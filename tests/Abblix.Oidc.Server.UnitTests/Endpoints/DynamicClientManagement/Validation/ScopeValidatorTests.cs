@@ -29,7 +29,7 @@ public class ScopeValidatorTests
 
     public ScopeValidatorTests()
     {
-        _validator = new ScopeValidator(_scopeManager.Object, tenantAccessor: SingleIssuer.Accessor);
+        _validator = new ScopeValidator(_scopeManager.Object);
     }
 
     private static ClientRegistrationValidationContext CreateContext(string[]? scope)
@@ -45,14 +45,14 @@ public class ScopeValidatorTests
     [Fact]
     public async Task ValidateAsync_WithNullScope_ShouldReturnNull()
     {
-        var result = await _validator.ValidateAsync(CreateContext(null));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(null));
         Assert.Null(result);
     }
 
     [Fact]
     public async Task ValidateAsync_WithEmptyScope_IsRefusedAsInvalidClientMetadata()
     {
-        var result = await _validator.ValidateAsync(CreateContext([]));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext([]));
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
@@ -70,7 +70,7 @@ public class ScopeValidatorTests
             .Setup(m => m.TryGet(TestTenant.Matched, "profile", out def2))
             .Returns(true);
 
-        var result = await _validator.ValidateAsync(CreateContext(["openid", "profile"]));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(["openid", "profile"]));
         Assert.Null(result);
     }
 
@@ -82,7 +82,7 @@ public class ScopeValidatorTests
             .Setup(m => m.TryGet(TestTenant.Matched, "openid", out def))
             .Returns(true);
 
-        var result = await _validator.ValidateAsync(CreateContext(["openid", "unknown_scope"]));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(["openid", "unknown_scope"]));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);

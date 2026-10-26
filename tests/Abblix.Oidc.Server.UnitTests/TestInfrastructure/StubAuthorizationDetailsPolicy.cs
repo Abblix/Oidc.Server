@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
@@ -86,11 +87,21 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     public JsonArray? LastRequested { get; private set; }
 
     public Task<Result<JsonArray, OidcError>> ApplyAsync(
+        TenantDefinition tenant,
         JsonArray? raw,
         ClientInfo client,
         CancellationToken token)
     {
         LastSeen = raw;
+
+        // Asked at a tenant other than the one the tests serve, it refuses, so a caller handing it the wrong tenant
+        // fails the test that drives it
+        if (tenant.Id != SingleIssuer.Tenant.Id)
+        {
+            return Task.FromResult<Result<JsonArray, OidcError>>(
+                new OidcError(ErrorCodes.InvalidAuthorizationDetails, "asked at a tenant the test does not serve"));
+        }
+
         if (_refusal is null)
         {
             if (_cap is { } cap && raw is not null)
@@ -111,6 +122,7 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     }
 
     public Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
+        TenantDefinition tenant,
         JsonArray? granted,
         JsonArray? requested,
         ClientInfo client,
@@ -124,6 +136,6 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
         if (_honourCancellation)
             token.ThrowIfCancellationRequested();
 
-        return ApplyAsync(granted, client, token);
+        return ApplyAsync(tenant, granted, client, token);
     }
 }

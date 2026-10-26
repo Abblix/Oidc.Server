@@ -19,7 +19,8 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 /// </summary>
 internal sealed class EverythingConsented : IUserConsentsProvider
 {
-    public Task<UserConsents> GetUserConsentsAsync(ValidAuthorizationRequest request, AuthSession authSession)
+    public Task<UserConsents> GetUserConsentsAsync(
+        Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession)
         => Task.FromResult(new UserConsents
         {
             Granted = new ConsentDefinition(

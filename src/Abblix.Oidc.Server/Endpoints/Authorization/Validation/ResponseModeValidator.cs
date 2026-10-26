@@ -10,6 +10,7 @@ using System.Collections.Frozen;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -33,7 +34,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 public partial class ResponseModeValidator(ILogger<ResponseModeValidator> logger) : SyncAuthorizationContextValidatorBase
 {
 	/// <inheritdoc />
-	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+	protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
 	{
 		var responseMode = context.Request.ResponseMode;
 		if (responseMode.HasValue())

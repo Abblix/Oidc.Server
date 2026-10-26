@@ -30,13 +30,11 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 /// </param>
 /// <param name="subjectTypeConverter">The converter used to translate user identifiers into subject types as
 /// required by different client configurations.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class UserClaimsProvider(
     ILogger<UserClaimsProvider> logger,
     IUserInfoProvider userInfoProvider,
     IScopeClaimsProvider scopeClaimsProvider,
-    ISubjectTypeConverter subjectTypeConverter,
-    ITenantAccessor tenantAccessor) : IUserClaimsProvider
+    ISubjectTypeConverter subjectTypeConverter) : IUserClaimsProvider
 {
     /// <summary>
     /// Asynchronously retrieves structured user claims based on an authentication session and specific claim parameters.
@@ -44,6 +42,7 @@ public partial class UserClaimsProvider(
     /// Connect Core 1.0 section 5.5.1 forbids answering with an error when claims are not returned, essential or
     /// voluntary alike, unless the description of the specific claim says otherwise.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="authSession">The authentication session providing the context for user claims retrieval.</param>
     /// <param name="scope">A collection of scopes defining the categories of claims required.</param>
     /// <param name="requestedClaims">The individual claims the client named. Their names widen what is asked of
@@ -53,23 +52,25 @@ public partial class UserClaimsProvider(
     /// <returns>A task that when completed returns a <see cref="JsonObject"/> representing the user claims,
     /// or null when the host's provider knows no such user.</returns>
     public async Task<JsonObject?> GetUserClaimsAsync(
+        TenantDefinition tenant,
         AuthSession authSession,
         ICollection<string> scope,
         ICollection<KeyValuePair<string, RequestedClaimDetails>>? requestedClaims,
         ClientInfo clientInfo)
     {
         var claimNames = scopeClaimsProvider.GetRequestedClaims(
+            tenant,
             scope, requestedClaims?.Select(claim => claim.Key))
             .Distinct(StringComparer.Ordinal);
 
-        var userInfo = await userInfoProvider.GetUserInfoAsync(authSession, claimNames);
+        var userInfo = await userInfoProvider.GetUserInfoAsync(tenant, authSession, claimNames);
         if (userInfo == null)
         {
             LogUserClaimsNotFound();
             return null;
         }
 
-        var subject = subjectTypeConverter.Convert(tenantAccessor.CurrentTenant(), authSession.Subject, clientInfo);
+        var subject = subjectTypeConverter.Convert(tenant, authSession.Subject, clientInfo);
         userInfo.SetProperty(JwtClaimTypes.Subject, subject);
 
         return userInfo;

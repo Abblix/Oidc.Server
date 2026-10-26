@@ -23,9 +23,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
 /// issue rather than closing it; the method below says what its refusal covers.
 /// </summary>
 /// <param name="storage">Storage for backchannel authentication requests.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class PollModeGrantProcessor(IBackChannelRequestStorage storage,
-    ITenantAccessor tenantAccessor)
+public class PollModeGrantProcessor(IBackChannelRequestStorage storage)
     : IBackChannelGrantProcessor
 {
     /// <summary>
@@ -43,6 +41,7 @@ public class PollModeGrantProcessor(IBackChannelRequestStorage storage,
     /// this method.
     /// </summary>
     public async Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {
@@ -52,7 +51,7 @@ public class PollModeGrantProcessor(IBackChannelRequestStorage storage,
         // would otherwise end with NEITHER poll told it took the request. Neither closes the window in
         // which a write lands between the read and the removal. Null does not say WHY - see the storage
         // contract.
-        var removedRequest = await storage.TryRemoveAsync(tenantAccessor.CurrentTenant(), authenticationRequestId);
+        var removedRequest = await storage.TryRemoveAsync(tenant, authenticationRequestId);
 
         if (removedRequest == null)
         {

@@ -10,6 +10,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using static Abblix.Oidc.Server.Model.AuthorizationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -28,7 +29,7 @@ public class DisplayValidator : SyncAuthorizationContextValidatorBase
         new([DisplayModes.Page, DisplayModes.Popup, DisplayModes.Touch, DisplayModes.Wap], StringComparer.Ordinal);
 
     /// <inheritdoc />
-    protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+    protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         if (context.Request.Display is not { } display || Supported.Contains(display))
             return null;

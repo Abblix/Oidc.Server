@@ -24,7 +24,6 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 /// <see cref="ErrorCodes.InvalidToken"/> if no claims are produced for the subject.
 /// </summary>
 public class UserInfoRequestProcessor(
-	ITenantAccessor tenantAccessor,
 	ITenantCatalog catalog,
 	IUserClaimsProvider userClaimsProvider) : IUserInfoRequestProcessor
 {
@@ -32,15 +31,17 @@ public class UserInfoRequestProcessor(
 	/// Asynchronously processes a valid user information request and returns a structured response containing
 	/// the requested user information.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The valid user information request containing the authentication session,
 	/// authorization context and client information necessary to determine the scope and specifics of
 	/// the requested claims.</param>
 	/// <returns>A <see cref="Task"/> representing the asynchronous operation,
 	/// which upon completion will yield a <see cref="Result{UserInfoFoundResponse, AuthError}"/> encapsulating either the user's claims
 	/// or an error response.</returns>
-	public async Task<Result<UserInfoFoundResponse, OidcError>> ProcessAsync(ValidUserInfoRequest request)
+	public async Task<Result<UserInfoFoundResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidUserInfoRequest request)
 	{
 		var userInfo = await userClaimsProvider.GetUserClaimsAsync(
+			tenant,
 			request.AuthSession,
 			request.AuthContext.Scope,
 			request.AuthContext.RequestedClaims?.UserInfo,
@@ -49,7 +50,6 @@ public class UserInfoRequestProcessor(
 		if (userInfo == null)
 			return new OidcError(ErrorCodes.InvalidToken, "The user claims aren't found");
 
-		var tenant = tenantAccessor.CurrentTenant();
 		var issuer = LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog);
 		return new UserInfoFoundResponse(userInfo, request.ClientInfo, issuer);
 	}

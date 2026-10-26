@@ -9,6 +9,7 @@
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
@@ -42,6 +43,7 @@ public interface IAuthorizationDetailsPolicy
     /// post-validation shape into <c>AuthorizationContext</c> - token emission reflects what
     /// was actually granted, not the original request.
     /// </remarks>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="raw">The raw <c>authorization_details</c> array off the wire, or
     /// <c>null</c> / empty when the request did not carry one.</param>
     /// <param name="client">The authenticated client; <see cref="ClientInfo.AuthorizationDetailsTypes"/>
@@ -59,6 +61,7 @@ public interface IAuthorizationDetailsPolicy
     /// <see cref="OidcError"/>, or re-wraps the description otherwise.
     /// </returns>
     Task<Result<JsonArray, OidcError>> ApplyAsync(
+        TenantDefinition tenant,
         JsonArray? raw,
         ClientInfo client,
         CancellationToken token);
@@ -82,6 +85,7 @@ public interface IAuthorizationDetailsPolicy
     /// loose one answers with a null task result the caller then dereferences.
     /// </para>
     /// </remarks>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="granted">The <c>authorization_details</c> the consent decision granted.</param>
     /// <param name="requested">The <c>authorization_details</c> the request carried, which each per-type
     /// validator is handed, filtered to its own type, to hold the granted entry to.</param>
@@ -90,11 +94,12 @@ public interface IAuthorizationDetailsPolicy
     /// <returns>The same shape as <see cref="ApplyAsync"/>: the post-validation array on success, or
     /// an <see cref="OidcError"/> naming the entry that was refused.</returns>
     Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
+        TenantDefinition tenant,
         JsonArray? granted,
         JsonArray? requested,
         ClientInfo client,
         CancellationToken token)
-        => ApplyAsync(granted, client, token);
+        => ApplyAsync(tenant, granted, client, token);
 }
 
 /// <summary>

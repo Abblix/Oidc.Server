@@ -116,13 +116,13 @@ public sealed class StageObservationTests : IDisposable
     {
         var inner = new Mock<IUserConsentsProvider>();
         inner
-            .Setup(provider => provider.GetUserConsentsAsync(It.IsAny<ValidAuthorizationRequest>(), It.IsAny<AuthSession>()))
+            .Setup(provider => provider.GetUserConsentsAsync(TestTenant.Matched, It.IsAny<ValidAuthorizationRequest>(), It.IsAny<AuthSession>()))
             .ReturnsAsync(new UserConsents());
         var reader = new UserConsentsReader(inner.Object, TimeProvider.System);
         var request = new ValidAuthorizationRequest(
             new AuthorizationValidationContext(new AuthorizationRequest()) { ClientInfo = new ClientInfo("client") });
 
-        var (_, stages) = await UnderAnEndpointSpan(() => reader.ReadAsync(request, null!));
+        var (_, stages) = await UnderAnEndpointSpan(() => reader.ReadAsync(SingleIssuer.Tenant, request, null!));
 
         Assert.Equal(TelemetryStages.Consent, Assert.Single(stages).GetTagItem(TelemetryTags.Stage));
     }

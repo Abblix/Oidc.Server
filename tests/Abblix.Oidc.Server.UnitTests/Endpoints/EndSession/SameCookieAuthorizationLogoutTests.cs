@@ -74,6 +74,7 @@ public class SameCookieAuthorizationLogoutTests
         await RequestAsync(provider, afterSecond ?? afterFirst ?? signedIn, async services =>
         {
             var result = await services.GetRequiredService<IEndSessionRequestProcessor>().ProcessAsync(
+                SingleIssuer.Tenant,
                 new ValidEndSessionRequest(new EndSessionRequest(), ClientInfo: null));
             Assert.True(result.TryGetSuccess(out _), "the logout itself failed");
         });
@@ -100,7 +101,7 @@ public class SameCookieAuthorizationLogoutTests
         };
 
         var result = await services.GetRequiredService<IAuthorizationRequestProcessor>()
-            .ProcessAsync(new ValidAuthorizationRequest(context));
+            .ProcessAsync(SingleIssuer.Tenant, new ValidAuthorizationRequest(context));
 
         Assert.IsType<SuccessfullyAuthenticated>(result);
     }
@@ -155,8 +156,8 @@ public class SameCookieAuthorizationLogoutTests
 
         var notifier = new Mock<ILogoutNotifier>();
         notifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
-            .Callback((ClientInfo client, LogoutContext _) => notified.Add(client.ClientId))
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Callback((TenantDefinition _, ClientInfo client, LogoutContext _) => notified.Add(client.ClientId))
             .Returns(Task.CompletedTask);
         services.Replace(ServiceDescriptor.Singleton(notifier.Object));
 

@@ -21,23 +21,23 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// </summary>
 /// <param name="hintParser">Decides whether an <c>id_token_hint</c> is an ID token this server issued.</param>
 /// <param name="clientJwtValidator">Validator for JWTs issued by clients.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class UserIdentityValidator(
     IIdTokenHintParser hintParser,
-    IClientJwtValidator clientJwtValidator,
-    ITenantAccessor tenantAccessor): IBackChannelAuthenticationContextValidator
+    IClientJwtValidator clientJwtValidator): IBackChannelAuthenticationContextValidator
 {
     /// <summary>
     /// Validates the user's identity based on the provided identity hints, such as login hint, login hint token,
     /// or ID token hint. It ensures that only one identity hint is present and attempts to process the hint
     /// to confirm the user's identity.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">Contains the backchannel authentication request and client information.</param>
     /// <returns>
     /// Returns a <see cref="OidcError"/> if the identity validation fails,
     /// or null if the identity is successfully validated.
     /// </returns>
     public async Task<OidcError?> ValidateAsync(
+        TenantDefinition tenant,
         BackChannelAuthenticationValidationContext context)
     {
         var request = context.Request;
@@ -75,7 +75,7 @@ public class UserIdentityValidator(
             // judged below: a JWT declaring itself some other kind this server names is refused (RFC 8725 Section
             // 3.11)
             var loginHintTokenResult = await clientJwtValidator.ValidateAsync(
-                tenantAccessor.CurrentTenant(),
+                tenant,
                 request.LoginHintToken, TokenTypePolicy.CheckedByCaller);
 
             if (loginHintTokenResult.TryGetSuccess(out var validJwt))
@@ -112,7 +112,7 @@ public class UserIdentityValidator(
         // Validate the IdTokenHint if present
         if (request.IdTokenHint.HasValue())
         {
-            var idTokenResult = await ValidateIdTokenHint(context, request.IdTokenHint);
+            var idTokenResult = await ValidateIdTokenHint(tenant, context, request.IdTokenHint);
             if (idTokenResult.TryGetFailure(out var error))
             {
                 return new OidcError(error.Error, error.ErrorDescription);
@@ -127,6 +127,7 @@ public class UserIdentityValidator(
     /// <summary>
     /// Validates the ID token hint to ensure it is properly issued and valid.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing the client information.</param>
     /// <param name="idTokenHint">The ID token hint string to be validated.</param>
     /// <returns>
@@ -134,6 +135,7 @@ public class UserIdentityValidator(
     /// which can either be a successful token or an error.
     /// </returns>
     private async Task<Result<JsonWebToken, OidcError>> ValidateIdTokenHint(
+        TenantDefinition tenant,
         BackChannelAuthenticationValidationContext context,
         string idTokenHint)
     {
@@ -141,7 +143,7 @@ public class UserIdentityValidator(
         // part of it: the three endpoints accepting the parameter disagree about who must be in it. Here it
         // is the requesting client, because OpenID Connect Core 1.0 Section 2 says an ID token's aud "MUST
         // contain the OAuth 2.0 client_id of the Relying Party".
-        var result = await hintParser.ParseAsync(tenantAccessor.CurrentTenant(), idTokenHint);
+        var result = await hintParser.ParseAsync(tenant, idTokenHint);
         if (result.TryGetFailure(out var reason))
             return new OidcError(ErrorCodes.InvalidRequest, reason);
 

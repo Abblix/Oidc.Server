@@ -31,34 +31,34 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// normally present even where the setting is disabled - the waiting is what the setting decides, and a
 /// notification nobody waits for is a no-op.</param>
 /// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
-/// <param name="tenantAccessor">Names the tenant the request is completed at, whose pairwise key seals the subject.</param>
 public partial class PollModeCompletionHandler(
     ILogger<PollModeCompletionHandler> logger,
     CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     TimeProvider clock,
-    IBackChannelLongPollingService? statusNotifier,
-    ITenantAccessor tenantAccessor)
+    IBackChannelLongPollingService? statusNotifier)
     : AuthenticationCompletionHandler(
-        logger, fingerprints, storage, subjectTypeConverter, clock, tenantAccessor, statusNotifier)
+        logger, fingerprints, storage, subjectTypeConverter, clock, statusNotifier)
 {
     /// <summary>
     /// Handles poll mode token delivery by storing the authenticated request in storage.
     /// The client will periodically poll the token endpoint to retrieve tokens, and one already waiting
     /// on a long poll is woken by the write.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information (not used in poll mode).</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     protected override async Task HandleDeliveryAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
         TimeSpan expiresIn)
     {
-        await StoreAsync(authenticationRequestId, request, expiresIn);
+        await StoreAsync(tenant, authenticationRequestId, request, expiresIn);
 
         LogTokensStored(FingerprintOf(authenticationRequestId));
     }

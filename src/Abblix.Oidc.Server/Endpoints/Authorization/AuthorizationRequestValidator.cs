@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -29,17 +30,18 @@ public class AuthorizationRequestValidator(IAuthorizationContextValidator valida
 	/// The method creates a validation context and delegates the validation process to the initial validator in the chain,
 	/// which can then pass the request to subsequent validators as necessary.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The authorization request to validate.</param>
 	/// <returns>
 	/// A <see cref="Result{TSuccess,TFailure}"/> of <see cref="ValidAuthorizationRequest"/> on success
 	/// or <see cref="AuthorizationRequestValidationError"/> on failure, representing the outcome of
 	/// the validation process, which may be the result of processing by one or more validators in the chain.
 	/// </returns>
-	public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(AuthorizationRequest request)
+	public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(TenantDefinition tenant, AuthorizationRequest request)
 	{
 		var context = new AuthorizationValidationContext(request);
 
-		var error = await validator.ValidateAsync(context);
+		var error = await validator.ValidateAsync(tenant, context);
 		if (error != null)
 			return error;
 

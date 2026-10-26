@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInteraction;
 
@@ -23,9 +24,10 @@ internal sealed class UserInteractionStep(IUserInteractionRequirement interactio
     /// The answer a request gets while the end user of <paramref name="authSession"/> owes a step, or null when they
     /// owe none.
     /// </summary>
-    public async Task<AuthorizationResponse?> OwedAsync(ValidAuthorizationRequest request, AuthSession authSession)
+    public async Task<AuthorizationResponse?> OwedAsync(
+        TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession)
     {
-        if (!await interactionRequirement.IsRequiredAsync(request, authSession))
+        if (!await interactionRequirement.IsRequiredAsync(tenant, request, authSession))
             return null;
 
         var model = request.Model;

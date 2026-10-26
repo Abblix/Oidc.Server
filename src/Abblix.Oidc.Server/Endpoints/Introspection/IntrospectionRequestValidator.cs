@@ -38,19 +38,18 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// <param name="rateLimiter">
 /// The budget of introspection requests one client gets, spent once the caller is known to be that client.
 /// </param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class IntrospectionRequestValidator(
 	ILogger<IntrospectionRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
 	IAuthServiceJwtValidator jwtValidator,
 	[FromKeyedServices(CallerRateLimiters.Introspection)]
-	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter,
-	ITenantAccessor tenantAccessor)
+	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter)
 	: IIntrospectionRequestValidator
 {
 	/// <summary>
 	/// Validates the introspection request properties and authenticates a client that initiated the request.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="introspectionRequest">The introspection request to validate. It includes the token and client information for validation.</param>
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>
@@ -58,10 +57,11 @@ public partial class IntrospectionRequestValidator(
 	/// <see cref="Result{ValidIntrospectionRequest, AuthError}"/> which indicates whether the request is valid or contains errors.
 	/// </returns>
 	public async Task<Result<ValidIntrospectionRequest, OidcError>> ValidateAsync(
+		TenantDefinition tenant,
 		IntrospectionRequest introspectionRequest,
 		ClientRequest clientRequest)
 	{
-		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenantAccessor.CurrentTenant(), clientRequest);
+		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
 		if (clientInfo == null)
 		{
 			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
@@ -104,7 +104,7 @@ public partial class IntrospectionRequestValidator(
 		// identifier does not say which resource is asking. The same section closes the list with "it is up to
 		// the authorization server to determine which of these checks (and any other checks) apply".
 		var result = await jwtValidator.ValidateAsync(
-			tenantAccessor.CurrentTenant(), introspectionRequest.Token,
+			tenant, introspectionRequest.Token,
 			JwtTypes.IntrospectableTokens,
 			ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
 

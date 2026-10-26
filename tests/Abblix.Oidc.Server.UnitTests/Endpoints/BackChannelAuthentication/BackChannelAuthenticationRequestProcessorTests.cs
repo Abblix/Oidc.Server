@@ -72,7 +72,7 @@ public class BackChannelAuthenticationRequestProcessorTests
             options.Object,
             _handler.Object,
             TimeProvider.System,
-            _subjectTypeConverter.Object, tenantAccessor: SingleIssuer.Accessor);
+            _subjectTypeConverter.Object);
     }
 
     private ValidBackChannelAuthenticationRequest Request(
@@ -112,7 +112,7 @@ public class BackChannelAuthenticationRequestProcessorTests
             AuthenticationTime: DateTimeOffset.UnixEpoch,
             IdentityProvider: "test");
 
-        _handler.Setup(h => h.InitiateAuthenticationAsync(It.IsAny<ValidBackChannelAuthenticationRequest>()))
+        _handler.Setup(h => h.InitiateAuthenticationAsync(TestTenant.Matched, It.IsAny<ValidBackChannelAuthenticationRequest>()))
             .Returns(Task.FromResult(session));
     }
 
@@ -137,8 +137,8 @@ public class BackChannelAuthenticationRequestProcessorTests
             AuthenticationTime: DateTimeOffset.UnixEpoch,
             IdentityProvider: "test");
 
-        _handler.Setup(h => h.InitiateAuthenticationAsync(It.IsAny<ValidBackChannelAuthenticationRequest>()))
-            .Callback((ValidBackChannelAuthenticationRequest r) => r.AuthorizationDetails?.Clear())
+        _handler.Setup(h => h.InitiateAuthenticationAsync(TestTenant.Matched, It.IsAny<ValidBackChannelAuthenticationRequest>()))
+            .Callback((TenantDefinition _, ValidBackChannelAuthenticationRequest r) => r.AuthorizationDetails?.Clear())
             .Returns(Task.FromResult(session));
 
         StoredRequest? stored = null;
@@ -147,7 +147,7 @@ public class BackChannelAuthenticationRequestProcessorTests
             .Callback((TenantDefinition _, StoredRequest request, TimeSpan _) => stored = request)
             .ReturnsAsync("auth-req-id");
 
-        var result = await _processor.ProcessAsync(Request(null, authorizationDetails: requested));
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, authorizationDetails: requested));
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.NotNull(stored);
@@ -185,7 +185,7 @@ public class BackChannelAuthenticationRequestProcessorTests
             AuthenticationTime: DateTimeOffset.UnixEpoch,
             IdentityProvider: "test");
 
-        _handler.Setup(h => h.InitiateAuthenticationAsync(It.IsAny<ValidBackChannelAuthenticationRequest>()))
+        _handler.Setup(h => h.InitiateAuthenticationAsync(TestTenant.Matched, It.IsAny<ValidBackChannelAuthenticationRequest>()))
             .Returns(Task.FromResult(session));
 
         StoredRequest? stored = null;
@@ -194,7 +194,7 @@ public class BackChannelAuthenticationRequestProcessorTests
             .Callback((TenantDefinition _, StoredRequest request, TimeSpan _) => stored = request)
             .ReturnsAsync("auth-req-id");
 
-        var result = await _processor.ProcessAsync(Request(null, claimsJson));
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, claimsJson));
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.NotNull(stored);
@@ -226,7 +226,7 @@ public class BackChannelAuthenticationRequestProcessorTests
 
         var requested = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await _processor.ProcessAsync(Request(null, authorizationDetails: requested));
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, authorizationDetails: requested));
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.NotNull(stored);
@@ -254,7 +254,7 @@ public class BackChannelAuthenticationRequestProcessorTests
     {
         HostAuthenticates(Approved);
 
-        var result = await _processor.ProcessAsync(Request("somebody-else"));
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request("somebody-else"));
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
@@ -275,7 +275,7 @@ public class BackChannelAuthenticationRequestProcessorTests
     {
         HostAuthenticates(Approved);
 
-        var result = await _processor.ProcessAsync(Request(Approved));
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(Approved));
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -293,7 +293,7 @@ public class BackChannelAuthenticationRequestProcessorTests
     {
         HostAuthenticates(Approved);
 
-        var result = await _processor.ProcessAsync(Request(null));
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null));
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -313,6 +313,7 @@ public class BackChannelAuthenticationRequestProcessorTests
         HostAuthenticates(Approved);
 
         var result = await _processor.ProcessAsync(
+            SingleIssuer.Tenant,
             Request(null, RequestingSubject("somebody-else")));
 
         Assert.True(result.TryGetFailure(out var error));
@@ -332,7 +333,7 @@ public class BackChannelAuthenticationRequestProcessorTests
     {
         HostAuthenticates(Approved);
 
-        var result = await _processor.ProcessAsync(Request(null, RequestingSubject(Approved)));
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, RequestingSubject(Approved)));
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -350,6 +351,7 @@ public class BackChannelAuthenticationRequestProcessorTests
         HostAuthenticates(Approved);
 
         var result = await _processor.ProcessAsync(
+            SingleIssuer.Tenant,
             Request(Approved, RequestingSubject("somebody-else")));
 
         Assert.True(result.TryGetFailure(out var error));

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -27,7 +28,7 @@ public class ReadClientRequestProcessor(
     TimeProvider clock) : IReadClientRequestProcessor
 {
     /// <inheritdoc />
-    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request)
+    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidClientRequest request)
     {
         var client = request.Client.ClientInfo;
 
@@ -36,6 +37,7 @@ public class ReadClientRequestProcessor(
         // stays valid; only update rotates it (read is idempotent). Read from the store again instead,
         // a request racing a rotation would hand the holder of the old token a current one.
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
+            tenant,
             client.ClientId, issuedAt, null, request.Client.RegistrationAccessTokenId);
 
         return new ReadClientSuccessfulResponse(RegisteredClientMetadata.Of(client))

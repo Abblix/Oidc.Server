@@ -77,7 +77,7 @@ public class ResourceValidatorsInferenceTests
                     Scope = scopes,
                     Resources = resources,
                 }) { ClientInfo = client };
-                var error = await new AuthorizationResourceValidator(resourceManager, tenantAccessor: SingleIssuer.AccessorOf(() => options.Value)).ValidateAsync(context);
+                var error = await new AuthorizationResourceValidator(resourceManager).ValidateAsync(options.Value.ToTenant(), context);
                 return (error?.Error, Uris(context.Resources));
             }
 
@@ -86,7 +86,7 @@ public class ResourceValidatorsInferenceTests
                 var context = new BackChannelAuthenticationValidationContext(
                     new BackChannelAuthenticationRequest { Scope = scopes, Resources = resources },
                     new ClientRequest { ClientId = ClientId }) { ClientInfo = client };
-                var error = await new BackChannelResourceValidator(resourceManager, tenantAccessor: SingleIssuer.AccessorOf(() => options.Value)).ValidateAsync(context);
+                var error = await new BackChannelResourceValidator(resourceManager).ValidateAsync(options.Value.ToTenant(), context);
                 return (error?.Error, Uris(context.Resources));
             }
 
@@ -95,7 +95,7 @@ public class ResourceValidatorsInferenceTests
                 var context = new DeviceAuthorizationValidationContext(
                     new DeviceAuthorizationRequest { Scope = scopes, Resources = resources },
                     new ClientRequest { ClientId = ClientId }) { ClientInfo = client };
-                var error = await new DeviceResourceValidator(resourceManager, tenantAccessor: SingleIssuer.AccessorOf(() => options.Value)).ValidateAsync(context);
+                var error = await new DeviceResourceValidator(resourceManager).ValidateAsync(options.Value.ToTenant(), context);
                 return (error?.Error, Uris(context.Resources));
             }
 
@@ -104,8 +104,8 @@ public class ResourceValidatorsInferenceTests
                 var context = new TokenValidationContext(
                     new TokenRequest { GrantType = GrantTypes.ClientCredentials, Scope = scopes, Resources = resources },
                     new ClientRequest { ClientId = ClientId });
-                var error = await new TokenResourceValidator(resourceManager, tenantAccessor: SingleIssuer.AccessorOf(() => options.Value))
-                    .ValidateAsync(context, TestContext.Current.CancellationToken);
+                var error = await new TokenResourceValidator(resourceManager)
+                    .ValidateAsync(options.Value.ToTenant(), context, TestContext.Current.CancellationToken);
 
                 // The grant handler reads the request, so the resource it is issued for has to be there too
                 Assert.Equal(Uris(context.Resources), context.Request.Resources ?? []);
@@ -176,8 +176,8 @@ public class ResourceValidatorsInferenceTests
             new ClientRequest { ClientId = ClientId });
 
         var error = await new TokenResourceValidator(
-                SingleIssuer.ResourceManager(), tenantAccessor: SingleIssuer.AccessorOf(() => options.Value))
-            .ValidateAsync(context, TestContext.Current.CancellationToken);
+                SingleIssuer.ResourceManager())
+            .ValidateAsync(options.Value.ToTenant(), context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
         Assert.Null(context.Request.Resources);
@@ -208,8 +208,8 @@ public class ResourceValidatorsInferenceTests
             new ClientRequest { ClientId = ClientId });
 
         var error = await new TokenResourceValidator(
-                SingleIssuer.ResourceManager(), tenantAccessor: SingleIssuer.AccessorOf(() => options.Value))
-            .ValidateAsync(context, TestContext.Current.CancellationToken);
+                SingleIssuer.ResourceManager())
+            .ValidateAsync(options.Value.ToTenant(), context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
         Assert.Empty(context.Resources);

@@ -33,7 +33,7 @@ public class ClientValidatorTests
     public ClientValidatorTests()
     {
         _clientAuthenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
-        _validator = new ClientValidator(_clientAuthenticator.Object, tenantAccessor: SingleIssuer.Accessor);
+        _validator = new ClientValidator(_clientAuthenticator.Object);
     }
 
     private BackChannelAuthenticationValidationContext CreateContext()
@@ -71,7 +71,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -98,7 +98,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -119,7 +119,7 @@ public class ClientValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -146,7 +146,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -173,7 +173,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -201,7 +201,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Same(clientInfo, context.ClientInfo);
@@ -230,7 +230,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(capturedRequest);
@@ -260,7 +260,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -285,7 +285,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -310,7 +310,7 @@ public class ClientValidatorTests
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
             .ReturnsAsync(clientInfo);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Equal(ErrorCodes.UnauthorizedClient, Assert.IsType<OidcError>(result).Error);
     }

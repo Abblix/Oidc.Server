@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
@@ -32,6 +33,7 @@ public class AuthorizationHandler(
     /// Asynchronously handles an authorization request by first fetching the request if necessary,
     /// validating the request and then processing it to generate an authorization response.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The authorization request to be handled. This can be a direct request or a reference
     /// to an external request that needs to be fetched.</param>
     /// <returns>A task that returns an <see cref="AuthorizationResponse"/>.
@@ -48,30 +50,30 @@ public class AuthorizationHandler(
     /// This method ensures that only requests meeting the necessary validation criteria are processed,
     /// maintaining the integrity and security of the authorization flow.
     /// </remarks>
-    public async Task<AuthorizationResponse> HandleAsync(Model.AuthorizationRequest request)
+    public async Task<AuthorizationResponse> HandleAsync(TenantDefinition tenant, Model.AuthorizationRequest request)
     {
         // Produce the response through the full processing chain (including the session-management
         // decorator that sets session_state), then let the encoder apply iss/scope gating and - for a
         // JARM request - pack the parameters into the response JWT. Encoding happens here, at the single
         // convergence point for success and every error variant, after session_state is finalised.
-        var response = await ProduceResponseAsync(request);
-        await responseEncoder.EncodeAsync(response);
+        var response = await ProduceResponseAsync(tenant, request);
+        await responseEncoder.EncodeAsync(tenant, response);
         return response;
     }
 
-    private async Task<AuthorizationResponse> ProduceResponseAsync(Model.AuthorizationRequest request)
+    private async Task<AuthorizationResponse> ProduceResponseAsync(TenantDefinition tenant, Model.AuthorizationRequest request)
     {
-        var fetchResult = await fetcher.FetchAsync(request);
+        var fetchResult = await fetcher.FetchAsync(tenant, request);
 
         if (fetchResult.TryGetFailure(out var fetchError))
             return new AuthorizationError(request, fetchError);
 
         request = fetchResult.GetSuccess();
 
-        var validationResult = await validator.ValidateAsync(request);
+        var validationResult = await validator.ValidateAsync(tenant, request);
 
         return await validationResult.MatchAsync(
-            onSuccess: processor.ProcessAsync,
+            onSuccess: valid => processor.ProcessAsync(tenant, valid),
             onFailure: error => Task.FromResult<AuthorizationResponse>(new AuthorizationError(request, error)));
     }
 }

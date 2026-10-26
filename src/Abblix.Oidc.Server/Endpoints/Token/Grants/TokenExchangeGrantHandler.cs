@@ -54,8 +54,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 public class TokenExchangeGrantHandler(
     IServiceProvider serviceProvider,
     ISessionIdGenerator sessionIdGenerator,
-    TimeProvider timeProvider,
-    ITenantAccessor tenantAccessor) : IAuthorizationGrantHandler
+    TimeProvider timeProvider) : IAuthorizationGrantHandler
 {
     /// <inheritdoc/>
     public IEnumerable<string> GrantTypesSupported
@@ -65,6 +64,7 @@ public class TokenExchangeGrantHandler(
 
     /// <inheritdoc/>
     public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(
+        TenantDefinition tenant,
         TokenRequest request,
         ClientInfo clientInfo,
         CancellationToken cancellationToken)
@@ -77,10 +77,10 @@ public class TokenExchangeGrantHandler(
             .Bind(ValidateActorTokenPair)
             .Bind(ValidateActorTokenType)
             .Bind(ValidateRequestedTokenType)
-            .BindAsync(ctx => ResolveSubjectTokenAsync(ctx, cancellationToken))
+            .BindAsync(ctx => ResolveSubjectTokenAsync(tenant, ctx, cancellationToken))
             .Bind(ValidateSubjectTokenOrigin)
             .Bind(ValidateForwardedAuthorizationDetails)
-            .BindAsync(ctx => ResolveActorTokenAsync(ctx, cancellationToken))
+            .BindAsync(ctx => ResolveActorTokenAsync(tenant, ctx, cancellationToken))
             .Bind(ValidateActorTokenOrigin)
             .Bind(ValidateAudiences)
             .MapSuccessAsync(ctx => Task.FromResult(BuildAuthorizedGrant(ctx)));
@@ -228,11 +228,12 @@ public class TokenExchangeGrantHandler(
     /// type URI and stores the resolved <see cref="SubjectTokenContext"/> on the chain context.
     /// </summary>
     private async Task<Result<ValidationContext, OidcError>> ResolveSubjectTokenAsync(
+        TenantDefinition tenant,
         ValidationContext ctx,
         CancellationToken cancellationToken)
     {
         var subjectToken = ctx.Request.SubjectToken.NotNull(TokenRequest.Parameters.SubjectToken);
-        var result = await ResolveTokenAsync(ctx.Request.SubjectTokenType, subjectToken, cancellationToken);
+        var result = await ResolveTokenAsync(tenant, ctx.Request.SubjectTokenType, subjectToken, cancellationToken);
         return result.MapSuccess(subject => ctx with { Subject = subject });
     }
 
@@ -298,13 +299,14 @@ public class TokenExchangeGrantHandler(
     /// error pinpoints which token was rejected.
     /// </summary>
     private async Task<Result<ValidationContext, OidcError>> ResolveActorTokenAsync(
+        TenantDefinition tenant,
         ValidationContext ctx,
         CancellationToken cancellationToken)
     {
         if (ctx.Request.ActorToken is not { Length: > 0 } actorToken)
             return ctx;
 
-        var result = await ResolveTokenAsync(ctx.Request.ActorTokenType, actorToken, cancellationToken);
+        var result = await ResolveTokenAsync(tenant, ctx.Request.ActorTokenType, actorToken, cancellationToken);
         return result.Match<Result<ValidationContext, OidcError>>(
             actor => ctx with { Actor = actor },
             failure => new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {failure.ErrorDescription}"));
@@ -413,6 +415,7 @@ public class TokenExchangeGrantHandler(
     }
 
     private async Task<Result<SubjectTokenContext, OidcError>> ResolveTokenAsync(
+        TenantDefinition tenant,
         Uri? tokenType,
         string tokenValue,
         CancellationToken cancellationToken)
@@ -425,7 +428,7 @@ public class TokenExchangeGrantHandler(
                 $"token_type '{tokenType}' is not supported.");
         }
 
-        return await resolver.ResolveAsync(tenantAccessor.CurrentTenant(), tokenValue, tokenType, cancellationToken);
+        return await resolver.ResolveAsync(tenant, tokenValue, tokenType, cancellationToken);
     }
 
     private AuthorizedGrant BuildAuthorizedGrant(ValidationContext ctx)

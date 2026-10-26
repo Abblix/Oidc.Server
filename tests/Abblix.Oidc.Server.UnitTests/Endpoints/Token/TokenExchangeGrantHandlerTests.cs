@@ -68,7 +68,7 @@ public class TokenExchangeGrantHandlerTests
             SubjectTokenType = subjectTokenType is null ? null : new Uri(subjectTokenType),
         };
 
-        var result = await handler.AuthorizeAsync(request, ClientWithAllowlist(null), TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, ClientWithAllowlist(null), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -84,7 +84,7 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(TestSubject, grant.AuthSession.Subject);
@@ -103,7 +103,7 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant.Context.AuthorizationDetails);
@@ -119,7 +119,7 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(null);
         var request = ExchangeRequest(TokenExchangeTokenTypes.Saml2);
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -139,6 +139,7 @@ public class TokenExchangeGrantHandlerTests
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
 
         var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             ExchangeRequest(UpperCaseScheme(TokenExchangeTokenTypes.AccessToken)),
             ClientWithAllowlist(null),
             TestContext.Current.CancellationToken);
@@ -160,6 +161,7 @@ public class TokenExchangeGrantHandlerTests
         var (handler, _) = CreateHandlerWith(spelledOtherwise, ctx);
 
         var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             ExchangeRequest(spelledOtherwise),
             ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
             TestContext.Current.CancellationToken);
@@ -178,7 +180,7 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist();  // empty -> deny-all
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -192,7 +194,7 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.IdToken);  // only id_token allowed
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -216,6 +218,7 @@ public class TokenExchangeGrantHandlerTests
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
 
         var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
             ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
             TestContext.Current.CancellationToken);
@@ -243,6 +246,7 @@ public class TokenExchangeGrantHandlerTests
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
 
         var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             ExchangeRequest(TokenExchangeTokenTypes.AccessToken),
             ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken),
             TestContext.Current.CancellationToken);
@@ -273,7 +277,7 @@ public class TokenExchangeGrantHandlerTests
         // received it: an exchange spends nothing, so a resolver making a remote call may stop when the caller does.
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, caller.Token);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, caller.Token);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("alice", grant.AuthSession.Subject);
@@ -304,7 +308,7 @@ public class TokenExchangeGrantHandlerTests
             ActorTokenType = new Uri(TokenExchangeTokenTypes.AccessToken),
         };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("svc-worker-7", grant.Context.Actor!["sub"]!.GetValue<string>());
@@ -323,7 +327,7 @@ public class TokenExchangeGrantHandlerTests
             ActorToken = "actor.jwt",  // type missing
         };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -340,7 +344,7 @@ public class TokenExchangeGrantHandlerTests
             ActorTokenType = new Uri(TokenExchangeTokenTypes.AccessToken),  // value missing
         };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -366,7 +370,7 @@ public class TokenExchangeGrantHandlerTests
             ActorTokenType = new Uri(TokenExchangeTokenTypes.AccessToken),
         };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -388,7 +392,7 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -405,7 +409,7 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(null);  // tri-state: no constraint
         var request = ExchangeRequest(TokenExchangeTokenTypes.IdToken);
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(TestSubject, grant.AuthSession.Subject);
@@ -423,7 +427,7 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = requestScope };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(requestScope, grant.Context.Scope);
@@ -449,7 +453,7 @@ public class TokenExchangeGrantHandlerTests
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken); // no explicit scope -> fallback
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.DoesNotContain("admin", grant.Context.Scope);
@@ -476,7 +480,7 @@ public class TokenExchangeGrantHandlerTests
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(["openid", "admin"], grant.Context.Scope);
@@ -497,7 +501,7 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = ["read", "admin"] };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.DoesNotContain("admin", grant.Context.Scope);
@@ -519,7 +523,7 @@ public class TokenExchangeGrantHandlerTests
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = ["api:read"] };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(["api:read"], grant.Context.Scope);
@@ -548,7 +552,7 @@ public class TokenExchangeGrantHandlerTests
         var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken); // ClientId = "test-client"
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(request, requestingClient, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, requestingClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -569,7 +573,7 @@ public class TokenExchangeGrantHandlerTests
         var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(request, requestingClient, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, requestingClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -593,7 +597,7 @@ public class TokenExchangeGrantHandlerTests
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(request, brokerClient, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, brokerClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("alice", grant.AuthSession.Subject);
@@ -614,7 +618,7 @@ public class TokenExchangeGrantHandlerTests
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(request, brokerClient, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, brokerClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("alice", grant.AuthSession.Subject);
@@ -633,7 +637,7 @@ public class TokenExchangeGrantHandlerTests
         var requestingClient = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(request, requestingClient, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, requestingClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("alice", grant.AuthSession.Subject);
@@ -659,7 +663,7 @@ public class TokenExchangeGrantHandlerTests
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
 
-        var result = await handler.AuthorizeAsync(request, clientWithDifferentAllowlist, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientWithDifferentAllowlist, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -682,7 +686,7 @@ public class TokenExchangeGrantHandlerTests
             Audiences = ["https://api1.example.com", "https://api2.example.com"],
         };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(request.Audiences, grant.Context.Audiences);
@@ -705,7 +709,7 @@ public class TokenExchangeGrantHandlerTests
             Audiences = ["https://victim.example.com"],
         };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
@@ -728,7 +732,7 @@ public class TokenExchangeGrantHandlerTests
             Audiences = ["https://api1.example.com", "https://api2.example.com", "https://api3.example.com"],
         };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
@@ -755,7 +759,7 @@ public class TokenExchangeGrantHandlerTests
             Resources = [new Uri("https://api2.example.com")],
         };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
@@ -778,7 +782,7 @@ public class TokenExchangeGrantHandlerTests
             Resources = [new Uri("https://api2.example.com")],
         };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(request.Audiences, grant.Context.Audiences);
@@ -799,7 +803,7 @@ public class TokenExchangeGrantHandlerTests
             Resources = [new Uri("https://api.example.com")],
         };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant.Context.Resources);
@@ -824,7 +828,7 @@ public class TokenExchangeGrantHandlerTests
             RequestedTokenType = TokenExchangeTokenTypes.IdToken,
         };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -862,7 +866,7 @@ public class TokenExchangeGrantHandlerTests
             ActorTokenType = new Uri(TokenExchangeTokenTypes.AccessToken),  // not in allowlist
         };
 
-        var result = await handler.AuthorizeAsync(request, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -890,14 +894,14 @@ public class TokenExchangeGrantHandlerTests
         services.AddKeyedSingleton(tokenType, resolverMock.Object);
         var sp = services.BuildServiceProvider();
 
-        var handler = new TokenExchangeGrantHandler(sp, _sessionIdGenerator.Object, _timeProvider, tenantAccessor: SingleIssuer.Accessor);
+        var handler = new TokenExchangeGrantHandler(sp, _sessionIdGenerator.Object, _timeProvider);
         return (handler, resolverMock);
     }
 
     private TokenExchangeGrantHandler CreateHandlerWithoutResolvers()
     {
         var sp = new ServiceCollection().BuildServiceProvider();
-        return new TokenExchangeGrantHandler(sp, _sessionIdGenerator.Object, _timeProvider, tenantAccessor: SingleIssuer.Accessor);
+        return new TokenExchangeGrantHandler(sp, _sessionIdGenerator.Object, _timeProvider);
     }
 
     private static ClientInfo ClientWithAllowlist(params string[]? allowlist) =>

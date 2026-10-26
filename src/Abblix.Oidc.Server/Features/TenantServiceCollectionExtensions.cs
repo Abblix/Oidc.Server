@@ -27,8 +27,8 @@ public static class TenantServiceCollectionExtensions
     /// </summary>
     /// <remarks>
     /// The users, the consents and the steps a host requires before issuing stay the host's and are not partitioned
-    /// here: a host keeping them apart per tenant reads the tenant of the request from <see cref="ITenantAccessor"/>
-    /// in its <c>IUserInfoProvider</c>, <c>IUserConsentsProvider</c> and <c>IUserInteractionRequirement</c>.
+    /// here: its <c>IUserInfoProvider</c>, <c>IUserConsentsProvider</c>, <c>IUserInteractionRequirement</c> and
+    /// <c>IUserCredentialsAuthenticator</c> are each handed the tenant, and a host keeping them apart answers for it.
     /// </remarks>
     /// <param name="services">The service collection to register the tenants in.</param>
     /// <returns>The service collection, for chaining.</returns>

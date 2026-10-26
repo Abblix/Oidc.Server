@@ -35,7 +35,7 @@ public class OfflineAccessValidatorTests
         clients
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(existing is { } offlineAccess ? new ClientInfo(ClientId) { OfflineAccess = offlineAccess } : null);
-        return new OfflineAccessValidator(clients.Object, tenantAccessor: SingleIssuer.Accessor);
+        return new OfflineAccessValidator(clients.Object);
     }
 
     private static ClientRegistrationValidationContext Context(
@@ -59,7 +59,7 @@ public class OfflineAccessValidatorTests
     public async Task ARegistration_IsRefusedOfflineAccessWithoutConsentPromptOrAnUnnamedValue(
         OfflineAccess offlineAccess, string? error)
     {
-        var result = await Validator(existing: null).ValidateAsync(Context(offlineAccess));
+        var result = await Validator(existing: null).ValidateAsync(SingleIssuer.Tenant, Context(offlineAccess));
 
         Assert.Equal(error, result?.Error);
     }
@@ -74,7 +74,7 @@ public class OfflineAccessValidatorTests
     [InlineData(OfflineAccess.Disabled, ErrorCodes.InvalidClientMetadata)]
     public async Task AnUpdate_KeepsAllowedOnlyForAClientAlreadyAllowed(OfflineAccess existing, string? error)
     {
-        var result = await Validator(existing).ValidateAsync(Context(OfflineAccess.Allowed, DynamicClientOperation.Update));
+        var result = await Validator(existing).ValidateAsync(SingleIssuer.Tenant, Context(OfflineAccess.Allowed, DynamicClientOperation.Update));
 
         Assert.Equal(error, result?.Error);
     }

@@ -64,16 +64,16 @@ public class AuthenticationCompletionRouterTests
             BackchannelTokenDeliveryModes.Poll,
             new PollModeCompletionHandler(
                 NullLogger<PollModeCompletionHandler>.Instance, TestFingerprints.Instance, storage.Object, Mock.Of<ISubjectTypeConverter>(),
-                TimeProvider.System, null, tenantAccessor: SingleIssuer.Accessor));
+                TimeProvider.System, null));
 
         var router = new AuthenticationCompletionRouter(
             NullLogger<AuthenticationCompletionRouter>.Instance,
             TestFingerprints.Instance,
             clients.Object,
             services.BuildServiceProvider(),
-            storage.Object, tenantAccessor: SingleIssuer.Accessor);
+            storage.Object);
 
-        await router.CompleteAsync(AuthReqId, RequestFor(AnotherClient), TimeSpan.FromMinutes(5));
+        await router.CompleteAsync(SingleIssuer.Tenant, AuthReqId, RequestFor(AnotherClient), TimeSpan.FromMinutes(5));
 
         Assert.NotNull(written);
         Assert.Equal(BackChannelAuthenticationStatus.Denied, written.Status);
@@ -97,7 +97,7 @@ public class AuthenticationCompletionRouterTests
 
         var router = RouterOver(storage, BackchannelTokenDeliveryModes.Poll);
 
-        await router.DenyAsync(AuthReqId, TimeSpan.FromMinutes(5));
+        await router.DenyAsync(SingleIssuer.Tenant, AuthReqId, TimeSpan.FromMinutes(5));
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, stored.Status);
         storage.Verify(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, stored, It.IsAny<TimeSpan>()), Times.Once);
@@ -114,7 +114,7 @@ public class AuthenticationCompletionRouterTests
         storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll).DenyAsync(AuthReqId, TimeSpan.FromMinutes(5)));
+            () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll).DenyAsync(SingleIssuer.Tenant, AuthReqId, TimeSpan.FromMinutes(5)));
     }
 
     /// <summary>
@@ -128,7 +128,7 @@ public class AuthenticationCompletionRouterTests
         storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(RequestFor(AnotherClient));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll).DenyAsync(AuthReqId, TimeSpan.FromMinutes(5)));
+            () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll).DenyAsync(SingleIssuer.Tenant, AuthReqId, TimeSpan.FromMinutes(5)));
 
         storage.Verify(
             s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
@@ -147,7 +147,7 @@ public class AuthenticationCompletionRouterTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll)
-                .CompleteAsync(AuthReqId, RequestFor(AnotherClient), TimeSpan.FromMinutes(5)));
+                .CompleteAsync(SingleIssuer.Tenant, AuthReqId, RequestFor(AnotherClient), TimeSpan.FromMinutes(5)));
     }
 
     /// <summary>
@@ -163,7 +163,7 @@ public class AuthenticationCompletionRouterTests
 
         var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
             () => RouterOver(storage, BackchannelTokenDeliveryModes.Poll)
-                .CompleteAsync(AuthReqId, RequestFor("typo-client"), TimeSpan.FromMinutes(5)));
+                .CompleteAsync(SingleIssuer.Tenant, AuthReqId, RequestFor("typo-client"), TimeSpan.FromMinutes(5)));
 
         Assert.Contains("the stored record is not there", refusal.Message, StringComparison.Ordinal);
     }
@@ -181,14 +181,14 @@ public class AuthenticationCompletionRouterTests
             BackchannelTokenDeliveryModes.Poll,
             new PollModeCompletionHandler(
                 NullLogger<PollModeCompletionHandler>.Instance, TestFingerprints.Instance, storage.Object, Mock.Of<ISubjectTypeConverter>(),
-                TimeProvider.System, null, tenantAccessor: SingleIssuer.Accessor));
+                TimeProvider.System, null));
 
         return new AuthenticationCompletionRouter(
             NullLogger<AuthenticationCompletionRouter>.Instance,
             TestFingerprints.Instance,
             clients.Object,
             services.BuildServiceProvider(),
-            storage.Object, tenantAccessor: SingleIssuer.Accessor);
+            storage.Object);
     }
 
     private static BackChannelAuthenticationRequest RequestFor(string clientId) =>

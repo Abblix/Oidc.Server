@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
@@ -28,6 +29,7 @@ internal sealed class AuthorizationContextBuilder(IConsentConstraintEnforcer con
     /// the consent backstop answers with.
     /// </summary>
     public async Task<Result<AuthorizationContext, OidcError>> BuildAsync(
+        TenantDefinition tenant,
         ValidAuthorizationRequest request,
         UserConsents userConsents,
         JsonArray? requestedDetails)
@@ -53,6 +55,7 @@ internal sealed class AuthorizationContextBuilder(IConsentConstraintEnforcer con
         // Handed what was asked for rather than what the provider left behind: the backstop measures the
         // granted set against the request, and the provider it is policing can reach that array.
         var enforcement = await consentConstraintEnforcer.EnforceAsync(
+            tenant,
             request with { AuthorizationDetails = requestedDetails },
             userConsents.Granted,
             CancellationToken.None);

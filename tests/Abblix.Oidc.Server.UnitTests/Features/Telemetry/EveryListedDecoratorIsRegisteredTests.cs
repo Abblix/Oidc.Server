@@ -75,7 +75,7 @@ public sealed class EveryListedDecoratorIsRegisteredTests
         await using var provider = services.ResolveToTheDeclaredTenant()
             .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await using var scope = provider.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<ICheckSessionHandler>().HandleAsync();
+        await scope.ServiceProvider.GetRequiredService<ICheckSessionHandler>().HandleAsync(SingleIssuer.Tenant);
 
         enricher.Verify(
             e => e.Enrich(It.IsAny<Activity>(), TelemetryEndpoints.CheckSession, null),

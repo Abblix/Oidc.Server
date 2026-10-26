@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -603,7 +604,7 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
 
         await scope.ServiceProvider
             .GetRequiredService<IAuthenticationCompletionHandler>()
-            .CompleteAsync(authenticationRequestId, completed, TimeSpan.FromMinutes(5));
+            .CompleteAsync(TestTenant.Of(host.Services), authenticationRequestId, completed, TimeSpan.FromMinutes(5));
     }
 
     private static JsonArray ReadAuthorizationDetails(string accessToken)
@@ -656,7 +657,10 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
     /// </summary>
     private sealed class ReachableUserDeviceHandler(TimeProvider clock) : IUserDeviceAuthenticationHandler
     {
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1172",
+            Justification = "The parameters belong to the interface; this stand-in answers the same way at every tenant.")]
         public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(
+            TenantDefinition tenant,
             ValidBackChannelAuthenticationRequest request)
             => Task.FromResult<Result<AuthSession, OidcError>>(new AuthSession(
                 Subject: LoginHint,

@@ -58,7 +58,7 @@ public class SupportedResponseTypeValidatorTests
     {
         var validator = new SupportedResponseTypeValidator(CodeOnly);
 
-        var result = await validator.ValidateAsync(Context([[ResponseTypes.Code]]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([[ResponseTypes.Code]]));
 
         Assert.Null(result);
     }
@@ -74,7 +74,7 @@ public class SupportedResponseTypeValidatorTests
     {
         var validator = new SupportedResponseTypeValidator(CodeOnly);
 
-        var result = await validator.ValidateAsync(Context([[unsupportedPart]]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([[unsupportedPart]]));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
@@ -91,6 +91,7 @@ public class SupportedResponseTypeValidatorTests
         var validator = new SupportedResponseTypeValidator(CodeOnly);
 
         var result = await validator.ValidateAsync(
+            SingleIssuer.Tenant,
             Context([[ResponseTypes.Code, ResponseTypes.IdToken]]));
 
         Assert.NotNull(result);
@@ -110,7 +111,7 @@ public class SupportedResponseTypeValidatorTests
     {
         var validator = new SupportedResponseTypeValidator(CodeTokenIdToken);
 
-        var result = await validator.ValidateAsync(Context([[responseType]]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([[responseType]]));
 
         Assert.Null(result);
     }
@@ -124,7 +125,7 @@ public class SupportedResponseTypeValidatorTests
     {
         var validator = new SupportedResponseTypeValidator(CodeOnly);
 
-        var result = await validator.ValidateAsync(Context([
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([
             [ResponseTypes.Code],
             [ResponseTypes.Token],
         ]));
@@ -143,7 +144,7 @@ public class SupportedResponseTypeValidatorTests
     {
         var validator = new SupportedResponseTypeValidator(CodeTokenIdToken);
 
-        var result = await validator.ValidateAsync(Context([[ResponseTypes.Code], []]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([[ResponseTypes.Code], []]));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
@@ -159,7 +160,7 @@ public class SupportedResponseTypeValidatorTests
     {
         var validator = new SupportedResponseTypeValidator(CodeTokenIdToken);
 
-        var result = await validator.ValidateAsync(Context([]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([]));
 
         Assert.Null(result);
     }

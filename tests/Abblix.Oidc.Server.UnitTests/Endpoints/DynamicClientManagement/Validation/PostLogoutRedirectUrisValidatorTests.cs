@@ -51,7 +51,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -70,7 +70,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -89,7 +89,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -111,7 +111,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -133,7 +133,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -154,7 +154,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -174,7 +174,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -193,7 +193,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -217,7 +217,7 @@ public class PostLogoutRedirectUrisValidatorTests
             postLogoutRedirectUris: [new Uri(uri)],
             applicationType: ApplicationTypes.Native);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Equal(accepted, result == null);
         if (!accepted)
@@ -263,7 +263,7 @@ public class PostLogoutRedirectUrisValidatorTests
             postLogoutRedirectUris: [new Uri(uri)],
             applicationType: ApplicationTypes.Web);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Equal(accepted, result == null);
         if (!accepted)
@@ -283,7 +283,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -304,7 +304,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -325,7 +325,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -349,7 +349,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -373,7 +373,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -393,7 +393,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -412,7 +412,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -431,7 +431,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -450,7 +450,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);

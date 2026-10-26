@@ -33,6 +33,7 @@ public class ReadClientRequestProcessorTests
     {
         _tokenService
             .Setup(s => s.IssueTokenAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), It.IsAny<string>()))
             .ReturnsAsync("registration-access-token");
 
@@ -49,9 +50,10 @@ public class ReadClientRequestProcessorTests
         var processor = CreateProcessor();
         var request = new ValidClientRequest(new ClientRequest(), new RegisteredClient(new ClientInfo("client-1"), TokenId));
 
-        await processor.ProcessAsync(request);
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         _tokenService.Verify(s => s.IssueTokenAsync(
+            TestTenant.Matched,
             "client-1", It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), TokenId), Times.Once);
     }
 
@@ -71,7 +73,7 @@ public class ReadClientRequestProcessorTests
         var request = new ValidClientRequest(new ClientRequest(), new RegisteredClient(client, TokenId));
 
         // Act
-        var result = await processor.ProcessAsync(request);
+        var result = await processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));

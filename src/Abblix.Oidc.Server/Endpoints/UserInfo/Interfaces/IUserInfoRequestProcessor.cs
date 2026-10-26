@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
@@ -19,8 +20,9 @@ public interface IUserInfoRequestProcessor
 	/// <summary>
 	/// Asynchronously processes a valid user info request and generates a user info response.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The valid user info request to process.</param>
 	/// <returns>A <see cref="Task"/> representing the asynchronous operation,
 	/// which upon completion will yield a <see cref="Result{UserInfoFoundResponse, AuthError}"/>.</returns>
-	Task<Result<UserInfoFoundResponse, OidcError>> ProcessAsync(ValidUserInfoRequest request);
+	Task<Result<UserInfoFoundResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidUserInfoRequest request);
 }

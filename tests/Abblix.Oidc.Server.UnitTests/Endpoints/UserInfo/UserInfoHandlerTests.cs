@@ -96,21 +96,21 @@ public class UserInfoHandlerTests
         var userInfoFound = CreateUserInfoFoundResponse();
 
         _validator
-            .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest))
             .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync((Result<UserInfoFoundResponse, OidcError>)(userInfoFound));
 
         // Act
-        var result = await _handler.HandleAsync(userInfoRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
         Assert.Same(userInfoFound, response);
-        _validator.Verify(v => v.ValidateAsync(userInfoRequest, clientRequest), Times.Once);
-        _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest), Times.Once);
+        _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
 
     /// <summary>
@@ -128,16 +128,16 @@ public class UserInfoHandlerTests
             "Access token is invalid or expired");
 
         _validator
-            .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest))
             .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(error));
 
         // Act
-        var result = await _handler.HandleAsync(userInfoRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
         Assert.Equal(error, failure);
-        _validator.Verify(v => v.ValidateAsync(userInfoRequest, clientRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest), Times.Once);
         _processor.VerifyNoOtherCalls();
     }
 
@@ -157,21 +157,21 @@ public class UserInfoHandlerTests
             "Failed to retrieve user information");
 
         _validator
-            .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest))
             .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync((Result<UserInfoFoundResponse, OidcError>)(error));
 
         // Act
-        var result = await _handler.HandleAsync(userInfoRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
         Assert.Equal(error, failure);
-        _validator.Verify(v => v.ValidateAsync(userInfoRequest, clientRequest), Times.Once);
-        _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest), Times.Once);
+        _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
 
     /// <summary>
@@ -189,18 +189,18 @@ public class UserInfoHandlerTests
         var userInfoFound = CreateUserInfoFoundResponse();
 
         _validator
-            .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest))
             .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(It.Is<ValidUserInfoRequest>(r => r == validRequest)))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, It.Is<ValidUserInfoRequest>(r => r == validRequest)))
             .ReturnsAsync((Result<UserInfoFoundResponse, OidcError>)(userInfoFound));
 
         // Act
-        await _handler.HandleAsync(userInfoRequest, clientRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
-        _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
+        _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
 
     /// <summary>
@@ -219,7 +219,7 @@ public class UserInfoHandlerTests
         var callOrder = new System.Collections.Generic.List<string>();
 
         _validator
-            .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest))
             .ReturnsAsync(() =>
             {
                 callOrder.Add("validate");
@@ -227,7 +227,7 @@ public class UserInfoHandlerTests
             });
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync(() =>
             {
                 callOrder.Add("process");
@@ -235,7 +235,7 @@ public class UserInfoHandlerTests
             });
 
         // Act
-        await _handler.HandleAsync(userInfoRequest, clientRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.Equal(2, callOrder.Count);
@@ -258,11 +258,11 @@ public class UserInfoHandlerTests
             "Access token is invalid");
 
         _validator
-            .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest))
             .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(error));
 
         // Act
-        var result = await _handler.HandleAsync(userInfoRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
@@ -284,15 +284,16 @@ public class UserInfoHandlerTests
         var error = new OidcError(ErrorCodes.InvalidRequest, "Invalid request");
 
         _validator
-            .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest))
             .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(error));
 
         // Act
-        await _handler.HandleAsync(userInfoRequest, clientRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         _validator.Verify(
             v => v.ValidateAsync(
+                TestTenant.Matched,
                 It.Is<UserInfoRequest>(r => r == userInfoRequest),
                 It.Is<ClientRequest>(r => r == clientRequest)),
             Times.Once);
@@ -312,11 +313,11 @@ public class UserInfoHandlerTests
         var error = new OidcError(ErrorCodes.InvalidToken, "Token not authorized");
 
         _validator
-            .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest))
             .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(error));
 
         // Act
-        await _handler.HandleAsync(userInfoRequest, clientRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         _processor.VerifyNoOtherCalls();
@@ -336,15 +337,15 @@ public class UserInfoHandlerTests
         var userInfoFound = CreateUserInfoFoundResponse();
 
         _validator
-            .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest))
             .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync((Result<UserInfoFoundResponse, OidcError>)(userInfoFound));
 
         // Act
-        var result = await _handler.HandleAsync(userInfoRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
@@ -366,15 +367,15 @@ public class UserInfoHandlerTests
         var userInfoFound = CreateUserInfoFoundResponse();
 
         _validator
-            .Setup(v => v.ValidateAsync(userInfoRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest))
             .ReturnsAsync((Result<ValidUserInfoRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync((Result<UserInfoFoundResponse, OidcError>)(userInfoFound));
 
         // Act
-        var result = await _handler.HandleAsync(userInfoRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));

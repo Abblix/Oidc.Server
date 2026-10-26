@@ -377,8 +377,8 @@ public class ServiceCollectionOverrideTests
         Assert.Single(services, d => d.ServiceType == typeof(IAuthorizationHandler));
         await using var provider = services.BuildServiceProvider();
         var request = new AuthorizationRequest();
-        await provider.GetRequiredService<IAuthorizationHandler>().HandleAsync(request);
-        stub.Verify(handler => handler.HandleAsync(request), Times.Once);
+        await provider.GetRequiredService<IAuthorizationHandler>().HandleAsync(SingleIssuer.Tenant, request);
+        stub.Verify(handler => handler.HandleAsync(TestTenant.Matched, request), Times.Once);
     }
 
     [Fact]
@@ -503,7 +503,7 @@ public class ServiceCollectionOverrideTests
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IIdentityTokenService>());
         Assert.Null(await scope.ServiceProvider.GetRequiredService<IUserInfoProvider>()
-            .GetUserInfoAsync(new AuthSession("alice", "s", DateTimeOffset.UnixEpoch, "local"), []));
+            .GetUserInfoAsync(SingleIssuer.Tenant, new AuthSession("alice", "s", DateTimeOffset.UnixEpoch, "local"), []));
     }
 
     /// <summary>
@@ -524,7 +524,7 @@ public class ServiceCollectionOverrideTests
         await using var provider = services.BuildServiceProvider();
 
         await provider.GetRequiredService<IUserInfoProvider>()
-            .GetUserInfoAsync(new AuthSession("alice", "s", DateTimeOffset.UnixEpoch, "local"), []);
+            .GetUserInfoAsync(SingleIssuer.Tenant, new AuthSession("alice", "s", DateTimeOffset.UnixEpoch, "local"), []);
 
         var record = Assert.Single(records.Entries, entry => entry.EventId.Id == LogEvents.Misc.NoUserInfoProvider.NoProviderRegistered);
         Assert.Equal(LogLevel.Warning, record.Level);

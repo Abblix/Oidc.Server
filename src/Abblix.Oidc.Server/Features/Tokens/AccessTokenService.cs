@@ -141,7 +141,7 @@ internal class AccessTokenService(
 		// the user-information endpoint would ask the host's provider for it, because of a scope or because the
 		// client named it for that endpoint. The endpoint rebuilds the session from this token and asks for the same
 		// claims, so it loses nothing.
-		if (!ReleasesEmail(authContext))
+		if (!ReleasesEmail(tenant, authContext))
 		{
 			accessToken.Payload.Email = null;
 			accessToken.Payload.EmailVerified = null;
@@ -172,9 +172,9 @@ internal class AccessTokenService(
 	/// Whether the user-information endpoint would ask the host's provider for the email address under
 	/// <paramref name="authContext"/>, decided by the same scopes and requested claims as there.
 	/// </summary>
-	private bool ReleasesEmail(AuthorizationContext authContext)
+	private bool ReleasesEmail(TenantDefinition tenant, AuthorizationContext authContext)
 		=> scopeClaims
-			.GetRequestedClaims(authContext.Scope, authContext.RequestedClaims?.UserInfo?.Select(claim => claim.Key))
+			.GetRequestedClaims(tenant, authContext.Scope, authContext.RequestedClaims?.UserInfo?.Select(claim => claim.Key))
 			.Contains(IanaClaimTypes.Email, StringComparer.Ordinal);
 
 	/// <summary>

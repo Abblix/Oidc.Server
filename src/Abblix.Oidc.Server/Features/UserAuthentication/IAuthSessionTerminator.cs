@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.UserAuthentication;
 
@@ -16,21 +17,18 @@ namespace Abblix.Oidc.Server.Features.UserAuthentication;
 /// <remarks>
 /// A session ends on logout and when a sign-in replaces it, and both go through here so the two cannot drift
 /// apart. Removing the session from the user agent is the caller's part.
-/// <para>
-/// It acts for the tenant of the request it is called in. Called outside one, as from a job or a message handler, it
-/// acts for the tenant of the <see cref="Abblix.Oidc.Server.Features.MultiTenancy.TenantScope"/> the caller enters
-/// with the definition the tenant catalog returns, and refuses to act with no tenant at all.
-/// </para>
 /// </remarks>
 public interface IAuthSessionTerminator
 {
     /// <summary>
     /// Revokes the tokens of the session when the deployment asks for it, then notifies its clients.
     /// </summary>
+    /// <param name="tenant">The tenant the session belonged to, which outside a request is the definition the tenant
+    /// catalog returns.</param>
     /// <param name="sessionId">The session that ended.</param>
     /// <param name="subject">The end user the session belonged to.</param>
     /// <returns>
     /// The logout context the notifiers filled in, whose front-channel URIs a logout renders to the user agent.
     /// </returns>
-    Task<LogoutContext> TerminateAsync(string sessionId, string subject);
+    Task<LogoutContext> TerminateAsync(TenantDefinition tenant, string sessionId, string subject);
 }

@@ -17,15 +17,14 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 /// Validates the client in a device authorization request.
 /// </summary>
 /// <param name="clientAuthenticator">The service used to authenticate clients.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class ClientValidator(IClientAuthenticator clientAuthenticator, ITenantAccessor tenantAccessor)
+public class ClientValidator(IClientAuthenticator clientAuthenticator)
     : IDeviceAuthorizationContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(DeviceAuthorizationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
     {
         var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
-            tenantAccessor.CurrentTenant(), context.ClientRequest);
+            tenant, context.ClientRequest);
         if (clientInfo == null)
         {
             return new OidcError(

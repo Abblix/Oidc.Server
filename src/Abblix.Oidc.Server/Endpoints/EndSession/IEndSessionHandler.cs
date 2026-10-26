@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 
@@ -23,10 +24,11 @@ public interface IEndSessionHandler
     /// <summary>
     /// Handles a single RP-initiated logout request end to end.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="endSessionRequest">The parsed wire-level end-session request.</param>
     /// <returns>
     /// An <see cref="EndSessionSuccess"/> on success, or an <see cref="OidcError"/>
     /// describing why the request was rejected.
     /// </returns>
-    Task<Result<IEndSessionResponse, OidcError>> HandleAsync(Model.EndSessionRequest endSessionRequest);
+    Task<Result<IEndSessionResponse, OidcError>> HandleAsync(TenantDefinition tenant, Model.EndSessionRequest endSessionRequest);
 }

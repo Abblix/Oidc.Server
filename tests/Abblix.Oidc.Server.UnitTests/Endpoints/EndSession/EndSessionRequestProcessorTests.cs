@@ -65,10 +65,9 @@ public class EndSessionRequestProcessorTests
                     _sessionClients,
                     _clientInfoProvider.Object,
                     _logoutNotifier.Object,
-                    SingleIssuer.LicensedCatalog,
-                    SingleIssuer.Accessor),
-                Options.Create(_options), tenantAccessor: SingleIssuer.Accessor),
-            _confirmationStore.Object, tenantAccessor: SingleIssuer.Accessor);
+                    SingleIssuer.LicensedCatalog),
+                Options.Create(_options)),
+            _confirmationStore.Object);
     }
 
     private static EndSessionRequest CreateEndSessionRequest(
@@ -155,7 +154,7 @@ public class EndSessionRequestProcessorTests
 
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
@@ -192,7 +191,7 @@ public class EndSessionRequestProcessorTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
@@ -222,7 +221,7 @@ public class EndSessionRequestProcessorTests
 
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
@@ -247,7 +246,7 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync((AuthSession?)null);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
@@ -276,7 +275,7 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync((AuthSession?)null);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
@@ -302,7 +301,7 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync((AuthSession?)null);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
@@ -343,16 +342,16 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync(client2);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
-        _logoutNotifier.Verify(n => n.NotifyClientAsync(client1, It.IsAny<LogoutContext>()), Times.Once);
-        _logoutNotifier.Verify(n => n.NotifyClientAsync(client2, It.IsAny<LogoutContext>()), Times.Once);
+        _logoutNotifier.Verify(n => n.NotifyClientAsync(TestTenant.Matched, client1, It.IsAny<LogoutContext>()), Times.Once);
+        _logoutNotifier.Verify(n => n.NotifyClientAsync(TestTenant.Matched, client2, It.IsAny<LogoutContext>()), Times.Once);
     }
 
     /// <summary>
@@ -386,17 +385,17 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync((ClientInfo?)null);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(client1, It.IsAny<LogoutContext>()))
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, client1, It.IsAny<LogoutContext>()))
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
-        _logoutNotifier.Verify(n => n.NotifyClientAsync(client1, It.IsAny<LogoutContext>()), Times.Once);
+        _logoutNotifier.Verify(n => n.NotifyClientAsync(TestTenant.Matched, client1, It.IsAny<LogoutContext>()), Times.Once);
         _logoutNotifier.Verify(
-            n => n.NotifyClientAsync(It.Is<ClientInfo>(c => c.ClientId == "client_missing"), It.IsAny<LogoutContext>()),
+            n => n.NotifyClientAsync(TestTenant.Matched, It.Is<ClientInfo>(c => c.ClientId == "client_missing"), It.IsAny<LogoutContext>()),
             Times.Never);
     }
 
@@ -428,12 +427,12 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync(client1);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
-            .Callback<ClientInfo, LogoutContext>((_, context) => capturedContext = context)
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Callback<TenantDefinition, ClientInfo, LogoutContext>((_, _, context) => capturedContext = context)
             .Returns(Task.CompletedTask);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(capturedContext);
@@ -469,15 +468,15 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync(client1);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
-            .Callback<ClientInfo, LogoutContext>((_, context) =>
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Callback<TenantDefinition, ClientInfo, LogoutContext>((_, _, context) =>
             {
                 context.FrontChannelLogoutRequestUris.Add(new Uri("https://client1.example.com/logout"));
             })
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
@@ -515,12 +514,12 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync(client1);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .Callback(() => callOrder.Add("notify"))
             .Returns(Task.CompletedTask);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Equal(2, callOrder.Count);
@@ -545,7 +544,7 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync((AuthSession?)null);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
@@ -583,11 +582,11 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync(client1);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .Returns(notificationGate.Task);
 
         // Act
-        var processTask = _processor.ProcessAsync(request);
+        var processTask = _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert - the processor must still be awaiting the pending notification, not done.
         Assert.False(processTask.IsCompleted);
@@ -623,11 +622,11 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync(client1);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .ThrowsAsync(new InvalidOperationException("client endpoint unreachable"));
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert - logout succeeds despite the notification failure.
         Assert.True(result.TryGetSuccess(out _));

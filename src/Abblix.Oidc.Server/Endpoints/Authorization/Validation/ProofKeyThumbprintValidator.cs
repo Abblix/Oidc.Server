@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
@@ -35,7 +36,7 @@ public class ProofKeyThumbprintValidator : SyncAuthorizationContextValidatorBase
     private const int Sha256ThumbprintLength = 43;
 
     /// <inheritdoc/>
-    protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+    protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         var thumbprint = context.Request.ProofKeyThumbprint;
         if (thumbprint is null)

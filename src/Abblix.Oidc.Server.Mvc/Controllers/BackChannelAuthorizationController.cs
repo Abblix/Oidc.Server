@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Model;
 using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -44,6 +45,7 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing pushed authorization requests.</param>
     /// <param name="formatter">The service for formatting the authorization response.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="authorizationRequest">The authorization request received from the client.</param>
     /// <param name="clientRequest">Additional client request information for contextual validation.</param>
     /// <returns>
@@ -61,11 +63,12 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     public async Task<ActionResult<Core.AuthorizationResponse>> PushAuthorizeAsync(
         [FromServices] IPushedAuthorizationHandler handler,
         [FromServices] IPushedAuthorizationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] AuthorizationRequest authorizationRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
-        var response = await handler.HandleAsync(coreAuthorizationRequest, clientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreAuthorizationRequest, clientRequest);
         return await formatter.FormatResponseAsync(coreAuthorizationRequest, response);
     }
 
@@ -89,6 +92,7 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     /// <param name="formatter">
     /// Service that formats the response to the client, based on the result of the backchannel authentication request.
     /// </param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="authenticationRequest">
     /// The backchannel authentication request containing user-related authentication parameters.</param>
     /// <param name="clientRequest">
@@ -103,12 +107,13 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     public async Task<ActionResult> BackChannelAuthenticationAsync(
         [FromServices] IBackChannelAuthenticationHandler handler,
         [FromServices] IBackChannelAuthenticationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] BackChannelAuthenticationRequest authenticationRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.BackChannelAuthenticationRequest coreAuthenticationRequest = authenticationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
-        var response = await handler.HandleAsync(coreAuthenticationRequest, coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreAuthenticationRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreAuthenticationRequest, coreClientRequest, response);
     }
 
@@ -126,11 +131,12 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     public async Task<ActionResult> DeviceAuthorizationAsync(
         [FromServices] IDeviceAuthorizationHandler handler,
         [FromServices] IDeviceAuthorizationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] DeviceAuthorizationRequest deviceAuthorizationRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.DeviceAuthorizationRequest coreDeviceAuthorizationRequest = deviceAuthorizationRequest;
-        var response = await handler.HandleAsync(coreDeviceAuthorizationRequest, clientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreDeviceAuthorizationRequest, clientRequest);
         return await formatter.FormatResponseAsync(coreDeviceAuthorizationRequest, response);
     }
 }

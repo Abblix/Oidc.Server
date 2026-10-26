@@ -8,6 +8,7 @@
 
 using System.Reflection;
 using Abblix.Oidc.Server.DeclarativeBinding;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -32,6 +33,7 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// Client identification is performed using the request parameter, JWT issuer claim, or JWT client_id claim,
     /// with validation ensuring all present sources match.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The authorization request to be processed.</param>
     /// <returns>
     /// A task that returns a <see cref="Result{AuthorizationRequest, AuthorizationRequestValidationError}"/>
@@ -39,9 +41,10 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// issues with the request object validation (invalid JWT, client identification failure, or claim mismatch).
     /// </returns>
     public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(
+        TenantDefinition tenant,
         AuthorizationRequest request)
     {
-        var fetchResult = await requestObjectFetcher.FetchAsync(
+        var fetchResult = await requestObjectFetcher.FetchAsync(tenant, 
             request, request.Request, client => client.RequestObjectSigningAlgorithm);
 
         // The merge rebuilds the request from its wire form, which leaves out what the server set on the request it

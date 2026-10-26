@@ -47,7 +47,7 @@ public class RefreshTokenGrantHandlerTests
 
         _handler = new RefreshTokenGrantHandler(
             _jwtValidator.Object,
-            _refreshTokenService.Object, tenantAccessor: SingleIssuer.Accessor);
+            _refreshTokenService.Object);
     }
 
     /// <summary>
@@ -57,7 +57,7 @@ public class RefreshTokenGrantHandlerTests
     [Fact]
     public async Task AuthorizeAsync_MissingRefreshToken_ReturnsInvalidRequest()
     {
-        var result = await _handler.AuthorizeAsync(new TokenRequest(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, new TokenRequest(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -88,7 +88,7 @@ public class RefreshTokenGrantHandlerTests
             .ReturnsAsync(expectedGrant);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -115,7 +115,7 @@ public class RefreshTokenGrantHandlerTests
                 new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
                 Context: new AuthorizationContext(ClientId, [Scopes.OpenId, Scopes.OfflineAccess], null)));
 
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -147,7 +147,7 @@ public class RefreshTokenGrantHandlerTests
             .ReturnsAsync(grantForDifferentClient);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -172,7 +172,7 @@ public class RefreshTokenGrantHandlerTests
                 ValidationOptions.Default))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -193,7 +193,7 @@ public class RefreshTokenGrantHandlerTests
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token is malformed"));
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -216,7 +216,7 @@ public class RefreshTokenGrantHandlerTests
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token has expired"));
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -246,7 +246,7 @@ public class RefreshTokenGrantHandlerTests
             .ReturnsAsync(serviceError);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));

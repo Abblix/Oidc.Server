@@ -118,7 +118,7 @@ public class GrantRevocationTests
         _service = new RefreshTokenService(
             _clock, ids.Object, formatter.Object, _registry, grants, new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             options, SingleIssuer.LicensedCatalog);
-        _processor = new RevocationRequestProcessor(_registry, grants, _clock, tenantAccessor: SingleIssuer.Accessor);
+        _processor = new RevocationRequestProcessor(_registry, grants, _clock);
 
         var inner = new Mock<IJsonWebTokenValidator>();
         inner
@@ -158,6 +158,7 @@ public class GrantRevocationTests
     }
 
     private Task RevokeAsync(JsonWebToken token) => _processor.ProcessAsync(
+        SingleIssuer.Tenant,
         new ValidRevocationRequest(new RevocationRequest { Token = token.Payload.JwtId! }, token));
 
     private async Task<bool> AcceptedAsync(JsonWebToken token)

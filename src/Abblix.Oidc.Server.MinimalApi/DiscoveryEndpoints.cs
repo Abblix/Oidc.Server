@@ -69,9 +69,9 @@ internal static class DiscoveryEndpoints
     /// Returns the session-management iframe document (OpenID Connect Session Management).
     /// </summary>
     private static async Task<IResult> CheckSessionAsync(
-        ICheckSessionHandler handler, ICheckSessionResponseFormatter formatter)
+        ICheckSessionHandler handler, ICheckSessionResponseFormatter formatter, ITenantAccessor tenantAccessor)
     {
-        var response = await handler.HandleAsync();
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant());
         return await formatter.FormatResponseAsync(response);
     }
 
@@ -79,9 +79,9 @@ internal static class DiscoveryEndpoints
     /// Returns the OpenID Provider configuration document (discovery metadata) for the current request.
     /// </summary>
     private static async Task<IResult> ConfigurationAsync(
-        IConfigurationHandler handler, IConfigurationResponseFormatter formatter)
+        IConfigurationHandler handler, IConfigurationResponseFormatter formatter, ITenantAccessor tenantAccessor)
     {
-        var response = await handler.HandleAsync();
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant());
         return await formatter.FormatResponseAsync(response);
     }
 

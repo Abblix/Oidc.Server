@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
@@ -35,6 +36,7 @@ public class PushModeGrantProcessor : IBackChannelGrantProcessor
     /// because <see cref="ValidateTokenEndpointAccess"/> short-circuits push-mode token-endpoint requests.
     /// </summary>
     public Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {

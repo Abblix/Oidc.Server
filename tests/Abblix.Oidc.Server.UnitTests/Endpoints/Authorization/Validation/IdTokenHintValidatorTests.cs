@@ -39,7 +39,7 @@ public class IdTokenHintValidatorTests
 
     public IdTokenHintValidatorTests()
     {
-        _validator = new IdTokenHintValidator(_hintParser.Object, tenantAccessor: SingleIssuer.Accessor);
+        _validator = new IdTokenHintValidator(_hintParser.Object);
     }
 
     private static AuthorizationValidationContext Context(string? hint = Hint) => new(
@@ -75,7 +75,7 @@ public class IdTokenHintValidatorTests
         var context = Context();
         SetupParsed();
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
         Assert.Equal(Subject, context.IdTokenHintSubject);
     }
 
@@ -93,7 +93,7 @@ public class IdTokenHintValidatorTests
     {
         var context = Context(hint);
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
         Assert.Null(context.IdTokenHintSubject);
     }
 
@@ -107,7 +107,7 @@ public class IdTokenHintValidatorTests
         Result<JsonWebToken, string> refused = "The id token hint is not an ID Token";
         _hintParser.Setup(p => p.ParseAsync(TestTenant.Matched, Hint)).ReturnsAsync(refused);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -132,7 +132,7 @@ public class IdTokenHintValidatorTests
         var context = Context();
         SetupParsed(audience: audience);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -154,7 +154,7 @@ public class IdTokenHintValidatorTests
         var context = Context();
         SetupParsed(subject: subject);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);

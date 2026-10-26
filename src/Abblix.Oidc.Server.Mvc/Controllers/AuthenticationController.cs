@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Model;
 using Abblix.Oidc.Server.Mvc.Attributes;
 using Abblix.Oidc.Server.Mvc.Filters;
@@ -52,6 +53,7 @@ public sealed class AuthenticationController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing authorization requests.</param>
     /// <param name="formatter">The formatter used to generate a response for the authorization request.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="authorizationRequest">The authorization request details received from the client.</param>
     /// <returns>A task that returns an action result containing
     /// the authorization response.</returns>
@@ -69,10 +71,11 @@ public sealed class AuthenticationController : ControllerBase
     public async Task<ActionResult<Core.AuthorizationResponse>> AuthorizeAsync(
         [FromServices] IAuthorizationHandler handler,
         [FromServices] IAuthorizationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromQueryOrForm] AuthorizationRequest authorizationRequest)
     {
         Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
-        var response = await handler.HandleAsync(coreAuthorizationRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreAuthorizationRequest);
         return await formatter.FormatResponseAsync(coreAuthorizationRequest, response);
     }
 
@@ -82,6 +85,7 @@ public sealed class AuthenticationController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing userinfo requests.</param>
     /// <param name="formatter">The formatter used to generate a response with user claims.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="userInfoRequest">The userinfo request containing the access token.</param>
     /// <param name="clientRequest">Additional request information provided by the client.</param>
     /// <returns>A task that returns an action result containing
@@ -98,11 +102,12 @@ public sealed class AuthenticationController : ControllerBase
     public async Task<ActionResult> UserInfoAsync(
         [FromServices] IUserInfoHandler handler,
         [FromServices] IUserInfoResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromQueryOrForm] UserInfoRequest userInfoRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.UserInfoRequest coreUserInfoRequest = userInfoRequest;
-        var response = await handler.HandleAsync(coreUserInfoRequest, clientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreUserInfoRequest, clientRequest);
         return await formatter.FormatResponseAsync(coreUserInfoRequest, response);
     }
 
@@ -112,6 +117,7 @@ public sealed class AuthenticationController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing end session requests.</param>
     /// <param name="formatter">The formatter used to generate a response for the end session request.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="request">The end session request details received from the client.</param>
     /// <returns>A task that returns an action result for
     /// the end session process.</returns>
@@ -130,10 +136,11 @@ public sealed class AuthenticationController : ControllerBase
     public async Task<ActionResult> EndSessionAsync(
         [FromServices] IEndSessionHandler handler,
         [FromServices] IEndSessionResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromQueryOrForm] EndSessionRequest request)
     {
         Core.EndSessionRequest coreEndSessionRequest = request;
-        var response = await handler.HandleAsync(coreEndSessionRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreEndSessionRequest);
         return await formatter.FormatResponseAsync(coreEndSessionRequest, response);
     }
 
@@ -144,6 +151,7 @@ public sealed class AuthenticationController : ControllerBase
     /// <param name="handler">The handler responsible for the check session operation.</param>
     /// <param name="formatter">The formatter used to generate a response suitable for session checking
     /// within an iframe.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <returns>A task that returns an action result for
     /// the check session response.</returns>
     /// <remarks>
@@ -162,9 +170,10 @@ public sealed class AuthenticationController : ControllerBase
     [EnableCors(OidcConstants.CorsPolicyName)]
     public async Task<ActionResult> CheckSessionAsync(
         [FromServices] ICheckSessionHandler handler,
-        [FromServices] ICheckSessionResponseFormatter formatter)
+        [FromServices] ICheckSessionResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
-        var response = await handler.HandleAsync();
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant());
         return await formatter.FormatResponseAsync(response);
     }
 }

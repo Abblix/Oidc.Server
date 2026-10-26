@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -29,6 +30,7 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
     /// is valid and authorized for the client making the request. It also ensures that the redirect URI used in the
     /// token request matches the one used during the initial authorization request.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing the token request and client information.</param>
     /// <returns>
     /// A <see cref="OidcError"/> if the authorization grant is invalid,
@@ -36,7 +38,7 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
     /// otherwise, null indicating that the grant is valid and the context has been updated.
     /// </returns>
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-    public async Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, TokenValidationContext context, CancellationToken cancellationToken)
     {
         // Ensure the client is authorized to use the requested grant type
         if (!context.ClientInfo.EffectiveGrantTypes.Contains(context.Request.GrantType))
@@ -46,7 +48,7 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
                 "The grant type is not allowed for this client");
         }
 
-        var result = await grantHandler.AuthorizeAsync(context.Request, context.ClientInfo, cancellationToken);
+        var result = await grantHandler.AuthorizeAsync(tenant, context.Request, context.ClientInfo, cancellationToken);
 
         if (result.TryGetFailure(out var error))
         {

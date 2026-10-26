@@ -26,18 +26,16 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <param name="logger">Logger for recording validation operations.</param>
 /// <param name="jwtValidator">Validates the software statement JWT signature and claims.</param>
 /// <param name="options">OIDC options containing software statement configuration.</param>
-/// <param name="tenantAccessor">Names the tenant whose default security profile applies.</param>
 /// <param name="secureFetcher">HTTP fetcher with SSRF protection for retrieving trusted issuer JWKS.</param>
 public partial class SoftwareStatementValidator(
     ILogger<SoftwareStatementValidator> logger,
     IJsonWebTokenValidator jwtValidator,
     IOptionsMonitor<OidcOptions> options,
-    ITenantAccessor tenantAccessor,
     [FromKeyedServices(KeySetOwners.SoftwareStatementIssuer)] ISecureHttpFetcher secureFetcher)
     : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var softwareStatementOptions = options.CurrentValue.SoftwareStatement;
         var softwareStatement = context.Request.SoftwareStatement;
@@ -58,7 +56,7 @@ public partial class SoftwareStatementValidator(
         }
 
         var profile = SecurityProfileRequirements.Resolve(
-            tenantAccessor.CurrentTenant().DefaultSecurityProfile);
+            tenant.DefaultSecurityProfile);
 
         var validationParameters = new ValidationParameters
         {

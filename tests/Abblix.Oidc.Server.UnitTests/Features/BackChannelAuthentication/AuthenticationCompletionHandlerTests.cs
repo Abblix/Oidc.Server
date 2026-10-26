@@ -97,11 +97,11 @@ public partial class AuthenticationCompletionHandlerTests
 
     private PollModeCompletionHandler CreatePollModeHandler() =>
         new(Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-            new FakeTimeProvider(ApprovedAt), null, tenantAccessor: SingleIssuer.Accessor);
+            new FakeTimeProvider(ApprovedAt), null);
 
     private PingModeCompletionHandler CreatePingModeHandler() =>
         new(Mock.Of<ILogger<PingModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-            _notificationService.Object, new FakeTimeProvider(ApprovedAt), tenantAccessor: SingleIssuer.Accessor);
+            _notificationService.Object, new FakeTimeProvider(ApprovedAt));
 
     private PushModeCompletionHandler CreatePushModeHandler(
         StubAuthorizationDetailsPolicy? policy = null,
@@ -110,7 +110,7 @@ public partial class AuthenticationCompletionHandlerTests
         new(logger ?? Mock.Of<ILogger<PushModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
             _notificationService.Object, _tokenRequestProcessor.Object,
             policy ?? StubAuthorizationDetailsPolicy.Accepting, new FakeTimeProvider(ApprovedAt),
-            cutoffs ?? Cutoffs(sessionRefused: false, grantRefused: false), tenantAccessor: SingleIssuer.Accessor);
+            cutoffs ?? Cutoffs(sessionRefused: false, grantRefused: false));
 
     /// <summary>
     /// A revocation checker answering as told: whether the session behind a grant is refused, and whether the grant
@@ -176,7 +176,7 @@ public partial class AuthenticationCompletionHandlerTests
         var handler = CreatePingModeHandler();
 
         // Act
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+        await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
 
         // Assert
         _storage.Verify(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, request, _expiresIn), Times.Once);
@@ -213,6 +213,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId,
             request,
             new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
@@ -249,7 +250,7 @@ public partial class AuthenticationCompletionHandlerTests
         var handler = CreatePollModeHandler();
 
         // Act
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+        await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
 
         // Assert
         _storage.Verify(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, request, _expiresIn), Times.Once);
@@ -286,7 +287,7 @@ public partial class AuthenticationCompletionHandlerTests
         var handler = CreatePingModeHandler();
 
         // Act
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+        await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
 
         // Assert
         _storage.Verify(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, request, _expiresIn), Times.Once);
@@ -323,7 +324,7 @@ public partial class AuthenticationCompletionHandlerTests
         var handler = CreatePingModeHandler();
 
         // Act
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+        await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
 
         // Assert
         _storage.Verify(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, request, _expiresIn), Times.Once);
@@ -358,7 +359,7 @@ public partial class AuthenticationCompletionHandlerTests
         var handler = CreatePollModeHandler();
 
         // Act
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, customExpiry);
+        await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, customExpiry);
 
         // Assert
         _storage.Verify(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, request, customExpiry), Times.Once);
@@ -395,7 +396,7 @@ public partial class AuthenticationCompletionHandlerTests
         var handler = CreatePingModeHandler();
 
         // Act
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+        await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
 
         // Assert
         _notificationService.Verify(
@@ -433,7 +434,7 @@ public partial class AuthenticationCompletionHandlerTests
             TimeSpan.FromHours(1),
             new Uri(TokenExchangeTokenTypes.AccessToken));
 
-        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync((Result<TokenIssued, OidcError>)(tokenIssued));
 
         _notificationService.Setup(s => s.SendAsync(
@@ -450,10 +451,10 @@ public partial class AuthenticationCompletionHandlerTests
         var handler = CreatePushModeHandler();
 
         // Act
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+        await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
 
         // Assert
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Once);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Once);
         _notificationService.Verify(
             s => s.SendAsync(_notificationEndpoint, NotificationToken, It.IsAny<IBackChannelNotificationRequest>(), BackchannelTokenDeliveryModes.Push),
             Times.Once);
@@ -480,7 +481,7 @@ public partial class AuthenticationCompletionHandlerTests
         request.ClientNotificationEndpoint = _notificationEndpoint;
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
 
-        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync((Result<TokenIssued, OidcError>)new TokenIssued(
                 new EncodedJsonWebToken(new Jwt.JsonWebToken(), EncodedAccessToken),
                 TokenTypes.Bearer,
@@ -494,7 +495,7 @@ public partial class AuthenticationCompletionHandlerTests
             .ReturnsAsync(false);
 
         var handler = CreatePushModeHandler();
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn);
+        await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, PushClient(), _expiresIn);
 
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
         _storage.Verify(
@@ -503,7 +504,7 @@ public partial class AuthenticationCompletionHandlerTests
 
         StoredRecordReads(null);
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => handler.CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
+            () => handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, PushClient(), _expiresIn));
     }
 
     /// <summary>
@@ -532,7 +533,7 @@ public partial class AuthenticationCompletionHandlerTests
 
         var error = new OidcError(ErrorCodes.InvalidRequest, "Token generation failed");
 
-        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync((Result<TokenIssued, OidcError>)(error));
 
         _storage.Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, request, _expiresIn)).Returns(Task.CompletedTask);
@@ -543,10 +544,10 @@ public partial class AuthenticationCompletionHandlerTests
         var handler = CreatePushModeHandler();
 
         // Act
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+        await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
 
         // Assert
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Once);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Once);
         VerifyPushErrorSent(ErrorCodes.TransactionFailed);
         _storage.Verify(
             s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId),
@@ -577,7 +578,7 @@ public partial class AuthenticationCompletionHandlerTests
         };
 
         var fault = new InvalidOperationException("The signing key is unavailable");
-        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>())).ThrowsAsync(fault);
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>())).ThrowsAsync(fault);
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
         NotificationsAreAccepted();
 
@@ -586,10 +587,10 @@ public partial class AuthenticationCompletionHandlerTests
         logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
 
         var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => CreatePushModeHandler(logger: logger.Object)
-            .CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn));
+            .CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn));
 
         Assert.Same(fault, thrown);
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Once);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Once);
         VerifyPushErrorSent(ErrorCodes.TransactionFailed);
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
         logger.Verify(
@@ -634,7 +635,7 @@ public partial class AuthenticationCompletionHandlerTests
 
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
 
-        await CreatePushModeHandler().CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+        await CreatePushModeHandler().CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
 
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
 
@@ -644,7 +645,7 @@ public partial class AuthenticationCompletionHandlerTests
             Times.Never);
 
         // Nothing is minted or delivered for a client that cannot be reached.
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Never);
         _notificationService.Verify(
             s => s.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
             Times.Never);
@@ -677,14 +678,14 @@ public partial class AuthenticationCompletionHandlerTests
 
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
 
-        await CreatePushModeHandler().CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+        await CreatePushModeHandler().CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
 
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
         _storage.Verify(
             s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
 
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Never);
         _notificationService.Verify(
             s => s.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
             Times.Never);
@@ -723,7 +724,7 @@ public partial class AuthenticationCompletionHandlerTests
         var handler = CreatePingModeHandler();
 
         // Act
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, clientInfo, _expiresIn);
+        await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
 
         // Assert
         _storage.Verify(
@@ -732,7 +733,7 @@ public partial class AuthenticationCompletionHandlerTests
         _notificationService.Verify(
             s => s.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
             Times.Never);
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Never);
     }
 
     /// <summary>
@@ -753,6 +754,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
@@ -794,9 +796,9 @@ public partial class AuthenticationCompletionHandlerTests
 
         var handler = new PollModeCompletionHandler(
             Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-            TimeProvider.System, notifier.Object, tenantAccessor: SingleIssuer.Accessor);
+            TimeProvider.System, notifier.Object);
 
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, PollClient(), _expiresIn);
+        await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
         notifier.Verify(
@@ -846,12 +848,13 @@ public partial class AuthenticationCompletionHandlerTests
         AuthenticationCompletionHandler handler = isPing
             ? new PingModeCompletionHandler(
                 Mock.Of<ILogger<PingModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-                _notificationService.Object, TimeProvider.System, SingleIssuer.Accessor, notifier.Object)
+                _notificationService.Object, TimeProvider.System, notifier.Object)
             : new PollModeCompletionHandler(
                 Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-                TimeProvider.System, notifier.Object, tenantAccessor: SingleIssuer.Accessor);
+                TimeProvider.System, notifier.Object);
 
         await handler.CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, isPing ? PingClient() : PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
@@ -871,7 +874,7 @@ public partial class AuthenticationCompletionHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => CreatePushModeHandler().CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
+            () => CreatePushModeHandler().CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, PushClient(), _expiresIn));
 
         _notificationService.VerifyNoOtherCalls();
     }
@@ -930,7 +933,7 @@ public partial class AuthenticationCompletionHandlerTests
         request.ClientNotificationEndpoint = _notificationEndpoint;
         StoredRecordIs(request);
 
-        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync((Result<TokenIssued, OidcError>)new TokenIssued(
                 new EncodedJsonWebToken(new Jwt.JsonWebToken(), EncodedAccessToken),
                 TokenTypes.Bearer,
@@ -948,10 +951,11 @@ public partial class AuthenticationCompletionHandlerTests
             .ReturnsAsync(request);
 
         await CreatePushModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PushClient(), _expiresIn);
 
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Never);
         VerifyPushErrorSent(ErrorCodes.AccessDenied);
     }
 
@@ -1004,6 +1008,7 @@ public partial class AuthenticationCompletionHandlerTests
             .ReturnsAsync(request);
 
         await CreatePushModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PushClient(), _expiresIn);
 
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
@@ -1119,7 +1124,7 @@ public partial class AuthenticationCompletionHandlerTests
         var handler = CreatePollModeHandler();
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => handler.CompleteAuthenticationAsync(AuthReqId, request, PollClient(), _expiresIn));
+            () => handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, PollClient(), _expiresIn));
 
         // It read the stored record and did nothing else: the guard consults storage, and refusing
         // costs no write.
@@ -1152,7 +1157,7 @@ public partial class AuthenticationCompletionHandlerTests
 
         var handler = CreatePollModeHandler();
 
-        await handler.CompleteAuthenticationAsync(AuthReqId, request, PollClient(), _expiresIn);
+        await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, PollClient(), _expiresIn);
 
         _storage.Verify(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, request, _expiresIn), Times.Once);
     }
@@ -1172,7 +1177,7 @@ public partial class AuthenticationCompletionHandlerTests
         var handler = CreatePingModeHandler();
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => handler.CompleteAuthenticationAsync(AuthReqId, request, PingClient(), _expiresIn));
+            () => handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, PingClient(), _expiresIn));
 
         // It read the stored record and did nothing else: the guard consults storage, and refusing
         // costs no write.
@@ -1196,7 +1201,7 @@ public partial class AuthenticationCompletionHandlerTests
         var handler = CreatePushModeHandler();
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => handler.CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
+            () => handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, PushClient(), _expiresIn));
 
         // It read the stored record and did nothing else: the guard consults storage, and refusing
         // costs no write.
@@ -1231,7 +1236,7 @@ public partial class AuthenticationCompletionHandlerTests
             .ReturnsAsync(won ? request : null);
 
         _tokenRequestProcessor
-            .Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .Callback(() => order.Add("minted"))
             .ReturnsAsync((Result<TokenIssued, OidcError>)(
                 new TokenIssued(
@@ -1247,7 +1252,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Callback(() => order.Add("delivered"))
             .ReturnsAsync(true);
 
-        var completion = CreatePushModeHandler().CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn);
+        var completion = CreatePushModeHandler().CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, PushClient(), _expiresIn);
 
         // The loser is refused rather than told it answered: its host must not believe tokens went out.
         if (won)

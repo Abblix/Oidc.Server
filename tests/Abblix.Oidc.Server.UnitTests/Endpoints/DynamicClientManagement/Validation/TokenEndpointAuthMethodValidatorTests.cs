@@ -54,7 +54,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var context = CreateContext(tokenEndpointAuthMethod: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -71,7 +71,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var context = CreateContext(tokenEndpointAuthMethod: string.Empty);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -92,7 +92,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var context = CreateContext(tokenEndpointAuthMethod: ClientAuthenticationMethods.ClientSecretBasic);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -113,7 +113,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var context = CreateContext(tokenEndpointAuthMethod: ClientAuthenticationMethods.PrivateKeyJwt);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -137,7 +137,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var context = CreateContext(tokenEndpointAuthMethod: "Client_Secret_Basic");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -159,7 +159,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var context = CreateContext(tokenEndpointAuthMethod: ClientAuthenticationMethods.ClientSecretPost);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -180,7 +180,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var context = CreateContext(tokenEndpointAuthMethod: ClientAuthenticationMethods.PrivateKeyJwt);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -201,7 +201,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var context = CreateContext(tokenEndpointAuthMethod: ClientAuthenticationMethods.ClientSecretJwt);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -222,7 +222,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var context = CreateContext(tokenEndpointAuthMethod: ClientAuthenticationMethods.None);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -249,7 +249,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var context = CreateContext(tokenEndpointAuthMethod: ClientAuthenticationMethods.ClientSecretPost);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -270,7 +270,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var context = CreateContext(tokenEndpointAuthMethod: "custom_auth_method");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -293,7 +293,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var context = CreateContext(tokenEndpointAuthMethod: ClientAuthenticationMethods.ClientSecretBasic);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         _clientAuthenticator.Verify(a => a.ClientAuthenticationMethodsSupported, Times.Once);
@@ -314,7 +314,7 @@ public class TokenEndpointAuthMethodValidatorTests
         var context = CreateContext(tokenEndpointAuthMethod: "unsupported_method");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);

@@ -47,7 +47,7 @@ public sealed class UnrecordedSpanTests
         await EndpointObservation.RunAsync(
             TelemetryEndpoints.Token,
             instruments,
-            NoTenant.Accessor,
+            null,
             () => Task.FromResult(0),
             EndpointObservation.NoError,
             enrichment: new EndpointEnrichment(new TokenRequest(), [enricher.Object]));

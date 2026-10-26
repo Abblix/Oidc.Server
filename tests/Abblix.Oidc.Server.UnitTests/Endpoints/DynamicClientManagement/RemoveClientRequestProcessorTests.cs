@@ -35,15 +35,14 @@ public class RemoveClientRequestProcessorTests
         return new RemoveClientRequestProcessor(
             clients.Object,
             TimeProvider.System,
-            SingleIssuer.LicensedCatalog,
-            SingleIssuer.Accessor);
+            SingleIssuer.LicensedCatalog);
     }
 
     [Fact]
     public async Task ARegistrationStillHeld_IsRemoved()
     {
         var result = await ProcessorWhere(registrationHeld: true)
-            .ProcessAsync(new ValidClientRequest(new ClientRequest(), Client));
+            .ProcessAsync(SingleIssuer.Tenant, new ValidClientRequest(new ClientRequest(), Client));
 
         Assert.True(result.TryGetSuccess(out var response));
         Assert.Equal("client-1", response.ClientId);
@@ -53,7 +52,7 @@ public class RemoveClientRequestProcessorTests
     public async Task ARegistrationNoLongerHeld_ReturnsInvalidToken()
     {
         var result = await ProcessorWhere(registrationHeld: false)
-            .ProcessAsync(new ValidClientRequest(new ClientRequest(), Client));
+            .ProcessAsync(SingleIssuer.Tenant, new ValidClientRequest(new ClientRequest(), Client));
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);

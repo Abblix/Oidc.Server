@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 
@@ -65,6 +66,7 @@ internal static class GrantedRevalidation
     /// Why the grant will not be issued, or <c>null</c> when the per-type validators accept it as stored.
     /// </summary>
     /// <param name="policy">The per-type validator dispatch.</param>
+    /// <param name="tenant">The tenant the grant is spent at.</param>
     /// <param name="grant">The grant about to be spent.</param>
     /// <param name="requested">The <c>authorization_details</c> the request carried, which the validators
     /// hold each granted entry to.</param>
@@ -72,6 +74,7 @@ internal static class GrantedRevalidation
     /// <param name="cancellationToken">Cancellation token forwarded to the validators.</param>
     public static async Task<GrantRefusal?> RefuseAsync(
         this IAuthorizationDetailsPolicy policy,
+        TenantDefinition tenant,
         AuthorizedGrant grant,
         JsonArray? requested,
         ClientInfo client,
@@ -87,7 +90,7 @@ internal static class GrantedRevalidation
         var asStored = (JsonArray)granted.DeepClone();
         var probe = (JsonArray)granted.DeepClone();
 
-        var result = await policy.ApplyGrantedAsync(probe, requested, client, cancellationToken);
+        var result = await policy.ApplyGrantedAsync(tenant, probe, requested, client, cancellationToken);
         if (result.TryGetFailure(out var error))
             return Refusal(error.ErrorDescription);
 

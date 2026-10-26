@@ -29,19 +29,18 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <param name="clock">Provides the issue time.</param>
 /// <param name="tokenIdGenerator">Generates the registration access token id.</param>
 /// <param name="registrationAccessTokenService">Issues the registration access token.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class RegisterClientRequestProcessor(
     ILogger<RegisterClientRequestProcessor> logger,
     IClientCredentialFactory credentialFactory,
     IClientInfoManager clientInfoManager,
     TimeProvider clock,
     ITokenIdGenerator tokenIdGenerator,
-    IRegistrationAccessTokenService registrationAccessTokenService,
-    ITenantAccessor tenantAccessor) : IRegisterClientRequestProcessor
+    IRegistrationAccessTokenService registrationAccessTokenService) : IRegisterClientRequestProcessor
 {
     /// <summary>
     /// Processes a valid client registration request, generating and storing the client's credentials and configuration.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The client registration request containing the necessary details for registering
     /// a new client.</param>
     /// <returns>A task that results in a Result containing the client ID,
@@ -53,7 +52,7 @@ public partial class RegisterClientRequestProcessor(
     /// The method also handles the storage of client information, facilitating future authentication and
     /// authorization processes.
     /// </remarks>
-    public async Task<Result<ClientRegistrationSuccessResponse, OidcError>> ProcessAsync(ValidClientRegistrationRequest request)
+    public async Task<Result<ClientRegistrationSuccessResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidClientRegistrationRequest request)
     {
         var model = request.Model;
 
@@ -69,6 +68,7 @@ public partial class RegisterClientRequestProcessor(
         // failure to issue leaves no stored client that no token could manage, and a token for a
         // registration the store then refuses matches nothing and is never answered.
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
+            tenant,
             credentials.ClientId,
             issuedAt,
             clientInfo.ExpiresAfter,
@@ -79,7 +79,7 @@ public partial class RegisterClientRequestProcessor(
         // registration the store did not keep - one racing another under the same id, or, in a store
         // following reloads, one under an id the settings came to configure meanwhile - is refused as
         // a taken id is.
-        if (!await clientInfoManager.TryAddClientAsync(tenantAccessor.CurrentTenant(), new RegisteredClient(clientInfo, registrationAccessTokenId)))
+        if (!await clientInfoManager.TryAddClientAsync(tenant, new RegisteredClient(clientInfo, registrationAccessTokenId)))
         {
             LogRegistrationNotKept(credentials.ClientId);
             return Validation.ErrorFactory.InvalidClientMetadata(

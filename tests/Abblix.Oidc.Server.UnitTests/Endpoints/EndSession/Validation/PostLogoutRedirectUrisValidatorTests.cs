@@ -69,7 +69,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(postLogoutRedirectUri: null);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(error);
@@ -88,7 +88,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(error);
@@ -107,7 +107,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(error);
@@ -125,7 +125,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(new Uri("https://client.example.com/logout"), clientInfo: null);
         context.Request = context.Request with { State = "af0ifjsldkj" };
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(error);
         Assert.Null(context.Request.PostLogoutRedirectUri);
@@ -145,7 +145,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert - Should fail because query parameter doesn't match
         Assert.NotNull(error);
@@ -168,7 +168,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(error);
@@ -187,7 +187,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert - Should fail due to case mismatch in path
         Assert.NotNull(error);
@@ -207,7 +207,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert - Should succeed because scheme and host are case-insensitive
         Assert.Null(error);
@@ -226,7 +226,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var clientInfo = CreateClientInfo("https://client.example.com/logout");
         var context = CreateContext(redirectUri, clientInfo);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -245,7 +245,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(error);
@@ -265,7 +265,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(error);

@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
@@ -38,8 +39,8 @@ public class InitialAccessTokenServiceTests
         _jwtFormatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
         _service = new InitialAccessTokenService(
             _jwtFormatter.Object,
-            SingleIssuer.Accessor,
             SingleIssuer.LicensedCatalog,
+            Mock.Of<ITokenIdGenerator>(generator => generator.GenerateTokenId() == "the-token-id"),
             Options.Create(new OidcOptions()));
     }
 
@@ -52,7 +53,7 @@ public class InitialAccessTokenServiceTests
             .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, t, _) => capturedToken = t)
             .ReturnsAsync("formatted-jwt");
 
-        await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
+        await _service.IssueTokenAsync(SingleIssuer.Tenant, "admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
 
         Assert.NotNull(capturedToken);
         Assert.Equal(JwtTypes.InitialAccessToken, capturedToken.Header.Type);
@@ -73,7 +74,7 @@ public class InitialAccessTokenServiceTests
             .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, t, _) => capturedToken = t)
             .ReturnsAsync("formatted-jwt");
 
-        await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
+        await _service.IssueTokenAsync(SingleIssuer.Tenant, "admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
 
         Assert.NotNull(capturedToken);
         Assert.Equal(
@@ -90,7 +91,7 @@ public class InitialAccessTokenServiceTests
             .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, t, _) => capturedToken = t)
             .ReturnsAsync("formatted-jwt");
 
-        await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
+        await _service.IssueTokenAsync(SingleIssuer.Tenant, "admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
 
         Assert.NotNull(capturedToken);
         Assert.Equal("admin-portal", capturedToken.Payload.Subject);
@@ -107,27 +108,12 @@ public class InitialAccessTokenServiceTests
 
         var expiresIn = TimeSpan.FromDays(30);
 
-        await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, expiresIn);
+        await _service.IssueTokenAsync(SingleIssuer.Tenant, "admin-portal", FixedIssuedAt, expiresIn);
 
         Assert.NotNull(capturedToken);
         Assert.Equal(FixedIssuedAt, capturedToken.Payload.IssuedAt);
         Assert.Equal(FixedIssuedAt, capturedToken.Payload.NotBefore);
         Assert.Equal(FixedIssuedAt + expiresIn, capturedToken.Payload.ExpiresAt);
-    }
-
-    [Fact]
-    public async Task IssueTokenAsync_WithNullExpiresIn_ShouldSetNullExpiration()
-    {
-        JsonWebToken? capturedToken = null;
-        _jwtFormatter
-            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, t, _) => capturedToken = t)
-            .ReturnsAsync("formatted-jwt");
-
-        await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, expiresIn: null);
-
-        Assert.NotNull(capturedToken);
-        Assert.Null(capturedToken.Payload.ExpiresAt);
     }
 
     [Fact]
@@ -137,8 +123,23 @@ public class InitialAccessTokenServiceTests
             .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
             .ReturnsAsync("eyJhbGciOiJSUzI1NiJ9.test.signature");
 
-        var result = await _service.IssueTokenAsync("admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
+        var result = await _service.IssueTokenAsync(SingleIssuer.Tenant, "admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
 
-        Assert.Equal("eyJhbGciOiJSUzI1NiJ9.test.signature", result);
+        Assert.Equal("eyJhbGciOiJSUzI1NiJ9.test.signature", result.EncodedJwt);
+    }
+
+    /// <summary>
+    /// Each token carries an identifier of its own, which is what it is revoked by.
+    /// </summary>
+    [Fact]
+    public async Task IssueTokenAsync_ShouldSetTheIdentifierItIsRevokedBy()
+    {
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .ReturnsAsync("formatted-jwt");
+
+        var result = await _service.IssueTokenAsync(SingleIssuer.Tenant, "admin-portal", FixedIssuedAt, TimeSpan.FromHours(1));
+
+        Assert.Equal("the-token-id", result.Token.Payload.JwtId);
     }
 }

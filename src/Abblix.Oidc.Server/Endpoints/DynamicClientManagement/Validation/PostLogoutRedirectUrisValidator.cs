@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
@@ -27,7 +28,7 @@ public class PostLogoutRedirectUrisValidator : SyncClientRegistrationContextVali
     /// Returns an <c>invalid_redirect_uri</c> error on the first non-conforming entry,
     /// or <c>null</c> when every URI passes the rules above.
     /// </summary>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 

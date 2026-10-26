@@ -51,7 +51,8 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
     {
         private DateTimeOffset? _givenAt;
 
-        public Task<UserConsents> GetUserConsentsAsync(ValidAuthorizationRequest request, AuthSession authSession)
+        public Task<UserConsents> GetUserConsentsAsync(
+            Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession)
             => Task.FromResult(new UserConsents
             {
                 Granted = new ConsentDefinition(request.Scope, request.Resources),

@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -32,6 +33,7 @@ public interface IAuthorizationGrantHandler : IGrantTypeInformer
 	/// <see cref="AuthorizedGrant"/> that will drive token issuance, or an <see cref="OidcError"/>
 	/// such as <c>invalid_grant</c>, <c>authorization_pending</c>, or <c>slow_down</c>.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The token request (already authenticated against the client).</param>
 	/// <param name="clientInfo">The authenticated client; used to enforce that the grant was
 	/// issued to the same client that is now redeeming it.</param>
@@ -45,5 +47,6 @@ public interface IAuthorizationGrantHandler : IGrantTypeInformer
 	/// before the one that calls this, not after it.
 	/// </param>
 	Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(
+		TenantDefinition tenant,
 		TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken);
 }

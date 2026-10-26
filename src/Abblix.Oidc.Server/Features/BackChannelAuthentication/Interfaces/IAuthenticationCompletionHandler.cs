@@ -6,19 +6,14 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 
 /// <summary>
 /// Handles CIBA authentication completion by routing to the appropriate delivery mode handler
 /// (poll, ping, or push) based on the client's configured backchannel_token_delivery_mode.
 /// </summary>
-/// <remarks>
-/// <para>
-/// It acts for the tenant of the request it is called in. Called outside one, as from a job or a message handler, it
-/// acts for the tenant of the <see cref="Abblix.Oidc.Server.Features.MultiTenancy.TenantScope"/> the caller enters
-/// with the definition the tenant catalog returns, and refuses to act with no tenant at all.
-/// </para>
-/// </remarks>
 public interface IAuthenticationCompletionHandler
 {
     /// <summary>
@@ -32,6 +27,7 @@ public interface IAuthenticationCompletionHandler
     /// Completes the authentication process and handles token delivery according to
     /// the client's configured delivery mode.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="authenticationRequestId">The auth_req_id identifying the authentication request.</param>
     /// <param name="request">The authentication request carrying the grant the end user approved. Only
     /// the grant is read from it, and the grant has to be for the client the request came from. Everything
@@ -68,6 +64,7 @@ public interface IAuthenticationCompletionHandler
     /// <c>transaction_failed</c>. The request is gone, so here too the recovery is to ask the end user again.
     /// </para></exception>
     Task CompleteAsync(
+        TenantDefinition tenant,
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn);
@@ -77,10 +74,11 @@ public interface IAuthenticationCompletionHandler
     /// the way its delivery mode knows anything: a poll reads access_denied, a ping client is told to come
     /// and read it, a push client is sent the error.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="authenticationRequestId">The auth_req_id the end user refused.</param>
     /// <param name="expiresIn">How long a denied request stays readable, for the modes that leave one.</param>
     /// <returns>A task representing the asynchronous denial.</returns>
     /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
     /// identifier, the same condition <see cref="CompleteAsync"/> refuses on.</exception>
-    Task DenyAsync(string authenticationRequestId, TimeSpan expiresIn);
+    Task DenyAsync(TenantDefinition tenant, string authenticationRequestId, TimeSpan expiresIn);
 }

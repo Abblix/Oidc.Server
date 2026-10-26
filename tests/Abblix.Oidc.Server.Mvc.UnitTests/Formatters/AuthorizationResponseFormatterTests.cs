@@ -90,14 +90,15 @@ public class AuthorizationResponseFormatterTests
 
     /// <summary>
     /// The cookie the check-session page compares is written as the session is kept, so a session surviving a browser
-    /// restart is not reported as changed after one.
+    /// restart is not reported as changed after one, and it is the cookie of the tenant serving the request.
     /// </summary>
     [Fact]
     public async Task TheSessionManagementCookie_IsWrittenAsTheSessionIsKept()
     {
         var expiresAt = DateTimeOffset.FromUnixTimeSeconds(1_900_000_000);
         var sessionManagement = new RecordsTheSessionCookie();
-        var formatter = Formatter(PagesOf(IssuerPages), sessionManagement);
+        var served = PagesOf(IssuerPages);
+        var formatter = Formatter(served, sessionManagement);
         var request = new AuthorizationRequest
         {
             RedirectUri = new Uri("https://client.example.com/callback"),
@@ -111,7 +112,7 @@ public class AuthorizationResponseFormatterTests
                 SessionPersistence = SessionPersistence.Until(expiresAt),
             }));
 
-        Assert.Equal(SessionPersistence.Until(expiresAt), sessionManagement.AskedFor);
+        Assert.Equal((served.Id, SessionPersistence.Until(expiresAt)), sessionManagement.AskedFor);
     }
 
     private static async Task<HttpResponse> RunAsync(ActionResult result)
@@ -168,28 +169,28 @@ public class AuthorizationResponseFormatterTests
 
     private sealed class RecordsTheSessionCookie : ISessionManagementService
     {
-        public SessionPersistence? AskedFor { get; private set; }
+        public (string TenantId, SessionPersistence Persistence)? AskedFor { get; private set; }
 
         public bool Enabled => true;
 
-        public Cookie GetSessionCookie(SessionPersistence persistence)
+        public Cookie GetSessionCookie(TenantDefinition tenant, SessionPersistence persistence)
         {
-            AskedFor = persistence;
+            AskedFor = (tenant.Id, persistence);
             return new Cookie("session", new Abblix.Oidc.Server.Common.CookieOptions());
         }
 
         public string GetSessionState(AuthorizationRequest request, string sessionId) => "state";
 
-        public Task<CheckSessionResponse> GetCheckSessionResponseAsync() => throw new NotSupportedException();
+        public Task<CheckSessionResponse> GetCheckSessionResponseAsync(TenantDefinition tenant) => throw new NotSupportedException();
     }
 
     private sealed class NoSessionManagement : ISessionManagementService
     {
         public bool Enabled => false;
-        public Cookie GetSessionCookie(SessionPersistence persistence) => throw new NotSupportedException();
+        public Cookie GetSessionCookie(TenantDefinition tenant, SessionPersistence persistence) => throw new NotSupportedException();
         public string GetSessionState(AuthorizationRequest request, string sessionId)
             => throw new NotSupportedException();
-        public Task<CheckSessionResponse> GetCheckSessionResponseAsync() => throw new NotSupportedException();
+        public Task<CheckSessionResponse> GetCheckSessionResponseAsync(TenantDefinition tenant) => throw new NotSupportedException();
     }
 
     /// <summary>

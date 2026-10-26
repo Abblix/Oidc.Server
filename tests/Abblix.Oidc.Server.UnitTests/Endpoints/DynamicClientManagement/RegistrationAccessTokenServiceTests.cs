@@ -43,7 +43,6 @@ public class RegistrationAccessTokenServiceTests
 
         _service = new RegistrationAccessTokenService(
             _jwtFormatter.Object,
-            SingleIssuer.Accessor,
             SingleIssuer.LicensedCatalog,
             Options.Create(new OidcOptions()));
     }
@@ -56,7 +55,7 @@ public class RegistrationAccessTokenServiceTests
             .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, t, _) => captured = t)
             .ReturnsAsync("formatted-jwt");
 
-        await _service.IssueTokenAsync(ClientId, IssuedAt, TimeSpan.FromDays(30), TokenId);
+        await _service.IssueTokenAsync(SingleIssuer.Tenant, ClientId, IssuedAt, TimeSpan.FromDays(30), TokenId);
 
         Assert.NotNull(captured);
         return captured!;

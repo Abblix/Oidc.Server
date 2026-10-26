@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
@@ -61,11 +62,12 @@ internal static class BackChannelEndpoints
         PushedAuthorizationRequest authorizationRequest,
         ClientRequest clientRequest,
         IPushedAuthorizationHandler handler,
-        IPushedAuthorizationResponseFormatter formatter)
+        IPushedAuthorizationResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
-        var response = await handler.HandleAsync(coreAuthorizationRequest, coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreAuthorizationRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreAuthorizationRequest, response);
     }
 
@@ -77,11 +79,12 @@ internal static class BackChannelEndpoints
         BackChannelAuthenticationRequest authenticationRequest,
         ClientRequest clientRequest,
         IBackChannelAuthenticationHandler handler,
-        IBackChannelAuthenticationResponseFormatter formatter)
+        IBackChannelAuthenticationResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.BackChannelAuthenticationRequest coreAuthenticationRequest = authenticationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
-        var response = await handler.HandleAsync(coreAuthenticationRequest, coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreAuthenticationRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreAuthenticationRequest, coreClientRequest, response);
     }
 
@@ -93,11 +96,12 @@ internal static class BackChannelEndpoints
         DeviceAuthorizationRequest deviceAuthorizationRequest,
         ClientRequest clientRequest,
         IDeviceAuthorizationHandler handler,
-        IDeviceAuthorizationResponseFormatter formatter)
+        IDeviceAuthorizationResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.DeviceAuthorizationRequest coreDeviceAuthorizationRequest = deviceAuthorizationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
-        var response = await handler.HandleAsync(coreDeviceAuthorizationRequest, coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreDeviceAuthorizationRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreDeviceAuthorizationRequest, response);
     }
 }

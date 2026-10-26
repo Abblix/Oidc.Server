@@ -73,10 +73,13 @@ public class AuthenticationSchemeAdapter(
 	/// The tenant serving this request, as the partition of its keys names it; null for a request that reached no
 	/// tenant, such as a page of the host's own.
 	/// </summary>
-	private string? CurrentTenant
-		=> HttpContext.RequestServices.GetRequiredService<ITenantAccessor>().Current is { } current
-			? TenantKey.PartitionOf(current.Tenant)
-			: null;
+	private string? CurrentTenant => ServedTenant is { } served ? TenantKey.PartitionOf(served) : null;
+
+	/// <summary>
+	/// The tenant serving this request; null for a request that reached no tenant.
+	/// </summary>
+	private TenantDefinition? ServedTenant
+		=> HttpContext.RequestServices.GetRequiredService<ITenantAccessor>().Current?.Tenant;
 
 	/// <summary>
 	/// Provides direct access to the current <see cref="HttpContext"/> by ensuring it is available and not null.
@@ -267,7 +270,7 @@ public class AuthenticationSchemeAdapter(
 	public async Task<AuthSessionSignInResult> SignInAsync(AuthSession authSession)
 	{
 		RequireReadableBack(authSession);
-		var tenant = CurrentTenant ?? throw new InvalidOperationException(
+		var served = ServedTenant ?? throw new InvalidOperationException(
 			"A session cannot be signed in outside every tenant: it would belong to no tenant and be read by none. " +
 			"Sign the end user in under the path of the tenant they sign in to.");
 
@@ -283,7 +286,7 @@ public class AuthenticationSchemeAdapter(
 		// A re-authentication or a step-up that states nothing keeps the cookie as the end user had it
 		authSession = SessionCookie.Resolve(authSession, sameEndUser ? replaced : null, clock.GetUtcNow());
 
-		var principal = BuildPrincipal(authSession with { SignedInAt = clock.GetUtcNow() }, tenant);
+		var principal = BuildPrincipal(authSession with { SignedInAt = clock.GetUtcNow() }, TenantKey.PartitionOf(served));
 
 		await SessionCookie.SignInAsync(HttpContext, authenticationScheme, principal, authSession);
 
@@ -293,7 +296,7 @@ public class AuthenticationSchemeAdapter(
 		HttpContext.Items[WrittenInThisRequest] = written;
 
 		foreach (var endedSession in endedSessions)
-			await authSessionTerminator.TerminateAsync(endedSession.SessionId, endedSession.Subject);
+			await authSessionTerminator.TerminateAsync(served, endedSession.SessionId, endedSession.Subject);
 
 		return new AuthSessionSignInResult(written, endedSessions);
 	}

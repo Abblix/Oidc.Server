@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession;
@@ -23,9 +24,9 @@ public class EndSessionHandler(
     IEndSessionRequestProcessor processor) : IEndSessionHandler
 {
     /// <inheritdoc />
-    public async Task<Result<IEndSessionResponse, OidcError>> HandleAsync(Model.EndSessionRequest endSessionRequest)
+    public async Task<Result<IEndSessionResponse, OidcError>> HandleAsync(TenantDefinition tenant, Model.EndSessionRequest endSessionRequest)
     {
-        var validationResult = await validator.ValidateAsync(endSessionRequest);
-        return await validationResult.BindAsync(processor.ProcessAsync);
+        var validationResult = await validator.ValidateAsync(tenant, endSessionRequest);
+        return await validationResult.BindAsync(request => processor.ProcessAsync(tenant, request));
     }
 }

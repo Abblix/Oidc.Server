@@ -35,7 +35,7 @@ public class RequiredAuthContextClassRefValidatorTests
     {
         var context = ContextRequiring(new RequestedClaimDetails { Essential = true, Values = [42] });
 
-        var error = await new RequiredAuthContextClassRefValidator().ValidateAsync(context);
+        var error = await new RequiredAuthContextClassRefValidator().ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -50,7 +50,7 @@ public class RequiredAuthContextClassRefValidatorTests
     {
         var context = ContextRequiring(new RequestedClaimDetails { Essential = true, Values = [Level] });
 
-        var error = await new RequiredAuthContextClassRefValidator().ValidateAsync(context);
+        var error = await new RequiredAuthContextClassRefValidator().ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(error);
         Assert.Equal([Level], Assert.IsType<string[]>(new ValidBackChannelAuthenticationRequest(context).RequiredAuthContextClassRefs));
@@ -64,7 +64,7 @@ public class RequiredAuthContextClassRefValidatorTests
     {
         var context = ContextRequiring(new RequestedClaimDetails { Values = [Level] });
 
-        var error = await new RequiredAuthContextClassRefValidator().ValidateAsync(context);
+        var error = await new RequiredAuthContextClassRefValidator().ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(error);
         Assert.Null(new ValidBackChannelAuthenticationRequest(context).RequiredAuthContextClassRefs);

@@ -27,8 +27,7 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 public class PushedAuthorizationRequestValidator(
     IAuthorizationRequestValidator authorizationRequestValidator,
     IClientAuthenticator clientAuthenticator,
-    IProofValidator proofValidator,
-    ITenantAccessor tenantAccessor) : IPushedAuthorizationRequestValidator
+    IProofValidator proofValidator) : IPushedAuthorizationRequestValidator
 {
     /// <summary>
     /// Validates a pushed authorization request according to OAuth 2.0 and OpenID Connect standards.
@@ -36,6 +35,7 @@ public class PushedAuthorizationRequestValidator(
     /// verifies that it adheres to the client's registered parameters. It effectively prevents misuse
     /// and ensures that the request is legitimately associated with the authenticated client.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="authorizationRequest">The authorization request to be validated.</param>
     /// <param name="clientRequest">Carrier of the client's authentication credentials (basic, JWT
     /// assertion, mTLS, etc.) used to authenticate the client per RFC 9126 section 2. Also carries an
@@ -44,11 +44,12 @@ public class PushedAuthorizationRequestValidator(
     /// <returns>A task that resolves to a validation result, indicating whether the request is valid
     /// and adheres to the expected protocol constraints.</returns>
     public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(
+        TenantDefinition tenant,
         AuthorizationRequest authorizationRequest,
         ClientRequest clientRequest)
     {
         var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
-            tenantAccessor.CurrentTenant(), clientRequest);
+            tenant, clientRequest);
         if (clientInfo == null)
         {
             return ErrorFactory.InvalidClient("The client is not authorized");
@@ -66,7 +67,7 @@ public class PushedAuthorizationRequestValidator(
 
         authorizationRequest = dpopResult.GetSuccess();
 
-        var result = await authorizationRequestValidator.ValidateAsync(authorizationRequest);
+        var result = await authorizationRequestValidator.ValidateAsync(tenant, authorizationRequest);
 
         if (result.TryGetSuccess(out var validRequest))
         {

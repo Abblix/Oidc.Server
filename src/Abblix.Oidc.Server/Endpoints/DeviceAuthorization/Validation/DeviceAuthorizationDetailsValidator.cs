@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 
 namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
@@ -14,7 +15,7 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 /// <summary>
 /// Thin endpoint-side adapter that delegates the RFC 9396 section 3 device-flow
 /// <c>authorization_details</c> validation to
-/// <see cref="IAuthorizationDetailsPolicy.ApplyAsync(System.Text.Json.Nodes.JsonArray, Abblix.Oidc.Server.Features.ClientInformation.ClientInfo, System.Threading.CancellationToken)"/> and propagates the
+/// <see cref="IAuthorizationDetailsPolicy.ApplyAsync(Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition, System.Text.Json.Nodes.JsonArray, Abblix.Oidc.Server.Features.ClientInformation.ClientInfo, System.Threading.CancellationToken)"/> and propagates the
 /// <see cref="OidcError"/> as-is. All actual policy lives on the composite so /authorize,
 /// /par, CIBA and device-flow endpoints share one source of truth.
 /// </summary>
@@ -22,13 +23,14 @@ public class DeviceAuthorizationDetailsValidator(
     IAuthorizationDetailsPolicy policy) : IDeviceAuthorizationContextValidator
 {
     /// <inheritdoc/>
-    public async Task<OidcError?> ValidateAsync(DeviceAuthorizationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
     {
         // Whether the request carried any, read before the call: the policy is handed this very
         // array, and a validator that narrows by editing in place empties it as it answers.
         var requested = context.Request.AuthorizationDetails is { Count: > 0 };
 
         var result = await policy.ApplyAsync(
+            tenant,
             context.Request.AuthorizationDetails,
             context.ClientInfo,
             CancellationToken.None);

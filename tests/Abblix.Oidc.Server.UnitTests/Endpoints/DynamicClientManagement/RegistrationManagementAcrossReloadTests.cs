@@ -53,7 +53,8 @@ public class RegistrationManagementAcrossReloadTests
 
     private async Task<ValidClientRequest?> ManagesAsync(IClientInfoManager clients, string tokenId)
     {
-        var result = await new ClientRequestValidator(clients, new TokenIsItsJti(), tenantAccessor: SingleIssuer.AccessorOf(() => _options.CurrentValue)).ValidateAsync(
+        var result = await new ClientRequestValidator(clients, new TokenIsItsJti()).ValidateAsync(
+            _options.CurrentValue.ToTenant(),
             new ClientRequest
             {
                 ClientId = ClientId,
@@ -127,7 +128,7 @@ public class RegistrationManagementAcrossReloadTests
     /// </summary>
     private sealed class TokenIsItsJti : IRegistrationAccessTokenValidator
     {
-        public Task<Result<string, OidcError>> ValidateAsync(AuthenticationHeaderValue? header, string clientId)
+        public Task<Result<string, OidcError>> ValidateAsync(TenantDefinition tenant, AuthenticationHeaderValue? header, string clientId)
             => Task.FromResult<Result<string, OidcError>>(header.NotNull(nameof(header)).Parameter.NotNull(nameof(header)));
     }
 }

@@ -30,7 +30,7 @@ public class ClientValidatorTests
     public ClientValidatorTests()
     {
         _clientAuthenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
-        _validator = new ClientValidator(_clientAuthenticator.Object, tenantAccessor: SingleIssuer.Accessor);
+        _validator = new ClientValidator(_clientAuthenticator.Object);
     }
 
     private static TokenValidationContext CreateContext(ClientRequest? clientRequest = null)
@@ -56,7 +56,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -79,7 +79,7 @@ public class ClientValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -104,7 +104,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, clientRequest), Times.Once);
@@ -126,7 +126,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Same(clientInfo, context.ClientInfo);
@@ -150,7 +150,7 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo);
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         _clientAuthenticator.Verify(
@@ -173,7 +173,7 @@ public class ClientValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -204,8 +204,8 @@ public class ClientValidatorTests
             .ReturnsAsync(clientInfo2);
 
         // Act
-        var error1 = await _validator.ValidateAsync(context1, TestContext.Current.CancellationToken);
-        var error2 = await _validator.ValidateAsync(context2, TestContext.Current.CancellationToken);
+        var error1 = await _validator.ValidateAsync(SingleIssuer.Tenant, context1, TestContext.Current.CancellationToken);
+        var error2 = await _validator.ValidateAsync(SingleIssuer.Tenant, context2, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error1);
@@ -229,7 +229,7 @@ public class ClientValidatorTests
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert - Context.ClientInfo getter will throw if not set, which is expected behavior
         // We just verify the error was returned

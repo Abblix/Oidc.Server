@@ -41,14 +41,12 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// handler outside this library keeps compiling - a deployment that registered none simply has nobody
 /// to wake.</param>
 /// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
-/// <param name="tenantAccessor">Names the tenant the request is completed at, whose pairwise key seals the subject.</param>
 public abstract partial class AuthenticationCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
     CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     TimeProvider clock,
-    ITenantAccessor tenantAccessor,
     IBackChannelLongPollingService? statusNotifier = null)
 {
     /// <summary>
@@ -57,14 +55,10 @@ public abstract partial class AuthenticationCompletionHandler(
     protected Fingerprint FingerprintOf([Credential] string? authenticationRequestId) => fingerprints.Of(authenticationRequestId);
 
     /// <summary>
-    /// The tenant the request is completed at.
-    /// </summary>
-    protected TenantDefinition CurrentTenant => tenantAccessor.CurrentTenant();
-
-    /// <summary>
     /// Completes the authentication process by marking the request as authenticated and delegating
     /// to the mode-specific delivery implementation.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="authenticationRequestId">The auth_req_id identifying the authentication request.</param>
     /// <param name="request">The authentication request carrying the grant the end user approved. Its
     /// own Status is not read: whether this request may still be answered is decided from the STORED
@@ -88,6 +82,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// identifier. The full statement of the condition, and why it is stated that way rather than as a
     /// list of causes, is on <see cref="IAuthenticationCompletionHandler.CompleteAsync"/>.</exception>
     public async Task CompleteAuthenticationAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
@@ -116,7 +111,7 @@ public abstract partial class AuthenticationCompletionHandler(
         // deciding, or push removed it after a configuration fault, where nothing was answered at all.
         // Naming one of them would send an operator who just fixed a client registration looking for a
         // second completion that never happened.
-        var stored = await ReadPendingAsync(authenticationRequestId, "completed");
+        var stored = await ReadPendingAsync(tenant, authenticationRequestId, "completed");
 
         // What the request recorded when it arrived - whom it named, what it asked for, the levels it
         // required, and where and with which token the client is to be notified - is the STORED record's,
@@ -146,7 +141,7 @@ public abstract partial class AuthenticationCompletionHandler(
                 StringComparison.Ordinal))
         {
             LogGrantNamesAnotherClient(FingerprintOf(authenticationRequestId), stored.AuthorizedGrant.Context.ClientId);
-            await RefuseAsync(authenticationRequestId, stored, GrantForAnotherClient, expiresIn);
+            await RefuseAsync(tenant, authenticationRequestId, stored, GrantForAnotherClient, expiresIn);
             return;
         }
 
@@ -158,10 +153,10 @@ public abstract partial class AuthenticationCompletionHandler(
         // Judged here rather than in the router so that each mode refuses the way it already refuses its own
         // failures: a mode that cannot leave a denied request behind removes it instead.
         if (request.RequestedSubjects is { } accepted &&
-            !subjectTypeConverter.Names(tenantAccessor.CurrentTenant(), request.AuthorizedGrant.AuthSession, accepted, clientInfo))
+            !subjectTypeConverter.Names(tenant, request.AuthorizedGrant.AuthSession, accepted, clientInfo))
         {
             LogAuthenticatedUserNotTheOneRequested(FingerprintOf(authenticationRequestId), clientInfo.ClientId);
-            await RefuseAsync(authenticationRequestId, request, NotTheRequestedEndUser, expiresIn);
+            await RefuseAsync(tenant, authenticationRequestId, request, NotTheRequestedEndUser, expiresIn);
             return;
         }
 
@@ -176,7 +171,7 @@ public abstract partial class AuthenticationCompletionHandler(
                 request.AuthorizedGrant.AuthSession.AuthContextClassRef))
         {
             LogAuthenticationLevelNotTheOneRequired(FingerprintOf(authenticationRequestId), clientInfo.ClientId);
-            await RefuseAsync(authenticationRequestId, request, NotTheRequiredLevel, expiresIn);
+            await RefuseAsync(tenant, authenticationRequestId, request, NotTheRequiredLevel, expiresIn);
             return;
         }
 
@@ -200,7 +195,7 @@ public abstract partial class AuthenticationCompletionHandler(
             LogGrantedAuthorizationDetailsExceedTheRequest(
                 FingerprintOf(authenticationRequestId), clientInfo.ClientId, string.Join(", ", escaped));
 
-            await RefuseAsync(authenticationRequestId, request, WidensTheRequest, expiresIn);
+            await RefuseAsync(tenant, authenticationRequestId, request, WidensTheRequest, expiresIn);
             return;
         }
 
@@ -222,7 +217,7 @@ public abstract partial class AuthenticationCompletionHandler(
         // Update status to Authenticated before handling delivery
         request.Status = BackChannelAuthenticationStatus.Authenticated;
 
-        await HandleDeliveryAsync(authenticationRequestId, request, clientInfo, expiresIn);
+        await HandleDeliveryAsync(tenant, authenticationRequestId, request, clientInfo, expiresIn);
     }
 
     /// <summary>
@@ -274,24 +269,26 @@ public abstract partial class AuthenticationCompletionHandler(
     /// user's own: poll leaves the request denied for the client to read, ping also tells the client to come
     /// and read it, push removes it and delivers the error.
     /// </remarks>
+    /// <param name="tenant">The tenant the request is completed at, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="authenticationRequestId">The auth_req_id the end user refused.</param>
     /// <param name="expiresIn">How long a denied request stays readable, for the modes that leave one.</param>
     /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
     /// identifier: a request already answered, removed or expired cannot be refused either.</exception>
-    public async Task DenyAuthenticationAsync([Credential] string authenticationRequestId, TimeSpan expiresIn)
+    public async Task DenyAuthenticationAsync(TenantDefinition tenant, [Credential] string authenticationRequestId, TimeSpan expiresIn)
     {
-        var stored = await ReadPendingAsync(authenticationRequestId, "denied");
-        await RefuseAsync(authenticationRequestId, stored, EndUserDenied, expiresIn);
+        var stored = await ReadPendingAsync(tenant, authenticationRequestId, "denied");
+        await RefuseAsync(tenant, authenticationRequestId, stored, EndUserDenied, expiresIn);
     }
 
     /// <summary>
     /// The stored record, when it is still pending; otherwise the refusal every answer to a request gets.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The request being answered.</param>
     /// <param name="answered">What the caller was doing, for the message: completed or denied.</param>
-    private async Task<BackChannelAuthenticationRequest> ReadPendingAsync([Credential] string authenticationRequestId, string answered)
+    private async Task<BackChannelAuthenticationRequest> ReadPendingAsync(TenantDefinition tenant, [Credential] string authenticationRequestId, string answered)
     {
-        var stored = await storage.TryGetAsync(tenantAccessor.CurrentTenant(), authenticationRequestId);
+        var stored = await storage.TryGetAsync(tenant, authenticationRequestId);
         if (stored is { Status: BackChannelAuthenticationStatus.Pending })
             return stored;
 
@@ -354,26 +351,30 @@ public abstract partial class AuthenticationCompletionHandler(
     /// carries the outcome back. A mode that notifies or delivers overrides this, because its client learns
     /// of the outcome only from what it is sent.
     /// </remarks>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The request refused.</param>
     /// <param name="request">The request as it is written back, carrying where the client is notified.</param>
     /// <param name="refusal">Why, in the terms a push-mode client is sent.</param>
     /// <param name="expiresIn">How long a denied request stays readable.</param>
     protected virtual Task RefuseAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         OidcError refusal,
         TimeSpan expiresIn)
-        => DenyRequestAsync(authenticationRequestId, request, expiresIn);
+        => DenyRequestAsync(tenant, authenticationRequestId, request, expiresIn);
 
     /// <summary>
     /// Handles the token delivery according to the specific delivery mode (poll, ping, or push).
     /// Derived classes implement the specific delivery logic for their mode.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information including delivery mode configuration.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid.</param>
     protected abstract Task HandleDeliveryAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
@@ -414,16 +415,18 @@ public abstract partial class AuthenticationCompletionHandler(
     /// Marks the authentication request as denied and persists the status to storage.
     /// This is used when configuration errors or token generation failures prevent successful authentication.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authentication request to mark as denied.</param>
     /// <param name="expiresIn">How long the denied status remains in storage for client polling.</param>
     protected async Task DenyRequestAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
     {
         request.Status = BackChannelAuthenticationStatus.Denied;
-        await StoreAsync(authenticationRequestId, request, expiresIn);
+        await StoreAsync(tenant, authenticationRequestId, request, expiresIn);
     }
 
     /// <summary>
@@ -453,15 +456,17 @@ public abstract partial class AuthenticationCompletionHandler(
     /// notifier skips the call.
     /// </para>
     /// </remarks>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The request whose status has just changed.</param>
     /// <param name="expiresIn">How long the stored record remains available.</param>
     protected async Task StoreAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
     {
-        await storage.UpdateAsync(tenantAccessor.CurrentTenant(), authenticationRequestId, request, expiresIn);
+        await storage.UpdateAsync(tenant, authenticationRequestId, request, expiresIn);
 
         if (statusNotifier != null)
         {
@@ -477,12 +482,13 @@ public abstract partial class AuthenticationCompletionHandler(
     /// what keeps the write path from having a second door. Nobody is woken: a waiter reading a record
     /// that has just gone learns nothing its own timeout does not already tell it.
     /// </remarks>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The request to take away.</param>
     /// <returns>The request, when this caller took it - which means the protocol ran to the end and this
     /// caller's own claim was still in the store; otherwise null. A null covers the record not being
     /// there, somebody else having taken it, and a claim that expired mid-protocol, which happens to a
     /// single caller with nobody to lose to. A store fault after the removal raises rather than
     /// returning null.</returns>
-    protected Task<BackChannelAuthenticationRequest?> TakeRequestAsync([Credential] string authenticationRequestId)
-        => storage.TryRemoveAsync(tenantAccessor.CurrentTenant(), authenticationRequestId);
+    protected Task<BackChannelAuthenticationRequest?> TakeRequestAsync(TenantDefinition tenant, [Credential] string authenticationRequestId)
+        => storage.TryRemoveAsync(tenant, authenticationRequestId);
 }

@@ -28,7 +28,7 @@ public partial class AuthorizationRequestProcessorTests
         var session = CreateAuthSession() with { Persistence = persistence };
         SetupSuccessfulAuthCodeFlow(request, session, CreateConsents());
 
-        var response = await _processor.ProcessAsync(request);
+        var response = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.Equal(persistence, Assert.IsType<SuccessfullyAuthenticated>(response).SessionPersistence);
     }

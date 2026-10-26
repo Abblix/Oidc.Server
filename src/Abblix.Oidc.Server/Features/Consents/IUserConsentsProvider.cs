@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 
 namespace Abblix.Oidc.Server.Features.Consents;
@@ -19,8 +20,8 @@ namespace Abblix.Oidc.Server.Features.Consents;
 /// <remarks>
 /// The consents stay the host's: the server does not partition this provider by tenant, so every tenant asks the
 /// same one, and a consent the host records without the tenant counts at every tenant serving a
-/// client under the same id. A host keeps each consent under the tenant of the request, read from
-/// <c>ITenantAccessor</c>, and answers only with the consents given at that tenant.
+/// client under the same id. A host keeps each consent under the tenant it is handed and answers only with the
+/// consents given at that tenant.
 /// <para>
 /// What the provider grants must stay within what the request asked for, and the two halves of that are kept in
 /// different places. The server refuses on its own a granted scope, resource or <c>authorization_details</c>
@@ -38,11 +39,13 @@ public interface IUserConsentsProvider
     /// This method is essential for determining which scopes and resources the user has consented to, enabling
     /// the application to respect user permissions and comply with data protection regulations.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The validated authorization request containing the scopes and resources for which
     /// consent may be required.</param>
     /// <param name="authSession">The current authentication session that provides context about the authenticated user,
     /// potentially influencing consent retrieval based on the user's settings or previous consent decisions.</param>
     /// <returns>A task that resolves to an instance of <see cref="UserConsents"/>, containing detailed information
     /// about the consents granted or denied by the user.</returns>
-    Task<UserConsents> GetUserConsentsAsync(ValidAuthorizationRequest request, AuthSession authSession);
+    Task<UserConsents> GetUserConsentsAsync(
+        TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession);
 }

@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
@@ -72,8 +73,8 @@ public class TokenRequestValidatorTests
         var clientRequest = CreateClientRequest();
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
-            .Callback<TokenValidationContext, CancellationToken>((ctx, _) =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback<TenantDefinition, TokenValidationContext, CancellationToken>((_, ctx, _) =>
             {
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
@@ -83,7 +84,7 @@ public class TokenRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -106,11 +107,11 @@ public class TokenRequestValidatorTests
             "Authorization code is invalid or expired");
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(error);
 
         // Act
-        var result = await _validator.ValidateAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
@@ -130,8 +131,8 @@ public class TokenRequestValidatorTests
         TokenValidationContext? capturedContext = null;
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
-            .Callback<TokenValidationContext, CancellationToken>((ctx, _) =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback<TenantDefinition, TokenValidationContext, CancellationToken>((_, ctx, _) =>
             {
                 capturedContext = ctx;
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
@@ -142,7 +143,7 @@ public class TokenRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        await _validator.ValidateAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(capturedContext);
@@ -162,8 +163,8 @@ public class TokenRequestValidatorTests
         var clientRequest = CreateClientRequest();
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
-            .Callback<TokenValidationContext, CancellationToken>((ctx, _) =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback<TenantDefinition, TokenValidationContext, CancellationToken>((_, ctx, _) =>
             {
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
@@ -173,11 +174,11 @@ public class TokenRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        await _validator.ValidateAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         _contextValidator.Verify(
-            v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()),
+            v => v.ValidateAsync(TestTenant.Matched, It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -195,8 +196,8 @@ public class TokenRequestValidatorTests
         TokenValidationContext? capturedContext = null;
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
-            .Callback<TokenValidationContext, CancellationToken>((ctx, _) =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback<TenantDefinition, TokenValidationContext, CancellationToken>((_, ctx, _) =>
             {
                 capturedContext = ctx;
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
@@ -207,7 +208,7 @@ public class TokenRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -229,8 +230,8 @@ public class TokenRequestValidatorTests
         var clientRequest = CreateClientRequest();
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
-            .Callback<TokenValidationContext, CancellationToken>((ctx, _) =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback<TenantDefinition, TokenValidationContext, CancellationToken>((_, ctx, _) =>
             {
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
@@ -240,7 +241,7 @@ public class TokenRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -262,11 +263,11 @@ public class TokenRequestValidatorTests
             "Client authentication failed");
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(error);
 
         // Act
-        var result = await _validator.ValidateAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
@@ -289,8 +290,8 @@ public class TokenRequestValidatorTests
         var capturedContexts = new System.Collections.Generic.List<TokenValidationContext>();
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
-            .Callback<TokenValidationContext, CancellationToken>((ctx, _) =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback<TenantDefinition, TokenValidationContext, CancellationToken>((_, ctx, _) =>
             {
                 capturedContexts.Add(ctx);
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
@@ -301,8 +302,8 @@ public class TokenRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        await _validator.ValidateAsync(tokenRequest1, clientRequest, TestContext.Current.CancellationToken);
-        await _validator.ValidateAsync(tokenRequest2, clientRequest, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, tokenRequest1, clientRequest, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, tokenRequest2, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, capturedContexts.Count);
@@ -333,8 +334,8 @@ public class TokenRequestValidatorTests
         var clientRequest = CreateClientRequest();
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
-            .Callback<TokenValidationContext, CancellationToken>((ctx, _) =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()))
+            .Callback<TenantDefinition, TokenValidationContext, CancellationToken>((_, ctx, _) =>
             {
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.AuthorizedGrant = CreateAuthorizedGrant();
@@ -344,8 +345,8 @@ public class TokenRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result1 = await _validator.ValidateAsync(authCodeRequest, clientRequest, TestContext.Current.CancellationToken);
-        var result2 = await _validator.ValidateAsync(refreshTokenRequest, clientRequest, TestContext.Current.CancellationToken);
+        var result1 = await _validator.ValidateAsync(SingleIssuer.Tenant, authCodeRequest, clientRequest, TestContext.Current.CancellationToken);
+        var result2 = await _validator.ValidateAsync(SingleIssuer.Tenant, refreshTokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out var validRequest1));
@@ -353,7 +354,7 @@ public class TokenRequestValidatorTests
         Assert.Equal(GrantTypes.AuthorizationCode, validRequest1.Model.GrantType);
         Assert.Equal(GrantTypes.RefreshToken, validRequest2.Model.GrantType);
         _contextValidator.Verify(
-            v => v.ValidateAsync(It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()),
+            v => v.ValidateAsync(TestTenant.Matched, It.IsAny<TokenValidationContext>(), It.IsAny<CancellationToken>()),
             Times.Exactly(2));
     }
 
@@ -371,10 +372,11 @@ public class TokenRequestValidatorTests
 
         _contextValidator
             .Setup(v => v.ValidateAsync(
+                TestTenant.Matched,
                 It.Is<TokenValidationContext>(
                     ctx => ctx.Request == tokenRequest && ctx.ClientRequest == clientRequest),
                 It.IsAny<CancellationToken>()))
-            .Callback<TokenValidationContext, CancellationToken>((ctx, _) =>
+            .Callback<TenantDefinition, TokenValidationContext, CancellationToken>((_, ctx, _) =>
             {
                 capturedContext = ctx;
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
@@ -385,7 +387,7 @@ public class TokenRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        await _validator.ValidateAsync(tokenRequest, clientRequest, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, tokenRequest, clientRequest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(capturedContext);
@@ -393,6 +395,7 @@ public class TokenRequestValidatorTests
         Assert.Same(clientRequest, capturedContext.ClientRequest);
         _contextValidator.Verify(
             v => v.ValidateAsync(
+                TestTenant.Matched,
                 It.Is<TokenValidationContext>(
                     ctx => ctx.Request == tokenRequest && ctx.ClientRequest == clientRequest),
                 It.IsAny<CancellationToken>()),

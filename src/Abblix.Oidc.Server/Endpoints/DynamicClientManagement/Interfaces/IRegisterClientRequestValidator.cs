@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Model;
 
@@ -23,6 +24,7 @@ public interface IRegisterClientRequestValidator
     /// <summary>
     /// Validates the request and returns either the typed valid form or the first error encountered.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The raw registration request to validate.</param>
-    Task<Result<ValidClientRegistrationRequest, OidcError>> ValidateAsync(ClientRegistrationRequest request);
+    Task<Result<ValidClientRegistrationRequest, OidcError>> ValidateAsync(TenantDefinition tenant, ClientRegistrationRequest request);
 }

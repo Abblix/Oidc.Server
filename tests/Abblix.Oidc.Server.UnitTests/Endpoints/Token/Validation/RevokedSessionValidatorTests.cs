@@ -41,7 +41,7 @@ public class RevokedSessionValidatorTests
 
     public RevokedSessionValidatorTests()
     {
-        _validator = new RevokedSessionValidator(_cutoffs.Object, tenantAccessor: SingleIssuer.Accessor);
+        _validator = new RevokedSessionValidator(_cutoffs.Object);
     }
 
     private static TokenValidationContext Context(string grantType) => new(
@@ -67,7 +67,7 @@ public class RevokedSessionValidatorTests
     {
         _cutoffs.Setup(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>())).ReturnsAsync(true);
 
-        var error = await _validator.ValidateAsync(Context(grantType), CancellationToken.None);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, Context(grantType), CancellationToken.None);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -87,7 +87,7 @@ public class RevokedSessionValidatorTests
         _cutoffs.Setup(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>())).ReturnsAsync(false);
         _cutoffs.Setup(c => c.IsGrantRefusedAtItsClientAsync(TestTenant.Matched, It.IsAny<AuthorizedGrant>())).ReturnsAsync(false);
 
-        var error = await _validator.ValidateAsync(Context(grantType), CancellationToken.None);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, Context(grantType), CancellationToken.None);
 
         Assert.Null(error);
     }
@@ -109,7 +109,7 @@ public class RevokedSessionValidatorTests
         _cutoffs.Setup(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>())).ReturnsAsync(false);
         _cutoffs.Setup(c => c.IsGrantRefusedAtItsClientAsync(TestTenant.Matched, It.IsAny<AuthorizedGrant>())).ReturnsAsync(true);
 
-        var error = await _validator.ValidateAsync(Context(grantType), CancellationToken.None);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, Context(grantType), CancellationToken.None);
 
         Assert.Equal(refused ? ErrorCodes.InvalidGrant : null, error?.Error);
     }
@@ -135,7 +135,7 @@ public class RevokedSessionValidatorTests
     [InlineData(GrantTypes.Password)]
     public async Task AGrantBuildingItsOwnSession_IsNotAskedAbout(string grantType)
     {
-        var error = await _validator.ValidateAsync(Context(grantType), CancellationToken.None);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, Context(grantType), CancellationToken.None);
 
         Assert.Null(error);
         _cutoffs.Verify(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>()), Times.Never);
@@ -150,7 +150,7 @@ public class RevokedSessionValidatorTests
         var context = new TokenValidationContext(
             new TokenRequest(), new ClientRequest { ClientId = TestConstants.DefaultClientId });
 
-        var error = await _validator.ValidateAsync(context, CancellationToken.None);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, CancellationToken.None);
 
         Assert.Null(error);
         _cutoffs.Verify(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>()), Times.Never);

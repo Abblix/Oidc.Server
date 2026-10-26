@@ -48,7 +48,7 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
             _storage.Object,
             _consumedRequestUris.Object,
             Options.Create(_options),
-            _timeProvider, tenantAccessor: SingleIssuer.Accessor);
+            _timeProvider);
     }
 
     private static ValidAuthorizationRequest CreateValidRequest(
@@ -89,10 +89,10 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
     {
         var requestUri = new Uri("urn:ietf:params:oauth:request_uri:single-use");
         var request = CreateValidRequest(requestUri);
-        _inner.Setup(p => p.ProcessAsync(request)).ReturnsAsync(Success(request));
+        _inner.Setup(p => p.ProcessAsync(TestTenant.Matched, request)).ReturnsAsync(Success(request));
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, requestUri, true)).ReturnsAsync((AuthorizationRequest?)null);
 
-        var response = await _decorator.ProcessAsync(request);
+        var response = await _decorator.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.IsType<SuccessfullyAuthenticated>(response);
         _storage.Verify(s => s.TryGetAsync(TestTenant.Matched, requestUri, true), Times.Once);
@@ -108,10 +108,10 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
         var pageUri = new Uri("urn:ietf:params:oauth:request_uri:login-page");
         var pushedUri = new Uri("urn:ietf:params:oauth:request_uri:pushed");
         var request = CreateValidRequest(pageUri, pushedBy: pushedUri);
-        _inner.Setup(p => p.ProcessAsync(request)).ReturnsAsync(Success(request));
+        _inner.Setup(p => p.ProcessAsync(TestTenant.Matched, request)).ReturnsAsync(Success(request));
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, It.IsAny<Uri>(), true)).ReturnsAsync((AuthorizationRequest?)null);
 
-        await _decorator.ProcessAsync(request);
+        await _decorator.ProcessAsync(SingleIssuer.Tenant, request);
 
         _storage.Verify(s => s.TryGetAsync(TestTenant.Matched, pageUri, true), Times.Once);
         _storage.Verify(s => s.TryGetAsync(TestTenant.Matched, pushedUri, true), Times.Once);
@@ -129,10 +129,10 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
     {
         var pushedUri = new Uri("urn:ietf:params:oauth:request_uri:pushed");
         var request = CreateValidRequest(pushedUri, pushedBy: pushedUri);
-        _inner.Setup(p => p.ProcessAsync(request)).ReturnsAsync(Success(request));
+        _inner.Setup(p => p.ProcessAsync(TestTenant.Matched, request)).ReturnsAsync(Success(request));
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, pushedUri, true)).ReturnsAsync((AuthorizationRequest?)null);
 
-        await _decorator.ProcessAsync(request);
+        await _decorator.ProcessAsync(SingleIssuer.Tenant, request);
 
         _consumedRequestUris.Verify(
             r => r.MarkConsumedAsync(TestTenant.Matched, pushedUri, _timeProvider.GetUtcNow() + _options.AuthenticationRequestExpiresIn),
@@ -146,9 +146,9 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
     public async Task ProcessAsync_SuccessWithoutPushedRequestUri_DoesNotConsume()
     {
         var request = CreateValidRequest(requestUri: null);
-        _inner.Setup(p => p.ProcessAsync(request)).ReturnsAsync(Success(request));
+        _inner.Setup(p => p.ProcessAsync(TestTenant.Matched, request)).ReturnsAsync(Success(request));
 
-        await _decorator.ProcessAsync(request);
+        await _decorator.ProcessAsync(SingleIssuer.Tenant, request);
 
         _storage.Verify(s => s.TryGetAsync(It.IsAny<TenantDefinition>(), It.IsAny<Uri>(), It.IsAny<bool>()), Times.Never);
     }
@@ -163,10 +163,10 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
     {
         var requestUri = new Uri("urn:ietf:params:oauth:request_uri:login-page");
         var request = CreateValidRequest(requestUri, promptedAt: DateTimeOffset.UnixEpoch);
-        _inner.Setup(p => p.ProcessAsync(request)).ReturnsAsync(new LoginRequired(request.Model));
+        _inner.Setup(p => p.ProcessAsync(TestTenant.Matched, request)).ReturnsAsync(new LoginRequired(request.Model));
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, requestUri, true)).ReturnsAsync((AuthorizationRequest?)null);
 
-        await _decorator.ProcessAsync(request);
+        await _decorator.ProcessAsync(SingleIssuer.Tenant, request);
 
         _storage.Verify(s => s.TryGetAsync(TestTenant.Matched, requestUri, true), Times.Once);
     }
@@ -180,9 +180,9 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
     {
         var requestUri = new Uri("urn:ietf:params:oauth:request_uri:still-valid");
         var request = CreateValidRequest(requestUri);
-        _inner.Setup(p => p.ProcessAsync(request)).ReturnsAsync(new LoginRequired(request.Model));
+        _inner.Setup(p => p.ProcessAsync(TestTenant.Matched, request)).ReturnsAsync(new LoginRequired(request.Model));
 
-        await _decorator.ProcessAsync(request);
+        await _decorator.ProcessAsync(SingleIssuer.Tenant, request);
 
         _storage.Verify(s => s.TryGetAsync(It.IsAny<TenantDefinition>(), It.IsAny<Uri>(), It.IsAny<bool>()), Times.Never);
     }

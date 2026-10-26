@@ -27,15 +27,13 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// client's own spelling of the end user is what the hint is compared against.</param>
 /// <param name="confirmationStore">Redeems the value that carries the end user's answer back from the page that
 /// asked them.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class ConfirmationValidator(
     IAuthSessionService authSessionService,
     ISubjectTypeConverter subjectTypeConverter,
-    ILogoutConfirmationStore confirmationStore,
-    ITenantAccessor tenantAccessor) : IEndSessionContextValidator
+    ILogoutConfirmationStore confirmationStore) : IEndSessionContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, EndSessionValidationContext context)
     {
         // The question is about the session this request would end, so it is asked of that session rather than of
         // the request alone. With no session there is nothing to end and nobody to ask: the processing answers
@@ -48,12 +46,12 @@ public class ConfirmationValidator(
         // rather than of the value: a question issued for another session, one already answered and one that
         // expired all lead to the same place below, which is that the end user is asked again.
         if (context.Request.Confirmation is { } confirmation &&
-            await confirmationStore.RedeemLogoutConfirmationAsync(tenantAccessor.CurrentTenant(), authSession.SessionId, confirmation))
+            await confirmationStore.RedeemLogoutConfirmationAsync(tenant, authSession.SessionId, confirmation))
         {
             return null;
         }
 
-        if (NamesTheCurrentSession(context, authSession))
+        if (NamesTheCurrentSession(tenant, context, authSession))
             return null;
 
         // Not a refusal: the request is one this server intends to honour once the end user has answered, so the
@@ -78,7 +76,7 @@ public class ConfirmationValidator(
     /// would see rather than against the real subject.
     /// </para>
     /// </remarks>
-    private bool NamesTheCurrentSession(EndSessionValidationContext context, AuthSession authSession)
+    private bool NamesTheCurrentSession(TenantDefinition tenant, EndSessionValidationContext context, AuthSession authSession)
     {
         if (context.IdToken is not { Payload: var hint })
             return false;
@@ -91,6 +89,6 @@ public class ConfirmationValidator(
         // skipping one.
         return context.ClientInfo is { } clientInfo &&
                hint.Subject is { } subject &&
-               subjectTypeConverter.Names(tenantAccessor.CurrentTenant(), authSession, [subject], clientInfo);
+               subjectTypeConverter.Names(tenant, authSession, [subject], clientInfo);
     }
 }

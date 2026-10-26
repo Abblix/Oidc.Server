@@ -49,7 +49,7 @@ public class DPoPBindingValidatorTests
     {
         var context = CreateContext(presentedThumbprint: null);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
     }
@@ -59,7 +59,7 @@ public class DPoPBindingValidatorTests
     {
         var context = CreateContext(presentedThumbprint: ProofKeyThumbprint, committedThumbprint: ProofKeyThumbprint);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
     }
@@ -71,7 +71,7 @@ public class DPoPBindingValidatorTests
             presentedThumbprint: ProofKeyThumbprint,
             committedThumbprint: "different-committed-thumbprint");
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         AssertInvalidProof(error);
     }
@@ -86,7 +86,7 @@ public class DPoPBindingValidatorTests
             presentedThumbprint: null,
             committedThumbprint: "committed-thumbprint-from-authorize");
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         AssertInvalidProof(error);
     }
@@ -104,7 +104,7 @@ public class DPoPBindingValidatorTests
             committedCertThumbprint: "committed-x5t-s256",
             tokenEndpointAuthMethod: ClientAuthenticationMethods.None);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -124,7 +124,7 @@ public class DPoPBindingValidatorTests
             committedCertThumbprint: CertThumbprint(certificate),
             tokenEndpointAuthMethod: ClientAuthenticationMethods.None);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
     }
@@ -142,7 +142,7 @@ public class DPoPBindingValidatorTests
             committedCertThumbprint: "committed-x5t-s256",
             tokenEndpointAuthMethod: ClientAuthenticationMethods.TlsClientAuth);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
     }

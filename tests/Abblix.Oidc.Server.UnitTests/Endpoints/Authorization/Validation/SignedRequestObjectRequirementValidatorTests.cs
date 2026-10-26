@@ -55,7 +55,7 @@ public class SignedRequestObjectRequirementValidatorTests
     {
         var context = CreateContext(requireSignedRequestObject: true);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -66,7 +66,7 @@ public class SignedRequestObjectRequirementValidatorTests
     {
         var context = CreateContext(requireSignedRequestObject: true, requestObject: "header.payload.signature");
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 
     /// <summary>
@@ -80,7 +80,7 @@ public class SignedRequestObjectRequirementValidatorTests
             requireSignedRequestObject: true,
             pushedRequestUri: new Uri("urn:ietf:params:oauth:request_uri:abc"));
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 
     [Fact]
@@ -88,6 +88,6 @@ public class SignedRequestObjectRequirementValidatorTests
     {
         var context = CreateContext(requireSignedRequestObject: false);
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 }

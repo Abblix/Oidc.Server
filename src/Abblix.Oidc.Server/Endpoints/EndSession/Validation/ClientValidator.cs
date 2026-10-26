@@ -26,16 +26,15 @@ namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 /// </summary>
 public partial class ClientValidator(
     ILogger<ClientValidator> logger,
-    IClientInfoProvider clientInfoProvider,
-    ITenantAccessor tenantAccessor) : IEndSessionContextValidator
+    IClientInfoProvider clientInfoProvider) : IEndSessionContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, EndSessionValidationContext context)
     {
         if (!context.ClientId.HasValue())
             return null;
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), context.ClientId);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, context.ClientId);
         if (clientInfo == null)
         {
             LogClientNotFound(context.ClientId);

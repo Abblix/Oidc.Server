@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -21,6 +22,7 @@ public interface IRegisterClientRequestProcessor
     /// <summary>
     /// Stores the validated client and returns the registration response payload.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The validated registration request.</param>
-    Task<Result<ClientRegistrationSuccessResponse, OidcError>> ProcessAsync(ValidClientRegistrationRequest request);
+    Task<Result<ClientRegistrationSuccessResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidClientRegistrationRequest request);
 }

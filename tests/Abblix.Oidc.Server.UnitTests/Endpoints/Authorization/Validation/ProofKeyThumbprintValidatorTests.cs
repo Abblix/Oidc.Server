@@ -49,14 +49,14 @@ public class ProofKeyThumbprintValidatorTests
     [Fact]
     public async Task ValidateAsync_NoThumbprint_PassesThrough()
     {
-        var result = await _validator.ValidateAsync(CreateContext(thumbprint: null));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(thumbprint: null));
         Assert.Null(result);
     }
 
     [Fact]
     public async Task ValidateAsync_ValidSha256Thumbprint_PassesThrough()
     {
-        var result = await _validator.ValidateAsync(CreateContext(ValidThumbprint));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(ValidThumbprint));
         Assert.Null(result);
     }
 
@@ -69,7 +69,7 @@ public class ProofKeyThumbprintValidatorTests
     [InlineData("Wv1eDD8H4U6oOyVD0Y8GbqYAh8mXJTfjOcfZ4nV+A9Y")]    // standard-base64 '+' (not base64url)
     public async Task ValidateAsync_MalformedThumbprint_ReturnsInvalidRequest(string thumbprint)
     {
-        var result = await _validator.ValidateAsync(CreateContext(thumbprint));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(thumbprint));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);

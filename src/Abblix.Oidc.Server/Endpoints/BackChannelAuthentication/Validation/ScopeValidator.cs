@@ -21,8 +21,7 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// or excessive scope requests, reinforcing the security policies and minimizing scope-related vulnerabilities.
 /// </summary>
 /// <param name="scopeManager">The scope manager used to validate scopes.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAccessor) : IBackChannelAuthenticationContextValidator
+public class ScopeValidator(IScopeManager scopeManager) : IBackChannelAuthenticationContextValidator
 {
 	/// <summary>
 	/// Validates the scopes in the context of the backchannel authentication request, checking if
@@ -30,15 +29,17 @@ public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAc
 	/// from requesting unauthorized scopes, such as offline access,
 	/// unless explicitly allowed by the client's configuration.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="context">The validation context that includes details about the request and the client.</param>
 	/// <returns>
 	/// A <see cref="OidcError"/> if the scope validation fails,
 	/// or null if the scopes in the request are valid.
 	/// </returns>
 	public Task<OidcError?> ValidateAsync(
+		TenantDefinition tenant,
 		BackChannelAuthenticationValidationContext context)
 	{
-		return Task.FromResult(Validate(context));
+		return Task.FromResult(Validate(tenant, context));
 	}
 
 	/// <summary>
@@ -46,13 +47,14 @@ public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAc
 	/// It checks for issues like unauthorized offline access requests and verifies the compatibility of
 	/// the requested scopes with the client's registered permissions and the resources requested.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="context">
 	/// Contains the authorization request and the client information necessary for validation.</param>
 	/// <returns>
 	/// A <see cref="OidcError"/> if the requested scopes are not valid or not allowed,
 	/// or null if the validation passes.
 	/// </returns>
-	private OidcError? Validate(BackChannelAuthenticationValidationContext context)
+	private OidcError? Validate(TenantDefinition tenant, BackChannelAuthenticationValidationContext context)
 	{
 		if (context.Request.Scope.Contains(Scopes.OfflineAccess) &&
 		    !context.ClientInfo.OfflineAccess.IsAllowed())
@@ -62,7 +64,7 @@ public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAc
 				"This client is not allowed to request for offline access");
 		}
 
-		if (!scopeManager.Validate(tenantAccessor.CurrentTenant(), 
+		if (!scopeManager.Validate(tenant, 
 			    context.Request.Scope,
 			    context.Resources,
 			    context.ClientInfo.AllowedScopes,

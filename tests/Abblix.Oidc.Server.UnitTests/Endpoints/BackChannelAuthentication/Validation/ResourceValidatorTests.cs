@@ -32,7 +32,7 @@ public class ResourceValidatorTests
     public ResourceValidatorTests()
     {
         _resourceManager = new Mock<IResourceManager>(MockBehavior.Strict);
-        _validator = new ResourceValidator(_resourceManager.Object, tenantAccessor: SingleIssuer.Accessor);
+        _validator = new ResourceValidator(_resourceManager.Object);
     }
 
     private BackChannelAuthenticationValidationContext CreateContext(Uri[]? resources = null, string[]? scopes = null)
@@ -62,7 +62,7 @@ public class ResourceValidatorTests
         var context = CreateContext(resources: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -79,7 +79,7 @@ public class ResourceValidatorTests
         var context = CreateContext(resources: []);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -109,7 +109,7 @@ public class ResourceValidatorTests
         var context = CreateContext(resources: [resourceUri]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -132,7 +132,7 @@ public class ResourceValidatorTests
         var context = CreateContext(resources: [relativeUri]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -152,7 +152,7 @@ public class ResourceValidatorTests
         var context = CreateContext(resources: [uriWithFragment]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -181,7 +181,7 @@ public class ResourceValidatorTests
         var context = CreateContext(resources: [unknownResource]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -222,7 +222,7 @@ public class ResourceValidatorTests
         var context = CreateContext(resources: [resource1, resource2]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -258,7 +258,7 @@ public class ResourceValidatorTests
             scopes: [TestConstants.DefaultScope, "profile"]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -289,7 +289,7 @@ public class ResourceValidatorTests
         var context = CreateContext(resources: [resourceUri]);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(context.Resources);
@@ -310,7 +310,7 @@ public class ResourceValidatorTests
         var context = CreateContext(resources: [invalidResource, validResource]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);

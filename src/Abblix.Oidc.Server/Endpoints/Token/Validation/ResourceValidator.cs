@@ -18,8 +18,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// recognized and appropriately scoped according to OAuth 2.0 and OpenID Connect standards.
 /// </summary>
 /// <param name="resourceManager">The manager responsible for validating and managing resource definitions.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class ResourceValidator(IResourceManager resourceManager, ITenantAccessor tenantAccessor)
+public class ResourceValidator(IResourceManager resourceManager)
     : SyncTokenContextValidatorBase
 {
     /// <summary>
@@ -38,12 +37,13 @@ public class ResourceValidator(IResourceManager resourceManager, ITenantAccessor
     /// Validates the resources specified in a token request against known resource definitions.
     /// This validation ensures that only registered and approved resources are accessed by the client.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The context of the token validation including the request and client information.</param>
     /// <returns>
     /// A <see cref="OidcError"/> if the validation fails, indicating the nature of the error and providing
     /// an error message; otherwise, null if the resource validation passes successfully.
     /// </returns>
-    protected override OidcError? Validate(TokenValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, TokenValidationContext context)
     {
         var request = context.Request;
 
@@ -52,7 +52,7 @@ public class ResourceValidator(IResourceManager resourceManager, ITenantAccessor
             request.Audiences is not { Length: > 0 } &&
             !AuthorizedEarlier.Contains(request.GrantType))
         {
-            if (!ResourceInference.TryInfer(tenantAccessor.CurrentTenant(), request.Scope, out var inferred, out var ambiguity))
+            if (!ResourceInference.TryInfer(tenant, request.Scope, out var inferred, out var ambiguity))
                 return new OidcError(ErrorCodes.InvalidScope, ambiguity);
 
             // A grant the request itself authorizes builds its audience from the request, so the inferred
@@ -64,7 +64,7 @@ public class ResourceValidator(IResourceManager resourceManager, ITenantAccessor
         if (request.Resources is not { Length: > 0 })
             return null;
 
-        if (!resourceManager.Validate(tenantAccessor.CurrentTenant(), 
+        if (!resourceManager.Validate(tenant, 
                 request.Resources,
                 request.Scope,
                 out var resources,

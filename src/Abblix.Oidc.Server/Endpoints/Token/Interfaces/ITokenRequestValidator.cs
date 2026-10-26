@@ -8,6 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -29,9 +30,11 @@ public interface ITokenRequestValidator
 	/// or an <see cref="OidcError"/> using one of the codes from RFC 6749 section 5.2 (e.g. <c>invalid_grant</c>,
 	/// <c>invalid_client</c>, <c>unsupported_grant_type</c>).
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="tokenRequest">The token request to validate.</param>
 	/// <param name="clientRequest">Supplementary information about the client making the request.</param>
 	/// <param name="cancellationToken">Abandons validation when the caller stops waiting.</param>
 	Task<Result<ValidTokenRequest, OidcError>> ValidateAsync(
+		TenantDefinition tenant,
 		TokenRequest tokenRequest, ClientRequest clientRequest, CancellationToken cancellationToken);
 }

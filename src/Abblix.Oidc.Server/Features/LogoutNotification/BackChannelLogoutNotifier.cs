@@ -20,31 +20,30 @@ namespace Abblix.Oidc.Server.Features.LogoutNotification;
 /// the details of the logout event.</param>
 /// <param name="logoutTokenSender">The service responsible for sending the logout tokens to the client
 /// applications via back-channel communication.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class BackChannelLogoutNotifier(
     ILogoutTokenService logoutTokenService,
-    ILogoutTokenSender logoutTokenSender,
-    ITenantAccessor tenantAccessor) : ILogoutNotifier
+    ILogoutTokenSender logoutTokenSender) : ILogoutNotifier
 {
     /// <summary>
     /// Asynchronously notifies a client of a logout event by creating a logout token and sending it to the client's
     /// back-channel logout endpoint. This ensures that the client application is informed about the logout event
     /// and can take appropriate actions, such as invalidating the user's session.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="clientInfo">The client information, including the back-channel logout URI, to which the logout
     /// notification should be sent.</param>
     /// <param name="logoutContext">The context of the logout event, containing details such as the subject identifier
     /// and session identifier, which are included in the logout token.</param>
     /// <returns>A task that completes when
     /// the notification has been successfully sent to the client's back-channel logout endpoint.</returns>
-    public async Task NotifyClientAsync(ClientInfo clientInfo, LogoutContext logoutContext)
+    public async Task NotifyClientAsync(TenantDefinition tenant, ClientInfo clientInfo, LogoutContext logoutContext)
     {
         // Ensure the client supports back-channel logout
         if (clientInfo.BackChannelLogout == null)
             return;
 
         // Create the logout token specific to the logout event and client
-        var logoutToken = await logoutTokenService.CreateLogoutTokenAsync(tenantAccessor.CurrentTenant(), clientInfo, logoutContext);
+        var logoutToken = await logoutTokenService.CreateLogoutTokenAsync(tenant, clientInfo, logoutContext);
 
         // Send the logout token to the client's back-channel logout endpoint
         await logoutTokenSender.SendBackChannelLogoutAsync(clientInfo, logoutToken);

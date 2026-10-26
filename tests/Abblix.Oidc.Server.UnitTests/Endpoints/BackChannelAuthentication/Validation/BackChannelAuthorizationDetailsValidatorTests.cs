@@ -49,7 +49,7 @@ public class BackChannelAuthorizationDetailsValidatorTests
         var context = Context((JsonArray)Requested.DeepClone());
         var validator = new BackChannelAuthorizationDetailsValidator(StubAuthorizationDetailsPolicy.Accepting);
 
-        Assert.Null(await validator.ValidateAsync(context));
+        Assert.Null(await validator.ValidateAsync(SingleIssuer.Tenant, context));
 
         Assert.NotNull(context.AuthorizationDetails);
         Assert.Single(context.AuthorizationDetails);
@@ -65,7 +65,7 @@ public class BackChannelAuthorizationDetailsValidatorTests
         var validator = new BackChannelAuthorizationDetailsValidator(
             StubAuthorizationDetailsPolicy.Refusing("amount exceeds the client's cap"));
 
-        var error = await validator.ValidateAsync(context);
+        var error = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
@@ -91,7 +91,7 @@ public class BackChannelAuthorizationDetailsValidatorTests
         var validator = new BackChannelAuthorizationDetailsValidator(policy);
 
         var thrown = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => validator.ValidateAsync(context));
+            () => validator.ValidateAsync(SingleIssuer.Tenant, context));
 
         Assert.Contains(nameof(IAuthorizationDetailsPolicy), thrown.Message, StringComparison.Ordinal);
         Assert.Null(context.AuthorizationDetails);

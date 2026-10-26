@@ -38,11 +38,11 @@ public partial class AuthorizationRequestProcessorTests
             .Returns(new[] { session }.ToAsyncEnumerable());
 
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(consents);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         var error = Assert.IsType<AuthorizationError>(result);
@@ -68,10 +68,10 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { session }.ToAsyncEnumerable());
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(granted);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         var consentRequired = Assert.IsType<ConsentRequired>(result);
         Assert.Equal(request.Scope, consentRequired.RequiredUserConsents.Scopes);
@@ -87,18 +87,18 @@ public partial class AuthorizationRequestProcessorTests
     {
         var request = CreateRequest(prompt: [Prompts.Consent], scope: [Scopes.OpenId, Scopes.Email]);
         var session = CreateAuthSession();
-        var granted = await new NullConsentService().GetUserConsentsAsync(request, session);
+        var granted = await new NullConsentService().GetUserConsentsAsync(SingleIssuer.Tenant, request, session);
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { session }.ToAsyncEnumerable());
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(granted);
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(TestTenant.Matched, It.IsAny<AuthorizedGrant>(), It.IsAny<TimeSpan>()))
             .ReturnsAsync("code");
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.Equal(request.Model.Scope, Assert.IsType<SuccessfullyAuthenticated>(result).GrantedScopes);
     }
@@ -120,13 +120,13 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { session }.ToAsyncEnumerable());
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(granted);
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(TestTenant.Matched, It.IsAny<AuthorizedGrant>(), It.IsAny<TimeSpan>()))
             .ReturnsAsync("code");
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.Equal(request.Model.Scope, Assert.IsType<SuccessfullyAuthenticated>(result).GrantedScopes);
     }
@@ -147,10 +147,10 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { session }.ToAsyncEnumerable());
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(consents);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         var consentRequired = Assert.IsType<ConsentRequired>(result);
         Assert.Equal(stillPending, consentRequired.RequiredUserConsents.Scopes);
@@ -168,13 +168,13 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { session }.ToAsyncEnumerable());
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(consents);
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(TestTenant.Matched, It.IsAny<AuthorizedGrant>(), It.IsAny<TimeSpan>()))
             .ReturnsAsync("code");
 
-        return (await _processor.ProcessAsync(request) as AuthorizationError)?.Error;
+        return (await _processor.ProcessAsync(SingleIssuer.Tenant, request) as AuthorizationError)?.Error;
     }
 
     private UserConsents Given(ConsentDefinition granted) => new()
@@ -291,11 +291,11 @@ public partial class AuthorizationRequestProcessorTests
             .Returns(new[] { session }.ToAsyncEnumerable());
 
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(consents);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         var consentRequired = Assert.IsType<ConsentRequired>(result);
@@ -320,11 +320,11 @@ public partial class AuthorizationRequestProcessorTests
             .Returns(new[] { session }.ToAsyncEnumerable());
 
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(consents);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         var consentRequired = Assert.IsType<ConsentRequired>(result);
@@ -350,7 +350,7 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { session }.ToAsyncEnumerable());
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(consents);
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
@@ -359,7 +359,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync("code");
 
         // Act + Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _processor.ProcessAsync(request));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _processor.ProcessAsync(SingleIssuer.Tenant, request));
     }
 
     /// <summary>
@@ -379,7 +379,7 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { session }.ToAsyncEnumerable());
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(consents);
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
@@ -388,6 +388,6 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync("code");
 
         // Act + Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _processor.ProcessAsync(request));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _processor.ProcessAsync(SingleIssuer.Tenant, request));
     }
 }

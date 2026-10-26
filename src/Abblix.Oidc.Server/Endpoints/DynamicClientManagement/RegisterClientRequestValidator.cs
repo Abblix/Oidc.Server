@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -27,11 +28,12 @@ public class RegisterClientRequestValidator(IClientRegistrationContextValidator 
     /// Runs the validator pipeline and, on success, returns the typed valid request together
     /// with the resolved sector identifier.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The raw registration request.</param>
-    public async Task<Result<ValidClientRegistrationRequest, OidcError>> ValidateAsync(ClientRegistrationRequest request)
+    public async Task<Result<ValidClientRegistrationRequest, OidcError>> ValidateAsync(TenantDefinition tenant, ClientRegistrationRequest request)
     {
         var context = new ClientRegistrationValidationContext(request);
-        var error = await validator.ValidateAsync(context);
+        var error = await validator.ValidateAsync(tenant, context);
         if (error != null)
         {
             return error;

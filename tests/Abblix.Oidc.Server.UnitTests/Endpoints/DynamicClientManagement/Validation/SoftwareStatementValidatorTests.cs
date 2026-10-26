@@ -44,7 +44,6 @@ public class SoftwareStatementValidatorTests
             NullLogger<SoftwareStatementValidator>.Instance,
             _jwtValidator.Object,
             optionsMonitor.Object,
-            SingleIssuer.Accessor,
             _secureFetcher.Object);
     }
 
@@ -63,7 +62,7 @@ public class SoftwareStatementValidatorTests
     {
         _oidcOptions.SoftwareStatement.RequireSoftwareStatement = false;
 
-        var result = await _validator.ValidateAsync(CreateContext());
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext());
         Assert.Null(result);
     }
 
@@ -72,7 +71,7 @@ public class SoftwareStatementValidatorTests
     {
         _oidcOptions.SoftwareStatement.RequireSoftwareStatement = true;
 
-        var result = await _validator.ValidateAsync(CreateContext());
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext());
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidSoftwareStatement, result.Error);
@@ -83,7 +82,7 @@ public class SoftwareStatementValidatorTests
     {
         _oidcOptions.SoftwareStatement.TrustedIssuers = [];
 
-        var result = await _validator.ValidateAsync(CreateContext("eyJ.fake.jwt"));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.fake.jwt"));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidSoftwareStatement, result.Error);
@@ -106,7 +105,7 @@ public class SoftwareStatementValidatorTests
             .Setup(v => v.ValidateAsync("eyJ.invalid.jwt", It.IsAny<ValidationParameters>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Signature verification failed"));
 
-        var result = await _validator.ValidateAsync(CreateContext("eyJ.invalid.jwt"));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.invalid.jwt"));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidSoftwareStatement, result.Error);
@@ -137,7 +136,7 @@ public class SoftwareStatementValidatorTests
             .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
             .ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(CreateContext("eyJ.valid.jwt"));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
         Assert.Null(result);
     }
 
@@ -173,7 +172,7 @@ public class SoftwareStatementValidatorTests
             .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
             .ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(CreateContext("eyJ.valid.jwt"));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidSoftwareStatement, result.Error);
@@ -204,7 +203,7 @@ public class SoftwareStatementValidatorTests
             .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
             .ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(CreateContext("eyJ.valid.jwt"));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
         Assert.Null(result);
     }
 
@@ -233,7 +232,7 @@ public class SoftwareStatementValidatorTests
             .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
             .ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(CreateContext("eyJ.valid.jwt"));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnapprovedSoftwareStatement, result.Error);
@@ -262,7 +261,7 @@ public class SoftwareStatementValidatorTests
             .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
             .ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(CreateContext("eyJ.valid.jwt"));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnapprovedSoftwareStatement, result.Error);

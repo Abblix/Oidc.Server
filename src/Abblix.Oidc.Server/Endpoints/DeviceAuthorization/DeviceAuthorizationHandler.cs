@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -25,10 +26,11 @@ public class DeviceAuthorizationHandler(
 {
     /// <inheritdoc />
     public async Task<Result<DeviceAuthorizationResponse, OidcError>> HandleAsync(
+        TenantDefinition tenant,
         DeviceAuthorizationRequest request,
         ClientRequest clientRequest)
     {
-        var validationResult = await validator.ValidateAsync(request, clientRequest);
-        return await validationResult.BindAsync(processor.ProcessAsync);
+        var validationResult = await validator.ValidateAsync(tenant, request, clientRequest);
+        return await validationResult.BindAsync(valid => processor.ProcessAsync(tenant, valid));
     }
 }

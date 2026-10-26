@@ -39,7 +39,7 @@ public class ClientRequestValidatorTests
 
     public ClientRequestValidatorTests()
     {
-        _validator = new ClientRequestValidator(_clients.Object, _tokenValidator.Object, tenantAccessor: SingleIssuer.Accessor);
+        _validator = new ClientRequestValidator(_clients.Object, _tokenValidator.Object);
     }
 
     private static ClientRequest Request() => new()
@@ -50,7 +50,7 @@ public class ClientRequestValidatorTests
 
     private void TokenCarries(string tokenId)
         => _tokenValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<AuthenticationHeaderValue?>(), ClientId))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthenticationHeaderValue?>(), ClientId))
             .ReturnsAsync(tokenId);
 
     private void Holds(RegisteredClient? client)
@@ -63,7 +63,7 @@ public class ClientRequestValidatorTests
         TokenCarries(TokenId);
         Holds(client);
 
-        var result = await _validator.ValidateAsync(Request());
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, Request());
 
         Assert.True(result.TryGetSuccess(out var validRequest));
         Assert.Same(client, validRequest.Client);
@@ -77,10 +77,10 @@ public class ClientRequestValidatorTests
     public async Task ValidateAsync_InvalidToken_IsRefusedBeforeAnyLookup()
     {
         _tokenValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<AuthenticationHeaderValue?>(), ClientId))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthenticationHeaderValue?>(), ClientId))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidToken, "The token is expired"));
 
-        var result = await _validator.ValidateAsync(Request());
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, Request());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);
@@ -96,7 +96,7 @@ public class ClientRequestValidatorTests
         TokenCarries("jti-old");
         Holds(new RegisteredClient(new ClientInfo(ClientId), TokenId));
 
-        var result = await _validator.ValidateAsync(Request());
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, Request());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);
@@ -113,7 +113,7 @@ public class ClientRequestValidatorTests
         TokenCarries(TokenId);
         Holds(null);
 
-        var result = await _validator.ValidateAsync(Request());
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, Request());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);

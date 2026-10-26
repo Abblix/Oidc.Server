@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
@@ -53,8 +54,8 @@ public class AuthorizationRequestValidatorTests
         // Arrange
         var request = CreateRequest();
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()))
-            .Callback<AuthorizationValidationContext>(ctx =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationValidationContext>()))
+            .Callback<TenantDefinition, AuthorizationValidationContext>((_, ctx) =>
             {
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.ResponseMode = ResponseModes.Query;
@@ -62,7 +63,7 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(request);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -86,11 +87,11 @@ public class AuthorizationRequestValidatorTests
             ResponseModes.Query);
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationValidationContext>()))
             .ReturnsAsync(error);
 
         // Act
-        var result = await _validator.ValidateAsync(request);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
@@ -109,8 +110,8 @@ public class AuthorizationRequestValidatorTests
         AuthorizationValidationContext? capturedContext = null;
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()))
-            .Callback<AuthorizationValidationContext>(ctx =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationValidationContext>()))
+            .Callback<TenantDefinition, AuthorizationValidationContext>((_, ctx) =>
             {
                 capturedContext = ctx;
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
@@ -119,7 +120,7 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        await _validator.ValidateAsync(request);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(capturedContext);
@@ -136,8 +137,8 @@ public class AuthorizationRequestValidatorTests
         // Arrange
         var request = CreateRequest();
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()))
-            .Callback<AuthorizationValidationContext>(ctx =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationValidationContext>()))
+            .Callback<TenantDefinition, AuthorizationValidationContext>((_, ctx) =>
             {
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.ResponseMode = ResponseModes.Query;
@@ -145,11 +146,11 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        await _validator.ValidateAsync(request);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, request);
 
         // Assert
         _contextValidator.Verify(
-            v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()),
+            v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationValidationContext>()),
             Times.Once);
     }
 
@@ -166,8 +167,8 @@ public class AuthorizationRequestValidatorTests
         AuthorizationValidationContext? capturedContext = null;
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()))
-            .Callback<AuthorizationValidationContext>(ctx =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationValidationContext>()))
+            .Callback<TenantDefinition, AuthorizationValidationContext>((_, ctx) =>
             {
                 capturedContext = ctx;
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
@@ -176,7 +177,7 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(request);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -196,8 +197,8 @@ public class AuthorizationRequestValidatorTests
         // Arrange
         var request = CreateRequest();
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()))
-            .Callback<AuthorizationValidationContext>(ctx =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationValidationContext>()))
+            .Callback<TenantDefinition, AuthorizationValidationContext>((_, ctx) =>
             {
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
                 ctx.ResponseMode = ResponseModes.Query;
@@ -205,7 +206,7 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(request);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -228,11 +229,11 @@ public class AuthorizationRequestValidatorTests
             ResponseModes.Query);
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationValidationContext>()))
             .ReturnsAsync(error);
 
         // Act
-        var result = await _validator.ValidateAsync(request);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
@@ -254,8 +255,8 @@ public class AuthorizationRequestValidatorTests
         var capturedContexts = new System.Collections.Generic.List<AuthorizationValidationContext>();
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()))
-            .Callback<AuthorizationValidationContext>(ctx =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationValidationContext>()))
+            .Callback<TenantDefinition, AuthorizationValidationContext>((_, ctx) =>
             {
                 capturedContexts.Add(ctx);
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
@@ -264,8 +265,8 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        await _validator.ValidateAsync(request1);
-        await _validator.ValidateAsync(request2);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, request1);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, request2);
 
         // Assert
         Assert.Equal(2, capturedContexts.Count);
@@ -297,8 +298,8 @@ public class AuthorizationRequestValidatorTests
         };
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()))
-            .Callback<AuthorizationValidationContext>(ctx =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationValidationContext>()))
+            .Callback<TenantDefinition, AuthorizationValidationContext>((_, ctx) =>
             {
                 ctx.ClientInfo = new ClientInfo(ctx.Request.ClientId!);
                 ctx.ResponseMode = ResponseModes.Query;
@@ -306,8 +307,8 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        var result1 = await _validator.ValidateAsync(request1);
-        var result2 = await _validator.ValidateAsync(request2);
+        var result1 = await _validator.ValidateAsync(SingleIssuer.Tenant, request1);
+        var result2 = await _validator.ValidateAsync(SingleIssuer.Tenant, request2);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out var validRequest1));
@@ -315,7 +316,7 @@ public class AuthorizationRequestValidatorTests
         Assert.Equal("client_1", validRequest1.Model.ClientId);
         Assert.Equal("client_2", validRequest2.Model.ClientId);
         _contextValidator.Verify(
-            v => v.ValidateAsync(It.IsAny<AuthorizationValidationContext>()),
+            v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationValidationContext>()),
             Times.Exactly(2));
     }
 
@@ -331,8 +332,8 @@ public class AuthorizationRequestValidatorTests
         AuthorizationValidationContext? capturedContext = null;
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.Is<AuthorizationValidationContext>(ctx => ctx.Request == request)))
-            .Callback<AuthorizationValidationContext>(ctx =>
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.Is<AuthorizationValidationContext>(ctx => ctx.Request == request)))
+            .Callback<TenantDefinition, AuthorizationValidationContext>((_, ctx) =>
             {
                 capturedContext = ctx;
                 ctx.ClientInfo = new ClientInfo(TestConstants.DefaultClientId);
@@ -341,13 +342,13 @@ public class AuthorizationRequestValidatorTests
             .ReturnsAsync((AuthorizationRequestValidationError?)null);
 
         // Act
-        await _validator.ValidateAsync(request);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(capturedContext);
         Assert.Same(request, capturedContext.Request);
         _contextValidator.Verify(
-            v => v.ValidateAsync(It.Is<AuthorizationValidationContext>(ctx => ctx.Request == request)),
+            v => v.ValidateAsync(TestTenant.Matched, It.Is<AuthorizationValidationContext>(ctx => ctx.Request == request)),
             Times.Once);
     }
 }

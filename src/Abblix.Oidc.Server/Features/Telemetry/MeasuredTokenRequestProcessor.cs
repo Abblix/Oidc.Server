@@ -24,26 +24,23 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// <param name="inner">The processor the server uses.</param>
 /// <param name="instruments">Records the tokens into the server's metrics.</param>
 /// <param name="grants">Tells the grant types the server supports, the only ones a measurement names.</param>
-/// <param name="tenants">Tells the tenant serving the request.</param>
 internal sealed class MeasuredTokenRequestProcessor(
     ITokenRequestProcessor inner,
     OidcInstruments instruments,
-    IAuthorizationGrantHandler grants,
-    ITenantAccessor tenants) : ITokenRequestProcessor
+    IAuthorizationGrantHandler grants) : ITokenRequestProcessor
 {
     /// <inheritdoc />
-    public async Task<Result<TokenIssued, OidcError>> ProcessAsync(ValidTokenRequest request)
+    public async Task<Result<TokenIssued, OidcError>> ProcessAsync(TenantDefinition tenant, ValidTokenRequest request)
     {
-        var result = await inner.ProcessAsync(request);
+        var result = await inner.ProcessAsync(tenant, request);
         if (result.TryGetSuccess(out var issued))
         {
             var grantType = EndpointObservation.GrantTypeOf(request.Model.GrantType, grants.GrantTypesSupported);
-            var tenant = EndpointObservation.TenantOf(tenants);
-            instruments.TokenIssued(TelemetryTokenTypes.AccessToken, grantType, tenant);
+            instruments.TokenIssued(TelemetryTokenTypes.AccessToken, grantType, tenant.Id);
             if (issued.IdToken is not null)
-                instruments.TokenIssued(TelemetryTokenTypes.IdToken, grantType, tenant);
+                instruments.TokenIssued(TelemetryTokenTypes.IdToken, grantType, tenant.Id);
             if (issued.RefreshToken is not null)
-                instruments.TokenIssued(TelemetryTokenTypes.RefreshToken, grantType, tenant);
+                instruments.TokenIssued(TelemetryTokenTypes.RefreshToken, grantType, tenant.Id);
         }
 
         return result;

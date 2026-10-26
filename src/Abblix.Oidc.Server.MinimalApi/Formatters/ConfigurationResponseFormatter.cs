@@ -118,7 +118,7 @@ public class ConfigurationResponseFormatter(
 
         if (options.Value.Discovery.SignedMetadata)
         {
-            modelResponse = modelResponse with { SignedMetadata = await signedMetadataProvider.SignAsync(modelResponse) };
+            modelResponse = modelResponse with { SignedMetadata = await signedMetadataProvider.SignAsync(tenantAccessor.CurrentTenant(), modelResponse) };
         }
 
         return Results.Json(modelResponse);

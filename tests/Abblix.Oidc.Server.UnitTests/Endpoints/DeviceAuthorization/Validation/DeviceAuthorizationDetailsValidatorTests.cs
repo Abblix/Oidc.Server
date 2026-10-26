@@ -48,7 +48,7 @@ public class DeviceAuthorizationDetailsValidatorTests
         var context = Context((JsonArray)Requested.DeepClone());
         var validator = new DeviceAuthorizationDetailsValidator(StubAuthorizationDetailsPolicy.Accepting);
 
-        Assert.Null(await validator.ValidateAsync(context));
+        Assert.Null(await validator.ValidateAsync(SingleIssuer.Tenant, context));
 
         Assert.NotNull(context.AuthorizationDetails);
         Assert.Single(context.AuthorizationDetails);
@@ -64,7 +64,7 @@ public class DeviceAuthorizationDetailsValidatorTests
         var validator = new DeviceAuthorizationDetailsValidator(
             StubAuthorizationDetailsPolicy.Refusing("amount exceeds the client's cap"));
 
-        var error = await validator.ValidateAsync(context);
+        var error = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
@@ -89,7 +89,7 @@ public class DeviceAuthorizationDetailsValidatorTests
         var validator = new DeviceAuthorizationDetailsValidator(policy);
 
         var thrown = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => validator.ValidateAsync(context));
+            () => validator.ValidateAsync(SingleIssuer.Tenant, context));
 
         Assert.Contains(nameof(IAuthorizationDetailsPolicy), thrown.Message, StringComparison.Ordinal);
         Assert.Null(context.AuthorizationDetails);

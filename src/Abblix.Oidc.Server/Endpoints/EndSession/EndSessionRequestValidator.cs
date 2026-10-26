@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
@@ -31,16 +32,17 @@ public class EndSessionRequestValidator(IEndSessionContextValidator validator) :
     /// <summary>
     /// Validates the specified end-session request asynchronously.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The end-session request to be validated.</param>
     /// <returns>
     /// A task representing the asynchronous validation operation. The task result contains the
     /// <see cref="Result{ValidEndSessionRequest, AuthError}"/> which encapsulates the validation outcome.
     /// </returns>
-    public async Task<Result<ValidEndSessionRequest, OidcError>> ValidateAsync(EndSessionRequest request)
+    public async Task<Result<ValidEndSessionRequest, OidcError>> ValidateAsync(TenantDefinition tenant, EndSessionRequest request)
     {
         var context = new EndSessionValidationContext(request);
 
-        var error = await validator.ValidateAsync(context);
+        var error = await validator.ValidateAsync(tenant, context);
         if (error != null)
             return error;
 

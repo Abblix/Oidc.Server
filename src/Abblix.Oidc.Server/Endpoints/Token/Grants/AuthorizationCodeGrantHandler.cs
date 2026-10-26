@@ -26,10 +26,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// the recorded <c>plain</c> / <c>S256</c> / <c>S512</c> method.
 /// </summary>
 /// <param name="authorizationCodeService">Persists, looks up and removes authorization codes.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class AuthorizationCodeGrantHandler(
-    IAuthorizationCodeService authorizationCodeService,
-    ITenantAccessor tenantAccessor) : IAuthorizationGrantHandler
+    IAuthorizationCodeService authorizationCodeService) : IAuthorizationGrantHandler
 {
     /// <summary>
     /// Provides the grant type this handler supports, which is the OAuth 2.0 'authorization_code' grant type.
@@ -47,6 +45,7 @@ public class AuthorizationCodeGrantHandler(
     /// It ensures that all security requirements, including client verification and PKCE validation, are enforced
     /// before tokens are issued.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">
     /// The token request containing the authorization code and other necessary parameters.</param>
     /// <param name="clientInfo">
@@ -54,7 +53,7 @@ public class AuthorizationCodeGrantHandler(
     /// <returns>A task that represents the asynchronous authorization operation.
     /// The result is either an authorized grant or an error indicating why the request failed.</returns>
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
     {
         // RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
         // not a server fault - the previous throw-on-access surfaced it as HTTP 500.
@@ -64,7 +63,7 @@ public class AuthorizationCodeGrantHandler(
         }
 
         // Validates the authorization code and retrieves the authorization context associated with the code.
-        var result = await authorizationCodeService.AuthorizeByCodeAsync(tenantAccessor.CurrentTenant(), request.Code);
+        var result = await authorizationCodeService.AuthorizeByCodeAsync(tenant, request.Code);
         if (result.TryGetFailure(out var error))
         {
             return error;

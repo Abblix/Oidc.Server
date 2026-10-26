@@ -47,25 +47,24 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 /// <param name="tokenRegistry">The registry used for managing token states and revocation.</param>
 /// <param name="authorizationCodeService">
 /// The service responsible for managing the lifecycle of authorization codes.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class AuthorizationCodeReusePreventingDecorator(
     ITokenRequestProcessor processor,
     ITokenRegistry tokenRegistry,
-    IAuthorizationCodeService authorizationCodeService,
-    ITenantAccessor tenantAccessor): ITokenRequestProcessor
+    IAuthorizationCodeService authorizationCodeService): ITokenRequestProcessor
 {
     /// <summary>
     /// Processes a valid token request, including revoking existing tokens if necessary and registering new tokens.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The valid token request to process.</param>
     /// <returns>
     /// A task that returns a <see cref="TokenIssued"/> on success or an <see cref="OidcError"/> on failure.
     /// </returns>
-    public async Task<Result<TokenIssued, OidcError>> ProcessAsync(ValidTokenRequest request)
+    public async Task<Result<TokenIssued, OidcError>> ProcessAsync(TenantDefinition tenant, ValidTokenRequest request)
     {
         if (request is not { Model: { GrantType: GrantTypes.AuthorizationCode, Code: {} code } })
         {
-            return await processor.ProcessAsync(request);
+            return await processor.ProcessAsync(tenant, request);
         }
 
         // Claim the code by removing it. Not atomically, whatever the store's method names suggest: the
@@ -74,7 +73,7 @@ public class AuthorizationCodeReusePreventingDecorator(
         // validators have already checked client binding and PKCE, so a failed validation never
         // reaches here and never burns the code - but two concurrent redemptions of a valid code
         // now contend for a single claim instead of both passing a stale "not yet used" check.
-        var claim = await authorizationCodeService.RemoveAuthorizationCodeAsync(tenantAccessor.CurrentTenant(), code);
+        var claim = await authorizationCodeService.RemoveAuthorizationCodeAsync(tenant, code);
 
         // The code did not come back. The claim answers with the grant only when this caller ran the
         // protocol to the end with its own claim still in the store, so everything short of that arrives
@@ -98,7 +97,7 @@ public class AuthorizationCodeReusePreventingDecorator(
         {
             foreach (var (jwtId, expiresAt) in issuedTokens)
             {
-                await tokenRegistry.SetStatusAsync(tenantAccessor.CurrentTenant(), jwtId, JsonWebTokenStatus.Revoked, expiresAt);
+                await tokenRegistry.SetStatusAsync(tenant, jwtId, JsonWebTokenStatus.Revoked, expiresAt);
             }
 
             return new OidcError(
@@ -107,7 +106,7 @@ public class AuthorizationCodeReusePreventingDecorator(
         }
 
         // We won the claim - proceed with processing the request using the decorated processor.
-        var result = await processor.ProcessAsync(request);
+        var result = await processor.ProcessAsync(tenant, request);
 
         // Register issued tokens as part of the authorization code grant
         if (result.TryGetSuccess(out var tokenResponse))
@@ -128,7 +127,7 @@ public class AuthorizationCodeReusePreventingDecorator(
             if (issuedTokensList.Count > 0)
             {
                 await authorizationCodeService.UpdateAuthorizationGrantAsync(
-                    tenantAccessor.CurrentTenant(),
+                    tenant,
                     code,
                     request.AuthorizedGrant with { IssuedTokens = issuedTokensList.ToArray() },
                     request.ClientInfo.AuthorizationCodeExpiresIn);

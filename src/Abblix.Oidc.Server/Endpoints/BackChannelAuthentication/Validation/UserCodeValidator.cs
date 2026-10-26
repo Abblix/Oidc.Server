@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
@@ -32,12 +33,13 @@ public class UserCodeValidator(IOptions<OidcOptions> options) : IBackChannelAuth
     /// Asynchronously validates the UserCode parameter in the context of a backchannel authentication request.
     /// If the UserCode is required but not present, the method returns an error. Otherwise, it returns null.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">
     /// The validation context containing the authentication request and client information.</param>
     /// <returns>
     /// A task that returns an error if validation fails,
     /// or null if successful.</returns>
-    public Task<OidcError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, BackChannelAuthenticationValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>

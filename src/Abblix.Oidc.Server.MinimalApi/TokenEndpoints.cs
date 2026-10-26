@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
@@ -63,13 +64,15 @@ internal static class TokenEndpoints
         ClientRequest clientRequest,
         ITokenHandler handler,
         ITokenResponseFormatter formatter,
+        ITenantAccessor tenantAccessor,
         CancellationToken cancellationToken)
     {
         Core.TokenRequest coreTokenRequest = tokenRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
         // Minimal API binds this parameter to the request's own RequestAborted. CIBA holds this call open for
         // the long-polling window, so without it a client that disconnects leaves the server polling storage.
-        var response = await handler.HandleAsync(coreTokenRequest, coreClientRequest, cancellationToken);
+        var response = await handler.HandleAsync(
+            tenantAccessor.CurrentTenant(), coreTokenRequest, coreClientRequest, cancellationToken);
         return await formatter.FormatResponseAsync(coreTokenRequest, response);
     }
 
@@ -78,11 +81,12 @@ internal static class TokenEndpoints
         RevocationRequest revocationRequest,
         ClientRequest clientRequest,
         IRevocationHandler handler,
-        IRevocationResponseFormatter formatter)
+        IRevocationResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.RevocationRequest coreRevocationRequest = revocationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
-        var response = await handler.HandleAsync(coreRevocationRequest, coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreRevocationRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreRevocationRequest, response);
     }
 
@@ -91,11 +95,12 @@ internal static class TokenEndpoints
         IntrospectionRequest introspectionRequest,
         ClientRequest clientRequest,
         IIntrospectionHandler handler,
-        IIntrospectionResponseFormatter formatter)
+        IIntrospectionResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.IntrospectionRequest coreIntrospectionRequest = introspectionRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
-        var response = await handler.HandleAsync(coreIntrospectionRequest, coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreIntrospectionRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreIntrospectionRequest, response);
     }
 }

@@ -116,7 +116,7 @@ public class RevocationRequestValidatorTests
             _requestInfoProvider.Object,
             new UnnamedSourceNotice(
                 new Logger<UnnamedSourceNotice>(recorded ?? new RecordingLoggerFactory()),
-                Options.Create(new OidcOptions())), tenantAccessor: SingleIssuer.Accessor);
+                Options.Create(new OidcOptions())));
 
     private static RevocationRequest CreateRevocationRequest(string token = "token_value")
     {
@@ -165,7 +165,7 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -191,7 +191,7 @@ public class RevocationRequestValidatorTests
             .Returns(Task.FromResult<ClientInfo?>(null));
 
         // Act
-        var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -229,7 +229,7 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -261,7 +261,7 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(validationError);
 
         // Act
-        var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -292,7 +292,7 @@ public class RevocationRequestValidatorTests
                 TestTenant.Matched, It.IsAny<string>(), TokenTypesArg.Is(JwtTypes.IntrospectableTokens), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an ID token"));
 
-        var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         Assert.True(result.TryGetSuccess(out var validRequest));
         Assert.Null(validRequest.Token);
@@ -321,7 +321,7 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -357,7 +357,7 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        await _validator.ValidateAsync(revocationRequest, clientRequest);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.Equal(2, callOrder.Count);
@@ -381,7 +381,7 @@ public class RevocationRequestValidatorTests
             .Returns(Task.FromResult<ClientInfo?>(null));
 
         // Act
-        await _validator.ValidateAsync(revocationRequest, clientRequest);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()), Times.Once);
@@ -411,7 +411,7 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(jwt);
 
         // Act
-        await _validator.ValidateAsync(revocationRequest, clientRequest);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
@@ -439,7 +439,7 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -468,7 +468,7 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -497,7 +497,7 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        var result = await _validator.ValidateAsync(revocationRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -526,8 +526,8 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
-        var first = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
-        var second = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var first = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
+        var second = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         // Assert
         Assert.True(first.TryGetSuccess(out _));
@@ -559,8 +559,8 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
-        var first = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
-        var second = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var first = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
+        var second = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         // Assert
         Assert.True(first.TryGetSuccess(out _));
@@ -591,11 +591,11 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
-        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
-        var flooded = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
+        var flooded = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(AnotherSource);
-        var elsewhere = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var elsewhere = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         // Assert
         Assert.True(flooded.TryGetFailure(out var error));
@@ -623,14 +623,15 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
-        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
-        var flooded = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
+        var flooded = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
             .Returns(Task.FromResult<ClientInfo?>(AnotherPublicClient));
 
         var neighbor = await validator.ValidateAsync(
+            SingleIssuer.Tenant,
             CreateRevocationRequest(),
             CreateClientRequest(TestConstants.AlternativeClientId));
 
@@ -666,8 +667,8 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
-        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
-        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
+        await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         // Assert
         Assert.Equal(reported, recorded.Entries.Count(
@@ -693,7 +694,7 @@ public class RevocationRequestValidatorTests
             _requestInfoProvider.Object,
             new UnnamedSourceNotice(
                 new Logger<UnnamedSourceNotice>(new RecordingLoggerFactory()),
-                Options.Create(new OidcOptions())), tenantAccessor: SingleIssuer.Accessor);
+                Options.Create(new OidcOptions())));
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
@@ -704,18 +705,20 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
-        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
-        await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
+        await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
             .Returns(Task.FromResult<ClientInfo?>(AnotherPublicClient));
 
         await validator.ValidateAsync(
+            SingleIssuer.Tenant,
             CreateRevocationRequest(),
             CreateClientRequest(TestConstants.AlternativeClientId));
 
         await validator.ValidateAsync(
+            SingleIssuer.Tenant,
             CreateRevocationRequest(),
             CreateClientRequest(TestConstants.AlternativeClientId));
 
@@ -762,13 +765,14 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
-        var spender = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var spender = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
             .Returns(Task.FromResult<ClientInfo?>(PublicClientNamed(NamedClientId)));
 
         var impersonated = await validator.ValidateAsync(
+            SingleIssuer.Tenant,
             CreateRevocationRequest(),
             CreateClientRequest(NamedClientId));
 
@@ -801,10 +805,10 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
-        var overIpv6 = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var overIpv6 = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(Source);
-        var overIpv4 = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var overIpv4 = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         // Assert
         Assert.True(overIpv6.TryGetSuccess(out _));
@@ -834,10 +838,11 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
-        var first = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var first = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(AnotherSource);
         var fromAnotherInstance = await validator.ValidateAsync(
+            SingleIssuer.Tenant,
             CreateRevocationRequest(),
             CreateClientRequest());
 
@@ -872,7 +877,7 @@ public class RevocationRequestValidatorTests
         // Act, Assert
         for (var attempt = 0; attempt < RequestsWellPastTheBudget; attempt++)
         {
-            var result = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+            var result = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
             Assert.True(result.TryGetSuccess(out _), $"a public client was refused on attempt {attempt + 1}");
         }
     }
@@ -899,9 +904,9 @@ public class RevocationRequestValidatorTests
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
-        var last = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var last = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
         for (var attempt = 1; attempt <= defaults.PermitLimit!.Value; attempt++)
-            last = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+            last = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         // Assert
         Assert.True(last.TryGetFailure(out var error), "a client past the default budget was still answered");
@@ -943,6 +948,7 @@ public class RevocationRequestValidatorTests
                 {
                     reentered = true;
                     var reentrant = await validator.ValidateAsync(
+                        SingleIssuer.Tenant,
                         CreateRevocationRequest(),
                         CreateClientRequest());
 
@@ -953,7 +959,7 @@ public class RevocationRequestValidatorTests
             });
 
         // Act
-        var first = await validator.ValidateAsync(CreateRevocationRequest(), CreateClientRequest());
+        var first = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         // Assert
         Assert.True(first.TryGetSuccess(out _));

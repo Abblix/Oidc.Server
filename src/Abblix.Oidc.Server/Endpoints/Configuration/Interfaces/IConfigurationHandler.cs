@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 
 /// <summary>
@@ -18,5 +20,5 @@ public interface IConfigurationHandler
 	/// Builds the framework-agnostic discovery payload. Endpoint URLs are filled in by the
 	/// hosting layer because they depend on routing.
 	/// </summary>
-	Task<ConfigurationResponse> HandleAsync();
+	Task<ConfigurationResponse> HandleAsync(TenantDefinition tenant);
 }

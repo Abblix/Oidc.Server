@@ -9,6 +9,7 @@
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -36,14 +37,20 @@ public class EndSessionResponseFormatterDecoratorTests
         var sessionManagement = new Mock<ISessionManagementService>(MockBehavior.Strict);
         sessionManagement.Setup(s => s.Enabled).Returns(true);
         sessionManagement
-            .Setup(s => s.GetSessionCookie(It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence>()))
+            .Setup(s => s.GetSessionCookie(
+                It.Is<TenantDefinition>(tenant => tenant.Id == "acme"),
+                It.IsAny<Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence>()))
             .Returns(new Cookie("Abblix.SessionId", new Abblix.Oidc.Server.Common.CookieOptions()));
 
         _inner
             .Setup(f => f.FormatResponseAsync(It.IsAny<EndSessionRequest>(), It.IsAny<Result<IEndSessionResponse, OidcError>>()))
             .ReturnsAsync(new NoContentResult());
 
-        _decorator = new EndSessionResponseFormatterDecorator(_inner.Object, sessionManagement.Object);
+        var served = new TenantDefinition { Id = "acme", Issuer = new System.Uri("https://auth.example.com/acme") };
+        _decorator = new EndSessionResponseFormatterDecorator(
+            _inner.Object,
+            sessionManagement.Object,
+            Mock.Of<ITenantAccessor>(accessor => accessor.Current == new TenantContext { Tenant = served }));
     }
 
     /// <summary>

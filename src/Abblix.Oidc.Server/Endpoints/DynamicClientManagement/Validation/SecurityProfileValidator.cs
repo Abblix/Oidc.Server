@@ -23,20 +23,19 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// inherits the default profile of the issuer it registers with, its tenant's
 /// <see cref="Features.MultiTenancy.TenantDefinition.DefaultSecurityProfile"/>.
 /// </summary>
-/// <param name="tenantAccessor">Names the tenant whose default profile a registered client inherits.</param>
-public class SecurityProfileValidator(ITenantAccessor tenantAccessor) : SyncClientRegistrationContextValidator
+public class SecurityProfileValidator : SyncClientRegistrationContextValidator
 {
     /// <summary>
     /// Returns an <c>invalid_client_metadata</c> error describing how the requested response types
     /// conflict with the server-wide security profile, or <c>null</c> when the registration is
     /// self-consistent (including when no profile applies).
     /// </summary>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var violations = SecurityProfileConsistency.FindViolations(
             context.Request.ResponseTypes,
             context.Request.TokenEndpointAuthMethod,
-            SecurityProfileRequirements.Resolve(tenantAccessor.CurrentTenant().DefaultSecurityProfile));
+            SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile));
 
         return violations.Count == 0
             ? null

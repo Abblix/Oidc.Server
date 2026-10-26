@@ -88,7 +88,7 @@ public class UserCodeVerificationServiceTests
             rateLimiter.Object,
             normalizer,
             Mock.Of<IRequestInfoProvider>(),
-            new FakeTimeProvider(new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero)), tenantAccessor: SingleIssuer.Accessor);
+            new FakeTimeProvider(new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero)));
     }
 
     [Theory]
@@ -98,7 +98,7 @@ public class UserCodeVerificationServiceTests
     [InlineData(" wdjb-mjht ")]
     public async Task Verify_AcceptsReadabilityVariantsOfStoredCode(string entered)
     {
-        var result = await _service.VerifyAsync(entered);
+        var result = await _service.VerifyAsync(SingleIssuer.Tenant, entered);
 
         var valid = Assert.IsType<ValidUserCode>(result);
         Assert.Equal(ClientId, valid.ClientId);
@@ -111,7 +111,7 @@ public class UserCodeVerificationServiceTests
     [Fact]
     public async Task Verify_HandsACopyOfTheRequestedAuthorizationDetails()
     {
-        var valid = Assert.IsType<ValidUserCode>(await _service.VerifyAsync(CanonicalUserCode));
+        var valid = Assert.IsType<ValidUserCode>(await _service.VerifyAsync(SingleIssuer.Tenant, CanonicalUserCode));
 
         valid.AuthorizationDetails![0]!["amount"] = "1";
 
@@ -128,7 +128,7 @@ public class UserCodeVerificationServiceTests
         var requestedDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
         var service = BuildService(requestedDetails, out var logs);
 
-        var approved = await service.ApproveAsync(CanonicalUserCode, GrantWith(null));
+        var approved = await service.ApproveAsync(SingleIssuer.Tenant, CanonicalUserCode, GrantWith(null));
 
         Assert.True(approved);
         var warning = Assert.Single(logs.Entries, entry => entry.Level == LogLevel.Warning);
@@ -148,7 +148,7 @@ public class UserCodeVerificationServiceTests
         // approval and take the real finding with it.
         var service = BuildService(requestedDetails: null, out var logs);
 
-        var approved = await service.ApproveAsync(CanonicalUserCode, GrantWith(null));
+        var approved = await service.ApproveAsync(SingleIssuer.Tenant, CanonicalUserCode, GrantWith(null));
 
         Assert.True(approved);
         Assert.DoesNotContain(logs.Entries, entry => entry.Level == LogLevel.Warning);
@@ -165,6 +165,7 @@ public class UserCodeVerificationServiceTests
             out var logs);
 
         var approved = await service.ApproveAsync(
+            SingleIssuer.Tenant,
             CanonicalUserCode,
             GrantWith(new JsonArray(
                 new JsonObject { ["type"] = "account_information" },
@@ -191,6 +192,7 @@ public class UserCodeVerificationServiceTests
         var service = BuildService(requestedDetails: null, out var logs);
 
         var approved = await service.ApproveAsync(
+            SingleIssuer.Tenant,
             CanonicalUserCode,
             GrantWith(new JsonArray(new JsonObject { ["type"] = "admin_access" })));
 
@@ -206,6 +208,7 @@ public class UserCodeVerificationServiceTests
         var service = BuildService(requestedDetails, out var logs);
 
         var approved = await service.ApproveAsync(
+            SingleIssuer.Tenant,
             CanonicalUserCode,
             GrantWith((JsonArray)requestedDetails.DeepClone()));
 
@@ -273,9 +276,9 @@ public class UserCodeVerificationServiceTests
             Mock.Of<IUserCodeRateLimiter>(),
             new UserCodeNormalizer(Options.Create(DeviceOptions())),
             Mock.Of<IRequestInfoProvider>(),
-            new FakeTimeProvider(Now), tenantAccessor: SingleIssuer.Accessor);
+            new FakeTimeProvider(Now));
 
-        Assert.True(await service.ApproveAsync(CanonicalUserCode, GrantWith(null)));
+        Assert.True(await service.ApproveAsync(SingleIssuer.Tenant, CanonicalUserCode, GrantWith(null)));
 
         // The object identity is the assertion. Both records carry the same fields, so comparing values
         // would pass on either one.
@@ -334,9 +337,9 @@ public class UserCodeVerificationServiceTests
             rateLimiter.Object,
             new UserCodeNormalizer(Options.Create(DeviceOptions())),
             Mock.Of<IRequestInfoProvider>(),
-            new FakeTimeProvider(Now), tenantAccessor: SingleIssuer.Accessor);
+            new FakeTimeProvider(Now));
 
-        var result = await service.VerifyAsync(CanonicalUserCode);
+        var result = await service.VerifyAsync(SingleIssuer.Tenant, CanonicalUserCode);
 
         Assert.IsType<InvalidUserCode>(result);
 
@@ -385,11 +388,11 @@ public class UserCodeVerificationServiceTests
             Mock.Of<IUserCodeRateLimiter>(),
             new UserCodeNormalizer(Options.Create(DeviceOptions())),
             Mock.Of<IRequestInfoProvider>(),
-            new FakeTimeProvider(Now), tenantAccessor: SingleIssuer.Accessor);
+            new FakeTimeProvider(Now));
 
         var decided = approving
-            ? await service.ApproveAsync(CanonicalUserCode, GrantWith(null))
-            : await service.DenyAsync(CanonicalUserCode);
+            ? await service.ApproveAsync(SingleIssuer.Tenant, CanonicalUserCode, GrantWith(null))
+            : await service.DenyAsync(SingleIssuer.Tenant, CanonicalUserCode);
 
         Assert.False(decided);
 
@@ -432,7 +435,7 @@ public class UserCodeVerificationServiceTests
             Mock.Of<IUserCodeRateLimiter>(),
             new UserCodeNormalizer(Options.Create(DeviceOptions())),
             Mock.Of<IRequestInfoProvider>(),
-            new FakeTimeProvider(Now), tenantAccessor: SingleIssuer.Accessor);
+            new FakeTimeProvider(Now));
     }
 
     /// <summary>
@@ -502,11 +505,11 @@ public class UserCodeVerificationServiceTests
             Mock.Of<IUserCodeRateLimiter>(),
             new UserCodeNormalizer(Options.Create(DeviceOptions())),
             Mock.Of<IRequestInfoProvider>(),
-            new FakeTimeProvider(Now), tenantAccessor: SingleIssuer.Accessor);
+            new FakeTimeProvider(Now));
 
         var decided = approving
-            ? await service.ApproveAsync(CanonicalUserCode, GrantWith(null))
-            : await service.DenyAsync(CanonicalUserCode);
+            ? await service.ApproveAsync(SingleIssuer.Tenant, CanonicalUserCode, GrantWith(null))
+            : await service.DenyAsync(SingleIssuer.Tenant, CanonicalUserCode);
 
         Assert.False(decided);
         storage.Verify(

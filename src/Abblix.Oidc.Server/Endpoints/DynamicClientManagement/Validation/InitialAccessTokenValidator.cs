@@ -21,21 +21,18 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <summary>
 /// Validates the initial access token on client registration requests per RFC 7591 Section 3
 /// and RFC 6750 Bearer Token Usage. When <see cref="OidcOptions.RequireInitialAccessToken"/> is enabled,
-/// checks JWT signature, expiration, type, and revocation status.
+/// checks JWT signature, expiration, type, and revocation status, the last through the token status check of
+/// <see cref="IAuthServiceJwtValidator"/>, which refuses a token whose identifier is recorded as revoked.
 /// Skipped for update operations and when the feature is disabled.
 /// </summary>
 /// <param name="jwtValidator">Validates JWT signature and expiration.</param>
-/// <param name="revocationProvider">Checks whether the token has been revoked.</param>
 /// <param name="options">OIDC configuration options.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class InitialAccessTokenValidator(
     IAuthServiceJwtValidator jwtValidator,
-    IInitialAccessTokenRevocationProvider revocationProvider,
-    IOptionsMonitor<OidcOptions> options,
-    ITenantAccessor tenantAccessor) : IClientRegistrationContextValidator
+    IOptionsMonitor<OidcOptions> options) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         if (context.Operation != DynamicClientOperation.Register || !options.CurrentValue.RequireInitialAccessToken)
             return null;
@@ -58,8 +55,11 @@ public class InitialAccessTokenValidator(
         // used to be off because the token carried no 'aud' at all - a token with no stated recipient, and
         // the one exception to the rule every other token here follows.
         var result = await jwtValidator.ValidateAsync(
-            tenantAccessor.CurrentTenant(),
-            header.Parameter, TokenTypePolicy.Exactly(JwtTypes.InitialAccessToken));
+            tenant,
+            header.Parameter,
+            TokenTypePolicy.Exactly(JwtTypes.InitialAccessToken),
+            // A token that never expires could not be revoked for good: its revocation is kept until it expires
+            ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
 
         if (result.TryGetFailure(out var error))
             return new OidcError(ErrorCodes.InvalidToken, error.ErrorDescription);
@@ -70,8 +70,9 @@ public class InitialAccessTokenValidator(
         if (string.IsNullOrEmpty(subject))
             return new OidcError(ErrorCodes.InvalidToken, "Token subject is missing");
 
-        if (await revocationProvider.IsRevokedAsync(subject))
-            return new OidcError(ErrorCodes.InvalidToken, "The access token has been revoked");
+        // The identifier the token is revoked by: a token without one could never be refused once issued
+        if (string.IsNullOrEmpty(token.Payload.JwtId))
+            return new OidcError(ErrorCodes.InvalidToken, "Token identifier is missing");
 
         return null;
     }

@@ -22,12 +22,12 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// synchronous validation.
 /// Refer to RFC 6749 and OpenID Connect Core 1.0 for more details on authorization request parameters.
 /// </summary>
-public class NonceValidator(IAuthorizationValueReuseDetector reuseDetector,
-    ITenantAccessor tenantAccessor) : IAuthorizationContextValidator
+public class NonceValidator(IAuthorizationValueReuseDetector reuseDetector) : IAuthorizationContextValidator
 {
     /// <summary>
     /// Validates the nonce in the authorization request as per OpenID Connect Core 1.0 specifications.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The <see cref="AuthorizationValidationContext"/> containing the authorization request
     /// to be validated.</param>
     /// <returns>
@@ -35,7 +35,7 @@ public class NonceValidator(IAuthorizationValueReuseDetector reuseDetector,
     /// when the response type includes an ID token, as by OpenID Connect Core 1.0;
     /// otherwise, null indicating successful validation.
     /// </returns>
-    public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
+    public async Task<AuthorizationRequestValidationError?> ValidateAsync(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         var request = context.Request;
         var responseType = request.ResponseType.NotNull(nameof(request.ResponseType));
@@ -59,7 +59,7 @@ public class NonceValidator(IAuthorizationValueReuseDetector reuseDetector,
         // A nonce must be transaction-specific (RFC 9700 section 2.1.1). When reuse detection is on, reject a
         // value this client already used for a previously issued authorization code.
         if (request.Nonce is { } nonce && !string.IsNullOrEmpty(nonce) &&
-            await reuseDetector.IsReusedAsync(tenantAccessor.CurrentTenant(), context.ClientInfo.ClientId, Parameters.Nonce, nonce))
+            await reuseDetector.IsReusedAsync(tenant, context.ClientInfo.ClientId, Parameters.Nonce, nonce))
         {
             return context.InvalidRequest("The nonce must be unique per authorization request");
         }

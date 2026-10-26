@@ -69,8 +69,7 @@ public class DPoPTokenEndpointValidatorTests
             Mock.Of<ILogger<DPoPTokenEndpointValidator>>(),
             _proofValidator.Object,
             _nonceService.Object,
-            _options.Object,
-            SingleIssuer.AccessorOf(() => _issuer));
+            _options.Object);
     }
 
     [Fact]
@@ -78,7 +77,7 @@ public class DPoPTokenEndpointValidatorTests
     {
         var context = CreateContext(proofJwt: null, clientRequiresDPoP: true);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -88,7 +87,7 @@ public class DPoPTokenEndpointValidatorTests
     {
         var context = CreateContext(proofJwt: null, clientRequiresDPoP: false);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
         Assert.Null(context.ProofKeyThumbprint);
@@ -108,7 +107,7 @@ public class DPoPTokenEndpointValidatorTests
             clientCertificate: certificate,
             tlsClientCertificateBoundAccessTokens: true);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -124,7 +123,7 @@ public class DPoPTokenEndpointValidatorTests
         var context = CreateContext(
             proofJwt: null, clientRequiresDPoP: false, securityProfile: ClientSecurityProfile.Fapi2);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -145,7 +144,7 @@ public class DPoPTokenEndpointValidatorTests
             tlsClientCertificateBoundAccessTokens: true,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
         Assert.Null(context.ProofKeyThumbprint);
@@ -166,7 +165,7 @@ public class DPoPTokenEndpointValidatorTests
             securityProfile: ClientSecurityProfile.Fapi2,
             tokenEndpointAuthMethod: ClientAuthenticationMethods.TlsClientAuth);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
     }
@@ -184,7 +183,7 @@ public class DPoPTokenEndpointValidatorTests
             tlsClientCertificateBoundAccessTokens: true,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -204,7 +203,7 @@ public class DPoPTokenEndpointValidatorTests
             clientCertificate: certificate,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -219,7 +218,7 @@ public class DPoPTokenEndpointValidatorTests
         _issuer.DefaultSecurityProfile = ClientSecurityProfile.Fapi2;
         var context = CreateContext(proofJwt: null, clientRequiresDPoP: false);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -237,7 +236,7 @@ public class DPoPTokenEndpointValidatorTests
         var context = CreateContext(
             proofJwt: null, clientRequiresDPoP: false, securityProfile: ClientSecurityProfile.None);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -248,7 +247,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupProofValidatorSuccess(BuildProof());
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: false);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertProofStashed(error, context);
     }
@@ -259,7 +258,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupProofValidatorSuccess(BuildProof());
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: true);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertProofStashed(error, context);
     }
@@ -270,7 +269,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupProofValidatorFailure(new ProofError(ProofErrorReasons.SignatureInvalid));
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: false);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertProofRejected(error, context);
     }
@@ -283,7 +282,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupNonceIssue();
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: true);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertNonceChallenge(error, context);
     }
@@ -297,7 +296,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupNonceIssue();
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: true);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertNonceChallenge(error, context);
     }
@@ -310,7 +309,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupNonceValidate("good-nonce", failure: null);
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: true);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertProofStashed(error, context);
     }
@@ -324,7 +323,7 @@ public class DPoPTokenEndpointValidatorTests
         SetupProofValidatorSuccess(BuildProof(nonceClaim: "some-nonce"));
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: false);
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
         AssertProofStashed(error, context);
         _nonceService.VerifyNoOtherCalls();

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.Logging;
 
@@ -24,7 +25,8 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 internal sealed partial class NoUserInfoProvider(ILogger<NoUserInfoProvider> logger) : IUserInfoProvider
 {
     /// <inheritdoc />
-    public Task<JsonObject?> GetUserInfoAsync(AuthSession authSession, IEnumerable<string> requestedClaims)
+    public Task<JsonObject?> GetUserInfoAsync(
+        TenantDefinition tenant, AuthSession authSession, IEnumerable<string> requestedClaims)
     {
         LogNoProviderRegistered();
         return Task.FromResult<JsonObject?>(null);

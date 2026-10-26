@@ -26,8 +26,7 @@ internal sealed class AuthSessionSelector(
 	IAuthSessionService authSessionService,
 	IRevocationCutoffChecker cutoffChecker,
 	ISubjectTypeConverter subjectTypeConverter,
-	TimeProvider clock,
-	ITenantAccessor tenantAccessor)
+	TimeProvider clock)
 {
 	/// <summary>
 	/// The values of <c>prompt</c> whose pages a session answers, in the order the pages come: account creation or
@@ -38,12 +37,13 @@ internal sealed class AuthSessionSelector(
 	/// <summary>
 	/// Selects the session the request proceeds with.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The validated authorization request.</param>
 	/// <returns>The single session to authorize with, or the response that answers the request instead.</returns>
-	public async Task<Result<AuthSession, AuthorizationResponse>> SelectAsync(ValidAuthorizationRequest request)
+	public async Task<Result<AuthSession, AuthorizationResponse>> SelectAsync(TenantDefinition tenant, ValidAuthorizationRequest request)
 	{
 		// Retrieves any available user authentication sessions, filtered by the request's parameters.
-		var (authSessions, authenticationLevelUnmet, hostHoldsAny) = await GetAvailableAuthSessionsAsync(request);
+		var (authSessions, authenticationLevelUnmet, hostHoldsAny) = await GetAvailableAuthSessionsAsync(tenant, request);
 
 		var (prompt, sessionsAnswering) = PromptStillAsked(request.Model, authSessions);
 		return Choose(request, sessionsAnswering, prompt, authenticationLevelUnmet, hostHoldsNone: !hostHoldsAny);
@@ -214,6 +214,7 @@ internal sealed class AuthSessionSelector(
 	/// This function ensures that only sessions meeting the request's criteria (e.g., recency, security level)
 	/// are used.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The validated request: its model supplies max age and ACR values, its client
 	/// the default_max_age and default_acr_values fallbacks, and it carries the end user an
 	/// <c>id_token_hint</c> named.</param>
@@ -221,7 +222,7 @@ internal sealed class AuthSessionSelector(
 	/// what left none of them, which is a different answer to the client than having nobody signed in; and whether the
 	/// host held any session before the filters, which tells a session the filters left out from none at all.</returns>
 	private async ValueTask<(List<AuthSession> Sessions, bool AuthenticationLevelUnmet, bool HostHoldsAny)>
-		GetAvailableAuthSessionsAsync(ValidAuthorizationRequest request)
+		GetAvailableAuthSessionsAsync(TenantDefinition tenant, ValidAuthorizationRequest request)
 	{
 		var model = request.Model;
 		var clientInfo = request.ClientInfo;
@@ -276,11 +277,11 @@ internal sealed class AuthSessionSelector(
 		// a claims request means - and nothing has to decide that if each simply binds.
 		if (request.IdTokenHintSubject is { } hinted)
 			authSessions = authSessions.Where(
-				session => subjectTypeConverter.Names(tenantAccessor.CurrentTenant(), session, [hinted], clientInfo));
+				session => subjectTypeConverter.Names(tenant, session, [hinted], clientInfo));
 
 		if (request.RequestedSubjects is { } requested)
 			authSessions = authSessions.Where(
-				session => subjectTypeConverter.Names(tenantAccessor.CurrentTenant(), session, requested, clientInfo));
+				session => subjectTypeConverter.Names(tenant, session, requested, clientInfo));
 
 		// A revocation reaches the session as well as the tokens, and it has to be read here because
 		// everything below mints against whichever session survives, stamping a fresh iat that no
@@ -288,7 +289,7 @@ internal sealed class AuthSessionSelector(
 		// other one, where a grant authorized earlier is redeemed after the revocation. Read after the
 		// cheap filters above, so a session already ruled out by max_age, acr or the hint costs no store
 		// lookup.
-		var candidates = await KeepUnrevokedAsync(authSessions);
+		var candidates = await KeepUnrevokedAsync(tenant, authSessions);
 
 		// An essential acr naming acceptable values is the same question acr_values asks, with an obligation
 		// attached: section 5.5.1.1 says the server "MUST return an acr Claim Value that matches one of the
@@ -335,12 +336,12 @@ internal sealed class AuthSessionSelector(
 	/// polling check_session sees no change and does not learn the session ended. It corrects itself on the
 	/// next successful sign-in, which rewrites the cookie; until then the two views disagree.
 	/// </remarks>
-	private async ValueTask<List<AuthSession>> KeepUnrevokedAsync(IEnumerable<AuthSession> sessions)
+	private async ValueTask<List<AuthSession>> KeepUnrevokedAsync(TenantDefinition tenant, IEnumerable<AuthSession> sessions)
 	{
 		var kept = new List<AuthSession>();
 		foreach (var session in sessions)
 		{
-			if (!await cutoffChecker.IsSessionRefusedAsync(tenantAccessor.CurrentTenant(), session))
+			if (!await cutoffChecker.IsSessionRefusedAsync(tenant, session))
 				kept.Add(session);
 		}
 

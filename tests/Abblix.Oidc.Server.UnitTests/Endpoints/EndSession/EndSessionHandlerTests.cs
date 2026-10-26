@@ -76,21 +76,21 @@ public class EndSessionHandlerTests
         var endSessionSuccess = CreateEndSessionSuccess();
 
         _validator
-            .Setup(v => v.ValidateAsync(endSessionRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, endSessionRequest))
             .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync((Result<IEndSessionResponse, OidcError>)(endSessionSuccess));
 
         // Act
-        var result = await _handler.HandleAsync(endSessionRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
         Assert.Same(endSessionSuccess, response);
-        _validator.Verify(v => v.ValidateAsync(endSessionRequest), Times.Once);
-        _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, endSessionRequest), Times.Once);
+        _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
 
     /// <summary>
@@ -107,16 +107,16 @@ public class EndSessionHandlerTests
             "Invalid id_token_hint");
 
         _validator
-            .Setup(v => v.ValidateAsync(endSessionRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, endSessionRequest))
             .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(error));
 
         // Act
-        var result = await _handler.HandleAsync(endSessionRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
         Assert.Equal(error, failure);
-        _validator.Verify(v => v.ValidateAsync(endSessionRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, endSessionRequest), Times.Once);
         _processor.VerifyNoOtherCalls();
     }
 
@@ -135,21 +135,21 @@ public class EndSessionHandlerTests
             "Failed to end session");
 
         _validator
-            .Setup(v => v.ValidateAsync(endSessionRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, endSessionRequest))
             .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync((Result<IEndSessionResponse, OidcError>)(error));
 
         // Act
-        var result = await _handler.HandleAsync(endSessionRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
         Assert.Equal(error, failure);
-        _validator.Verify(v => v.ValidateAsync(endSessionRequest), Times.Once);
-        _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, endSessionRequest), Times.Once);
+        _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
 
     /// <summary>
@@ -166,18 +166,18 @@ public class EndSessionHandlerTests
         var endSessionSuccess = CreateEndSessionSuccess();
 
         _validator
-            .Setup(v => v.ValidateAsync(endSessionRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, endSessionRequest))
             .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(It.Is<ValidEndSessionRequest>(r => r == validRequest)))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, It.Is<ValidEndSessionRequest>(r => r == validRequest)))
             .ReturnsAsync((Result<IEndSessionResponse, OidcError>)(endSessionSuccess));
 
         // Act
-        await _handler.HandleAsync(endSessionRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
-        _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
+        _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
 
     /// <summary>
@@ -195,7 +195,7 @@ public class EndSessionHandlerTests
         var callOrder = new List<string>();
 
         _validator
-            .Setup(v => v.ValidateAsync(endSessionRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, endSessionRequest))
             .ReturnsAsync(() =>
             {
                 callOrder.Add("validate");
@@ -203,7 +203,7 @@ public class EndSessionHandlerTests
             });
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync(() =>
             {
                 callOrder.Add("process");
@@ -211,7 +211,7 @@ public class EndSessionHandlerTests
             });
 
         // Act
-        await _handler.HandleAsync(endSessionRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.Equal(2, callOrder.Count);
@@ -233,11 +233,11 @@ public class EndSessionHandlerTests
             "Invalid request");
 
         _validator
-            .Setup(v => v.ValidateAsync(endSessionRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, endSessionRequest))
             .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(error));
 
         // Act
-        var result = await _handler.HandleAsync(endSessionRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
@@ -258,15 +258,15 @@ public class EndSessionHandlerTests
         var error = new OidcError(ErrorCodes.InvalidRequest, "Invalid request");
 
         _validator
-            .Setup(v => v.ValidateAsync(endSessionRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, endSessionRequest))
             .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(error));
 
         // Act
-        await _handler.HandleAsync(endSessionRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         _validator.Verify(
-            v => v.ValidateAsync(It.Is<EndSessionRequest>(r => r == endSessionRequest)),
+            v => v.ValidateAsync(TestTenant.Matched, It.Is<EndSessionRequest>(r => r == endSessionRequest)),
             Times.Once);
     }
 
@@ -283,11 +283,11 @@ public class EndSessionHandlerTests
         var error = new OidcError(ErrorCodes.InvalidRequest, "Validation failed");
 
         _validator
-            .Setup(v => v.ValidateAsync(endSessionRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, endSessionRequest))
             .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(error));
 
         // Act
-        await _handler.HandleAsync(endSessionRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         _processor.VerifyNoOtherCalls();
@@ -306,15 +306,15 @@ public class EndSessionHandlerTests
         var endSessionSuccess = CreateEndSessionSuccess();
 
         _validator
-            .Setup(v => v.ValidateAsync(endSessionRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, endSessionRequest))
             .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync((Result<IEndSessionResponse, OidcError>)(endSessionSuccess));
 
         // Act
-        var result = await _handler.HandleAsync(endSessionRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
@@ -336,15 +336,15 @@ public class EndSessionHandlerTests
         var endSessionSuccess = CreateEndSessionSuccess();
 
         _validator
-            .Setup(v => v.ValidateAsync(endSessionRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, endSessionRequest))
             .ReturnsAsync((Result<ValidEndSessionRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync((Result<IEndSessionResponse, OidcError>)(endSessionSuccess));
 
         // Act
-        var result = await _handler.HandleAsync(endSessionRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));

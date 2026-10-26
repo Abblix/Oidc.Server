@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -59,7 +60,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator();
 
-        var result = await validator.ValidateAsync(Context(null));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context(null));
 
         Assert.Null(result);
     }
@@ -69,7 +70,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator("payment_initiation");
 
-        var result = await validator.ValidateAsync(Context([]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([]));
 
         Assert.Null(result);
     }
@@ -79,7 +80,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator("payment_initiation", "account_information");
 
-        var result = await validator.ValidateAsync(Context(["payment_initiation"]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context(["payment_initiation"]));
 
         Assert.Null(result);
     }
@@ -89,7 +90,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator("payment_initiation");
 
-        var result = await validator.ValidateAsync(Context(["payment_initiation", "unknown_type"]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context(["payment_initiation", "unknown_type"]));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
@@ -102,7 +103,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator();
 
-        var result = await validator.ValidateAsync(Context(["payment_initiation"]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context(["payment_initiation"]));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
@@ -114,7 +115,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator("payment_initiation");
 
-        var result = await validator.ValidateAsync(Context(["unknown_a", "unknown_b"]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context(["unknown_a", "unknown_b"]));
 
         Assert.NotNull(result);
         Assert.Contains("unknown_a", result.ErrorDescription);
@@ -126,7 +127,7 @@ public class AuthorizationDetailsTypesValidatorTests
     {
         var validator = Validator("payment_initiation");
 
-        var result = await validator.ValidateAsync(Context(["unknown_type", "unknown_type"]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context(["unknown_type", "unknown_type"]));
 
         Assert.NotNull(result);
         var firstIndex = result.ErrorDescription.IndexOf("unknown_type", StringComparison.Ordinal);
@@ -139,6 +140,7 @@ public class AuthorizationDetailsTypesValidatorTests
         public string Type => key ?? "stub";
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }

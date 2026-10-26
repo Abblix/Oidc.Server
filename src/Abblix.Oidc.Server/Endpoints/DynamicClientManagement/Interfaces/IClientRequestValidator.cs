@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Model;
 
@@ -23,6 +24,7 @@ public interface IClientRequestValidator
     /// Validates the request, returning the resolved <see cref="ValidClientRequest"/> on success
     /// or an <see cref="OidcError"/> describing the rejection.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The client management request to validate.</param>
-    Task<Result<ValidClientRequest, OidcError>> ValidateAsync(ClientRequest request);
+    Task<Result<ValidClientRequest, OidcError>> ValidateAsync(TenantDefinition tenant, ClientRequest request);
 }

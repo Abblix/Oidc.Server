@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Telemetry;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 
@@ -29,11 +30,11 @@ internal sealed class UserConsentsReader(IUserConsentsProvider consentsProvider,
     /// Observed and decided here rather than by decorators around the host's provider, so a host replacing its
     /// provider keeps both the stage's span and the prompt.
     /// </remarks>
-    public async Task<UserConsents> ReadAsync(ValidAuthorizationRequest request, AuthSession authSession)
+    public async Task<UserConsents> ReadAsync(TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession)
     {
         var hostConsents = await StageObservation.RunAsync(
             TelemetryStages.Consent,
-            () => consentsProvider.GetUserConsentsAsync(request, authSession),
+            () => consentsProvider.GetUserConsentsAsync(tenant, request, authSession),
             StageObservation.NeverRefused);
 
         return ConsentAskedOf(request, hostConsents);

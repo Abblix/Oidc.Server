@@ -41,13 +41,14 @@ public class UpdateClientRequestProcessorTests
         var tokenService = new Mock<IRegistrationAccessTokenService>(MockBehavior.Loose);
         tokenService
             .Setup(s => s.IssueTokenAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), It.IsAny<string>()))
             .ReturnsAsync("registration-access-token");
 
         var idGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
 
         var processor = new UpdateClientRequestProcessor(
-            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System, tenantAccessor: SingleIssuer.Accessor);
+            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System);
 
         return (processor, clientInfoManager, tokenService, idGenerator);
     }
@@ -69,7 +70,7 @@ public class UpdateClientRequestProcessorTests
             new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
-        await processor.ProcessAsync(request);
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(saved);
@@ -103,7 +104,7 @@ public class UpdateClientRequestProcessorTests
             new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
-        await processor.ProcessAsync(request);
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(saved);
@@ -135,12 +136,12 @@ public class UpdateClientRequestProcessorTests
             new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
-        await processor.ProcessAsync(request);
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Equal("rotated-jti", saved?.RegistrationAccessTokenId);
         tokenService.Verify(
-            s => s.IssueTokenAsync("client-1", It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), "rotated-jti"),
+            s => s.IssueTokenAsync(TestTenant.Matched, "client-1", It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), "rotated-jti"),
             Times.Once);
     }
 
@@ -163,7 +164,7 @@ public class UpdateClientRequestProcessorTests
             new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
-        var result = await processor.ProcessAsync(request);
+        var result = await processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -182,6 +183,7 @@ public class UpdateClientRequestProcessorTests
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("rotated-jti");
         tokenService
             .Setup(s => s.IssueTokenAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), It.IsAny<string>()))
             .ThrowsAsync(new InvalidOperationException("no signing key"));
 
@@ -193,7 +195,7 @@ public class UpdateClientRequestProcessorTests
             new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
-        await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ProcessAsync(request));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ProcessAsync(SingleIssuer.Tenant, request));
 
         // Assert
         manager.Verify(
@@ -226,7 +228,7 @@ public class UpdateClientRequestProcessorTests
             new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
-        var result = await processor.ProcessAsync(request);
+        var result = await processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));

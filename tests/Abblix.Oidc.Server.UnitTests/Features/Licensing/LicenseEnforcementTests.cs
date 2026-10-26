@@ -89,7 +89,7 @@ public sealed class LicenseEnforcementTests : IDisposable
         await Assert.ThrowsAsync<LicenseViolationException>(() => EndpointObservation.RunAsync(
             TelemetryEndpoints.UserInfo,
             new OidcInstruments(NullLoggerFactory.Instance, meters),
-            NoTenant.Accessor,
+            null,
             () => Task.FromResult(LicenseChecker.CheckIssuer(UnlicensedIssuer, SingleIssuer.Tenant, SingleIssuer.HostCatalog)),
             EndpointObservation.NoError));
 
@@ -985,13 +985,11 @@ public sealed class LicenseEnforcementTests : IDisposable
     {
         var clients = new Mock<IClientInfoManager>();
         clients.Setup(manager => manager.TryRemoveClientAsync(It.IsAny<TenantDefinition>(), removed)).ReturnsAsync(true);
-        var context = new TenantContext { Tenant = served.Tenant };
         var result = await new RemoveClientRequestProcessor(
                 clients.Object,
                 TimeProvider.System,
-                served.ResolvedBy,
-                Mock.Of<ITenantAccessor>(accessor => accessor.Current == context))
-            .ProcessAsync(new ValidClientRequest(new ClientRequest(), removed));
+                served.ResolvedBy)
+            .ProcessAsync(served.Tenant, new ValidClientRequest(new ClientRequest(), removed));
         Assert.True(result.TryGetSuccess(out _));
     }
 

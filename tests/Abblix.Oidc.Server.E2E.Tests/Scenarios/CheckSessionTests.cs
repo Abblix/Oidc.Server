@@ -9,7 +9,9 @@
 using System.Net;
 using System.Net.Mime;
 using System.Text.RegularExpressions;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.E2E.Tests.Model;
+using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Microsoft.Net.Http.Headers;
 using Xunit;
 
@@ -69,6 +71,19 @@ public class CheckSessionTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(MediaTypeNames.Text.Html, response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task The_check_session_iframe_reads_the_session_cookie_of_the_tenant_serving_it()
+    {
+        // Tenants sharing a host share its cookies, so each tenant's page watches a cookie named after it. A page
+        // watching another name never sees the session the authorization response wrote, and reports it changed.
+        var (_, body) = await FetchCheckSessionPageAsync();
+
+        Assert.Contains(
+            $"\"{new OidcOptions().CheckSessionCookie.Name}.{TestTenantSettings.TenantId}\"",
+            body,
+            StringComparison.Ordinal);
     }
 
     [Fact]

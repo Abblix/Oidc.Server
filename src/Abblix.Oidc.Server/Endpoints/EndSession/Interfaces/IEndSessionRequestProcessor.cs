@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
@@ -22,10 +23,11 @@ public interface IEndSessionRequestProcessor
 	/// <summary>
 	/// Executes logout for an already-validated request.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">A request that passed all validation steps.</param>
 	/// <returns>
 	/// An <see cref="EndSessionSuccess"/> describing the post-logout redirect and any
 	/// front-channel URIs to invoke; an <see cref="OidcError"/> if processing cannot complete.
 	/// </returns>
-	Task<Result<IEndSessionResponse, OidcError>> ProcessAsync(ValidEndSessionRequest request);
+	Task<Result<IEndSessionResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidEndSessionRequest request);
 }

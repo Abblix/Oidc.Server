@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
@@ -44,6 +45,7 @@ public interface IConsentConstraintEnforcer
     /// Asserts that the granted consent does not exceed the request, and returns the
     /// <c>authorization_details</c> as the per-type validators left them.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The validated authorization request carrying the requested scopes,
     /// resources and <c>authorization_details</c>.</param>
     /// <param name="granted">The consent decision produced by <see cref="IUserConsentsProvider"/>.</param>
@@ -75,6 +77,7 @@ public interface IConsentConstraintEnforcer
     /// and leaves nothing to issue a grant for. Content within a requested type that is wider than the
     /// request is answered with access_denied instead.</exception>
     Task<Result<JsonArray, OidcError>> EnforceAsync(
+        TenantDefinition tenant,
         ValidAuthorizationRequest request,
         ConsentDefinition granted,
         CancellationToken cancellationToken);

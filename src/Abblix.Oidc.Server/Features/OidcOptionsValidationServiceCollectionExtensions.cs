@@ -58,6 +58,10 @@ internal static class OidcOptionsValidationServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, RegistrationRequestSizeValidator>());
 
+        // Refuse revoked initial access token subjects left in the server options, where nothing reads them
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, RevokedInitialAccessTokenSubjectsValidator>());
+
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClockSkewValidator>());
         services.TryAddEnumerable(

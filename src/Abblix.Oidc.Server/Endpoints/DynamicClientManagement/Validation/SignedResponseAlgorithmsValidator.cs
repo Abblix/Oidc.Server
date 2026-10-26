@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -30,12 +31,13 @@ public class SignedResponseAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorit
     /// Validates the signing algorithms specified for ID tokens, user info and JARM authorization responses.
     /// This method ensures that the JWT creator supports the requested algorithms.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing the client registration data.</param>
     /// <returns>
     /// A <see cref="OidcError"/> if any signing algorithm is not supported;
     /// otherwise, null if all validations are successful.
     /// </returns>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
         return ValidateIdTokenSignedResponseAlg(request) ??

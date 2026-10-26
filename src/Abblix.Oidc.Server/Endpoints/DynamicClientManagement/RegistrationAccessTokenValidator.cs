@@ -27,12 +27,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Section 1.2 describes.
 /// </summary>
 /// <param name="jwtValidator">JWT validator used for signature and lifetime checks.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValidator, ITenantAccessor tenantAccessor)
+public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValidator)
     : IRegistrationAccessTokenValidator
 {
     /// <inheritdoc />
-    public async Task<Result<string, OidcError>> ValidateAsync(AuthenticationHeaderValue? header, string clientId)
+    public async Task<Result<string, OidcError>> ValidateAsync(TenantDefinition tenant, AuthenticationHeaderValue? header, string clientId)
     {
         if (header?.Parameter == null)
             return Refused($"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
@@ -43,7 +42,7 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
         // The audience is required and checked: it names this server, which is what reads the token. Which
         // registration the token is about is a separate question, and the subject answers it - see below.
         var result = await jwtValidator.ValidateAsync(
-            tenantAccessor.CurrentTenant(),
+            tenant,
             header.Parameter, TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken));
 
         if (result.TryGetFailure(out var error))

@@ -31,25 +31,24 @@ namespace Abblix.Oidc.Server.Features.PushedAuthorization;
 /// <param name="consumedRequestUris">Records the flows that ended, so the other pages of one are refused.</param>
 /// <param name="options">How long a page of a flow can be presented.</param>
 /// <param name="timeProvider">Dates the end of a flow.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class PushedAuthorizationRequestProcessorDecorator(
     IAuthorizationRequestProcessor inner,
     IAuthorizationRequestStorage authorizationRequestStorage,
     IConsumedRequestUriRegistry consumedRequestUris,
     IOptions<OidcOptions> options,
-    TimeProvider timeProvider,
-    ITenantAccessor tenantAccessor) : IAuthorizationRequestProcessor
+    TimeProvider timeProvider) : IAuthorizationRequestProcessor
 {
     /// <summary>
     /// Delegates to the wrapped processor and consumes the <c>request_uri</c> values the request is done with: on a
     /// successful authentication the one it came by and the one it was first fetched under, and on any answer the
     /// one it came back with from a page its prompt sent the end user to.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The validated authorization request to process.</param>
     /// <returns>The inner processor's <see cref="AuthorizationResponse"/>, unchanged.</returns>
-    public async Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request)
+    public async Task<AuthorizationResponse> ProcessAsync(TenantDefinition tenant, ValidAuthorizationRequest request)
     {
-        var response = await inner.ProcessAsync(request);
+        var response = await inner.ProcessAsync(tenant, request);
 
         // PushedRequestFetcher carries the URN forward onto the resolved request (surfaced as
         // ValidAuthorizationRequest.RequestUri) and deliberately does not consume on fetch, so multi-step UI re-reads
@@ -61,7 +60,7 @@ public class PushedAuthorizationRequestProcessorDecorator(
             request.RequestUri is { } requestUri &&
             requestUri.OriginalString.StartsWith(RequestUrn.Prefix))
         {
-            await authorizationRequestStorage.TryGetAsync(tenantAccessor.CurrentTenant(), requestUri, shouldRemove: true);
+            await authorizationRequestStorage.TryGetAsync(tenant, requestUri, shouldRemove: true);
         }
 
         // The URN the request was first fetched under - usually the one the client pushed - outlives the pages the
@@ -71,10 +70,10 @@ public class PushedAuthorizationRequestProcessorDecorator(
         if (response is SuccessfullyAuthenticated && request.Model.OriginRequestUri is { } originRequestUri)
         {
             if (originRequestUri != request.RequestUri)
-                await authorizationRequestStorage.TryGetAsync(tenantAccessor.CurrentTenant(), originRequestUri, shouldRemove: true);
+                await authorizationRequestStorage.TryGetAsync(tenant, originRequestUri, shouldRemove: true);
 
             await consumedRequestUris.MarkConsumedAsync(
-                tenantAccessor.CurrentTenant(),
+                tenant,
                 originRequestUri,
                 timeProvider.GetUtcNow() + options.Value.AuthenticationRequestExpiresIn);
         }

@@ -168,7 +168,7 @@ public partial class BackChannelAuthenticationTests
 
         await scope.ServiceProvider
             .GetRequiredService<IAuthenticationCompletionHandler>()
-            .CompleteAsync(authenticationRequestId, completed, TimeSpan.FromMinutes(5));
+            .CompleteAsync(TestTenant.Of(host.Services), authenticationRequestId, completed, TimeSpan.FromMinutes(5));
     }
 
     /// <summary>

@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
@@ -34,13 +35,14 @@ public partial class ConsentConstraintEnforcer(
 {
     /// <inheritdoc />
     public async Task<Result<JsonArray, OidcError>> EnforceAsync(
+        TenantDefinition tenant,
         ValidAuthorizationRequest request,
         ConsentDefinition granted,
         CancellationToken cancellationToken)
     {
         EnforceScopes(request, granted);
         EnforceResources(request, granted);
-        return await EnforceAuthorizationDetailsAsync(request, granted, cancellationToken);
+        return await EnforceAuthorizationDetailsAsync(tenant, request, granted, cancellationToken);
     }
 
     private static void EnforceScopes(ValidAuthorizationRequest request, ConsentDefinition granted)
@@ -89,6 +91,7 @@ public partial class ConsentConstraintEnforcer(
     }
 
     private async Task<Result<JsonArray, OidcError>> EnforceAuthorizationDetailsAsync(
+        TenantDefinition tenant,
         ValidAuthorizationRequest request,
         ConsentDefinition granted,
         CancellationToken cancellationToken)
@@ -111,6 +114,7 @@ public partial class ConsentConstraintEnforcer(
         // granted entry wider than what was asked: with both in hand, most likely an edited consent form,
         // which the client is told as a denial rather than the end user shown a server error.
         var revalidation = await authorizationDetailsPolicy.ApplyGrantedAsync(
+            tenant,
             grantedAuthorizationDetails, request.AuthorizationDetails, request.ClientInfo, cancellationToken);
 
         if (!revalidation.TryGetSuccess(out var revalidated))

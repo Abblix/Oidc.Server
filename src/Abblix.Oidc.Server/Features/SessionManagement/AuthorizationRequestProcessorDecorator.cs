@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.SessionManagement;
@@ -31,17 +32,18 @@ public class AuthorizationRequestProcessorDecorator(
     /// OpenID Connect authentication, attaches the OIDC Session Management 1.0 <c>session_state</c> value so the
     /// client's <c>check_session_iframe</c> can detect session changes.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The authorization request to be processed, expected to be a valid and authenticated request.</param>
     /// <returns>
     /// The inner processor's <see cref="AuthorizationResponse"/>, with <c>session_state</c> populated when applicable.
     /// </returns>
-    public async Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request)
+    public async Task<AuthorizationResponse> ProcessAsync(TenantDefinition tenant, ValidAuthorizationRequest request)
     {
         // Read before the inner processor is handed the request: it is the seam a host replaces or wraps,
         // and whether this response carries session state is decided from what the request asked for.
         var asksForOpenId = request.Model.Scope.HasFlag(Scopes.OpenId);
 
-        var response = await inner.ProcessAsync(request);
+        var response = await inner.ProcessAsync(tenant, request);
 
         // Append session state to the response if session management is enabled and the request qualifies
         if (sessionManagementService.Enabled &&

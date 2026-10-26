@@ -112,6 +112,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                 var claims = new Mock<IUserClaimsProvider>();
                 claims
                     .Setup(p => p.GetUserClaimsAsync(
+                        TestTenant.Matched,
                         It.IsAny<AuthSession>(),
                         It.IsAny<string[]>(),
                         It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),

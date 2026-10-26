@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -31,7 +32,7 @@ public class SupportedResponseTypeValidator(IEnumerable<IAuthorizationResponseBu
         .ToHashSet(StringComparer.Ordinal);
 
     /// <inheritdoc />
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         // An empty string names no response type; registered, it would be a combination no authorization request
         // can match, and the client would be refused on every request after a successful registration

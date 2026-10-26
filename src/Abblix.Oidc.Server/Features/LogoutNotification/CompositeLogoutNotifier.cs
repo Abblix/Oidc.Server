@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
 
@@ -24,6 +25,7 @@ public class CompositeLogoutNotifier(ILogoutNotifier[] logoutNotifiers) : ILogou
     /// <summary>
     /// Asynchronously notifies all configured clients about a logout event by invoking each registered logout notifier.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="clientInfo">The information about the client that is being notified of the logout event.</param>
     /// <param name="logoutContext">Contextual information related to the logout event, including the user and session identifiers.</param>
     /// <returns>A task that completes when all clients are notified.</returns>
@@ -31,11 +33,11 @@ public class CompositeLogoutNotifier(ILogoutNotifier[] logoutNotifiers) : ILogou
     /// This method ensures that each logout notifier is called, regardless of the individual notifier's outcome.
     /// It allows for a unified approach to logout notifications, accommodating various client requirements and logout mechanisms.
     /// </remarks>
-    public Task NotifyClientAsync(ClientInfo clientInfo, LogoutContext logoutContext)
+    public Task NotifyClientAsync(TenantDefinition tenant, ClientInfo clientInfo, LogoutContext logoutContext)
     {
         var tasks = Array.ConvertAll(
             logoutNotifiers,
-            notifier => notifier.NotifyClientAsync(clientInfo, logoutContext));
+            notifier => notifier.NotifyClientAsync(tenant, clientInfo, logoutContext));
 
         return Task.WhenAll(tasks);
     }

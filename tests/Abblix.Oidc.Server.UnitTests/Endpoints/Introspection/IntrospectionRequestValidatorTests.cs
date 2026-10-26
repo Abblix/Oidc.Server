@@ -64,7 +64,7 @@ public class IntrospectionRequestValidatorTests
             _logger.Object,
             _clientAuthenticator.Object,
             _jwtValidator.Object,
-            CallerRateLimiters.Create(rateLimit), tenantAccessor: SingleIssuer.Accessor);
+            CallerRateLimiters.Create(rateLimit));
 
     private static IntrospectionRequest CreateIntrospectionRequest(string token = "token_value")
     {
@@ -113,7 +113,7 @@ public class IntrospectionRequestValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -139,7 +139,7 @@ public class IntrospectionRequestValidatorTests
             .Returns(Task.FromResult<ClientInfo?>(null));
 
         // Act
-        var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -170,7 +170,7 @@ public class IntrospectionRequestValidatorTests
             .Returns(Task.FromResult<ClientInfo?>(publicClient));
 
         // Act
-        var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -202,7 +202,7 @@ public class IntrospectionRequestValidatorTests
             .ReturnsAsync(validationError);
 
         // Act
-        var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -224,7 +224,7 @@ public class IntrospectionRequestValidatorTests
             new Logger<IntrospectionRequestValidator>(loggers),
             _clientAuthenticator.Object,
             _jwtValidator.Object,
-            CallerRateLimiters.Create(new CallerRateLimitOptions()), tenantAccessor: SingleIssuer.Accessor);
+            CallerRateLimiters.Create(new CallerRateLimitOptions()));
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
@@ -233,7 +233,7 @@ public class IntrospectionRequestValidatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "No signing key matched: kid='sent\r\nforged'"));
 
-        await validator.ValidateAsync(CreateIntrospectionRequest(), CreateClientRequest());
+        await validator.ValidateAsync(SingleIssuer.Tenant, CreateIntrospectionRequest(), CreateClientRequest());
 
         var record = Assert.Single(loggers.Entries);
         Assert.IsType<Sanitized>(record.Value("JwtValidationError"));
@@ -262,7 +262,7 @@ public class IntrospectionRequestValidatorTests
                 TestTenant.Matched, It.IsAny<string>(), TokenTypesArg.Is(JwtTypes.IntrospectableTokens), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an ID token"));
 
-        var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         Assert.True(result.TryGetSuccess(out var validRequest));
         Assert.Null(validRequest.Token);
@@ -290,7 +290,7 @@ public class IntrospectionRequestValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -326,7 +326,7 @@ public class IntrospectionRequestValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        await _validator.ValidateAsync(introspectionRequest, clientRequest);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.Equal(2, callOrder.Count);
@@ -350,7 +350,7 @@ public class IntrospectionRequestValidatorTests
             .Returns(Task.FromResult<ClientInfo?>(null));
 
         // Act
-        await _validator.ValidateAsync(introspectionRequest, clientRequest);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         _clientAuthenticator.Verify(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()), Times.Once);
@@ -380,7 +380,7 @@ public class IntrospectionRequestValidatorTests
             .ReturnsAsync(jwt);
 
         // Act
-        await _validator.ValidateAsync(introspectionRequest, clientRequest);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         _jwtValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()), Times.Once);
@@ -408,7 +408,7 @@ public class IntrospectionRequestValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -437,7 +437,7 @@ public class IntrospectionRequestValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -465,8 +465,8 @@ public class IntrospectionRequestValidatorTests
             .ReturnsAsync(CreateValidJsonWebToken());
 
         // Act
-        var first = await validator.ValidateAsync(CreateIntrospectionRequest(), CreateClientRequest());
-        var second = await validator.ValidateAsync(CreateIntrospectionRequest(), CreateClientRequest());
+        var first = await validator.ValidateAsync(SingleIssuer.Tenant, CreateIntrospectionRequest(), CreateClientRequest());
+        var second = await validator.ValidateAsync(SingleIssuer.Tenant, CreateIntrospectionRequest(), CreateClientRequest());
 
         // Assert
         Assert.True(first.TryGetSuccess(out _));
@@ -498,9 +498,10 @@ public class IntrospectionRequestValidatorTests
             .ReturnsAsync(CreateValidJsonWebToken(OtherClientId));
 
         // Act
-        await validator.ValidateAsync(CreateIntrospectionRequest(), CreateClientRequest());
-        var spent = await validator.ValidateAsync(CreateIntrospectionRequest(), CreateClientRequest());
+        await validator.ValidateAsync(SingleIssuer.Tenant, CreateIntrospectionRequest(), CreateClientRequest());
+        var spent = await validator.ValidateAsync(SingleIssuer.Tenant, CreateIntrospectionRequest(), CreateClientRequest());
         var other = await validator.ValidateAsync(
+            SingleIssuer.Tenant,
             CreateIntrospectionRequest(),
             CreateClientRequest(OtherClientId));
 
@@ -532,7 +533,7 @@ public class IntrospectionRequestValidatorTests
         // Act, Assert
         for (var attempt = 0; attempt < RequestsBeyondAnyDefaultBudget; attempt++)
         {
-            var result = await validator.ValidateAsync(CreateIntrospectionRequest(), CreateClientRequest());
+            var result = await validator.ValidateAsync(SingleIssuer.Tenant, CreateIntrospectionRequest(), CreateClientRequest());
             Assert.True(result.TryGetSuccess(out _));
         }
     }
@@ -559,7 +560,7 @@ public class IntrospectionRequestValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        var result = await _validator.ValidateAsync(introspectionRequest, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));

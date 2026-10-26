@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,7 +38,7 @@ public class AuthorizationDetailsTypesValidator(
     IServiceProvider serviceProvider) : SyncClientRegistrationContextValidator
 {
     /// <inheritdoc />
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var requested = context.Request.AuthorizationDetailsTypes;
         if (requested is null || requested.Length == 0)

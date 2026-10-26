@@ -33,8 +33,7 @@ public partial class DPoPUserInfoValidator(
     ILogger<DPoPUserInfoValidator> logger,
     IProofValidator proofValidator,
     INonceService nonceService,
-    IOptionsMonitor<OidcOptions> options,
-    ITenantAccessor tenantAccessor) : DPoPNonceValidator(nonceService, tenantAccessor), IDPoPUserInfoValidator
+    IOptionsMonitor<OidcOptions> options) : DPoPNonceValidator(nonceService), IDPoPUserInfoValidator
 {
     /// <inheritdoc/>
     /// <remarks>
@@ -42,6 +41,7 @@ public partial class DPoPUserInfoValidator(
     /// token is judged by its scheme alone, a bound one by its scheme, its proof and the proof's nonce.
     /// </remarks>
     public async Task<OidcError?> ValidateAsync(
+        TenantDefinition tenant,
         ClientRequest clientRequest,
         JsonWebToken accessToken,
         [Credential] string rawAccessToken)
@@ -49,7 +49,7 @@ public partial class DPoPUserInfoValidator(
         var schemeDPoP = clientRequest is { AuthorizationHeader.Scheme: TokenTypes.DPoP };
 
         return accessToken is { Payload.Confirmation.JwkThumbprint: {} committed }
-            ? await ValidateBoundPresentationAsync(clientRequest, schemeDPoP, committed, rawAccessToken)
+            ? await ValidateBoundPresentationAsync(tenant, clientRequest, schemeDPoP, committed, rawAccessToken)
             : ValidateUnboundPresentation(schemeDPoP);
     }
 
@@ -71,6 +71,7 @@ public partial class DPoPUserInfoValidator(
     }
 
     private async Task<OidcError?> ValidateBoundPresentationAsync(
+        TenantDefinition tenant,
         ClientRequest clientRequest,
         bool schemeDPoP,
         string committed,
@@ -107,7 +108,7 @@ public partial class DPoPUserInfoValidator(
 
         if (options.CurrentValue.DPoP.Nonce.RequireAtUserInfoEndpoint)
         {
-            var nonceError = await EnforceNonceAsync(proof);
+            var nonceError = await EnforceNonceAsync(tenant, proof);
             if (nonceError is not null)
                 return nonceError;
         }

@@ -54,6 +54,7 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
     private const string NotificationToken = "notification-token";
 
     private readonly NotificationRecorder _deliveries = new();
+    private readonly UserInfoByTenant _userInfo = new();
     private WebApplication? _app;
     private HttpClient? _http;
 
@@ -67,7 +68,7 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
         builder.WebHost.UseTestServer();
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
-        builder.Services.AddSingleton<IUserInfoProvider, SignedInUserInfo>();
+        builder.Services.AddSingleton<IUserInfoProvider>(_userInfo);
         builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddBackChannelAuthentication();
         builder.Services.AddOidcServices(options =>
@@ -152,10 +153,15 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
 
     /// <summary>
     /// Completes <paramref name="authenticationRequestId"/> as the host does when the end user approves on their
-    /// device: reads the stored request inside <paramref name="readIn"/>'s scope and hands it to the completion
-    /// handler inside <paramref name="completeIn"/>'s scope, or outside any scope when that is null.
+    /// device: reads the stored request at <paramref name="readIn"/> and hands it to the completion handler at
+    /// <paramref name="completeAt"/>, while the ambient scope names <paramref name="servedIn"/>, or outside any scope
+    /// when that is null.
     /// </summary>
-    private async Task CompleteAsync(string authenticationRequestId, TenantDefinition readIn, TenantDefinition? completeIn)
+    private async Task CompleteAsync(
+        string authenticationRequestId,
+        TenantDefinition readIn,
+        TenantDefinition completeAt,
+        TenantDefinition? servedIn)
     {
         Features.BackChannelAuthentication.BackChannelAuthenticationRequest completed;
         using (TenantScope.Enter(readIn))
@@ -174,10 +180,10 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
             completed.Status = BackChannelAuthenticationStatus.Authenticated;
         }
 
-        using var scope = completeIn is null ? null : TenantScope.Enter(completeIn);
+        using var scope = servedIn is null ? null : TenantScope.Enter(servedIn);
         using var completing = _app.Services.CreateScope();
         await completing.ServiceProvider.GetRequiredService<IAuthenticationCompletionHandler>()
-            .CompleteAsync(authenticationRequestId, completed, TimeSpan.FromMinutes(5));
+            .CompleteAsync(completeAt, authenticationRequestId, completed, TimeSpan.FromMinutes(5));
     }
 
     private async Task<TenantDefinition> TenantAsync(string id)
@@ -185,29 +191,47 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
             .FindByIdAsync(id, TestContext.Current.CancellationToken))!;
 
     /// <summary>
-    /// A request started at one tenant and completed by the host inside the other tenant's scope, or outside any
-    /// scope, is refused and delivered nowhere; completed inside its own tenant's scope it reaches that tenant's
-    /// client alone, pushed as that client takes it rather than as the other tenant's client of the same id would.
+    /// A request started at one tenant and completed by the host at the other tenant is refused and delivered
+    /// nowhere, even inside its own tenant's scope; completed at its own tenant it reaches that tenant's client
+    /// alone, even inside the other tenant's scope, pushed as that client takes it rather than as the other
+    /// tenant's client of the same id would.
     /// </summary>
     [Fact]
-    public async Task ARequestOfOneTenant_IsCompletedOnlyInItsScope_AndReachesItsClientAlone()
+    public async Task ARequestOfOneTenant_IsCompletedOnlyAtItsTenant_AndReachesItsClientAlone()
     {
         var acme = await TenantAsync("acme");
         var globex = await TenantAsync("globex");
         var authenticationRequestId = await InitiateAtAsync(Acme);
 
         await Assert.ThrowsAnyAsync<InvalidOperationException>(
-            () => CompleteAsync(authenticationRequestId, acme, globex));
-        await Assert.ThrowsAnyAsync<InvalidOperationException>(
-            () => CompleteAsync(authenticationRequestId, acme, null));
+            () => CompleteAsync(authenticationRequestId, acme, completeAt: globex, servedIn: acme));
         Assert.Empty(_deliveries.Received);
 
-        await CompleteAsync(authenticationRequestId, acme, acme);
+        await CompleteAsync(authenticationRequestId, acme, completeAt: acme, servedIn: globex);
 
         var delivery = Assert.Single(_deliveries.Received);
         Assert.Equal(NotificationEndpointOf("acme"), delivery.Endpoint);
         Assert.False(string.IsNullOrEmpty(delivery.Payload["access_token"]?.GetValue<string>()));
         Assert.Null(delivery.Payload["error"]);
+        Assert.Equal([acme.Id], _userInfo.AskedAt);
+    }
+
+    /// <summary>
+    /// A host completing a request outside any request and any scope, as a push provider's callback does, hands the
+    /// tenant over, and the end user's claims are asked of that tenant, so the client receives its ID token.
+    /// </summary>
+    [Fact]
+    public async Task ARequestCompletedOutsideAnyScope_AsksTheClaimsOfItsTenant()
+    {
+        var acme = await TenantAsync("acme");
+        var authenticationRequestId = await InitiateAtAsync(Acme);
+
+        await CompleteAsync(authenticationRequestId, acme, completeAt: acme, servedIn: null);
+
+        var delivery = Assert.Single(_deliveries.Received);
+        Assert.Equal(NotificationEndpointOf("acme"), delivery.Endpoint);
+        Assert.False(string.IsNullOrEmpty(delivery.Payload["id_token"]?.GetValue<string>()));
+        Assert.Equal([acme.Id], _userInfo.AskedAt);
     }
 
     /// <summary>
@@ -216,9 +240,27 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
     private sealed class ReachableUserDeviceHandler(TimeProvider clock) : IUserDeviceAuthenticationHandler
     {
         public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(
+            TenantDefinition tenant,
             ValidBackChannelAuthenticationRequest request)
             => Task.FromResult<Result<AuthSession, OidcError>>(new AuthSession(
                 request.Model.LoginHint!, Guid.NewGuid().ToString("N"), clock.GetUtcNow(), "local"));
+    }
+
+    /// <summary>
+    /// The host's users, answering for whoever is asked about and noting the tenant each question is asked at.
+    /// </summary>
+    private sealed class UserInfoByTenant : IUserInfoProvider
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _askedAt = new();
+
+        public IEnumerable<string> AskedAt => _askedAt;
+
+        public Task<JsonObject?> GetUserInfoAsync(
+            TenantDefinition tenant, AuthSession authSession, IEnumerable<string> requestedClaims)
+        {
+            _askedAt.Enqueue(tenant.Id);
+            return Task.FromResult<JsonObject?>(new JsonObject { [IanaClaimTypes.Sub] = authSession.Subject });
+        }
     }
 
     /// <summary>What the server posted to a client's notification endpoint, and where.</summary>

@@ -25,12 +25,12 @@ public class UpdateClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     IRegistrationAccessTokenService registrationAccessTokenService,
     ITokenIdGenerator tokenIdGenerator,
-    TimeProvider clock,
-    ITenantAccessor tenantAccessor) : IUpdateClientRequestProcessor
+    TimeProvider clock) : IUpdateClientRequestProcessor
 {
     /// <summary>
     /// Processes a valid update client request, updating client metadata and returning updated configuration.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The validated update request containing new client metadata.</param>
     /// <returns>A task that results in updated client configuration or an error response.</returns>
     /// <remarks>
@@ -40,7 +40,7 @@ public class UpdateClientRequestProcessor(
     /// - A new registration_access_token may be issued
     /// - Client secrets cannot be updated via this endpoint
     /// </remarks>
-    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidUpdateClientRequest request)
+    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidUpdateClientRequest request)
     {
         var existingClient = request.Client.ClientInfo;
 
@@ -66,12 +66,13 @@ public class UpdateClientRequestProcessor(
         // holds working rather than rotating it away for one never delivered.
         var issuedAt = clock.GetUtcNow();
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
+            tenant,
             updatedClient.ClientId,
             issuedAt,
             null,
             registrationAccessTokenId);
 
-        if (!await clientInfoManager.TryUpdateClientAsync(tenantAccessor.CurrentTenant(), 
+        if (!await clientInfoManager.TryUpdateClientAsync(tenant, 
                 request.Client, new RegisteredClient(updatedClient, registrationAccessTokenId)))
         {
             return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");

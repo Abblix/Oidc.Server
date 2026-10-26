@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 
 namespace Abblix.Oidc.Server.Features.UserInteraction;
@@ -17,6 +18,6 @@ namespace Abblix.Oidc.Server.Features.UserInteraction;
 public sealed class NoUserInteractionRequirement : IUserInteractionRequirement
 {
     /// <inheritdoc />
-    public Task<bool> IsRequiredAsync(ValidAuthorizationRequest request, AuthSession authSession)
+    public Task<bool> IsRequiredAsync(TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession)
         => Task.FromResult(false);
 }

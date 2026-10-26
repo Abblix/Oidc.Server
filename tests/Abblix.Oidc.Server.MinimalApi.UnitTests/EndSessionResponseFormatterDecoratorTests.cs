@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
@@ -35,22 +36,33 @@ public class EndSessionResponseFormatterDecoratorTests
 {
     private const string CookieName = "Abblix.SessionId";
 
-    private readonly EndSessionResponseFormatterDecorator _decorator =
-        new(new AlwaysNoContent(), new ServingTheCookie());
+    private static readonly TenantDefinition Served = new() { Id = "acme", Issuer = new Uri("https://auth.example.com/acme") };
 
-    /// <summary>A deployment that serves the check-session cookie, which is what makes the decorator do anything.
+    private readonly EndSessionResponseFormatterDecorator _decorator =
+        new(new AlwaysNoContent(), new ServingTheCookie(), new ServedBy(Served));
+
+    /// <summary>Tells every request it is served by <paramref name="tenant"/>.</summary>
+    private sealed class ServedBy(TenantDefinition tenant) : ITenantAccessor
+    {
+        public TenantContext Current { get; } = new() { Tenant = tenant };
+    }
+
+    /// <summary>A deployment that serves the check-session cookie, which is what makes the decorator do anything, named
+    /// after the tenant it is asked for as the service names it.
     /// </summary>
     private sealed class ServingTheCookie : ISessionManagementService
     {
         public bool Enabled => true;
 
-        public Cookie GetSessionCookie(Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence persistence) => new(CookieName, new Abblix.Oidc.Server.Common.CookieOptions());
+        public Cookie GetSessionCookie(
+            TenantDefinition tenant, Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence persistence)
+            => new($"{CookieName}.{tenant.Id}", new Abblix.Oidc.Server.Common.CookieOptions());
 
         // The rest of the seam belongs to the check-session endpoint, which this decorator never reaches.
         public string GetSessionState(AuthorizationRequest request, string sessionId)
             => throw new NotSupportedException();
 
-        public Task<CheckSessionResponse> GetCheckSessionResponseAsync()
+        public Task<CheckSessionResponse> GetCheckSessionResponseAsync(TenantDefinition tenant)
             => throw new NotSupportedException();
     }
 
@@ -73,7 +85,7 @@ public class EndSessionResponseFormatterDecoratorTests
         var executed = await HttpResultRunner.RunAsync(result);
 
         return executed.Headers.TryGetValue(HeaderNames.SetCookie, out var cookies) &&
-               cookies.ToString().Contains(CookieName);
+               cookies.ToString().Contains($"{CookieName}.{Served.Id}");
     }
 
     /// <summary>

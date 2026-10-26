@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
@@ -30,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 public partial class DPoPBindingValidator(ILogger<DPoPBindingValidator> logger) : ITokenContextValidator
 {
     /// <inheritdoc/>
-    public Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, TokenValidationContext context, CancellationToken cancellationToken)
     {
         if (ValidateCertificateBinding(context) is { } certificateError)
             return Task.FromResult<OidcError?>(certificateError);

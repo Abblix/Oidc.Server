@@ -44,14 +44,12 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 /// Seals a session's subject the way the requesting client sees it, so the session the host authenticated can
 /// be compared against the end user an <c>id_token_hint</c> named.
 /// </param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class BackChannelAuthenticationRequestProcessor(
 	IBackChannelRequestStorage storage,
 	IOptionsSnapshot<OidcOptions> options,
 	IUserDeviceAuthenticationHandler userDeviceAuthenticationHandler,
 	TimeProvider timeProvider,
-	ISubjectTypeConverter subjectTypeConverter,
-	ITenantAccessor tenantAccessor) : IBackChannelAuthenticationRequestProcessor
+	ISubjectTypeConverter subjectTypeConverter) : IBackChannelAuthenticationRequestProcessor
 {
 	/// <inheritdoc />
 	/// <summary>
@@ -59,12 +57,13 @@ public class BackChannelAuthenticationRequestProcessor(
 	/// This method coordinates between client validation, initiating user-device authentication,
 	/// and persisting the authentication request for further polling.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">
 	/// The validated backchannel authentication request containing details such as client info, scope, and resources.
 	/// </param>
 	/// <returns>A task that represents the result of processing the backchannel authentication request, returning
 	/// a <see cref="Result{BackChannelAuthenticationSuccess, AuthError}"/>.</returns>
-	public async Task<Result<BackChannelAuthenticationSuccess, OidcError>> ProcessAsync(ValidBackChannelAuthenticationRequest request)
+	public async Task<Result<BackChannelAuthenticationSuccess, OidcError>> ProcessAsync(TenantDefinition tenant, ValidBackChannelAuthenticationRequest request)
 	{
 
 		// Read before the handler sees the request. The handler is a host seam holding this very request,
@@ -89,7 +88,7 @@ public class BackChannelAuthenticationRequestProcessor(
 		var requiredLevels = request.Model.Claims.RequiredAuthContextClassRefs()
 			.Match<string[]?>(levels => levels, _ => null);
 
-		var authResult = await userDeviceAuthenticationHandler.InitiateAuthenticationAsync(request);
+		var authResult = await userDeviceAuthenticationHandler.InitiateAuthenticationAsync(tenant, request);
 		if (authResult.TryGetFailure(out var error))
 		{
 			return error.Error switch
@@ -126,7 +125,7 @@ public class BackChannelAuthenticationRequestProcessor(
 		// to reach somebody else is refused before any notification goes out. The end user who eventually
 		// answers is judged separately, at completion, against what is carried on the stored request.
 		if (namedSubjects is { } accepted &&
-			!subjectTypeConverter.Names(tenantAccessor.CurrentTenant(), authSession, accepted, request.ClientInfo))
+			!subjectTypeConverter.Names(tenant, authSession, accepted, request.ClientInfo))
 		{
 			// CIBA Core 1.0 Section 13 defines access_denied as "The resource owner or OpenID Provider
 			// denied the request", and it is this server denying it. The note attached there describes the
@@ -192,7 +191,7 @@ public class BackChannelAuthenticationRequestProcessor(
 			ClientNotificationToken = request.Model.ClientNotificationToken,
 		};
 
-		var authenticationRequestId = await storage.StoreAsync(tenantAccessor.CurrentTenant(), backChannelRequest, request.ExpiresIn);
+		var authenticationRequestId = await storage.StoreAsync(tenant, backChannelRequest, request.ExpiresIn);
 
 		return new BackChannelAuthenticationSuccess
 		{

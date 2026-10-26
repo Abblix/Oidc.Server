@@ -38,7 +38,7 @@ public class ClientValidatorTests
     {
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         var logger = new Mock<ILogger<ClientValidator>>(MockBehavior.Loose);
-        _validator = new ClientValidator(logger.Object, _clientInfoProvider.Object, tenantAccessor: SingleIssuer.Accessor);
+        _validator = new ClientValidator(logger.Object, _clientInfoProvider.Object);
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ public class ClientValidatorTests
         var context = CreateContext(ValidClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -94,7 +94,7 @@ public class ClientValidatorTests
         var context = CreateContext(null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -118,7 +118,7 @@ public class ClientValidatorTests
         var context = CreateContext(UnknownClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -143,7 +143,7 @@ public class ClientValidatorTests
         var context = CreateContext(string.Empty);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -167,7 +167,7 @@ public class ClientValidatorTests
         var context = CreateContext(ValidClientId2);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -191,7 +191,7 @@ public class ClientValidatorTests
         var context = CreateContext(uppercaseClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -220,7 +220,7 @@ public class ClientValidatorTests
         var context = CreateContext(ValidClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -245,7 +245,7 @@ public class ClientValidatorTests
         var context = CreateContext(UnknownClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -265,7 +265,7 @@ public class ClientValidatorTests
         var context = CreateContext(null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -290,7 +290,7 @@ public class ClientValidatorTests
         var context = CreateContext(UnknownClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -315,7 +315,7 @@ public class ClientValidatorTests
         var context = CreateContext(ValidClientId);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         _clientInfoProvider.Verify(
@@ -339,7 +339,7 @@ public class ClientValidatorTests
         var context = CreateContext(ValidClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);

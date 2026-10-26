@@ -73,7 +73,7 @@ public class UnregisteredHintAudienceTests
         var validator = scope.ServiceProvider.GetRequiredService<IEndSessionContextValidator>();
 
         var context = new EndSessionValidationContext(new EndSessionRequest { IdTokenHint = IdTokenHint });
-        var error = await validator.ValidateAsync(context);
+        var error = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 
@@ -18,7 +19,8 @@ public interface IDeviceAuthorizationContextValidator
     /// <summary>
     /// Validates the device authorization request context.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing the request and client information.</param>
     /// <returns>An OIDC error if validation fails, or null if validation succeeds.</returns>
-    Task<OidcError?> ValidateAsync(DeviceAuthorizationValidationContext context);
+    Task<OidcError?> ValidateAsync(TenantDefinition tenant, DeviceAuthorizationValidationContext context);
 }

@@ -39,7 +39,6 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
 /// <param name="cutoffChecker">Asked before minting whether a revocation refuses the grant, as the token endpoint
 /// asks for a poll or ping client redeeming the same request.</param>
-/// <param name="tenantAccessor">Names the tenant the request is completed at, whose pairwise key seals the subject.</param>
 public partial class PushModeCompletionHandler(
     ILogger<PushModeCompletionHandler> logger,
     CredentialFingerprints fingerprints,
@@ -49,9 +48,8 @@ public partial class PushModeCompletionHandler(
     ITokenRequestProcessor tokenRequestProcessor,
     IAuthorizationDetailsPolicy authorizationDetailsPolicy,
     TimeProvider clock,
-    IRevocationCutoffChecker cutoffChecker,
-    ITenantAccessor tenantAccessor)
-    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, clock, tenantAccessor)
+    IRevocationCutoffChecker cutoffChecker)
+    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, clock)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
 
@@ -73,17 +71,19 @@ public partial class PushModeCompletionHandler(
     /// payload - sent only by whoever took the request, the same claim delivery makes before it mints, so a
     /// refusal and a delivery racing each other answer the client once between them.
     /// </remarks>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The request refused.</param>
     /// <param name="request">The request, carrying where and with which token the client is notified.</param>
     /// <param name="refusal">The error sent.</param>
     /// <param name="expiresIn">Unused: nothing is left behind to expire.</param>
     protected override async Task RefuseAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         OidcError refusal,
         TimeSpan expiresIn)
     {
-        if (await TakeRequestAsync(authenticationRequestId) is null)
+        if (await TakeRequestAsync(tenant, authenticationRequestId) is null)
             throw ClaimLost(authenticationRequestId);
 
         await SendErrorAsync(authenticationRequestId, request, refusal);
@@ -104,11 +104,13 @@ public partial class PushModeCompletionHandler(
     /// to ask the end user again.
     /// </para>
     /// </remarks>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information for token generation.</param>
     /// <param name="expiresIn">Unused: push leaves no record behind.</param>
     protected override async Task HandleDeliveryAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
@@ -123,20 +125,20 @@ public partial class PushModeCompletionHandler(
         {
             // Removed rather than denied: this client never polls, so a denied request it cannot read is an
             // orphan waiting out its expiry, and with nowhere to send it no error reaches the client either.
-            if (await TakeRequestAsync(authenticationRequestId) is null)
+            if (await TakeRequestAsync(tenant, authenticationRequestId) is null)
                 throw ClaimLost(authenticationRequestId);
 
             return;
         }
 
-        if (await TakeRequestAsync(authenticationRequestId) is null)
+        if (await TakeRequestAsync(tenant, authenticationRequestId) is null)
             throw ClaimLost(authenticationRequestId);
 
         // The revocation checks the token endpoint makes before redeeming a grant, asked HERE for the same reason as
         // the per-type validators below: a push client never redeems, so without them a request whose session or
         // subject was revoked, or which the end user approved before withdrawing consent from this client, would be
         // answered with tokens in push mode and refused in poll or ping.
-        if (await RefusedAsRevokedAsync(authenticationRequestId, request, clientInfo))
+        if (await RefusedAsRevokedAsync(tenant, authenticationRequestId, request, clientInfo))
             return;
 
         // The per-type validators, asked HERE because this is where a push grant is spent. Poll and ping
@@ -154,6 +156,7 @@ public partial class PushModeCompletionHandler(
         try
         {
             refusal = await authorizationDetailsPolicy.RefuseAsync(
+                tenant,
                 request.AuthorizedGrant,
                 request.RequestedAuthorizationDetails,
                 clientInfo,
@@ -180,7 +183,7 @@ public partial class PushModeCompletionHandler(
 
         LogGeneratingTokens(FingerprintOf(authenticationRequestId));
 
-        var tokenResult = await IssueTokensAsync(authenticationRequestId, request, clientInfo);
+        var tokenResult = await IssueTokensAsync(tenant, authenticationRequestId, request, clientInfo);
 
         await tokenResult.MatchAsync<object?>(
             async tokens =>
@@ -222,6 +225,7 @@ public partial class PushModeCompletionHandler(
     /// transaction failed when the check itself throws; answers whether it refused.
     /// </summary>
     private async Task<bool> RefusedAsRevokedAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo)
@@ -229,7 +233,7 @@ public partial class PushModeCompletionHandler(
         bool revoked;
         try
         {
-            revoked = await cutoffChecker.IsGrantRefusedAsync(CurrentTenant, request.AuthorizedGrant, GrantTypes.Ciba);
+            revoked = await cutoffChecker.IsGrantRefusedAsync(tenant, request.AuthorizedGrant, GrantTypes.Ciba);
         }
         catch (Exception exception)
         {
@@ -252,6 +256,7 @@ public partial class PushModeCompletionHandler(
     /// Issues the tokens of a taken push request, telling the client the transaction failed when issuing throws.
     /// </summary>
     private async Task<Result<TokenIssued, OidcError>> IssueTokensAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo)
@@ -276,7 +281,7 @@ public partial class PushModeCompletionHandler(
 
         try
         {
-            return await tokenRequestProcessor.ProcessAsync(validTokenRequest);
+            return await tokenRequestProcessor.ProcessAsync(tenant, validTokenRequest);
         }
         catch (Exception exception)
         {

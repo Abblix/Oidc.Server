@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
@@ -26,9 +27,8 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validat
 /// </summary>
 public class SecurityProfileValidatorTests
 {
-    private static SecurityProfileValidator CreateValidator(
-        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
-        => new(SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = defaultSecurityProfile }));
+    private static TenantDefinition TenantHolding(ClientSecurityProfile defaultSecurityProfile)
+        => new TestIssuer { DefaultSecurityProfile = defaultSecurityProfile }.ToTenant();
 
     private static ClientRegistrationValidationContext CreateContext(string[][] responseTypes)
     {
@@ -55,7 +55,7 @@ public class SecurityProfileValidatorTests
     {
         var context = CreateContext([[ResponseTypes.IdToken]]);
 
-        var result = await CreateValidator().ValidateAsync(context);
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.None), context);
 
         Assert.Null(result);
     }
@@ -69,7 +69,7 @@ public class SecurityProfileValidatorTests
     {
         var context = CreateContext([[ResponseTypes.Code]]);
 
-        var result = await CreateValidator(ClientSecurityProfile.Fapi2).ValidateAsync(context);
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
 
         Assert.Null(result);
     }
@@ -83,7 +83,7 @@ public class SecurityProfileValidatorTests
     {
         var context = CreateContext([[ResponseTypes.IdToken]]);
 
-        var result = await CreateValidator(ClientSecurityProfile.Fapi2).ValidateAsync(context);
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
@@ -98,7 +98,7 @@ public class SecurityProfileValidatorTests
     {
         var context = CreateContext([[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]]);
 
-        var result = await CreateValidator(ClientSecurityProfile.Fapi2).ValidateAsync(context);
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);

@@ -13,9 +13,11 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
+using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Moq;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Utils;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.BackChannelAuthentication;
@@ -80,6 +82,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
@@ -100,6 +103,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
@@ -120,6 +124,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
@@ -141,6 +146,7 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Authenticated, request.Status);
@@ -162,9 +168,40 @@ public partial class AuthenticationCompletionHandlerTests
             .Returns(Task.CompletedTask);
 
         await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PollClient(), _expiresIn);
 
         Assert.Equal(BackChannelAuthenticationStatus.Denied, request.Status);
+    }
+
+    /// <summary>
+    /// A push grant whose validators accept it at the tenant it is completed at is delivered with its tokens.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_PushMode_WhenTheValidatorAcceptsTheGrant_IssuesTheTokens()
+    {
+        var request = CreateRequestWithAuthorizationDetails(
+            requestedTypes: ["payment_initiation"],
+            grantedTypes: ["payment_initiation"],
+            deliverable: true);
+
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
+        NotificationsAreAccepted();
+        _tokenRequestProcessor
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
+            .ReturnsAsync((Result<TokenIssued, OidcError>)new TokenIssued(
+                new EncodedJsonWebToken(new Jwt.JsonWebToken(), EncodedAccessToken),
+                TokenTypes.Bearer,
+                TimeSpan.FromHours(1),
+                new Uri(TokenExchangeTokenTypes.AccessToken)));
+
+        var policy = StubAuthorizationDetailsPolicy.Accepting;
+
+        await CreatePushModeHandler(policy).CompleteAuthenticationAsync(
+            SingleIssuer.Tenant, AuthReqId, request, PushClient(), _expiresIn);
+
+        Assert.Equal(1, policy.GrantedCalls);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Once);
     }
 
     /// <summary>
@@ -199,6 +236,7 @@ public partial class AuthenticationCompletionHandlerTests
         var policy = StubAuthorizationDetailsPolicy.Refusing("instructedAmount exceeds the ceiling");
 
         await CreatePushModeHandler(policy).CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PushClient(), _expiresIn);
 
         Assert.Equal(1, policy.GrantedCalls);
@@ -231,7 +269,7 @@ public partial class AuthenticationCompletionHandlerTests
         var policy = StubAuthorizationDetailsPolicy.Throwing("the entry lost its amount");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => CreatePushModeHandler(policy)
-            .CompleteAuthenticationAsync(AuthReqId, request, PushClient(), _expiresIn));
+            .CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, PushClient(), _expiresIn));
 
         _tokenRequestProcessor.VerifyNoOtherCalls();
         VerifyPushErrorSent(ErrorCodes.TransactionFailed);
@@ -268,6 +306,7 @@ public partial class AuthenticationCompletionHandlerTests
         var policy = StubAuthorizationDetailsPolicy.Capping("instructedAmount", "100");
 
         await CreatePushModeHandler(policy).CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
             AuthReqId, request, PushClient(), _expiresIn);
 
         Assert.Equal(1, policy.GrantedCalls);

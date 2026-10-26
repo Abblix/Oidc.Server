@@ -11,6 +11,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -42,6 +43,7 @@ internal sealed class AuthorizationDetailsPolicy(
     /// </summary>
     private delegate Task<Result<AuthorizationDetail, OidcError>> AskValidator(
         IAuthorizationDetailValidator validator,
+        TenantDefinition tenant,
         AuthorizationDetail detail,
         IReadOnlyList<AuthorizationDetail> requested,
         ClientInfo client,
@@ -49,31 +51,36 @@ internal sealed class AuthorizationDetailsPolicy(
 
     /// <inheritdoc/>
     public Task<Result<JsonArray, OidcError>> ApplyAsync(
+        TenantDefinition tenant,
         JsonArray? raw,
         ClientInfo client,
         CancellationToken token)
         => ApplyCoreAsync(
+            tenant,
             raw,
             [],
             client,
-            static (validator, detail, _, client, token) => validator.ValidateAsync(detail, client, token),
+            static (validator, tenant, detail, _, client, token) => validator.ValidateAsync(tenant, detail, client, token),
             token);
 
     /// <inheritdoc/>
     public Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
+        TenantDefinition tenant,
         JsonArray? granted,
         JsonArray? requested,
         ClientInfo client,
         CancellationToken token)
         => ApplyCoreAsync(
+            tenant,
             granted,
             requested?.ToTypedArray() ?? [],
             client,
-            static (validator, detail, requested, client, token)
-                => validator.ValidateGrantedAsync(detail, requested, client, token),
+            static (validator, tenant, detail, requested, client, token)
+                => validator.ValidateGrantedAsync(tenant, detail, requested, client, token),
             token);
 
     private async Task<Result<JsonArray, OidcError>> ApplyCoreAsync(
+        TenantDefinition tenant,
         JsonArray? raw,
         AuthorizationDetail[] requested,
         ClientInfo client,
@@ -110,7 +117,7 @@ internal sealed class AuthorizationDetailsPolicy(
                 return Reject($"Authorization detail types not allowed for this client: {string.Join(", ", disallowed)}");
         }
 
-        var result = await ValidateAsync(authorizationDetails, requested, client, ask, token);
+        var result = await ValidateAsync(tenant, authorizationDetails, requested, client, ask, token);
 
         // Rebuild the raw array from the validated typed list (RFC 9396 section 7.1 narrow / extend).
         // When per-type validators left their input untouched the result is byte-equivalent
@@ -123,6 +130,7 @@ internal sealed class AuthorizationDetailsPolicy(
     }
 
     private async Task<Result<IReadOnlyList<AuthorizationDetail>, OidcError>> ValidateAsync(
+        TenantDefinition tenant,
         IEnumerable<AuthorizationDetail> details,
         AuthorizationDetail[] requested,
         ClientInfo client,
@@ -150,7 +158,7 @@ internal sealed class AuthorizationDetailsPolicy(
             var requestedOfType = Array.FindAll(
                 requested, entry => string.Equals(entry.Type, detail.Type, StringComparison.Ordinal));
 
-            var result = await ask(validator, detail, requestedOfType, client, cancellationToken);
+            var result = await ask(validator, tenant, detail, requestedOfType, client, cancellationToken);
             if (result.TryGetFailure(out var failure))
             {
                 return failure;

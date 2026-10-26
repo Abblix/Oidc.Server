@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -27,11 +28,12 @@ public class ReadClientHandler(
     /// Validates the registration access token and resolves the addressed client, then delegates
     /// to the processor to build the read-client response per RFC 7592 section 2.1.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="clientRequest">The incoming RFC 7592 read request.</param>
     /// <returns>The current client metadata or an error result.</returns>
-    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(ClientRequest clientRequest)
+    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(TenantDefinition tenant, ClientRequest clientRequest)
     {
-        var validationResult = await validator.ValidateAsync(clientRequest);
-        return await validationResult.BindAsync(processor.ProcessAsync);
+        var validationResult = await validator.ValidateAsync(tenant, clientRequest);
+        return await validationResult.BindAsync(request => processor.ProcessAsync(tenant, request));
     }
 }

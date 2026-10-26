@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Features.Telemetry;
@@ -17,6 +18,7 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 internal sealed partial class ObservedPushedAuthorizationHandler
 {
     private partial (string Key, string? Value) RequestTagOf(
+        TenantDefinition tenant,
         AuthorizationRequest authorizationRequest,
         ClientRequest clientRequest)
         => (TelemetryTags.ResponseType, EndpointObservation.ResponseTypeOf(authorizationRequest.ResponseType));

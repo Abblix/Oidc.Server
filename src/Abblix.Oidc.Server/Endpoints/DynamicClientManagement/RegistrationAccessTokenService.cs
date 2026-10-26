@@ -22,22 +22,21 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 public class RegistrationAccessTokenService(
     IAuthServiceJwtFormatter serviceJwtFormatter,
-    ITenantAccessor tenantAccessor,
     ITenantCatalog catalog,
     IOptions<OidcOptions> options) : IRegistrationAccessTokenService
 {
     /// <summary>
     /// Issues a registration access token for a registered client.
     /// </summary>
+    /// <param name="tenant">The tenant the token is issued at.</param>
     /// <param name="clientId">The unique identifier of the registered client.</param>
     /// <param name="issuedAt">The timestamp when the token is issued.</param>
     /// <param name="expiresIn">The optional duration after which the token expires.</param>
     /// <param name="tokenId">The identifier (jti) embedded in the token and bound to the client.</param>
     /// <returns>A task that results in the encoded registration access token.</returns>
-    public Task<string> IssueTokenAsync(string clientId, DateTimeOffset issuedAt, TimeSpan? expiresIn, string tokenId)
+    public Task<string> IssueTokenAsync(TenantDefinition tenant, string clientId, DateTimeOffset issuedAt, TimeSpan? expiresIn, string tokenId)
     {
         var signing = options.Value.ServiceTokens.RegistrationAccessToken.Signing;
-        var tenant = tenantAccessor.CurrentTenant();
         var issuer = LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog);
 
         var token = new JsonWebToken
@@ -70,7 +69,7 @@ public class RegistrationAccessTokenService(
         };
 
         return serviceJwtFormatter.FormatAsync(
-            tenantAccessor.CurrentTenant(),
+            tenant,
             token, ServiceJwtEncryption.ForRegistrationAccessToken(options.Value));
     }
 }

@@ -17,6 +17,8 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
@@ -74,10 +76,10 @@ public class GrantedRevalidationTests
         var policy = PolicyWith<RequiringTheRequestValidator>();
 
         Assert.Null(await policy.RefuseAsync(
-            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId),
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId),
             TestContext.Current.CancellationToken));
         Assert.NotNull(await policy.RefuseAsync(
-            GrantWith(WorkedExample), null, new ClientInfo(ClientId), TestContext.Current.CancellationToken));
+            SingleIssuer.Tenant, GrantWith(WorkedExample), null, new ClientInfo(ClientId), TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -94,7 +96,7 @@ public class GrantedRevalidationTests
         var policy = PolicyWith<PassThroughValidator>();
 
         Assert.Null(await policy.RefuseAsync(
-            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken));
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -111,7 +113,7 @@ public class GrantedRevalidationTests
         var policy = PolicyWith<ReorderingValidator>();
 
         Assert.Null(await policy.RefuseAsync(
-            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken));
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -128,7 +130,7 @@ public class GrantedRevalidationTests
         var policy = PolicyWith<CappingValidator>();
 
         var refusal = await policy.RefuseAsync(
-            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal.Value.Error.Error);
@@ -150,7 +152,7 @@ public class GrantedRevalidationTests
         IAuthorizationDetailsPolicy policy = new InPlaceEditingPolicy();
 
         var refusal = await policy.RefuseAsync(
-            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal.Value.Error.Error);
@@ -171,7 +173,7 @@ public class GrantedRevalidationTests
         IAuthorizationDetailsPolicy policy = new EditingInPlaceAndAnsweringTheOriginalPolicy();
 
         var refusal = await policy.RefuseAsync(
-            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal.Value.Error.Error);
@@ -193,10 +195,26 @@ public class GrantedRevalidationTests
         IAuthorizationDetailsPolicy policy = new EmptyingPolicy();
 
         var refusal = await policy.RefuseAsync(
-            GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal.Value.Error.Error);
+    }
+
+    /// <summary>
+    /// The grant is revalidated at the tenant it is spent at, which is the tenant its validators are asked at.
+    /// </summary>
+    [Fact]
+    public async Task AGrant_IsRevalidatedAtTheTenantItIsSpentAt()
+    {
+        var policy = PolicyWith<ServedTenantOnlyValidator>();
+
+        Assert.Null(await policy.RefuseAsync(
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId),
+            TestContext.Current.CancellationToken));
+        Assert.NotNull(await policy.RefuseAsync(
+            new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") }, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId),
+            TestContext.Current.CancellationToken));
     }
 
     private static IAuthorizationDetailsPolicy PolicyWith<TValidator>()
@@ -221,6 +239,7 @@ public class GrantedRevalidationTests
         public string Type => PaymentType;
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
@@ -231,10 +250,12 @@ public class GrantedRevalidationTests
         public string Type => PaymentType;
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail,
             IReadOnlyList<AuthorizationDetail> requested,
             ClientInfo client,
@@ -251,6 +272,7 @@ public class GrantedRevalidationTests
         public string Type => PaymentType;
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
         {
             var sorted = new JsonObject();
@@ -268,6 +290,7 @@ public class GrantedRevalidationTests
         public string Type => PaymentType;
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
         {
             var capped = (JsonObject)detail.Json.DeepClone();
@@ -281,6 +304,7 @@ public class GrantedRevalidationTests
     private sealed class InPlaceEditingPolicy : IAuthorizationDetailsPolicy
     {
         public Task<Result<JsonArray, OidcError>> ApplyAsync(
+            TenantDefinition tenant,
             JsonArray? raw, ClientInfo client, CancellationToken token)
         {
             if (raw?[0] is JsonObject entry)
@@ -294,6 +318,7 @@ public class GrantedRevalidationTests
     private sealed class EmptyingPolicy : IAuthorizationDetailsPolicy
     {
         public Task<Result<JsonArray, OidcError>> ApplyAsync(
+            TenantDefinition tenant,
             JsonArray? raw, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<JsonArray, OidcError>>(new JsonArray());
     }
@@ -304,6 +329,7 @@ public class GrantedRevalidationTests
     private sealed class EditingInPlaceAndAnsweringTheOriginalPolicy : IAuthorizationDetailsPolicy
     {
         public Task<Result<JsonArray, OidcError>> ApplyAsync(
+            TenantDefinition tenant,
             JsonArray? raw, ClientInfo client, CancellationToken token)
         {
             var asGiven = (JsonArray)raw!.DeepClone();

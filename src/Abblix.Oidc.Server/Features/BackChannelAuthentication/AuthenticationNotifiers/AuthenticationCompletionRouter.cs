@@ -27,14 +27,12 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
 /// <param name="serviceProvider">Service provider for resolving mode-specific handlers using keyed services.</param>
 /// <param name="storage">Holds the stored request, whose client decides the route.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class AuthenticationCompletionRouter(
     ILogger<AuthenticationCompletionRouter> logger,
     CredentialFingerprints fingerprints,
     IClientInfoProvider clientInfoProvider,
     IServiceProvider serviceProvider,
-    IBackChannelRequestStorage storage,
-    ITenantAccessor tenantAccessor) : IAuthenticationCompletionHandler
+    IBackChannelRequestStorage storage) : IAuthenticationCompletionHandler
 {
     private static readonly string[] AllDeliveryModes =
     [
@@ -54,23 +52,25 @@ public partial class AuthenticationCompletionRouter(
     /// Completes the authentication process and handles token delivery based on the
     /// client's configured delivery mode. Automatically selects the appropriate handler implementation.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="authenticationRequestId">The auth_req_id to complete.</param>
     /// <param name="request">The authentication request to mark as completed.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     public async Task CompleteAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
     {
-        var (handler, clientInfo) = await RouteAsync(authenticationRequestId, "completed");
-        await handler.CompleteAuthenticationAsync(authenticationRequestId, request, clientInfo, expiresIn);
+        var (handler, clientInfo) = await RouteAsync(tenant, authenticationRequestId, "completed");
+        await handler.CompleteAuthenticationAsync(tenant, authenticationRequestId, request, clientInfo, expiresIn);
     }
 
     /// <inheritdoc />
-    public async Task DenyAsync([Credential] string authenticationRequestId, TimeSpan expiresIn)
+    public async Task DenyAsync(TenantDefinition tenant, [Credential] string authenticationRequestId, TimeSpan expiresIn)
     {
-        var (handler, _) = await RouteAsync(authenticationRequestId, "denied");
-        await handler.DenyAuthenticationAsync(authenticationRequestId, expiresIn);
+        var (handler, _) = await RouteAsync(tenant, authenticationRequestId, "denied");
+        await handler.DenyAuthenticationAsync(tenant, authenticationRequestId, expiresIn);
     }
 
     /// <summary>
@@ -83,13 +83,15 @@ public partial class AuthenticationCompletionRouter(
     /// refused rather than returned from, because the request would stay pending while the host believed its
     /// answer had reached somebody.
     /// </remarks>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The request being answered.</param>
     /// <param name="answered">What the caller is doing, for the refusals: completed or denied.</param>
     private async Task<(AuthenticationCompletionHandler Handler, ClientInfo ClientInfo)> RouteAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         string answered)
     {
-        var stored = await storage.TryGetAsync(tenantAccessor.CurrentTenant(), authenticationRequestId);
+        var stored = await storage.TryGetAsync(tenant, authenticationRequestId);
         if (stored is null)
         {
             LogNothingStored(fingerprints.Of(authenticationRequestId), answered);
@@ -97,7 +99,7 @@ public partial class AuthenticationCompletionRouter(
         }
 
         var clientId = stored.AuthorizedGrant.Context.ClientId;
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         if (clientInfo == null)
         {
             LogClientNotFound(fingerprints.Of(authenticationRequestId), clientId);

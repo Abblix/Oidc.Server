@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
 
@@ -25,9 +26,10 @@ public class FrontChannelLogoutNotifier: ILogoutNotifier
     /// Throws <see cref="InvalidOperationException"/> if the client requires <c>sid</c> but the
     /// context has no session identifier.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="clientInfo">Information about the client that needs to be notified of the logout event.</param>
     /// <param name="logoutContext">Contextual information about the logout event, including the session ID and issuer.</param>
-    public Task NotifyClientAsync(ClientInfo clientInfo, LogoutContext logoutContext)
+    public Task NotifyClientAsync(TenantDefinition tenant, ClientInfo clientInfo, LogoutContext logoutContext)
     {
         NotifyClient(clientInfo, logoutContext);
         return Task.CompletedTask;

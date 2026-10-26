@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
@@ -30,7 +31,7 @@ public class UpdateClientRequestValidatorTests
     [InlineData(null)]
     public async Task AnUpdateDerivingAnotherSector_IsRefused(string? derivedSector)
     {
-        var result = await Validator(derivedSector).ValidateAsync(Update());
+        var result = await Validator(derivedSector).ValidateAsync(SingleIssuer.Tenant, Update());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
@@ -39,7 +40,7 @@ public class UpdateClientRequestValidatorTests
     [Fact]
     public async Task AnUpdateKeepingTheSector_IsAccepted()
     {
-        var result = await Validator(StoredSector).ValidateAsync(Update());
+        var result = await Validator(StoredSector).ValidateAsync(SingleIssuer.Tenant, Update());
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -53,13 +54,13 @@ public class UpdateClientRequestValidatorTests
 
         var clientValidator = new Mock<IClientRequestValidator>();
         clientValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ClientRequest>()))
-            .ReturnsAsync((ClientRequest request) => new ValidClientRequest(request, stored));
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .ReturnsAsync((TenantDefinition _, ClientRequest request) => new ValidClientRequest(request, stored));
 
         var registrationValidator = new Mock<IRegisterClientRequestValidator>();
         registrationValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ClientRegistrationRequest>()))
-            .ReturnsAsync((ClientRegistrationRequest request) => new ValidClientRegistrationRequest(request, derivedSector));
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientRegistrationRequest>()))
+            .ReturnsAsync((TenantDefinition _, ClientRegistrationRequest request) => new ValidClientRegistrationRequest(request, derivedSector));
 
         return new UpdateClientRequestValidator(clientValidator.Object, registrationValidator.Object);
     }

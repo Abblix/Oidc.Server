@@ -87,7 +87,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.AuthorizationCode, ResponseModes.Query);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -106,7 +106,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.AuthorizationCode, ResponseModes.Fragment);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -125,7 +125,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.AuthorizationCode, ResponseModes.FormPost);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -144,7 +144,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.Implicit, ResponseModes.Fragment);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -163,7 +163,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.Implicit, ResponseModes.FormPost);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -182,7 +182,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.Implicit, ResponseModes.Query);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -202,7 +202,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.Hybrid, ResponseModes.Fragment);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -221,7 +221,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.Hybrid, ResponseModes.FormPost);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -240,7 +240,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.Hybrid, ResponseModes.Query);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -259,7 +259,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.AuthorizationCode, responseMode: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -277,7 +277,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.AuthorizationCode, responseMode: string.Empty);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -295,7 +295,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.AuthorizationCode, responseMode: "custom_mode");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -315,7 +315,7 @@ public class ResponseModeValidatorTests
         Assert.Equal(ResponseModes.Query, context.ResponseMode); // Default
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -335,7 +335,7 @@ public class ResponseModeValidatorTests
         var originalMode = context.ResponseMode;
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -354,7 +354,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.Implicit, ResponseModes.Query);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         _logger.Verify(
@@ -381,7 +381,7 @@ public class ResponseModeValidatorTests
         context.ValidRedirectUri = redirectUri;
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -401,7 +401,7 @@ public class ResponseModeValidatorTests
         context.ResponseMode = ResponseModes.Fragment; // Default for error response
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -420,7 +420,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.AuthorizationCode, responseMode: "QUERY");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -439,7 +439,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.AuthorizationCode, responseMode: "   ");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -462,7 +462,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.AuthorizationCode, responseMode);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -482,7 +482,7 @@ public class ResponseModeValidatorTests
         var originalMode = context.ResponseMode;
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -524,7 +524,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(flowType, responseMode);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         if (shouldSucceed)
@@ -550,7 +550,7 @@ public class ResponseModeValidatorTests
         var context = CreateContext(FlowTypes.AuthorizationCode, responseMode: "query ");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         // No trimming, so "query " != "query"
@@ -572,7 +572,7 @@ public class ResponseModeValidatorTests
             allowedResponseModes: [ResponseModes.FormPost]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -596,7 +596,7 @@ public class ResponseModeValidatorTests
             allowedResponseModes: [ResponseModes.FormPost]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -619,7 +619,7 @@ public class ResponseModeValidatorTests
             defaultResponseMode: ResponseModes.Query);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -641,7 +641,7 @@ public class ResponseModeValidatorTests
             defaultResponseMode: ResponseModes.Query);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -662,7 +662,7 @@ public class ResponseModeValidatorTests
             allowedResponseModes: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -683,7 +683,7 @@ public class ResponseModeValidatorTests
             allowedResponseModes: []);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -704,7 +704,7 @@ public class ResponseModeValidatorTests
             allowedResponseModes: [ResponseModes.FormPost]);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         _logger.Verify(

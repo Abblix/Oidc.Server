@@ -20,14 +20,8 @@ namespace Abblix.Oidc.Server.Features.DPoP;
 /// their own endpoint <c>EventId</c>.
 /// </summary>
 public abstract class DPoPNonceValidator(
-    INonceService nonceService,
-    ITenantAccessor tenantAccessor)
+    INonceService nonceService)
 {
-    /// <summary>
-    /// The tenant the request is served at, whose nonces the proof is judged against.
-    /// </summary>
-    protected TenantDefinition CurrentTenant => tenantAccessor.CurrentTenant();
-
     /// <summary>
     /// Enforces the nonce policy on <paramref name="proof"/>. Returns <c>null</c> when
     /// the proof carries an acceptable nonce; otherwise mints a fresh nonce, fires
@@ -35,22 +29,24 @@ public abstract class DPoPNonceValidator(
     /// a <see cref="UseDPoPNonceError"/> the response formatter attaches to the
     /// <c>DPoP-Nonce</c> response header.
     /// </summary>
-    protected async Task<OidcError?> EnforceNonceAsync(Proof proof)
+    /// <param name="tenant">The tenant the request is served at, whose nonces the proof is judged against.</param>
+    /// <param name="proof">The validated DPoP proof whose nonce is judged.</param>
+    protected async Task<OidcError?> EnforceNonceAsync(TenantDefinition tenant, Proof proof)
     {
         var nonceClaim = proof.Token.Payload.Nonce;
         if (nonceClaim is null)
-            return await UseDPoPNonce();
+            return await UseDPoPNonce(tenant);
 
-        var failure = await nonceService.ValidateAsync(CurrentTenant, nonceClaim);
+        var failure = await nonceService.ValidateAsync(tenant, nonceClaim);
         if (failure is not null)
-            return await UseDPoPNonce();
+            return await UseDPoPNonce(tenant);
 
         return null;
     }
 
-    private async Task<UseDPoPNonceError> UseDPoPNonce()
+    private async Task<UseDPoPNonceError> UseDPoPNonce(TenantDefinition tenant)
     {
-        var nonce = await nonceService.IssueAsync(CurrentTenant);
+        var nonce = await nonceService.IssueAsync(tenant);
         LogNonceChallengeIssued();
         return new UseDPoPNonceError(nonce);
     }

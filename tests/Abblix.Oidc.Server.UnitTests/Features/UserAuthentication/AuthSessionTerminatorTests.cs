@@ -35,19 +35,19 @@ public class AuthSessionTerminatorTests
             .Callback((TenantDefinition _, string sessionId, DateTimeOffset? _, CancellationToken _) => _calls.Add($"revoke {sessionId}"))
             .Returns(Task.CompletedTask);
         _notifier
-            .Setup(n => n.NotifyClientsAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .Callback((string sessionId, string subject) => _calls.Add($"notify {sessionId} {subject}"))
-            .ReturnsAsync((string sessionId, string subject) => new LogoutContext(sessionId, subject, "issuer"));
+            .Setup(n => n.NotifyClientsAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback((TenantDefinition _, string sessionId, string subject) => _calls.Add($"notify {sessionId} {subject}"))
+            .ReturnsAsync((TenantDefinition _, string sessionId, string subject) => new LogoutContext(sessionId, subject, "issuer"));
     }
 
-    private AuthSessionTerminator Terminator => new(_tokenRevoker.Object, _notifier.Object, Options.Create(_options), tenantAccessor: SingleIssuer.Accessor);
+    private AuthSessionTerminator Terminator => new(_tokenRevoker.Object, _notifier.Object, Options.Create(_options));
 
     [Fact]
     public async Task Revokes_the_session_tokens_before_any_client_is_told_when_the_deployment_asks()
     {
         _options.RevokeSessionTokensOnLogout = true;
 
-        var context = await Terminator.TerminateAsync("session", "alice");
+        var context = await Terminator.TerminateAsync(SingleIssuer.Tenant, "session", "alice");
 
         Assert.Equal(["revoke session", "notify session alice"], _calls);
         Assert.Equal(("session", "alice"), (context.SessionId, context.SubjectId));
@@ -56,7 +56,7 @@ public class AuthSessionTerminatorTests
     [Fact]
     public async Task Only_notifies_by_default()
     {
-        await Terminator.TerminateAsync("session", "alice");
+        await Terminator.TerminateAsync(SingleIssuer.Tenant, "session", "alice");
 
         Assert.Equal(["notify session alice"], _calls);
     }

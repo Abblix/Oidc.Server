@@ -30,13 +30,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// registered processor - this enforces OAuth 2.1 (draft) default-off Implicit Flow at the validation
 /// layer (without <c>EnableImplicitFlow()</c>, no <c>token</c> / <c>id_token</c> processors exist
 /// and any request asking for them gets <c>unsupported_response_type</c>).</param>
-/// <param name="tenantAccessor">Names the tenant whose default security profile a client inherits when it
-/// states none, used to reject implicit and hybrid response types for a client held to a code-only
-/// profile (FAPI 2.0).</param>
 public partial class FlowTypeValidator(
     ILogger<FlowTypeValidator> logger,
-    IEnumerable<IAuthorizationResponseBuilder> processors,
-    ITenantAccessor tenantAccessor) : SyncAuthorizationContextValidatorBase
+    IEnumerable<IAuthorizationResponseBuilder> processors) : SyncAuthorizationContextValidatorBase
 {
     private readonly IReadOnlySet<string> _supportedResponseTypeParts =
         processors.Select(b => b.ResponseType).ToHashSet(StringComparer.Ordinal);
@@ -45,12 +41,13 @@ public partial class FlowTypeValidator(
     /// Validates the flow type specified in the authorization request.
     /// This method checks if the flow type is supported and aligns with the OAuth 2.0 specifications.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing client and request information.</param>
     /// <returns>
     /// An <see cref="AuthorizationRequestValidationError" /> if the flow type is not valid or supported,
     /// or null if the flow type is valid.
     /// </returns>
-    protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+    protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         var responseType = context.Request.ResponseType;
         var returnsTokenFromAuthorization = responseType.ReturnsTokenFromAuthorization();
@@ -69,7 +66,7 @@ public partial class FlowTypeValidator(
         // permits - the profile tightens, the granular whitelist cannot widen it. Checked before the
         // server-support gate so a profiled client gets the profile-specific reason even on a server
         // where Implicit Flow is enabled for other clients.
-        var profile = SecurityProfileRequirements.For(context.ClientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile);
+        var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
         if (profile.RequireCodeResponseTypeOnly && returnsTokenFromAuthorization)
         {
             LogResponseTypeNotAllowed(Sanitized.Values(responseType));

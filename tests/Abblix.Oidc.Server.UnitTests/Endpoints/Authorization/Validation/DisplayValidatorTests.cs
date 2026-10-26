@@ -42,14 +42,14 @@ public class DisplayValidatorTests
     [InlineData(DisplayModes.Touch)]
     [InlineData(DisplayModes.Wap)]
     public async Task ADefinedDisplay_IsAccepted(string? display)
-        => Assert.Null(await new DisplayValidator().ValidateAsync(ContextWith(display)));
+        => Assert.Null(await new DisplayValidator().ValidateAsync(SingleIssuer.Tenant, ContextWith(display)));
 
     [Theory]
     [InlineData("hologram")]
     [InlineData("Page")]
     public async Task AnyOtherDisplay_IsRefusedAsAnInvalidRequest(string display)
     {
-        var error = await new DisplayValidator().ValidateAsync(ContextWith(display));
+        var error = await new DisplayValidator().ValidateAsync(SingleIssuer.Tenant, ContextWith(display));
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);

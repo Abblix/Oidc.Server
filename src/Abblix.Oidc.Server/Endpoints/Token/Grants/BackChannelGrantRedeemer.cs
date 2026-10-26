@@ -37,12 +37,10 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="authorizationDetailsPolicy">Asks the per-type validators whether the grant's
 /// authorization_details are still acceptable, which is the only comparison that can see inside an
 /// entry.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 internal sealed partial class BackChannelGrantRedeemer(
     ILoggerFactory loggerFactory,
     ISubjectTypeConverter subjectTypeConverter,
-    IAuthorizationDetailsPolicy authorizationDetailsPolicy,
-    ITenantAccessor tenantAccessor)
+    IAuthorizationDetailsPolicy authorizationDetailsPolicy)
 {
     private readonly ILogger _logger = loggerFactory.CreateLogger<BackChannelAuthenticationGrantHandler>();
 
@@ -65,6 +63,7 @@ internal sealed partial class BackChannelGrantRedeemer(
     /// </para>
     /// </remarks>
     public async Task<Result<AuthorizedGrant, OidcError>> RedeemAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         StoredRequest request,
         ClientInfo clientInfo,
@@ -72,16 +71,16 @@ internal sealed partial class BackChannelGrantRedeemer(
     {
         var yardstick = BackChannelGrantYardstick.Of(request);
 
-        if (RefuseBeforeRedemption(yardstick, clientInfo) is { } early)
+        if (RefuseBeforeRedemption(tenant, yardstick, clientInfo) is { } early)
             return early;
 
-        var result = await processor.ProcessAuthenticatedRequestAsync(authenticationRequestId, request);
+        var result = await processor.ProcessAuthenticatedRequestAsync(tenant, authenticationRequestId, request);
         if (result.TryGetFailure(out var error))
             return error;
 
         var grant = result.GetSuccess();
 
-        if (RefuseRedeemed(yardstick, grant, clientInfo) is { } late)
+        if (RefuseRedeemed(tenant, yardstick, grant, clientInfo) is { } late)
             return late;
 
         // And what the type comparison structurally cannot see: an entry of a type the request DID ask
@@ -90,7 +89,7 @@ internal sealed partial class BackChannelGrantRedeemer(
         // cancellation token, because the request is already taken: giving up here would spend it and issue
         // nothing, where finishing issues tokens a departed client simply never reads.
         if (await authorizationDetailsPolicy.RefuseAsync(
-                grant, request.RequestedAuthorizationDetails, clientInfo, CancellationToken.None)
+                tenant, grant, request.RequestedAuthorizationDetails, clientInfo, CancellationToken.None)
             is not { } refusal)
             return grant;
 
@@ -105,11 +104,11 @@ internal sealed partial class BackChannelGrantRedeemer(
     /// nothing it could have used: redeeming removes the entry, and a request answerable only for the wrong
     /// end user is worth keeping just long enough to say so again if the client polls twice.
     /// </summary>
-    private OidcError? RefuseBeforeRedemption(BackChannelGrantYardstick yardstick, ClientInfo clientInfo)
+    private OidcError? RefuseBeforeRedemption(TenantDefinition tenant, BackChannelGrantYardstick yardstick, ClientInfo clientInfo)
     {
         var storedGrant = yardstick.Request.AuthorizedGrant;
 
-        if (!NamesTheRequestedEndUser(yardstick.NamedEndUsers, storedGrant, clientInfo))
+        if (!NamesTheRequestedEndUser(tenant, yardstick.NamedEndUsers, storedGrant, clientInfo))
             return NotTheRequestedEndUser();
 
         if (WidensTheRequest(yardstick.Request, storedGrant))
@@ -135,9 +134,9 @@ internal sealed partial class BackChannelGrantRedeemer(
     /// attack. Approving one grant and handing over another is the whole failure this comparison exists to
     /// prevent.
     /// </remarks>
-    private OidcError? RefuseRedeemed(BackChannelGrantYardstick yardstick, AuthorizedGrant grant, ClientInfo clientInfo)
+    private OidcError? RefuseRedeemed(TenantDefinition tenant, BackChannelGrantYardstick yardstick, AuthorizedGrant grant, ClientInfo clientInfo)
     {
-        if (!NamesTheRequestedEndUser(yardstick.NamedEndUsers, grant, clientInfo))
+        if (!NamesTheRequestedEndUser(tenant, yardstick.NamedEndUsers, grant, clientInfo))
             return NotTheRequestedEndUser();
 
         if (!AcceptsRecordedLevel(yardstick, grant))
@@ -161,9 +160,10 @@ internal sealed partial class BackChannelGrantRedeemer(
     /// each caller passes in.
     /// </remarks>
     private bool NamesTheRequestedEndUser(
+        TenantDefinition tenant,
         string[]? requestedSubjects, AuthorizedGrant grant, ClientInfo clientInfo)
         => requestedSubjects is not { } accepted ||
-           subjectTypeConverter.Names(tenantAccessor.CurrentTenant(), grant.AuthSession, accepted, clientInfo);
+           subjectTypeConverter.Names(tenant, grant.AuthSession, accepted, clientInfo);
 
     private static bool AcceptsRecordedLevel(BackChannelGrantYardstick yardstick, AuthorizedGrant grant)
         => AuthenticationLevels.Accept(

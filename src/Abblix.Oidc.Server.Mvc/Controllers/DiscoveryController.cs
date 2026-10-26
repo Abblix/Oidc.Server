@@ -66,6 +66,7 @@ public sealed class DiscoveryController : ControllerBase
 	/// </remarks>
 	/// <param name="handler">The service responsible for building discovery metadata.</param>
 	/// <param name="formatter">The service responsible for enriching the response with endpoint URLs.</param>
+	/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 	/// <returns>A task that results in an action result containing the provider's configuration details
 	/// in JSON format.</returns>
 	[HttpGet]
@@ -75,9 +76,10 @@ public sealed class DiscoveryController : ControllerBase
 	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 	public async Task<ActionResult<Abblix.Oidc.Server.Model.ConfigurationResponse>> ConfigurationAsync(
 		[FromServices] IConfigurationHandler handler,
-		[FromServices] IConfigurationResponseFormatter formatter)
+		[FromServices] IConfigurationResponseFormatter formatter,
+		[FromServices] ITenantAccessor tenantAccessor)
 	{
-		var response = await handler.HandleAsync();
+		var response = await handler.HandleAsync(tenantAccessor.CurrentTenant());
 		return await formatter.FormatResponseAsync(response);
 	}
 

@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -39,13 +40,15 @@ public partial class JwtBearerIssuerProvider(
 
 	/// <summary>
 	/// Determines whether the specified issuer is trusted for JWT Bearer assertions.
-	/// Checks against the configured list of trusted issuers in <see cref="OidcOptions.JwtBearer"/>.
+	/// Checks against the configured list of trusted issuers in <see cref="OidcOptions.JwtBearer"/>, which every tenant
+	/// shares.
 	/// </summary>
+	/// <param name="tenant">The tenant the grant is requested at.</param>
 	/// <param name="issuer">The issuer identifier from the JWT's 'iss' claim.</param>
 	/// <returns>
 	/// A task that completes with true if the issuer is in the trusted issuers list; otherwise, false.
 	/// </returns>
-	public Task<bool> IsTrustedIssuerAsync(string issuer)
+	public Task<bool> IsTrustedIssuerAsync(TenantDefinition tenant, string issuer)
 	{
 		var trustedIssuer = FindTrustedIssuer(issuer);
 
@@ -56,7 +59,7 @@ public partial class JwtBearerIssuerProvider(
 	}
 
 	/// <inheritdoc />
-	public Task<TrustedIssuer?> GetTrustedIssuerAsync(string issuer) =>
+	public Task<TrustedIssuer?> GetTrustedIssuerAsync(TenantDefinition tenant, string issuer) =>
 		Task.FromResult(FindTrustedIssuer(issuer));
 
 	/// <summary>
@@ -88,6 +91,7 @@ public partial class JwtBearerIssuerProvider(
 	/// Resolves the signing keys for a trusted issuer by fetching the JWKS from the configured JWKS URI
 	/// with SSRF (Server-Side Request Forgery) protection.
 	/// </summary>
+	/// <param name="tenant">The tenant the grant is requested at.</param>
 	/// <param name="issuer">The issuer identifier from the JWT's 'iss' claim.</param>
 	/// <returns>
 	/// An async enumerable of JSON Web Keys from the issuer's JWKS endpoint.
@@ -101,7 +105,7 @@ public partial class JwtBearerIssuerProvider(
 	/// - Filters keys to return only those suitable for signature verification
 	/// - Logs warnings if JWKS fetching fails
 	/// </remarks>
-	public async IAsyncEnumerable<JsonWebKey> GetSigningKeysAsync(string issuer)
+	public async IAsyncEnumerable<JsonWebKey> GetSigningKeysAsync(TenantDefinition tenant, string issuer)
 	{
 		var trustedIssuer = FindTrustedIssuer(issuer);
 

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -24,11 +25,13 @@ public interface IPushedAuthorizationRequestValidator
     /// Asynchronously validates a pushed authorization request against OAuth 2.0 specifications.
     /// This method ensures the request meets all necessary criteria and constraints defined for secure processing.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="authorizationRequest">The authorization request to be validated.</param>
     /// <param name="clientRequest">Additional client request information for contextual validation.</param>
     /// <returns>A task that upon completion provides a validation result, indicating either success and validity
     /// of the request or the presence of errors.</returns>
     Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(
+        TenantDefinition tenant,
         AuthorizationRequest authorizationRequest,
         ClientRequest clientRequest);
 }

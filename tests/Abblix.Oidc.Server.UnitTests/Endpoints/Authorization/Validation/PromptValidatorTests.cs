@@ -55,17 +55,17 @@ public class PromptValidatorTests
     [Theory]
     [MemberData(nameof(Accepted))]
     public async Task APromptWithoutNoneBesideAnotherValue_IsAccepted(string[] prompt)
-        => Assert.Null(await new PromptValidator().ValidateAsync(ContextWith(prompt)));
+        => Assert.Null(await new PromptValidator().ValidateAsync(SingleIssuer.Tenant, ContextWith(prompt)));
 
     [Fact]
     public async Task ARequestWithoutPrompt_IsAccepted()
-        => Assert.Null(await new PromptValidator().ValidateAsync(ContextWith(null)));
+        => Assert.Null(await new PromptValidator().ValidateAsync(SingleIssuer.Tenant, ContextWith(null)));
 
     [Theory]
     [MemberData(nameof(Refused))]
     public async Task NoneBesideAnotherValue_IsRefusedAsAnInvalidRequest(string[] prompt)
     {
-        var error = await new PromptValidator().ValidateAsync(ContextWith(prompt));
+        var error = await new PromptValidator().ValidateAsync(SingleIssuer.Tenant, ContextWith(prompt));
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);

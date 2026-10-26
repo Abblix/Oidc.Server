@@ -29,24 +29,23 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 /// <param name="userCodeGenerator">Generator for user-friendly verification codes.</param>
 /// <param name="options">Configuration options for device authorization.</param>
 /// <param name="timeProvider">Dates the instant the device code carries.</param>
-/// <param name="tenantAccessor">Names the tenant whose issuer a relative verification page is under.</param>
 public class DeviceAuthorizationRequestProcessor(
     IDeviceAuthorizationStorage storage,
     IDeviceCodeGenerator deviceCodeGenerator,
     IUserCodeGenerator userCodeGenerator,
     IOptionsSnapshot<OidcOptions> options,
-    TimeProvider timeProvider,
-    ITenantAccessor tenantAccessor) : IDeviceAuthorizationRequestProcessor
+    TimeProvider timeProvider) : IDeviceAuthorizationRequestProcessor
 {
     /// <inheritdoc />
     public async Task<Result<DeviceAuthorizationResponse, OidcError>> ProcessAsync(
+        TenantDefinition tenant,
         ValidDeviceAuthorizationRequest request)
     {
 
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
         // Before anything is stored, so a request refused for the page leaves no code behind
-        var verificationUri = VerificationUri(deviceAuthOptions.VerificationUri);
+        var verificationUri = VerificationUri(tenant, deviceAuthOptions.VerificationUri);
 
         // The code carries its own expiry, so a poll after the record is evicted is still told expired_token
         var deviceCode = ExpiringIdentifier.Compose(
@@ -73,7 +72,7 @@ public class DeviceAuthorizationRequestProcessor(
             AuthorizationDetails = request.AuthorizationDetails,
         };
 
-        await storage.StoreAsync(tenantAccessor.CurrentTenant(), deviceCode, deviceRequest, deviceAuthOptions.CodeLifetime);
+        await storage.StoreAsync(tenant, deviceCode, deviceRequest, deviceAuthOptions.CodeLifetime);
 
         return new DeviceAuthorizationResponse
         {
@@ -99,9 +98,9 @@ public class DeviceAuthorizationRequestProcessor(
     /// A relative page resolves under an issuer without TLS, where the user would authenticate in the clear. One
     /// leaving the issuer's path was refused when it was configured.
     /// </exception>
-    private Uri VerificationUri(Uri configured)
+    private static Uri VerificationUri(TenantDefinition tenant, Uri configured)
     {
-        var issuer = new Uri(tenantAccessor.CurrentTenant().Issuer.OriginalString.AppendTrailingSlash());
+        var issuer = new Uri(tenant.Issuer.OriginalString.AppendTrailingSlash());
         var resolved = new Uri(issuer, configured);
 
         if (configured.IsAbsoluteUri)

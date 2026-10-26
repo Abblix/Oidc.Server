@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.LogoutNotification;
 
@@ -22,6 +23,7 @@ public interface ILogoutNotifier
     /// Asynchronously notifies a client about a logout event, providing the client with
     /// information necessary to process the logout on its end.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="clientInfo">The information about the client that needs to be notified.
     /// This includes details such as the client ID and the logout endpoint URI.</param>
     /// <param name="logoutContext">The context of the logout event, including any relevant
@@ -36,7 +38,7 @@ public interface ILogoutNotifier
     /// the notification process and ensure that all clients are notified as configured,
     /// regardless of the mechanism used (front-channel or back-channel).
     /// </remarks>
-    Task NotifyClientAsync(ClientInfo clientInfo, LogoutContext logoutContext);
+    Task NotifyClientAsync(TenantDefinition tenant, ClientInfo clientInfo, LogoutContext logoutContext);
 
     /// <summary>
     /// Indicates whether the logout notifier supports front-channel logout,

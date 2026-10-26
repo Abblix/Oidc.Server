@@ -8,6 +8,7 @@
 
 using System.Security.Claims;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -42,8 +43,8 @@ public class SessionPersistenceTests
 
         var terminator = new Mock<IAuthSessionTerminator>();
         terminator
-            .Setup(t => t.TerminateAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((string sessionId, string subject) => new LogoutContext(sessionId, subject, "issuer"));
+            .Setup(t => t.TerminateAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string sessionId, string subject) => new LogoutContext(sessionId, subject, "issuer"));
 
         var authentication = new Mock<IAuthenticationService>();
         authentication

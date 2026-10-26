@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
@@ -62,11 +63,12 @@ internal static class InteractionEndpoints
         UserInfoRequest userInfoRequest,
         ClientRequest clientRequest,
         IUserInfoHandler handler,
-        IUserInfoResponseFormatter formatter)
+        IUserInfoResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.UserInfoRequest coreUserInfoRequest = userInfoRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
-        var response = await handler.HandleAsync(coreUserInfoRequest, coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreUserInfoRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreUserInfoRequest, response);
     }
 
@@ -77,10 +79,11 @@ internal static class InteractionEndpoints
     private static async Task<IResult> EndSessionAsync(
         EndSessionRequest endSessionRequest,
         IEndSessionHandler handler,
-        IEndSessionResponseFormatter formatter)
+        IEndSessionResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.EndSessionRequest coreEndSessionRequest = endSessionRequest;
-        var response = await handler.HandleAsync(coreEndSessionRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreEndSessionRequest);
         return await formatter.FormatResponseAsync(coreEndSessionRequest, response);
     }
 
@@ -91,10 +94,11 @@ internal static class InteractionEndpoints
     private static async Task<IResult> AuthorizeAsync(
         AuthorizationRequest authorizationRequest,
         IAuthorizationHandler handler,
-        IAuthorizationResponseFormatter formatter)
+        IAuthorizationResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
-        var response = await handler.HandleAsync(coreAuthorizationRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreAuthorizationRequest);
         return await formatter.FormatResponseAsync(coreAuthorizationRequest, response);
     }
 }

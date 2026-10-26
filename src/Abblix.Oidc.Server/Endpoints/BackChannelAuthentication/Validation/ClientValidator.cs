@@ -18,14 +18,14 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// and authorized to perform the request as part of the authentication validation process.
 /// </summary>
 /// <param name="clientAuthenticator">The service used to authenticate and retrieve client information.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class ClientValidator(IClientAuthenticator clientAuthenticator, ITenantAccessor tenantAccessor)
+public class ClientValidator(IClientAuthenticator clientAuthenticator)
     : IBackChannelAuthenticationContextValidator
 {
     /// <summary>
     /// Validates the client in the context of a backchannel authentication request.
     /// Ensures that the client is recognized and authorized to make the request.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">
     /// The validation context containing the backchannel authentication request and client information.
     /// </param>
@@ -34,10 +34,11 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator, ITenantAc
     /// or null if the client is authorized.
     /// </returns>
     public async Task<OidcError?> ValidateAsync(
+        TenantDefinition tenant,
         BackChannelAuthenticationValidationContext context)
     {
         var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
-            tenantAccessor.CurrentTenant(), context.ClientRequest);
+            tenant, context.ClientRequest);
         if (clientInfo == null)
         {
             return new OidcError(

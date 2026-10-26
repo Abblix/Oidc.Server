@@ -33,7 +33,7 @@ public partial class AuthorizationRequestProcessorTests
         SetupSuccessfulAuthCodeFlow(request, session, CreateConsents());
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         _sessionClients.Verify(
@@ -67,7 +67,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync("code");
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Equal(["recorded", "issued"], order);
@@ -88,7 +88,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(["recorded-earlier", request.ClientInfo.ClientId]);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         var authenticated = Assert.IsType<SuccessfullyAuthenticated>(result);
@@ -111,11 +111,11 @@ public partial class AuthorizationRequestProcessorTests
             .Returns(new[] { session }.ToAsyncEnumerable());
 
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(consents);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.IsType<ConsentRequired>(result);

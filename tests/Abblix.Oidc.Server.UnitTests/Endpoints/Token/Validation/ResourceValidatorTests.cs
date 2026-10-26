@@ -39,7 +39,7 @@ public class ResourceValidatorTests
     public ResourceValidatorTests()
     {
         _resourceManager = new Mock<IResourceManager>(MockBehavior.Strict);
-        _validator = new ResourceValidator(_resourceManager.Object, tenantAccessor: SingleIssuer.Accessor);
+        _validator = new ResourceValidator(_resourceManager.Object);
     }
 
     private static TokenValidationContext CreateContext(
@@ -66,7 +66,7 @@ public class ResourceValidatorTests
         var context = CreateContext(resources: null, scope: ["read"]);
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -84,7 +84,7 @@ public class ResourceValidatorTests
         var context = CreateContext(resources: [], scope: ["read"]);
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -113,7 +113,7 @@ public class ResourceValidatorTests
             }));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -143,7 +143,7 @@ public class ResourceValidatorTests
             }));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -172,7 +172,7 @@ public class ResourceValidatorTests
             }));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -199,7 +199,7 @@ public class ResourceValidatorTests
             }));
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(new[] { resourceDefinition }, context.Resources);
@@ -235,7 +235,7 @@ public class ResourceValidatorTests
             }));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -271,7 +271,7 @@ public class ResourceValidatorTests
             }));
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         _resourceManager.Verify(
@@ -302,7 +302,7 @@ public class ResourceValidatorTests
             }));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);

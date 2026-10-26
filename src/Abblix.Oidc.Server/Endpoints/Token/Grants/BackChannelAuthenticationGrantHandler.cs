@@ -39,7 +39,6 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="serviceProvider">Resolves the mode-specific grant processors and the redeemer that judges an
 /// authenticated request before it is exchanged for tokens. The redeemer is internal and registered by
 /// <c>AddBackChannelAuthentication</c>, so a provider built without that call cannot construct the handler.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 /// <param name="statusNotifier">Notifier for long-polling status changes (null if long-polling disabled).</param>
 public class BackChannelAuthenticationGrantHandler(
     IBackChannelRequestStorage storage,
@@ -48,7 +47,6 @@ public class BackChannelAuthenticationGrantHandler(
     TimeProvider timeProvider,
     IOptions<OidcOptions> options,
     IServiceProvider serviceProvider,
-    ITenantAccessor tenantAccessor,
     IBackChannelLongPollingService? statusNotifier = null) : IAuthorizationGrantHandler
 {
     // Resolved rather than injected: the redeemer is internal, and a public constructor cannot name it.
@@ -86,6 +84,7 @@ public class BackChannelAuthenticationGrantHandler(
     /// connection open until authentication completes instead of requiring repeated polling.
     /// </para>
     /// </remarks>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The token request containing the authentication request ID and other parameters.</param>
     /// <param name="clientInfo">Information about the client making the request, used to validate client identity
     /// and determine token delivery mode (poll/ping/push).</param>
@@ -94,7 +93,7 @@ public class BackChannelAuthenticationGrantHandler(
     /// (authorization_pending, access_denied, expired_token, slow_down, or invalid_grant).
     /// </returns>
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
     {
         // RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
         // not a server fault - the previous throw-on-access surfaced it as HTTP 500.
@@ -114,7 +113,7 @@ public class BackChannelAuthenticationGrantHandler(
             return refusal;
 
         // Try to retrieve the corresponding backchannel authentication request from storage
-        var authenticationRequest = await storage.TryGetAsync(tenantAccessor.CurrentTenant(), request.AuthenticationRequestId);
+        var authenticationRequest = await storage.TryGetAsync(tenant, request.AuthenticationRequestId);
 
         // Determine the outcome of the authorization based on the state of the backchannel authentication request
         return authenticationRequest switch
@@ -130,14 +129,14 @@ public class BackChannelAuthenticationGrantHandler(
 
             // If the user has been authenticated, process mode-specific token retrieval
             { Status: BackChannelAuthenticationStatus.Authenticated } authenticated
-                => await _redeemer.RedeemAsync(
+                => await _redeemer.RedeemAsync(tenant, 
                     request.AuthenticationRequestId, authenticated, clientInfo, processor),
 
             // If the user has not yet been authenticated and the request is still pending, either
             // tell a client that asked early to slow down, or wait for a status change (long
             // polling) and otherwise answer immediately
             { Status: BackChannelAuthenticationStatus.Pending } pendingRequest
-                => await HandlePendingRequestAsync(
+                => await HandlePendingRequestAsync(tenant, 
                     request.AuthenticationRequestId, pendingRequest, clientInfo, cancellationToken),
 
             // If the user denied the authentication request, return an error indicating access is denied
@@ -166,12 +165,14 @@ public class BackChannelAuthenticationGrantHandler(
     /// reason the old remark gave.
     /// </para>
     /// </remarks>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="authenticationRequest">The pending authentication request to update.</param>
     /// <param name="clientInfo">Client information for determining token delivery mode.</param>
     /// <param name="cancellationToken">Abandons the wait when the caller stops waiting.</param>
     /// <returns>Either an authorized grant if authentication completed during long-polling, or authorization_pending error.</returns>
     private async Task<Result<AuthorizedGrant, OidcError>> HandlePendingRequestAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         Features.BackChannelAuthentication.BackChannelAuthenticationRequest authenticationRequest,
         ClientInfo clientInfo,
@@ -182,14 +183,14 @@ public class BackChannelAuthenticationGrantHandler(
         if (expiresIn <= TimeSpan.Zero)
         {
             // Request has expired, remove it
-            await storage.TryRemoveAsync(tenantAccessor.CurrentTenant(), authenticationRequestId);
+            await storage.TryRemoveAsync(tenant, authenticationRequestId);
             return new OidcError(ErrorCodes.ExpiredToken, "The authentication request has expired");
         }
 
         // The instant before which this client is told to slow down, under a key of its own.
         // Absence means it may ask now.
         var pollingInterval = options.Value.BackChannelAuthentication.PollingInterval;
-        var pollKey = keyFactory.BackChannelAuthenticationNextPollKey(tenantAccessor.CurrentTenant(), authenticationRequestId);
+        var pollKey = keyFactory.BackChannelAuthenticationNextPollKey(tenant, authenticationRequestId);
         var nextPollAt = await pollSchedule.TryGetNextPollAtAsync(pollKey);
 
         var now = timeProvider.GetUtcNow();
@@ -200,10 +201,10 @@ public class BackChannelAuthenticationGrantHandler(
         // path writes the request, so there is nothing for a poll to overwrite. The same method the long
         // poll hands its re-read to, so a client that waits and a client that asks again are answered by
         // one piece of code.
-        if (await storage.TryGetAsync(tenantAccessor.CurrentTenant(), authenticationRequestId) is
+        if (await storage.TryGetAsync(tenant, authenticationRequestId) is
             { Status: not BackChannelAuthenticationStatus.Pending } advanced)
         {
-            return await ProcessUpdatedRequest(
+            return await ProcessUpdatedRequest(tenant, 
                 advanced, authenticationRequestId, clientInfo);
         }
 
@@ -225,7 +226,7 @@ public class BackChannelAuthenticationGrantHandler(
         }
 
         if (options.Value.BackChannelAuthentication.UseLongPolling && statusNotifier != null
-            && await TryLongPollingAsync(authenticationRequestId, clientInfo, cancellationToken)
+            && await TryLongPollingAsync(tenant, authenticationRequestId, clientInfo, cancellationToken)
                 is { } result)
         {
             return result;
@@ -240,6 +241,7 @@ public class BackChannelAuthenticationGrantHandler(
     /// <summary>
     /// Attempts long-polling for status change notification.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="clientInfo">Client information for determining token delivery mode.</param>
     /// <param name="cancellationToken">Abandons the wait when the caller stops waiting.</param>
@@ -248,6 +250,7 @@ public class BackChannelAuthenticationGrantHandler(
     /// Null indicates the caller should return authorization_pending error.
     /// </returns>
     private async Task<Result<AuthorizedGrant, OidcError>?> TryLongPollingAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         ClientInfo clientInfo,
         CancellationToken cancellationToken)
@@ -262,8 +265,8 @@ public class BackChannelAuthenticationGrantHandler(
             return null;
         }
 
-        var updatedRequest = await storage.TryGetAsync(tenantAccessor.CurrentTenant(), authenticationRequestId);
-        return await ProcessUpdatedRequest(
+        var updatedRequest = await storage.TryGetAsync(tenant, authenticationRequestId);
+        return await ProcessUpdatedRequest(tenant, 
             updatedRequest, authenticationRequestId, clientInfo);
     }
 
@@ -271,11 +274,13 @@ public class BackChannelAuthenticationGrantHandler(
     /// Processes the updated authentication request after status change notification.
     /// Handles Authenticated, Denied, and Expired states appropriately.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="updatedRequest">The updated authentication request from storage, or null if expired.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="clientInfo">Client information for determining token delivery mode.</param>
     /// <returns>Either an authorized grant, access denied error, expired token error, or authorization_pending.</returns>
     private async Task<Result<AuthorizedGrant, OidcError>> ProcessUpdatedRequest(
+        TenantDefinition tenant,
         Features.BackChannelAuthentication.BackChannelAuthenticationRequest? updatedRequest,
         [Credential] string authenticationRequestId,
         ClientInfo clientInfo)
@@ -292,7 +297,7 @@ public class BackChannelAuthenticationGrantHandler(
         switch (updatedRequest)
         {
             case { Status: BackChannelAuthenticationStatus.Authenticated } authenticated:
-                return await _redeemer.RedeemAsync(
+                return await _redeemer.RedeemAsync(tenant, 
                     authenticationRequestId, authenticated, clientInfo, grantProcessor);
 
             case { Status: BackChannelAuthenticationStatus.Denied }:

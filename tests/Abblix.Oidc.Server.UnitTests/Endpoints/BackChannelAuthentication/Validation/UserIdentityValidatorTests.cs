@@ -42,7 +42,7 @@ public class UserIdentityValidatorTests
         _idTokenValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         _clientJwtValidator = new Mock<IClientJwtValidator>(MockBehavior.Strict);
         _validator = new UserIdentityValidator(
-            new IdTokenHintParser(_idTokenValidator.Object), _clientJwtValidator.Object, tenantAccessor: SingleIssuer.Accessor);
+            new IdTokenHintParser(_idTokenValidator.Object), _clientJwtValidator.Object);
     }
 
     private BackChannelAuthenticationValidationContext CreateContext(
@@ -81,7 +81,7 @@ public class UserIdentityValidatorTests
         var context = CreateContext();
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -100,7 +100,7 @@ public class UserIdentityValidatorTests
         var context = CreateContext(loginHint: "user@example.com");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -119,7 +119,7 @@ public class UserIdentityValidatorTests
             parseLoginHintTokenAsJwt: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -145,7 +145,7 @@ public class UserIdentityValidatorTests
             parseLoginHintTokenAsJwt: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -173,7 +173,7 @@ public class UserIdentityValidatorTests
             loginHintToken: "jwt-token",
             parseLoginHintTokenAsJwt: true);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -198,7 +198,7 @@ public class UserIdentityValidatorTests
             parseLoginHintTokenAsJwt: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -225,7 +225,7 @@ public class UserIdentityValidatorTests
             parseLoginHintTokenAsJwt: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert - pin the error code (the stable contract), not the description wording.
         Assert.NotNull(result);
@@ -253,7 +253,7 @@ public class UserIdentityValidatorTests
             parseLoginHintTokenAsJwt: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert - pin the error code (the stable contract), not the description wording.
         Assert.NotNull(result);
@@ -280,7 +280,7 @@ public class UserIdentityValidatorTests
         var context = CreateContext(idTokenHint: "id-token");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -313,7 +313,7 @@ public class UserIdentityValidatorTests
 
         var context = CreateContext(idTokenHint: "id-token");
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnknownUserId, result.Error);
@@ -345,7 +345,7 @@ public class UserIdentityValidatorTests
         var context = CreateContext(idTokenHint: "id-token");
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(capturedOptions);
@@ -368,7 +368,7 @@ public class UserIdentityValidatorTests
 
         var context = CreateContext(idTokenHint: "access-token-as-hint");
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -394,7 +394,7 @@ public class UserIdentityValidatorTests
         var context = CreateContext(idTokenHint: "id-token");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -419,7 +419,7 @@ public class UserIdentityValidatorTests
         var context = CreateContext(idTokenHint: "invalid-id-token");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -440,7 +440,7 @@ public class UserIdentityValidatorTests
             loginHintToken: "token");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -462,7 +462,7 @@ public class UserIdentityValidatorTests
             idTokenHint: "id-token");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -489,7 +489,7 @@ public class UserIdentityValidatorTests
         var context = CreateContext(idTokenHint: "id-token");
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(capturedOptions);

@@ -67,7 +67,7 @@ public partial class AuthorizationRequestProcessorTests
             .Returns(new[] { session }.ToAsyncEnumerable());
 
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(consents);
 
         _authorizationCodeService
@@ -94,10 +94,10 @@ public partial class AuthorizationRequestProcessorTests
             .Returns(new[] { session }.ToAsyncEnumerable());
 
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(consents);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         var consentRequired = Assert.IsType<ConsentRequired>(result);
         Assert.Same(pendingAd, consentRequired.RequiredUserConsents.AuthorizationDetails);
@@ -118,10 +118,10 @@ public partial class AuthorizationRequestProcessorTests
             .Returns(new[] { session }.ToAsyncEnumerable());
 
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(consents);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         var error = Assert.IsType<AuthorizationError>(result);
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
@@ -151,11 +151,11 @@ public partial class AuthorizationRequestProcessorTests
             .Returns(new[] { session }.ToAsyncEnumerable());
 
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .Callback(() => requestedAd.Clear())
             .ReturnsAsync(consents);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         var error = Assert.IsType<AuthorizationError>(result);
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
@@ -176,7 +176,7 @@ public partial class AuthorizationRequestProcessorTests
 
         var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.NotNull(capture.Grant);
         // Defensive DeepClone at the boundary (C2): the AuthorizationContext receives a clone,
@@ -204,13 +204,14 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
+                TestTenant.Matched,
                 It.IsAny<JsonArray?>(), It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((JsonArray? ad, JsonArray? _, ClientInfo _, CancellationToken _) =>
+            .ReturnsAsync((TenantDefinition _, JsonArray? ad, JsonArray? _, ClientInfo _, CancellationToken _) =>
                 CapAmount(ad, 800m) ?? new JsonArray());
 
         var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.NotNull(capture.Grant);
         var emitted = capture.Grant.Context.AuthorizationDetails!;
@@ -263,7 +264,7 @@ public partial class AuthorizationRequestProcessorTests
 
         var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.NotNull(capture.Grant);
         // Defensive DeepClone at the boundary (C2): value-equality, not reference.
@@ -294,7 +295,7 @@ public partial class AuthorizationRequestProcessorTests
 
         var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.NotNull(capture.Grant);
         var emitted = capture.Grant.Context.AuthorizationDetails!;
@@ -315,7 +316,7 @@ public partial class AuthorizationRequestProcessorTests
 
         var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.NotNull(capture.Grant);
         // Defensive DeepClone at the boundary (C2): value-equality, not reference.
@@ -340,12 +341,13 @@ public partial class AuthorizationRequestProcessorTests
         var backstop = new Mock<IConsentConstraintEnforcer>(MockBehavior.Strict);
         backstop
             .Setup(b => b.EnforceAsync(
+                TestTenant.Matched,
                 It.IsAny<ValidAuthorizationRequest>(), It.IsAny<ConsentDefinition>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<JsonArray, OidcError>)new JsonArray());
 
         var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
 
-        await ProcessorWith(backstop.Object).ProcessAsync(request);
+        await ProcessorWith(backstop.Object).ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.NotNull(capture.Grant);
         Assert.Null(capture.Grant.Context.AuthorizationDetails);
