@@ -17,10 +17,13 @@ using Abblix.Oidc.Server.Endpoints;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ImplicitFlow;
+using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
@@ -108,6 +111,35 @@ public class RegisterClientHandlerIntegrationTests
         GrantTypes = [GrantTypes.AuthorizationCode],
         DpopBoundAccessTokens = true,
     };
+
+    /// <summary>
+    /// An initial access token is revoked by its identifier, recorded in the token registry the server shares
+    /// between its instances: it registers a client until then, and is refused from the moment it is recorded.
+    /// </summary>
+    [Fact]
+    public async Task AnInitialAccessTokenRevokedByItsIdentifier_IsRefusedAtRegistration()
+    {
+        var provider = BuildProvider(configureOptions: opts => opts.RequireInitialAccessToken = true);
+        var tenant = provider.GetRequiredService<ITenantAccessor>().CurrentTenant();
+        var issued = await provider.GetRequiredService<IInitialAccessTokenService>().IssueTokenAsync(
+            tenant, "registration-portal", provider.GetRequiredService<TimeProvider>().GetUtcNow(), TimeSpan.FromMinutes(5));
+        var handler = provider.GetRequiredService<IRegisterClientHandler>();
+        ClientRegistrationRequest Presenting() => CreateRequest() with
+        {
+            AuthorizationHeader = new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.Bearer, issued.EncodedJwt),
+        };
+
+        Assert.True((await handler.HandleAsync(tenant, Presenting())).TryGetSuccess(out _));
+
+        await provider.GetRequiredService<ITokenRegistry>().SetStatusAsync(
+            tenant,
+            issued.Token.Payload.JwtId.NotNull(nameof(JsonWebTokenPayload.JwtId)),
+            JsonWebTokenStatus.Revoked,
+            issued.Token.Payload.ExpiresAt.NotNull(nameof(JsonWebTokenPayload.ExpiresAt)));
+
+        Assert.True((await handler.HandleAsync(tenant, Presenting())).TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
+    }
 
     /// <summary>
     /// Default registration with the Code Flow defaults must succeed against a stock host:
@@ -410,7 +442,7 @@ public class RegisterClientHandlerIntegrationTests
 
         var request = CreateRequest() with
         {
-            AuthorizationHeader = new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.Bearer, token),
+            AuthorizationHeader = new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.Bearer, token.EncodedJwt),
         };
 
         var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);

@@ -34,9 +34,7 @@ internal static class ClientManagementServiceCollectionExtensions
         this IServiceCollection services,
         Func<IServiceProvider, NewClientOptions> newClientOptionsFactory)
     {
-        services
-            .AddClientRegistrationContextValidators()
-            .AddDefaultInitialAccessTokenRevocationProvider();
+        services.AddClientRegistrationContextValidators();
 
         services.TryAddSingleton<IRegistrationAccessTokenValidator, RegistrationAccessTokenValidator>();
         services.TryAddTransient(newClientOptionsFactory);
@@ -46,8 +44,4 @@ internal static class ClientManagementServiceCollectionExtensions
             .AddClientConfigurationEndpoint();
     }
 
-    private static void AddDefaultInitialAccessTokenRevocationProvider(this IServiceCollection services)
-    {
-        services.TryAddSingleton<IInitialAccessTokenRevocationProvider, InitialAccessTokenRevocationProvider>();
-    }
 }

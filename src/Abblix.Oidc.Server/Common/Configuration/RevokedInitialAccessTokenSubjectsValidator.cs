@@ -15,8 +15,8 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// longer reads.
 /// </summary>
 /// <remarks>
-/// The subjects are each tenant's now. Left in the server options they would be ignored, and every token they revoke
-/// would register clients again with nothing saying so.
+/// An initial access token is revoked by its identifier now. Left in the server options the subjects would be ignored,
+/// and every token they revoke would register clients again with nothing saying so.
 /// </remarks>
 public sealed class RevokedInitialAccessTokenSubjectsValidator : IValidateOptions<OidcOptions>
 {
@@ -32,7 +32,7 @@ public sealed class RevokedInitialAccessTokenSubjectsValidator : IValidateOption
 
         return ValidateOptionsResult.Fail(
             $"The server options list {listed} revoked initial access token subject(s), which the server no longer " +
-            "reads. Declare them on the tenant that issued the tokens, as " +
-            "TenantDefinition.RevokedInitialAccessTokenSubjects.");
+            "reads. Revoke each token by its jti instead, recorded as revoked in ITokenRegistry at the tenant that " +
+            "issued it.");
     }
 }

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.Tokens;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
@@ -14,15 +15,24 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 /// Issues initial access tokens that authorize calls to the client registration endpoint
 /// per RFC 7591 Section 3.
 /// </summary>
+/// <remarks>
+/// Each token carries an identifier of its own, its <c>jti</c>. A token is revoked by recording that identifier as
+/// revoked in <see cref="Features.Storages.ITokenRegistry"/> at the tenant that issued it, until the token expires. The
+/// registry lives in the server's storage, so a deployment whose instances share it, through a distributed cache,
+/// has every instance refuse the token from the moment it is recorded.
+/// </remarks>
 public interface IInitialAccessTokenService
 {
     /// <summary>
     /// Issues an initial access token for authorizing client registration.
     /// </summary>
     /// <param name="tenant">The tenant the token is issued at.</param>
-    /// <param name="subject">A unique identifier for the token, used as the JWT subject for revocation tracking.</param>
+    /// <param name="subject">The party the token is issued to, written as its subject.</param>
     /// <param name="issuedAt">The timestamp when the token is issued.</param>
-    /// <param name="expiresIn">The optional duration after which the token expires.</param>
-    /// <returns>A task that results in the encoded initial access token.</returns>
-    Task<string> IssueTokenAsync(TenantDefinition tenant, string subject, DateTimeOffset issuedAt, TimeSpan? expiresIn);
+    /// <param name="expiresIn">The duration after which the token expires, which also bounds how long its revocation
+    /// has to be kept.</param>
+    /// <returns>A task that results in the initial access token, encoded, with the identifier it is revoked by
+    /// in its payload.</returns>
+    Task<EncodedJsonWebToken> IssueTokenAsync(
+        TenantDefinition tenant, string subject, DateTimeOffset issuedAt, TimeSpan expiresIn);
 }

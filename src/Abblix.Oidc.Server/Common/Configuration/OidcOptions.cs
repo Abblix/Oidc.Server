@@ -395,14 +395,14 @@ public record OidcOptions
 	public long? MaxRegistrationRequestSize { get; set; } = 128 * 1024;
 
 	/// <summary>
-	/// No longer read: the revoked subjects are each tenant's,
-	/// <see cref="Features.MultiTenancy.TenantDefinition.RevokedInitialAccessTokenSubjects"/>.
+	/// No longer read: an initial access token is revoked by its identifier, recorded in
+	/// <see cref="Features.Storages.ITokenRegistry"/> at the tenant that issued it.
 	/// </summary>
 	/// <remarks>
 	/// Kept so that a deployment still listing subjects here does not start, rather than starting with every
 	/// token it revoked accepted again.
 	/// </remarks>
-	[Obsolete("Declare the revoked subjects on the tenant, TenantDefinition.RevokedInitialAccessTokenSubjects.")]
+	[Obsolete("Revoke an initial access token by its jti, recorded as revoked in ITokenRegistry at the tenant that issued it.")]
 	[System.Diagnostics.CodeAnalysis.SuppressMessage("Info Code Smell", "S1133",
 		Justification = "Kept on purpose: a deployment still listing subjects here is refused at startup instead of ignored.")]
 	public HashSet<string> RevokedInitialAccessTokenSubjects { get; set; } = [];
