@@ -93,11 +93,11 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant(redirectUri);
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .Setup(h => h.AuthorizeAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(authorizedGrant));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -117,7 +117,7 @@ public class AuthorizationGrantValidatorTests
             allowedGrantTypes: [GrantTypes.ClientCredentials]);
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -138,11 +138,11 @@ public class AuthorizationGrantValidatorTests
         var grantError = new OidcError(ErrorCodes.InvalidGrant, "Invalid authorization code");
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .Setup(h => h.AuthorizeAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(grantError));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Same(grantError, error);
@@ -162,11 +162,11 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant(grantRedirectUri);
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .Setup(h => h.AuthorizeAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(authorizedGrant));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -185,10 +185,10 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant(new Uri("http://127.0.0.1:51004/oauth2redirect"));
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .Setup(h => h.AuthorizeAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(authorizedGrant));
 
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -206,11 +206,11 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant(redirectUri: null);
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .Setup(h => h.AuthorizeAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(authorizedGrant));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -229,14 +229,14 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant();
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(context.Request, context.ClientInfo, It.IsAny<CancellationToken>()))
+            .Setup(h => h.AuthorizeAsync(TestTenant.Matched, context.Request, context.ClientInfo, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(authorizedGrant));
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
-        _grantHandler.Verify(h => h.AuthorizeAsync(context.Request, context.ClientInfo, It.IsAny<CancellationToken>()), Times.Once);
+        _grantHandler.Verify(h => h.AuthorizeAsync(TestTenant.Matched, context.Request, context.ClientInfo, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -252,7 +252,7 @@ public class AuthorizationGrantValidatorTests
             allowedGrantTypes: [GrantTypes.AuthorizationCode]);
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         _grantHandler.VerifyNoOtherCalls();
@@ -270,11 +270,11 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant();
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .Setup(h => h.AuthorizeAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(authorizedGrant));
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Same(authorizedGrant, context.AuthorizedGrant);
@@ -299,11 +299,11 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant();
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .Setup(h => h.AuthorizeAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(authorizedGrant));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -323,11 +323,11 @@ public class AuthorizationGrantValidatorTests
         var authorizedGrant = CreateAuthorizedGrant(grantRedirectUri);
 
         _grantHandler
-            .Setup(h => h.AuthorizeAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .Setup(h => h.AuthorizeAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<AuthorizedGrant, OidcError>)(authorizedGrant));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert - Path is case-sensitive
         Assert.NotNull(error);

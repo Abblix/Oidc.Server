@@ -183,12 +183,13 @@ public sealed class EndpointSpanTests : IDisposable
     {
         var inner = new Mock<ITokenHandler>();
         inner
-            .Setup(h => h.HandleAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
+            .Setup(h => h.HandleAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Issued);
         var grants = Mock.Of<IAuthorizationGrantHandler>(g => g.GrantTypesSupported == new[] { GrantTypes.AuthorizationCode });
         var traced = new ObservedTokenHandler(inner.Object, grants, _instruments, tenants: NoTenant.Accessor);
 
         var span = await SpanOf(() => traced.HandleAsync(
+            SingleIssuer.Tenant,
             new TokenRequest { GrantType = requested }, new ClientRequest(), CancellationToken.None));
 
         Assert.Equal(named, span.GetTagItem(TelemetryTags.GrantType));
@@ -200,13 +201,13 @@ public sealed class EndpointSpanTests : IDisposable
         var enricher = new Mock<IEndpointSpanEnricher>();
         var inner = new Mock<ITokenHandler>();
         inner
-            .Setup(h => h.HandleAsync(It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
+            .Setup(h => h.HandleAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Issued);
         var observed = new ObservedTokenHandler(
             inner.Object, Mock.Of<IAuthorizationGrantHandler>(), _instruments, enrichers: [enricher.Object], tenants: NoTenant.Accessor);
         var request = new TokenRequest();
 
-        var span = await SpanOf(() => observed.HandleAsync(request, new ClientRequest(), CancellationToken.None));
+        var span = await SpanOf(() => observed.HandleAsync(SingleIssuer.Tenant, request, new ClientRequest(), CancellationToken.None));
 
         enricher.Verify(e => e.Enrich(span, TelemetryEndpoints.Token, request), Times.Once);
     }

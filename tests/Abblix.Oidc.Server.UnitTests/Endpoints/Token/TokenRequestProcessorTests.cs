@@ -55,7 +55,7 @@ public class TokenRequestProcessorTests
             _refreshTokenService.Object,
             _identityTokenService.Object,
             _contextEvaluator.Object,
-            _grantIdGenerator.Object, tenantAccessor: SingleIssuer.Accessor);
+            _grantIdGenerator.Object);
     }
 
     private static TokenRequest CreateTokenRequest() => new()
@@ -129,7 +129,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(accessToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
@@ -178,7 +178,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(idToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
@@ -228,7 +228,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(refreshToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
@@ -307,7 +307,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(idToken);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(captured);
@@ -376,7 +376,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(idToken);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert. Seeded with a non-null value first, so "nothing was passed" cannot be confused with
         // "the callback never ran".
@@ -428,7 +428,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(idToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
@@ -462,7 +462,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(accessToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
@@ -500,7 +500,7 @@ public class TokenRequestProcessorTests
                 issuedUnder = context)
             .ReturnsAsync(CreateAccessToken());
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Null(tokenIssued.RefreshToken);
@@ -534,7 +534,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(accessToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
@@ -570,7 +570,7 @@ public class TokenRequestProcessorTests
                 authSession, authContext, request.ClientInfo, ExistingGrantId, subjectExpiresAt))
             .ReturnsAsync(accessToken);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Same(accessToken, tokenIssued.AccessToken);
@@ -612,7 +612,7 @@ public class TokenRequestProcessorTests
                 authSession, authContext, request.ClientInfo, legacyRefreshToken, NewGrantId))
             .ReturnsAsync(newRefreshToken);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Same(newRefreshToken, tokenIssued.RefreshToken);
@@ -652,7 +652,7 @@ public class TokenRequestProcessorTests
                 authSession, narrowedContext, request.ClientInfo, false, null, accessToken.EncodedJwt))
             .ReturnsAsync(CreateIdToken());
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Same(accessToken, tokenIssued.AccessToken);
@@ -685,7 +685,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(accessToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
@@ -718,7 +718,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(accessToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
@@ -746,7 +746,7 @@ public class TokenRequestProcessorTests
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(CreateAccessToken(TimeSpan.FromSeconds(lifetimeSeconds)));
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -779,7 +779,7 @@ public class TokenRequestProcessorTests
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _processor.ProcessAsync(request));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _processor.ProcessAsync(SingleIssuer.Tenant, request));
     }
 
     /// <summary>
@@ -806,7 +806,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(accessToken);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         _contextEvaluator.Verify(
@@ -839,7 +839,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(accessToken);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         _accessTokenService.Verify(
@@ -905,7 +905,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(newRefreshToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
@@ -953,7 +953,7 @@ public class TokenRequestProcessorTests
             .Setup(s => s.TrySpendAsync(TestTenant.Matched, existingRefreshToken, request.ClientInfo))
             .ReturnsAsync(false);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -994,7 +994,7 @@ public class TokenRequestProcessorTests
                 TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, false, null, accessToken.EncodedJwt))
             .ThrowsAsync(new HttpRequestException("The client key set could not be fetched."));
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => _processor.ProcessAsync(request));
+        await Assert.ThrowsAsync<HttpRequestException>(() => _processor.ProcessAsync(SingleIssuer.Tenant, request));
 
         _refreshTokenService.Verify(
             s => s.TrySpendAsync(TestTenant.Matched, It.IsAny<Jwt.JsonWebToken>(), It.IsAny<ClientInfo>()), Times.Never);
@@ -1030,7 +1030,7 @@ public class TokenRequestProcessorTests
                 authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId))
             .ReturnsAsync((EncodedJsonWebToken?)null);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetSuccess(out var issued));
         Assert.Null(issued.RefreshToken);
@@ -1074,7 +1074,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(idToken);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         _identityTokenService.Verify(
@@ -1118,7 +1118,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(accessToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
@@ -1180,7 +1180,7 @@ public class TokenRequestProcessorTests
             .ReturnsAsync(refreshToken);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(capturedRefreshContext);
@@ -1219,7 +1219,7 @@ public class TokenRequestProcessorTests
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Null(tokenIssued.RefreshToken);
@@ -1256,7 +1256,7 @@ public class TokenRequestProcessorTests
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(CreateAccessToken());
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidScope, error.Error);
@@ -1300,7 +1300,7 @@ public class TokenRequestProcessorTests
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(CreateAccessToken());
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
@@ -1350,7 +1350,7 @@ public class TokenRequestProcessorTests
                 request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.True(JsonNode.DeepEquals(tokenIssued.AuthorizationDetails, issued));

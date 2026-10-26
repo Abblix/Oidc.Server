@@ -64,13 +64,15 @@ internal static class TokenEndpoints
         ClientRequest clientRequest,
         ITokenHandler handler,
         ITokenResponseFormatter formatter,
+        ITenantAccessor tenantAccessor,
         CancellationToken cancellationToken)
     {
         Core.TokenRequest coreTokenRequest = tokenRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
         // Minimal API binds this parameter to the request's own RequestAborted. CIBA holds this call open for
         // the long-polling window, so without it a client that disconnects leaves the server polling storage.
-        var response = await handler.HandleAsync(coreTokenRequest, coreClientRequest, cancellationToken);
+        var response = await handler.HandleAsync(
+            tenantAccessor.CurrentTenant(), coreTokenRequest, coreClientRequest, cancellationToken);
         return await formatter.FormatResponseAsync(coreTokenRequest, response);
     }
 

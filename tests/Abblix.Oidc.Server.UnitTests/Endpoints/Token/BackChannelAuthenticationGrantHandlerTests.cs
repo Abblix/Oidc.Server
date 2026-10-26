@@ -94,7 +94,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             new EntityStorageKeyFactory(),
             timeProvider,
             options,
-            serviceProvider, tenantAccessor: SingleIssuer.Accessor);
+            serviceProvider);
     }
 
     /// <summary>
@@ -132,7 +132,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         private readonly BackChannelGrantRedeemer _redeemer = new(
             NullLoggerFactory.Instance,
             PublicSubjects(),
-            policy ?? StubAuthorizationDetailsPolicy.Accepting, tenantAccessor: SingleIssuer.Accessor);
+            policy ?? StubAuthorizationDetailsPolicy.Accepting);
 
         public object? GetKeyedService(Type serviceType, object? serviceKey)
         {
@@ -167,7 +167,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
     [Fact]
     public async Task AuthorizeAsync_MissingAuthenticationRequestId_ReturnsInvalidRequest()
     {
-        var result = await _handler.AuthorizeAsync(new TokenRequest(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, new TokenRequest(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -197,7 +197,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
         var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = deliveryMode };
 
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidClient, error.Error);
@@ -245,7 +245,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -292,7 +292,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
@@ -335,6 +335,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             new TokenRequest { AuthenticationRequestId = AuthReqId },
             new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
             TestContext.Current.CancellationToken);
@@ -382,6 +383,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             new TokenRequest { AuthenticationRequestId = AuthReqId },
             new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
             TestContext.Current.CancellationToken);
@@ -416,6 +418,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             new TokenRequest { AuthenticationRequestId = AuthReqId },
             new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
             new CancellationToken(canceled: true));
@@ -441,7 +444,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             {
                 BackChannelAuthentication = new BackChannelAuthenticationOptions { UseLongPolling = false },
             }),
-            CreateMockServiceProvider(_storage.Object, policy), tenantAccessor: SingleIssuer.Accessor);
+            CreateMockServiceProvider(_storage.Object, policy));
 
     /// <summary>
     /// An auth_req_id the storage does not hold is invalid, and CIBA Core section 11 requires invalid_grant for it:
@@ -457,7 +460,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -476,6 +479,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, authReqId)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         var result = await _handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             new TokenRequest { AuthenticationRequestId = authReqId },
             new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
             TestContext.Current.CancellationToken);
@@ -509,7 +513,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, wrongClientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, wrongClientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -546,7 +550,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         await _pollSchedule.SetNextPollAtAsync(PollKey, _currentTime.AddSeconds(5), TimeSpan.FromMinutes(5));
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -591,12 +595,41 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         await _pollSchedule.SetNextPollAtAsync(PollKey, _currentTime.AddSeconds(1), TimeSpan.FromSeconds(2));
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.SlowDown, error.Error);
         Assert.Equal(expiresAt, await _pollSchedule.TryGetNextPollAtAsync(PollKey));
+    }
+
+    /// <summary>
+    /// A pending request polled after its expiry is answered expired_token and removed from the store of the
+    /// tenant it is served at, so the next poll does not find it pending again.
+    /// </summary>
+    [Fact]
+    public async Task APendingRequestPolledAfterItsExpiry_IsRemovedFromItsTenantAndAnsweredExpired()
+    {
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        var grant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var authRequest = new BackChannelAuthenticationRequest(grant, _currentTime.AddSeconds(-1))
+        {
+            Status = BackChannelAuthenticationStatus.Pending,
+        };
+
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
     }
 
     /// <summary>
@@ -643,6 +676,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
 
         // Act: the real poll, through the handler the token endpoint calls.
         var result = await HandlerOver(requests).AuthorizeAsync(
+            SingleIssuer.Tenant,
             new TokenRequest { AuthenticationRequestId = authReqId },
             new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
             TestContext.Current.CancellationToken);
@@ -682,7 +716,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             {
                 BackChannelAuthentication = new BackChannelAuthenticationOptions { UseLongPolling = false },
             }),
-            new TestServiceProvider(requests), tenantAccessor: SingleIssuer.Accessor);
+            new TestServiceProvider(requests));
 
     /// <summary>
     /// Verifies that when the authentication request is still pending (user hasn't authenticated yet)
@@ -709,7 +743,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -742,7 +776,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         await _pollSchedule.SetNextPollAtAsync(PollKey, _currentTime.AddSeconds(-1), TimeSpan.FromMinutes(5));
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -772,7 +806,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -794,7 +828,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, null!)).ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert: the missing required auth_req_id is rejected by the parameter validator.
         Assert.True(result.TryGetFailure(out _));
@@ -827,7 +861,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
@@ -857,7 +891,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.UpdateAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert - TryRemoveAsync should never be called
         _storage.Verify(s => s.TryRemoveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
@@ -891,7 +925,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -927,7 +961,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         await _pollSchedule.SetNextPollAtAsync(PollKey, _currentTime, TimeSpan.FromMinutes(5));
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -961,7 +995,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -997,7 +1031,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -1032,7 +1066,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -1056,7 +1090,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
             TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
         };
 
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);

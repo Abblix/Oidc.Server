@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -43,13 +44,14 @@ public class PasswordGrantHandler(
     /// It delegates credential validation to the user credentials authenticator, which handles the security
     /// checks related to user authentication.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The token request containing the user's credentials and other parameters.</param>
     /// <param name="clientInfo">Information about the client making the request, used for validation and context.
     /// </param>
     /// <returns>A task that completes with the authorization result, which could be an error or successful grant.
     /// </returns>
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-    public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+    public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
     {
         // RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
         // not a server fault - the previous throw-on-access surfaced it as HTTP 500.

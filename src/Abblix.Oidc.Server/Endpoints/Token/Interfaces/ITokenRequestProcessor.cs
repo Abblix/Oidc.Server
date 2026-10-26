@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
@@ -38,8 +39,9 @@ public interface ITokenRequestProcessor
 	/// <summary>
 	/// Asynchronously processes a validated and authorized token request, generating a token response.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The validated token request from the client.</param>
 	/// <returns>A task that resolves to a <see cref="TokenIssued"/>, encapsulating the tokens to be issued to
 	/// the client, or an <see cref="OidcError"/> if processing fails.</returns>
-	Task<Result<TokenIssued, OidcError>> ProcessAsync(ValidTokenRequest request);
+	Task<Result<TokenIssued, OidcError>> ProcessAsync(TenantDefinition tenant, ValidTokenRequest request);
 }

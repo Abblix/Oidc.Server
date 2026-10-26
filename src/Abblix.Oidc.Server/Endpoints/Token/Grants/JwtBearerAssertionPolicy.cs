@@ -28,13 +28,10 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="logger">Records why an assertion was refused.</param>
 /// <param name="issuerProvider">Carries the JWT Bearer options and the per-issuer configuration.</param>
 /// <param name="timeProvider">Provides the current time the assertion's age is measured against.</param>
-/// <param name="tenantAccessor">Names the tenant whose default security profile a client without one of its
-/// own falls back to.</param>
 internal sealed partial class JwtBearerAssertionPolicy(
 	ILogger logger,
 	IJwtBearerIssuerProvider issuerProvider,
-	TimeProvider timeProvider,
-	ITenantAccessor tenantAccessor)
+	TimeProvider timeProvider)
 {
 	/// <summary>
 	/// Default secure algorithms allowed for JWT signatures when not configured per issuer.
@@ -65,15 +62,15 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// a profile in this codebase resolves one. Reading the server default alone would ignore a
 	/// client that asks for a tighter window than the deployment demands.
 	/// </remarks>
-	public ClockSkew ResolveClockSkew(ClientInfo clientInfo)
-		=> issuerProvider.Options.ResolveClockSkew(Profile(clientInfo));
+	public ClockSkew ResolveClockSkew(TenantDefinition tenant, ClientInfo clientInfo)
+		=> issuerProvider.Options.ResolveClockSkew(Profile(tenant, clientInfo));
 
 	/// <summary>
 	/// The control bundle this client is held to: what the deployment demands of everyone,
 	/// tightened by whatever the client names for itself.
 	/// </summary>
-	private SecurityProfileRequirements Profile(ClientInfo clientInfo)
-		=> SecurityProfileRequirements.For(clientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile);
+	private static SecurityProfileRequirements Profile(TenantDefinition tenant, ClientInfo clientInfo)
+		=> SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile);
 
 	/// <summary>
 	/// Validates that the JWT assertion carries an 'exp' (expiration) claim. RFC 7523 Section 3
@@ -153,6 +150,7 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// Validates that the JWT is not too old based on MaxJwtAge configuration.
 	/// </summary>
 	public Result<JwtBearerValidationContext, OidcError> ValidateJwtAge(
+		TenantDefinition tenant,
 		JwtBearerValidationContext ctx, ClientInfo clientInfo)
 	{
 		var options = issuerProvider.Options;
@@ -173,7 +171,7 @@ internal sealed partial class JwtBearerAssertionPolicy(
 		var now = timeProvider.GetUtcNow();
 		var jwtAge = now - issuedAt.Value;
 
-		if (jwtAge <= maxAge + ResolveClockSkew(clientInfo).Past)
+		if (jwtAge <= maxAge + ResolveClockSkew(tenant, clientInfo).Past)
 			return ctx;
 
 		LogTooOld(issuedAt.Value, jwtAge, maxAge, clientInfo.ClientId, ctx.Issuer);

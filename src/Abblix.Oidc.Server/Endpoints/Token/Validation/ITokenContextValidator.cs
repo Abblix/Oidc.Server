@@ -8,6 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -22,6 +23,7 @@ public interface ITokenContextValidator
     /// Asynchronously validates the token request within the provided context, checking for compliance with
     /// the necessary validation rules such as client authentication, scope validation, grant validation, etc.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The context containing the token request and related information that needs to be validated.</param>
     /// <param name="cancellationToken">
     /// Abandons validation when the caller stops waiting. It is a parameter rather than a member of the
@@ -31,5 +33,5 @@ public interface ITokenContextValidator
     /// A <see cref="OidcError"/> containing error details if the validation fails;
     /// otherwise, returns null indicating that the validation was successful.
     /// </returns>
-    Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken);
+    Task<OidcError?> ValidateAsync(TenantDefinition tenant, TokenValidationContext context, CancellationToken cancellationToken);
 }

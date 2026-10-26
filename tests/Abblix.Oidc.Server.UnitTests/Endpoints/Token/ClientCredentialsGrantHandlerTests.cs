@@ -48,7 +48,7 @@ public class ClientCredentialsGrantHandlerTests
         };
 
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -74,7 +74,7 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest { Scope = null! };
 
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -100,7 +100,7 @@ public class ClientCredentialsGrantHandlerTests
         };
 
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -124,7 +124,7 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest();
 
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -146,8 +146,8 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest();
 
         // Act
-        var result1 = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-        var result2 = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result1 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result2 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out var grant1));
@@ -173,7 +173,7 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest();
 
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -194,7 +194,7 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest();
 
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -237,7 +237,7 @@ public class ClientCredentialsGrantHandlerTests
         };
 
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -259,8 +259,8 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest { Scope = ["api.read"] };
 
         // Act
-        var result1 = await handler.AuthorizeAsync(tokenRequest, clientInfo1, TestContext.Current.CancellationToken);
-        var result2 = await handler.AuthorizeAsync(tokenRequest, clientInfo2, TestContext.Current.CancellationToken);
+        var result1 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo1, TestContext.Current.CancellationToken);
+        var result2 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo2, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out var grant1));
@@ -294,7 +294,7 @@ public class ClientCredentialsGrantHandlerTests
         };
 
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -316,7 +316,7 @@ public class ClientCredentialsGrantHandlerTests
         var tokenRequest = new TokenRequest { Scope = ["api.read"] };
 
         // Act
-        var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));

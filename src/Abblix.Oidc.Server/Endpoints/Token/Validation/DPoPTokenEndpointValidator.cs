@@ -46,14 +46,13 @@ public partial class DPoPTokenEndpointValidator(
     ILogger<DPoPTokenEndpointValidator> logger,
     IProofValidator proofValidator,
     INonceService nonceService,
-    IOptionsMonitor<OidcOptions> options,
-    ITenantAccessor tenantAccessor) : DPoPNonceValidator(nonceService), ITokenContextValidator
+    IOptionsMonitor<OidcOptions> options) : DPoPNonceValidator(nonceService), ITokenContextValidator
 {
     /// <inheritdoc/>
-    public async Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, TokenValidationContext context, CancellationToken cancellationToken)
     {
         if (context.ClientRequest is { DPoPProof: { } proofJwt })
-            return await ValidatePresentedProofAsync(context, proofJwt);
+            return await ValidatePresentedProofAsync(tenant, context, proofJwt);
 
         // The per-client dpop_bound_access_tokens flag (RFC 9449 section 5.2) mandates DPoP specifically, so
         // an mTLS-bound token does not satisfy it and a missing proof is rejected outright.
@@ -73,7 +72,7 @@ public partial class DPoPTokenEndpointValidator(
         // authentication request is spent. The profile tightens, and the granular RequireDPoP toggle cannot
         // weaken it.
         if (SecurityProfileRequirements
-                .For(context.ClientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile)
+                .For(context.ClientInfo, tenant.DefaultSecurityProfile)
                 .RequireSenderConstrainedTokens &&
             !WillIssueCertificateBoundToken(context))
         {
@@ -92,7 +91,7 @@ public partial class DPoPTokenEndpointValidator(
     /// the nonce policy, then stashes the proof-key thumbprint so the processor can bind cnf.jkt onto the
     /// issued token.
     /// </summary>
-    private async Task<OidcError?> ValidatePresentedProofAsync(TokenValidationContext context, string proofJwt)
+    private async Task<OidcError?> ValidatePresentedProofAsync(TenantDefinition tenant, TokenValidationContext context, string proofJwt)
     {
         var proofResult = await proofValidator.ValidateAsync(proofJwt);
 
@@ -108,7 +107,7 @@ public partial class DPoPTokenEndpointValidator(
 
         if (options.CurrentValue.DPoP.Nonce.RequireAtTokenEndpoint)
         {
-            var nonceError = await EnforceNonceAsync(tenantAccessor.CurrentTenant(), proof);
+            var nonceError = await EnforceNonceAsync(tenant, proof);
             if (nonceError is not null)
                 return nonceError;
         }

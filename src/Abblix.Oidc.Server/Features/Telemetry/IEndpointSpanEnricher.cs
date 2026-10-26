@@ -42,7 +42,7 @@ public interface IEndpointSpanEnricher
     /// </summary>
     /// <param name="span">The span of the endpoint request.</param>
     /// <param name="endpoint">The endpoint, one of <see cref="TelemetryEndpoints"/>.</param>
-    /// <param name="request">The request the endpoint handles, as its handler receives it first, or null for an
-    /// endpoint whose handler takes none.</param>
+    /// <param name="request">The request the endpoint handles, as its handler receives it after the tenant the
+    /// request is served at, or null for an endpoint whose handler takes none.</param>
     void Enrich(Activity span, string endpoint, object? request);
 }

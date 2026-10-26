@@ -19,13 +19,13 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// only receive permissions appropriate to their needs and in compliance with server policies.
 /// </summary>
 /// <param name="scopeManager">The manager responsible for maintaining and validating scope definitions.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAccessor): SyncTokenContextValidatorBase
+public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidatorBase
 {
     /// <summary>
     /// Validates the scopes specified in the token request context. This method ensures that all requested scopes
     /// are recognized by the scope manager and are permissible for the requesting client.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The context containing the token request information,
     /// including the scopes to be validated.</param>
     /// <returns>
@@ -33,9 +33,9 @@ public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAc
     /// including an error code and a message describing the issue;
     /// otherwise, returns null indicating that all requested scopes are valid.
     /// </returns>
-    protected override OidcError? Validate(TokenValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, TokenValidationContext context)
     {
-        if (!scopeManager.Validate(tenantAccessor.CurrentTenant(), 
+        if (!scopeManager.Validate(tenant, 
                 context.Request.Scope,
                 context.Resources,
                 context.ClientInfo.AllowedScopes,

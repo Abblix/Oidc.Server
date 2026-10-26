@@ -62,7 +62,7 @@ public class AddAuthorizationGrantTests
     {
         public IEnumerable<string> GrantTypesSupported { get; } = ["urn:test:stub"];
 
-        public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+        public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
             => Task.FromResult<Result<AuthorizedGrant, OidcError>>(
                 new OidcError(ErrorCodes.UnsupportedGrantType, "stub"));
     }
@@ -71,7 +71,7 @@ public class AddAuthorizationGrantTests
     {
         public IEnumerable<string> GrantTypesSupported { get; } = ["urn:test:other"];
 
-        public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+        public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
             => Task.FromResult<Result<AuthorizedGrant, OidcError>>(
                 new OidcError(ErrorCodes.UnsupportedGrantType, "other"));
     }

@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -53,11 +54,12 @@ public class ClientCredentialsGrantHandler(
 	/// Since the client has already been authenticated (via client authentication middleware),
 	/// this handler creates a grant for the client with the requested scope.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The token request containing the requested scope and other parameters.</param>
 	/// <param name="clientInfo">Information about the authenticated client making the request.</param>
 	/// <returns>A task that completes with an authorized grant containing the client session and context.</returns>
 	/// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+	public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
 	{
 		// Extract the requested scope from the request (may be null/empty)
 		var scope = request.Scope;

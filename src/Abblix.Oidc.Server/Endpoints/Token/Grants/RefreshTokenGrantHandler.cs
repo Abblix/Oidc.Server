@@ -28,11 +28,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="jwtValidator">Validates the refresh-token JWT issued by this server.</param>
 /// <param name="refreshTokenService">Resolves the refresh-token JWT to an <see cref="AuthorizedGrant"/>
 /// and enforces single-use / rotation semantics.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class RefreshTokenGrantHandler(
 	IAuthServiceJwtValidator jwtValidator,
-	IRefreshTokenService refreshTokenService,
-	ITenantAccessor tenantAccessor) : IAuthorizationGrantHandler
+	IRefreshTokenService refreshTokenService) : IAuthorizationGrantHandler
 {
 	/// <summary>
 	/// Indicates that this handler is responsible for processing the 'refresh_token' grant type.
@@ -48,6 +46,7 @@ public class RefreshTokenGrantHandler(
 	/// This method validates the refresh token, ensures that the token is associated with the correct client,
 	/// and generates new tokens if the request is valid.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The token request, containing the refresh token and other required parameters.</param>
 	/// <param name="clientInfo">
 	/// The client information, used to verify the request is coming from an authorized client.</param>
@@ -56,7 +55,7 @@ public class RefreshTokenGrantHandler(
 	/// access token or an error if the request is invalid or the refresh token is unauthorized.
 	/// </returns>
 	/// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
 	{
 		// RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
 		// not a server fault - the previous throw-on-access surfaced it as HTTP 500.
@@ -67,7 +66,7 @@ public class RefreshTokenGrantHandler(
 
 		// Validate the refresh token's JWT structure and authenticity using the JWT validator service.
 		var jwtValidationResult = await jwtValidator.ValidateAsync(
-			tenantAccessor.CurrentTenant(),
+			tenant,
 			request.RefreshToken, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
 
 		if (jwtValidationResult.TryGetFailure(out var error))
@@ -80,7 +79,7 @@ public class RefreshTokenGrantHandler(
 		// Authorize the request based on the refresh token and check if the token belongs to the correct client.
 		// The authenticated client is the one the refresh token was issued to (verified below), so its sector opens
 		// a pairwise subject back to the real subject.
-		var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(tenantAccessor.CurrentTenant(), token, clientInfo);
+		var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(tenant, token, clientInfo);
 		if (result.TryGetFailure(out var authError))
 		{
 			return authError;

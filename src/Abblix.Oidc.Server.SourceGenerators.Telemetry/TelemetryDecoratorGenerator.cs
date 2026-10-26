@@ -36,6 +36,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		"Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse";
 	private const string TaskOfTypeName = "System.Threading.Tasks.Task`1";
 	private const string NullableTypeName = "System.Nullable`1";
+	private const string TenantDefinitionTypeName = "Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition";
 
 	private const string TagsRequestProperty = "TagsRequest";
 	private const string ObservesResultProperty = "ObservesResult";
@@ -425,8 +426,10 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 				if (tagsRequest)
 					run.Append($", () => RequestTagOf({arguments})");
 
-				// The host's enrichers see the request the handler receives first
-				var request = method.Parameters.Length > 0 ? Escape(method.Parameters[0].Name) : "null";
+				// The host's enrichers see the request the handler receives, which follows the tenant it is served at
+				var request = method.Parameters
+					.SkipWhile(parameter => MetadataName(parameter.Type) == TenantDefinitionTypeName)
+					.FirstOrDefault() is { } received ? Escape(received.Name) : "null";
 				run.Append($", enrichment: new global::{TelemetryNamespace}.EndpointEnrichment({request}, _enrichers)");
 				break;
 

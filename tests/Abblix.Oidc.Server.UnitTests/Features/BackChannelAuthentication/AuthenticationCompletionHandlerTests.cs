@@ -434,7 +434,7 @@ public partial class AuthenticationCompletionHandlerTests
             TimeSpan.FromHours(1),
             new Uri(TokenExchangeTokenTypes.AccessToken));
 
-        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync((Result<TokenIssued, OidcError>)(tokenIssued));
 
         _notificationService.Setup(s => s.SendAsync(
@@ -454,7 +454,7 @@ public partial class AuthenticationCompletionHandlerTests
         await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
 
         // Assert
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Once);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Once);
         _notificationService.Verify(
             s => s.SendAsync(_notificationEndpoint, NotificationToken, It.IsAny<IBackChannelNotificationRequest>(), BackchannelTokenDeliveryModes.Push),
             Times.Once);
@@ -481,7 +481,7 @@ public partial class AuthenticationCompletionHandlerTests
         request.ClientNotificationEndpoint = _notificationEndpoint;
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
 
-        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync((Result<TokenIssued, OidcError>)new TokenIssued(
                 new EncodedJsonWebToken(new Jwt.JsonWebToken(), EncodedAccessToken),
                 TokenTypes.Bearer,
@@ -533,7 +533,7 @@ public partial class AuthenticationCompletionHandlerTests
 
         var error = new OidcError(ErrorCodes.InvalidRequest, "Token generation failed");
 
-        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync((Result<TokenIssued, OidcError>)(error));
 
         _storage.Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, request, _expiresIn)).Returns(Task.CompletedTask);
@@ -547,7 +547,7 @@ public partial class AuthenticationCompletionHandlerTests
         await handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
 
         // Assert
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Once);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Once);
         VerifyPushErrorSent(ErrorCodes.TransactionFailed);
         _storage.Verify(
             s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId),
@@ -578,7 +578,7 @@ public partial class AuthenticationCompletionHandlerTests
         };
 
         var fault = new InvalidOperationException("The signing key is unavailable");
-        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>())).ThrowsAsync(fault);
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>())).ThrowsAsync(fault);
         _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
         NotificationsAreAccepted();
 
@@ -590,7 +590,7 @@ public partial class AuthenticationCompletionHandlerTests
             .CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn));
 
         Assert.Same(fault, thrown);
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Once);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Once);
         VerifyPushErrorSent(ErrorCodes.TransactionFailed);
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
         logger.Verify(
@@ -645,7 +645,7 @@ public partial class AuthenticationCompletionHandlerTests
             Times.Never);
 
         // Nothing is minted or delivered for a client that cannot be reached.
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Never);
         _notificationService.Verify(
             s => s.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
             Times.Never);
@@ -685,7 +685,7 @@ public partial class AuthenticationCompletionHandlerTests
             s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<BackChannelAuthenticationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
 
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Never);
         _notificationService.Verify(
             s => s.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
             Times.Never);
@@ -733,7 +733,7 @@ public partial class AuthenticationCompletionHandlerTests
         _notificationService.Verify(
             s => s.SendAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IBackChannelNotificationRequest>(), It.IsAny<string>()),
             Times.Never);
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Never);
     }
 
     /// <summary>
@@ -933,7 +933,7 @@ public partial class AuthenticationCompletionHandlerTests
         request.ClientNotificationEndpoint = _notificationEndpoint;
         StoredRecordIs(request);
 
-        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync((Result<TokenIssued, OidcError>)new TokenIssued(
                 new EncodedJsonWebToken(new Jwt.JsonWebToken(), EncodedAccessToken),
                 TokenTypes.Bearer,
@@ -955,7 +955,7 @@ public partial class AuthenticationCompletionHandlerTests
             AuthReqId, request, PushClient(), _expiresIn);
 
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Never);
         VerifyPushErrorSent(ErrorCodes.AccessDenied);
     }
 
@@ -1236,7 +1236,7 @@ public partial class AuthenticationCompletionHandlerTests
             .ReturnsAsync(won ? request : null);
 
         _tokenRequestProcessor
-            .Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .Callback(() => order.Add("minted"))
             .ReturnsAsync((Result<TokenIssued, OidcError>)(
                 new TokenIssued(

@@ -8,6 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -23,6 +24,7 @@ public interface ITokenHandler
     /// Asynchronously handles a token request, validating the request details and, if valid, processing it to issue,
     /// renew or exchange tokens according to OAuth 2.0 and OpenID Connect standards.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="tokenRequest">The token request containing essential parameters such as the grant type,
     /// client credentials, and other parameters pertinent to the token issuance process.</param>
     /// <param name="clientRequest">Supplementary information about the client making the request, necessary
@@ -43,5 +45,6 @@ public interface ITokenHandler
     /// thereby maintaining the integrity and security of the authentication and authorization process.
     /// </remarks>
     Task<Result<TokenIssued, OidcError>> HandleAsync(
+        TenantDefinition tenant,
         TokenRequest tokenRequest, ClientRequest clientRequest, CancellationToken cancellationToken);
 }

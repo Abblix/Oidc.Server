@@ -39,10 +39,9 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// client identifier, and under the assertion grants it belongs to a federated issuer.
 /// </para>
 /// </remarks>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 /// <param name="cutoffChecker">Decides whether a cutoff refuses the session behind the grant, or the grant itself
 /// at its client.</param>
-public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker, ITenantAccessor tenantAccessor)
+public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker)
     : ITokenContextValidator
 {
     /// <summary>
@@ -64,12 +63,12 @@ public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker, ITe
     ];
 
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, TokenValidationContext context, CancellationToken cancellationToken)
     {
         if (context.Request.GrantType is not { } grantType || !RedeemsAnEarlierSession.Contains(grantType))
             return null;
 
-        if (!await cutoffChecker.IsGrantRefusedAsync(tenantAccessor.CurrentTenant(), context.AuthorizedGrant, grantType))
+        if (!await cutoffChecker.IsGrantRefusedAsync(tenant, context.AuthorizedGrant, grantType))
             return null;
 
         // RFC 6749 Section 5.2 names this case in the definition of the code: the grant is "invalid,

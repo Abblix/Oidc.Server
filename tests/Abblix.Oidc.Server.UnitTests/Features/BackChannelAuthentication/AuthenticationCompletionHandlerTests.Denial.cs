@@ -106,7 +106,7 @@ public partial class AuthenticationCompletionHandlerTests
 
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
         VerifyPushErrorSent(ErrorCodes.AccessDenied);
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Never);
     }
 
     /// <summary>

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -15,6 +16,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -47,7 +49,7 @@ public class AuthorizationCodeReusePreventingDecoratorTests
 
     public AuthorizationCodeReusePreventingDecoratorTests()
         => _decorator = new AuthorizationCodeReusePreventingDecorator(
-            _inner.Object, _tokenRegistry.Object, _codeService.Object, tenantAccessor: SingleIssuer.Accessor);
+            _inner.Object, _tokenRegistry.Object, _codeService.Object);
 
     private static ValidTokenRequest CreateRequest(AuthorizedGrant grant)
     {
@@ -78,12 +80,12 @@ public class AuthorizationCodeReusePreventingDecoratorTests
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidGrant, "Authorization code is invalid"));
 
         // Act
-        var result = await _decorator.ProcessAsync(CreateRequest(CreateGrant()));
+        var result = await _decorator.ProcessAsync(SingleIssuer.Tenant, CreateRequest(CreateGrant()));
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-        _inner.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _inner.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Never);
     }
 
     /// <summary>
@@ -102,14 +104,14 @@ public class AuthorizationCodeReusePreventingDecoratorTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _decorator.ProcessAsync(CreateRequest(CreateGrant(issued)));
+        var result = await _decorator.ProcessAsync(SingleIssuer.Tenant, CreateRequest(CreateGrant(issued)));
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
         _tokenRegistry.Verify(r => r.SetStatusAsync(TestTenant.Matched, "access-jti", JsonWebTokenStatus.Revoked, expiresAt), Times.Once);
         _tokenRegistry.Verify(r => r.SetStatusAsync(TestTenant.Matched, "refresh-jti", JsonWebTokenStatus.Revoked, expiresAt), Times.Once);
-        _inner.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _inner.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Never);
     }
 
     /// <summary>
@@ -122,15 +124,53 @@ public class AuthorizationCodeReusePreventingDecoratorTests
         // Arrange
         _codeService.Setup(s => s.RemoveAuthorizationCodeAsync(TestTenant.Matched, Code)).ReturnsAsync(CreateGrant());
         var innerError = new OidcError(ErrorCodes.InvalidGrant, "inner-marker");
-        _inner.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>())).ReturnsAsync(innerError);
+        _inner.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>())).ReturnsAsync(innerError);
 
         // Act
-        var result = await _decorator.ProcessAsync(CreateRequest(CreateGrant()));
+        var result = await _decorator.ProcessAsync(SingleIssuer.Tenant, CreateRequest(CreateGrant()));
 
         // Assert: the inner processor was invoked (its result flowed through unchanged).
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal("inner-marker", error.ErrorDescription);
-        _inner.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Once);
+        _inner.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Once);
+    }
+
+    /// <summary>
+    /// The tokens a winning redemption issues are written back to the code's grant at the tenant the request is
+    /// served at, which is where a later reuse of the code looks for the tokens to revoke.
+    /// </summary>
+    [Fact]
+    public async Task WinningRedemption_RecordsItsTokensOnTheGrantOfTheServingTenant()
+    {
+        var expiresAt = DateTimeOffset.UnixEpoch.AddHours(1);
+        var accessToken = new Jwt.JsonWebToken { Payload = { JwtId = "access-jti", ExpiresAt = expiresAt } };
+        var refreshToken = new Jwt.JsonWebToken { Payload = { JwtId = "refresh-jti", ExpiresAt = expiresAt } };
+        var issued = new TokenIssued(
+            new EncodedJsonWebToken(accessToken, "access_token_jwt"),
+            TokenTypes.Bearer,
+            TimeSpan.FromHours(1),
+            new Uri(TokenExchangeTokenTypes.AccessToken))
+        {
+            RefreshToken = new EncodedJsonWebToken(refreshToken, "refresh_token_jwt"),
+        };
+        var request = CreateRequest(CreateGrant());
+
+        _codeService.Setup(s => s.RemoveAuthorizationCodeAsync(TestTenant.Matched, Code)).ReturnsAsync(CreateGrant());
+        _inner.Setup(p => p.ProcessAsync(TestTenant.Matched, request)).ReturnsAsync(issued);
+        _codeService
+            .Setup(s => s.UpdateAuthorizationGrantAsync(
+                TestTenant.Matched, Code, It.IsAny<AuthorizedGrant>(), request.ClientInfo.AuthorizationCodeExpiresIn))
+            .Returns(Task.CompletedTask);
+
+        var result = await _decorator.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetSuccess(out _));
+        _codeService.Verify(s => s.UpdateAuthorizationGrantAsync(
+            TestTenant.Matched,
+            Code,
+            It.Is<AuthorizedGrant>(grant => grant.IssuedTokens != null
+                && grant.IssuedTokens.Select(token => token.JwtId).SequenceEqual(new[] { "access-jti", "refresh-jti" })),
+            request.ClientInfo.AuthorizationCodeExpiresIn), Times.Once);
     }
 
     /// <summary>
@@ -144,10 +184,10 @@ public class AuthorizationCodeReusePreventingDecoratorTests
         var model = new TokenRequest { GrantType = GrantTypes.RefreshToken };
         var request = new ValidTokenRequest(model, CreateGrant(), new ClientInfo("client-1"), [], []);
         var innerError = new OidcError(ErrorCodes.InvalidGrant, "inner-marker");
-        _inner.Setup(p => p.ProcessAsync(request)).ReturnsAsync(innerError);
+        _inner.Setup(p => p.ProcessAsync(TestTenant.Matched, request)).ReturnsAsync(innerError);
 
         // Act
-        var result = await _decorator.ProcessAsync(request);
+        var result = await _decorator.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));

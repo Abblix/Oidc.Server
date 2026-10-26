@@ -101,6 +101,7 @@ public class LostUpdateTests
 
         // The real poll, through the handler the token endpoint calls.
         var result = await DeviceHandlerOver(devices, RealStorage(cache)).AuthorizeAsync(
+            SingleIssuer.Tenant,
             new TokenRequest { DeviceCode = DeviceCode },
             new ClientInfo("a-client"),
             TestContext.Current.CancellationToken);
@@ -275,7 +276,7 @@ public class LostUpdateTests
             new EntityStorageKeyFactory(),
             StubAuthorizationDetailsPolicy.Accepting,
             new FakeTimeProvider(_now),
-            Options.Create(new OidcOptions { DeviceAuthorization = DeviceOptions() }), tenantAccessor: SingleIssuer.Accessor);
+            Options.Create(new OidcOptions { DeviceAuthorization = DeviceOptions() }));
 
     private UserCodeRateLimiter LimiterOver(IEntityStorage storage, int failuresBeforeBackoff = 2)
         => new(

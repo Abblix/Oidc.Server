@@ -44,7 +44,7 @@ public partial class AuthenticationCompletionHandlerTests
         var request = CreateRequest("somebody-else", requested: UserId);
         request.ClientNotificationEndpoint = _notificationEndpoint;
 
-        _tokenRequestProcessor.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync((Result<TokenIssued, OidcError>)new TokenIssued(
                 new EncodedJsonWebToken(new Jwt.JsonWebToken(), EncodedAccessToken),
                 TokenTypes.Bearer,
@@ -67,7 +67,7 @@ public partial class AuthenticationCompletionHandlerTests
             AuthReqId, request, PushClient(), _expiresIn);
 
         _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
-        _tokenRequestProcessor.Verify(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()), Times.Never);
+        _tokenRequestProcessor.Verify(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()), Times.Never);
         VerifyPushErrorSent(ErrorCodes.AccessDenied);
     }
 

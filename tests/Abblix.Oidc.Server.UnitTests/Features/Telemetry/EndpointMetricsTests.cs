@@ -232,18 +232,19 @@ public sealed class EndpointMetricsTests : IDisposable
     {
         var inner = new Mock<ITokenRequestProcessor>();
         inner
-            .Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync(Issued with { IdToken = AToken, RefreshToken = AToken });
-        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments, Grants, tenants: NoTenant.Accessor);
+        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments, Grants);
 
         // A CIBA push delivery mints its tokens through the processor with no request to the token endpoint
-        await measured.ProcessAsync(ValidRequest(GrantTypes.Ciba));
+        await measured.ProcessAsync(SingleIssuer.Tenant, ValidRequest(GrantTypes.Ciba));
 
         var issued = _measured.Of(OidcMetrics.TokensIssued);
         Assert.Equal(
             [TelemetryTokenTypes.AccessToken, TelemetryTokenTypes.IdToken, TelemetryTokenTypes.RefreshToken],
             issued.Select(tags => tags[TelemetryTags.TokenType]));
         Assert.All(issued, tags => Assert.Equal(GrantTypes.Ciba, tags[TelemetryTags.GrantType]));
+        Assert.All(issued, tags => Assert.Equal(SingleIssuer.Tenant.Id, tags[TelemetryTags.Tenant]));
     }
 
     private static IAuthorizationGrantHandler Grants => Mock.Of<IAuthorizationGrantHandler>(
@@ -252,16 +253,16 @@ public sealed class EndpointMetricsTests : IDisposable
     private static Mock<ITokenRequestProcessor> Issuing()
     {
         var inner = new Mock<ITokenRequestProcessor>();
-        inner.Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>())).ReturnsAsync(Issued);
+        inner.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>())).ReturnsAsync(Issued);
         return inner;
     }
 
     [Fact]
     public async Task AGrantTypeTheServerDoesNotSupportAsSpelled_IsNotNamed()
     {
-        var measured = new MeasuredTokenRequestProcessor(Issuing().Object, _instruments, Grants, tenants: NoTenant.Accessor);
+        var measured = new MeasuredTokenRequestProcessor(Issuing().Object, _instruments, Grants);
 
-        await measured.ProcessAsync(ValidRequest("Authorization_Code"));
+        await measured.ProcessAsync(SingleIssuer.Tenant, ValidRequest("Authorization_Code"));
 
         Assert.False(Assert.Single(_measured.Of(OidcMetrics.TokensIssued)).ContainsKey(TelemetryTags.GrantType));
     }
@@ -270,10 +271,11 @@ public sealed class EndpointMetricsTests : IDisposable
     public async Task UnderMultiTenancy_ATokenNamesTheTenant()
     {
         var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") } };
-        var measured = new MeasuredTokenRequestProcessor(
-            Issuing().Object, _instruments, Grants, Mock.Of<ITenantAccessor>(accessor => accessor.Current == served));
+        var inner = new Mock<ITokenRequestProcessor>();
+        inner.Setup(p => p.ProcessAsync(served.Tenant, It.IsAny<ValidTokenRequest>())).ReturnsAsync(Issued);
+        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments, Grants);
 
-        await measured.ProcessAsync(ValidRequest(GrantTypes.AuthorizationCode));
+        await measured.ProcessAsync(served.Tenant, ValidRequest(GrantTypes.AuthorizationCode));
 
         Assert.Equal("acme", Assert.Single(_measured.Of(OidcMetrics.TokensIssued))[TelemetryTags.Tenant]);
     }
@@ -283,11 +285,11 @@ public sealed class EndpointMetricsTests : IDisposable
     {
         var inner = new Mock<ITokenRequestProcessor>();
         inner
-            .Setup(p => p.ProcessAsync(It.IsAny<ValidTokenRequest>()))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidGrant, "The code has expired"));
-        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments, Grants, tenants: NoTenant.Accessor);
+        var measured = new MeasuredTokenRequestProcessor(inner.Object, _instruments, Grants);
 
-        await measured.ProcessAsync(ValidRequest(GrantTypes.AuthorizationCode));
+        await measured.ProcessAsync(SingleIssuer.Tenant, ValidRequest(GrantTypes.AuthorizationCode));
 
         Assert.Empty(_measured.Of(OidcMetrics.TokensIssued));
     }

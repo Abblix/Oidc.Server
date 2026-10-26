@@ -182,7 +182,7 @@ public partial class PushModeCompletionHandler(
 
         LogGeneratingTokens(FingerprintOf(authenticationRequestId));
 
-        var tokenResult = await IssueTokensAsync(authenticationRequestId, request, clientInfo);
+        var tokenResult = await IssueTokensAsync(tenant, authenticationRequestId, request, clientInfo);
 
         await tokenResult.MatchAsync<object?>(
             async tokens =>
@@ -255,6 +255,7 @@ public partial class PushModeCompletionHandler(
     /// Issues the tokens of a taken push request, telling the client the transaction failed when issuing throws.
     /// </summary>
     private async Task<Result<TokenIssued, OidcError>> IssueTokensAsync(
+        TenantDefinition tenant,
         [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo)
@@ -279,7 +280,7 @@ public partial class PushModeCompletionHandler(
 
         try
         {
-            return await tokenRequestProcessor.ProcessAsync(validTokenRequest);
+            return await tokenRequestProcessor.ProcessAsync(tenant, validTokenRequest);
         }
         catch (Exception exception)
         {

@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -28,6 +29,7 @@ public class TokenHandler(ITokenRequestValidator validator, ITokenRequestProcess
     /// Asynchronously handles a token request by first validating it and then, if the validation is successful,
     /// processing the request to issue, renew, or exchange tokens as required by the request parameters.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="tokenRequest">An object containing the details of the token request, including the grant type,
     /// client credentials and other necessary parameters.</param>
     /// <param name="clientRequest">Additional information about the client making the request, used for contextual
@@ -46,11 +48,12 @@ public class TokenHandler(ITokenRequestValidator validator, ITokenRequestProcess
     /// <param name="cancellationToken">Abandons validation, a long poll included, when the caller stops waiting.
     /// Issuance does not receive it: see <see cref="ITokenRequestProcessor"/>.</param>
     public async Task<Result<TokenIssued, OidcError>> HandleAsync(
+        TenantDefinition tenant,
         TokenRequest tokenRequest,
         ClientRequest clientRequest,
         CancellationToken cancellationToken)
     {
-        var validationResult = await validator.ValidateAsync(tokenRequest, clientRequest, cancellationToken);
-        return await validationResult.BindAsync(processor.ProcessAsync);
+        var validationResult = await validator.ValidateAsync(tenant, tokenRequest, clientRequest, cancellationToken);
+        return await validationResult.BindAsync(valid => processor.ProcessAsync(tenant, valid));
     }
 }

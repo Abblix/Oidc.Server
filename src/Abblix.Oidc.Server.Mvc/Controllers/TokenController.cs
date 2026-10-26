@@ -45,6 +45,7 @@ public class TokenController : ControllerBase
     /// </summary>
     /// <param name="handler">The service responsible for handling token issuance logic.</param>
     /// <param name="formatter">The service tasked with formatting the token issuance response.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="tokenRequest">Details of the token request, including a grant type and required parameters.</param>
     /// <param name="clientRequest">Contextual information about the client making the request.</param>
     /// <returns>A task that results in an action containing the token response, formatted as per OIDC specifications.
@@ -67,13 +68,15 @@ public class TokenController : ControllerBase
     public async Task<ActionResult<TokenResponse>> TokenAsync(
         [FromServices] ITokenHandler handler,
         [FromServices] ITokenResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] TokenRequest tokenRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.TokenRequest coreTokenRequest = tokenRequest;
         // The request's own token: CIBA holds this call open for the long-polling window, and without it a
         // client that disconnects leaves the server polling storage for an answer nobody is waiting for.
-        var response = await handler.HandleAsync(coreTokenRequest, clientRequest, HttpContext.RequestAborted);
+        var response = await handler.HandleAsync(
+            tenantAccessor.CurrentTenant(), coreTokenRequest, clientRequest, HttpContext.RequestAborted);
         return await formatter.FormatResponseAsync(coreTokenRequest, response);
     }
 

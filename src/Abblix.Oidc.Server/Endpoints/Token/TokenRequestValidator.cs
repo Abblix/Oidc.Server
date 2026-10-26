@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -29,6 +30,7 @@ public class TokenRequestValidator(ITokenContextValidator validator) : ITokenReq
 	/// the client using the provided client authenticator and then delegating the grant-specific validation
 	/// to the appropriate grant handler.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="tokenRequest">The token request containing all necessary parameters for validation.</param>
 	/// <param name="clientRequest">Client request information necessary for client authentication.</param>
 	/// <returns>A <see cref="Task"/> that resolves to a <see cref="Result{ValidTokenRequest, AuthError}"/>,
@@ -36,11 +38,12 @@ public class TokenRequestValidator(ITokenContextValidator validator) : ITokenReq
 	/// or contain error information specifying why the request was invalid.</returns>
 	/// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
 	public async Task<Result<ValidTokenRequest, OidcError>> ValidateAsync(
+		TenantDefinition tenant,
 		TokenRequest tokenRequest, ClientRequest clientRequest, CancellationToken cancellationToken)
 	{
 		var context = new TokenValidationContext(tokenRequest, clientRequest);
 
-		var error = await validator.ValidateAsync(context, cancellationToken);
+		var error = await validator.ValidateAsync(tenant, context, cancellationToken);
 		if (error != null)
 			return error;
 
