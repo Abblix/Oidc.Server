@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -26,7 +27,7 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// Delegates to the underlying request-object fetcher, passing <c>request.Request</c> as the JWT to
     /// be validated and merged into the outer model.
     /// </summary>
-    public Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(BackChannelAuthenticationRequest request)
-        => requestObjectFetcher.FetchAsync(
+    public Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(TenantDefinition tenant, BackChannelAuthenticationRequest request)
+        => requestObjectFetcher.FetchAsync(tenant,
             request, request.Request, client => client.BackChannelAuthenticationRequestSigningAlg);
 }

@@ -53,6 +53,7 @@ public sealed class AuthenticationController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing authorization requests.</param>
     /// <param name="formatter">The formatter used to generate a response for the authorization request.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="authorizationRequest">The authorization request details received from the client.</param>
     /// <returns>A task that returns an action result containing
     /// the authorization response.</returns>
@@ -70,10 +71,11 @@ public sealed class AuthenticationController : ControllerBase
     public async Task<ActionResult<Core.AuthorizationResponse>> AuthorizeAsync(
         [FromServices] IAuthorizationHandler handler,
         [FromServices] IAuthorizationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromQueryOrForm] AuthorizationRequest authorizationRequest)
     {
         Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
-        var response = await handler.HandleAsync(coreAuthorizationRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreAuthorizationRequest);
         return await formatter.FormatResponseAsync(coreAuthorizationRequest, response);
     }
 

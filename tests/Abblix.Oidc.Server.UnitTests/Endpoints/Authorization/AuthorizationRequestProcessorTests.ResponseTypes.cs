@@ -59,7 +59,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedCode);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         var success = Assert.IsType<SuccessfullyAuthenticated>(result);
@@ -95,7 +95,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         var success = Assert.IsType<SuccessfullyAuthenticated>(result);
@@ -135,19 +135,18 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
-        var response = await _processor.ProcessAsync(request);
+        var response = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Encode through the real response encoder. Query (non-JARM) mode means no response JWT is built,
-        // so the JWT builder is never invoked; iss advertising is disabled to keep the tenant unasked.
+        // so the JWT builder is never invoked; iss advertising is disabled, so the issuer is not read.
         var metadata = new Mock<IAuthorizationMetadataProvider>(MockBehavior.Strict);
         metadata.SetupGet(m => m.AuthorizationResponseIssParameterSupported).Returns(false);
         var encoder = new AuthorizationResponseEncoder(
-            new Mock<ITenantAccessor>(MockBehavior.Strict).Object,
             metadata.Object,
             new Mock<IResponseJwtBuilder>(MockBehavior.Strict).Object);
 
         // Act
-        await encoder.EncodeAsync(response);
+        await encoder.EncodeAsync(SingleIssuer.Tenant, response);
 
         // Assert - the front-channel scope reflects the granted set, not the requested set.
         var success = Assert.IsType<SuccessfullyAuthenticated>(response);
@@ -188,7 +187,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedIdToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         var success = Assert.IsType<SuccessfullyAuthenticated>(result);
@@ -232,7 +231,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         var success = Assert.IsType<SuccessfullyAuthenticated>(result);
@@ -304,7 +303,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync("code");
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(capturedGrant);
@@ -360,7 +359,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedIdToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         var success = Assert.IsType<SuccessfullyAuthenticated>(result);
@@ -409,7 +408,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedIdToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         var success = Assert.IsType<SuccessfullyAuthenticated>(result);
@@ -468,7 +467,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedIdToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         var success = Assert.IsType<SuccessfullyAuthenticated>(result);
@@ -506,7 +505,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync("code");
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         _authorizationCodeService.Verify(
@@ -546,7 +545,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync("code");
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         var success = Assert.IsType<SuccessfullyAuthenticated>(result);
@@ -587,7 +586,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedIdToken);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         _identityTokenService.Verify(

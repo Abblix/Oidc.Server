@@ -78,7 +78,7 @@ public class RequestedSubjectValidatorTests
     {
         var context = Context("""{"id_token":{"sub":{"value":"alice"}}}""", throughTheStore);
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
         Assert.NotNull(context.RequestedSubjects);
         Assert.Equal(["alice"], context.RequestedSubjects);
     }
@@ -98,7 +98,7 @@ public class RequestedSubjectValidatorTests
     {
         var context = Context("""{"id_token":{"sub":{"values":["bob","alice"]}}}""", throughTheStore);
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
         Assert.NotNull(context.RequestedSubjects);
         Assert.Equal(["bob", "alice"], context.RequestedSubjects);
     }
@@ -111,7 +111,7 @@ public class RequestedSubjectValidatorTests
     {
         var context = Context("""{"id_token":{"sub":{"value":"alice","values":["bob","alice"]}}}""");
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
         Assert.NotNull(context.RequestedSubjects);
         Assert.Equal(["alice"], context.RequestedSubjects);
     }
@@ -126,7 +126,7 @@ public class RequestedSubjectValidatorTests
     {
         var context = Context("""{"id_token":{"sub":{"value":"ALICE","values":["alice"]}}}""");
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -147,7 +147,7 @@ public class RequestedSubjectValidatorTests
     {
         var context = Context("""{"id_token":{"sub":{"value":"carol","values":["bob","alice"]}}}""");
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -168,7 +168,7 @@ public class RequestedSubjectValidatorTests
     {
         var context = Context("""{"id_token":{"sub":{"values":[]}}}""");
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -193,7 +193,7 @@ public class RequestedSubjectValidatorTests
     {
         var context = Context(claimsJson);
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
         Assert.Null(context.RequestedSubjects);
     }
 
@@ -223,7 +223,7 @@ public class RequestedSubjectValidatorTests
     {
         var context = Context(claimsJson, throughTheStore);
 
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);

@@ -63,8 +63,8 @@ public class AuthSessionSelectorTests
             ClientInfo = new ClientInfo(TestConstants.DefaultClientId),
         });
 
-        return new AuthSessionSelector(service.Object, cutoff.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()), _clock, tenantAccessor: SingleIssuer.Accessor)
-            .SelectAsync(request);
+        return new AuthSessionSelector(service.Object, cutoff.Object, new FixedSubjectTypeConverter(new SubjectTypeConverter()), _clock)
+            .SelectAsync(SingleIssuer.Tenant, request);
     }
 
     private static AuthSession Session(string id, DateTimeOffset authenticatedAt, DateTimeOffset? signedInAt)
@@ -209,5 +209,48 @@ public class AuthSessionSelectorTests
         Assert.True(result.TryGetFailure(out var response));
         var selection = Assert.IsType<AccountSelectionRequired>(response);
         Assert.Equal([signedIn.SessionId], selection.Users.Select(user => user.SessionId));
+    }
+
+    /// <summary>
+    /// A request naming its end user by the pseudonym a pairwise client knows selects that end user's session, and
+    /// the pseudonym is the one of the tenant the request is served at: the converter answers it for that tenant
+    /// alone. Both parameters naming an end user, id_token_hint and a requested sub claim, bind alike.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task APairwiseHint_SelectsTheSessionByThePseudonymOfTheServingTenant(bool byIdTokenHint)
+    {
+        const string pseudonym = "pseudonym-of-the-end-user";
+        var session = Session("named", Now.AddHours(-1), Now.AddHours(-1));
+        var client = new ClientInfo(TestConstants.DefaultClientId) { SubjectType = SubjectTypes.Pairwise };
+
+        var service = new Mock<IAuthSessionService>();
+        service.Setup(s => s.GetAvailableAuthSessions()).Returns(() => new[] { session }.ToAsyncEnumerable());
+        var cutoff = new Mock<IRevocationCutoffChecker>();
+        cutoff.Setup(c => c.IsSessionRefusedAsync(TestTenant.Matched, It.IsAny<AuthSession>())).ReturnsAsync(false);
+        var subjects = new Mock<ISubjectTypeConverter>();
+        subjects.Setup(s => s.Convert(TestTenant.Matched, session.Subject, client)).Returns(pseudonym);
+
+        var request = new ValidAuthorizationRequest(new AuthorizationValidationContext(new AuthorizationRequest
+        {
+            ClientId = TestConstants.DefaultClientId,
+            ResponseType = [ResponseTypes.Code],
+            RedirectUri = TestConstants.DefaultRedirectUri,
+            Scope = [Scopes.OpenId],
+        })
+        {
+            ClientInfo = client,
+        })
+        {
+            IdTokenHintSubject = byIdTokenHint ? pseudonym : null,
+            RequestedSubjects = byIdTokenHint ? null : [pseudonym],
+        };
+
+        var result = await new AuthSessionSelector(service.Object, cutoff.Object, subjects.Object, _clock)
+            .SelectAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetSuccess(out var selected));
+        Assert.Equal(session.SessionId, selected.SessionId);
     }
 }

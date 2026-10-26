@@ -21,16 +21,14 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// response parameters into a signed/encrypted <c>response</c> JWT and resolves the delivery mode.
 /// Mutates the response in place; the transport layer only maps the encoded response onto the wire.
 /// </summary>
-/// <param name="tenantAccessor">Names the tenant whose issuer is the <c>iss</c> value (RFC 9207).</param>
 /// <param name="authorizationMetadata">Tells whether <c>iss</c> is advertised/emitted.</param>
 /// <param name="responseJwtBuilder">Builds the JARM <c>response</c> JWT.</param>
 public class AuthorizationResponseEncoder(
-	ITenantAccessor tenantAccessor,
 	IAuthorizationMetadataProvider authorizationMetadata,
 	IResponseJwtBuilder responseJwtBuilder) : IAuthorizationResponseEncoder
 {
 	/// <inheritdoc />
-	public async Task EncodeAsync(AuthorizationResponse response)
+	public async Task EncodeAsync(TenantDefinition tenant, AuthorizationResponse response)
 	{
 		switch (response)
 		{
@@ -43,10 +41,10 @@ public class AuthorizationResponseEncoder(
 				// The value is the GRANTED scope (matching the issued token), not the requested set, so a
 				// consent-narrowed grant is advertised truthfully per RFC 6749 section 3.3.
 				var carriesTokens = success is { AccessToken: not null } or { IdToken: not null };
-				success.Issuer = Issuer;
+				success.Issuer = IssuerOf(tenant);
 				success.Scope = carriesTokens ? string.Join(' ', success.GrantedScopes) : null;
 
-				await PackJwtAsync(success, carriesTokens, SuccessParameters(success));
+				await PackJwtAsync(tenant, success, carriesTokens, SuccessParameters(success));
 				break;
 			}
 
@@ -58,9 +56,9 @@ public class AuthorizationResponseEncoder(
 					responseType.Contains(ResponseTypes.Token) ||
 					responseType.Contains(ResponseTypes.IdToken));
 
-				error.Issuer = Issuer;
+				error.Issuer = IssuerOf(tenant);
 
-				await PackJwtAsync(error, carriesTokens, ErrorParameters(error));
+				await PackJwtAsync(tenant, error, carriesTokens, ErrorParameters(error));
 				break;
 			}
 
@@ -72,8 +70,9 @@ public class AuthorizationResponseEncoder(
 	/// <summary>
 	/// The <c>iss</c> value to place on the response, or null when the server does not advertise it.
 	/// </summary>
-	private string? Issuer => authorizationMetadata.AuthorizationResponseIssParameterSupported
-		? tenantAccessor.CurrentTenant().Issuer.OriginalString
+	/// <param name="tenant">The tenant the request is served at.</param>
+	private string? IssuerOf(TenantDefinition tenant) => authorizationMetadata.AuthorizationResponseIssParameterSupported
+		? tenant.Issuer.OriginalString
 		: null;
 
 	/// <summary>
@@ -81,6 +80,7 @@ public class AuthorizationResponseEncoder(
 	/// <c>response</c> JWT and resolves the plaintext delivery mode; otherwise a no-op.
 	/// </summary>
 	private async Task PackJwtAsync(
+		TenantDefinition tenant,
 		ClientDeliveredResponse response,
 		bool carriesTokens,
 		IReadOnlyList<(string name, string? value)> parameters)
@@ -88,7 +88,7 @@ public class AuthorizationResponseEncoder(
 		if (!response.ResponseMode.IsJwtMode())
 			return;
 
-		response.ResponseJwt = await responseJwtBuilder.BuildAsync(tenantAccessor.CurrentTenant(), response.Model.ClientId, parameters);
+		response.ResponseJwt = await responseJwtBuilder.BuildAsync(tenant, response.Model.ClientId, parameters);
 		response.ResponseMode = response.ResponseMode.ToDeliveryMode(carriesTokens);
 	}
 

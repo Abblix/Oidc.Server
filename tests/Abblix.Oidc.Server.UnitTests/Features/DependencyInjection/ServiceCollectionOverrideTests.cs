@@ -377,8 +377,8 @@ public class ServiceCollectionOverrideTests
         Assert.Single(services, d => d.ServiceType == typeof(IAuthorizationHandler));
         await using var provider = services.BuildServiceProvider();
         var request = new AuthorizationRequest();
-        await provider.GetRequiredService<IAuthorizationHandler>().HandleAsync(request);
-        stub.Verify(handler => handler.HandleAsync(request), Times.Once);
+        await provider.GetRequiredService<IAuthorizationHandler>().HandleAsync(SingleIssuer.Tenant, request);
+        stub.Verify(handler => handler.HandleAsync(TestTenant.Matched, request), Times.Once);
     }
 
     [Fact]

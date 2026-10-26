@@ -102,11 +102,11 @@ public partial class AuthorizationRequestProcessorTests
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             _timeProvider,
             [
-                new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>(), tenantAccessor: SingleIssuer.Accessor),
-                new TokenResponseBuilder(_accessTokenService.Object, tenantAccessor: SingleIssuer.Accessor),
-                new IdTokenResponseBuilder(_identityTokenService.Object, tenantAccessor: SingleIssuer.Accessor),
+                new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>()),
+                new TokenResponseBuilder(_accessTokenService.Object),
+                new IdTokenResponseBuilder(_identityTokenService.Object),
             ],
-            consentConstraintEnforcer, tenantAccessor: SingleIssuer.Accessor);
+            consentConstraintEnforcer);
     }
 
     private static ValidAuthorizationRequest CreateRequest(

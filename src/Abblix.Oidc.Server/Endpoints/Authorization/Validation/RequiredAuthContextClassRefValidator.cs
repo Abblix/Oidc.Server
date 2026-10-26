@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -37,7 +38,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 public class RequiredAuthContextClassRefValidator : SyncAuthorizationContextValidatorBase
 {
     /// <inheritdoc />
-    protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+    protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         var required = context.Request.Claims.RequiredAuthContextClassRefs();
         if (required.TryGetFailure(out var reason))

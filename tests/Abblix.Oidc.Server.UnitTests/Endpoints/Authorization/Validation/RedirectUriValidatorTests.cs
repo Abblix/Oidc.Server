@@ -80,7 +80,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, redirectUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -101,7 +101,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -123,7 +123,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(null, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -146,7 +146,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri1, registeredUri2);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -167,7 +167,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -188,7 +188,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -209,7 +209,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -230,7 +230,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -250,7 +250,7 @@ public class RedirectUriValidatorTests
     {
         var context = CreateContext(new Uri(requested), new Uri(registered));
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -270,7 +270,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -291,7 +291,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -311,7 +311,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -332,7 +332,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -353,7 +353,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -374,7 +374,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -395,7 +395,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -416,7 +416,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -437,7 +437,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -457,7 +457,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -478,7 +478,7 @@ public class RedirectUriValidatorTests
         Assert.Null(context.ValidRedirectUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -500,7 +500,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -521,7 +521,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         _logger.Verify(
@@ -548,7 +548,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -568,7 +568,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -588,7 +588,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -608,7 +608,7 @@ public class RedirectUriValidatorTests
         var redirectUri = new Uri(requested);
         var context = CreateContext(redirectUri, new Uri(registered));
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
         Assert.Equal(redirectUri, context.ValidRedirectUri);
@@ -628,7 +628,7 @@ public class RedirectUriValidatorTests
             new Uri("http://127.0.0.1:51004/oauth2redirect"),
             new Uri("http://[::1]:61023/oauth2redirect"));
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
         Assert.Equal(redirectUri, context.ValidRedirectUri);
@@ -654,7 +654,7 @@ public class RedirectUriValidatorTests
     {
         var context = CreateContext(new Uri(requested), new Uri(registered));
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -675,7 +675,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);

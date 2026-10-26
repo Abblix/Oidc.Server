@@ -298,11 +298,11 @@ public sealed class EndpointMetricsTests : IDisposable
         var request = new AuthorizationRequest();
         var inner = new Mock<IAuthorizationHandler>();
         inner
-            .Setup(h => h.HandleAsync(request))
+            .Setup(h => h.HandleAsync(TestTenant.Matched, request))
             .ReturnsAsync(new AuthorizationError(request, ErrorCodes.AccessDenied, "The user said no", ResponseModes.Query, null));
         var observed = new ObservedAuthorizationHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
 
-        await observed.HandleAsync(request);
+        await observed.HandleAsync(SingleIssuer.Tenant, request);
 
         var measured = Assert.Single(_measured.Of(OidcMetrics.RequestDuration));
         Assert.Equal(TelemetryOutcomes.Refused, measured[TelemetryTags.Outcome]);
@@ -315,7 +315,7 @@ public sealed class EndpointMetricsTests : IDisposable
         var request = new AuthorizationRequest();
         var inner = new Mock<IAuthorizationHandler>();
         inner
-            .Setup(h => h.HandleAsync(request))
+            .Setup(h => h.HandleAsync(TestTenant.Matched, request))
             .ReturnsAsync(new SuccessfullyAuthenticated(request, ResponseModes.Fragment, null, [])
             {
                 SessionPersistence = Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence.BrowserSession,
@@ -324,7 +324,7 @@ public sealed class EndpointMetricsTests : IDisposable
             });
         var traced = new ObservedAuthorizationHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
 
-        await traced.HandleAsync(request);
+        await traced.HandleAsync(SingleIssuer.Tenant, request);
 
         var issued = _measured.Of(OidcMetrics.TokensIssued);
         Assert.Equal(

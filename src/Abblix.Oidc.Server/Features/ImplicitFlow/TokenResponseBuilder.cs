@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.Features.ImplicitFlow;
 /// Declares <c>implicit</c> in <see cref="GrantTypesSupported"/> so opting in surfaces the
 /// implicit grant in discovery and registration-time gating without extra DI wiring.
 /// </summary>
-public class TokenResponseBuilder(IAccessTokenService accessTokenService, ITenantAccessor tenantAccessor)
+public class TokenResponseBuilder(IAccessTokenService accessTokenService)
     : IAuthorizationResponseBuilder
 {
     /// <inheritdoc />
@@ -37,6 +37,7 @@ public class TokenResponseBuilder(IAccessTokenService accessTokenService, ITenan
 
     /// <inheritdoc />
     public async Task BuildResponseAsync(
+        TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result)
@@ -44,7 +45,7 @@ public class TokenResponseBuilder(IAccessTokenService accessTokenService, ITenan
         result.TokenType = TokenTypes.Bearer;
 
         result.AccessToken = await accessTokenService.CreateAccessTokenAsync(
-            tenantAccessor.CurrentTenant(),
+            tenant,
             authorizedGrant.AuthSession,
             authorizedGrant.Context,
             request.ClientInfo,

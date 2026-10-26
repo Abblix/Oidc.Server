@@ -36,9 +36,7 @@ public class PushedRequestFetcherTests
     // No flow has ended unless a test says so
     private readonly Mock<IConsumedRequestUriRegistry> _consumedRequestUris = new();
 
-    private PushedRequestFetcher CreateFetcher(
-        bool serverWideRequirement = false,
-        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
+    private PushedRequestFetcher CreateFetcher(bool serverWideRequirement = false)
     {
         var snapshot = new Mock<IOptionsSnapshot<OidcOptions>>();
         snapshot
@@ -49,8 +47,7 @@ public class PushedRequestFetcherTests
             snapshot.Object,
             _storage.Object,
             _clientInfoProvider.Object,
-            _consumedRequestUris.Object,
-            SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = defaultSecurityProfile }));
+            _consumedRequestUris.Object);
     }
 
     private static AuthorizationRequest CreateRequest() => new()
@@ -75,7 +72,7 @@ public class PushedRequestFetcherTests
             .ReturnsAsync(CreateRequest() with { OriginRequestUri = originUri });
         _consumedRequestUris.Setup(r => r.IsConsumedAsync(TestTenant.Matched, originUri)).ReturnsAsync(true);
 
-        var result = await CreateFetcher().FetchAsync(CreateRequest() with { RequestUri = pageUri });
+        var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest() with { RequestUri = pageUri });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestUri, error.Error);
@@ -91,7 +88,7 @@ public class PushedRequestFetcherTests
                 RequirePushedAuthorizationRequests = true,
             });
 
-        var result = await CreateFetcher().FetchAsync(CreateRequest());
+        var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
@@ -105,7 +102,7 @@ public class PushedRequestFetcherTests
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId));
 
         var request = CreateRequest();
-        var result = await CreateFetcher().FetchAsync(request);
+        var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetSuccess(out var passed));
         Assert.Same(request, passed);
@@ -117,7 +114,7 @@ public class PushedRequestFetcherTests
     [Fact]
     public async Task FetchAsync_ServerWideRequirement_ReturnsErrorWithoutClientLookup()
     {
-        var result = await CreateFetcher(serverWideRequirement: true).FetchAsync(CreateRequest());
+        var result = await CreateFetcher(serverWideRequirement: true).FetchAsync(SingleIssuer.Tenant, CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
@@ -139,7 +136,7 @@ public class PushedRequestFetcherTests
                 SecurityProfile = ClientSecurityProfile.Fapi2,
             });
 
-        var result = await CreateFetcher().FetchAsync(CreateRequest());
+        var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
@@ -156,8 +153,8 @@ public class PushedRequestFetcherTests
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId));
 
-        var result = await CreateFetcher(defaultSecurityProfile: ClientSecurityProfile.Fapi2)
-            .FetchAsync(CreateRequest());
+        var result = await CreateFetcher()
+            .FetchAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
@@ -179,7 +176,7 @@ public class PushedRequestFetcherTests
             });
 
         var request = CreateRequest();
-        var result = await CreateFetcher(defaultSecurityProfile: ClientSecurityProfile.Fapi2).FetchAsync(request);
+        var result = await CreateFetcher().FetchAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), request);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);

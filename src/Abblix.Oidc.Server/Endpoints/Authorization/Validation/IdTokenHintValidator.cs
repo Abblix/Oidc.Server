@@ -36,16 +36,15 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// </para>
 /// </remarks>
 /// <param name="hintParser">Decides whether the hint is an ID token this server issued.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class IdTokenHintValidator(IIdTokenHintParser hintParser, ITenantAccessor tenantAccessor) : IAuthorizationContextValidator
+public class IdTokenHintValidator(IIdTokenHintParser hintParser) : IAuthorizationContextValidator
 {
     /// <inheritdoc />
-    public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
+    public async Task<AuthorizationRequestValidationError?> ValidateAsync(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         if (!context.Request.IdTokenHint.HasValue())
             return null;
 
-        var result = await hintParser.ParseAsync(tenantAccessor.CurrentTenant(), context.Request.IdTokenHint);
+        var result = await hintParser.ParseAsync(tenant, context.Request.IdTokenHint);
         if (result.TryGetFailure(out var reason))
             return context.InvalidRequest(reason);
 

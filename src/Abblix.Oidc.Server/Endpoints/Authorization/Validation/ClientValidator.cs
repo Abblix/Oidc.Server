@@ -26,16 +26,15 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// </summary>
 /// <param name="logger">The logger to be used for recording validation activities and outcomes.</param>
 /// <param name="clientInfoProvider">The provider used to retrieve information about clients.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class ClientValidator(
     ILogger<ClientValidator> logger,
-    IClientInfoProvider clientInfoProvider,
-    ITenantAccessor tenantAccessor) : IAuthorizationContextValidator
+    IClientInfoProvider clientInfoProvider) : IAuthorizationContextValidator
 {
     /// <summary>
     /// Asynchronously validates the client specified in the authorization request.
     /// Ensures the client is recognized and authorized to make the request.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">
     /// The validation context containing details of the authorization request and client information.
     /// </param>
@@ -43,7 +42,7 @@ public partial class ClientValidator(
     /// An <see cref="AuthorizationRequestValidationError"/> if the client is not found or not authorized,
     /// or null if the client is valid.
     /// </returns>
-    public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
+    public async Task<AuthorizationRequestValidationError?> ValidateAsync(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         var clientId = context.Request.ClientId;
         if (clientId is null)
@@ -51,7 +50,7 @@ public partial class ClientValidator(
             return context.Error(ErrorCodes.UnauthorizedClient, "The client id is required");
         }
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         if (clientInfo == null)
         {
             LogClientNotFound(clientId);

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 
@@ -32,6 +33,7 @@ public class PushedAuthorizationHandler(
     /// Asynchronously handles a pushed authorization request by first validating it and then processing it if
     /// the validation is successful.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="authorizationRequest">The authorization request details as received from the client.</param>
     /// <param name="clientRequest">Additional client request information that may be needed for contextual validation.
     /// </param>
@@ -47,20 +49,21 @@ public class PushedAuthorizationHandler(
     /// or an error response in case of failure.
     /// </remarks>
     public async Task<AuthorizationResponse> HandleAsync(
+        TenantDefinition tenant,
         Model.AuthorizationRequest authorizationRequest,
         Model.ClientRequest clientRequest)
     {
-        var fetchResult = await fetcher.FetchAsync(authorizationRequest);
+        var fetchResult = await fetcher.FetchAsync(tenant, authorizationRequest);
 
         if (fetchResult.TryGetFailure(out var fetchError))
             return new AuthorizationError(authorizationRequest, fetchError);
 
         authorizationRequest = fetchResult.GetSuccess();
 
-        var validationResult = await validator.ValidateAsync(authorizationRequest, clientRequest);
+        var validationResult = await validator.ValidateAsync(tenant, authorizationRequest, clientRequest);
 
         return await validationResult.MatchAsync(
-            onSuccess: processor.ProcessAsync,
+            onSuccess: valid => processor.ProcessAsync(tenant, valid),
             onFailure: error => Task.FromResult<AuthorizationResponse>(
                 new AuthorizationError(authorizationRequest, error)));
     }

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Model;
@@ -22,6 +23,7 @@ public interface IAuthorizationRequestFetcher
     /// Asynchronously fetches and processes the authorization request, which may involve resolving a request object
     /// from a URI or directly from the request parameters.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">
     /// The initial authorization request, which may contain a reference to a request object or inline request parameters.
     /// </param>
@@ -35,5 +37,5 @@ public interface IAuthorizationRequestFetcher
     /// or validating the request object provided inline via the 'request' parameter. It ensures the request adheres
     /// to the expected format and validation requirements before further processing.
     /// </remarks>
-    Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request);
+    Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(TenantDefinition tenant, AuthorizationRequest request);
 }

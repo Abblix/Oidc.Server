@@ -88,8 +88,7 @@ public class RequestObjectFetcherTests
 
     private RequestObjectFetcher CreateFetcher()
     {
-        return new RequestObjectFetcher(_logger.Object, _jsonObjectBinder.Object, _serviceProvider.Object, _options.Object,
-            SingleIssuer.Accessor);
+        return new RequestObjectFetcher(_logger.Object, _jsonObjectBinder.Object, _serviceProvider.Object, _options.Object);
     }
 
     private record TestRequest(string ClientId, string RedirectUri, string? State);
@@ -134,7 +133,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync((JsonObject _, JarTestRequest bound) => bound);
 
         // Act
-        var result = await fetcher.FetchAsync(request, jwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
 
         // Assert - the payload bound onto a fresh model (the outside-only state is gone) and the drop was logged.
         Assert.True(result.TryGetSuccess(out var value));
@@ -151,6 +150,41 @@ public class RequestObjectFetcherTests
     }
 
     /// <summary>
+    /// A client with no security profile of its own takes the default of the tenant the request is served at, so a
+    /// tenant holding its clients to FAPI 2.0 has their request objects processed under the strict RFC 9101 section
+    /// 6.3 rule: a parameter passed outside the object that the object does not carry is dropped.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_UnprofiledClientAtFapiTenant_ProcessesStrictly()
+    {
+        Assert.False(_oidcOptions.IgnoreParametersOutsideRequestObject);
+        var fetcher = CreateFetcher();
+
+        const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjMSJ9.signature";
+        var request = new JarTestRequest { ClientId = "c1", State = "outside-only", Request = jwt };
+        var payload = new JsonObject { [RequestParameters.ClientId] = "c1" };
+        var token = new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(new JsonObject()),
+            Payload = new JsonWebTokenPayload(payload),
+        };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("c1")));
+        _jsonObjectBinder
+            .Setup(b => b.BindModelAsync(payload, It.IsAny<JarTestRequest>()))
+            .ReturnsAsync((JsonObject _, JarTestRequest bound) => bound);
+
+        var fapiTenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant();
+        var result = await fetcher.FetchAsync(fapiTenant, request, jwt);
+
+        Assert.True(result.TryGetSuccess(out var value));
+        Assert.NotSame(request, value);
+        Assert.Null(value.State);
+    }
+
+    /// <summary>
     /// Verifies that null requestObject returns original request unchanged.
     /// Per OIDC specification, request object parameter is optional.
     /// </summary>
@@ -162,7 +196,7 @@ public class RequestObjectFetcherTests
         var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, "state123");
 
         // Act
-        var result = await fetcher.FetchAsync(request, null);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, null);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var value));
@@ -181,7 +215,7 @@ public class RequestObjectFetcherTests
         var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
 
         // Act
-        var result = await fetcher.FetchAsync(request, string.Empty);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, string.Empty);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var value));
@@ -216,7 +250,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(boundRequest);
 
         // Act
-        var result = await fetcher.FetchAsync(originalRequest, jwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, originalRequest, jwt);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var value));
@@ -251,7 +285,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync((TestRequest?)null);
 
         // Act
-        var result = await fetcher.FetchAsync(originalRequest, jwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, originalRequest, jwt);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -283,7 +317,7 @@ public class RequestObjectFetcherTests
             .Setup(b => b.BindModelAsync(payload, originalRequest))
             .ThrowsAsync(new JsonException("negative seconds"));
 
-        var result = await fetcher.FetchAsync(originalRequest, jwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, originalRequest, jwt);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
@@ -296,7 +330,7 @@ public class RequestObjectFetcherTests
     private async Task<Result<AuthorizationRequest, OidcError>> FetchWithUiLocales(JsonNode uiLocales)
     {
         var fetcher = new RequestObjectFetcher(_logger.Object, new JsonSerializationBinder(), _serviceProvider.Object,
-            _options.Object, SingleIssuer.Accessor);
+            _options.Object);
         var originalRequest = new AuthorizationRequest { ClientId = TestConstants.DefaultClientId };
         const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJ1aV9sb2NhbGVzIjoiISJ9.signature";
         var payload = new JsonObject { [RequestParameters.UiLocales] = uiLocales };
@@ -310,7 +344,7 @@ public class RequestObjectFetcherTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo(TestConstants.DefaultClientId)));
 
-        return await fetcher.FetchAsync(originalRequest, jwt);
+        return await fetcher.FetchAsync(SingleIssuer.Tenant, originalRequest, jwt);
     }
 
     /// <summary>
@@ -363,7 +397,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
 
         // Act - the binder is strict and unset, so the alg pin must reject before any binding.
-        var result = await fetcher.FetchAsync(request, jwt, client => client.RequestObjectSigningAlgorithm);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt, client => client.RequestObjectSigningAlgorithm);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -397,7 +431,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(request);
 
         // Act
-        var result = await fetcher.FetchAsync(request, jwt, client => client.RequestObjectSigningAlgorithm);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt, client => client.RequestObjectSigningAlgorithm);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var value));
@@ -422,7 +456,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(validationError);
 
         // Act
-        var result = await fetcher.FetchAsync(request, jwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -459,7 +493,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(request);
 
         // Act
-        await fetcher.FetchAsync(request, jwt);
+        await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
 
         // Assert
         Assert.NotNull(capturedOptions);
@@ -497,7 +531,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(request);
 
         // Act
-        await fetcher.FetchAsync(request, jwt);
+        await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
 
         // Assert
         Assert.NotNull(capturedOptions);
@@ -532,7 +566,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(request);
 
         // Act
-        await fetcher.FetchAsync(request, jwt);
+        await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
 
         // Assert
         _serviceScopeFactory.Verify(f => f.CreateScope(), Times.Once);
@@ -566,7 +600,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(request);
 
         // Act
-        await fetcher.FetchAsync(request, jwt);
+        await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
 
         // Assert
         _serviceScope.Verify(s => s.Dispose(), Times.Once);
@@ -611,8 +645,8 @@ public class RequestObjectFetcherTests
             .ReturnsAsync((JsonObject _, TestRequest req) => req);
 
         // Act
-        var result1 = await fetcher.FetchAsync(request1, jwt1);
-        var result2 = await fetcher.FetchAsync(request2, jwt2);
+        var result1 = await fetcher.FetchAsync(SingleIssuer.Tenant, request1, jwt1);
+        var result2 = await fetcher.FetchAsync(SingleIssuer.Tenant, request2, jwt2);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out _));
@@ -638,7 +672,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(validationError);
 
         // Act
-        var result = await fetcher.FetchAsync(request, jwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -663,7 +697,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(validationError);
 
         // Act
-        var result = await fetcher.FetchAsync(request, jwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -705,7 +739,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(boundRequest);
 
         // Act
-        var result = await fetcher.FetchAsync(originalRequest, jwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, originalRequest, jwt);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var value));
@@ -740,7 +774,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(request);
 
         // Act
-        await fetcher.FetchAsync(request, jwt);
+        await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
 
         // Assert
         // Verify logging was called (implementation depends on how you verify ILogger mocks)
@@ -766,7 +800,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(validationError);
 
         // Act
-        var result = await fetcher.FetchAsync(request, jwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -800,7 +834,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(request);
 
         // Act
-        var result = await fetcher.FetchAsync(request, jwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var value));
@@ -835,7 +869,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(boundRequest);
 
         // Act
-        var result = await fetcher.FetchAsync(request, jwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var value));
@@ -879,7 +913,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(boundRequest);
 
         // Act
-        var result = await fetcher.FetchAsync(request, unsignedJwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, unsignedJwt);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var value));
@@ -914,7 +948,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(validationError);
 
         // Act
-        var result = await fetcher.FetchAsync(request, unsignedJwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, unsignedJwt);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -952,7 +986,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(new ValidJsonWebToken(token, committedClient));
 
         // Act
-        var result = await fetcher.FetchAsync(request, jwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -995,7 +1029,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(boundRequest);
 
         // Act
-        var result = await fetcher.FetchAsync(outerRequest, jwt);
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, outerRequest, jwt);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var value));

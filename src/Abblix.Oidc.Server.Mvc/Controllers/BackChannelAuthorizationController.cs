@@ -45,6 +45,7 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing pushed authorization requests.</param>
     /// <param name="formatter">The service for formatting the authorization response.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="authorizationRequest">The authorization request received from the client.</param>
     /// <param name="clientRequest">Additional client request information for contextual validation.</param>
     /// <returns>
@@ -62,11 +63,12 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     public async Task<ActionResult<Core.AuthorizationResponse>> PushAuthorizeAsync(
         [FromServices] IPushedAuthorizationHandler handler,
         [FromServices] IPushedAuthorizationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] AuthorizationRequest authorizationRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
-        var response = await handler.HandleAsync(coreAuthorizationRequest, clientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreAuthorizationRequest, clientRequest);
         return await formatter.FormatResponseAsync(coreAuthorizationRequest, response);
     }
 

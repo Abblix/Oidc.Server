@@ -57,7 +57,7 @@ public class AuthorizationDetailsRequestValidatorTests
         var context = Context((JsonArray)Requested.DeepClone());
         var validator = new AuthorizationDetailsRequestValidator(StubAuthorizationDetailsPolicy.Accepting);
 
-        Assert.Null(await validator.ValidateAsync(context));
+        Assert.Null(await validator.ValidateAsync(SingleIssuer.Tenant, context));
 
         Assert.NotNull(context.AuthorizationDetails);
         Assert.Single(context.AuthorizationDetails);
@@ -72,7 +72,7 @@ public class AuthorizationDetailsRequestValidatorTests
         var context = Context(null);
         var validator = new AuthorizationDetailsRequestValidator(StubAuthorizationDetailsPolicy.Accepting);
 
-        Assert.Null(await validator.ValidateAsync(context));
+        Assert.Null(await validator.ValidateAsync(SingleIssuer.Tenant, context));
 
         Assert.Null(context.AuthorizationDetails);
     }
@@ -87,7 +87,7 @@ public class AuthorizationDetailsRequestValidatorTests
         var validator = new AuthorizationDetailsRequestValidator(
             StubAuthorizationDetailsPolicy.Refusing("amount exceeds the client's cap"));
 
-        var error = await validator.ValidateAsync(context);
+        var error = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
@@ -110,7 +110,7 @@ public class AuthorizationDetailsRequestValidatorTests
         var validator = new AuthorizationDetailsRequestValidator(StubAuthorizationDetailsPolicy.Emptying);
 
         var thrown = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => validator.ValidateAsync(context));
+            () => validator.ValidateAsync(SingleIssuer.Tenant, context));
 
         Assert.Contains(nameof(IAuthorizationDetailsPolicy), thrown.Message, StringComparison.Ordinal);
         Assert.Null(context.AuthorizationDetails);
@@ -132,7 +132,7 @@ public class AuthorizationDetailsRequestValidatorTests
         var policy = StubAuthorizationDetailsPolicy.ClearingInPlace;
         var validator = new AuthorizationDetailsRequestValidator(policy);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => validator.ValidateAsync(context));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => validator.ValidateAsync(SingleIssuer.Tenant, context));
 
         Assert.Null(context.AuthorizationDetails);
 

@@ -22,8 +22,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// are requested, enhancing security and compliance with the defined authorization policies.
 /// </summary>
 /// <param name="scopeManager">The scope manager used to validate scopes.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAccessor) : SyncAuthorizationContextValidatorBase
+public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationContextValidatorBase
 {
 	/// <summary>
 	/// Validates the scopes specified in the authorization request. It checks the compatibility of requested scopes
@@ -31,12 +30,13 @@ public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAc
 	/// Core 1.0 has the server do so, and refused only when it would otherwise be received by a client not
 	/// allowed it.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="context">The validation context containing client information and request details.</param>
 	/// <returns>
 	/// An <see cref="AuthorizationRequestValidationError" /> if the scope validation fails,
 	/// or null if the scopes in the request are valid.
 	/// </returns>
-	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+	protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
 	{
 		if (context.Request.Scope.Contains(Scopes.OfflineAccess))
 		{
@@ -54,7 +54,7 @@ public class ScopeValidator(IScopeManager scopeManager, ITenantAccessor tenantAc
 			}
 		}
 
-		if (!scopeManager.Validate(tenantAccessor.CurrentTenant(), 
+		if (!scopeManager.Validate(tenant, 
 			    context.Request.Scope,
 			    context.Resources,
 			    context.ClientInfo.AllowedScopes,

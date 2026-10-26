@@ -40,11 +40,8 @@ public class PkceValidatorTests
         _validator = CreateValidator();
     }
 
-    private static PkceValidator CreateValidator(
-        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None,
-        IAuthorizationValueReuseDetector? reuseDetector = null)
+    private static PkceValidator CreateValidator(IAuthorizationValueReuseDetector? reuseDetector = null)
         => new(
-            SingleIssuer.AccessorOf(new TestIssuer { DefaultSecurityProfile = defaultSecurityProfile }),
             reuseDetector ?? Mock.Of<IAuthorizationValueReuseDetector>());
 
     /// <summary>
@@ -66,7 +63,7 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S256);
 
         // Act
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -122,7 +119,7 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S256);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -143,7 +140,7 @@ public class PkceValidatorTests
             plainPkceAllowed: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -164,7 +161,7 @@ public class PkceValidatorTests
             plainPkceAllowed: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -186,7 +183,7 @@ public class PkceValidatorTests
         var context = CreateContext(pkceRequired: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -208,7 +205,7 @@ public class PkceValidatorTests
         var context = CreateContext(pkceRequired: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -228,7 +225,7 @@ public class PkceValidatorTests
         var context = CreateContext(pkceRequired: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -249,7 +246,7 @@ public class PkceValidatorTests
             plainPkceAllowed: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -271,7 +268,7 @@ public class PkceValidatorTests
             plainPkceAllowed: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -289,7 +286,7 @@ public class PkceValidatorTests
             codeChallenge: CodeChallengeS256,
             codeChallengeMethod: "custom-method");
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -310,7 +307,7 @@ public class PkceValidatorTests
             pkceRequired: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -332,7 +329,7 @@ public class PkceValidatorTests
             plainPkceAllowed: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -354,7 +351,7 @@ public class PkceValidatorTests
             plainPkceAllowed: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -376,7 +373,7 @@ public class PkceValidatorTests
             pkceRequired: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -396,7 +393,7 @@ public class PkceValidatorTests
             pkceRequired: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -417,7 +414,7 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S256);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -438,7 +435,7 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S256);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -458,7 +455,7 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S256);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -478,7 +475,7 @@ public class PkceValidatorTests
         context.ValidRedirectUri = redirectUri;
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -499,7 +496,7 @@ public class PkceValidatorTests
         context.ResponseMode = responseMode;
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -520,7 +517,7 @@ public class PkceValidatorTests
             codeChallengeMethod: "custom-method",
             pkceRequired: false);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -536,7 +533,7 @@ public class PkceValidatorTests
             codeChallengeMethod: "custom-method",
             responseType: [ResponseTypes.IdToken]);
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 
     /// <summary>
@@ -551,7 +548,7 @@ public class PkceValidatorTests
             codeChallengeMethod: "PLAIN",
             plainPkceAllowed: true);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -569,7 +566,7 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S256,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -587,7 +584,7 @@ public class PkceValidatorTests
             plainPkceAllowed: true,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -606,7 +603,7 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S512,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -625,7 +622,7 @@ public class PkceValidatorTests
             codeChallengeMethod: null,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -643,7 +640,7 @@ public class PkceValidatorTests
             pkceRequired: false,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -657,14 +654,14 @@ public class PkceValidatorTests
     [Fact]
     public async Task ValidateAsync_GlobalDefaultFapi2_RestrictsUnprofiledClientToS256()
     {
-        var validator = CreateValidator(defaultSecurityProfile: ClientSecurityProfile.Fapi2);
+        var validator = CreateValidator();
         var context = CreateContext(
             codeChallenge: CodeChallengePlain,
             codeChallengeMethod: CodeChallengeMethods.Plain,
             plainPkceAllowed: true,
             securityProfile: null);
 
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -684,14 +681,14 @@ public class PkceValidatorTests
     [Fact]
     public async Task ValidateAsync_ExplicitNoneUnderGlobalDefaultFapi2_StillRefusesPlain()
     {
-        var validator = CreateValidator(defaultSecurityProfile: ClientSecurityProfile.Fapi2);
+        var validator = CreateValidator();
         var context = CreateContext(
             codeChallenge: CodeChallengePlain,
             codeChallengeMethod: CodeChallengeMethods.Plain,
             plainPkceAllowed: true,
             securityProfile: ClientSecurityProfile.None);
 
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -710,7 +707,7 @@ public class PkceValidatorTests
             responseType: [ResponseTypes.Token],
             pkceRequired: null);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -727,7 +724,7 @@ public class PkceValidatorTests
             responseType: [ResponseTypes.IdToken],
             pkceRequired: true);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -744,7 +741,7 @@ public class PkceValidatorTests
             responseType: [ResponseTypes.Code, ResponseTypes.IdToken],
             pkceRequired: true);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);

@@ -32,18 +32,17 @@ namespace Abblix.Oidc.Server.Features.RequestObject;
 /// <param name="serviceProvider">The service provider used for resolving dependencies at runtime.</param>
 /// <param name="options">Options that define how request object validation is handled, including whether
 /// request objects must be signed.</param>
-/// <param name="tenantAccessor">Names the tenant whose default security profile applies.</param>
 public partial class RequestObjectFetcher(
     ILogger<RequestObjectFetcher> logger,
     IJsonObjectBinder jsonObjectBinder,
     IServiceProvider serviceProvider,
-    IOptionsSnapshot<OidcOptions> options,
-    ITenantAccessor tenantAccessor) : IRequestObjectFetcher
+    IOptionsSnapshot<OidcOptions> options) : IRequestObjectFetcher
 {
     /// <summary>
     /// Fetches and processes the request object by validating its JWT and binding the payload to the request model.
     /// </summary>
     /// <typeparam name="T">The type of the request model.</typeparam>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The initial request model to bind the JWT payload to.</param>
     /// <param name="requestObject">The JWT contained within the request, if any.</param>
     /// <param name="requiredSigningAlgorithm">An optional selector returning the signing algorithm the
@@ -57,6 +56,7 @@ public partial class RequestObjectFetcher(
     /// is bound to the request model. If the JWT is invalid, an error is returned and logged.
     /// </remarks>
     public async Task<Result<T, OidcError>> FetchAsync<T>(
+        TenantDefinition tenant,
         T request,
         string? requestObject,
         Func<ClientInfo, string?>? requiredSigningAlgorithm = null)
@@ -65,7 +65,7 @@ public partial class RequestObjectFetcher(
         if (!requestObject.HasValue())
             return request;
 
-        var validationResult = await ValidateAsync(requestObject, requiredSigningAlgorithm);
+        var validationResult = await ValidateAsync(tenant, requestObject, requiredSigningAlgorithm);
         return await validationResult.BindAsync<T>(
             async validated =>
             {
@@ -77,7 +77,7 @@ public partial class RequestObjectFetcher(
                 // semantics bind the payload over the outer request. The OAuth-syntax client_id/response_type
                 // duplicates are cross-checked against the result by the authorization-endpoint adapter in both.
                 var strict = options.Value.IgnoreParametersOutsideRequestObject
-                    || SecurityProfileRequirements.For(client, tenantAccessor.CurrentTenant().DefaultSecurityProfile)
+                    || SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile)
                         .RequireStrictRequestObjectProcessing;
                 var target = strict ? Activator.CreateInstance<T>() : request;
 
@@ -146,6 +146,7 @@ public partial class RequestObjectFetcher(
     /// Validates the JWT request object to ensure it complies with the required signing algorithm
     /// and structure, based on the OIDC options.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="requestObject">The JWT request object to be validated.</param>
     /// <param name="requiredSigningAlgorithm">An optional selector returning the signing algorithm the
     /// request object must use for a given client, or <c>null</c> to impose no per-client requirement.</param>
@@ -158,6 +159,7 @@ public partial class RequestObjectFetcher(
     /// it accordingly. It retrieves a validator service from the DI container to perform the validation.
     /// </remarks>
     private async Task<Result<(JsonObject Payload, ClientInfo Client), OidcError>> ValidateAsync(
+        TenantDefinition tenant,
         string requestObject,
         Func<ClientInfo, string?>? requiredSigningAlgorithm)
     {
@@ -179,7 +181,7 @@ public partial class RequestObjectFetcher(
         using var scope = serviceProvider.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
         // The type is judged below, where a refusal speaks the request object's error vocabulary
-        var result = await tokenValidator.ValidateAsync(tenantAccessor.CurrentTenant(), requestObject, TokenTypePolicy.CheckedByCaller, validationOptions);
+        var result = await tokenValidator.ValidateAsync(tenant, requestObject, TokenTypePolicy.CheckedByCaller, validationOptions);
 
         return result.Match<Result<(JsonObject Payload, ClientInfo Client), OidcError>>(
             validJwt =>

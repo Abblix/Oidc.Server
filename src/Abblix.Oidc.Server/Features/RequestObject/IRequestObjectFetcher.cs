@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.RequestObject;
@@ -23,6 +24,7 @@ public interface IRequestObjectFetcher
     /// Fetches and processes the request object by validating its JWT and binding the payload to the request model.
     /// </summary>
     /// <typeparam name="T">The type of the request model.</typeparam>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The initial request model to bind the JWT payload to.</param>
     /// <param name="requestObject">The JWT contained within the request, if any.</param>
     /// <param name="requiredSigningAlgorithm">Optional selector returning the algorithm the resolved
@@ -39,6 +41,7 @@ public interface IRequestObjectFetcher
     /// If the JWT is invalid or not present, an appropriate error result is returned.
     /// </remarks>
     Task<Result<T, OidcError>> FetchAsync<T>(
+        TenantDefinition tenant,
         T request,
         string? requestObject,
         Func<ClientInfo, string?>? requiredSigningAlgorithm = null)

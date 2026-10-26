@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Model;
 
@@ -27,8 +28,9 @@ public interface IAuthorizationRequestValidator
 	/// Asynchronously validates an authorization request against the OpenID Connect Core 1.0 specifications,
 	/// ensuring it meets the required criteria for processing.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The authorization request to validate.</param>
 	/// <returns>A task that resolves to a validation result indicating the request's compliance with
 	/// the specifications.</returns>
-	Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(AuthorizationRequest request);
+	Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(TenantDefinition tenant, AuthorizationRequest request);
 }

@@ -30,17 +30,16 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// <param name="clientInfoProvider">
 /// Resolves the requesting client's registration to enforce the per-client PAR requirement.</param>
 /// <param name="consumedRequestUris">The flows that ended, whose remaining pages are refused.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class PushedRequestFetcher(
     IOptionsSnapshot<OidcOptions> options,
     IAuthorizationRequestStorage authorizationRequestStorage,
     IClientInfoProvider clientInfoProvider,
-    IConsumedRequestUriRegistry consumedRequestUris,
-    ITenantAccessor tenantAccessor) : IAuthorizationRequestFetcher
+    IConsumedRequestUriRegistry consumedRequestUris) : IAuthorizationRequestFetcher
 {
     /// <summary>
     /// Asynchronously retrieves the pushed authorization request object associated with the specified URN.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">
     /// The authorization request containing a URN from which to fetch the stored pushed authorization request object.
     /// </param>
@@ -55,13 +54,13 @@ public class PushedRequestFetcher(
     /// an error is returned.
     /// Additionally, it checks the server configuration to enforce the Pushed Authorization Request (PAR) requirement.
     /// </remarks>
-    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request)
+    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(TenantDefinition tenant, AuthorizationRequest request)
     {
         // If the request contains a URN, attempt to retrieve the pushed authorization request from storage
         if (request is { RequestUri: { } requestUrn } &&
             requestUrn.OriginalString.StartsWith(RequestUrn.Prefix))
         {
-            return await FetchPushedAsync(requestUrn);
+            return await FetchPushedAsync(tenant, requestUrn);
         }
 
         // If PAR is required by server configuration, return an error if no pushed authorization request is provided
@@ -70,7 +69,7 @@ public class PushedRequestFetcher(
             return ErrorFactory.InvalidRequestObject("The Pushed Authorization Request (PAR) is required");
         }
 
-        if (await ClientRequiresPushedRequestsAsync(request.ClientId))
+        if (await ClientRequiresPushedRequestsAsync(tenant, request.ClientId))
         {
             return ErrorFactory.InvalidRequestObject(
                 "The client is required to use Pushed Authorization Requests (PAR)");
@@ -84,6 +83,7 @@ public class PushedRequestFetcher(
     /// Fetches the request stored under the URN, refusing a page of a flow that already ended.
     /// </summary>
     private async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchPushedAsync(
+        TenantDefinition tenant,
         Uri requestUrn)
     {
         // Do not consume the request_uri here. RFC 9126 section 7.3 says request_uri SHOULD be
@@ -95,11 +95,11 @@ public class PushedRequestFetcher(
         // continuation. Single-use is still enforced - by the cache TTL upper bound and,
         // when the flow completes, by PushedAuthorizationRequestProcessorDecorator, which
         // consumes the request_uri carried forward below once a code or token is issued.
-        var requestObject = await authorizationRequestStorage.TryGetAsync(tenantAccessor.CurrentTenant(), requestUrn, shouldRemove: false);
+        var requestObject = await authorizationRequestStorage.TryGetAsync(tenant, requestUrn, shouldRemove: false);
 
         // A page of a flow that already ended with a code, as a refresh of the page made
         if (requestObject?.OriginRequestUri is { } originRequestUri &&
-            await consumedRequestUris.IsConsumedAsync(tenantAccessor.CurrentTenant(), originRequestUri))
+            await consumedRequestUris.IsConsumedAsync(tenant, originRequestUri))
         {
             return ErrorFactory.InvalidRequestUri($"The request by {requestUrn} has already been used");
         }
@@ -135,17 +135,17 @@ public class PushedRequestFetcher(
     /// over the requirement it is there to satisfy.
     /// The rule is a predicate method of its own, so the fetch above reads as the order of checks it performs.
     /// </remarks>
-    private async Task<bool> ClientRequiresPushedRequestsAsync(string? clientId)
+    private async Task<bool> ClientRequiresPushedRequestsAsync(TenantDefinition tenant, string? clientId)
     {
         if (clientId is null)
             return false;
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         if (clientInfo is null)
             return false;
 
         return clientInfo.RequirePushedAuthorizationRequests ||
-               SecurityProfileRequirements.For(clientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile)
+               SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile)
                    .RequirePushedAuthorizationRequests;
     }
 }

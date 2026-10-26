@@ -94,10 +94,11 @@ internal static class InteractionEndpoints
     private static async Task<IResult> AuthorizeAsync(
         AuthorizationRequest authorizationRequest,
         IAuthorizationHandler handler,
-        IAuthorizationResponseFormatter formatter)
+        IAuthorizationResponseFormatter formatter,
+        ITenantAccessor tenantAccessor)
     {
         Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
-        var response = await handler.HandleAsync(coreAuthorizationRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreAuthorizationRequest);
         return await formatter.FormatResponseAsync(coreAuthorizationRequest, response);
     }
 }

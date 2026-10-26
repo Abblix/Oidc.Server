@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Microsoft.Extensions.Logging;
 
@@ -27,12 +28,13 @@ public partial class RedirectUriValidator(ILogger<RedirectUriValidator> logger) 
     /// for the client. Ensures that the redirect URI is one of the pre-approved URIs for the client making the request.
     /// This validation is crucial for preventing unauthorized redirections in the OAuth 2.0 authorization flow.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing client information and the request details.</param>
     /// <returns>
     /// An <see cref="AuthorizationRequestValidationError"/> if the redirect URI is not valid for the specified client,
     /// or null if the redirect URI is valid.
     /// </returns>
-    protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+    protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         var uriValidator = UriValidatorFactory.CreateForRedirectUris(context.ClientInfo.RedirectUris);
 

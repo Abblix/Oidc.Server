@@ -42,7 +42,7 @@ public class BackChannelAuthenticationHandler(
         BackChannelAuthenticationRequest request,
         ClientRequest clientRequest)
     {
-        var fetchResult = await fetcher.FetchAsync(request);
+        var fetchResult = await fetcher.FetchAsync(tenant, request);
         if (fetchResult.TryGetSuccess(out var fetchedRequest))
         {
             request = fetchedRequest;

@@ -101,7 +101,7 @@ public class SameCookieAuthorizationLogoutTests
         };
 
         var result = await services.GetRequiredService<IAuthorizationRequestProcessor>()
-            .ProcessAsync(new ValidAuthorizationRequest(context));
+            .ProcessAsync(SingleIssuer.Tenant, new ValidAuthorizationRequest(context));
 
         Assert.IsType<SuccessfullyAuthenticated>(result);
     }

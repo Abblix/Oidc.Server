@@ -224,11 +224,11 @@ public sealed class EndpointSpanTests : IDisposable
         var request = new AuthorizationRequest { ResponseType = [ResponseTypes.IdToken, ResponseTypes.Code] };
         var inner = new Mock<IPushedAuthorizationHandler>();
         inner
-            .Setup(h => h.HandleAsync(request, It.IsAny<ClientRequest>()))
+            .Setup(h => h.HandleAsync(TestTenant.Matched, request, It.IsAny<ClientRequest>()))
             .ReturnsAsync(new AuthorizationError(request, ErrorCodes.InvalidRequest, "Refused", ResponseModes.Query, null));
         var observed = new ObservedPushedAuthorizationHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
 
-        var span = await SpanOf(() => observed.HandleAsync(request, new ClientRequest()));
+        var span = await SpanOf(() => observed.HandleAsync(SingleIssuer.Tenant, request, new ClientRequest()));
 
         Assert.Equal("code id_token", span.GetTagItem(TelemetryTags.ResponseType));
     }

@@ -30,7 +30,7 @@ public partial class AuthorizationRequestProcessorTests
         SessionsAre(session);
         _interactionRequirement.Setup(r => r.IsRequiredAsync(request, session)).ReturnsAsync(true);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         var interaction = Assert.IsType<InteractionRequired>(result);
         Assert.Same(session, interaction.AuthSession);
@@ -50,7 +50,7 @@ public partial class AuthorizationRequestProcessorTests
         SessionsAre(session);
         _interactionRequirement.Setup(r => r.IsRequiredAsync(request, session)).ReturnsAsync(true);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         var error = Assert.IsType<AuthorizationError>(result);
         Assert.Equal(ErrorCodes.InteractionRequired, error.Error);
@@ -71,7 +71,7 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(r => r.IsRequiredAsync(It.IsAny<ValidAuthorizationRequest>(), It.IsAny<AuthSession>()))
             .ReturnsAsync(true);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.IsType<LoginRequired>(result);
         _interactionRequirement.Verify(
@@ -90,7 +90,7 @@ public partial class AuthorizationRequestProcessorTests
         var capture = SetupSuccessfulAuthCodeFlow(request, session, CreateConsents());
         _interactionRequirement.Setup(r => r.IsRequiredAsync(request, session)).ReturnsAsync(false);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.IsType<SuccessfullyAuthenticated>(result);
         Assert.Same(session, capture.Grant?.AuthSession);
@@ -110,7 +110,7 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(r => r.IsRequiredAsync(It.IsAny<ValidAuthorizationRequest>(), It.IsAny<AuthSession>()))
             .ReturnsAsync(true);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.IsType<AccountSelectionRequired>(result);
         _interactionRequirement.Verify(

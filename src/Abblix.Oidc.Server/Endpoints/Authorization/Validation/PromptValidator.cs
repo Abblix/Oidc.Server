@@ -9,6 +9,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using static Abblix.Oidc.Server.Model.AuthorizationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -25,7 +26,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 public class PromptValidator : SyncAuthorizationContextValidatorBase
 {
     /// <inheritdoc />
-    protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+    protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         if (context.Request.Prompt is { } prompt &&
             prompt.Contains(Prompts.None, StringComparer.Ordinal) &&

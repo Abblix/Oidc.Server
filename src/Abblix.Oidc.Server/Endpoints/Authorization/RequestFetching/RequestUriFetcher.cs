@@ -32,18 +32,17 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// <param name="logger">The logger used for logging warnings when request fetching fails.</param>
 /// <param name="clientInfoProvider">Service to retrieve client-specific information for validation.</param>
 /// <param name="secureHttpFetcher">The secure HTTP fetcher for retrieving content from external URIs with SSRF protection.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public partial class RequestUriFetcher(
     ILogger<RequestUriFetcher> logger,
     IClientInfoProvider clientInfoProvider,
-    ISecureHttpFetcher secureHttpFetcher,
-    ITenantAccessor tenantAccessor) : IAuthorizationRequestFetcher
+    ISecureHttpFetcher secureHttpFetcher) : IAuthorizationRequestFetcher
 {
     /// <summary>
     /// Asynchronously fetches the authorization request object from the given request URI.
     /// This method retrieves the request object if the request URI is valid and contains an absolute URL.
     /// It then returns the authorization request object or logs an error if the fetch fails.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The authorization request, which contains the RequestUri.</param>
     /// <returns>
     /// A task representing the asynchronous operation, with the result being the fetched request object or an error.
@@ -54,6 +53,7 @@ public partial class RequestUriFetcher(
     /// Otherwise, it proceeds to fetch the request object from the `RequestUri` and returns the result.
     /// </remarks>
     public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(
+        TenantDefinition tenant,
         AuthorizationRequest request)
     {
         if (request is { Request: not null, RequestUri: not null })
@@ -80,7 +80,7 @@ public partial class RequestUriFetcher(
                 ErrorCodes.UnauthorizedClient, "The client id is required");
         }
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         if (clientInfo == null)
         {
             LogClientNotFound(clientId);

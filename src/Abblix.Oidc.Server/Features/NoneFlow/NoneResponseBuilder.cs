@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.NoneFlow;
 
@@ -31,6 +32,7 @@ public class NoneResponseBuilder : IAuthorizationResponseBuilder
 
     /// <inheritdoc />
     public Task BuildResponseAsync(
+        TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result)

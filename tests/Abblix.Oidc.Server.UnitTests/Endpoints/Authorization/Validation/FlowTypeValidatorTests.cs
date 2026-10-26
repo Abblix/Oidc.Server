@@ -45,12 +45,8 @@ public class FlowTypeValidatorTests
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Token),
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.IdToken),
         ];
-        _validator = new FlowTypeValidator(logger.Object, processors, SingleIssuer.AccessorOf(ProfileOptions().Value));
+        _validator = new FlowTypeValidator(logger.Object, processors);
     }
-
-    private static IOptions<TestIssuer> ProfileOptions(
-        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
-        => Options.Create(new TestIssuer { DefaultSecurityProfile = defaultSecurityProfile });
 
     /// <summary>
     /// Creates an AuthorizationValidationContext for testing.
@@ -94,7 +90,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext([ResponseTypes.Code], [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -114,7 +110,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], [[ResponseTypes.IdToken]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -134,7 +130,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext([ResponseTypes.Token], [[ResponseTypes.Token]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -156,7 +152,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.IdToken, ResponseTypes.Token]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -178,7 +174,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code, ResponseTypes.IdToken]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -200,7 +196,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code, ResponseTypes.Token]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -222,7 +218,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code, ResponseTypes.IdToken, ResponseTypes.Token]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -242,7 +238,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext(null, [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -261,7 +257,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext([], [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -280,7 +276,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext(["unknown"], [["unknown"]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -301,7 +297,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -323,7 +319,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code], [ResponseTypes.IdToken]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -344,7 +340,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.IdToken, ResponseTypes.Token]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -367,7 +363,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext(["CODE"], [["CODE"]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -394,14 +390,14 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, SingleIssuer.AccessorOf(ProfileOptions().Value));
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
 
         // Client is configured to allow the implicit response type, so without the server-level
         // gate the request would proceed past ResponseTypeAllowed.
         var context = CreateContext([implicitResponseType], [[implicitResponseType]]);
 
         // Act
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -428,12 +424,12 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, SingleIssuer.AccessorOf(ProfileOptions().Value));
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
 
         var context = CreateContext(hybridResponseType, [hybridResponseType]);
 
         // Act
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -454,7 +450,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result); // Succeeds after deduplication
@@ -473,7 +469,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext(null, [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -495,7 +491,7 @@ public class FlowTypeValidatorTests
             responseMode: ResponseModes.Fragment);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -522,19 +518,19 @@ public class FlowTypeValidatorTests
 
         // Test authorization code flow
         var context1 = CreateContext([ResponseTypes.Code], allowedResponseTypes);
-        var result1 = await _validator.ValidateAsync(context1);
+        var result1 = await _validator.ValidateAsync(SingleIssuer.Tenant, context1);
         Assert.Null(result1);
         Assert.Equal(FlowTypes.AuthorizationCode, context1.FlowType);
 
         // Test implicit flow
         var context2 = CreateContext([ResponseTypes.IdToken], allowedResponseTypes);
-        var result2 = await _validator.ValidateAsync(context2);
+        var result2 = await _validator.ValidateAsync(SingleIssuer.Tenant, context2);
         Assert.Null(result2);
         Assert.Equal(FlowTypes.Implicit, context2.FlowType);
 
         // Test hybrid flow
         var context3 = CreateContext([ResponseTypes.Code, ResponseTypes.IdToken], allowedResponseTypes);
-        var result3 = await _validator.ValidateAsync(context3);
+        var result3 = await _validator.ValidateAsync(SingleIssuer.Tenant, context3);
         Assert.Null(result3);
         Assert.Equal(FlowTypes.Hybrid, context3.FlowType);
     }
@@ -554,7 +550,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code, ResponseTypes.IdToken]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -575,13 +571,13 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, SingleIssuer.AccessorOf(ProfileOptions().Value));
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
         var context = CreateContext(
             [ResponseTypes.Code, ResponseTypes.Token],
             [[ResponseTypes.Code, ResponseTypes.Token]]);
 
         // Act
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -601,7 +597,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext(null, [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -621,7 +617,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext(null, [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -641,7 +637,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code]],
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
         Assert.Equal(FlowTypes.AuthorizationCode, context.FlowType);
@@ -663,7 +659,7 @@ public class FlowTypeValidatorTests
             [[implicitResponseType]],
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
@@ -682,14 +678,14 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code, ResponseTypes.IdToken]],
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
         Assert.Contains("security profile", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static FlowTypeValidator AllFlowsValidator(ClientSecurityProfile defaultProfile)
+    private static FlowTypeValidator AllFlowsValidator()
     {
         var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
         IAuthorizationResponseBuilder[] processors =
@@ -698,7 +694,7 @@ public class FlowTypeValidatorTests
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Token),
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.IdToken),
         ];
-        return new FlowTypeValidator(logger.Object, processors, SingleIssuer.AccessorOf(ProfileOptions(defaultProfile).Value));
+        return new FlowTypeValidator(logger.Object, processors);
     }
 
     /// <summary>
@@ -708,10 +704,10 @@ public class FlowTypeValidatorTests
     [Fact]
     public async Task ValidateAsync_GlobalDefaultFapi2_RejectsImplicitForUnprofiledClient()
     {
-        var validator = AllFlowsValidator(ClientSecurityProfile.Fapi2);
+        var validator = AllFlowsValidator();
         var context = CreateContext([ResponseTypes.IdToken], [[ResponseTypes.IdToken]], securityProfile: null);
 
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
@@ -726,13 +722,13 @@ public class FlowTypeValidatorTests
     [Fact]
     public async Task ValidateAsync_ExplicitNoneUnderGlobalDefaultFapi2_StillRefusesImplicit()
     {
-        var validator = AllFlowsValidator(ClientSecurityProfile.Fapi2);
+        var validator = AllFlowsValidator();
         var context = CreateContext(
             [ResponseTypes.IdToken],
             [[ResponseTypes.IdToken]],
             securityProfile: ClientSecurityProfile.None);
 
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), context);
 
         Assert.NotNull(result);
         Assert.Contains("security profile", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
@@ -746,7 +742,7 @@ public class FlowTypeValidatorTests
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Code),
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.None),
         ];
-        return new FlowTypeValidator(logger.Object, processors, SingleIssuer.AccessorOf(ProfileOptions().Value));
+        return new FlowTypeValidator(logger.Object, processors);
     }
 
     /// <summary>
@@ -760,7 +756,7 @@ public class FlowTypeValidatorTests
         var validator = NoneEnabledValidator();
         var context = CreateContext([ResponseTypes.None], [[ResponseTypes.None]]);
 
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
         Assert.Equal(FlowTypes.None, context.FlowType);
@@ -780,7 +776,7 @@ public class FlowTypeValidatorTests
             [ResponseTypes.None, ResponseTypes.Code],
             [[ResponseTypes.None, ResponseTypes.Code]]);
 
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
@@ -797,7 +793,7 @@ public class FlowTypeValidatorTests
         // The shared _validator registers only Code/Token/IdToken (no None).
         var context = CreateContext([ResponseTypes.None], [[ResponseTypes.None]]);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);

@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
@@ -40,6 +41,7 @@ public interface IAuthorizationResponseBuilder : IGrantTypeInformer
     /// (<c>code</c> before <c>token</c> before <c>id_token</c>).
     /// </summary>
     Task BuildResponseAsync(
+        TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result);

@@ -49,7 +49,7 @@ public class RequestObjectFetchAdapterTests
     private void SetupFetcher(AuthorizationRequest merged) =>
         _requestObjectFetcher
             .Setup(f => f.FetchAsync(
-                It.IsAny<AuthorizationRequest>(), RequestJwt, It.IsAny<Func<ClientInfo, string?>?>()))
+                TestTenant.Matched, It.IsAny<AuthorizationRequest>(), RequestJwt, It.IsAny<Func<ClientInfo, string?>?>()))
             .ReturnsAsync(merged);
 
     [Fact]
@@ -58,7 +58,7 @@ public class RequestObjectFetchAdapterTests
         var outer = CreateRequest();
         SetupFetcher(CreateRequest());
 
-        var result = await _adapter.FetchAsync(outer);
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, outer);
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -73,7 +73,7 @@ public class RequestObjectFetchAdapterTests
         var outer = CreateRequest(clientId: ClientId);
         SetupFetcher(CreateRequest(clientId: "another-client"));
 
-        var result = await _adapter.FetchAsync(outer);
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, outer);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
@@ -89,7 +89,7 @@ public class RequestObjectFetchAdapterTests
         var outer = CreateRequest(responseType: [ResponseTypes.Code]);
         SetupFetcher(CreateRequest(responseType: [ResponseTypes.Code, ResponseTypes.IdToken]));
 
-        var result = await _adapter.FetchAsync(outer);
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, outer);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
@@ -103,7 +103,7 @@ public class RequestObjectFetchAdapterTests
     {
         SetupFetcher(CreateRequest() with { Prompt = [Prompts.Login, "unknown"] });
 
-        var result = await _adapter.FetchAsync(CreateRequest());
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -119,7 +119,7 @@ public class RequestObjectFetchAdapterTests
         var outer = CreateRequest(responseType: [ResponseTypes.Code]);
         SetupFetcher(CreateRequest(responseType: [ResponseTypes.IdToken]) with { Prompt = ["unknown"] });
 
-        var result = await _adapter.FetchAsync(outer);
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, outer);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);

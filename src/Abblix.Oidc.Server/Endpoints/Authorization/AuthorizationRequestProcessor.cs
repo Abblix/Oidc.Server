@@ -43,8 +43,7 @@ public class AuthorizationRequestProcessor(
 	ISubjectTypeConverter subjectTypeConverter,
 	TimeProvider clock,
 	IEnumerable<IAuthorizationResponseBuilder> responseProcessors,
-	IConsentConstraintEnforcer consentConstraintEnforcer,
-	ITenantAccessor tenantAccessor) : IAuthorizationRequestProcessor
+	IConsentConstraintEnforcer consentConstraintEnforcer) : IAuthorizationRequestProcessor
 {
 	// Extracted collaborators, each answering one question of the authorization with its own dependencies, built
 	// here from the constructor's arguments so the processor's public constructor stays as hosts call it.
@@ -55,24 +54,25 @@ public class AuthorizationRequestProcessor(
 	private readonly AuthorizationContextBuilder _contextBuilder = new(consentConstraintEnforcer);
 
 	private readonly AuthSessionSelector _sessionSelector =
-		new(authSessionService, cutoffChecker, subjectTypeConverter, clock, tenantAccessor);
+		new(authSessionService, cutoffChecker, subjectTypeConverter, clock);
 
 	/// <summary>
 	/// Orchestrates the flow for handling a valid authorization request, considering the user's session state,
 	/// the need for user consent, and generating appropriate tokens. This method serves as the central logic for
 	/// determining how the system should respond based on the client's request and the user's current state.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">A validated authorization request containing parameters required for processing.</param>
 	/// <returns>
 	/// An authorization response object, which can either represent a successful authentication, an error,
 	/// or a signal that further user interaction is required (e.g., login, consent).
 	/// </returns>
-	public async Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request)
+	public async Task<AuthorizationResponse> ProcessAsync(TenantDefinition tenant, ValidAuthorizationRequest request)
 	{
 
-		var selected = await _sessionSelector.SelectAsync(request);
+		var selected = await _sessionSelector.SelectAsync(tenant, request);
 		return await selected.MatchAsync(
-			authSession => AuthorizeAsync(request, authSession),
+			authSession => AuthorizeAsync(tenant, request, authSession),
 			answered => answered);
 	}
 
@@ -80,7 +80,7 @@ public class AuthorizationRequestProcessor(
 	/// Authorizes the request with the session selected for it: asks for the consent still owed, or issues
 	/// what the request asked for.
 	/// </summary>
-	private async Task<AuthorizationResponse> AuthorizeAsync(ValidAuthorizationRequest request, AuthSession authSession)
+	private async Task<AuthorizationResponse> AuthorizeAsync(TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession)
 	{
 		var model = request.Model;
 
@@ -154,7 +154,7 @@ public class AuthorizationRequestProcessor(
 				model.RedirectUri);
 		}
 
-		return await IssueAsync(request, authSession, authContext.GetSuccess(), responseType);
+		return await IssueAsync(tenant, request, authSession, authContext.GetSuccess(), responseType);
 	}
 
 	/// <summary>
@@ -180,6 +180,7 @@ public class AuthorizationRequestProcessor(
 	/// Records the client for the session and issues what each requested response type asks for.
 	/// </summary>
 	private async Task<AuthorizationResponse> IssueAsync(
+		TenantDefinition tenant,
 		ValidAuthorizationRequest request,
 		AuthSession authSession,
 		AuthorizationContext authContext,
@@ -187,7 +188,7 @@ public class AuthorizationRequestProcessor(
 	{
 		// Recorded before anything is issued, so a store that refuses the record fails the authorization
 		// rather than following a code or a token already handed out.
-		await sessionClients.AddClientAsync(tenantAccessor.CurrentTenant(), authSession.SessionId, request.ClientInfo.ClientId);
+		await sessionClients.AddClientAsync(tenant, authSession.SessionId, request.ClientInfo.ClientId);
 
 		// Initialize a successful authentication result. GrantedScopes carries the consent-narrowed
 		// scope set (identical to what the issued token carries) so the response encoder advertises the
@@ -196,7 +197,7 @@ public class AuthorizationRequestProcessor(
 			request.Model,
 			request.ResponseMode,
 			authSession.SessionId,
-			[..await sessionClients.GetClientsAsync(tenantAccessor.CurrentTenant(), authSession.SessionId)])
+			[..await sessionClients.GetClientsAsync(tenant, authSession.SessionId)])
 		{
 			GrantedScopes = authContext.Scope,
 			SessionPersistence = authSession.Persistence,
@@ -217,7 +218,7 @@ public class AuthorizationRequestProcessor(
 			if (!responseType.HasFlag(processor.ResponseType))
 				continue;
 
-			await processor.BuildResponseAsync(request, authorizedGrant, result);
+			await processor.BuildResponseAsync(tenant, request, authorizedGrant, result);
 		}
 
 		// Return the final authorization result containing codes and tokens as needed.

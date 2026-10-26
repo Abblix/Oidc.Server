@@ -26,12 +26,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// particularly in public clients. It ensures that the authorization request conforms to
 /// the standards defined in RFC 7636 (specifically, see Section 4.3 for client validation requirements).
 /// </summary>
-/// <param name="tenantAccessor">Names the tenant whose default security profile a client inherits when it
-/// states none, which tightens PKCE enforcement (mandatory PKCE, S256-only) under a profile.</param>
 /// <param name="reuseDetector">Detects a client repeating a code_challenge across authorization requests
 /// when reuse detection is enabled (RFC 9700 Section 2.1.1).</param>
 public class PkceValidator(
-	ITenantAccessor tenantAccessor,
 	IAuthorizationValueReuseDetector reuseDetector) : IAuthorizationContextValidator
 {
 	/// <summary>
@@ -46,12 +43,13 @@ public class PkceValidator(
 	/// configuration. This method checks for compliance with PKCE specifications as outlined in RFC 7636,
 	/// with particular attention to the guidelines in Section 4.3 of the document.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="context">The validation context containing client information and request details.</param>
 	/// <returns>
 	/// An AuthorizationRequestValidationError if the validation fails due to non-compliance with PKCE requirements,
 	/// or null if the request is valid. Refer to Section 4.3 of RFC 7636 for more details.
 	/// </returns>
-	public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
+	public async Task<AuthorizationRequestValidationError?> ValidateAsync(TenantDefinition tenant, AuthorizationValidationContext context)
 	{
 		// RFC 7636 section 4.4.1: "If the server supporting PKCE does not support the requested transformation, the
 		// authorization endpoint MUST return the authorization error response with "error" value set to
@@ -65,10 +63,10 @@ public class PkceValidator(
 			return context.InvalidRequest("The PKCE code challenge method is not supported");
 		}
 
-		var profile = SecurityProfileRequirements.For(context.ClientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile);
+		var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
 
 		return context.Request.CodeChallenge is { } codeChallenge && codeChallenge.HasValue()
-			? await ValidatePresentedChallengeAsync(context, profile, codeChallenge)
+			? await ValidatePresentedChallengeAsync(tenant, context, profile, codeChallenge)
 			: ValidateMissingChallenge(context, profile);
 	}
 
@@ -77,6 +75,7 @@ public class PkceValidator(
 	/// and a value not used before.
 	/// </summary>
 	private async Task<AuthorizationRequestValidationError?> ValidatePresentedChallengeAsync(
+		TenantDefinition tenant,
 		AuthorizationValidationContext context,
 		SecurityProfileRequirements profile,
 		string codeChallenge)
@@ -100,7 +99,7 @@ public class PkceValidator(
 
 		// A code_challenge must be transaction-specific (RFC 9700 section 2.1.1). When reuse detection is on,
 		// reject a value this client already used for a previously issued authorization code.
-		if (await reuseDetector.IsReusedAsync(tenantAccessor.CurrentTenant(), context.ClientInfo.ClientId, Parameters.CodeChallenge, codeChallenge))
+		if (await reuseDetector.IsReusedAsync(tenant, context.ClientInfo.ClientId, Parameters.CodeChallenge, codeChallenge))
 		{
 			return context.InvalidRequest("The PKCE code_challenge must be unique per authorization request");
 		}

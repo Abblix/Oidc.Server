@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Telemetry;
 
@@ -18,7 +19,7 @@ namespace Abblix.Oidc.Server.Features.Telemetry;
 /// </remarks>
 internal sealed partial class ObservedAuthorizationHandler
 {
-    private partial (string Key, string? Value) RequestTagOf(Model.AuthorizationRequest request)
+    private partial (string Key, string? Value) RequestTagOf(TenantDefinition tenant, Model.AuthorizationRequest request)
         => (TelemetryTags.ResponseType, EndpointObservation.ResponseTypeOf(request.ResponseType));
 
     private partial void Observe(AuthorizationResponse result)

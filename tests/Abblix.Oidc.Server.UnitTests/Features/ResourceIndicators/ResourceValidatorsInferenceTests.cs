@@ -77,7 +77,7 @@ public class ResourceValidatorsInferenceTests
                     Scope = scopes,
                     Resources = resources,
                 }) { ClientInfo = client };
-                var error = await new AuthorizationResourceValidator(resourceManager, tenantAccessor: SingleIssuer.AccessorOf(() => options.Value)).ValidateAsync(context);
+                var error = await new AuthorizationResourceValidator(resourceManager).ValidateAsync(options.Value.ToTenant(), context);
                 return (error?.Error, Uris(context.Resources));
             }
 

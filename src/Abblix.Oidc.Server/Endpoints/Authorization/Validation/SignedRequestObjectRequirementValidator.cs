@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
@@ -21,7 +22,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 public class SignedRequestObjectRequirementValidator : SyncAuthorizationContextValidatorBase
 {
     /// <inheritdoc />
-    protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+    protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         if (context.ClientInfo.RequireSignedRequestObject &&
             context.Request is { Request: null, PushedRequestUri: null })
