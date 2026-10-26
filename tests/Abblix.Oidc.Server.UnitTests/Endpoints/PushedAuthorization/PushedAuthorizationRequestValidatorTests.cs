@@ -52,7 +52,7 @@ public class PushedAuthorizationRequestValidatorTests
     public PushedAuthorizationRequestValidatorTests()
     {
         _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId));
         _innerValidator
             .Setup(v => v.ValidateAsync(It.IsAny<AuthorizationRequest>()))
@@ -72,7 +72,7 @@ public class PushedAuthorizationRequestValidatorTests
         _validator = new PushedAuthorizationRequestValidator(
             _innerValidator.Object,
             _clientAuthenticator.Object,
-            _proofValidator.Object);
+            _proofValidator.Object, tenantAccessor: SingleIssuer.Accessor);
     }
 
     private AuthorizationRequest? _capturedRequest;

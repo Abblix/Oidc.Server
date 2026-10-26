@@ -37,23 +37,22 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </remarks>
 internal partial class SecurityProfileClientAuthenticator(
     IClientAuthenticator inner,
-    ITenantAccessor tenantAccessor,
     ILogger<SecurityProfileClientAuthenticator> logger) : IClientAuthenticator
 {
     public IEnumerable<string> ClientAuthenticationMethodsSupported
         => inner.ClientAuthenticationMethodsSupported;
 
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
+    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
-        var clientInfo = await inner.TryAuthenticateClientAsync(request);
+        var clientInfo = await inner.TryAuthenticateClientAsync(tenant, request);
         if (clientInfo == null)
             return null;
 
         // The raw value, because the question below is whether this server DEFINES it - not what
         // it demands. What the client is held to comes from the combination further down, which
-        // takes the deployment's demands as a floor; this read must not, or an undefined value the
-        // client set would be hidden behind a defined deployment default.
-        var profile = clientInfo.SecurityProfile ?? tenantAccessor.CurrentTenant().DefaultSecurityProfile;
+        // takes the tenant's demands as a floor; this read must not, or an undefined value the
+        // client set would be hidden behind a defined default of the tenant.
+        var profile = clientInfo.SecurityProfile ?? tenant.DefaultSecurityProfile;
 
         // Said where a client is met after proving who it is. The value cannot be interpreted, so
         // the client is held to every control this server can demand - and without this line the
@@ -73,7 +72,7 @@ internal partial class SecurityProfileClientAuthenticator(
         var violations = SecurityProfileConsistency.FindViolations(
             clientInfo.EffectiveResponseTypes,
             clientInfo.TokenEndpointAuthMethod,
-            SecurityProfileRequirements.For(clientInfo, tenantAccessor.CurrentTenant().DefaultSecurityProfile));
+            SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile));
 
         if (violations.Count == 0)
             return clientInfo;
@@ -83,10 +82,10 @@ internal partial class SecurityProfileClientAuthenticator(
         // sentinel string would put prose where a consumer expects a value it can query.
         if (clientInfo.SecurityProfile is { } named)
             LogRegistrationCannotSatisfyProfile(
-                clientInfo.ClientId, named, tenantAccessor.CurrentTenant().DefaultSecurityProfile, violations);
+                clientInfo.ClientId, named, tenant.DefaultSecurityProfile, violations);
         else
             LogRegistrationCannotSatisfyDeploymentProfile(
-                clientInfo.ClientId, tenantAccessor.CurrentTenant().DefaultSecurityProfile, violations);
+                clientInfo.ClientId, tenant.DefaultSecurityProfile, violations);
         return null;
     }
 }

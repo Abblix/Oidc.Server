@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 
@@ -16,12 +17,15 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 /// Validates the client in a device authorization request.
 /// </summary>
 /// <param name="clientAuthenticator">The service used to authenticate clients.</param>
-public class ClientValidator(IClientAuthenticator clientAuthenticator) : IDeviceAuthorizationContextValidator
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class ClientValidator(IClientAuthenticator clientAuthenticator, ITenantAccessor tenantAccessor)
+    : IDeviceAuthorizationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(DeviceAuthorizationValidationContext context)
     {
-        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(context.ClientRequest);
+        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
+            tenantAccessor.CurrentTenant(), context.ClientRequest);
         if (clientInfo == null)
         {
             return new OidcError(

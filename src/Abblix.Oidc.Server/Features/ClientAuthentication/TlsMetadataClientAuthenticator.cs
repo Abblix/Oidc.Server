@@ -28,8 +28,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 public partial class TlsMetadataClientAuthenticator(
     ILogger<TlsMetadataClientAuthenticator> logger,
-    IClientInfoProvider clientInfoProvider,
-    ITenantAccessor tenantAccessor) : IClientAuthenticator
+    IClientInfoProvider clientInfoProvider) : IClientAuthenticator
 {
     /// <summary>
     /// OID for Subject Alternative Name extension (RFC 5280 section 4.2.1.6).
@@ -51,6 +50,7 @@ public partial class TlsMetadataClientAuthenticator(
     /// Attempts to authenticate a client using mutual TLS with metadata-based certificate validation.
     /// Validates the client certificate against configured Subject DN and/or Subject Alternative Name entries.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the certificate and client ID to authenticate.</param>
     /// <returns>
     /// A task that returns the authenticated <see cref="ClientInfo"/> if successful; otherwise, null.
@@ -65,7 +65,7 @@ public partial class TlsMetadataClientAuthenticator(
     /// 4. Validating certificate Subject DN (if configured)
     /// 5. Validating certificate SAN entries (if configured)
     /// </remarks>
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
+    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
         var certificate = request.ClientCertificate;
         if (certificate == null)
@@ -75,7 +75,7 @@ public partial class TlsMetadataClientAuthenticator(
         if (!clientId.NotNullOrWhiteSpace())
             return null;
 
-        var client = await clientInfoProvider.TryFindClientAsync(tenantAccessor.CurrentTenant(), clientId);
+        var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         if (client == null)
             return null;
 

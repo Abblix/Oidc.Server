@@ -25,9 +25,8 @@ public class ClientSecretBasicAuthenticator(
 	ILogger<ClientSecretBasicAuthenticator> logger,
 	IClientInfoProvider clientInfoProvider,
 	TimeProvider clock,
-	IHashService hashService,
-	ITenantAccessor tenantAccessor)
-	: ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService, tenantAccessor), IClientAuthenticator
+	IHashService hashService)
+	: ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService), IClientAuthenticator
 {
 	/// <summary>
 	/// Specifies the client authentication method this authenticator supports, which is 'client_secret_basic'.
@@ -47,6 +46,7 @@ public class ClientSecretBasicAuthenticator(
 	/// It adheres to the user-id and password format as outlined in RFC 7617, Section 2.1, where the first colon in the
 	/// credentials string separates the user-id (client ID) and the password (client secret).
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
 	/// <param name="request">
 	/// The client request containing the authentication information in the 'Authorization' header.
 	/// </param>
@@ -56,7 +56,7 @@ public class ClientSecretBasicAuthenticator(
 	/// If the 'Authorization' header is missing, malformed, or does not follow the Basic authentication scheme,
 	/// the method returns null.
 	/// </returns>
-	public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
+	public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
 		if (request.AuthorizationHeader is not { Scheme: "Basic", Parameter: { } parameter })
 			return null;
@@ -72,6 +72,7 @@ public class ClientSecretBasicAuthenticator(
 			return null;
 
 		return await TryAuthenticateAsync(
+			tenant,
 			clientId: value[..colonIndex],
 			secret: value[(colonIndex + 1)..],
 			ClientAuthenticationMethods.ClientSecretBasic);

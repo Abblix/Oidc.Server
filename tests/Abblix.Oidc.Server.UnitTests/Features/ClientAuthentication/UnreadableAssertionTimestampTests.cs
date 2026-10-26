@@ -45,6 +45,9 @@ public class UnreadableAssertionTimestampTests
     private const string JwtAssertion = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
     private static readonly DateTimeOffset Now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
+    private static readonly TenantDefinition Tenant =
+        new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = ClientSecurityProfile.None }.ToTenant();
+
     [Theory]
     [InlineData(JwtClaimTypes.ExpiresAt)]
     [InlineData(JwtClaimTypes.IssuedAt)]
@@ -53,7 +56,7 @@ public class UnreadableAssertionTimestampTests
     {
         var (authenticator, replayCache) = Build(payload => payload[claim] = 99999999999999);
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        var result = await authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
@@ -78,7 +81,7 @@ public class UnreadableAssertionTimestampTests
     {
         var (authenticator, _) = Build(_ => { });
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        var result = await authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
@@ -145,8 +148,7 @@ public class UnreadableAssertionTimestampTests
             clientInfoProvider.Object,
             requestInfoProvider.Object,
             new FakeTimeProvider(Now),
-            replayCache.Object,
-            SingleIssuer.AccessorOf(new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = ClientSecurityProfile.None }));
+            replayCache.Object);
 
         return (authenticator, replayCache);
     }

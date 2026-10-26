@@ -42,7 +42,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
             logger.Object,
             clientInfoProvider.Object,
             timeProvider ?? TimeProvider.System,
-            hashService, tenantAccessor: SingleIssuer.Accessor);
+            hashService);
     }
 
     protected override ClientRequest PrepareValidRequest(string clientId, string clientSecret)
@@ -123,7 +123,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -149,7 +149,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);

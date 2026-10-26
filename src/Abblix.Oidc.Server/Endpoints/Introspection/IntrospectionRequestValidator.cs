@@ -61,7 +61,7 @@ public partial class IntrospectionRequestValidator(
 		IntrospectionRequest introspectionRequest,
 		ClientRequest clientRequest)
 	{
-		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
+		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenantAccessor.CurrentTenant(), clientRequest);
 		if (clientInfo == null)
 		{
 			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");

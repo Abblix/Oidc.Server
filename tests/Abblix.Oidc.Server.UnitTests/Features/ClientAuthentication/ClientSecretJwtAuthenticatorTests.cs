@@ -42,6 +42,8 @@ public class ClientSecretJwtAuthenticatorTests
     private const string ClientSecret = "test_secret_for_hmac_signing";
     private const string RequestUri = "https://auth.example.com/token";
 
+    private static readonly TenantDefinition Tenant = new TestIssuer { Issuer = new Uri("https://issuer.example.com") }.ToTenant();
+
     private readonly Mock<IJsonWebTokenValidator> _tokenValidator;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly Mock<IRequestInfoProvider> _requestInfoProvider;
@@ -68,8 +70,7 @@ public class ClientSecretJwtAuthenticatorTests
             _clientInfoProvider.Object,
             _requestInfoProvider.Object,
             _clock,
-            _replayCache.Object,
-            SingleIssuer.AccessorOf(new TestIssuer { Issuer = new Uri("https://issuer.example.com") }));
+            _replayCache.Object);
     }
 
     /// <summary>
@@ -87,7 +88,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -108,7 +109,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -129,7 +130,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -150,7 +151,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -173,7 +174,7 @@ public class ClientSecretJwtAuthenticatorTests
             .Callback<string, ValidationParameters>((_, parameters) => captured = parameters)
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Invalid audience"));
 
-        await _authenticator.TryAuthenticateClientAsync(new ClientRequest
+        await _authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = jwt,
@@ -207,16 +208,16 @@ public class ClientSecretJwtAuthenticatorTests
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
-                // Simulate JWT validator executing the callbacks
+                // In the order the JWT validator runs them: the signing keys, then the issuer
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                 if (parameters.ValidateIssuer != null)
                 {
                     var issuerValid = await parameters.ValidateIssuer(ClientId);
                     if (!issuerValid)
                         return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
                 }
-
-                if (parameters.ResolveIssuerSigningKeys != null)
-                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
 
                 return token;
             }));
@@ -236,7 +237,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.NotNull(result);
@@ -288,7 +289,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -343,7 +344,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.NotNull(result);
@@ -371,7 +372,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -399,16 +400,16 @@ public class ClientSecretJwtAuthenticatorTests
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
-                // Simulate JWT validator executing the callbacks
+                // In the order the JWT validator runs them: the signing keys, then the issuer
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                 if (parameters.ValidateIssuer != null)
                 {
                     var issuerValid = await parameters.ValidateIssuer(ClientId);
                     if (!issuerValid)
                         return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
                 }
-
-                if (parameters.ResolveIssuerSigningKeys != null)
-                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
 
                 return token;
             }));
@@ -424,7 +425,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -452,16 +453,16 @@ public class ClientSecretJwtAuthenticatorTests
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
-                // Simulate JWT validator executing the callbacks
+                // In the order the JWT validator runs them: the signing keys, then the issuer
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                 if (parameters.ValidateIssuer != null)
                 {
                     var issuerValid = await parameters.ValidateIssuer(ClientId);
                     if (!issuerValid)
                         return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
                 }
-
-                if (parameters.ResolveIssuerSigningKeys != null)
-                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
 
                 return token;
             }));
@@ -477,7 +478,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -506,16 +507,16 @@ public class ClientSecretJwtAuthenticatorTests
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
-                // Simulate JWT validator executing the callbacks
+                // In the order the JWT validator runs them: the signing keys, then the issuer
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                 if (parameters.ValidateIssuer != null)
                 {
                     var issuerValid = await parameters.ValidateIssuer(ClientId);
                     if (!issuerValid)
                         return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
                 }
-
-                if (parameters.ResolveIssuerSigningKeys != null)
-                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
 
                 return token;
             }));
@@ -531,7 +532,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
