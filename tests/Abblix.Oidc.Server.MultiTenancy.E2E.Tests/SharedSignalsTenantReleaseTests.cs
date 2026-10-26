@@ -22,6 +22,7 @@ using Abblix.SecurityEvents.Subjects;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.MinimalApi;
 using Abblix.SharedSignals.Model;
+using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -87,6 +88,56 @@ public sealed partial class SharedSignalsTenantReleaseTests
         Assert.Empty(await PendingAsync(app, acme, streamIds["acme"], ct));
         Assert.Single(await StreamsOfAsync(app, globex, ct));
     }
+
+    /// <summary>
+    /// The closing of a released tenant run while another tenant is served, as when a host changes the tenants from
+    /// that tenant's request, deletes the released tenant's streams all the same.
+    /// </summary>
+    [Fact]
+    public async Task AClosingRunWhileAnotherTenantIsServed_DeletesTheReleasedTenantsStreams()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        var time = new FakeTimeProvider();
+        await store.AddAsync(TenantAt("acme"), ct);
+        await store.AddAsync(TenantAt("globex"), ct);
+        var streams = new InMemoryStreamStore();
+        await using var app = await StartAsync(store, time, streams);
+
+        var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
+        var acme = (await catalog.FindByIdAsync("acme", ct))!;
+        var globex = (await catalog.FindByIdAsync("globex", ct))!;
+        var stored = (await store.ListAsync(ct)).Single(entry => entry.Tenant.Id == "acme");
+        Assert.True(await store.RemoveAsync("acme", stored.Version, ct));
+        await catalog.RefreshAsync(ct);
+        time.Advance(new OidcOptions().RefreshTenantsEvery);
+        await catalog.RefreshAsync(ct);
+
+        // Left in the released tenant's part of the store, as by a write that raced its release
+        Assert.True(await streams.TryCreateAsync(StreamOf(TenantKey.Of(acme, ReceiverId)), ct));
+        var closing = app.Services.GetServices<ITenantClosing>().OfType<TenantStreamsClosing>().Single();
+        IReadOnlyDictionary<TenantDefinition, Exception> failures;
+        using (TenantScope.Enter(globex))
+            failures = await closing.CloseAsync([acme], ct);
+
+        Assert.Empty(failures);
+        Assert.Empty(await streams.ListAllAsync(ct));
+    }
+
+    private static StreamState StreamOf(string receiverId) => new()
+    {
+        ReceiverId = receiverId,
+        Status = StreamStatuses.Enabled,
+        SubjectsMode = StreamSubjectsMode.All,
+        Configuration = new StreamConfiguration
+        {
+            StreamId = "alerts",
+            Issuer = Host + "/tenants/acme",
+            Audiences = [ReceiverId],
+            EventsDelivered = [MembershipChanged],
+            Delivery = new PollDeliveryMethod(new Uri(Host + "/tenants/acme" + StreamPath)),
+        },
+    };
 
     /// <summary>
     /// The streams a released tenant declared are deleted with it, and a request still holding the tenant after its

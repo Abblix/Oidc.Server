@@ -6,15 +6,15 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.SecurityEvents.Abstractions;
 using Abblix.SharedSignals.Telemetry;
 using Abblix.SharedSignals.Transmitter;
 
 namespace Abblix.Oidc.Server.SharedSignals;
 
 /// <summary>
-/// The Shared Signals transmitter of one tenant: every part of it bound to that tenant's issuer, addresses, part of
-/// the stores and signing keys when it is built, so nothing in it asks which tenant a request was resolved to.
+/// The Shared Signals transmitter of one tenant: every part of it bound to that tenant when it is built, its part of
+/// the stores and the tenant's definition it answers and signs as, so nothing in it asks which tenant a request was
+/// resolved to.
 /// </summary>
 /// <remarks>
 /// Built by <see cref="TenantTransmitters"/>, which keeps one per creation of a tenant and lets it go with that
@@ -36,9 +36,6 @@ internal sealed class TenantTransmitter
 
     /// <summary>Whether a store of declared streams of another transmitter replaced this one's.</summary>
     public required Func<bool> Superseded { get; init; }
-
-    /// <summary>Signs the tenant's security events with its own keys.</summary>
-    public required ISecurityEventTokenSigner TokenSigner { get; init; }
 
     /// <summary>Signs a queued event for delivery.</summary>
     public required QueuedEventSigner Signer { get; init; }

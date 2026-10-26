@@ -22,7 +22,9 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// </remarks>
 /// <param name="inner">The outbox every tenant shares.</param>
 /// <param name="tenant">The tenant whose queues these are.</param>
-internal sealed class TenantEventOutbox(IEventOutbox inner, TenantDefinition tenant) : IEventOutbox
+/// <param name="guard">Refuses every call made while another tenant is served.</param>
+internal sealed class TenantEventOutbox(IEventOutbox inner, TenantDefinition tenant, TenantPartGuard guard)
+    : IEventOutbox
 {
     /// <inheritdoc />
     public Task EnqueueAsync(
@@ -52,5 +54,9 @@ internal sealed class TenantEventOutbox(IEventOutbox inner, TenantDefinition ten
     public Task ClearAsync(string receiverId, string streamId, CancellationToken cancellationToken = default)
         => inner.ClearAsync(Own(receiverId), streamId, cancellationToken);
 
-    private string Own(string receiverId) => TenantKey.Of(tenant, receiverId);
+    private string Own(string receiverId)
+    {
+        guard.EnsureNotServedElsewhere();
+        return TenantKey.Of(tenant, receiverId);
+    }
 }

@@ -20,8 +20,11 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// <remarks>
 /// Each creation of a tenant has a transmitter of its own, let go once the creation is released, built from the
 /// definition the server's own catalog has in force rather than from the one the caller holds, and built again when
-/// that definition moves the tenant to another issuer. With a catalog of the host's own, which has no definition in
-/// force, the transmitter is built from the first definition that asks and kept. A released creation is built a
+/// that definition moves the tenant to another issuer, so the streams it declares name the issuer it moved to. With
+/// a catalog of the host's own, which has no definition in force, the transmitter is built from the first definition
+/// that asks and kept. Between builds a transmitter answers and signs as the tenant's definition at each call: the
+/// one in force, or with a catalog of the host's own the latest a request or tenant scope was served at, so a key the
+/// tenant rotates in signs from then on. A released creation is built a
 /// transmitter on every call and kept nowhere, serving its part of the stores alone, so its release can delete its
 /// streams without its declared streams being written again.
 /// <para>
@@ -30,9 +33,9 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// the tenant's space, which names the tenant and its creation.
 /// </para>
 /// </remarks>
+/// <param name="logger">Records a write to a tenant's streams sent again after the tenant moved.</param>
 /// <param name="catalog">Tells when a creation of a tenant is released and which definition of it is in force.</param>
 /// <param name="declared">The streams each tenant declares.</param>
-/// <param name="logger">Records a write to a tenant's streams sent again after the tenant moved.</param>
 /// <param name="builder">Builds each transmitter.</param>
 internal sealed partial class TenantTransmitters(
     ILogger<TenantTransmitters> logger,
@@ -52,16 +55,29 @@ internal sealed partial class TenantTransmitters(
     /// </summary>
     private sealed class Built
     {
-        public Built(string space, string issuer, Func<Built, TenantTransmitter> build)
+        private TenantDefinition _latest;
+
+        public Built(string space, TenantDefinition builtFrom, Func<Built, TenantTransmitter> build)
         {
             Space = space;
-            Issuer = issuer;
+            Issuer = builtFrom.Issuer.OriginalString;
+            _latest = builtFrom;
             Transmitter = new Lazy<TenantTransmitter>(() => build(this));
         }
 
         public string Space { get; }
 
         public string Issuer { get; }
+
+        /// <summary>
+        /// The latest definition of the tenant a request or tenant scope was served at, which a catalog of the host's
+        /// own has no other way to tell.
+        /// </summary>
+        public TenantDefinition Latest
+        {
+            get => Volatile.Read(ref _latest);
+            set => Volatile.Write(ref _latest, value);
+        }
 
         public Lazy<TenantTransmitter> Transmitter { get; }
     }
@@ -80,13 +96,23 @@ internal sealed partial class TenantTransmitters(
     /// </summary>
     /// <exception cref="InvalidOperationException">
     /// The tenant declares a stream no request could be served from.</exception>
-    public TenantTransmitter For(TenantDefinition tenant)
+    public TenantTransmitter For(TenantDefinition tenant) => For(tenant, served: false);
+
+    /// <summary>
+    /// The transmitter of <paramref name="tenant"/> as a request or tenant scope is served at it, which from then on
+    /// answers as that definition where a catalog of the host's own gives the server no other way to learn it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The tenant declares a stream no request could be served from.</exception>
+    public TenantTransmitter Serving(TenantDefinition tenant) => For(tenant, served: true);
+
+    private TenantTransmitter For(TenantDefinition tenant, bool served)
     {
         var released = StoreTenantCatalog.ReleasedOf(catalog, tenant);
         if (released.IsCancellationRequested)
-            return builder.Build(tenant, released, declared: null);
+            return builder.Build(tenant, () => tenant, released, declared: null);
 
-        var (builtFrom, inForce) = catalog is StoreTenantCatalog served && served.InForce(tenant) is { } held
+        var (builtFrom, inForce) = catalog is StoreTenantCatalog own && own.InForce(tenant) is { } held
             ? (held, true)
             : (tenant, false);
 
@@ -96,16 +122,32 @@ internal sealed partial class TenantTransmitters(
         {
             var built = _built.GetValueOrDefault(space);
             if (built is not null && (!inForce || built.Issuer == issuer))
+            {
+                if (served)
+                    built.Latest = builtFrom;
+
                 return built.Transmitter.Value;
+            }
 
             var created = new Built(
                 space,
-                issuer,
-                installed => builder.Build(builtFrom, released, Declaration(tenant, installed)));
+                builtFrom,
+                installed => builder.Build(
+                    builtFrom,
+                    () => InForceOf(installed.Latest),
+                    released,
+                    Declaration(tenant, installed)));
             if (Installed(space, built, created, released))
                 return created.Transmitter.Value;
         }
     }
+
+    /// <summary>
+    /// The definition of <paramref name="held"/>'s tenant the server's own catalog has in force, or
+    /// <paramref name="held"/> where it has none, as with a catalog of the host's own or once the creation is released.
+    /// </summary>
+    private TenantDefinition InForceOf(TenantDefinition held)
+        => catalog is StoreTenantCatalog served && served.InForce(held) is { } inForce ? inForce : held;
 
     /// <summary>
     /// Puts <paramref name="created"/> in place of <paramref name="replaced"/>, or of nothing, unless another call got

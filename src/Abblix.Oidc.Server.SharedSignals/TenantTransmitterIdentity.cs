@@ -20,23 +20,19 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// tenant's definition in force at that moment, so an address minted by a request that began before the tenant moved
 /// to another issuer names the issuer it is served at now.
 /// </remarks>
-/// <param name="tenant">The tenant the transmitter answers as, read where the catalog holds no definition of it in
-/// force, as once it is released or with a catalog of the host's own.</param>
+/// <param name="current">The tenant's definition in force.</param>
 /// <param name="options">The transmitter's options, read for the path of the key set address.</param>
-/// <param name="catalog">Holds the tenant's definition in force.</param>
-public sealed class TenantTransmitterIdentity(
-    TenantDefinition tenant,
-    SharedSignalsTransmitterOptions options,
-    ITenantCatalog catalog) : ITransmitterIdentity
+internal sealed class TenantTransmitterIdentity(Func<TenantDefinition> current, SharedSignalsTransmitterOptions options)
+    : ITransmitterIdentity
 {
     /// <inheritdoc />
-    public string Issuer => InForce.Issuer.OriginalString;
+    public string Issuer => current().Issuer.OriginalString;
 
     /// <inheritdoc />
     public Uri? JwksUri => options.JwksUri is { } jwksUri ? Under(jwksUri.PathAndQuery) : null;
 
     /// <inheritdoc />
-    public Uri EndpointsBase => InForce.Issuer;
+    public Uri EndpointsBase => current().Issuer;
 
     /// <inheritdoc />
     public bool Serves => true;
@@ -48,10 +44,7 @@ public sealed class TenantTransmitterIdentity(
     public string? ReceiverIssuer => Issuer;
 
     /// <inheritdoc />
-    public string? TenantId => tenant.Id;
-
-    private TenantDefinition InForce
-        => catalog is StoreTenantCatalog served && served.InForce(tenant) is { } inForce ? inForce : tenant;
+    public string? TenantId => current().Id;
 
     private Uri Under(string pathAndQuery) => new(Issuer.TrimEnd('/') + pathAndQuery, UriKind.Absolute);
 }

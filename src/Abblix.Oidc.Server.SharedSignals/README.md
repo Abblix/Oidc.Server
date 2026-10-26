@@ -51,7 +51,9 @@ builder.Services
 
 The transmitter's issuer names the host without a path. Each tenant's addresses take their paths from the options and put them under the tenant's issuer: for a tenant whose issuer is `https://idp.example.com/acme`, the configuration document is served at `https://idp.example.com/.well-known/ssf-configuration/acme` and its key set address is `https://idp.example.com/acme/.well-known/jwks`.
 
-Each tenant has a transmitter of its own, and what your code resolves from the container - the event dispatcher, the stream store, the stream management service - is the part of the transmitter of the tenant served when it is resolved. Resolve it in the request, or inside `TenantScope.Enter`, that the event belongs to; a part kept across requests keeps answering as the tenant it was resolved for, and one resolved where no tenant is served refuses once it is used.
+Each tenant has a transmitter of its own, and what your code resolves from the container - the event dispatcher, the stream store, the stream management service - is the part of the transmitter of the tenant served when it is resolved. Resolve it in the request of the tenant the event belongs to, or inside `TenantScope.Enter` for that tenant. A part kept across requests refuses once it is used while another tenant is served, and one resolved where no tenant is served refuses once it is used, so a part kept by mistake fails rather than putting one tenant's events on another's streams.
+
+With the Redis stream store, every tenant's streams are kept in one hash, so each event dispatched and each tenant's push delivery pass reads the streams of every tenant.
 
 A request that reaches no tenant is answered 404. A receiver is accepted only with credentials the tenant's own issuer issued: the issuer is read from the `iss` claim the host's authentication leaves behind, or through `ReceiverIssuerSelector` of `SharedSignalsEndpointOptions` where the host keeps it elsewhere. So a receiver of one tenant cannot reach another tenant's streams by presenting its credentials under that tenant's address, even with the same identifier.
 

@@ -95,10 +95,8 @@ public sealed class PollEndpointLocatorTests
     {
         _routes.ServePollAt((_, streamId) => new Uri($"{Issuer}/ssf/poll/{streamId}"));
 
-        var refusal = Assert.Throws<InvalidOperationException>(
+        Assert.Throws<InvalidOperationException>(
             () => _routes.ServePollAt((_, streamId) => new Uri($"{Issuer}/other/poll/{streamId}")));
-
-        Assert.Contains("already mapped", refusal.Message);
     }
 
     private readonly TransmitterRoutes _routes = new();

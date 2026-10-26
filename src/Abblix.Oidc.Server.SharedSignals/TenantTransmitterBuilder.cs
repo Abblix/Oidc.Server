@@ -21,36 +21,42 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// <param name="assembler">Puts the transmitter together.</param>
 /// <param name="options">The transmitter's options.</param>
 /// <param name="routes">Where the transmitter's routes were mapped.</param>
-/// <param name="catalog">Holds each tenant's definition in force, which its transmitter answers as.</param>
+/// <param name="tenants">Names the tenant served when a part is used, which a tenant's parts refuse to serve another.</param>
 internal sealed class TenantTransmitterBuilder(
     IServiceProvider serviceProvider,
     TenantStreamStores stores,
     TransmitterAssembler assembler,
     SharedSignalsTransmitterOptions options,
     TransmitterRoutes routes,
-    ITenantCatalog catalog)
+    ITenantAccessor tenants)
 {
     /// <summary>
     /// The transmitter of <paramref name="tenant"/>, serving the streams it declares when <paramref name="declared"/>
     /// names them.
     /// </summary>
-    /// <param name="tenant">The tenant the transmitter answers as.</param>
+    /// <param name="tenant">The creation of the tenant whose stores the transmitter keeps.</param>
+    /// <param name="current">The tenant's definition in force, which the transmitter answers and signs as.</param>
     /// <param name="released">Canceled once the tenant's creation is released.</param>
     /// <param name="declared">The streams the tenant declares, or null for a tenant serving its part of the store
     /// alone.</param>
     /// <exception cref="InvalidOperationException">
     /// The tenant declares a stream no request could be served from.</exception>
-    public TenantTransmitter Build(TenantDefinition tenant, CancellationToken released, TenantStreamDeclaration? declared)
+    public TenantTransmitter Build(
+        TenantDefinition tenant,
+        Func<TenantDefinition> current,
+        CancellationToken released,
+        TenantStreamDeclaration? declared)
     {
-        var identity = new TenantTransmitterIdentity(tenant, options, catalog);
+        var identity = new TenantTransmitterIdentity(current, options);
         var pollEndpoints = new PollEndpointLocator(options, routes, identity);
+        var guard = new TenantPartGuard(tenants, tenant, released);
 
         return assembler.Assemble(
             identity,
             pollEndpoints,
-            stores.Build(tenant, released, identity, pollEndpoints, declared),
-            new TenantEventOutbox(serviceProvider.GetRequiredService<IEventOutbox>(), tenant),
-            serviceProvider.CreateService<TenantSecurityEventTokenSigner>(Dependency.Override(tenant)),
+            stores.Build(tenant, released, identity, pollEndpoints, declared, guard),
+            new TenantEventOutbox(serviceProvider.GetRequiredService<IEventOutbox>(), tenant, guard),
+            new InForceTenantTokenSigner(serviceProvider.CreateService<TenantSecurityEventTokenSigner>(), current),
             new TenantDeliveryLease(serviceProvider.GetRequiredService<IDeliveryLease>(), tenant));
     }
 

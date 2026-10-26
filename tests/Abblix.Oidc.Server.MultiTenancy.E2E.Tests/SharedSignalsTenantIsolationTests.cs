@@ -172,6 +172,24 @@ public sealed class SharedSignalsTenantIsolationTests
     }
 
     /// <summary>
+    /// A stream store the host registers after the transmitter's own is the one every tenant's streams are kept in,
+    /// as it is the one the container resolves.
+    /// </summary>
+    [Fact]
+    public async Task AStoreTheHostRegistersAfterTheTransmittersOwn_HoldsTheStreams()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var hosts = new InMemoryStreamStore();
+        await using var app = await StartAsync(beforeMultiTenancy: services => services.AddSingleton<IStreamStore>(hosts));
+
+        using var created = await ClientOf(app, Host + Acme).PostAsJsonAsync(
+            Acme + StreamPath, new CreateStreamRequest { EventsRequested = [MembershipChanged] }, ct);
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Single(await hosts.ListAllAsync(ct));
+    }
+
+    /// <summary>
     /// A poll handler resolved where no tenant is served refuses once it reaches the queued events, rather than
     /// answering from a queue no tenant owns.
     /// </summary>
@@ -181,24 +199,48 @@ public sealed class SharedSignalsTenantIsolationTests
         var ct = TestContext.Current.CancellationToken;
         await using var app = await StartAsync();
         var handler = app.Services.GetRequiredService<PollEndpointHandler>();
-        var stream = new StreamState
-        {
-            ReceiverId = ReceiverId,
-            Status = StreamStatuses.Enabled,
-            SubjectsMode = StreamSubjectsMode.All,
-            Configuration = new StreamConfiguration
-            {
-                StreamId = StreamId,
-                Issuer = Host + Acme,
-                Audiences = [ReceiverId],
-                EventsDelivered = [MembershipChanged],
-                Delivery = new PollDeliveryMethod(new Uri(Host + Acme + StreamPath)),
-            },
-        };
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => handler.HandleAsync(stream, new PollRequest { ReturnImmediately = true }, ct));
+            () => handler.HandleAsync(AcmesStream(), new PollRequest { ReturnImmediately = true }, ct));
     }
+
+    /// <summary>
+    /// A poll handler a host kept from acme's request refuses to read the queued events while globex is served,
+    /// rather than answering globex's caller from acme's queue.
+    /// </summary>
+    [Fact]
+    public async Task APollHandlerKeptFromAnotherTenantsRequest_RefusesOnceUsed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var app = await StartAsync();
+        var catalog = app.Services.GetRequiredService<ITenantCatalog>();
+
+        PollEndpointHandler kept;
+        using (TenantScope.Enter((await catalog.FindByIdAsync("acme", ct))!))
+            kept = app.Services.GetRequiredService<PollEndpointHandler>();
+
+        using var scope = TenantScope.Enter((await catalog.FindByIdAsync("globex", ct))!);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => kept.HandleAsync(AcmesStream(), new PollRequest { ReturnImmediately = true }, ct));
+    }
+
+    /// <summary>
+    /// A poll stream of acme's receiver, as the store hands it to the poll handler.
+    /// </summary>
+    private static StreamState AcmesStream() => new()
+    {
+        ReceiverId = ReceiverId,
+        Status = StreamStatuses.Enabled,
+        SubjectsMode = StreamSubjectsMode.All,
+        Configuration = new StreamConfiguration
+        {
+            StreamId = StreamId,
+            Issuer = Host + Acme,
+            Audiences = [ReceiverId],
+            EventsDelivered = [MembershipChanged],
+            Delivery = new PollDeliveryMethod(new Uri(Host + Acme + StreamPath)),
+        },
+    };
 
     /// <summary>
     /// A receiver whose credentials globex issued, with the same identifier as acme's receiver, presents them under
@@ -504,17 +546,72 @@ public sealed class SharedSignalsTenantIsolationTests
 
         Assert.Equal(1, await DispatchAsync(app, "acme", ct));
         var delivering = sweep.SweepAsync(ct);
-        await receiver.Held.WaitAsync(HeldFor, ct);
+        try
+        {
+            await receiver.Held.WaitAsync(HeldFor, ct);
 
-        // Queued once the first sweep holds acme's claim, so only the second sweep can deliver it
-        Assert.Equal(1, await DispatchAsync(app, "globex", ct));
-        await sweep.SweepAsync(ct);
+            // Queued once the first sweep holds acme's claim, so only the second sweep can deliver it
+            Assert.Equal(1, await DispatchAsync(app, "globex", ct));
+            await sweep.SweepAsync(ct);
 
-        var token = Assert.Single(receiver.Tokens);
-        Assert.Equal(Host + Globex, IssuerOf(token));
+            var token = Assert.Single(receiver.Tokens);
+            Assert.Equal(Host + Globex, IssuerOf(token));
+        }
+        finally
+        {
+            receiver.Release();
+            await delivering;
+        }
+    }
 
-        receiver.Release();
-        await delivering;
+    /// <summary>
+    /// An event dispatcher a host kept from acme's request refuses to dispatch globex's event, rather than queueing it
+    /// on acme's streams for acme's receivers.
+    /// </summary>
+    [Fact]
+    public async Task ADispatcherKeptFromAnotherTenantsRequest_RefusesToDispatch()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var app = await StartAsync();
+        var catalog = app.Services.GetRequiredService<ITenantCatalog>();
+        var acme = (await catalog.FindByIdAsync("acme", ct))!;
+        var globex = (await catalog.FindByIdAsync("globex", ct))!;
+
+        EventDispatcher kept;
+        using (TenantScope.Enter(acme))
+            kept = app.Services.GetRequiredService<EventDispatcher>();
+
+        using var scope = TenantScope.Enter(globex);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => kept.DispatchAsync(
+            new SecurityEventDescriptor { EventType = MembershipChanged, Subject = new EmailSubject("jdoe@example.com") },
+            ct));
+    }
+
+    /// <summary>
+    /// A tenant whose key the host's own catalog rotates signs its events with the new key from then on, an event
+    /// queued before the rotation included.
+    /// </summary>
+    [Fact]
+    public async Task AKeyRotatedInTheHostsCatalog_SignsTheEventsPolledAfterIt()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        ConfiguredStream[] declared =
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, EventsRequested = [MembershipChanged] }];
+        await using var app = await StartAsync(
+            beforeMultiTenancy: services =>
+            {
+                services.AddSingleton<HostCatalog>();
+                services.Replace(ServiceDescriptor.Singleton<ITenantCatalog>(
+                    provider => provider.GetRequiredService<HostCatalog>()));
+            },
+            declare: server => server.AddConfiguredStreams("acme", declared));
+        Assert.Equal(1, await DispatchAsync(app, "acme", ct));
+
+        var rotated = TenantAt("acme", Acme);
+        app.Services.GetRequiredService<HostCatalog>().Own = rotated;
+
+        var token = Assert.Single(await PollAsync(ClientOf(app, Host + Acme), Acme, ct));
+        Assert.Equal(rotated.SigningKeys.Single().KeyId, KeyIdOf(token));
     }
 
     /// <summary>
@@ -571,6 +668,12 @@ public sealed class SharedSignalsTenantIsolationTests
                 });
                 return rsa.VerifyData(signed, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             });
+    }
+
+    private static string? KeyIdOf(string compactToken)
+    {
+        var header = Base64Url.DecodeFromChars(compactToken.Split('.')[0]);
+        return JsonNode.Parse(header)?[JwtClaimTypes.KeyId]?.GetValue<string>();
     }
 
     private static string? IssuerOf(string compactToken)
@@ -686,6 +789,27 @@ public sealed class SharedSignalsTenantIsolationTests
             Tokens.Add(await request.Content!.ReadAsStringAsync(cancellationToken));
             return new HttpResponseMessage(HttpStatusCode.Accepted);
         }
+    }
+
+    /// <summary>
+    /// A catalog of the host's own, which answers with its own definition of a tenant once it holds one and with the
+    /// server's otherwise.
+    /// </summary>
+    private sealed class HostCatalog(StoreTenantCatalog inner) : ITenantCatalog
+    {
+        public TenantDefinition? Own { get; set; }
+
+        public async ValueTask<TenantDefinition?> FindByIdAsync(string tenantId, CancellationToken cancellationToken)
+            => OwnFor(await inner.FindByIdAsync(tenantId, cancellationToken));
+
+        public async ValueTask<TenantDefinition?> FindByAddressAsync(
+            string host,
+            string path,
+            CancellationToken cancellationToken)
+            => OwnFor(await inner.FindByAddressAsync(host, path, cancellationToken));
+
+        private TenantDefinition? OwnFor(TenantDefinition? served)
+            => Own is { } own && served is not null && own.Id == served.Id ? own : served;
     }
 
     /// <summary>

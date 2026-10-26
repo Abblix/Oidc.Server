@@ -71,7 +71,8 @@ public static class SharedSignalsMultiTenancyExtensions
         services.TryAddSingleton<TenantTransmitters>();
 
         // Each part a request, a host's job or an endpoint asks for is the part of the transmitter of the tenant served
-        // when it asks, resolved anew each time, so a part held across requests is not one tenant's for every tenant.
+        // when it asks, resolved anew each time; one held across requests refuses once used while another tenant is
+        // served, rather than serving that tenant's events as its own.
         // Where no tenant is served, it is the part of a transmitter that refuses once it reaches a tenant's data:
         // an endpoint's parts are resolved before its filters run, and the filter answering 404 must get to run
         services.Replace(ServiceDescriptor.Transient(provider => Served(provider).Streams));
@@ -84,9 +85,9 @@ public static class SharedSignalsMultiTenancyExtensions
         services.Replace(ServiceDescriptor.Transient(provider => Served(provider).PollEndpoints));
         services.Replace(ServiceDescriptor.Transient(provider => Served(provider).ManagementEndpoints));
 
-        // The signer alone is not built where no tenant is served: the server's startup check reads a signer that
-        // cannot be built as a server that signs nothing, and any other as one that must be the tenant's own
-        services.Replace(ServiceDescriptor.Transient(provider => ServedTenantOnly(provider).TokenSigner));
+        // The signer a host resolves reads the tenant served at each signing, so one kept across requests signs as
+        // the right tenant; each tenant's transmitter signs through its own
+        services.Replace(ServiceDescriptor.Singleton<ISecurityEventTokenSigner, TenantSecurityEventTokenSigner>());
         services.Replace(ServiceDescriptor.Singleton<IPushDeliverySweep, TenantPushDeliverySweep>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantClosing, TenantStreamsClosing>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, TenantSharedSignalsStartupCheck>());
@@ -97,21 +98,13 @@ public static class SharedSignalsMultiTenancyExtensions
     }
 
     /// <summary>
-    /// The transmitter of the tenant the request or scope is served at.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">No tenant is served.</exception>
-    private static TenantTransmitter ServedTenantOnly(IServiceProvider provider)
-        => provider.GetRequiredService<TenantTransmitters>()
-            .For(provider.GetRequiredService<ITenantAccessor>().CurrentTenant());
-
-    /// <summary>
     /// The transmitter of the tenant the request or scope is served at, or the one serving no tenant.
     /// </summary>
     private static TenantTransmitter Served(IServiceProvider provider)
     {
         var transmitters = provider.GetRequiredService<TenantTransmitters>();
         return provider.GetRequiredService<ITenantAccessor>().Current is { } served
-            ? transmitters.For(served.Tenant)
+            ? transmitters.Serving(served.Tenant)
             : transmitters.None;
     }
 

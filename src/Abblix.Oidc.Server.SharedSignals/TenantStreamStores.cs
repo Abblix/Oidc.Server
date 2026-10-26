@@ -31,20 +31,24 @@ internal sealed class TenantStreamStores(ILogger<TenantStreamStores> logger, ISe
     /// <param name="pollEndpoints">The poll address the declared streams name.</param>
     /// <param name="declared">The streams the tenant declares, or null for a tenant serving its part of the store
     /// alone.</param>
+    /// <param name="guard">Refuses every call made while another tenant is served.</param>
     public (IStreamStore Store, IStreamStore View, Func<bool> Superseded) Build(
         TenantDefinition tenant,
         CancellationToken released,
         ITransmitterIdentity identity,
         PollEndpointLocator pollEndpoints,
-        TenantStreamDeclaration? declared)
+        TenantStreamDeclaration? declared,
+        TenantPartGuard guard)
     {
-        var own = new ReleaseCheckingStreamStore(
-            logger,
-            new TenantStreamStore(
-                serviceProvider.GetRequiredKeyedService<IStreamStore>(TenantTransmitters.SharedStoreKey),
-                tenant),
-            released,
-            TenantKey.PartitionOf(tenant));
+        var own = new GuardedStreamStore(
+            new ReleaseCheckingStreamStore(
+                logger,
+                new TenantStreamStore(
+                    serviceProvider.GetRequiredKeyedService<IStreamStore>(TenantTransmitters.SharedStoreKey),
+                    tenant),
+                released,
+                TenantKey.PartitionOf(tenant)),
+            guard);
 
         if (declared is null)
             return (own, own, static () => false);
