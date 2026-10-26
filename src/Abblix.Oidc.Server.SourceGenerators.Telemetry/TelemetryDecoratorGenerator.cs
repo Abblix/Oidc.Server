@@ -119,7 +119,7 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 	/// <summary>
 	/// The names every decorator takes for itself, which a dependency therefore cannot take.
 	/// </summary>
-	private static readonly string[] ReservedNames = ["inner", "instruments", "tenants", "enrichers"];
+	private static readonly string[] ReservedNames = ["inner", "instruments", "enrichers"];
 
 	/// <inheritdoc />
 	public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -351,7 +351,6 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		{
 			source
 				.AppendLine($"\tprivate readonly global::{TelemetryNamespace}.OidcInstruments _instruments;")
-				.AppendLine("\tprivate readonly global::Abblix.Oidc.Server.Features.MultiTenancy.ITenantAccessor _tenants;")
 				.AppendLine(
 					$"\tprivate readonly global::System.Collections.Generic.IEnumerable<global::{TelemetryNamespace}." +
 					"IEndpointSpanEnricher>? _enrichers;");
@@ -363,7 +362,6 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		if (observesEndpoint)
 		{
 			parameters.Add($"global::{TelemetryNamespace}.OidcInstruments instruments");
-			parameters.Add("global::Abblix.Oidc.Server.Features.MultiTenancy.ITenantAccessor tenants");
 			parameters.Add(
 				$"global::System.Collections.Generic.IEnumerable<global::{TelemetryNamespace}.IEndpointSpanEnricher>? " +
 				"enrichers = null");
@@ -385,7 +383,6 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 		{
 			source
 				.AppendLine("\t\t_instruments = instruments;")
-				.AppendLine("\t\t_tenants = tenants;")
 				.AppendLine("\t\t_enrichers = enrichers;");
 		}
 
@@ -421,16 +418,13 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 			case ObservationKind.Endpoint:
 				run
 					.Append($"global::{TelemetryNamespace}.EndpointObservation.RunAsync(")
-					.Append($"{name}, _instruments, _tenants, () => _inner.{Escape(method.Name)}({arguments}), ")
+					.Append($"{name}, _instruments, {TenantIdOf(method)}, () => _inner.{Escape(method.Name)}({arguments}), ")
 					.Append($"global::{TelemetryNamespace}.EndpointObservation.{reader}");
 				if (tagsRequest)
 					run.Append($", () => RequestTagOf({arguments})");
 
-				// The host's enrichers see the request the handler receives, which follows the tenant it is served at
-				var request = method.Parameters
-					.SkipWhile(parameter => MetadataName(parameter.Type) == TenantDefinitionTypeName)
-					.FirstOrDefault() is { } received ? Escape(received.Name) : "null";
-				run.Append($", enrichment: new global::{TelemetryNamespace}.EndpointEnrichment({request}, _enrichers)");
+				run.Append(
+					$", enrichment: new global::{TelemetryNamespace}.EndpointEnrichment({RequestOf(method)}, _enrichers)");
 				break;
 
 			case ObservationKind.Stage:
@@ -457,14 +451,18 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 			source
 				.AppendLine("\t{")
 				.AppendLine($"\t\tvar __result = await {run};")
-				.AppendLine("\t\tObserve(__result);")
+				.AppendLine(arguments.Length > 0
+					? $"\t\tObserve({arguments}, __result);"
+					: "\t\tObserve(__result);")
 				.AppendLine("\t\treturn __result;")
 				.AppendLine("\t}")
 				.AppendLine()
 				.AppendLine("\t/// <summary>")
-				.AppendLine("\t/// Looks at what the handler returned, once it has returned it.")
+				.AppendLine("\t/// Looks at what the handler returned for the arguments it was handed, once it has returned it.")
 				.AppendLine("\t/// </summary>")
-				.AppendLine($"\tprivate partial void Observe({resultType} result);");
+				.AppendLine(parameters.Length > 0
+					? $"\tprivate partial void Observe({parameters}, {resultType} result);"
+					: $"\tprivate partial void Observe({resultType} result);");
 		}
 		else
 		{
@@ -630,6 +628,27 @@ public sealed class TelemetryDecoratorGenerator : IIncrementalGenerator
 
 		return "NoError";
 	}
+
+	/// <summary>
+	/// The tenant id a generated call measures the request under: that of the tenant the handler is handed, so a call
+	/// made outside a request is measured under the tenant it works for, or none for a handler handed no tenant.
+	/// </summary>
+	private static string TenantIdOf(IMethodSymbol method)
+		=> method.Parameters.FirstOrDefault(parameter => MetadataName(parameter.Type) == TenantDefinitionTypeName)
+			is { } served
+			? $"{Escape(served.Name)}.Id"
+			: "null";
+
+	/// <summary>
+	/// The argument the host's enrichers see as the request: the first the handler receives after the tenant it is
+	/// served at, or none for a handler that receives nothing else.
+	/// </summary>
+	private static string RequestOf(IMethodSymbol method)
+		=> method.Parameters
+			.SkipWhile(parameter => MetadataName(parameter.Type) == TenantDefinitionTypeName)
+			.FirstOrDefault() is { } received
+			? Escape(received.Name)
+			: "null";
 
 	private static string MetadataName(ITypeSymbol type)
 		=> type.ContainingNamespace is { IsGlobalNamespace: false } ns

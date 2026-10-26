@@ -54,6 +54,8 @@ public class SessionManagementService(
     /// Retrieves a cookie configured for session management. This cookie can be used to track the session state
     /// between the client and the server.
     /// </summary>
+    /// <param name="tenant">The tenant whose session the cookie tracks, whose id its name carries.</param>
+    /// <param name="persistence">How the user agent keeps the session the cookie tracks.</param>
     /// <returns>A <see cref="Cookie"/> object configured with session management settings, such as the cookie name,
     /// domain, path, and security attributes.</returns>
     /// <remarks>
@@ -108,6 +110,7 @@ public class SessionManagementService(
     /// Asynchronously generates the response content for the check session endpoint. This method retrieves an HTML template
     /// that includes JavaScript code for the client to check the session state.
     /// </summary>
+    /// <param name="tenant">The tenant whose session cookie the page reads.</param>
     /// <returns>A task that returns a <see cref="CheckSessionResponse"/>
     /// containing the HTML content for the check session iframe and the name of the session management cookie.</returns>
     public async Task<CheckSessionResponse> GetCheckSessionResponseAsync(TenantDefinition tenant)

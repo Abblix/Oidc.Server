@@ -85,7 +85,7 @@ public class AuthorizationRequestProcessor(
 		var model = request.Model;
 
 		// A step of the host's own comes before the consents, so the end user completes it before granting anything
-		if (await _interactionStep.OwedAsync(request, authSession) is { } interactionAnswer)
+		if (await _interactionStep.OwedAsync(tenant, request, authSession) is { } interactionAnswer)
 			return interactionAnswer;
 
 		// What the request asked for, read BEFORE the provider sees it. The provider is a host seam and it
@@ -107,7 +107,7 @@ public class AuthorizationRequestProcessor(
 
 		// Retrieve user consents (i.e., permissions granted for requested
 		// scopes/resources/authorization_details), as prompt=consent leaves them
-		var userConsents = await _consentsReader.ReadAsync(request, authSession);
+		var userConsents = await _consentsReader.ReadAsync(tenant, request, authSession);
 
 		if (_consentsReader.StillOwed(request, authSession, userConsents) is { } consentAnswer)
 			return consentAnswer;

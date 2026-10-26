@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Moq;
 using Xunit;
@@ -65,8 +66,8 @@ public partial class AuthorizationRequestProcessorTests
         // end user the request went on to be answered for.
         AuthSession? chosen = null;
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, It.IsAny<AuthSession>()))
-            .Callback((ValidAuthorizationRequest _, AuthSession session) => chosen = session)
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, It.IsAny<AuthSession>()))
+            .Callback((TenantDefinition _, ValidAuthorizationRequest _, AuthSession session) => chosen = session)
             .ReturnsAsync(new UserConsents
             {
                 // Pending consent stops the flow right after the session was chosen, which is all this
@@ -351,7 +352,7 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { session }.ToAsyncEnumerable());
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(CreateConsents());
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
@@ -382,7 +383,7 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { before, since }.ToAsyncEnumerable());
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, since))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, since))
             .ReturnsAsync(CreateConsents());
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
@@ -411,7 +412,7 @@ public partial class AuthorizationRequestProcessorTests
             .Setup(s => s.GetAvailableAuthSessions())
             .Returns(new[] { session }.ToAsyncEnumerable());
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(CreateConsents());
         _authorizationCodeService
             .Setup(s => s.GenerateAuthorizationCodeAsync(
@@ -516,7 +517,7 @@ public partial class AuthorizationRequestProcessorTests
         var consents = CreateConsents();
 
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, recentSession))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, recentSession))
             .ReturnsAsync(consents);
 
         _authorizationCodeService
@@ -553,7 +554,7 @@ public partial class AuthorizationRequestProcessorTests
         var consents = CreateConsents();
 
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, highAcrSession))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, highAcrSession))
             .ReturnsAsync(consents);
 
         _authorizationCodeService
@@ -568,7 +569,7 @@ public partial class AuthorizationRequestProcessorTests
 
         // Assert - high ACR session should be used
         Assert.IsType<SuccessfullyAuthenticated>(result);
-        _consentsProvider.Verify(p => p.GetUserConsentsAsync(request, highAcrSession), Times.Once);
+        _consentsProvider.Verify(p => p.GetUserConsentsAsync(TestTenant.Matched, request, highAcrSession), Times.Once);
     }
 
     /// <summary>
@@ -588,7 +589,7 @@ public partial class AuthorizationRequestProcessorTests
             .Returns(new[] { session }.ToAsyncEnumerable());
 
         _consentsProvider
-            .Setup(p => p.GetUserConsentsAsync(request, session))
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
             .ReturnsAsync(consents);
 
         _authorizationCodeService

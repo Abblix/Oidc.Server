@@ -49,7 +49,7 @@ public sealed class TelemetryDecoratorGeneratorTests
         inner.Setup(h => h.HandleAsync("request")).ReturnsAsync("handled");
         var decorator = new ObservedProbeHandler(
             inner.Object,
-            new OidcInstruments(NullLoggerFactory.Instance, services.GetRequiredService<IMeterFactory>()), tenants: NoTenant.Accessor);
+            new OidcInstruments(NullLoggerFactory.Instance, services.GetRequiredService<IMeterFactory>()));
 
         var trace = ActivityTraceId.CreateRandom();
         using (new Activity("test").SetParentId(trace, ActivitySpanId.CreateRandom(), ActivityTraceFlags.Recorded).Start())
@@ -60,6 +60,40 @@ public sealed class TelemetryDecoratorGeneratorTests
 
         var span = Assert.Single(stopped, span => span.TraceId == trace);
         Assert.Equal(TelemetryEndpoints.Introspection, span.GetTagItem(TelemetryTags.Endpoint));
+    }
+
+    /// <summary>
+    /// A handler handed its tenant after its request is measured under that tenant, and the host's enrichers see the
+    /// request rather than the tenant.
+    /// </summary>
+    [Fact]
+    public async Task AHandlerHandedItsTenantLast_IsMeasuredUnderItAndEnrichedWithItsRequest()
+    {
+        var stopped = new ConcurrentBag<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == OidcTelemetry.SourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = stopped.Add,
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        await using var services = new ServiceCollection().AddMetrics().BuildServiceProvider();
+        var inner = new Mock<IProbeTenantLastHandler>();
+        inner.Setup(h => h.HandleAsync("request", TestTenant.Matched)).ReturnsAsync("handled");
+        var enricher = new Mock<IEndpointSpanEnricher>();
+        var decorator = new ObservedProbeTenantLastHandler(
+            inner.Object,
+            new OidcInstruments(NullLoggerFactory.Instance, services.GetRequiredService<IMeterFactory>()),
+            [enricher.Object]);
+
+        var trace = ActivityTraceId.CreateRandom();
+        using (new Activity("test").SetParentId(trace, ActivitySpanId.CreateRandom(), ActivityTraceFlags.Recorded).Start())
+            Assert.True((await decorator.HandleAsync("request", SingleIssuer.Tenant)).TryGetSuccess(out _));
+
+        var span = Assert.Single(stopped, span => span.TraceId == trace);
+        Assert.Equal(SingleIssuer.Tenant.Id, span.GetTagItem(TelemetryTags.Tenant));
+        enricher.Verify(e => e.Enrich(span, TelemetryEndpoints.Revocation, "request"), Times.Once);
     }
 
     private const string Ok = "Abblix.Utils.Result<string, Abblix.Oidc.Server.Common.OidcError>";

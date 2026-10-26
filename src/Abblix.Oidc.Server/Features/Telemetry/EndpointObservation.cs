@@ -12,7 +12,6 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.Licensing;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Telemetry;
@@ -29,7 +28,7 @@ internal static class EndpointObservation
     /// </summary>
     /// <param name="endpoint">The endpoint, one of <see cref="TelemetryEndpoints"/>.</param>
     /// <param name="instruments">Records the request into the server's metrics.</param>
-    /// <param name="tenants">Tells the tenant serving the request.</param>
+    /// <param name="tenant">The id of the tenant the handler is handed, or null for a handler handed none.</param>
     /// <param name="handle">The endpoint's handling.</param>
     /// <param name="errorOf">The error the outcome refuses the request with, or null when it does not.</param>
     /// <param name="tags">The request's attribute, from the closed set its tag documents; asked only when a span is
@@ -38,13 +37,12 @@ internal static class EndpointObservation
     public static async Task<TResult> RunAsync<TResult>(
         string endpoint,
         OidcInstruments instruments,
-        ITenantAccessor tenants,
+        string? tenant,
         Func<Task<TResult>> handle,
         Func<TResult, OidcError?> errorOf,
         Func<(string Key, string? Value)>? tags = null,
         EndpointEnrichment enrichment = default)
     {
-        var tenant = TenantOf(tenants);
         using var span = StartSpan(endpoint, tenant, tags);
 
         var started = Stopwatch.GetTimestamp();
@@ -134,11 +132,6 @@ internal static class EndpointObservation
         span?.SetTag(TelemetryTags.ErrorType, exception.GetType().FullName);
         span?.SetStatus(ActivityStatusCode.Error);
     }
-
-    /// <summary>
-    /// The tenant serving the request, or null for a request outside every tenant.
-    /// </summary>
-    public static string? TenantOf(ITenantAccessor tenants) => tenants.Current?.Tenant.Id;
 
     /// <summary>
     /// The error of a refusal, or null for a success.

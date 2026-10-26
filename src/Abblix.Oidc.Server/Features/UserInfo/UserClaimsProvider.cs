@@ -63,7 +63,7 @@ public partial class UserClaimsProvider(
             scope, requestedClaims?.Select(claim => claim.Key))
             .Distinct(StringComparer.Ordinal);
 
-        var userInfo = await userInfoProvider.GetUserInfoAsync(authSession, claimNames);
+        var userInfo = await userInfoProvider.GetUserInfoAsync(tenant, authSession, claimNames);
         if (userInfo == null)
         {
             LogUserClaimsNotFound();

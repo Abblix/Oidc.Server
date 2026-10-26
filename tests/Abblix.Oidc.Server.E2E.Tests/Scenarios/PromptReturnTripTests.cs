@@ -109,7 +109,8 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
 
         private bool _refused;
 
-        public Task<UserConsents> GetUserConsentsAsync(ValidAuthorizationRequest request, AuthSession authSession)
+        public Task<UserConsents> GetUserConsentsAsync(
+            Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession)
             => Task.FromResult(new UserConsents
             {
                 Granted = _refused ? new ConsentDefinition([], []) : new ConsentDefinition(request.Scope, request.Resources),

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 
 namespace Abblix.Oidc.Server.Features.UserInteraction;
@@ -32,8 +33,8 @@ namespace Abblix.Oidc.Server.Features.UserInteraction;
 /// on its verification page or on the authentication device, and puts any step of its own there.
 /// </para>
 /// <para>
-/// The server asks the same implementation for every tenant; a host keeping its steps per tenant
-/// reads the tenant of the request from <c>ITenantAccessor</c>.
+/// The server asks the same implementation for every tenant and hands it the tenant the request is served at; a
+/// host keeping its steps per tenant answers for that tenant.
 /// </para>
 /// </remarks>
 public interface IUserInteractionRequirement
@@ -42,7 +43,8 @@ public interface IUserInteractionRequirement
     /// Whether the end user of <paramref name="authSession"/> must complete a step before
     /// <paramref name="request"/> is authorized.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The validated authorization request.</param>
     /// <param name="authSession">The session selected to answer the request.</param>
-    Task<bool> IsRequiredAsync(ValidAuthorizationRequest request, AuthSession authSession);
+    Task<bool> IsRequiredAsync(TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession);
 }

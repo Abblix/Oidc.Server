@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 
 namespace Abblix.Oidc.Server.Features.UserInfo;
@@ -19,10 +20,9 @@ namespace Abblix.Oidc.Server.Features.UserInfo;
 /// of claim types including those that require complex, structured data beyond traditional scalar values.
 /// </summary>
 /// <remarks>
-/// The users stay the host's: the server keeps no users of its own and does not partition this provider by tenant,
-/// so every tenant asks the same one. A host whose tenants keep users apart reads the tenant of the request from
-/// <c>ITenantAccessor</c> and answers from that tenant's users; a host whose tenants share their users answers alike
-/// for every tenant.
+/// The users stay the host's: the server keeps no users of its own and asks the same provider for every tenant,
+/// handing it the tenant the claims are released at. A host whose tenants keep users apart answers from that tenant's
+/// users; a host whose tenants share their users answers alike for every tenant.
 /// </remarks>
 public interface IUserInfoProvider
 {
@@ -32,6 +32,10 @@ public interface IUserInfoProvider
     /// specification by allowing for the selective disclosure of user information, catering to the need for complex
     /// data structures within claims.
     /// </summary>
+    /// <param name="tenant">
+    /// The tenant the claims are released at: the one the request is served at, or the one a backchannel
+    /// authentication is completed at when the host completes it outside a request.
+    /// </param>
     /// <param name="authSession">
     /// The authentication session containing the user's subject identifier and additional authentication context.
     /// This provides access to authentication-specific claims such as the email used during authentication,
@@ -63,5 +67,6 @@ public interface IUserInfoProvider
     /// Implementations should prioritize authentication session claims (such as authSession.Email) over database values
     /// to preserve the exact authentication context, especially for external provider authentications.
     /// </remarks>
-    Task<JsonObject?> GetUserInfoAsync(AuthSession authSession, IEnumerable<string> requestedClaims);
+    Task<JsonObject?> GetUserInfoAsync(
+        TenantDefinition tenant, AuthSession authSession, IEnumerable<string> requestedClaims);
 }

@@ -39,6 +39,7 @@ namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 public sealed class AutoConsentsProvider(IHttpContextAccessor httpContextAccessor) : IUserConsentsProvider
 {
     public Task<UserConsents> GetUserConsentsAsync(
+        Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthSession authSession)
     {

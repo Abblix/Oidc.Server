@@ -657,6 +657,8 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
     /// </summary>
     private sealed class ReachableUserDeviceHandler(TimeProvider clock) : IUserDeviceAuthenticationHandler
     {
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1172",
+            Justification = "The parameters belong to the interface; this stand-in answers the same way at every tenant.")]
         public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(
             TenantDefinition tenant,
             ValidBackChannelAuthenticationRequest request)

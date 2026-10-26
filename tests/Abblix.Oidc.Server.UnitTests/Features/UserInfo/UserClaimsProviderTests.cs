@@ -174,7 +174,7 @@ public class UserClaimsProviderTests
             IdentityProvider: "local");
 
         _userInfoProvider
-            .Setup(p => p.GetUserInfoAsync(authSession, It.IsAny<IEnumerable<string>>()))
+            .Setup(p => p.GetUserInfoAsync(TestTenant.Matched, authSession, It.IsAny<IEnumerable<string>>()))
             .ReturnsAsync(userInfo);
 
         return await _provider.GetUserClaimsAsync(

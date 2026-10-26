@@ -64,9 +64,9 @@ public sealed class EndpointMetricsTests : IDisposable
 
     private Task<Result<TokenIssued, OidcError>> Token(
         Result<TokenIssued, OidcError> result,
-        ITenantAccessor? tenants = null)
+        string? tenant = null)
         => EndpointObservation.RunAsync(
-            TelemetryEndpoints.Token, _instruments, tenants ?? NoTenant.Accessor, () => Task.FromResult(result), EndpointObservation.ErrorOf);
+            TelemetryEndpoints.Token, _instruments, tenant, () => Task.FromResult(result), EndpointObservation.ErrorOf);
 
     private static TokenIssued Issued => new(
         new EncodedJsonWebToken(new JsonWebToken(), "token"),
@@ -123,7 +123,7 @@ public sealed class EndpointMetricsTests : IDisposable
     public async Task AFailedRequest_IsMeasuredAsFailedAndPassesOn()
     {
         await Assert.ThrowsAsync<TimeoutException>(() => EndpointObservation.RunAsync<Result<TokenIssued, OidcError>>(
-            TelemetryEndpoints.Token, _instruments, NoTenant.Accessor, () => throw new TimeoutException(), EndpointObservation.ErrorOf));
+            TelemetryEndpoints.Token, _instruments, null, () => throw new TimeoutException(), EndpointObservation.ErrorOf));
 
         var request = Assert.Single(_measured.Of(OidcMetrics.RequestDuration));
         Assert.Equal(TelemetryOutcomes.Failed, request[TelemetryTags.Outcome]);
@@ -146,7 +146,7 @@ public sealed class EndpointMetricsTests : IDisposable
         System.Diagnostics.ActivitySource.AddActivityListener(listener);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => EndpointObservation.RunAsync(
-            TelemetryEndpoints.Token, _instruments, NoTenant.Accessor, () => Task.FromResult(Issued), EndpointObservation.NoError,
+            TelemetryEndpoints.Token, _instruments, null, () => Task.FromResult(Issued), EndpointObservation.NoError,
             enrichment: new EndpointEnrichment(null, [enricher.Object])));
 
         Assert.Equal(
@@ -157,9 +157,7 @@ public sealed class EndpointMetricsTests : IDisposable
     [Fact]
     public async Task UnderMultiTenancy_TheRequestNamesTheTenant()
     {
-        var served = new TenantContext { Tenant = new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") } };
-
-        await Token(Issued, Mock.Of<ITenantAccessor>(accessor => accessor.Current == served));
+        await Token(Issued, "acme");
 
         Assert.Equal("acme", Assert.Single(_measured.Of(OidcMetrics.RequestDuration))[TelemetryTags.Tenant]);
     }
@@ -186,7 +184,7 @@ public sealed class EndpointMetricsTests : IDisposable
             () => EndpointObservation.RunAsync<Result<TokenIssued, OidcError>>(
                 TelemetryEndpoints.Token,
                 _instruments,
-                NoTenant.Accessor,
+                null,
                 () => throw new TooManyAuthenticationFailuresException(spent),
                 EndpointObservation.ErrorOf));
 
@@ -209,7 +207,7 @@ public sealed class EndpointMetricsTests : IDisposable
             () => EndpointObservation.RunAsync<Result<TokenIssued, OidcError>>(
                 TelemetryEndpoints.Token,
                 _instruments,
-                NoTenant.Accessor,
+                null,
                 () => throw new LicenseViolationException(reason),
                 EndpointObservation.ErrorOf));
 
@@ -302,7 +300,7 @@ public sealed class EndpointMetricsTests : IDisposable
         inner
             .Setup(h => h.HandleAsync(TestTenant.Matched, request))
             .ReturnsAsync(new AuthorizationError(request, ErrorCodes.AccessDenied, "The user said no", ResponseModes.Query, null));
-        var observed = new ObservedAuthorizationHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
+        var observed = new ObservedAuthorizationHandler(inner.Object, _instruments);
 
         await observed.HandleAsync(SingleIssuer.Tenant, request);
 
@@ -324,7 +322,7 @@ public sealed class EndpointMetricsTests : IDisposable
                 AccessToken = AToken,
                 IdToken = AToken,
             });
-        var traced = new ObservedAuthorizationHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
+        var traced = new ObservedAuthorizationHandler(inner.Object, _instruments);
 
         await traced.HandleAsync(SingleIssuer.Tenant, request);
 
@@ -333,6 +331,8 @@ public sealed class EndpointMetricsTests : IDisposable
             [TelemetryTokenTypes.AccessToken, TelemetryTokenTypes.IdToken],
             issued.Select(tags => tags[TelemetryTags.TokenType]));
         Assert.All(issued, tags => Assert.Equal(GrantTypes.Implicit, tags[TelemetryTags.GrantType]));
+        Assert.All(issued, tags => Assert.Equal(SingleIssuer.Tenant.Id, tags[TelemetryTags.Tenant]));
+        Assert.Equal(SingleIssuer.Tenant.Id, Assert.Single(_measured.Of(OidcMetrics.RequestDuration))[TelemetryTags.Tenant]);
     }
 
     [Fact]
@@ -343,7 +343,7 @@ public sealed class EndpointMetricsTests : IDisposable
             .SetupSequence(h => h.HandleAsync(TestTenant.Matched, It.IsAny<ClientRegistrationRequest>()))
             .ReturnsAsync(new ClientRegistrationSuccessResponse("client", null, "token") { Metadata = new() })
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidRedirectUri, "Refused"));
-        var traced = new ObservedRegisterClientHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
+        var traced = new ObservedRegisterClientHandler(inner.Object, _instruments);
 
         await traced.HandleAsync(SingleIssuer.Tenant, new ClientRegistrationRequest());
         await traced.HandleAsync(SingleIssuer.Tenant, new ClientRegistrationRequest());
@@ -361,7 +361,7 @@ public sealed class EndpointMetricsTests : IDisposable
         inner
             .Setup(h => h.HandleAsync(TestTenant.Matched, It.IsAny<ClientRegistrationRequest>()))
             .ThrowsAsync(new TooManyAuthenticationFailuresException(spent));
-        var observed = new ObservedRegisterClientHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
+        var observed = new ObservedRegisterClientHandler(inner.Object, _instruments);
 
         await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
             () => observed.HandleAsync(SingleIssuer.Tenant, new ClientRegistrationRequest()));
@@ -377,7 +377,7 @@ public sealed class EndpointMetricsTests : IDisposable
         inner
             .Setup(h => h.HandleAsync(TestTenant.Matched, It.IsAny<ClientRegistrationRequest>()))
             .ThrowsAsync(new TimeoutException());
-        var traced = new ObservedRegisterClientHandler(inner.Object, _instruments, tenants: NoTenant.Accessor);
+        var traced = new ObservedRegisterClientHandler(inner.Object, _instruments);
 
         await Assert.ThrowsAsync<TimeoutException>(() => traced.HandleAsync(SingleIssuer.Tenant, new ClientRegistrationRequest()));
 

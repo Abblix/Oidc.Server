@@ -8,6 +8,7 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 
@@ -18,6 +19,7 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 /// </summary>
 internal sealed class SignedInUserInfo : IUserInfoProvider
 {
-    public Task<JsonObject?> GetUserInfoAsync(AuthSession authSession, IEnumerable<string> requestedClaims)
+    public Task<JsonObject?> GetUserInfoAsync(
+        TenantDefinition tenant, AuthSession authSession, IEnumerable<string> requestedClaims)
         => Task.FromResult<JsonObject?>(new JsonObject { [IanaClaimTypes.Sub] = authSession.Subject });
 }
