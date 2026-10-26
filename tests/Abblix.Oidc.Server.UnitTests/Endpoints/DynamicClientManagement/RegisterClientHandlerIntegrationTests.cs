@@ -113,8 +113,8 @@ public class RegisterClientHandlerIntegrationTests
     };
 
     /// <summary>
-    /// An initial access token is revoked by its identifier, recorded in the token registry the server shares
-    /// between its instances: it registers a client until then, and is refused from the moment it is recorded.
+    /// An initial access token is revoked by its identifier, recorded in the token registry: it registers a client
+    /// until then, and is refused from the moment it is recorded.
     /// </summary>
     [Fact]
     public async Task AnInitialAccessTokenRevokedByItsIdentifier_IsRefusedAtRegistration()
