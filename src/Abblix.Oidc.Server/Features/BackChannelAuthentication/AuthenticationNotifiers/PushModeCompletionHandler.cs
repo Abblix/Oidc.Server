@@ -156,6 +156,7 @@ public partial class PushModeCompletionHandler(
         try
         {
             refusal = await authorizationDetailsPolicy.RefuseAsync(
+                tenant,
                 request.AuthorizedGrant,
                 request.RequestedAuthorizationDetails,
                 clientInfo,

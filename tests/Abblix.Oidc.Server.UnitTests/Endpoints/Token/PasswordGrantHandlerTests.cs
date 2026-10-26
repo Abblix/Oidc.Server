@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Moq;
@@ -85,7 +86,7 @@ public class PasswordGrantHandlerTests
             Context: new AuthorizationContext(ClientId, tokenRequest.Scope, null));
 
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, Password, It.Is<AuthorizationContext>(ctx =>
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, Password, It.Is<AuthorizationContext>(ctx =>
                 ctx.ClientId == ClientId &&
                 ctx.Scope.SequenceEqual(tokenRequest.Scope))))
             .ReturnsAsync(expectedGrant);
@@ -116,7 +117,7 @@ public class PasswordGrantHandlerTests
 
         var authError = new OidcError(ErrorCodes.InvalidGrant, "Invalid username or password");
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, "wrongpassword", It.IsAny<AuthorizationContext>()))
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, "wrongpassword", It.IsAny<AuthorizationContext>()))
             .ReturnsAsync(authError);
 
         // Act
@@ -145,7 +146,7 @@ public class PasswordGrantHandlerTests
 
         var authError = new OidcError(ErrorCodes.InvalidGrant, "Account is locked");
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, Password, It.IsAny<AuthorizationContext>()))
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, Password, It.IsAny<AuthorizationContext>()))
             .ReturnsAsync(authError);
 
         // Act
@@ -179,7 +180,7 @@ public class PasswordGrantHandlerTests
             Context: new AuthorizationContext(ClientId, tokenRequest.Scope, null));
 
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(specialUserName, specialPassword, It.IsAny<AuthorizationContext>()))
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, specialUserName, specialPassword, It.IsAny<AuthorizationContext>()))
             .ReturnsAsync(expectedGrant);
 
         // Act
@@ -211,7 +212,7 @@ public class PasswordGrantHandlerTests
             Context: new AuthorizationContext(ClientId, scopes, null));
 
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, Password, It.Is<AuthorizationContext>(ctx =>
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, Password, It.Is<AuthorizationContext>(ctx =>
                 ctx.Scope.SequenceEqual(scopes))))
             .ReturnsAsync(expectedGrant);
 
@@ -243,7 +244,7 @@ public class PasswordGrantHandlerTests
             Context: new AuthorizationContext(ClientId, null!, null));
 
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, Password, It.Is<AuthorizationContext>(ctx =>
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, Password, It.Is<AuthorizationContext>(ctx =>
                 ctx.Scope == null)))
             .ReturnsAsync(expectedGrant);
 
@@ -290,9 +291,9 @@ public class PasswordGrantHandlerTests
 
         AuthorizationContext? capturedContext = null;
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, Password, It.IsAny<AuthorizationContext>()))
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, Password, It.IsAny<AuthorizationContext>()))
             .ReturnsAsync(expectedGrant)
-            .Callback<string, string, AuthorizationContext>((_, _, ctx) => capturedContext = ctx);
+            .Callback<TenantDefinition, string, string, AuthorizationContext>((_, _, _, ctx) => capturedContext = ctx);
 
         // Act
         await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -330,9 +331,9 @@ public class PasswordGrantHandlerTests
 
         AuthorizationContext? capturedContext = null;
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, Password, It.IsAny<AuthorizationContext>()))
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, Password, It.IsAny<AuthorizationContext>()))
             .ReturnsAsync(expectedGrant)
-            .Callback<string, string, AuthorizationContext>((_, _, ctx) => capturedContext = ctx);
+            .Callback<TenantDefinition, string, string, AuthorizationContext>((_, _, _, ctx) => capturedContext = ctx);
 
         // Act
         await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);

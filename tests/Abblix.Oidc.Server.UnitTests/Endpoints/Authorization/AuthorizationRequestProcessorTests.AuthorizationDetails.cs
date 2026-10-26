@@ -204,8 +204,9 @@ public partial class AuthorizationRequestProcessorTests
 
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
+                TestTenant.Matched,
                 It.IsAny<JsonArray?>(), It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((JsonArray? ad, JsonArray? _, ClientInfo _, CancellationToken _) =>
+            .ReturnsAsync((TenantDefinition _, JsonArray? ad, JsonArray? _, ClientInfo _, CancellationToken _) =>
                 CapAmount(ad, 800m) ?? new JsonArray());
 
         var capture = SetupSuccessfulAuthCodeFlow(request, session, consents);
@@ -340,6 +341,7 @@ public partial class AuthorizationRequestProcessorTests
         var backstop = new Mock<IConsentConstraintEnforcer>(MockBehavior.Strict);
         backstop
             .Setup(b => b.EnforceAsync(
+                TestTenant.Matched,
                 It.IsAny<ValidAuthorizationRequest>(), It.IsAny<ConsentDefinition>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<JsonArray, OidcError>)new JsonArray());
 

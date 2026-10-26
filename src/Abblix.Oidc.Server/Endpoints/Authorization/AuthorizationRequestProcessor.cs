@@ -143,7 +143,7 @@ public class AuthorizationRequestProcessor(
 				model.RedirectUri);
 		}
 
-		var authContext = await _contextBuilder.BuildAsync(request, userConsents, requestedDetails);
+		var authContext = await _contextBuilder.BuildAsync(tenant, request, userConsents, requestedDetails);
 		if (authContext.TryGetFailure(out var refusal))
 		{
 			return new AuthorizationError(

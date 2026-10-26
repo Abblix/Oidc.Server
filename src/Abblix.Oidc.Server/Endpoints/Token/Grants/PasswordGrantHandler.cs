@@ -79,6 +79,6 @@ public class PasswordGrantHandler(
         var context = new AuthorizationContext(clientInfo.ClientId, scope, null, request.Resources);
 
         // Delegate the actual user credential validation and authentication to the custom authenticator.
-        return userCredentialsAuthenticator.ValidateAsync(userName, password, context);
+        return userCredentialsAuthenticator.ValidateAsync(tenant, userName, password, context);
     }
 }

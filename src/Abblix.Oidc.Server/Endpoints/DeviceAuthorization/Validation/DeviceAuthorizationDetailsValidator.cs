@@ -15,7 +15,7 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 /// <summary>
 /// Thin endpoint-side adapter that delegates the RFC 9396 section 3 device-flow
 /// <c>authorization_details</c> validation to
-/// <see cref="IAuthorizationDetailsPolicy.ApplyAsync(System.Text.Json.Nodes.JsonArray, Abblix.Oidc.Server.Features.ClientInformation.ClientInfo, System.Threading.CancellationToken)"/> and propagates the
+/// <see cref="IAuthorizationDetailsPolicy.ApplyAsync(Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition, System.Text.Json.Nodes.JsonArray, Abblix.Oidc.Server.Features.ClientInformation.ClientInfo, System.Threading.CancellationToken)"/> and propagates the
 /// <see cref="OidcError"/> as-is. All actual policy lives on the composite so /authorize,
 /// /par, CIBA and device-flow endpoints share one source of truth.
 /// </summary>
@@ -30,6 +30,7 @@ public class DeviceAuthorizationDetailsValidator(
         var requested = context.Request.AuthorizationDetails is { Count: > 0 };
 
         var result = await policy.ApplyAsync(
+            tenant,
             context.Request.AuthorizationDetails,
             context.ClientInfo,
             CancellationToken.None);

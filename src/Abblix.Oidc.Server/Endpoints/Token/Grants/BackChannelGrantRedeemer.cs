@@ -89,7 +89,7 @@ internal sealed partial class BackChannelGrantRedeemer(
         // cancellation token, because the request is already taken: giving up here would spend it and issue
         // nothing, where finishing issues tokens a departed client simply never reads.
         if (await authorizationDetailsPolicy.RefuseAsync(
-                grant, request.RequestedAuthorizationDetails, clientInfo, CancellationToken.None)
+                tenant, grant, request.RequestedAuthorizationDetails, clientInfo, CancellationToken.None)
             is not { } refusal)
             return grant;
 

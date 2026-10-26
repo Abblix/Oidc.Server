@@ -12,6 +12,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Utils;
 
@@ -31,6 +32,7 @@ public sealed class PaymentInitiationValidator : IAuthorizationDetailValidator
     public string Type => "payment_initiation";
 
     public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+        TenantDefinition tenant,
         AuthorizationDetail detail,
         ClientInfo client,
         CancellationToken token)
@@ -56,12 +58,13 @@ public sealed class PaymentInitiationValidator : IAuthorizationDetailValidator
     /// the host's code that made the decision, so it is thrown rather than returned.
     /// </summary>
     public async Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+        TenantDefinition tenant,
         AuthorizationDetail detail,
         IReadOnlyList<AuthorizationDetail> requested,
         ClientInfo client,
         CancellationToken token)
     {
-        var validated = await ValidateAsync(detail, client, token);
+        var validated = await ValidateAsync(tenant, detail, client, token);
         if (validated.TryGetFailure(out var defect))
         {
             throw new InvalidOperationException(

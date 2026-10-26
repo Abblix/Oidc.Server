@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -139,6 +140,7 @@ public class AuthorizationDetailsTypesValidatorTests
         public string Type => key ?? "stub";
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }

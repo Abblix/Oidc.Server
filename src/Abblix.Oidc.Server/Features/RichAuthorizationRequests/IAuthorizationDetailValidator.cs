@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
@@ -40,6 +41,7 @@ public interface IAuthorizationDetailValidator
     /// Validates a single authorization-detail entry against this validator's per-type schema
     /// and any per-client policy the implementation chooses to enforce.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="detail">The entry to validate. Its <see cref="AuthorizationDetail.Type"/>
     /// matches this validator's <see cref="Type"/>; the per-type schema lives in the raw
     /// <see cref="AuthorizationDetail.Json"/> object alongside the RFC 9396 section 2.2
@@ -52,6 +54,7 @@ public interface IAuthorizationDetailValidator
     /// failure. RFC 9396 section 5 makes the protocol-level error code at the wire
     /// <c>invalid_authorization_details</c> regardless of the underlying reason.</returns>
     Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+        TenantDefinition tenant,
         AuthorizationDetail detail,
         ClientInfo client,
         CancellationToken token);
@@ -105,6 +108,7 @@ public interface IAuthorizationDetailValidator
     /// <see cref="OidcError"/>, the first of the two.
     /// </para>
     /// </remarks>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="detail">The granted entry, whose <see cref="AuthorizationDetail.Type"/> matches
     /// this validator's <see cref="Type"/>.</param>
     /// <param name="requested">The entries of this validator's <see cref="Type"/> the request carried,
@@ -115,11 +119,12 @@ public interface IAuthorizationDetailValidator
     /// <see cref="OidcError"/> describing why the granted entry is refused, most likely for being wider than
     /// the requested ones.</returns>
     Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+        TenantDefinition tenant,
         AuthorizationDetail detail,
         IReadOnlyList<AuthorizationDetail> requested,
         ClientInfo client,
         CancellationToken token)
-        => ValidateAsync(detail, client, token);
+        => ValidateAsync(tenant, detail, client, token);
 
     /// <summary>
     /// Optional: produces a host-renderable <see cref="AuthorizationDetailDescriptor"/> describing
@@ -129,6 +134,7 @@ public interface IAuthorizationDetailValidator
     /// extract the structured payload from <see cref="AuthorizationDetail.Json"/> and project it to
     /// the descriptor's Title / Summary / Details shape.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="detail">The entry to describe. Already passed
     /// <see cref="ValidateAsync"/>, so the per-type schema is satisfied.</param>
     /// <param name="client">The requesting client, for descriptions that vary by client metadata
@@ -137,6 +143,7 @@ public interface IAuthorizationDetailValidator
     /// <returns>The descriptor on success; <c>null</c> when no structured description is
     /// available and the host should fall back to a JSON-dump rendering.</returns>
     Task<AuthorizationDetailDescriptor?> BuildConsentDescriptorAsync(
+        TenantDefinition tenant,
         AuthorizationDetail detail,
         ClientInfo client,
         CancellationToken cancellationToken)

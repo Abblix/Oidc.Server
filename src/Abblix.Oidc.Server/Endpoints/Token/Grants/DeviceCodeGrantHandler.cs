@@ -187,6 +187,7 @@ public partial class DeviceCodeGrantHandler(
                 // token, because the code is already claimed: giving up here would spend it and issue
                 // nothing, where finishing issues tokens a departed client simply never reads.
                 if (await authorizationDetailsPolicy.RefuseAsync(
+                        tenant,
                         authorizedGrant,
                         deviceRequest.AuthorizationDetails,
                         clientInfo,

@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ImplicitFlow;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Storages;
@@ -67,8 +68,9 @@ public partial class AuthorizationRequestProcessorTests
         // covered in ConsentConstraintEnforcerTests against the real enforcer.
         _authorizationDetailsPolicy
             .Setup(p => p.ApplyGrantedAsync(
+                TestTenant.Matched,
                 It.IsAny<JsonArray?>(), It.IsAny<JsonArray?>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((JsonArray? ad, JsonArray? _, ClientInfo _, CancellationToken _) => ad ?? new JsonArray());
+            .ReturnsAsync((TenantDefinition _, JsonArray? ad, JsonArray? _, ClientInfo _, CancellationToken _) => ad ?? new JsonArray());
 
         _timeProvider = new FakeTimeProvider();
 

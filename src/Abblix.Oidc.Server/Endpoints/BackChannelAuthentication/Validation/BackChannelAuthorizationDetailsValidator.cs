@@ -32,6 +32,7 @@ public class BackChannelAuthorizationDetailsValidator(
         var requested = context.Request.AuthorizationDetails is { Count: > 0 };
 
         var result = await policy.ApplyAsync(
+            tenant,
             context.Request.AuthorizationDetails,
             context.ClientInfo,
             CancellationToken.None);

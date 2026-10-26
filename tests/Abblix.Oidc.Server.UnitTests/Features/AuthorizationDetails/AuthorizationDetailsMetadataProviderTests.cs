@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -72,6 +73,7 @@ public class AuthorizationDetailsMetadataProviderTests
     {
         public string Type => "payment_initiation";
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
@@ -80,6 +82,7 @@ public class AuthorizationDetailsMetadataProviderTests
     {
         public string Type => "account_information";
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
