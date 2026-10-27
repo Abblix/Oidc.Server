@@ -78,6 +78,7 @@ internal sealed class TenantSharedSignalsStartupCheck(IServiceProvider servicePr
         Require<ITransmitterIdentity, NoTenantTransmitterIdentity>(failures);
         Require<IEventOutbox, NoTenantEventOutbox>(failures);
         Require<IPushDeliverySweep, TenantPushDeliverySweep>(failures);
+        RequirePartitions(failures);
 
         var transmitter = serviceProvider.GetRequiredService<SharedSignalsTransmitterOptions>();
         if (!Uri.TryCreate(transmitter.Issuer, UriKind.Absolute, out var issuerUri) || issuerUri.AbsolutePath != "/")
@@ -146,6 +147,28 @@ internal sealed class TenantSharedSignalsStartupCheck(IServiceProvider servicePr
         var service = serviceProvider.GetRequiredService<TService>();
         if (service is not TPerTenant)
             failures.Add(Shared<TService, TPerTenant>(service));
+    }
+
+    /// <summary>
+    /// Refuses a store every tenant shares that keeps no partitions while the host registered one that does: a store
+    /// the host wrapped around it hides the partitions the tenants' streams are kept in.
+    /// </summary>
+    private void RequirePartitions(List<string> failures)
+    {
+        if (serviceProvider.GetService<PartitionedStreamStoreRegistration>() is not { } registered)
+            return;
+
+        var shared = serviceProvider.GetRequiredKeyedService<IStreamStore>(TenantTransmitters.SharedStoreKey);
+        if (shared is IPartitionedStreamStore)
+            return;
+
+        failures.Add(
+            $"The stream store registered is {registered.StoreType.Name}, which keeps each tenant's streams in a "
+            + $"partition of its own, but the store every tenant shares is {shared.GetType().Name}, which keeps none, "
+            + "so the tenants' streams kept in partitions would not be found. A store wrapping "
+            + $"{registered.StoreType.Name} implements {nameof(IPartitionedStreamStore)} and returns the inner "
+            + "store's partition wrapped; a store of your own in its place is registered without the call that "
+            + $"registers {registered.StoreType.Name}.");
     }
 
     private static string Shared<TService, TPerTenant>(object service)

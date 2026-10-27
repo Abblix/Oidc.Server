@@ -15,6 +15,15 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <remarks>
 /// A transmitter serving several parties, as one tenant each, asks for the store of the party it serves. One sharing a
 /// store without partitions between its parties reads every party's streams on each listing.
+/// <para>
+/// <see cref="Partition"/> is called while requests are served and from several threads at once, so it does no I/O,
+/// and every call naming the same partition returns a store over the same streams.
+/// </para>
+/// <para>
+/// A store wrapping one that keeps partitions implements this interface too and returns the inner store's partition,
+/// wrapped. A wrapper that does not hides the partitions: the transmitter reads every party's streams from the
+/// wrapper, where none of the streams kept in partitions are.
+/// </para>
 /// </remarks>
 public interface IPartitionedStreamStore : IStreamStore
 {

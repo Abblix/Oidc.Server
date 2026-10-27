@@ -38,7 +38,7 @@ A queue expires after `RedisOutboxOptions.Retention` without a new event, seven 
 
 ## Stream registrations
 
-`AddSharedSignalsRedisStreamStore()` puts the transmitter's stream registrations on one Redis hash - the durable `IStreamStore` for a transmitter whose streams must outlive its process without a database of its own.
+`AddSharedSignalsRedisStreamStore()` puts the transmitter's stream registrations on a Redis hash - the durable `IStreamStore` for a transmitter whose streams must outlive its process without a database of its own. A transmitter serving tenants keeps each tenant's streams on a hash of the tenant's own; a store you wrap around this one implements `IPartitionedStreamStore` and returns the inner store's partition wrapped.
 
 ```csharp
 builder.Services

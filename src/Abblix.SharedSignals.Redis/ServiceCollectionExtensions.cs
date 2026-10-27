@@ -41,15 +41,22 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Puts the transmitter's stream registrations on one Redis hash - the durable store for a
+    /// Puts the transmitter's stream registrations on a Redis hash - the durable store for a
     /// transmitter whose streams must outlive its process without a database of its own. The host
     /// registers its <c>IConnectionMultiplexer</c>; this call uses Replace for the same reason as the
     /// outbox above: it IS the host's explicit choice of store and wins in any registration order.
     /// </summary>
+    /// <remarks>
+    /// A transmitter serving tenants keeps each tenant's streams on a hash of the tenant's own. A store the host
+    /// wraps around this one implements <see cref="IPartitionedStreamStore"/> and returns the inner store's
+    /// partition wrapped, or the server does not start, since the tenants' streams kept in partitions would not be
+    /// found through it.
+    /// </remarks>
     /// <param name="services">The service collection.</param>
     public static IServiceCollection AddSharedSignalsRedisStreamStore(this IServiceCollection services)
     {
         services.Replace(ServiceDescriptor.Singleton<IStreamStore, RedisStreamStore>());
+        services.TryAddSingleton(new PartitionedStreamStoreRegistration(typeof(RedisStreamStore)));
         return services;
     }
 

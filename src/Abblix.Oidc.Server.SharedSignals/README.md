@@ -55,7 +55,7 @@ Each tenant has a transmitter of its own, and what your code resolves from the c
 
 A tenant catalog of your own hands every request the tenant's definition in force, and so does your code to every tenant scope it enters: the transmitter answers and signs as the definition it was last served at, so a stale one brings back the keys and the issuer it names. When your catalog moves a tenant to another issuer, the streams the tenant declares keep the issuer and the poll address they were first written with, so their receivers poll an address that stops answering once your catalog no longer serves the old issuer, until the server restarts.
 
-With the Redis stream store, every tenant's streams are kept in one hash, so each event dispatched and each tenant's push delivery pass reads the streams of every tenant.
+With the Redis stream store, each tenant's streams are kept on a hash of the tenant's own, so each event dispatched and each tenant's push delivery pass reads that tenant's streams alone. A store you wrap around it implements `IPartitionedStreamStore` and returns the inner store's partition wrapped, or the server does not start.
 
 A request that reaches no tenant is answered 404. A receiver is accepted only with credentials the tenant's own issuer issued: the issuer is read from the `iss` claim the host's authentication leaves behind, or through `ReceiverIssuerSelector` of `SharedSignalsEndpointOptions` where the host keeps it elsewhere. So a receiver of one tenant cannot reach another tenant's streams by presenting its credentials under that tenant's address, even with the same identifier.
 

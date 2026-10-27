@@ -14,7 +14,7 @@ using StackExchange.Redis;
 namespace Abblix.SharedSignals.Redis;
 
 /// <summary>
-/// Stream registrations on one Redis hash: the durable <see cref="IStreamStore"/> for a transmitter
+/// Stream registrations on a Redis hash: the durable <see cref="IStreamStore"/> for a transmitter
 /// whose streams must outlive its process, without a database of its own.
 /// </summary>
 /// <remarks>
@@ -41,8 +41,9 @@ namespace Abblix.SharedSignals.Redis;
 /// </remarks>
 /// <param name="connection">The Redis connection; opening and configuring it is the host's.</param>
 /// <param name="options">The transmitter's options, whose issuer the key is scoped by. It is the configured issuer
-/// rather than the one a request is answered as, so a deployment answering as many issuers keeps one registry for
-/// each of its tenants under the tenant's partition, and a tenant moving to another issuer keeps its streams.</param>
+/// rather than the one a request is answered as, so a deployment answering as many issuers keeps its streams under
+/// one name, each tenant's on the partition it is handed where the deployment hands its tenants partitions, and a
+/// tenant moving to another issuer keeps its streams.</param>
 public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSignalsTransmitterOptions options)
     : IPartitionedStreamStore
 {
