@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Net;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
@@ -164,6 +165,48 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
             $"Expected cross-client exchange to be rejected, but got {(int)response.StatusCode}: {raw}");
         var error = JsonNode.Parse(raw)?.AsObject();
         Assert.Equal(ErrorCodes.InvalidRequest, error?[ResponseParameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// An exchange names a scope only within the subject token's scope, an empty one included: an access token
+    /// carrying no scope is not exchanged for one carrying a scope, while a token carrying that scope is.
+    /// </summary>
+    [Theory]
+    [InlineData(false, HttpStatusCode.BadRequest)]
+    [InlineData(true, HttpStatusCode.OK)]
+    public async Task AnExchange_IsBoundByTheSubjectTokensScope(bool subjectCarriesTheScope, HttpStatusCode expected)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var (verifier, challenge) = GeneratePkcePair();
+        var parameters = CodeFlowParameters(TestConstants.ConfidentialClientId, challenge);
+        if (subjectCarriesTheScope)
+            parameters[AuthorizationRequest.Parameters.Scope] = Scopes.Profile;
+        else
+            parameters.Remove(AuthorizationRequest.Parameters.Scope);
+
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, parameters);
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        using var exchange = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
+            [TokenRequest.Parameters.SubjectToken] = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>(),
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [TokenRequest.Parameters.Scope] = Scopes.Profile,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        Assert.Equal(expected, exchange.StatusCode);
     }
 
     private async Task<JsonObject> PerformTokenExchangeAsync(Dictionary<string, string> form)
