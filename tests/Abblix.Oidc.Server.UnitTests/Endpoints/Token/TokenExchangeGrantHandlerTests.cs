@@ -509,6 +509,26 @@ public class TokenExchangeGrantHandlerTests
     }
 
     /// <summary>
+    /// 2a binds a requested scope to a subject token carrying an empty scope as to any other scope it carries, so
+    /// a token granted no scope is not exchanged for one holding a scope.
+    /// </summary>
+    [Fact]
+    public async Task RequestScope_BoundToAnEmptySubjectScope()
+    {
+        var ctx = new SubjectTokenContext(
+            Subject: TestSubject, Issuer: null, Scope: [], AuthorizationDetails: null)
+            { OriginalClientId = ClientId };
+        var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
+        var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
+        var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with { Scope = ["api:read"] };
+
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out var grant));
+        Assert.Empty(grant.Context.Scope);
+    }
+
+    /// <summary>
     /// 2a must not break the RFC 8693 id_token → access_token scenario: an id_token subject token carries
     /// no scope claim, which imposes no scope upper bound, so an explicitly requested scope passes through
     /// unchanged instead of being intersected down to nothing.
