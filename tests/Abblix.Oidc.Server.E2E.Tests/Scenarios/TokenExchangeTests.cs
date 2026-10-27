@@ -169,21 +169,23 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
 
     /// <summary>
     /// An exchange names a scope only within the subject token's scope, an empty one included: an access token
-    /// carrying no scope is not exchanged for one carrying a scope, while a token carrying that scope is.
+    /// carrying no scope is not exchanged for one carrying a scope, while a token carrying that scope is, and an ID
+    /// token, which carries no scope claim at all, is not bounded by one.
     /// </summary>
     [Theory]
-    [InlineData(false, HttpStatusCode.BadRequest)]
-    [InlineData(true, HttpStatusCode.OK)]
-    public async Task AnExchange_IsBoundByTheSubjectTokensScope(bool subjectCarriesTheScope, HttpStatusCode expected)
+    [InlineData(null, false, HttpStatusCode.BadRequest)]
+    [InlineData(Scopes.Profile, false, HttpStatusCode.OK)]
+    [InlineData(Scopes.OpenId, true, HttpStatusCode.OK)]
+    public async Task AnExchange_IsBoundByTheSubjectTokensScope(string? granted, bool idToken, HttpStatusCode expected)
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
         var (verifier, challenge) = GeneratePkcePair();
         var parameters = CodeFlowParameters(TestConstants.ConfidentialClientId, challenge);
-        if (subjectCarriesTheScope)
-            parameters[AuthorizationRequest.Parameters.Scope] = Scopes.Profile;
-        else
+        if (granted is null)
             parameters.Remove(AuthorizationRequest.Parameters.Scope);
+        else
+            parameters[AuthorizationRequest.Parameters.Scope] = granted;
 
         var code = await AuthorizeAndExtractCodeAsync(client, discovery, parameters);
         var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
@@ -199,14 +201,21 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         using var exchange = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
-            [TokenRequest.Parameters.SubjectToken] = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>(),
-            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [TokenRequest.Parameters.SubjectToken] =
+                tokens[idToken ? ResponseParameters.IdToken : UserInfoRequest.Parameters.AccessToken]!.GetValue<string>(),
+            [TokenRequest.Parameters.SubjectTokenType] =
+                idToken ? TokenExchangeTokenTypes.IdToken : TokenExchangeTokenTypes.AccessToken,
             [TokenRequest.Parameters.Scope] = Scopes.Profile,
             [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
         Assert.Equal(expected, exchange.StatusCode);
+        if (expected == HttpStatusCode.BadRequest)
+        {
+            var body = JsonNode.Parse(await exchange.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(ErrorCodes.InvalidScope, body?[ResponseParameters.Error]?.GetValue<string>());
+        }
     }
 
     private async Task<JsonObject> PerformTokenExchangeAsync(Dictionary<string, string> form)

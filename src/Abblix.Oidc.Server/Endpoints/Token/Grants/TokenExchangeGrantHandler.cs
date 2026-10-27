@@ -524,9 +524,9 @@ public class TokenExchangeGrantHandler(
 
     /// <summary>
     /// Intersects the explicitly requested scope with the subject_token's own scope, keeping only the
-    /// requested values the subject token also holds. Caller applies this only when the subject token
-    /// carries a scope; a scopeless subject token (e.g. an id_token) imposes no upper bound. Comparison
-    /// is ordinal per RFC 6749 section 3.3 scope-token semantics.
+    /// requested values the subject token also holds. Caller applies this whenever the subject token
+    /// carries a scope claim, an empty one included; a token without the claim (e.g. an id_token) imposes
+    /// no upper bound. Comparison is ordinal per RFC 6749 section 3.3 scope-token semantics.
     /// </summary>
     private static string[] IntersectScopes(string[] requestedScope, string[] subjectScope)
         => Array.FindAll(requestedScope, scope => Array.IndexOf(subjectScope, scope) >= 0);
