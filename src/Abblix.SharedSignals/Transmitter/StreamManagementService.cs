@@ -120,7 +120,7 @@ public sealed class StreamManagementService(
         string streamId,
         CancellationToken cancellationToken = default)
         => await store.FindAsync(receiverId, streamId, cancellationToken) is { } stream
-            ? ManagementResult<StreamConfiguration>.Ok(stream.Configuration)
+            ? ManagementResult<StreamConfiguration>.Ok(Answered(stream.Configuration))
             : NoSuchStream<StreamConfiguration>(streamId);
 
     /// <summary>
@@ -134,7 +134,7 @@ public sealed class StreamManagementService(
         CancellationToken cancellationToken = default)
         => ManagementResult<IReadOnlyList<StreamConfiguration>>.Ok(
             (await store.ListAsync(receiverId, cancellationToken))
-            .Select(stream => stream.Configuration)
+            .Select(stream => Answered(stream.Configuration))
             .ToArray());
 
     /// <summary>
@@ -550,8 +550,16 @@ public sealed class StreamManagementService(
 
         return written is null
             ? AcceptedNotProcessed<StreamConfiguration>(stream.StreamId)
-            : ManagementResult<StreamConfiguration>.Ok(written.Configuration);
+            : ManagementResult<StreamConfiguration>.Ok(Answered(written.Configuration));
     }
+
+    /// <summary>
+    /// <paramref name="configuration"/> as the receiver is answered it, naming the issuer this transmitter issues its
+    /// security event tokens under now, with which SSF 1.0 Section 8.1.1 requires the stream's issuer to be
+    /// identical: a stream created before the transmitter's issuer changed keeps the old one in its stored record.
+    /// </summary>
+    private StreamConfiguration Answered(StreamConfiguration configuration)
+        => configuration with { Issuer = dispatcher.Issuer };
 
     private static StreamStatus StatusOf(StreamState stream) => new()
     {
