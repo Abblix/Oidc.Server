@@ -122,27 +122,6 @@ public class EventDispatcherTests
     }
 
     /// <summary>
-    /// The issuer is asked when a SET is minted rather than once at construction, so a host whose identity
-    /// answers per request - one issuer per tenant - signs each SET with the issuer serving it.
-    /// </summary>
-    [Fact]
-    public async Task TheIssuer_IsReadWhenTheSetIsMinted()
-    {
-        var ct = TestContext.Current.CancellationToken;
-        var store = new InMemoryStreamStore();
-        Assert.True(await store.TryCreateAsync(CreateStream("s-1", mode: StreamSubjectsMode.All), ct));
-        var identity = new SwitchableTransmitterIdentity("https://first.example.com");
-        var outbox = new InMemoryEventOutbox();
-        var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance, store, outbox, identity, TestInstruments.Create());
-
-        identity.Issuer = "https://second.example.com";
-        Assert.Equal(1, (await dispatcher.DispatchAsync(Descriptor(), ct)).Reached);
-
-        Assert.Equal("https://second.example.com", Assert.Single(await MintedAsync(outbox, "s-1", identity)).Issuer);
-    }
-
-    /// <summary>
     /// An event queued before the transmitter's issuer changed is sent under the issuer the transmitter issues under
     /// when it is sent, the one the stream's configuration names then (SSF 1.0 Section 4.1.6).
     /// </summary>

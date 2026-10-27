@@ -236,6 +236,26 @@ public class StreamManagementServiceTests
             Assert.IsType<PollDeliveryMethod>(read.Body!.Delivery).EndpointUrl);
     }
 
+    /// <summary>
+    /// A push stream of a transmitter that also serves poll delivery is answered with the push delivery it stored,
+    /// read alone and in the receiver's list: only a poll stream's address is the transmitter's own.
+    /// </summary>
+    [Fact]
+    public async Task APushStream_IsAnsweredWithThePushDeliveryItStored()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var harness = CreateHarness();
+        var pushTo = new Uri("https://receiver.example.com/events");
+        var created = await CreatedStreamAsync(
+            harness, new CreateStreamRequest { EventsRequested = [TypeA], Delivery = new PushDeliveryMethod(pushTo) });
+
+        var read = await harness.Service.GetStreamAsync(Receiver, created.StreamId, ct);
+        var listed = await harness.Service.ListStreamsAsync(Receiver, ct);
+
+        Assert.Equal(pushTo, Assert.IsType<PushDeliveryMethod>(read.Body!.Delivery).EndpointUrl);
+        Assert.Equal(pushTo, Assert.IsType<PushDeliveryMethod>(Assert.Single(listed.Body!).Delivery).EndpointUrl);
+    }
+
     [Fact]
     public async Task Create_SuppliesTheTransmitterHalf_AndDefaultsToPoll()
     {
