@@ -110,9 +110,43 @@ public class SingleResourceAccessTokensTests
             new ClientRequest { ClientId = ClientId })
         {
             ClientInfo = Client(singleResource: true),
+            // The exchange handler carries the audiences its request names into the grant
             AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
-                new AuthorizationContext(ClientId, [], null)),
+                new AuthorizationContext(ClientId, [], null) { Audiences = audiences }),
+        };
+
+        var refused = await new SingleResourceValidator().ValidateAsync(
+            Tenant,
+            context,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(error, refused?.Error);
+    }
+
+    /// <summary>
+    /// An audience a code redemption names is no part of its token, which is built from the grant, so it does not
+    /// spare a grant for two resources from naming one; and a resource named twice is one resource.
+    /// </summary>
+    [Theory]
+    [InlineData(null, new[] { "https://orders.example.com" }, ErrorCodes.InvalidTarget)]
+    [InlineData(new[] { "https://orders.example.com", "https://orders.example.com" }, null, null)]
+    public async Task ACodeRedemption_IsCountedByWhatItsTokenCarries(string[]? named, string[]? audiences, string? error)
+    {
+        Uri[] granted = [Orders, Billing];
+        var context = new TokenValidationContext(
+            new TokenRequest
+            {
+                GrantType = GrantTypes.AuthorizationCode,
+                Resources = named is null ? null : Array.ConvertAll(named, uri => new Uri(uri)),
+                Audiences = audiences,
+            },
+            new ClientRequest { ClientId = ClientId })
+        {
+            ClientInfo = Client(singleResource: true),
+            AuthorizedGrant = new AuthorizedGrant(
+                new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
+                new AuthorizationContext(ClientId, [], null, granted)),
         };
 
         var refused = await new SingleResourceValidator().ValidateAsync(
