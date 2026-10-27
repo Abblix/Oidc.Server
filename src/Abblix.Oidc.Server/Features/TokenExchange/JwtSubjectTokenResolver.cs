@@ -71,9 +71,9 @@ public sealed class JwtSubjectTokenResolver(
                 ErrorCodes.InvalidRequest, $"The subject_token type '{tokenType}' is not a JWT this server reads.");
         }
 
-        // An RFC 8693 subject_token was minted for a client or, under RFC 8707, for a resource server, never for
-        // this server as its audience, so a resource-scoped access token presented for exchange is not refused for
-        // it. Its binding to the requesting client is enforced by the confused-deputy guard in
+        // An RFC 8693 subject_token may name a client (an ID token) or, under RFC 8707, a resource server in its
+        // audience rather than this server, so a resource-scoped access token presented for exchange is not refused
+        // for it. Its binding to the requesting client is enforced by the confused-deputy guard in
         // TokenExchangeGrantHandler.
         var validation = await jwtValidator.ValidateAsync(
             tenant,

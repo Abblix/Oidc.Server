@@ -205,6 +205,10 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
         var tokens = await ObtainResourceGrantTokensAsync(client, discovery);
+        var audience = DecodeJwtPayload(RefreshTokenOf(tokens))[JwtClaimTypes.Audience];
+        Assert.Equal(
+            TestConstants.ApiResource,
+            (audience as JsonArray)?.Single()?.GetValue<string>() ?? audience?.GetValue<string>());
 
         var resigned = await ResignAsync(
             RefreshTokenOf(tokens),
