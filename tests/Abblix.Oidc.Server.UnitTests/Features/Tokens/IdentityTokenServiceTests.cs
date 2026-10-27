@@ -458,7 +458,7 @@ public class IdentityTokenServiceTests
     {
         // Arrange
         var authSession = CreateAuthSession();
-        var scopes = new[] { Scopes.OpenId, Scopes.Profile, Scopes.Email };
+        var scopes = new[] { Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Phone };
         var authContext = new AuthorizationContext(ClientId, scopes, null);
         var clientInfo = CreateClientInfo();
         clientInfo.ForceUserClaimsInIdentityToken = true;
