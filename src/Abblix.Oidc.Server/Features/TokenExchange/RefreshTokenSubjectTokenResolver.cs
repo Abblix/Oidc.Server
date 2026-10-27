@@ -52,7 +52,13 @@ public sealed class RefreshTokenSubjectTokenResolver(
         Uri tokenType,
         CancellationToken cancellationToken)
     {
-        var validation = await jwtValidator.ValidateAsync(tenant, subjectToken, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
+        // The refresh token's audience holds the resources of the grant it continues (RefreshTokenService), so it
+        // need not name this server
+        var validation = await jwtValidator.ValidateAsync(
+            tenant,
+            subjectToken,
+            TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
+            ServiceTokenValidation.AnyAudience);
         if (!validation.TryGetSuccess(out var jwt))
         {
             return new OidcError(

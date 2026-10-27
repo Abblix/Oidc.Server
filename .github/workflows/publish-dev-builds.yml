@@ -79,6 +79,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # The lookup before the Test step reads the pull request of the commit and its check results
+      checks: read
+      pull-requests: read
     steps:
       - name: Harden runner (audit egress)
         uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
@@ -134,7 +137,52 @@ jobs:
         run: dotnet build --no-restore -c Release
 
         timeout-minutes: 3
+      # Whether the pull request that produced this commit already ran the suite on this very tree. Three
+      # things must hold, each asked of the side that decides it. The rule on develop requires the
+      # "Unit tests" check AND that the branch be up to date with develop before merging, so the tree a
+      # squash merge produces is the tree the check ran on. The commit came from a merged pull request,
+      # which an admin's direct push, allowed to bypass that rule, did not. And that pull request's head
+      # has the check green. Anything else, including an answer that did not arrive, leaves the suite to
+      # run below: a failed lookup costs minutes, never an untested package. Not asked: an admin merging an
+      # out-of-date branch through the same bypass, which the rule cannot see from here.
+      - name: Look up whether the merged pull request tested this tree
+        id: tested
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          REF: ${{ github.ref }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          covered=false
+          if [ "$EVENT" = "push" ] && [ "$REF" = "refs/heads/develop" ]; then
+            rc=0
+            rule=$(gh api "repos/$REPO/rules/branches/develop" --jq '[.[] | select(.type == "required_status_checks") | .parameters | select(.strict_required_status_checks_policy == true and any(.required_status_checks[]; .context == "Unit tests"))] | length') || rc=$?
+            [ "$rc" -eq 0 ] || rule=0
+
+            rc=0
+            head=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '[.[] | select(.merged_at != null and .base.ref == "develop")][0].head.sha // ""') || rc=$?
+            [ "$rc" -eq 0 ] || head=""
+
+            passed=0
+            if [ -n "$head" ]; then
+              rc=0
+              passed=$(gh api "repos/$REPO/commits/$head/check-runs?check_name=Unit%20tests" --jq '[.check_runs[] | select(.conclusion == "success")] | length') || rc=$?
+              [ "$rc" -eq 0 ] || passed=0
+            fi
+
+            echo "rule=$rule pull-request-head=${head:-none} unit-tests-green=$passed"
+            if [ "$rule" -ge 1 ] && [ "$passed" -ge 1 ]; then
+              covered=true
+            fi
+          fi
+          echo "covered=$covered"
+          echo "covered=$covered" >> "$GITHUB_OUTPUT"
+        timeout-minutes: 3
       - name: Test
+        if: steps.tested.outputs.covered != 'true'
         # The whole suite in one pass over the tree this job just built. Sharding it the way
         # pr-tests does would be slower here, not faster: a shard restores and builds its own
         # dependency closure, where this reuses the build above.
@@ -144,9 +192,9 @@ jobs:
         # 5 minutes needed more than 5m13s. Raise it from a cut-off run's step timings, together with
         # the job's ceiling above.
         #
-        # The suite runs on this path because a squash merge produces a new commit on top of
-        # wherever develop had moved to, so what lands on the branch is a state no pull request
-        # tested, and no other workflow tests develop itself.
+        # The suite still runs for a release branch, for a commit with no merged pull request behind it
+        # and whenever the lookup above cannot prove its pull request tested this tree: only a develop
+        # commit that came through the rule is trusted to have been tested.
         run: dotnet test --no-build -c Release --verbosity normal
 
         timeout-minutes: 15

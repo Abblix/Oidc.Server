@@ -64,10 +64,13 @@ public class RefreshTokenGrantHandler(
 			return ErrorFactory.MissingParameter(TokenRequest.Parameters.RefreshToken);
 		}
 
-		// Validate the refresh token's JWT structure and authenticity using the JWT validator service.
+		// Validate the refresh token's JWT structure and authenticity using the JWT validator service. Its audience
+		// holds the resources of the grant it continues (RefreshTokenService), so it need not name this server.
 		var jwtValidationResult = await jwtValidator.ValidateAsync(
 			tenant,
-			request.RefreshToken, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
+			request.RefreshToken,
+			TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
+			ServiceTokenValidation.AnyAudience);
 
 		if (jwtValidationResult.TryGetFailure(out var error))
 		{

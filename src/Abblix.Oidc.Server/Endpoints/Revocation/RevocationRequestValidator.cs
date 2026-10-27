@@ -180,7 +180,7 @@ public partial class RevocationRequestValidator(
 		var result = await jwtValidator.ValidateAsync(
 			tenant, revocationRequest.Token,
 			JwtTypes.IntrospectableTokens,
-			ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
+			ServiceTokenValidation.AnyAudience);
 
 		return result.Match(
 			token =>

@@ -191,6 +191,37 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(HttpStatusCode.OK, renewed);
     }
 
+    /// <summary>
+    /// A refresh token of a grant for a resource, whose audience names the resource rather than this server, is still
+    /// renewed only under this server's issuer: its readers leave out the audience check and no other.
+    /// </summary>
+    [Theory]
+    [InlineData(false, HttpStatusCode.OK)]
+    [InlineData(true, HttpStatusCode.BadRequest)]
+    public async Task ARefreshTokenOfAResourceGrant_IsRenewedOnlyUnderThisIssuer(
+        bool anotherIssuer,
+        HttpStatusCode expected)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var tokens = await ObtainResourceGrantTokensAsync(client, discovery);
+        var audience = DecodeJwtPayload(RefreshTokenOf(tokens))[JwtClaimTypes.Audience];
+        Assert.Equal(
+            TestConstants.ApiResource,
+            (audience as JsonArray)?.Single()?.GetValue<string>() ?? audience?.GetValue<string>());
+
+        var resigned = await ResignAsync(
+            RefreshTokenOf(tokens),
+            payload =>
+            {
+                if (anotherIssuer)
+                    payload[IanaClaimTypes.Iss] = "https://another.example.com";
+            });
+        var (status, _) = await RefreshAsync(client, discovery, resigned);
+
+        Assert.Equal(expected, status);
+    }
+
     private async Task<(HttpClient Client, DiscoveryDocument Discovery, JsonObject Tokens)> GenuineAsync()
     {
         var client = CreateClient();
