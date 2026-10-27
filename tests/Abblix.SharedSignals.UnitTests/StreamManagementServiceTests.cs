@@ -157,11 +157,16 @@ public class StreamManagementServiceTests
         var listed = await harness.Service.ListStreamsAsync(Receiver, ct);
         var changed = await harness.Service.UpdateStreamAsync(
             Receiver, new UpdateStreamRequest { StreamId = created.StreamId, Description = "changed" }, ct);
+        var replaced = await harness.Service.ReplaceStreamAsync(
+            Receiver,
+            new UpdateStreamRequest { StreamId = created.StreamId, Delivery = new PollDeliveryMethod() },
+            ct);
 
         Assert.Equal("https://first.example.com", created.Issuer);
         Assert.Equal("https://second.example.com", read.Body!.Issuer);
         Assert.Equal("https://second.example.com", Assert.Single(listed.Body!).Issuer);
         Assert.Equal("https://second.example.com", changed.Body!.Issuer);
+        Assert.Equal("https://second.example.com", replaced.Body!.Issuer);
     }
 
     [Fact]
@@ -325,7 +330,8 @@ public class StreamManagementServiceTests
     /// <summary>
     /// An update or a replacement that loses its write to another writer applies the receiver's members to the stream
     /// as the other writer left it, so what that writer changed in the transmitter's half, such as the issuer of a
-    /// tenant that moved, is kept rather than written back from the first read.
+    /// tenant that moved, is kept rather than written back from the first read, and the receiver is answered with the
+    /// stream as written.
     /// </summary>
     [Theory]
     [InlineData(false)]
@@ -334,6 +340,7 @@ public class StreamManagementServiceTests
     {
         var ct = TestContext.Current.CancellationToken;
         const string movedIssuer = "https://moved.example.com";
+        string[] otherAudiences = ["https://other.example.com"];
         var options = DefaultOptions();
         var inner = new InMemoryStreamStore();
         var otherWriterDone = false;
@@ -359,7 +366,10 @@ public class StreamManagementServiceTests
                 otherWriterDone = true;
                 var current = (await inner.FindAsync(stream.ReceiverId, stream.StreamId, token))!;
                 Assert.True(await inner.UpdateAsync(
-                    current with { Configuration = current.Configuration with { Issuer = movedIssuer } },
+                    current with
+                    {
+                        Configuration = current.Configuration with { Issuer = movedIssuer, Audiences = otherAudiences },
+                    },
                     token));
                 return await inner.UpdateAsync(stream, token);
             });
@@ -382,6 +392,7 @@ public class StreamManagementServiceTests
         Assert.Equal(movedIssuer, stored.Issuer);
         Assert.Equal([TypeB], stored.EventsRequested);
         Assert.Equal([TypeB], stored.EventsDelivered);
+        Assert.Equal(otherAudiences, changed.Body!.Audiences);
     }
 
     private static StreamManagementService ServiceOver(IStreamStore store, SharedSignalsTransmitterOptions options)
