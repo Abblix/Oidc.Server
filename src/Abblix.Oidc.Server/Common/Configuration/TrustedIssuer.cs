@@ -22,6 +22,20 @@ public record TrustedIssuer
     public required string Issuer { get; init; }
 
     /// <summary>
+    /// Whether <paramref name="issuer"/> names this issuer: scheme and host compared without regard to case, port
+    /// and path exactly, as RFC 3986 makes scheme and host case-insensitive and leaves the path case-sensitive.
+    /// </summary>
+    internal bool Names(Uri issuer)
+        => Uri.TryCreate(Issuer, UriKind.Absolute, out var trusted) &&
+           SameOrigin(issuer, trusted) &&
+           issuer.AbsolutePath == trusted.AbsolutePath;
+
+    private static bool SameOrigin(Uri issuer, Uri trusted)
+        => string.Equals(issuer.Scheme, trusted.Scheme, StringComparison.OrdinalIgnoreCase) &&
+           string.Equals(issuer.Host, trusted.Host, StringComparison.OrdinalIgnoreCase) &&
+           issuer.Port == trusted.Port;
+
+    /// <summary>
     /// The URL to the JSON Web Key Set (JWKS) endpoint for this issuer.
     /// Used to retrieve public keys for verifying JWT assertion signatures.
     /// </summary>
