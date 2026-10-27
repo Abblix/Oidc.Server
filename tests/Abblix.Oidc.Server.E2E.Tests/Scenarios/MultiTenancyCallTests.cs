@@ -79,25 +79,69 @@ public sealed class MultiTenancyCallTests
         Assert.True(host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.IsCancellationRequested);
     }
 
+    /// <summary>
+    /// A host running no web server, such as a worker sharing the web application's registration, has no pipeline to
+    /// call it in and starts.
+    /// </summary>
+    [Fact]
+    public async Task AHostRunningNoWebServer_StartsWithoutAPipeline()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var builder = Host.CreateApplicationBuilder();
+        Register(builder.Services);
+        using var host = builder.Build();
+
+        await host.StartAsync(ct);
+
+        Assert.True(host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.IsCancellationRequested);
+    }
+
+    /// <summary>
+    /// A host registering the server's core and its tenant accessor itself, with no transport package, calls the
+    /// middleware and starts.
+    /// </summary>
+    [Fact]
+    public async Task AHostOfTheCoreAlone_CallsUseMultiTenancyAndStarts()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddMemoryCache();
+        builder.Services.AddDistributedMemoryCache();
+        builder.Services.AddConsentGrantedForEveryClient();
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddSingleton<ITenantAccessor, HttpContextTenantAccessor>();
+        builder.Services.AddOidcCore(options => TestTenant.ServeOn(
+            options, JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)));
+        await using var application = builder.Build();
+        application.UseMultiTenancy();
+
+        await application.StartAsync(ct);
+
+        Assert.True(application.Lifetime.ApplicationStarted.IsCancellationRequested);
+    }
+
+    private static void Register(IServiceCollection services, Action<IServiceCollection>? beforeServer = null)
+    {
+        services.AddRouting();
+        services.AddCors();
+        services.AddDistributedMemoryCache();
+        services.AddMemoryCache();
+        services.AddConsentGrantedForEveryClient();
+        beforeServer?.Invoke(services);
+#if !MINIMAL_API_TRANSPORT
+        services.AddControllers();
+#endif
+        services.AddOidcServices(options => TestTenant.ServeOn(
+            options, JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)));
+    }
+
     private static IHost Build(
         bool underStartupClass,
         bool callsMultiTenancy,
         Action<IServiceCollection>? beforeServer = null)
     {
-        void Register(IServiceCollection services)
-        {
-            services.AddRouting();
-            services.AddCors();
-            services.AddDistributedMemoryCache();
-            services.AddMemoryCache();
-            services.AddConsentGrantedForEveryClient();
-            beforeServer?.Invoke(services);
-#if !MINIMAL_API_TRANSPORT
-            services.AddControllers();
-#endif
-            services.AddOidcServices(options => TestTenant.ServeOn(
-                options, JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)));
-        }
+        void RegisterHost(IServiceCollection services) => Register(services, beforeServer);
 
         void Configure(IApplicationBuilder app)
         {
@@ -114,7 +158,7 @@ public sealed class MultiTenancyCallTests
             return new HostBuilder()
                 .ConfigureWebHost(web => web
                     .UseTestServer()
-                    .UseStartup(_ => new DelegatingStartup(Register, app =>
+                    .UseStartup(_ => new DelegatingStartup(RegisterHost, app =>
                     {
                         Configure(app);
                         app.UseEndpoints(Map);
@@ -124,7 +168,7 @@ public sealed class MultiTenancyCallTests
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
-        Register(builder.Services);
+        RegisterHost(builder.Services);
         var application = builder.Build();
         Configure(application);
         Map(application);

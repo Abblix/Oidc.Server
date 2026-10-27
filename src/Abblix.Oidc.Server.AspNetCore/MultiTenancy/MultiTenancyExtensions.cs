@@ -64,7 +64,8 @@ public static class MultiTenancyExtensions
                 "would be matched against the full path before the tenant it is addressed to is resolved.");
         }
 
-        app.ApplicationServices.GetRequiredService<MultiTenancyCall>().Record();
+        // A host registering the server's core without a transport package has no check to record the call for
+        app.ApplicationServices.GetService<MultiTenancyCall>()?.Record();
         return app.UseMiddleware<TenantResolutionMiddleware>().UseRouting();
     }
 
