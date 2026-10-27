@@ -20,28 +20,41 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// The pass runs on a timer, outside any request, so each tenant's pass runs inside that tenant's scope: its
 /// transmitter refuses to serve while any other tenant is, and a sweep a host sets off from one tenant's request
 /// still runs every tenant's pass. One tenant's failure is logged and the others still run.
+/// <para>
+/// Each tenant is served with the definition the catalog the server resolves tenants through serves it with now, as a
+/// request reaching the tenant would be. With a catalog of the host's own, the transmitter is built once and signs as
+/// the definition last served to it, so a pass that did not serve one would sign as the issuer and keys the tenant
+/// had before its last move or key change on this instance. A tenant that catalog no longer serves is passed over, as
+/// a request reaching it is.
+/// </para>
 /// </remarks>
 /// <param name="logger">Records a tenant whose pass failed.</param>
 /// <param name="transmitters">The transmitter of each tenant, whose pass runs over that tenant's streams.</param>
 /// <param name="catalog">Names the tenants served now.</param>
+/// <param name="served">The catalog the server resolves tenants through, the host's own where it registered one.
+/// </param>
 internal sealed partial class TenantPushDeliverySweep(
     ILogger<TenantPushDeliverySweep> logger,
     TenantTransmitters transmitters,
-    StoreTenantCatalog catalog) : IPushDeliverySweep
+    StoreTenantCatalog catalog,
+    ITenantCatalog served) : IPushDeliverySweep
 {
     /// <inheritdoc />
     public async Task SweepAsync(CancellationToken cancellationToken)
     {
-        foreach (var tenant in catalog.ServedTenants.ToArray())
+        foreach (var tenantId in catalog.ServedTenants.Select(listed => listed.Id).ToArray())
         {
             try
             {
+                if (await served.FindByIdAsync(tenantId, cancellationToken) is not { } tenant)
+                    continue;
+
                 using var scope = TenantScope.Enter(tenant);
-                await transmitters.For(tenant).Sweep.SweepAsync(cancellationToken);
+                await transmitters.Serving(tenant).Sweep.SweepAsync(cancellationToken);
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
-                LogTenantSweepFailed(exception, tenant.Id);
+                LogTenantSweepFailed(exception, tenantId);
             }
         }
     }

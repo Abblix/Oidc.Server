@@ -650,6 +650,88 @@ public sealed class SharedSignalsTenantIsolationTests
     }
 
     /// <summary>
+    /// A tenant whose definition the host's own catalog changes is pushed its events as the new definition by the next
+    /// pass, though no request reached the tenant since: with its new signing key after a key change, and under its
+    /// new issuer after a move.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ADefinitionTheHostsCatalogChanges_SignsTheEventsTheNextPassPushes(bool moved)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var receiver = new RecordingReceiver();
+        ConfiguredStream[] declared =
+        [
+            new ConfiguredStream
+            {
+                ReceiverId = ReceiverId,
+                StreamId = StreamId,
+                EventsRequested = [MembershipChanged],
+                PushEndpointUrl = new Uri(PushEndpoint),
+            },
+        ];
+        await using var app = await StartAsync(
+            beforeMultiTenancy: services =>
+            {
+                services.AddHttpClient(nameof(PushDeliverySender)).ConfigurePrimaryHttpMessageHandler(() => receiver);
+                services.AddSingleton<HostCatalog>();
+                services.Replace(ServiceDescriptor.Singleton<ITenantCatalog>(
+                    provider => provider.GetRequiredService<HostCatalog>()));
+            },
+            declare: server => server.AddConfiguredStreams("acme", declared));
+        Assert.Equal(1, await DispatchAsync(app, "acme", ct));
+
+        // The root issuer is one the license names, and a catalog of the host's own is counted by the issuers it serves
+        var changed = TenantAt("acme", moved ? string.Empty : Acme);
+        app.Services.GetRequiredService<HostCatalog>().Own = changed;
+        await app.Services.GetRequiredService<IPushDeliverySweep>().SweepAsync(ct);
+
+        var token = Assert.Single(receiver.Tokens);
+        Assert.Equal(changed.SigningKeys.Single().KeyId, KeyIdOf(token));
+        Assert.Equal(changed.Issuer.OriginalString, IssuerOf(token));
+    }
+
+    /// <summary>
+    /// A tenant the host's own catalog no longer serves is passed over by the push pass, as a request reaching it is
+    /// answered with no tenant, and its events stay queued.
+    /// </summary>
+    [Fact]
+    public async Task ATenantTheHostsCatalogNoLongerServes_IsPushedNothing()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var receiver = new RecordingReceiver();
+        ConfiguredStream[] declared =
+        [
+            new ConfiguredStream
+            {
+                ReceiverId = ReceiverId,
+                StreamId = StreamId,
+                EventsRequested = [MembershipChanged],
+                PushEndpointUrl = new Uri(PushEndpoint),
+            },
+        ];
+        await using var app = await StartAsync(
+            beforeMultiTenancy: services =>
+            {
+                services.AddHttpClient(nameof(PushDeliverySender)).ConfigurePrimaryHttpMessageHandler(() => receiver);
+                services.AddSingleton<HostCatalog>();
+                services.Replace(ServiceDescriptor.Singleton<ITenantCatalog>(
+                    provider => provider.GetRequiredService<HostCatalog>()));
+            },
+            declare: server => server.AddConfiguredStreams("acme", declared));
+        Assert.Equal(1, await DispatchAsync(app, "acme", ct));
+        var acme = (await app.Services.GetRequiredService<ITenantCatalog>().FindByIdAsync("acme", ct))!;
+
+        app.Services.GetRequiredService<HostCatalog>().Withheld = "acme";
+        await app.Services.GetRequiredService<IPushDeliverySweep>().SweepAsync(ct);
+
+        Assert.Empty(receiver.Tokens);
+        using var scope = TenantScope.Enter(acme);
+        Assert.Single(await app.Services.GetRequiredService<IEventOutbox>().PendingAsync(ReceiverId, StreamId, null, ct));
+    }
+
+    /// <summary>
     /// A push delivery sweep a host sets off from acme's request delivers globex's events as well: each tenant's pass
     /// runs as that tenant.
     /// </summary>
@@ -936,8 +1018,13 @@ public sealed class SharedSignalsTenantIsolationTests
     {
         public TenantDefinition? Own { get; set; }
 
+        /// <summary>
+        /// The id of a tenant the server's catalog serves and this one no longer does.
+        /// </summary>
+        public string? Withheld { get; set; }
+
         public async ValueTask<TenantDefinition?> FindByIdAsync(string tenantId, CancellationToken cancellationToken)
-            => OwnFor(await inner.FindByIdAsync(tenantId, cancellationToken));
+            => tenantId == Withheld ? null : OwnFor(await inner.FindByIdAsync(tenantId, cancellationToken));
 
         public async ValueTask<TenantDefinition?> FindByAddressAsync(
             string host,
