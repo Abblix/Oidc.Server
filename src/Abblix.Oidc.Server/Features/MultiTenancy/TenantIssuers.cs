@@ -26,10 +26,19 @@ internal static class TenantIssuers
     /// Whether <paramref name="issuer"/> is the issuer of a tenant <paramref name="catalog"/> serves, whose tokens
     /// this server issued and may have revoked.
     /// </summary>
+    /// <remarks>
+    /// The tenant is looked up at the address the catalog keeps it under, its path decoded as a request path is, so a
+    /// path holding an escaped character finds it as a request to it does.
+    /// </remarks>
     public static async Task<bool> ServesAsync(this ITenantCatalog catalog, string issuer, CancellationToken cancellationToken)
-        => Uri.TryCreate(issuer, UriKind.Absolute, out var uri) &&
-           await catalog.FindByAddressAsync(uri.Host, uri.AbsolutePath, cancellationToken) is { } tenant &&
-           Same(tenant.Issuer, uri);
+    {
+        if (!Uri.TryCreate(issuer, UriKind.Absolute, out var uri))
+            return false;
+
+        var address = TenantAddress.Of(uri);
+        return await catalog.FindByAddressAsync(address.Host, address.Path, cancellationToken) is { } tenant &&
+               Same(tenant.Issuer, uri);
+    }
 
     private static bool SameOrigin(Uri first, Uri second)
         => string.Equals(first.Scheme, second.Scheme, StringComparison.OrdinalIgnoreCase) &&
