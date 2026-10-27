@@ -8,22 +8,27 @@
 
 using Abblix.SharedSignals.Transmitter;
 
-namespace Abblix.Oidc.Server.SharedSignals;
+namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
 /// <summary>
-/// The outbox the host registered, kept under a key of its own as the outbox every tenant shares, while the unkeyed
-/// registration answers with the outbox of the tenant being served.
+/// An outbox in memory that records whether whoever built it has disposed it.
 /// </summary>
-/// <param name="inner">The outbox the host registered.</param>
-internal sealed class SharedEventOutbox(IEventOutbox inner) : IEventOutbox
+internal sealed class DisposableEventOutbox : IEventOutbox, IDisposable
 {
+    private readonly InMemoryEventOutbox _inner = new();
+
+    /// <summary>
+    /// Whether the outbox has been disposed.
+    /// </summary>
+    public bool Disposed { get; private set; }
+
     /// <inheritdoc />
     public Task EnqueueAsync(
         string receiverId,
         string streamId,
         OutboxItem item,
         CancellationToken cancellationToken = default)
-        => inner.EnqueueAsync(receiverId, streamId, item, cancellationToken);
+        => _inner.EnqueueAsync(receiverId, streamId, item, cancellationToken);
 
     /// <inheritdoc />
     public Task<IReadOnlyList<OutboxItem>> PendingAsync(
@@ -31,7 +36,7 @@ internal sealed class SharedEventOutbox(IEventOutbox inner) : IEventOutbox
         string streamId,
         int? maxCount = null,
         CancellationToken cancellationToken = default)
-        => inner.PendingAsync(receiverId, streamId, maxCount, cancellationToken);
+        => _inner.PendingAsync(receiverId, streamId, maxCount, cancellationToken);
 
     /// <inheritdoc />
     public Task AcknowledgeAsync(
@@ -39,9 +44,12 @@ internal sealed class SharedEventOutbox(IEventOutbox inner) : IEventOutbox
         string streamId,
         IReadOnlyCollection<string> jwtIds,
         CancellationToken cancellationToken = default)
-        => inner.AcknowledgeAsync(receiverId, streamId, jwtIds, cancellationToken);
+        => _inner.AcknowledgeAsync(receiverId, streamId, jwtIds, cancellationToken);
 
     /// <inheritdoc />
     public Task ClearAsync(string receiverId, string streamId, CancellationToken cancellationToken = default)
-        => inner.ClearAsync(receiverId, streamId, cancellationToken);
+        => _inner.ClearAsync(receiverId, streamId, cancellationToken);
+
+    /// <inheritdoc />
+    public void Dispose() => Disposed = true;
 }

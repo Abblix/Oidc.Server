@@ -20,5 +20,6 @@ internal sealed class NoTenantTokenSigner : ISecurityEventTokenSigner
     /// <inheritdoc />
     public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
         => throw new InvalidOperationException(
-            "A security event token is signed with its issuing tenant's keys, and no tenant is served here.");
+            "This signer was resolved where no tenant was served, and a security event token is signed with its "
+            + "issuing tenant's keys; resolve it in the request or tenant scope it serves rather than keeping one.");
 }

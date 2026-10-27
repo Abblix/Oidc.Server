@@ -707,6 +707,48 @@ public sealed class SharedSignalsTenantIsolationTests
     }
 
     /// <summary>
+    /// An outbox the host registers after the transmitter's own is the one every tenant's events are queued in, as it
+    /// is the one the container resolves, each tenant's under the receiver identifier prefixed with its space.
+    /// </summary>
+    [Fact]
+    public async Task AnOutboxTheHostRegistersAfterTheTransmittersOwn_HoldsTheEvents()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var hosts = new InMemoryEventOutbox();
+        ConfiguredStream[] declared =
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, EventsRequested = [MembershipChanged] }];
+        await using var app = await StartAsync(
+            beforeMultiTenancy: services => services.AddSingleton<IEventOutbox>(hosts),
+            declare: server => server.AddConfiguredStreams("acme", declared));
+        var acme = await app.Services.GetRequiredService<ITenantCatalog>().FindByIdAsync("acme", ct);
+
+        Assert.Equal(1, await DispatchAsync(app, "acme", ct));
+
+        Assert.Single(await hosts.PendingAsync(TenantKey.Of(acme!, ReceiverId), StreamId, null, ct));
+    }
+
+    /// <summary>
+    /// An outbox the container builds for the host is disposed with the container, as it would be without tenants.
+    /// </summary>
+    [Fact]
+    public async Task AnOutboxTheContainerBuilds_IsDisposedWithIt()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var built = new DisposableEventOutbox();
+        ConfiguredStream[] declared =
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, EventsRequested = [MembershipChanged] }];
+        var app = await StartAsync(
+            beforeMultiTenancy: services => services.AddSingleton<IEventOutbox>(_ => built),
+            declare: server => server.AddConfiguredStreams("acme", declared));
+        Assert.Equal(1, await DispatchAsync(app, "acme", ct));
+        Assert.False(built.Disposed);
+
+        await app.DisposeAsync();
+
+        Assert.True(built.Disposed);
+    }
+
+    /// <summary>
     /// The security event tokens the one stream the receiver has at <paramref name="tenant"/> holds, polled from the
     /// address that stream names.
     /// </summary>

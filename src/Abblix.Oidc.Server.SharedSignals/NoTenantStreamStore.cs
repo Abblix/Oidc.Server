@@ -44,5 +44,6 @@ internal sealed class NoTenantStreamStore : IStreamStore
         => throw NoTenant();
 
     private static InvalidOperationException NoTenant()
-        => new("Every stream belongs to a tenant, and none is served here.");
+        => new("This stream store was resolved where no tenant was served, and every stream belongs to a tenant; "
+               + "resolve it in the request or tenant scope it serves rather than keeping one.");
 }
