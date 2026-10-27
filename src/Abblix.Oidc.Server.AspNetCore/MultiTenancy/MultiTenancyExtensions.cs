@@ -9,6 +9,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -35,6 +36,8 @@ public static class MultiTenancyExtensions
         if (registered is null || registered.ImplementationType == typeof(AmbientTenantAccessor))
             services.Replace(ServiceDescriptor.Singleton<ITenantAccessor, HttpContextTenantAccessor>());
 
+        services.TryAddSingleton<MultiTenancyCall>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, MultiTenancyCallCheck>());
         return services;
     }
 
@@ -49,7 +52,9 @@ public static class MultiTenancyExtensions
     /// a fallback page included, would take every tenant's request - and before <c>UseAuthentication</c>, whose
     /// cookie then takes the tenant's path and does not reach another tenant on the same host. A path base set
     /// before this call, by <c>UsePathBase</c> for one, is compared with the issuer's path exactly, the case of an
-    /// encoded slash aside, so a request spelling it in another case reaches no tenant.
+    /// encoded slash aside, so a request spelling it in another case reaches no tenant. A host registering the server
+    /// through the MVC or Minimal API <c>AddOidcServices</c> whose pipeline leaves this call out does not start, unless
+    /// it registers its own <see cref="ITenantAccessor"/> or runs no web server.
     /// </remarks>
     public static IApplicationBuilder UseMultiTenancy(this IApplicationBuilder app)
     {
@@ -60,6 +65,8 @@ public static class MultiTenancyExtensions
                 "would be matched against the full path before the tenant it is addressed to is resolved.");
         }
 
+        // A host registering the server's core without a transport package has no check to record the call for
+        app.ApplicationServices.GetService<MultiTenancyCall>()?.Record();
         return app.UseMiddleware<TenantResolutionMiddleware>().UseRouting();
     }
 

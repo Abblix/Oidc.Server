@@ -46,6 +46,7 @@ public static class ServiceCollectionExtensions
     /// (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartingAsync"/>), as the Generic Host and
     /// <c>WebApplication</c> do. A host starting its services without that announcement, such as the obsolete
     /// <c>WebHost</c>, is not supported: it would start the server without those checks.
+    /// A pipeline that leaves out <c>app.UseMultiTenancy()</c> is refused only once the host has started (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartedAsync"/>), when both hosting models have built it, so a request arriving before then is answered.
     /// </remarks>
     public static IOidcServerBuilder AddOidcServices(
         this IServiceCollection services, Action<OidcOptions> configureOptions)
