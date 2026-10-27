@@ -154,6 +154,9 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
     tenant.Resources =
     [
         new ResourceDefinition(new Uri(TestConstants.ApiResource), new ScopeDefinition(TestConstants.ApiScope)),
+        new ResourceDefinition(
+            new Uri(TestConstants.OtherApiResource),
+            new ScopeDefinition(TestConstants.OtherApiScope)),
     ];
 
     return;

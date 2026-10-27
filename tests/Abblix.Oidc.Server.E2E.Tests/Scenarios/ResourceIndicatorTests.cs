@@ -416,13 +416,4 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
             BaseAddress = TestServerAddress.BaseAddress,
         });
 
-    // RFC 7519 section 4.1.3: aud is serialized as a single string when there is one value, or an array
-    // when there are several. Normalize both shapes to a flat list for assertion.
-    private static string[] ExtractAudiences(JsonObject payload) =>
-        payload[JwtClaimTypes.Audience] switch
-        {
-            JsonArray array => array.Select(node => node!.GetValue<string>()).ToArray(),
-            JsonValue value => [value.GetValue<string>()],
-            _ => [],
-        };
 }

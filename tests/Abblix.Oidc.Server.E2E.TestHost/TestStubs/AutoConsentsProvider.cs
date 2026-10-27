@@ -43,14 +43,9 @@ public sealed class AutoConsentsProvider(IHttpContextAccessor httpContextAccesso
         ValidAuthorizationRequest request,
         AuthSession authSession)
     {
-        var grantedScopes = (request.Model.Scope ?? [])
-            .Select(s => new ScopeDefinition(s))
-            .ToArray();
-        var grantedResources = (request.Model.Resources ?? [])
-            .Select(uri => new ResourceDefinition(uri))
-            .ToArray();
-
-        var granted = new ConsentDefinition(grantedScopes, grantedResources);
+        // What validation settled, as the server's own provider grants it: a scope a requested resource declares
+        // travels with that resource rather than among the scopes
+        var granted = new ConsentDefinition(request.Scope, request.Resources);
 
         var items = httpContextAccessor.HttpContext?.Items;
         if (items?[TestConsentOverrideMiddleware.PresenceItemKey] is true)
