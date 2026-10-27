@@ -52,8 +52,9 @@ public static class MultiTenancyExtensions
     /// a fallback page included, would take every tenant's request - and before <c>UseAuthentication</c>, whose
     /// cookie then takes the tenant's path and does not reach another tenant on the same host. A path base set
     /// before this call, by <c>UsePathBase</c> for one, is compared with the issuer's path exactly, the case of an
-    /// encoded slash aside, so a request spelling it in another case reaches no tenant. A host whose pipeline leaves
-    /// this call out does not start, unless it registers its own <see cref="ITenantAccessor"/>.
+    /// encoded slash aside, so a request spelling it in another case reaches no tenant. A host registering the server
+    /// through the MVC or Minimal API <c>AddOidcServices</c> whose pipeline leaves this call out does not start, unless
+    /// it registers its own <see cref="ITenantAccessor"/> or runs no web server.
     /// </remarks>
     public static IApplicationBuilder UseMultiTenancy(this IApplicationBuilder app)
     {
