@@ -75,6 +75,29 @@ public class JwtSubjectTokenResolverTests
     }
 
     /// <summary>
+    /// A token whose scope claim holds no scope answers an empty scope, which bounds an exchange, while a token
+    /// carrying no scope claim answers none, which leaves it unbounded.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AnEmptyScopeClaim_IsAnEmptyScope_AndNoClaimIsNone(bool carriesTheClaim)
+    {
+        var jwt = NewJwt(subject: "user-1", issuer: null);
+        if (carriesTheClaim)
+            jwt.Payload.Scope = [];
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .ReturnsAsync(jwt);
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Equal(carriesTheClaim, ctx.Scope is not null);
+        Assert.Empty(ctx.Scope ?? []);
+    }
+
+    /// <summary>
     /// The family the presented token carries travels into the exchange, so a token exchanged from it dies with
     /// that family. A token carrying none answers none rather than an empty name, which would be a family of its
     /// own for everything downstream.

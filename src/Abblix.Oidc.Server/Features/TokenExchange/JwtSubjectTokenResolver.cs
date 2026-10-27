@@ -128,7 +128,8 @@ public sealed class JwtSubjectTokenResolver(
         return new SubjectTokenContext(
             Subject: subject,
             Issuer: jwt.Payload.Issuer,
-            Scope: jwt.Payload.Scope?.ToArray(),
+            // A scope claim holding no scope is still the token's scope, unlike a token carrying no scope claim
+            Scope: jwt.Payload.Json.ContainsKey(IanaClaimTypes.Scope) ? [.. jwt.Payload.Scope] : null,
             AuthorizationDetails: authorizationDetails)
         {
             Act = act,

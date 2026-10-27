@@ -445,16 +445,17 @@ public class TokenExchangeGrantHandler(
         //
         // - Explicit request.Scope (2a): already gated against the client's AllowedScopes by
         //   ScopeValidator in the token pipeline. Additionally bound it to the subject_token's own
-        //   scope WHEN the subject token carries one, so an exchange cannot amplify authority beyond
-        //   the presented token. A subject token without a scope claim (e.g. an id_token) imposes no
-        //   scope upper bound, so the RFC 8693 id_token -> access_token scenario keeps working.
+        //   scope WHEN the subject token carries a scope claim, an empty one included, so an exchange
+        //   cannot amplify authority beyond the presented token. A subject token without a scope claim
+        //   (e.g. an id_token) imposes no scope upper bound, so the RFC 8693 id_token -> access_token
+        //   scenario keeps working.
         // - Fallback to the subject_token's scope (2b): the fallback path does not pass through
         //   ScopeValidator, so it is filtered to the client's AllowedScopes here - otherwise a broker
         //   client would obtain scopes it was never registered for (RFC 6749 section 3.3).
         string[] scope;
         if (request.Scope is { Length: > 0 } requestedScope)
         {
-            scope = subject.Scope is { Length: > 0 } subjectScope
+            scope = subject.Scope is { } subjectScope
                 ? IntersectScopes(requestedScope, subjectScope)
                 : requestedScope;
         }
