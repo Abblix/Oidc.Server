@@ -22,7 +22,7 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// </remarks>
 /// <param name="inner">The outbox every tenant shares.</param>
 /// <param name="tenant">The tenant whose queues these are.</param>
-/// <param name="guard">Refuses every call made while another tenant is served.</param>
+/// <param name="guard">Refuses every call made where the tenant is not served.</param>
 internal sealed class TenantEventOutbox(IEventOutbox inner, TenantDefinition tenant, TenantPartGuard guard)
     : IEventOutbox
 {
@@ -56,7 +56,7 @@ internal sealed class TenantEventOutbox(IEventOutbox inner, TenantDefinition ten
 
     private string Own(string receiverId)
     {
-        guard.EnsureNotServedElsewhere();
+        guard.EnsureServed();
         return TenantKey.Of(tenant, receiverId);
     }
 }

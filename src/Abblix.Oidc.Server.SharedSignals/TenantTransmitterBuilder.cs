@@ -56,7 +56,7 @@ internal sealed class TenantTransmitterBuilder(
             pollEndpoints,
             stores.Build(tenant, released, identity, pollEndpoints, declared, guard),
             new TenantEventOutbox(serviceProvider.GetRequiredService<IEventOutbox>(), tenant, guard),
-            new InForceTenantTokenSigner(serviceProvider.CreateService<TenantSecurityEventTokenSigner>(), current),
+            new InForceTenantTokenSigner(serviceProvider.CreateService<TenantSecurityEventTokenSigner>(), current, guard),
             new TenantDeliveryLease(serviceProvider.GetRequiredService<IDeliveryLease>(), tenant));
     }
 

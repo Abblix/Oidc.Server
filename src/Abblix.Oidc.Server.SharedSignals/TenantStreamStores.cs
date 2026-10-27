@@ -31,7 +31,7 @@ internal sealed class TenantStreamStores(ILogger<TenantStreamStores> logger, ISe
     /// <param name="pollEndpoints">The poll address the declared streams name.</param>
     /// <param name="declared">The streams the tenant declares, or null for a tenant serving its part of the store
     /// alone.</param>
-    /// <param name="guard">Refuses every call made while another tenant is served.</param>
+    /// <param name="guard">Refuses every call made where the tenant is not served.</param>
     public (IStreamStore Store, IStreamStore View, Func<bool> Superseded) Build(
         TenantDefinition tenant,
         CancellationToken released,

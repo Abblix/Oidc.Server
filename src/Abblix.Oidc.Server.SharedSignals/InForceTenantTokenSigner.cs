@@ -18,10 +18,16 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// </summary>
 /// <param name="signer">Signs with a given tenant's keys.</param>
 /// <param name="current">The tenant's definition in force.</param>
-internal sealed class InForceTenantTokenSigner(TenantSecurityEventTokenSigner signer, Func<TenantDefinition> current)
-    : ISecurityEventTokenSigner
+/// <param name="guard">Refuses to sign where the tenant is not served.</param>
+internal sealed class InForceTenantTokenSigner(
+    TenantSecurityEventTokenSigner signer,
+    Func<TenantDefinition> current,
+    TenantPartGuard guard) : ISecurityEventTokenSigner
 {
     /// <inheritdoc />
     public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
-        => signer.SignAsync(current(), token, cancellationToken);
+    {
+        guard.EnsureServed();
+        return signer.SignAsync(current(), token, cancellationToken);
+    }
 }

@@ -22,6 +22,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.MinimalApi;
 using Abblix.Oidc.Server.SharedSignals;
+using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Infrastructure;
@@ -565,26 +566,48 @@ public sealed class SharedSignalsTenantIsolationTests
     }
 
     /// <summary>
-    /// An event dispatcher a host kept from acme's request refuses to dispatch globex's event, rather than queueing it
-    /// on acme's streams for acme's receivers.
+    /// An event dispatcher a host kept from acme's request refuses to dispatch where acme is not served, as for
+    /// globex's event in globex's request or in a job of the host's that serves no tenant, rather than queueing the
+    /// event on acme's streams for acme's receivers.
     /// </summary>
-    [Fact]
-    public async Task ADispatcherKeptFromAnotherTenantsRequest_RefusesToDispatch()
+    [Theory]
+    [InlineData("globex")]
+    [InlineData(null)]
+    public async Task ADispatcherKeptFromAnotherTenantsRequest_RefusesToDispatch(string? servedAt)
     {
         var ct = TestContext.Current.CancellationToken;
         await using var app = await StartAsync();
         var catalog = app.Services.GetRequiredService<ITenantCatalog>();
-        var acme = (await catalog.FindByIdAsync("acme", ct))!;
-        var globex = (await catalog.FindByIdAsync("globex", ct))!;
 
         EventDispatcher kept;
-        using (TenantScope.Enter(acme))
+        using (TenantScope.Enter((await catalog.FindByIdAsync("acme", ct))!))
             kept = app.Services.GetRequiredService<EventDispatcher>();
 
-        using var scope = TenantScope.Enter(globex);
+        using var scope = servedAt is null ? null : TenantScope.Enter((await catalog.FindByIdAsync(servedAt, ct))!);
         await Assert.ThrowsAsync<InvalidOperationException>(() => kept.DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = new EmailSubject("jdoe@example.com") },
             ct));
+    }
+
+    /// <summary>
+    /// The signer of queued events a host kept from acme's request refuses to sign in globex's request, rather than
+    /// signing with acme's keys.
+    /// </summary>
+    [Fact]
+    public async Task ASignerKeptFromAnotherTenantsRequest_RefusesToSign()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var app = await StartAsync();
+        var catalog = app.Services.GetRequiredService<ITenantCatalog>();
+
+        QueuedEventSigner kept;
+        using (TenantScope.Enter((await catalog.FindByIdAsync("acme", ct))!))
+            kept = app.Services.GetRequiredService<QueuedEventSigner>();
+
+        var queued = new OutboxItem("event-1", CompactToken: null, Unsigned: QueuedEventSigner.ToQueued(
+            new SecurityEventToken(new JsonWebToken())));
+        using var scope = TenantScope.Enter((await catalog.FindByIdAsync("globex", ct))!);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => kept.SignAsync(queued, ct));
     }
 
     /// <summary>
@@ -612,6 +635,39 @@ public sealed class SharedSignalsTenantIsolationTests
 
         var token = Assert.Single(await PollAsync(ClientOf(app, Host + Acme), Acme, ct));
         Assert.Equal(rotated.SigningKeys.Single().KeyId, KeyIdOf(token));
+    }
+
+    /// <summary>
+    /// A push delivery sweep a host sets off from acme's request delivers globex's events as well: each tenant's pass
+    /// runs as that tenant.
+    /// </summary>
+    [Fact]
+    public async Task ASweepSetOffFromOneTenantsRequest_DeliversEveryTenantsEvents()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var receiver = new RecordingReceiver();
+        ConfiguredStream[] declared =
+        [
+            new ConfiguredStream
+            {
+                ReceiverId = ReceiverId,
+                StreamId = StreamId,
+                EventsRequested = [MembershipChanged],
+                PushEndpointUrl = new Uri(PushEndpoint),
+            },
+        ];
+        await using var app = await StartAsync(
+            beforeMultiTenancy: services => services
+                .AddHttpClient(nameof(PushDeliverySender))
+                .ConfigurePrimaryHttpMessageHandler(() => receiver),
+            declare: server => server.AddConfiguredStreams("globex", declared));
+        Assert.Equal(1, await DispatchAsync(app, "globex", ct));
+
+        var catalog = app.Services.GetRequiredService<ITenantCatalog>();
+        using (TenantScope.Enter((await catalog.FindByIdAsync("acme", ct))!))
+            await app.Services.GetRequiredService<IPushDeliverySweep>().SweepAsync(ct);
+
+        Assert.Equal(Host + Globex, IssuerOf(Assert.Single(receiver.Tokens)));
     }
 
     /// <summary>

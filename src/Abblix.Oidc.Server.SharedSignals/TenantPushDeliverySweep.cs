@@ -17,8 +17,9 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// Runs the push delivery pass of each tenant the server serves, through that tenant's own transmitter.
 /// </summary>
 /// <remarks>
-/// The pass runs on a timer, outside any request, so it is each tenant's transmitter that names the tenant: its
-/// streams, its queued events and the keys it signs with. One tenant's failure is logged and the others still run.
+/// The pass runs on a timer, outside any request, so each tenant's pass runs inside that tenant's scope: its
+/// transmitter refuses to serve while any other tenant is, and a sweep a host sets off from one tenant's request
+/// still runs every tenant's pass. One tenant's failure is logged and the others still run.
 /// </remarks>
 /// <param name="logger">Records a tenant whose pass failed.</param>
 /// <param name="transmitters">The transmitter of each tenant, whose pass runs over that tenant's streams.</param>
@@ -35,6 +36,7 @@ internal sealed partial class TenantPushDeliverySweep(
         {
             try
             {
+                using var scope = TenantScope.Enter(tenant);
                 await transmitters.For(tenant).Sweep.SweepAsync(cancellationToken);
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
