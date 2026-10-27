@@ -96,6 +96,34 @@ public class SingleResourceAccessTokensTests
     }
 
     /// <summary>
+    /// An exchange naming resources as audiences counts each declared one as a resource, so naming two is refused as
+    /// naming two resources is, while an audience no resource declares, absolute or not, is no resource.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { "https://orders.example.com", "https://billing.example.com" }, ErrorCodes.InvalidTarget)]
+    [InlineData(new[] { "https://orders.example.com" }, null)]
+    [InlineData(new[] { "https://orders.example.com", "https://unknown.example.com" }, null)]
+    public async Task AnExchangeNamingResourcesAsAudiences_CountsThemAsResources(string[] audiences, string? error)
+    {
+        var context = new TokenValidationContext(
+            new TokenRequest { GrantType = GrantTypes.TokenExchange, Audiences = audiences },
+            new ClientRequest { ClientId = ClientId })
+        {
+            ClientInfo = Client(singleResource: true),
+            AuthorizedGrant = new AuthorizedGrant(
+                new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
+                new AuthorizationContext(ClientId, [], null)),
+        };
+
+        var refused = await new SingleResourceValidator().ValidateAsync(
+            Tenant,
+            context,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(error, refused?.Error);
+    }
+
+    /// <summary>
     /// At the token endpoint the access token names the resources the request names, else every resource of its
     /// grant: a grant for two resources is redeemed by a request naming one, and refused to one naming none or both.
     /// </summary>

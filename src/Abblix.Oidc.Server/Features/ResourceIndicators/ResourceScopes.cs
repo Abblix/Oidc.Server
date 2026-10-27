@@ -36,20 +36,27 @@ internal static class ResourceScopes
         if (tenant.Resources is not { Length: > 0 } definitions)
             return context;
 
-        Uri[] addressed = [.. context.Resources ?? [], .. AsResources(context.Audiences)];
+        var addressed = AddressedBy(tenant, context.Resources, context.Audiences);
         return context with
         {
             Scope = [.. context.Scope.Where(scope => BelongsTo(scope, definitions, addressed))],
         };
     }
 
-    private static IEnumerable<Uri> AsResources(string[]? audiences)
+    /// <summary>
+    /// The resources a token naming <paramref name="resources"/> and <paramref name="audiences"/> is addressed to:
+    /// each resource it names, and each audience equal to the identifier of a resource <paramref name="tenant"/>
+    /// declares, every one once.
+    /// </summary>
+    public static Uri[] AddressedBy(TenantDefinition tenant, Uri[]? resources, string[]? audiences)
     {
-        foreach (var audience in audiences ?? [])
-        {
-            if (Uri.TryCreate(audience, UriKind.Absolute, out var resource))
-                yield return resource;
-        }
+        var declared = tenant.Resources ?? [];
+        var named = (audiences ?? [])
+            .Select(audience => Uri.TryCreate(audience, UriKind.Absolute, out var uri) ? uri : null)
+            .OfType<Uri>()
+            .Where(uri => declared.Any(definition => definition.Resource == uri));
+
+        return [.. (resources ?? []).Concat(named).Distinct()];
     }
 
     private static bool BelongsTo(string scope, ResourceDefinition[] definitions, Uri[] addressed)
