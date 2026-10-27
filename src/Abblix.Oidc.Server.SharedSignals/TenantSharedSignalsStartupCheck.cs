@@ -152,8 +152,8 @@ internal sealed class TenantSharedSignalsStartupCheck(IServiceProvider servicePr
     /// <summary>
     /// Refuses a store every tenant shares that keeps no partitions while the host registered one that does: a store
     /// the host wrapped around it hides the partitions the tenants' streams are kept in. A store registered after
-    /// <see cref="SharedSignalsMultiTenancyExtensions.AddSharedSignals"/>() is refused for that already, and moving
-    /// its registration is the whole repair.
+    /// <see cref="SharedSignalsMultiTenancyExtensions.AddSharedSignals"/>() is refused for that already; once it is
+    /// moved, its partitions are checked here.
     /// </summary>
     private void RequirePartitions(List<string> failures)
     {
