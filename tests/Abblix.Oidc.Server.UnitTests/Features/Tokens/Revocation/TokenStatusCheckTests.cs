@@ -27,13 +27,13 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 
 /// <summary>
-/// Unit tests for <see cref="TokenStatusValidatorDecorator"/> covering the two revocations it enforces:
+/// Unit tests for <see cref="TokenStatusCheck"/> covering the two revocations it enforces:
 /// the refresh-token family per the OAuth 2.0 Security BCP (RFC 9700 Section 4.14.2) rotation model, and
-/// the subject- and session-level cutoffs an administrator writes. The decorator turns a replay of a
+/// the subject- and session-level cutoffs an administrator writes. The check turns a replay of a
 /// superseded refresh token into a whole-family revocation and enforces the family kill switch on every
 /// subsequent use, so a compromised grant is shut down rather than leaving the attacker's active token working.
 /// </summary>
-public class TokenStatusValidatorDecoratorTests
+public class TokenStatusCheckTests
 {
     private const string ActiveJwtId = "rt_jti_active";
     private const string GrantId = "grant_001";
@@ -54,18 +54,17 @@ public class TokenStatusValidatorDecoratorTests
     private readonly Mock<ITokenRegistry> _registry = new(MockBehavior.Strict);
     private readonly Mock<IRevocationCutoffRegistry> _cutoffs = new(MockBehavior.Strict);
     private readonly Mock<IClientInfoProvider> _clients = new(MockBehavior.Strict);
-    private readonly Mock<IJsonWebTokenValidator> _inner = new(MockBehavior.Strict);
-    private readonly TokenStatusValidatorDecorator _decorator;
+    private readonly TokenStatusCheck _check;
+    private JsonWebToken? _token;
 
-    public TokenStatusValidatorDecoratorTests()
+    public TokenStatusCheckTests()
     {
         // The real converter, not a mock: what has to hold is that a pairwise pseudonym opens back into the
         // subject a host revoked, and a stub told to return the right answer proves nothing about that.
-        _decorator = new TokenStatusValidatorDecorator(
+        _check = new TokenStatusCheck(
             _registry.Object,
             CutoffChecker(TimeSpan.Zero),
-            new GrantRevocation(_registry.Object, _clients.Object),
-            _inner.Object, tenantAccessor: SingleIssuer.Accessor);
+            new GrantRevocation(_registry.Object, _clients.Object));
 
         // No cutoff recorded is the ordinary case, and every test not about cutoffs relies on it.
         _cutoffs
@@ -81,21 +80,21 @@ public class TokenStatusValidatorDecoratorTests
     }
 
     /// <summary>
-    /// Replay of a superseded (already-rotated) refresh token: the decorator cannot tell an attacker from a
+    /// Replay of a superseded (already-rotated) refresh token: the check cannot tell an attacker from a
     /// lagging client, so it revokes the whole family and reports the token as already used. This is the
     /// breach signal of RFC 9700 Section 4.14.2 - the point at which the active token in the lineage is doomed.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_ReusedRefreshToken_RevokesFamilyAndReportsAlreadyUsed()
     {
-        SetupInnerReturns(RefreshToken(GrantId));
+        Checking(RefreshToken(GrantId));
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Used);
         _registry
             .Setup(r => r.SetStatusAsync(TestTenant.Matched, GrantId, JsonWebTokenStatus.Revoked, Expiry))
             .Returns(Task.CompletedTask);
 
-        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await CheckAsync();
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenAlreadyUsed, error.Error);
@@ -111,10 +110,10 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_ActiveTokenOfRevokedFamily_IsRejected()
     {
-        SetupInnerReturns(RefreshToken(GrantId));
+        Checking(RefreshToken(GrantId));
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, GrantId)).ReturnsAsync(JsonWebTokenStatus.Revoked);
 
-        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await CheckAsync();
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -123,17 +122,17 @@ public class TokenStatusValidatorDecoratorTests
 
     /// <summary>
     /// A fresh refresh token of a live family passes through unchanged: neither the family nor the token has a
-    /// non-neutral status, so the decorator returns the inner validator's success without any registry write.
+    /// non-neutral status, so the check returns the inner validator's success without any registry write.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_LiveRefreshToken_PassesThrough()
     {
         var token = RefreshToken(GrantId);
-        SetupInnerReturns(token);
+        Checking(token);
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
-        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await CheckAsync();
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.Same(token, validated);
@@ -147,10 +146,10 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_UsedTokenWithoutFamily_RejectsWithoutTouchingAnyFamily()
     {
-        SetupInnerReturns(RefreshToken(grantId: null));
+        Checking(RefreshToken(grantId: null));
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Used);
 
-        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await CheckAsync();
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenAlreadyUsed, error.Error);
@@ -167,10 +166,10 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_TokenIssuedBeforeTheSubjectCutoff_IsRejected()
     {
-        SetupInnerReturns(RefreshToken(GrantId));
+        Checking(RefreshToken(GrantId));
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(1));
 
-        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await CheckAsync();
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -184,12 +183,12 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_TokenIssuedAfterTheSubjectCutoff_IsAccepted()
     {
-        SetupInnerReturns(RefreshToken(GrantId));
+        Checking(RefreshToken(GrantId));
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(-1));
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
-        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await CheckAsync();
 
         Assert.True(result.TryGetSuccess(out _));
         _cutoffs.Verify(
@@ -203,10 +202,10 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_TokenOfACutOffSession_IsRejected()
     {
-        SetupInnerReturns(RefreshToken(GrantId));
+        Checking(RefreshToken(GrantId));
         SetupCutoff(RevocationScope.Session, SessionId, IssuedAt.AddSeconds(1));
 
-        var result = await _decorator.ValidateAsync("opaque.rt.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await CheckAsync();
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -221,7 +220,7 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_TokenWithoutAnIdentifier_IsStillReachedByACutoff()
     {
-        SetupInnerReturns(new JsonWebToken
+        Checking(new JsonWebToken
         {
             Payload =
             {
@@ -233,7 +232,7 @@ public class TokenStatusValidatorDecoratorTests
         });
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(1));
 
-        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await CheckAsync();
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -246,7 +245,7 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_TokenWithoutAnIssueTime_IsNotReachedByACutoff()
     {
-        SetupInnerReturns(new JsonWebToken
+        Checking(new JsonWebToken
         {
             Payload =
             {
@@ -259,7 +258,7 @@ public class TokenStatusValidatorDecoratorTests
         SetupCutoff(RevocationScope.Subject, Subject, Expiry);
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
-        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await CheckAsync();
 
         Assert.True(result.TryGetSuccess(out _));
 
@@ -289,7 +288,7 @@ public class TokenStatusValidatorDecoratorTests
         var pseudonym = SubjectConverter.Convert(SingleIssuer.Tenant, Subject, pairwiseClient);
         Assert.NotEqual(Subject, pseudonym); // the fixture is only meaningful if the two actually differ
 
-        SetupInnerReturns(new JsonWebToken
+        Checking(new JsonWebToken
         {
             Payload =
             {
@@ -305,7 +304,7 @@ public class TokenStatusValidatorDecoratorTests
         // The host revokes the subject it knows, which is the real one.
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(1));
 
-        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await CheckAsync();
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -320,18 +319,12 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_WhenTheCallerDoesNotValidateLifetime_ACutoffDoesNotRefuse()
     {
-        SetupInnerReturns(RefreshToken(GrantId));
+        Checking(RefreshToken(GrantId));
         SetupCutoff(RevocationScope.Session, SessionId, IssuedAt.AddSeconds(1));
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
-        var result = await _decorator.ValidateAsync(
-            "opaque.id.jwt",
-            new ValidationParameters
-            {
-                TokenTypes = TokenTypePolicy.CheckedByCaller,
-                Options = ValidationOptions.Default & ~ValidationOptions.ValidateLifetime,
-            });
+        var result = await CheckAsync(ValidationOptions.Default & ~ValidationOptions.ValidateLifetime);
 
         Assert.True(result.TryGetSuccess(out _));
 
@@ -347,13 +340,13 @@ public class TokenStatusValidatorDecoratorTests
             .Setup(c => c.GetCutoffAsync(TestTenant.Matched, scope, principal, It.IsAny<CancellationToken>()))
             .ReturnsAsync(cutoff);
 
-    private void SetupInnerReturns(JsonWebToken token)
-    {
-        Result<JsonWebToken, JwtValidationError> success = token;
-        _inner
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
-            .ReturnsAsync(success);
-    }
+    private void Checking(JsonWebToken token) => _token = token;
+
+    private Task<Result<JsonWebToken, JwtValidationError>> CheckAsync(
+        ValidationOptions options = ValidationOptions.Default)
+        => _check.CheckAsync(SingleIssuer.Tenant, Checked, options);
+
+    private JsonWebToken Checked => _token ?? throw new InvalidOperationException("No token is being checked.");
 
 
     /// <summary>
@@ -395,7 +388,7 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_TokenFromAnotherIssuer_IsNotReachedByACutoff()
     {
-        SetupInnerReturns(new JsonWebToken
+        Checking(new JsonWebToken
         {
             Payload =
             {
@@ -409,7 +402,7 @@ public class TokenStatusValidatorDecoratorTests
         SetupCutoff(RevocationScope.Subject, Subject, Expiry);
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
 
-        var result = await _decorator.ValidateAsync("opaque.assertion.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await CheckAsync();
 
         Assert.True(result.TryGetSuccess(out _));
 
@@ -440,7 +433,7 @@ public class TokenStatusValidatorDecoratorTests
         };
         _clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(pairwiseClient);
 
-        SetupInnerReturns(new JsonWebToken
+        Checking(new JsonWebToken
         {
             Payload =
             {
@@ -456,7 +449,7 @@ public class TokenStatusValidatorDecoratorTests
             }
         });
 
-        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await CheckAsync();
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -475,7 +468,7 @@ public class TokenStatusValidatorDecoratorTests
     {
         _clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync((ClientInfo?)null);
 
-        SetupInnerReturns(new JsonWebToken
+        Checking(new JsonWebToken
         {
             Payload =
             {
@@ -488,7 +481,7 @@ public class TokenStatusValidatorDecoratorTests
             }
         });
 
-        var result = await _decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await CheckAsync();
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);
@@ -506,13 +499,12 @@ public class TokenStatusValidatorDecoratorTests
     [Fact]
     public async Task ValidateAsync_TokenIssuedWithinTheSkewAfterACutoff_IsStillRefused()
     {
-        var decorator = new TokenStatusValidatorDecorator(
+        var check = new TokenStatusCheck(
             _registry.Object,
             CutoffChecker(TimeSpan.FromMinutes(1)),
-            new GrantRevocation(_registry.Object, _clients.Object),
-            _inner.Object, tenantAccessor: SingleIssuer.Accessor);
+            new GrantRevocation(_registry.Object, _clients.Object));
 
-        SetupInnerReturns(new JsonWebToken
+        Checking(new JsonWebToken
         {
             Payload =
             {
@@ -528,7 +520,7 @@ public class TokenStatusValidatorDecoratorTests
         // revoking instance looks like from here.
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(-30));
 
-        var result = await decorator.ValidateAsync("opaque.at.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await check.CheckAsync(SingleIssuer.Tenant, Checked, ValidationOptions.Default);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.TokenRevoked, error.Error);

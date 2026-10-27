@@ -63,6 +63,8 @@ public static class JwtServiceCollectionExtensions
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, KeyRolloverPropagationValidator>());
 
         services.TryAddSingleton<IAuthServiceJwtFormatter, AuthServiceJwtFormatter>();
+        // The validator refuses a token revoked, rotated or cut off, so what records those comes with it
+        services.AddTokenRevocation();
         services.TryAddSingleton<IAuthServiceJwtValidator, AuthServiceJwtValidator>();
         services.TryAddSingleton<IIdTokenHintParser, IdTokenHintParser>();
         return services;

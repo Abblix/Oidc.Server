@@ -243,7 +243,8 @@ public class RefreshTokenSubjectTokenResolverTests
             new AuthServiceJwtValidator(
                 inner.Object,
                 SingleIssuer.LicensedCatalog,
-                Mock.Of<Abblix.Oidc.Server.Common.Interfaces.IAuthServiceKeysProvider>()),
+                Mock.Of<Abblix.Oidc.Server.Common.Interfaces.IAuthServiceKeysProvider>(),
+                NothingRecorded.StatusCheck),
             _refreshTokenService.Object,
             _clientInfoProvider.Object);
 

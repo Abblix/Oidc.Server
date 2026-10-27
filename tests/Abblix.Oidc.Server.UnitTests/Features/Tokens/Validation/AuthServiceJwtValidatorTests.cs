@@ -49,7 +49,8 @@ public class AuthServiceJwtValidatorTests
         _validator = new AuthServiceJwtValidator(
             _jwtValidator.Object,
             SingleIssuer.LicensedCatalog,
-            _serviceKeysProvider.Object);
+            _serviceKeysProvider.Object,
+            NothingRecorded.StatusCheck);
     }
 
     /// <summary>
@@ -696,7 +697,8 @@ public class AuthServiceJwtValidatorTests
         var validator = new AuthServiceJwtValidator(
             _jwtValidator.Object,
             SingleIssuer.HostCatalog,
-            _serviceKeysProvider.Object);
+            _serviceKeysProvider.Object,
+            NothingRecorded.StatusCheck);
 
         var token = CreateValidToken();
         token.Header.Type = type;

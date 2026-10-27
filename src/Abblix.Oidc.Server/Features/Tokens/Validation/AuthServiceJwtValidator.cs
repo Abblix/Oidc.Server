@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -23,10 +24,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="catalog">The catalog the tenant was resolved from, which the license counts it by.</param>
 /// <param name="serviceKeysProvider">The provider used to retrieve the cryptographic keys for signing and
 /// decrypting tokens.</param>
+/// <param name="statusCheck">Refuses a token revoked, rotated or cut off at the tenant it is validated for.</param>
 public class AuthServiceJwtValidator(
 	IJsonWebTokenValidator validator,
 	ITenantCatalog catalog,
-	IAuthServiceKeysProvider serviceKeysProvider) : IAuthServiceJwtValidator
+	IAuthServiceKeysProvider serviceKeysProvider,
+	TokenStatusCheck statusCheck) : IAuthServiceJwtValidator
 {
 
 	/// <summary>
@@ -45,41 +48,38 @@ public class AuthServiceJwtValidator(
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options = ValidationOptions.Default)
 	{
-		// The token status decorator under this validator reads what is recorded about the token at the tenant of the
-		// accessor, so the scope makes that the tenant the token is validated for, also for a caller outside its request
-		Result<JsonWebToken, JwtValidationError> result;
-		using (TenantScope.Enter(tenant))
-		{
-			result = await validator.ValidateAsync(
-				jwt,
-				new ValidationParameters
-				{
-					Options = options,
-					TokenTypes = tokenTypes,
-					ValidateIssuer = issuer => ValidateIssuerAsync(tenant, issuer),
-					ValidateAudience = audiences => ValidateAudienceAsync(tenant, audiences),
-					ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(tenant),
-					ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
+		var result = await validator.ValidateAsync(
+			jwt,
+			new ValidationParameters
+			{
+				Options = options,
+				TokenTypes = tokenTypes,
+				ValidateIssuer = issuer => ValidateIssuerAsync(tenant, issuer),
+				ValidateAudience = audiences => ValidateAudienceAsync(tenant, audiences),
+				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(tenant),
+				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
 
-					// No profile tolerance here, and the absence is a decision. These are tokens this
-					// server issued and reads back, so the freshness a profile bounds is not the
-					// question: a tolerance tight enough for a third party would turn one node running
-					// ahead of another into a refusal of this server's own refresh token, which is an
-					// operational hazard rather than the requirement.
-				});
-		}
+				// No profile tolerance here, and the absence is a decision. These are tokens this
+				// server issued and reads back, so the freshness a profile bounds is not the
+				// question: a tolerance tight enough for a third party would turn one node running
+				// ahead of another into a refusal of this server's own refresh token, which is an
+				// operational hazard rather than the requirement.
+			});
+
+		if (!result.TryGetSuccess(out var token))
+			return result;
 
 		// What is recorded about a refresh token, revoked, rotated or cut off, is kept for the tenant and creation it
 		// was issued at, so one of another creation of this tenant, or of a version before 3.0, which names none,
-		// would be judged against no records at all, at every endpoint that reads it
-		if (result.TryGetSuccess(out var token) &&
-		    JwtTypeName.Matches(token.Header.Type, JwtTypes.RefreshToken) &&
+		// would be judged against no records at all, at every endpoint that reads it. Refused before the records are
+		// read, since a replay found there revokes the grant it belongs to.
+		if (JwtTypeName.Matches(token.Header.Type, JwtTypes.RefreshToken) &&
 		    !RefreshTokenTenant.Names(token.Payload, TenantKey.PartitionOf(tenant)))
 		{
 			return new JwtValidationError(JwtError.InvalidToken, "The refresh token does not name this tenant and creation");
 		}
 
-		return result;
+		return await statusCheck.CheckAsync(tenant, token, options);
 	}
 
 	/// <summary>
