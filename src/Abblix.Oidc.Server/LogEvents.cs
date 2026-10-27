@@ -1039,6 +1039,7 @@ internal static class LogEvents
             private const int Base = 10760;
 
             public const int TrustedIssuerIsServedTenant = Base;
+            public const int TrustedIssuersNotChecked = Base + 1;
         }
     }
 

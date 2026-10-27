@@ -20,7 +20,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <remarks>
 /// The grant and the registration refuse such an issuer at each request, since they read nothing this server records
 /// about its own tokens and a revoked one would pass, so the entry does nothing; the operator is told rather than left
-/// to believe it trusts something. The tenant is served all the same.
+/// to believe it trusts something. The tenant is served all the same, and a catalog that cannot answer yet costs a
+/// log line rather than the start, since nothing is refused here.
 /// </remarks>
 /// <param name="logger">Records each such entry.</param>
 /// <param name="options">The server's settings, which list the trusted issuers.</param>
@@ -34,14 +35,21 @@ internal sealed partial class TrustedTenantIssuersWarning(
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         var settings = options.Value;
-        await WarnAsync(
-            $"{nameof(OidcOptions.JwtBearer)}.{nameof(JwtBearerOptions.TrustedIssuers)}",
-            settings.JwtBearer.TrustedIssuers,
-            cancellationToken);
-        await WarnAsync(
-            $"{nameof(OidcOptions.SoftwareStatement)}.{nameof(SoftwareStatementOptions.TrustedIssuers)}",
-            settings.SoftwareStatement.TrustedIssuers,
-            cancellationToken);
+        try
+        {
+            await WarnAsync(
+                $"{nameof(OidcOptions.JwtBearer)}.{nameof(JwtBearerOptions.TrustedIssuers)}",
+                settings.JwtBearer.TrustedIssuers,
+                cancellationToken);
+            await WarnAsync(
+                $"{nameof(OidcOptions.SoftwareStatement)}.{nameof(SoftwareStatementOptions.TrustedIssuers)}",
+                settings.SoftwareStatement.TrustedIssuers,
+                cancellationToken);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            LogTrustedIssuersNotChecked(exception);
+        }
     }
 
     /// <inheritdoc />
@@ -62,4 +70,10 @@ internal sealed partial class TrustedTenantIssuersWarning(
         Message = "{Setting} lists {Issuer}, a tenant this server serves, which is never trusted for its own tokens; " +
                   "the entry has no effect and can be removed")]
     private partial void LogTrustedIssuerIsServedTenant(string issuer, string setting);
+
+    [LoggerMessage(
+        EventId = LogEvents.MultiTenancy.TrustedTenantIssuersWarning.TrustedIssuersNotChecked,
+        Level = LogLevel.Warning,
+        Message = "The trusted issuers could not be checked against the tenants this server serves")]
+    private partial void LogTrustedIssuersNotChecked(Exception exception);
 }

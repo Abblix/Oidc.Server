@@ -41,13 +41,16 @@ public class TenantIssuersTests
     }
 
     /// <summary>
-    /// The issuer of a tenant whose path holds a character a URI escapes is found, written either way, and an issuer
-    /// the catalog does not serve is not.
+    /// The issuer of a tenant whose path holds a character a URI escapes is found, written either way; an issuer the
+    /// catalog does not serve is not, nor one at the tenant's address whose scheme or port is another, which the
+    /// catalog's lookup ignores and the issuer does not.
     /// </summary>
     [Theory]
     [InlineData("https://auth.example.com/tenants/café", true)]
     [InlineData("https://auth.example.com/tenants/caf%C3%A9", true)]
     [InlineData("https://auth.example.com/tenants/cafe", false)]
+    [InlineData("http://auth.example.com/tenants/café", false)]
+    [InlineData("https://auth.example.com:8443/tenants/café", false)]
     [InlineData("not a uri", false)]
     public async Task AnIssuer_IsFoundAsATenantTheCatalogServes(string issuer, bool served)
     {

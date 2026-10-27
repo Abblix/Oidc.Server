@@ -23,8 +23,7 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
 /// <summary>
 /// A trusted issuer of the JWT bearer grant or of software statements that is a tenant this server serves is never
-/// trusted, since its revoked tokens would pass; the server starts and serves the tenant, and warns that the entry
-/// has no effect.
+/// trusted, since its revoked tokens would pass; the server starts and warns that the entry has no effect.
 /// </summary>
 public sealed class TrustedTenantIssuerTests
 {
