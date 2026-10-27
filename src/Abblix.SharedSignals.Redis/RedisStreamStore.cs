@@ -36,15 +36,33 @@ namespace Abblix.SharedSignals.Redis;
 /// <para>Registrations carry the receivers' delivery credentials
 /// (<c>authorization_header</c>), so this Redis holds secrets and deserves the protection of one:
 /// TLS, authentication, and a database of its own.</para>
+/// <para>Each partition keeps its streams on a hash of its own, named after the transmitter's hash and the partition,
+/// so a transmitter serving tenants reads one tenant's streams without the others'.</para>
 /// </remarks>
 /// <param name="connection">The Redis connection; opening and configuring it is the host's.</param>
 /// <param name="options">The transmitter's options, whose issuer the key is scoped by. It is the configured issuer
-/// rather than the one a request is answered as, so a deployment answering as many issuers keeps one registry, which
-/// keeps its tenants apart by the receiver identifiers it is handed, and a tenant moving to another issuer keeps its
-/// streams.</param>
+/// rather than the one a request is answered as, so a deployment answering as many issuers keeps one registry for
+/// each of its tenants under the tenant's partition, and a tenant moving to another issuer keeps its streams.</param>
 public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSignalsTransmitterOptions options)
-    : IStreamStore
+    : IPartitionedStreamStore
 {
+    /// <summary>
+    /// The store of one partition's streams, on the hash of that partition.
+    /// </summary>
+    private RedisStreamStore(
+        IConnectionMultiplexer connection,
+        SharedSignalsTransmitterOptions options,
+        string partition)
+        : this(connection, options)
+    {
+        _partition = partition;
+    }
+
+    /// <summary>
+    /// The partition whose streams this store holds, or null for the transmitter's own hash.
+    /// </summary>
+    private readonly string? _partition;
+
     /// <summary>
     /// Enum members travel as their names. The default is the ordinal, which turns reordering a
     /// vocabulary - an edit with no wire consequence anywhere else - into a silent reinterpretation of
@@ -57,10 +75,20 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSi
     };
 
     private RedisKey HashKey
+        => _partition is null ? TransmitterKey : $"{TransmitterKey}:{Uri.EscapeDataString(_partition)}";
+
+    private string TransmitterKey
         => $"{nameof(Abblix)}.{nameof(SharedSignals)}:{nameof(RedisStreamStore)}:"
            + Uri.EscapeDataString(options.Issuer);
 
     private readonly IDatabase _database = connection.GetDatabase();
+
+    /// <inheritdoc />
+    public IStreamStore Partition(string partition)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(partition);
+        return new RedisStreamStore(connection, options, partition);
+    }
 
     /// <summary>
     /// The exact text a stored stream carries when its version is <paramref name="version"/>.
