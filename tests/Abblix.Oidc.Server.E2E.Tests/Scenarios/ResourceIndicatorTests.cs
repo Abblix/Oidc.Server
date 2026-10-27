@@ -240,30 +240,6 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(ErrorCodes.InvalidGrant, body?[ResponseParameters.Error]?.GetValue<string>());
     }
 
-    /// <summary>
-    /// The token response of an authorization code grant the confidential client is given for the registered
-    /// resource, with a refresh token.
-    /// </summary>
-    private static async Task<JsonObject> ObtainResourceGrantTokensAsync(
-        HttpClient client, DiscoveryDocument discovery)
-    {
-        var (verifier, challenge) = GeneratePkcePair();
-        var parameters = CodeFlowParameters(TestConstants.ConfidentialClientId, challenge);
-        parameters[AuthorizationRequest.Parameters.Scope] = $"{Scopes.OpenId} {Scopes.OfflineAccess}";
-        parameters[AuthorizationRequest.Parameters.Resource] = TestConstants.ApiResource;
-        var code = await AuthorizeAndExtractCodeAsync(client, discovery, parameters);
-
-        return await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
-        {
-            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
-            [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-        });
-    }
-
     private static async Task<HttpResponseMessage> SendUserInfoAsync(
         HttpClient client, DiscoveryDocument discovery, string accessToken)
     {

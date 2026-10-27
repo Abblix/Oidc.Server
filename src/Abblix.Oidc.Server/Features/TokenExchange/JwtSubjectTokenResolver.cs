@@ -43,17 +43,6 @@ public sealed class JwtSubjectTokenResolver(
     IClientInfoProvider clientInfoProvider) : ISubjectTokenResolver
 {
     /// <summary>
-    /// An RFC 8693 subject_token was minted for a client or, under RFC 8707, for a resource server
-    /// -- never for this AS as its audience. Enforcing the default "aud must be a registered client"
-    /// rule would wrongly reject a resource-scoped access token presented for exchange. The token's
-    /// binding to the requesting client is enforced separately by the confused-deputy guard in
-    /// <see cref="Endpoints.Token.Grants.TokenExchangeGrantHandler"/>, so here we validate signature,
-    /// issuer and lifetime but deliberately drop the audience constraint.
-    /// </summary>
-    private const ValidationOptions SubjectTokenValidation =
-        ValidationOptions.Default & ~ValidationOptions.RequireValidAudience;
-
-    /// <summary>
     /// The token types a subject token presented under <paramref name="tokenType"/> may carry, so a token issued
     /// for one purpose is not exchanged as another.
     /// </summary>
@@ -82,7 +71,15 @@ public sealed class JwtSubjectTokenResolver(
                 ErrorCodes.InvalidRequest, $"The subject_token type '{tokenType}' is not a JWT this server reads.");
         }
 
-        var validation = await jwtValidator.ValidateAsync(tenant, subjectToken, accepted, SubjectTokenValidation);
+        // An RFC 8693 subject_token was minted for a client or, under RFC 8707, for a resource server, never for
+        // this server as its audience, so a resource-scoped access token presented for exchange is not refused for
+        // it. Its binding to the requesting client is enforced by the confused-deputy guard in
+        // TokenExchangeGrantHandler.
+        var validation = await jwtValidator.ValidateAsync(
+            tenant,
+            subjectToken,
+            accepted,
+            ServiceTokenValidation.AnyAudience);
         if (!validation.TryGetSuccess(out var jwt))
         {
             return new OidcError(ErrorCodes.InvalidRequest, "The subject_token is invalid or has expired.");
