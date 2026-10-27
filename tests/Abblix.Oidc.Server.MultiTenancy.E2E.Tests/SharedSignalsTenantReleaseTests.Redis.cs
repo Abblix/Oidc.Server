@@ -113,15 +113,78 @@ public sealed partial class SharedSignalsTenantReleaseTests
             new MemoryTenantStore(),
             new FakeTimeProvider(),
             garnet.Connection,
-            afterRedis: services => services.AddSingleton<IStreamStore>(
-                provider => new WrappingStreamStore(ActivatorUtilities.CreateInstance<RedisStreamStore>(provider)))));
+            streamStore: services => services
+                .AddSharedSignalsRedisStreamStore()
+                .AddSingleton<IStreamStore>(provider =>
+                    new WrappingStreamStore(ActivatorUtilities.CreateInstance<RedisStreamStore>(provider)))));
+    }
+
+    /// <summary>
+    /// A store the host wraps around the Redis stream store passing on its partitions serves each tenant's streams
+    /// from that tenant's hash, as the Redis store does unwrapped.
+    /// </summary>
+    [Fact]
+    public async Task AStoreWrappingTheRedisStoreWithItsPartitions_ReadsTheTenantsHash()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var garnet = new GarnetFixture();
+        var store = new MemoryTenantStore();
+        await store.AddAsync(TenantAt("acme"), ct);
+        await store.AddAsync(TenantAt("globex"), ct);
+        var calls = new ConcurrentQueue<(string Method, string Key)>();
+
+        await using var app = await StartOverRedisAsync(
+            store,
+            new FakeTimeProvider(),
+            RecordingRedisProxy<IConnectionMultiplexer>.Over(garnet.Connection, calls),
+            streamStore: services => services
+                .AddSharedSignalsRedisStreamStore()
+                .AddSingleton<IStreamStore>(provider =>
+                    new PartitionedWrappingStreamStore(ActivatorUtilities.CreateInstance<RedisStreamStore>(provider))));
+        foreach (var tenantId in (string[])["acme", "globex"])
+        {
+            using var created = await ClientOf(app, tenantId).PostAsJsonAsync(
+                $"/tenants/{tenantId}{StreamPath}",
+                new CreateStreamRequest { EventsRequested = [MembershipChanged] },
+                ct);
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        }
+
+        var acme = (await app.Services.GetRequiredService<StoreTenantCatalog>().FindByIdAsync("acme", ct))!;
+        calls.Clear();
+        var listed = await ClientOf(app, "acme").GetFromJsonAsync<StreamConfiguration[]>(
+            $"/tenants/acme{StreamPath}",
+            ct);
+
+        Assert.Single(listed!);
+        Assert.Equal([PartitionHash(acme)], calls.Select(call => call.Key).Distinct().ToArray());
+    }
+
+    /// <summary>
+    /// The Redis stream store registered after the multi-tenant transmitter is refused once, for being registered
+    /// there, and not a second time for the partitions the store every tenant shares then keeps none of.
+    /// </summary>
+    [Fact]
+    public async Task TheRedisStoreRegisteredAfterTheTenantsTransmitter_IsRefusedForThatAlone()
+    {
+        using var garnet = new GarnetFixture();
+
+        var refused = await Assert.ThrowsAsync<OptionsValidationException>(() => StartOverRedisAsync(
+            new MemoryTenantStore(),
+            new FakeTimeProvider(),
+            garnet.Connection,
+            streamStore: _ => { },
+            afterSharedSignals: services => services.AddSharedSignalsRedisStreamStore()));
+
+        Assert.Single(refused.Failures);
     }
 
     private static async Task<WebApplication> StartOverRedisAsync(
         MemoryTenantStore store,
         FakeTimeProvider time,
         IConnectionMultiplexer connection,
-        Action<IServiceCollection>? afterRedis = null)
+        Action<IServiceCollection>? streamStore = null,
+        Action<IServiceCollection>? afterSharedSignals = null)
     {
         await TestLicense.Loaded;
 
@@ -142,13 +205,13 @@ public sealed partial class SharedSignalsTenantReleaseTests
             PushDeliveryInterval = null,
         });
         builder.Services.AddSingleton(connection);
-        builder.Services.AddSharedSignalsRedisStreamStore();
-        afterRedis?.Invoke(builder.Services);
+        (streamStore ?? (services => services.AddSharedSignalsRedisStreamStore()))(builder.Services);
 
         builder.Services.AddSingleton<ITenantStore>(store);
         builder.Services.AddSingleton<ITenantStoreWriter>(store);
 
         server.AddSharedSignals();
+        afterSharedSignals?.Invoke(builder.Services);
 
         var app = builder.Build();
 
