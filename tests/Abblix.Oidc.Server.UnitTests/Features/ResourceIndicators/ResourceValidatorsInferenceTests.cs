@@ -47,11 +47,23 @@ public class ResourceValidatorsInferenceTests
     /// The resources a request naming no resource is taken to be for at <paramref name="endpoint"/>, or the error
     /// it is refused with.
     /// </summary>
-    private static async Task<(string? Error, Uri[] Resources)> ValidateAsync(
+    private static Task<(string? Error, Uri[] Resources)> ValidateAsync(
         string endpoint,
         bool infer,
         Uri[]? resources,
         params string[] scopes)
+        => ValidateAsync(endpoint, infer, resources, scopes, defaultScope: null);
+
+    /// <summary>
+    /// The resources a request naming no resource is taken to be for at <paramref name="endpoint"/>, or the error
+    /// it is refused with, its client serving a request naming no scope with <paramref name="defaultScope"/>.
+    /// </summary>
+    private static async Task<(string? Error, Uri[] Resources)> ValidateAsync(
+        string endpoint,
+        bool infer,
+        Uri[]? resources,
+        string[] scopes,
+        string[]? defaultScope)
     {
         var options = Options.Create(new TestIssuer
         {
@@ -63,7 +75,7 @@ public class ResourceValidatorsInferenceTests
             ],
         });
         var resourceManager = SingleIssuer.ResourceManager();
-        var client = new ClientInfo(ClientId);
+        var client = new ClientInfo(ClientId) { DefaultScope = defaultScope };
 
         switch (endpoint)
         {
@@ -125,6 +137,20 @@ public class ResourceValidatorsInferenceTests
     public async Task AScopeOfOneResource_TakesTheRequestToBeForIt(string endpoint)
     {
         var (error, resources) = await ValidateAsync(endpoint, infer: true, null, Scopes.OpenId, OrdersRead);
+
+        Assert.Null(error);
+        Assert.Equal([Orders], resources);
+    }
+
+    /// <summary>
+    /// A request naming no scope is taken to be for the resource its client's default scope belongs to, as the same
+    /// request naming that scope is.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Endpoints))]
+    public async Task ARequestNamingNoScope_IsTakenToBeForTheResourceOfTheClientsDefault(string endpoint)
+    {
+        var (error, resources) = await ValidateAsync(endpoint, infer: true, null, [], defaultScope: [OrdersRead]);
 
         Assert.Null(error);
         Assert.Equal([Orders], resources);
