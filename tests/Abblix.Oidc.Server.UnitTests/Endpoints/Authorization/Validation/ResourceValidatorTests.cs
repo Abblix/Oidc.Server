@@ -69,6 +69,24 @@ public class ResourceValidatorTests
     }
 
     /// <summary>
+    /// A request naming no scope is judged with its client's default, so a default scope the named resource declares
+    /// stays on that resource as a scope the request named would.
+    /// </summary>
+    [Fact]
+    public async Task ARequestNamingNoScope_KeepsTheResourceScopesOfTheClientsDefault()
+    {
+        var tenant = new TestIssuer { Resources = [new ResourceDefinition(Resource1, new ScopeDefinition("orders.read"))] }
+            .ToTenant();
+        var context = CreateContext(resources: [Resource1], scopes: []);
+        context.ClientInfo = new ClientInfo(ClientId) { AllowedScopes = ["orders.read"], DefaultScope = ["orders.read"] };
+
+        var result = await new ResourceValidator(SingleIssuer.ResourceManager()).ValidateAsync(tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal("orders.read", Assert.Single(Assert.Single(context.Resources).Scopes).Scope);
+    }
+
+    /// <summary>
     /// Verifies that ValidateAsync succeeds when no resources specified.
     /// Per RFC 8707, resource parameter is OPTIONAL.
     /// Tests default behavior without resource indicators.

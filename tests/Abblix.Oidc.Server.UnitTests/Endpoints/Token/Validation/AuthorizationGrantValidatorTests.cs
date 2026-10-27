@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -59,6 +60,35 @@ public class AuthorizationGrantValidatorTests
         context.ClientInfo = clientInfo;
 
         return context;
+    }
+
+    /// <summary>
+    /// A grant starting from the client alone builds its context from the request's scope, so a request naming none
+    /// reaches its handler with the client's default scope.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.ClientCredentials)]
+    [InlineData(GrantTypes.Password)]
+    [InlineData(GrantTypes.JwtBearer)]
+    public async Task ARequestNamingNoScope_ReachesItsHandlerWithTheClientsDefault(string grantType)
+    {
+        var context = new TokenValidationContext(new TokenRequest { GrantType = grantType, Scope = [] }, new ClientRequest())
+        {
+            ClientInfo = new ClientInfo(TestConstants.DefaultClientId)
+            {
+                AllowedGrantTypes = [grantType],
+                DefaultScope = ["read"],
+            },
+        };
+        TokenRequest? handed = null;
+        _grantHandler
+            .Setup(h => h.AuthorizeAsync(TestTenant.Matched, It.IsAny<TokenRequest>(), It.IsAny<ClientInfo>(), It.IsAny<CancellationToken>()))
+            .Callback<TenantDefinition, TokenRequest, ClientInfo, CancellationToken>((_, request, _, _) => handed = request)
+            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)CreateAuthorizedGrant());
+
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Equal("read", Assert.Single(handed?.Scope ?? []));
     }
 
     private static AuthorizedGrant CreateAuthorizedGrant(Uri? redirectUri = null)

@@ -35,8 +35,11 @@ public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidat
     /// </returns>
     protected override OidcError? Validate(TenantDefinition tenant, TokenValidationContext context)
     {
-        if (!scopeManager.Validate(tenant, 
-                context.Request.Scope,
+        if (TokenRequestScope.ServedFor(context) is not { } scope)
+            return new OidcError(ErrorCodes.InvalidScope, ScopeRefusals.NoneNamed);
+
+        if (!scopeManager.Validate(tenant,
+                scope,
                 context.Resources,
                 context.ClientInfo.AllowedScopes,
                 out var scopeDefinitions,

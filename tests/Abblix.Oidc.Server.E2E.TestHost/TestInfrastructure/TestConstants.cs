@@ -67,6 +67,18 @@ public static class TestConstants
     /// used to verify RFC 8707 resource indicators reach the issued access token's audience.</summary>
     public const string ClientCredentialsClientId = "e2e-client-credentials";
 
+    /// <summary>Client restricted to the client_credentials grant whose requests naming no scope are served with its
+    /// default scope (RFC 6749 section 3.3).</summary>
+    public const string DefaultScopeClientId = "e2e-default-scope";
+
+    /// <summary>Client restricted to the client_credentials grant whose requests naming no scope are refused with
+    /// <c>invalid_scope</c> (RFC 6749 section 3.3).</summary>
+    public const string ScopeRequiredClientId = "e2e-scope-required";
+
+    /// <summary>Client of the client_credentials and device authorization grants whose default scope is one only
+    /// <see cref="ApiResource"/> declares, and whose allowed scopes are wider than its default.</summary>
+    public const string DefaultResourceScopeClientId = "e2e-default-resource-scope";
+
     /// <summary>Client restricted to the client_credentials grant that authenticates with HTTP Basic
     /// (<c>client_secret_basic</c>, RFC 6749 section 2.3.1), so a test can see the token endpoint read the
     /// Authorization header.</summary>

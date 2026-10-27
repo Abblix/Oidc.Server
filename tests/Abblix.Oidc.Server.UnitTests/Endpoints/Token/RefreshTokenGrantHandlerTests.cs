@@ -76,7 +76,7 @@ public class RefreshTokenGrantHandlerTests
         var refreshToken = CreateValidRefreshToken(ClientId);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(refreshToken);
 
         var expectedGrant = new AuthorizedGrant(
@@ -107,7 +107,7 @@ public class RefreshTokenGrantHandlerTests
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
         var refreshToken = CreateValidRefreshToken(ClientId);
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(refreshToken);
         _refreshTokenService
             .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, refreshToken, It.IsAny<ClientInfo>()))
@@ -134,7 +134,7 @@ public class RefreshTokenGrantHandlerTests
         var refreshToken = CreateValidRefreshToken(ClientId);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(refreshToken);
 
         // Token belongs to different client
@@ -169,7 +169,7 @@ public class RefreshTokenGrantHandlerTests
             .Setup(v => v.ValidateAsync(
                 TestTenant.Matched, ValidRefreshToken,
                 TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.RefreshToken)),
-                ValidationOptions.Default))
+                ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
         var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
@@ -189,7 +189,7 @@ public class RefreshTokenGrantHandlerTests
         var tokenRequest = new TokenRequest { RefreshToken = "malformed.jwt" };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, "malformed.jwt", It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, "malformed.jwt", It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token is malformed"));
 
         // Act
@@ -212,7 +212,7 @@ public class RefreshTokenGrantHandlerTests
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token has expired"));
 
         // Act
@@ -237,7 +237,7 @@ public class RefreshTokenGrantHandlerTests
         var refreshToken = CreateValidRefreshToken(ClientId);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(refreshToken);
 
         var serviceError = new OidcError(ErrorCodes.InvalidGrant, "Token has been revoked");

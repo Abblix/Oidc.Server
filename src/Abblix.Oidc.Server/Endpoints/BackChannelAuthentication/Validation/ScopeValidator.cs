@@ -56,7 +56,14 @@ public class ScopeValidator(IScopeManager scopeManager) : IBackChannelAuthentica
 	/// </returns>
 	private OidcError? Validate(TenantDefinition tenant, BackChannelAuthenticationValidationContext context)
 	{
-		if (context.Request.Scope.Contains(Scopes.OfflineAccess) &&
+		if (context.ClientInfo.ScopeServedFor(context.Request.Scope) is not { } scope)
+		{
+			return new OidcError(
+				ErrorCodes.InvalidScope,
+				ScopeRefusals.NoneNamed);
+		}
+
+		if (scope.Contains(Scopes.OfflineAccess) &&
 		    !context.ClientInfo.OfflineAccess.IsAllowed())
 		{
 			return new OidcError(
@@ -64,8 +71,8 @@ public class ScopeValidator(IScopeManager scopeManager) : IBackChannelAuthentica
 				"This client is not allowed to request for offline access");
 		}
 
-		if (!scopeManager.Validate(tenant, 
-			    context.Request.Scope,
+		if (!scopeManager.Validate(tenant,
+			    scope,
 			    context.Resources,
 			    context.ClientInfo.AllowedScopes,
 			    out var scopeDefinitions,

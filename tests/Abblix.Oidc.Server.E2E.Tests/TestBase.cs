@@ -223,6 +223,30 @@ public abstract class TestBase(TestFactory factory)
             _ => [],
         };
 
+    /// <summary>
+    /// The token response of an authorization code grant the confidential client is given for the registered
+    /// resource, with a refresh token.
+    /// </summary>
+    protected static async Task<JsonObject> ObtainResourceGrantTokensAsync(
+        HttpClient client, DiscoveryDocument discovery)
+    {
+        var (verifier, challenge) = GeneratePkcePair();
+        var parameters = CodeFlowParameters(TestConstants.ConfidentialClientId, challenge);
+        parameters[AuthorizationRequest.Parameters.Scope] = $"{Scopes.OpenId} {Scopes.OfflineAccess}";
+        parameters[AuthorizationRequest.Parameters.Resource] = TestConstants.ApiResource;
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, parameters);
+
+        return await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+    }
+
     protected static JsonObject DecodeJwtPayload(string jwt)
     {
         var parts = jwt.Split('.');

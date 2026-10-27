@@ -26,7 +26,8 @@ public class ScopeValidator(IScopeManager scopeManager) : IDeviceAuthorizationCo
 
     private OidcError? Validate(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
     {
-        var scopes = context.Request.Scope ?? [];
+        if (context.ClientInfo.ScopeServedFor(context.Request.Scope ?? []) is not { } scopes)
+            return new OidcError(ErrorCodes.InvalidScope, ScopeRefusals.NoneNamed);
 
         if (scopes.Contains(Scopes.OfflineAccess) &&
             !context.ClientInfo.OfflineAccess.IsAllowed())

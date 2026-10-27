@@ -72,8 +72,10 @@ public static class TokenEndpointServiceCollectionExtensions
         // Order is load-bearing:
         // - ClientValidator must precede DPoPTokenEndpointValidator because the latter reads
         //   ClientInfo.RequireDPoP to decide whether DPoP is mandatory or opportunistic.
-        // - ClientValidator must also precede ScopeValidator: ScopeValidator enforces the client's
-        //   registered scope set and therefore reads ClientInfo, which ClientValidator populates.
+        // - ClientValidator must also precede ResourceValidator and ScopeValidator: both read the scope a request
+        //   is served with, which for a request naming none is the client's default, and ScopeValidator enforces
+        //   the client's registered scope set. A request failing both authentication and its resources is
+        //   therefore answered invalid_client: a client that cannot authenticate gets nothing a target could fix.
         // - AuthorizationGrantValidator must precede RevokedSessionValidator, which reads the AuthSession
         //   the former resolves. It also has to stay in validation rather than move into the processor:
         //   the authorization code is spent by a decorator around the processor, so a refusal there would
@@ -85,8 +87,8 @@ public static class TokenEndpointServiceCollectionExtensions
         // - SingleResourceValidator reads the grant's resources, so it follows AuthorizationGrantValidator, and the
         //   authorization code it may refuse a request for is spent only after validation.
         services.TryAddEnumerable([
-            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ClientValidator>(),
+            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, DPoPTokenEndpointValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, AuthorizationGrantValidator>(),

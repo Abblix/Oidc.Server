@@ -106,7 +106,7 @@ public partial class IntrospectionRequestValidator(
 		var result = await jwtValidator.ValidateAsync(
 			tenant, introspectionRequest.Token,
 			JwtTypes.IntrospectableTokens,
-			ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
+			ServiceTokenValidation.AnyAudience);
 
 		return result.Match(
 			token =>

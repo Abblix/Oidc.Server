@@ -24,4 +24,14 @@ public record NewClientOptions
     /// Generation parameters and lifetime policy for the client secret issued to a newly registered client.
     /// </summary>
     public ClientSecretOptions ClientSecret { get; init; } = new();
+
+    /// <summary>
+    /// The scope values a client registering without a <c>scope</c> member may request: the default set
+    /// RFC 7591 section 2 lets the server register such a client with. Unset, the client may request any scope.
+    /// </summary>
+    /// <remarks>
+    /// Applied on registration and on every RFC 7592 update that omits the member, since an update replaces the
+    /// metadata whole.
+    /// </remarks>
+    public string[]? Scope { get; init; }
 }

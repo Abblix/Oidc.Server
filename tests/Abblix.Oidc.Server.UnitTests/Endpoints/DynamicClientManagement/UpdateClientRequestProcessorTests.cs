@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -30,7 +31,10 @@ public class UpdateClientRequestProcessorTests
 {
     private static (UpdateClientRequestProcessor processor, Mock<IClientInfoManager> manager,
         Mock<IRegistrationAccessTokenService> tokenService, Mock<ITokenIdGenerator> idGenerator)
-        CreateProcessor(Action<RegisteredClient> onSave, bool registrationHeld = true)
+        CreateProcessor(
+            Action<RegisteredClient> onSave,
+            bool registrationHeld = true,
+            NewClientOptions? newClients = null)
     {
         var clientInfoManager = new Mock<IClientInfoManager>(MockBehavior.Strict);
         clientInfoManager
@@ -48,7 +52,8 @@ public class UpdateClientRequestProcessorTests
         var idGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
 
         var processor = new UpdateClientRequestProcessor(
-            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System);
+            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System,
+            newClients ?? new NewClientOptions());
 
         return (processor, clientInfoManager, tokenService, idGenerator);
     }
@@ -75,6 +80,26 @@ public class UpdateClientRequestProcessorTests
         // Assert
         Assert.NotNull(saved);
         Assert.Equal(model.Scope, saved.AllowedScopes);
+    }
+
+    /// <summary>
+    /// An update omitting the scope member replaces the metadata whole, so the client takes the host's default set
+    /// again rather than any scope (RFC 7591 section 2, RFC 7592 section 2.2).
+    /// </summary>
+    [Fact]
+    public async Task AnUpdateWithoutScope_TakesTheHostsDefaultSet()
+    {
+        ClientInfo? saved = null;
+        var (processor, _, _, idGenerator) = CreateProcessor(
+            c => saved = c.ClientInfo, newClients: new NewClientOptions { Scope = [Scopes.Profile] });
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+        var model = new ClientRegistrationRequest { RedirectUris = [new Uri("https://client.example.com/cb")] };
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
+
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.Equal((string[])[Scopes.Profile], saved!.AllowedScopes);
     }
 
     /// <summary>

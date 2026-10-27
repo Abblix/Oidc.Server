@@ -354,4 +354,35 @@ public class ScopeValidatorTests
         // Verify scope manager was never called
         _scopeManager.VerifyNoOtherCalls();
     }
+
+    /// <summary>
+    /// A backchannel authentication request naming no scope is served with the client's default scope, and a client
+    /// required to name its scope is refused one naming none with <c>invalid_scope</c> (RFC 6749 section 3.3).
+    /// </summary>
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, ErrorCodes.InvalidScope)]
+    public async Task ARequestNamingNoScope_IsServedWithTheDefaultOrRefused(bool requireScope, string? error)
+    {
+        var definition = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
+        _scopeManager
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
+            {
+                def = definition;
+                return true;
+            }));
+        var context = CreateContext(scopes: []);
+        context.ClientInfo = new ClientInfo("test-client")
+        {
+            DefaultScope = [TestConstants.DefaultScope],
+            RequireScope = requireScope,
+        };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(error, result?.Error);
+        Assert.Equal(
+            requireScope ? null : TestConstants.DefaultScope, context.Scope is [var served] ? served.Scope : null);
+    }
 }

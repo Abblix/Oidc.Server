@@ -629,6 +629,41 @@ public record ClientInfo(string ClientId)
     public string[]? AllowedScopes { get; set; }
 
     /// <summary>
+    /// The scope a request of this client naming none is served with: the pre-defined default RFC 6749 section 3.3
+    /// lets the server use when the client omits the scope parameter.
+    /// </summary>
+    /// <remarks>
+    /// It applies wherever a client may omit the scope and nothing else gives the request one: the authorization,
+    /// device authorization and backchannel authentication requests, and the token requests of the client
+    /// credentials, password and JWT bearer grants. A request naming a scope is served with the one it names. Unset
+    /// or empty, such a request is served with no scope, unless <see cref="RequireScope"/> refuses it. The default is
+    /// held to <see cref="AllowedScopes"/> as a scope the request named would be.
+    /// </remarks>
+    public string[]? DefaultScope { get; set; }
+
+    /// <summary>
+    /// Whether a request of this client naming no scope is refused with <c>invalid_scope</c>, the other answer
+    /// RFC 6749 section 3.3 allows, rather than served with <see cref="DefaultScope"/>.
+    /// </summary>
+    public bool RequireScope { get; set; }
+
+    /// <summary>
+    /// The scope a request naming <paramref name="requested"/> is served with: that scope when it names one, or else
+    /// <see cref="DefaultScope"/>, or null when <see cref="RequireScope"/> refuses a request naming none.
+    /// </summary>
+    /// <param name="requested">The scope the request names, empty when it names none.</param>
+    public string[]? ScopeServedFor(string[] requested)
+    {
+        if (requested.Length > 0)
+            return requested;
+
+        if (RequireScope)
+            return null;
+
+        return DefaultScope ?? [];
+    }
+
+    /// <summary>
     /// A unique identifier for the client software per RFC 7591 Section 2.
     /// </summary>
     public string? SoftwareId { get; set; }
