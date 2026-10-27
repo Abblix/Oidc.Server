@@ -26,6 +26,8 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     private string? _sectorIdentifier;
     private ClientSecret[]? _clientSecrets;
     private string[]? _defaultScope;
+    private Uri[]? _defaultAllowedResources;
+    private string[]? _defaultTokenExchangeAudiences;
 
     /// <summary>
     /// Sets the scope values the client may request when its metadata names none.
@@ -33,6 +35,24 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     public ClientInfoBuilder WithDefaultScope(string[]? defaultScope)
     {
         _defaultScope = defaultScope;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the resources the client may get access tokens for when its metadata names none.
+    /// </summary>
+    public ClientInfoBuilder WithDefaultAllowedResources(Uri[]? allowedResources)
+    {
+        _defaultAllowedResources = allowedResources;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the token exchange audiences the client may name when its metadata names none.
+    /// </summary>
+    public ClientInfoBuilder WithDefaultTokenExchangeAudiences(string[]? tokenExchangeAudiences)
+    {
+        _defaultTokenExchangeAudiences = tokenExchangeAudiences;
         return this;
     }
 
@@ -111,8 +131,11 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
         clientInfo.AuthorizationDetailsTypes = model.AuthorizationDetailsTypes;
         // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
         clientInfo.TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes;
-        // Non-standard extension: RFC 8693 Token Exchange per-client audience allowlist (default-deny).
-        clientInfo.TokenExchangeAllowedAudiences = model.TokenExchangeAudiences;
+        // Non-standard extension: RFC 8693 Token Exchange per-client audience allowlist (default-deny), held to the
+        // host's set by registration validation and given that set when the metadata names none.
+        clientInfo.TokenExchangeAllowedAudiences = model.TokenExchangeAudiences ?? _defaultTokenExchangeAudiences;
+        // Non-standard extension: the resources the client may get access tokens for, held and defaulted alike
+        clientInfo.AllowedResources = model.AllowedResources ?? _defaultAllowedResources;
     }
 
     private void ApplySecurityRequirements(ClientInfo clientInfo)

@@ -398,6 +398,12 @@ public record RegisteredClientMetadata
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string[]? TokenExchangeAudiences { get; init; }
 
+    /// <summary>The resources the client may get access tokens for (an extension of this server).</summary>
+    [JsonPropertyOrder(162)]
+    [JsonPropertyName(Parameters.AllowedResources)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Uri[]? AllowedResources { get; init; }
+
     /// <summary>The identifier of the client software (RFC 7591 section 2).</summary>
     [JsonPropertyOrder(160)]
     [JsonPropertyName(Parameters.SoftwareId)]
@@ -474,6 +480,7 @@ public record RegisteredClientMetadata
         AuthorizationDetailsTypes = client.AuthorizationDetailsTypes,
         TokenExchangeSubjectTokenTypes = client.TokenExchangeAllowedSubjectTokenTypes,
         TokenExchangeAudiences = client.TokenExchangeAllowedAudiences,
+        AllowedResources = client.AllowedResources,
         SoftwareId = client.SoftwareId,
         SoftwareVersion = client.SoftwareVersion,
     });

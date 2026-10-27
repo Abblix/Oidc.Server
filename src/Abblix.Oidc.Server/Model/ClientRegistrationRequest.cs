@@ -550,6 +550,15 @@ public record ClientRegistrationRequest
     public string[]? TokenExchangeAudiences { get; init; }
 
     /// <summary>
+    /// Non-standard extension: the resources (RFC 8707) the client asks to get access tokens for. RFC 7591 defines no
+    /// member for this, so it is exposed as <c>allowed_resources</c>. Maps to
+    /// <see cref="Features.ClientInformation.ClientInfo.AllowedResources"/>, held to the server's policy in
+    /// <see cref="Common.Configuration.NewClientOptions.AllowedResources"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.AllowedResources)]
+    public Uri[]? AllowedResources { get; init; }
+
+    /// <summary>
     /// The <c>backchannel_logout_uri</c> (OIDC Back-Channel Logout 1.0): an absolute URL at the client
     /// that the OP calls server-to-server with a logout token to terminate the user's session at the client.
     /// </summary>
@@ -906,6 +915,10 @@ public record ClientRegistrationRequest
         /// (non-standard extension; RFC 8693 does not standardise it): default-deny per-client
         /// allowlist of <c>audience</c> values this client may request when exchanging a token.</summary>
         public const string TokenExchangeAudiences = "token_exchange_audiences";
+
+        /// <summary>The <c>allowed_resources</c> registration parameter (non-standard extension; RFC 7591 does not
+        /// standardise it): the resources the client may get access tokens for.</summary>
+        public const string AllowedResources = "allowed_resources";
 
         /// <summary>The <c>backchannel_logout_uri</c> registration parameter pointing to the client's
         /// back-channel logout endpoint.</summary>

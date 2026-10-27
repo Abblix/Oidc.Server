@@ -112,6 +112,8 @@ public partial class RegisterClientRequestProcessor(
         => new ClientInfoBuilder(credentials.ClientId, model)
             .WithSectorIdentifier(sectorIdentifier)
             .WithDefaultScope(newClientOptions.Scope)
+            .WithDefaultAllowedResources(newClientOptions.AllowedResources)
+            .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
             .WithClientSecrets(ToClientSecrets(model.TokenEndpointAuthMethod, credentials))
             .Build();
 

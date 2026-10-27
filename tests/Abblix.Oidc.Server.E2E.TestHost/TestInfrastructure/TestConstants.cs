@@ -116,6 +116,13 @@ public static class TestConstants
     /// <summary>A scope only <see cref="OtherApiResource"/> declares.</summary>
     public const string OtherApiScope = "payments.read";
 
+    /// <summary>The token exchange audience the host grants a dynamically registered client.</summary>
+    public const string ExchangeAudience = "https://api.example.com";
+
+    /// <summary>Client restricted to the client_credentials grant that may get access tokens for
+    /// <see cref="ApiResource"/> alone.</summary>
+    public const string AllowedResourceClientId = "e2e-allowed-resource";
+
     /// <summary>Confidential authorization code client whose access tokens each name one resource.</summary>
     public const string SingleResourceClientId = "e2e-single-resource";
 

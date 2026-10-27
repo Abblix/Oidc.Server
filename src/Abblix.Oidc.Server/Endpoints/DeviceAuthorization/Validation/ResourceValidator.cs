@@ -8,13 +8,17 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 
 /// <summary>
-/// Validates the resources requested in a device authorization request.
+/// Settles the resources (RFC 8707) a device authorization request is for: the ones it names, else the one its scopes
+/// refer to where the tenant infers it. Each has to be registered at the tenant and one the client may get an access
+/// token for. The token request polling for it spends the request, so the tenant's default resource when nothing names
+/// one, and one resource for a client held to one per token, are held here too.
 /// </summary>
 /// <param name="resourceManager">The service for managing and validating resources.</param>
 public class ResourceValidator(IResourceManager resourceManager)
@@ -36,7 +40,7 @@ public class ResourceValidator(IResourceManager resourceManager)
                 return new OidcError(ErrorCodes.InvalidScope, ambiguity);
 
             if (inferred is null)
-                return null;
+                return Refused(context.ClientInfo, tenant, []);
 
             requested = [inferred];
         }
@@ -50,11 +54,19 @@ public class ResourceValidator(IResourceManager resourceManager)
             return new OidcError(ErrorCodes.InvalidTarget, errorDescription);
         }
 
-        // The poll for the token spends the request, so it is held to one resource here
-        if (context.ClientInfo.SingleResourceAccessTokens && resources.Length > 1)
-            return new OidcError(ErrorCodes.InvalidTarget, ResourceRefusals.OnePerAccessToken);
+        if (Refused(context.ClientInfo, tenant, resources) is { } refusal)
+            return refusal;
 
         context.Resources = resources;
         return null;
     }
+
+    /// <summary>
+    /// The refusal of the client's rules about <paramref name="resources"/>, or null. The token request polling for
+    /// this request spends it, so the resources its access token is addressed to are settled here.
+    /// </summary>
+    private static OidcError? Refused(ClientInfo client, TenantDefinition tenant, ResourceDefinition[] resources)
+        => ResourceRefusals.Of(client, tenant, resources, finalForItsToken: true) is { } refusal
+            ? new OidcError(ErrorCodes.InvalidTarget, refusal)
+            : null;
 }

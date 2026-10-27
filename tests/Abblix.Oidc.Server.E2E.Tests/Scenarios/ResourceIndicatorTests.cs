@@ -240,6 +240,39 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(ErrorCodes.InvalidGrant, body?[ResponseParameters.Error]?.GetValue<string>());
     }
 
+    /// <summary>
+    /// A client may get an access token only for a resource on its list: one inside it is the token's audience, one
+    /// outside it is refused with <c>invalid_target</c> (RFC 8707 section 2.2).
+    /// </summary>
+    [Theory]
+    [InlineData(TestConstants.ApiResource, HttpStatusCode.OK)]
+    [InlineData(TestConstants.OtherApiResource, HttpStatusCode.BadRequest)]
+    public async Task A_resource_outside_the_clients_list_is_refused(string resource, HttpStatusCode expected)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.AllowedResourceClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [TokenRequest.Parameters.Resource] = resource,
+        });
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+
+        Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.OK)
+        {
+            var payload = DecodeJwtPayload(body[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+            Assert.Equal([resource], ExtractAudiences(payload));
+        }
+        else
+        {
+            Assert.Equal(ErrorCodes.InvalidTarget, body[ResponseParameters.Error]?.GetValue<string>());
+        }
+    }
+
     private static async Task<HttpResponseMessage> SendUserInfoAsync(
         HttpClient client, DiscoveryDocument discovery, string accessToken)
     {

@@ -114,7 +114,7 @@ public record OidcOptions
 	/// Configuration options for registering new clients dynamically in the OIDC server. These options define default
 	/// values and constraints for new client registrations, facilitating dynamic and secure client onboarding processes.
 	/// </summary>
-	public NewClientOptions NewClientOptions { get; init; } = new();
+	public NewClientOptions NewClientOptions { get; set; } = new();
 
 	/// <summary>
 	/// The key-rollover propagation window: how long a newly published signing or encryption key is served at the

@@ -75,6 +75,13 @@ builder.Services.AddOidcServices((options, services) =>
         DeviceCodeLength = 32,
         UserCodeLength = 8,
     };
+
+    // What a dynamically registered client may reach is the host's grant rather than the client's choice
+    options.NewClientOptions = new NewClientOptions
+    {
+        AllowedResources = [new Uri(TestConstants.ApiResource)],
+        TokenExchangeAudiences = [TestConstants.ExchangeAudience],
+    };
 });
 
 builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
@@ -140,6 +147,13 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
             AllowedScopes = [Scopes.Profile],
             DefaultScope = [Scopes.Profile],
             RequireScope = true,
+        },
+        new ClientInfo(TestConstants.AllowedResourceClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            AllowedResources = [new Uri(TestConstants.ApiResource)],
         },
         new ClientInfo(TestConstants.DefaultResourceScopeClientId)
         {
