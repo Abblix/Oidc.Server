@@ -199,6 +199,8 @@ public partial class MultiTenancyRegistrationTests
         var globex = TenantWithKeys("globex");
         var services = new ServiceCollection();
         services.AddOptions<OidcOptions>();
+        services.AddClientInformation();
+        services.AddUserInfo();
         services.AddAuthServiceJwt();
         services.AddServerStorage().ServeTenants(options =>
         {

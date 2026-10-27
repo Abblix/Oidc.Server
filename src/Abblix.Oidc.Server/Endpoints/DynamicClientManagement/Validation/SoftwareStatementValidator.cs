@@ -27,11 +27,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <param name="jwtValidator">Validates the software statement JWT signature and claims.</param>
 /// <param name="options">OIDC options containing software statement configuration.</param>
 /// <param name="secureFetcher">HTTP fetcher with SSRF protection for retrieving trusted issuer JWKS.</param>
+/// <param name="catalog">Tells an issuer this server serves, whose statements are refused.</param>
 public partial class SoftwareStatementValidator(
     ILogger<SoftwareStatementValidator> logger,
     IJsonWebTokenValidator jwtValidator,
     IOptionsMonitor<OidcOptions> options,
-    [FromKeyedServices(KeySetOwners.SoftwareStatementIssuer)] ISecureHttpFetcher secureFetcher)
+    [FromKeyedServices(KeySetOwners.SoftwareStatementIssuer)] ISecureHttpFetcher secureFetcher,
+    ITenantCatalog catalog)
     : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
@@ -99,12 +101,20 @@ public partial class SoftwareStatementValidator(
     /// <summary>
     /// Checks whether the software statement issuer is in the configured trusted issuers list.
     /// </summary>
-    private Task<bool> ValidateIssuer(SoftwareStatementOptions statementOptions, string issuer)
+    private async Task<bool> ValidateIssuer(SoftwareStatementOptions statementOptions, string issuer)
     {
+        // A statement is validated as a token another issuer wrote, so nothing this server records about its own
+        // tokens is read for it: one of its own tenants' tokens, revoked included, would pass as a statement
+        if (await catalog.ServesAsync(issuer, CancellationToken.None))
+        {
+            LogIssuerIsServedTenant(issuer);
+            return false;
+        }
+
         var trusted = FindTrustedIssuer(statementOptions, issuer) != null;
         if (!trusted)
             LogIssuerNotTrusted(issuer);
-        return Task.FromResult(trusted);
+        return trusted;
     }
 
     /// <summary>

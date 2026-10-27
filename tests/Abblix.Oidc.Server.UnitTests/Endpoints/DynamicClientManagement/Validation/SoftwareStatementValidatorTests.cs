@@ -44,7 +44,8 @@ public class SoftwareStatementValidatorTests
             NullLogger<SoftwareStatementValidator>.Instance,
             _jwtValidator.Object,
             optionsMonitor.Object,
-            _secureFetcher.Object);
+            _secureFetcher.Object,
+            SingleIssuer.LicensedCatalog);
     }
 
     private static ClientRegistrationValidationContext CreateContext(string? softwareStatement = null)
@@ -138,6 +139,37 @@ public class SoftwareStatementValidatorTests
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// A statement whose issuer is a tenant this server serves is refused even when the settings trust that issuer,
+    /// since nothing this server records about its own tokens is read for a statement and a revoked one would pass;
+    /// another trusted issuer is accepted.
+    /// </summary>
+    [Fact]
+    public async Task AnIssuerThatIsATenantOfThisServer_IsRefused_EvenWhereTrusted()
+    {
+        var served = SingleIssuer.Tenant.Issuer.OriginalString;
+        _oidcOptions.SoftwareStatement.TrustedIssuers =
+        [
+            new TrustedIssuer { Issuer = served, JwksUri = new Uri(served + "/.well-known/jwks.json") },
+            new TrustedIssuer
+            {
+                Issuer = "https://trusted-issuer.example.com",
+                JwksUri = new Uri("https://trusted-issuer.example.com/.well-known/jwks.json"),
+            },
+        ];
+        ValidationParameters? captured = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
+            .Callback(new Action<string, ValidationParameters>((_, p) => captured = p))
+            .ReturnsAsync(new JsonWebToken());
+
+        await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
+        var validateIssuer = captured!.ValidateIssuer!;
+
+        Assert.False(await validateIssuer(served));
+        Assert.True(await validateIssuer("https://trusted-issuer.example.com"));
     }
 
     /// <summary>

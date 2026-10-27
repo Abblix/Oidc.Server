@@ -13,7 +13,9 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
@@ -49,7 +51,8 @@ public class AuthServiceJwtValidatorTests
         _validator = new AuthServiceJwtValidator(
             _jwtValidator.Object,
             SingleIssuer.LicensedCatalog,
-            _serviceKeysProvider.Object);
+            _serviceKeysProvider.Object,
+            NothingRecorded.StatusCheck);
     }
 
     /// <summary>
@@ -696,7 +699,8 @@ public class AuthServiceJwtValidatorTests
         var validator = new AuthServiceJwtValidator(
             _jwtValidator.Object,
             SingleIssuer.HostCatalog,
-            _serviceKeysProvider.Object);
+            _serviceKeysProvider.Object,
+            NothingRecorded.StatusCheck);
 
         var token = CreateValidToken();
         token.Header.Type = type;
@@ -708,6 +712,37 @@ public class AuthServiceJwtValidatorTests
         var result = await validator.ValidateAsync(served, ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// A refresh token naming another creation of the tenant is refused before what is recorded about it is read, so
+    /// a replay recorded there cannot revoke a grant of this creation.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ARefreshTokenOfAnotherCreation_IsRefusedBeforeItsRecordsAreRead()
+    {
+        // Strict: any read of the records fails the test
+        var registry = new Mock<ITokenRegistry>(MockBehavior.Strict);
+        var validator = new AuthServiceJwtValidator(
+            _jwtValidator.Object,
+            SingleIssuer.LicensedCatalog,
+            _serviceKeysProvider.Object,
+            new TokenStatusCheck(
+                registry.Object,
+                new Mock<IRevocationCutoffChecker>(MockBehavior.Strict).Object,
+                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>())));
+
+        var token = CreateValidToken();
+        token.Header.Type = JwtTypes.RefreshToken;
+        token.Payload.JwtId = "jti-1";
+        token.Payload.GrantId = "grant-1";
+        token.Payload.Json.SetProperty(RefreshTokenTenant.ClaimType, "another~g1");
+        _jwtValidator.Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>())).ReturnsAsync(token);
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, ValidJwt, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
     /// <summary>

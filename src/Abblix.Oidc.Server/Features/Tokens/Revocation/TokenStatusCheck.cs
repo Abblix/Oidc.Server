@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -14,78 +14,53 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 /// <summary>
-/// Adds revocation checking to an existing <see cref="IJsonWebTokenValidator"/>: a token that has been
-/// rotated, whose grant family was killed, or that a subject- or session-level cutoff reaches is refused
-/// after the inner validator has accepted it.
+/// Refuses a token this server issued that has since been rotated, whose grant family was killed, or that a
+/// subject- or session-level cutoff reaches, judged by what is recorded at the tenant the token is validated for.
 /// </summary>
 /// <remarks>
+/// A step of validating the tokens this server issues, run after the token has been found authentic. A token a
+/// client or another issuer wrote has nothing recorded about it, so nothing here would refuse it.
+/// <para>
 /// The two halves come from different stores and answer different questions, which is why the cutoff lives
 /// behind <see cref="IRevocationCutoffChecker"/> rather than here: this type asks what is recorded about one
 /// token, and that one asks what is recorded about the principal behind it.
+/// </para>
 /// </remarks>
 /// <param name="tokenRegistry">The token registry used to check token status.</param>
 /// <param name="cutoffChecker">Decides whether a revocation cutoff reaches this token.</param>
 /// <param name="grantRevocation">Revokes the grant of a replayed refresh token.</param>
-/// <param name="innerValidator">The inner validator for initial token validation.</param>
-/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class TokenStatusValidatorDecorator(
+public sealed class TokenStatusCheck(
 	ITokenRegistry tokenRegistry,
 	IRevocationCutoffChecker cutoffChecker,
-	GrantRevocation grantRevocation,
-	IJsonWebTokenValidator innerValidator,
-	ITenantAccessor tenantAccessor) : IJsonWebTokenValidator
+	GrantRevocation grantRevocation)
 {
 	/// <summary>
-	/// Forwards the set of JWS signing algorithms accepted by the inner validator (RFC 7518 section 3.1
-	/// names such as <c>RS256</c>, <c>PS256</c>, <c>ES256</c>); revocation checking does not
-	/// influence which algorithms are supported.
+	/// <paramref name="token"/> when nothing recorded at <paramref name="tenant"/> refuses it, otherwise the refusal.
 	/// </summary>
-	public IEnumerable<string> SigningAlgorithmsSupported => innerValidator.SigningAlgorithmsSupported;
-
-	/// <summary>
-	/// Forwards the JWE key-management algorithms accepted by the inner validator; revocation checking
-	/// does not influence which encryption algorithms are supported.
-	/// </summary>
-	public IEnumerable<string> EncryptionAlgorithmsSupported => innerValidator.EncryptionAlgorithmsSupported;
-
-	/// <summary>
-	/// Forwards the JWE content-encryption algorithms accepted by the inner validator; revocation checking
-	/// does not influence which encryption algorithms are supported.
-	/// </summary>
-	public IEnumerable<string> EncryptionMethodsSupported => innerValidator.EncryptionMethodsSupported;
-
-	/// <summary>
-	/// Validates a JSON Web Token (JWT) and checks its revocation status.
-	/// </summary>
-	/// <param name="jwt">The JWT to be validated.</param>
-	/// <param name="parameters">Validation parameters to use during validation.</param>
-	/// <returns>
-	/// A Result containing either a validated JsonWebToken or a JwtValidationError.
-	/// If the token is revoked or already used, it returns a JwtValidationError.
-	/// Otherwise, it returns the result from the inner validator.
-	/// </returns>
-	public async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
-		string jwt,
-		ValidationParameters parameters)
+	/// <param name="tenant">The tenant the token is validated for, whose records are read.</param>
+	/// <param name="token">The token, already found authentic.</param>
+	/// <param name="options">What the caller validates, which decides whether a cutoff applies.</param>
+	public async Task<Result<JsonWebToken, JwtValidationError>> CheckAsync(
+		TenantDefinition tenant,
+		JsonWebToken token,
+		ValidationOptions options)
 	{
-		var result = await innerValidator.ValidateAsync(jwt, parameters);
-
-		if (!result.TryGetSuccess(out var token))
-			return result;
-
 		// Chain of Responsibility: what is recorded about the principal, then about the token's grant family,
 		// then about the token itself; the first refusal answers
-		var refusal = await CutoffRefusalAsync(token, parameters)
-		              ?? await GrantFamilyRefusalAsync(token)
-		              ?? await TokenStatusRefusalAsync(token);
+		var refusal = await CutoffRefusalAsync(tenant, token, options)
+		              ?? await GrantFamilyRefusalAsync(tenant, token)
+		              ?? await TokenStatusRefusalAsync(tenant, token);
 
-		return refusal ?? result;
+		return refusal is null ? token : refusal;
 	}
 
 	/// <summary>
 	/// The refusal a revocation cutoff on the principal behind <paramref name="token"/> produces, if any.
 	/// </summary>
-	private async Task<JwtValidationError?> CutoffRefusalAsync(JsonWebToken token, ValidationParameters parameters)
+	private async Task<JwtValidationError?> CutoffRefusalAsync(
+		TenantDefinition tenant,
+		JsonWebToken token,
+		ValidationOptions options)
 	{
 		// Checked before the per-token links, and outside them: a cutoff is a fact about the principal
 		// rather than about one token, so it must also refuse a token that carries no identifier of its
@@ -98,16 +73,16 @@ public class TokenStatusValidatorDecorator(
 		// reads this token as a reference to something past rather than as authority. The logout endpoint is
 		// exactly that - an id_token_hint names the session that just ended, and refusing it because that
 		// session was revoked would break the second logout of a session the first one revoked.
-		if (!parameters.Options.HasFlag(ValidationOptions.ValidateLifetime))
+		if (!options.HasFlag(ValidationOptions.ValidateLifetime))
 			return null;
 
-		return await cutoffChecker.CheckAsync(tenantAccessor.CurrentTenant(), token.Payload);
+		return await cutoffChecker.CheckAsync(tenant, token.Payload);
 	}
 
 	/// <summary>
 	/// The refusal a revoked grant family produces for an identified <paramref name="token"/> exercising it.
 	/// </summary>
-	private async Task<JwtValidationError?> GrantFamilyRefusalAsync(JsonWebToken token)
+	private async Task<JwtValidationError?> GrantFamilyRefusalAsync(TenantDefinition tenant, JsonWebToken token)
 	{
 		// A token exercising a family's authority carries its grant id (Payload.GrantId); the rest leave it
 		// null, so the family logic is inert for them. A revoked grant is a kill switch that outlives any single
@@ -117,7 +92,7 @@ public class TokenStatusValidatorDecorator(
 		if (token.Payload is not { JwtId: not null, GrantId: { } grantId })
 			return null;
 
-		var status = await tokenRegistry.GetStatusAsync(tenantAccessor.CurrentTenant(), grantId);
+		var status = await tokenRegistry.GetStatusAsync(tenant, grantId);
 		return status switch
 		{
 			JsonWebTokenStatus.Revoked => new JwtValidationError(JwtError.TokenRevoked, "Refresh token family was revoked"),
@@ -129,17 +104,17 @@ public class TokenStatusValidatorDecorator(
 	/// <summary>
 	/// The refusal what is recorded about an identified <paramref name="token"/> itself produces, if any.
 	/// </summary>
-	private async Task<JwtValidationError?> TokenStatusRefusalAsync(JsonWebToken token)
+	private async Task<JwtValidationError?> TokenStatusRefusalAsync(TenantDefinition tenant, JsonWebToken token)
 	{
 		if (token.Payload.JwtId is not { } jwtId)
 			return null;
 
-		switch (await tokenRegistry.GetStatusAsync(tenantAccessor.CurrentTenant(), jwtId))
+		switch (await tokenRegistry.GetStatusAsync(tenant, jwtId))
 		{
 			case JsonWebTokenStatus.Used:
 				// Replay of a superseded (rotated) token. We cannot tell an attacker from a lagging client,
 				// so revoke the whole grant family; the active token dies with it on its next use.
-				await grantRevocation.RevokeAsync(tenantAccessor.CurrentTenant(), token.Payload);
+				await grantRevocation.RevokeAsync(tenant, token.Payload);
 
 				return new JwtValidationError(JwtError.TokenAlreadyUsed, "Token was already used");
 

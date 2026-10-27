@@ -49,8 +49,7 @@ public static class TokenServiceCollectionExtensions
             .AddRefreshToken()
             .AddIdentityToken()
             .AddAuthServiceJwt()
-            .AddClientJwt()
-            .AddTokenRevocation();
+            .AddClientJwt();
     }
 
     /// <summary>
@@ -93,30 +92,23 @@ public static class TokenServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Decorates the JSON Web Token validator service with a token status validator to support token revocation
-    /// within the specified <see cref="IServiceCollection"/>.
+    /// Registers what token revocation records and reads: the status of each token rotated or revoked, the cutoffs a
+    /// suspension writes, and the check that refuses a token of this server they reach, which
+    /// <see cref="Tokens.Validation.IAuthServiceJwtValidator"/> runs against the tenant it validates a token for.
     /// </summary>
-    /// <remarks>
-    /// This method enhances the application's security by decorating the <see cref="IJsonWebTokenValidator"/> service
-    /// with <see cref="TokenStatusValidatorDecorator"/>.
-    /// This decoration adds the capability to check the revocation status of tokens, allowing the application to reject
-    /// tokens that have been revoked. This is crucial for maintaining the integrity and security of the application's
-    /// authentication system, particularly in response to security incidents or user logout events.
-    /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to add token revocation support to.</param>
     /// <returns>The <see cref="IServiceCollection"/> for chaining further service registrations.</returns>
     public static IServiceCollection AddTokenRevocation(this IServiceCollection services)
     {
-        // The whole revocation substrate, not only the decoration: a host calling this alone gets the
-        // status registry a replay trips, the cutoff registry a suspension writes, and the surface it
-        // writes through.
+        // The whole revocation substrate: a host calling this alone gets the status registry a replay trips, the
+        // cutoff registry a suspension writes, the surface it writes through, and the check that reads them.
         services.TryAddSingleton<ITokenRegistry, TokenRegistry>();
         services.TryAddSingleton<IRevocationCutoffRegistry, RevocationCutoffRegistry>();
         services.TryAddSingleton<IRevocationCutoffChecker, RevocationCutoffChecker>();
         services.TryAddSingleton<ITokenRevoker, TokenRevoker>();
         services.TryAddSingleton<GrantRevocation>();
+        services.TryAddSingleton<TokenStatusCheck>();
         services.TryAddSingleton(TimeProvider.System);
-        return services
-            .Decorate<IJsonWebTokenValidator, TokenStatusValidatorDecorator>();
+        return services;
     }
 }
