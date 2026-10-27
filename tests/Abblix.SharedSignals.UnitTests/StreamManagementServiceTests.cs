@@ -138,6 +138,32 @@ public class StreamManagementServiceTests
         Assert.Equal("https://second.example.com", configuration.Issuer);
     }
 
+    /// <summary>
+    /// A stream created before the identity changed is answered under the issuer serving the request, read alone, in
+    /// the receiver's list and in the answer to a change, though its stored record keeps the issuer it was created
+    /// under (SSF 1.0 Section 8.1.1).
+    /// </summary>
+    [Fact]
+    public async Task AStreamCreatedBeforeTheIdentityChanged_IsAnsweredUnderTheIssuerServingTheRequest()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var identity = new SwitchableTransmitterIdentity("https://first.example.com");
+        var harness = CreateHarness(DefaultOptions(), identity);
+        var created = await CreatedStreamAsync(harness);
+
+        identity.Issuer = "https://second.example.com";
+
+        var read = await harness.Service.GetStreamAsync(Receiver, created.StreamId, ct);
+        var listed = await harness.Service.ListStreamsAsync(Receiver, ct);
+        var changed = await harness.Service.UpdateStreamAsync(
+            Receiver, new UpdateStreamRequest { StreamId = created.StreamId, Description = "changed" }, ct);
+
+        Assert.Equal("https://first.example.com", created.Issuer);
+        Assert.Equal("https://second.example.com", read.Body!.Issuer);
+        Assert.Equal("https://second.example.com", Assert.Single(listed.Body!).Issuer);
+        Assert.Equal("https://second.example.com", changed.Body!.Issuer);
+    }
+
     [Fact]
     public async Task Create_SuppliesTheTransmitterHalf_AndDefaultsToPoll()
     {
@@ -356,7 +382,6 @@ public class StreamManagementServiceTests
         Assert.Equal(movedIssuer, stored.Issuer);
         Assert.Equal([TypeB], stored.EventsRequested);
         Assert.Equal([TypeB], stored.EventsDelivered);
-        Assert.Equal(movedIssuer, changed.Body!.Issuer);
     }
 
     private static StreamManagementService ServiceOver(IStreamStore store, SharedSignalsTransmitterOptions options)
