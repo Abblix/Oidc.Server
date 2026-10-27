@@ -192,6 +192,32 @@ public sealed class SharedSignalsTenantIsolationTests
     }
 
     /// <summary>
+    /// A stream store keeping partitions holds each tenant's streams in the tenant's own partition, under the receiver
+    /// identifier the tenant knows, so listing one tenant's streams reads that partition alone.
+    /// </summary>
+    [Fact]
+    public async Task AStoreKeepingPartitions_HoldsEachTenantsStreamsInItsOwnPartition()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var hosts = new PartitionedMemoryStreamStore();
+        await using var app = await StartAsync(beforeMultiTenancy: services => services.AddSingleton<IStreamStore>(hosts));
+        var catalog = app.Services.GetRequiredService<ITenantCatalog>();
+        var acme = (await catalog.FindByIdAsync("acme", ct))!;
+        var globex = (await catalog.FindByIdAsync("globex", ct))!;
+
+        foreach (var (issuer, path) in new[] { (Host + Acme, Acme), (Host + Globex, Globex) })
+        {
+            using var created = await ClientOf(app, issuer).PostAsJsonAsync(
+                path + StreamPath, new CreateStreamRequest { EventsRequested = [MembershipChanged] }, ct);
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        }
+
+        Assert.Equal(ReceiverId, Assert.Single(await hosts.Partitions[TenantKey.PartitionOf(acme)].ListAllAsync(ct)).ReceiverId);
+        Assert.Equal(ReceiverId, Assert.Single(await hosts.Partitions[TenantKey.PartitionOf(globex)].ListAllAsync(ct)).ReceiverId);
+        Assert.Empty(await hosts.ListAllAsync(ct));
+    }
+
+    /// <summary>
     /// A poll handler resolved where no tenant is served refuses once it reaches the queued events, rather than
     /// answering from a queue no tenant owns.
     /// </summary>

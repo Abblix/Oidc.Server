@@ -173,6 +173,32 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
     }
 
     /// <summary>
+    /// Each partition keeps its streams on a hash of its own, so a partition's listing reads that hash alone: two
+    /// partitions holding a stream each under the same receiver list one stream apiece, and neither stream is on the
+    /// transmitter's own hash.
+    /// </summary>
+    [Fact]
+    public async Task EachPartition_KeepsItsStreamsOnAHashOfItsOwn()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = NewStore();
+        var (first, second) = ($"tenant-{Guid.NewGuid():N}", $"tenant-{Guid.NewGuid():N}");
+        var (firstStream, secondStream) = (Guid.NewGuid().ToString("N"), Guid.NewGuid().ToString("N"));
+
+        Assert.True(await store.Partition(first).TryCreateAsync(NewState(firstStream), ct));
+        Assert.True(await store.Partition(second).TryCreateAsync(NewState(secondStream), ct));
+
+        var database = garnet.Connection.GetDatabase();
+        Assert.Equal(firstStream, Assert.Single(await store.Partition(first).ListAllAsync(ct)).StreamId);
+        Assert.Equal(secondStream, Assert.Single(await store.Partition(second).ListAllAsync(ct)).StreamId);
+        Assert.Equal(1, await database.HashLengthAsync($"{HashKey}:{first}"));
+        Assert.Equal(1, await database.HashLengthAsync($"{HashKey}:{second}"));
+        Assert.DoesNotContain(
+            await store.ListAllAsync(ct),
+            stream => stream.StreamId == firstStream || stream.StreamId == secondStream);
+    }
+
+    /// <summary>
     /// Ownership rides in the key: the wrong receiver finds nothing and lists nothing, while the
     /// dispatcher's all-streams view still sees the registration.
     /// </summary>
