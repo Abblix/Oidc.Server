@@ -179,7 +179,7 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
         },
     ];
 
-    // A single registered RFC 8707 resource indicator. The AS only mints audience-restricted
+    // Two registered RFC 8707 resource indicators, one scope each. The AS only mints audience-restricted
     // tokens for a resource it knows; an unregistered target is rejected with invalid_target.
     tenant.Resources =
     [

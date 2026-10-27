@@ -22,7 +22,8 @@ namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 /// unambiguously correlated to a specific resource among the ones listed in the "aud" claim". A scope one of the
 /// tenant's resources declares belongs to that resource, so it stays only on a token addressed to a resource declaring
 /// it; a scope no resource declares belongs to none, and stays. The tenant's declarations decide, as they decide
-/// <see cref="ResourceInference"/>.
+/// <see cref="ResourceInference"/>. A token is addressed to a resource it names in its audience, whether named as a
+/// resource (RFC 8707) or as an audience (RFC 8693) equal to the resource's identifier.
 /// </remarks>
 internal static class ResourceScopes
 {
@@ -35,11 +36,20 @@ internal static class ResourceScopes
         if (tenant.Resources is not { Length: > 0 } definitions)
             return context;
 
-        var addressed = context.Resources ?? [];
+        Uri[] addressed = [.. context.Resources ?? [], .. AsResources(context.Audiences)];
         return context with
         {
             Scope = [.. context.Scope.Where(scope => BelongsTo(scope, definitions, addressed))],
         };
+    }
+
+    private static IEnumerable<Uri> AsResources(string[]? audiences)
+    {
+        foreach (var audience in audiences ?? [])
+        {
+            if (Uri.TryCreate(audience, UriKind.Absolute, out var resource))
+                yield return resource;
+        }
     }
 
     private static bool BelongsTo(string scope, ResourceDefinition[] definitions, Uri[] addressed)

@@ -68,6 +68,22 @@ public class ResourceScopesTests
         => Assert.Equal(["openid"], Narrowed([], "openid", "orders.read"));
 
     /// <summary>
+    /// A token naming a resource as an audience (RFC 8693) rather than a resource keeps that resource's scope, while
+    /// an audience that is no declared resource addresses none.
+    /// </summary>
+    [Theory]
+    [InlineData("https://api.example.com/payments", true)]
+    [InlineData("payments-api", false)]
+    public void AnAudienceEqualToADeclaredResource_AddressesIt(string audience, bool kept)
+    {
+        var context = new AuthorizationContext("client", ["payments.read"], null) { Audiences = [audience] };
+
+        var narrowed = context.NarrowedToItsResources(new TestIssuer { Resources = Declared }.ToTenant()).Scope;
+
+        Assert.Equal(kept, narrowed.Contains("payments.read"));
+    }
+
+    /// <summary>
     /// A tenant declaring no resources leaves the scope as it is.
     /// </summary>
     [Fact]

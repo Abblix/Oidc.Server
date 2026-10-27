@@ -151,6 +151,65 @@ public class AccessTokenServiceTests
     }
 
     /// <summary>
+    /// A token naming no resource is addressed to the tenant's default resource before its scope is narrowed, so it
+    /// keeps that resource's scope (RFC 8707 section 2.2).
+    /// </summary>
+    [Fact]
+    public async Task CreateAccessToken_KeepsTheScopeOfTheDefaultResource()
+    {
+        var orders = new Uri("https://api.example.com/orders");
+        var tenant = new TestIssuer
+        {
+            Resources = [new ResourceDefinition(orders, new ScopeDefinition("orders.read"))],
+            DefaultResourceIndicator = orders,
+        }.ToTenant();
+        var authContext = new AuthorizationContext(ClientId, [Scopes.OpenId, "orders.read"], null);
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateAccessTokenAsync(tenant, CreateAuthSession(), authContext, CreateClientInfo(), grantId: null, null);
+
+        Assert.Equal([Scopes.OpenId, "orders.read"], capturedToken!.Payload.Scope);
+    }
+
+    /// <summary>
+    /// The address the user signed in with is released by the scope the token carries once narrowed: a scope
+    /// releasing it that belongs to another resource leaves it out of a token for this one.
+    /// </summary>
+    [Fact]
+    public async Task CreateAccessToken_ReleasesTheSessionEmailByTheNarrowedScope()
+    {
+        const string contactScope = "contact";
+        var orders = new Uri("https://api.example.com/orders");
+        var payments = new Uri("https://api.example.com/payments");
+        var tenant = new TestIssuer
+        {
+            Scopes = [new ScopeDefinition(contactScope, IanaClaimTypes.Email)],
+            Resources =
+            [
+                new ResourceDefinition(orders, new ScopeDefinition(contactScope)),
+                new ResourceDefinition(payments, new ScopeDefinition("payments.read")),
+            ],
+        }.ToTenant();
+        var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
+        var authContext = new AuthorizationContext(ClientId, [Scopes.OpenId, contactScope], null, [payments]);
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateAccessTokenAsync(tenant, authSession, authContext, CreateClientInfo(), grantId: null, null);
+
+        Assert.Null(capturedToken!.Payload.Email);
+    }
+
+    /// <summary>
     /// A client that names the email claim for the ID token alone has the user-information endpoint ask for nothing
     /// more, so the address stays out of its access token.
     /// </summary>
