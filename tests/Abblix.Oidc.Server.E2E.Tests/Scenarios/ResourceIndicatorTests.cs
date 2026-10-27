@@ -168,6 +168,78 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    /// <summary>
+    /// A refresh token of a grant for a named resource carries that resource as its audience, and redeeming it
+    /// issues an access token for the same resource, as RFC 8707 section 2.2 shows a refresh token being used.
+    /// </summary>
+    [Fact]
+    public async Task A_refresh_token_of_a_grant_for_a_resource_is_redeemed()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var refreshToken = (await ObtainResourceGrantTokensAsync(client, discovery))[TokenRequest.Parameters.RefreshToken]!
+            .GetValue<string>();
+
+        var refreshed = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
+            [TokenRequest.Parameters.RefreshToken] = refreshToken,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        var payload = DecodeJwtPayload(refreshed[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        Assert.Equal([TestConstants.ApiResource], ExtractAudiences(payload));
+    }
+
+    /// <summary>
+    /// The same refresh token is accepted as the subject token of a token exchange (RFC 8693 section 3).
+    /// </summary>
+    [Fact]
+    public async Task A_refresh_token_of_a_grant_for_a_resource_is_exchanged()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var refreshToken = (await ObtainResourceGrantTokensAsync(client, discovery))[TokenRequest.Parameters.RefreshToken]!
+            .GetValue<string>();
+
+        var exchanged = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
+            [TokenRequest.Parameters.SubjectToken] = refreshToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.RefreshToken,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        Assert.NotNull(exchanged[UserInfoRequest.Parameters.AccessToken]);
+    }
+
+    /// <summary>
+    /// An access token of the same grant is still no refresh token: what tells them apart is the token type, which the
+    /// refresh token grant checks whatever the audience says.
+    /// </summary>
+    [Fact]
+    public async Task An_access_token_of_a_grant_for_a_resource_is_refused_as_a_refresh_token()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var accessToken = (await ObtainResourceGrantTokensAsync(client, discovery))[UserInfoRequest.Parameters.AccessToken]!
+            .GetValue<string>();
+
+        var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
+            [TokenRequest.Parameters.RefreshToken] = accessToken,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidGrant, body?[ResponseParameters.Error]?.GetValue<string>());
+    }
+
     private static async Task<HttpResponseMessage> SendUserInfoAsync(
         HttpClient client, DiscoveryDocument discovery, string accessToken)
     {
