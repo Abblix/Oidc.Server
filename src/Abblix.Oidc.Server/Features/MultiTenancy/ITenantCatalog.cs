@@ -33,9 +33,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// the key ring keeping no partition for it.
 /// </para>
 /// <para>
-/// What the server's catalog holds in force is read again when it is needed, while a catalog of the host's own can
-/// only hand a definition to a request: so it answers with the definition in force, and a tenant scope the host
-/// enters is entered with it too, or the stale one is answered with, its keys included, until the next request.
+/// The server uses the definition it is handed, so a catalog of the host's own answers with the definition in force,
+/// and the host enters a tenant scope with the definition in force too.
 /// </para>
 /// </remarks>
 public interface ITenantCatalog

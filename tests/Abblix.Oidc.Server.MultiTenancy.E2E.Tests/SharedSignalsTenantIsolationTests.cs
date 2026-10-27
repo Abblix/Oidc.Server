@@ -218,7 +218,11 @@ public sealed class SharedSignalsTenantIsolationTests
 
         PollEndpointHandler kept;
         using (TenantScope.Enter((await catalog.FindByIdAsync("acme", ct))!))
+        {
             kept = app.Services.GetRequiredService<PollEndpointHandler>();
+            // Served in its own tenant, the kept part works, so only being used elsewhere is what refuses it
+            await kept.HandleAsync(AcmesStream(), new PollRequest { ReturnImmediately = true }, ct);
+        }
 
         using var scope = TenantScope.Enter((await catalog.FindByIdAsync("globex", ct))!);
         await Assert.ThrowsAsync<InvalidOperationException>(
@@ -579,14 +583,18 @@ public sealed class SharedSignalsTenantIsolationTests
         await using var app = await StartAsync();
         var catalog = app.Services.GetRequiredService<ITenantCatalog>();
 
+        var descriptor =
+            new SecurityEventDescriptor { EventType = MembershipChanged, Subject = new EmailSubject("jdoe@example.com") };
         EventDispatcher kept;
         using (TenantScope.Enter((await catalog.FindByIdAsync("acme", ct))!))
+        {
             kept = app.Services.GetRequiredService<EventDispatcher>();
+            // Served in its own tenant, the kept part works, so only being used elsewhere is what refuses it
+            await kept.DispatchAsync(descriptor, ct);
+        }
 
         using var scope = servedAt is null ? null : TenantScope.Enter((await catalog.FindByIdAsync(servedAt, ct))!);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => kept.DispatchAsync(
-            new SecurityEventDescriptor { EventType = MembershipChanged, Subject = new EmailSubject("jdoe@example.com") },
-            ct));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => kept.DispatchAsync(descriptor, ct));
     }
 
     /// <summary>
@@ -600,12 +608,15 @@ public sealed class SharedSignalsTenantIsolationTests
         await using var app = await StartAsync();
         var catalog = app.Services.GetRequiredService<ITenantCatalog>();
 
-        QueuedEventSigner kept;
-        using (TenantScope.Enter((await catalog.FindByIdAsync("acme", ct))!))
-            kept = app.Services.GetRequiredService<QueuedEventSigner>();
-
         var queued = new OutboxItem("event-1", CompactToken: null, Unsigned: QueuedEventSigner.ToQueued(
             new SecurityEventToken(new JsonWebToken())));
+        QueuedEventSigner kept;
+        using (TenantScope.Enter((await catalog.FindByIdAsync("acme", ct))!))
+        {
+            kept = app.Services.GetRequiredService<QueuedEventSigner>();
+            // Served in its own tenant, the kept part works, so only being used elsewhere is what refuses it
+            Assert.NotNull(await kept.SignAsync(queued, ct));
+        }
         using var scope = TenantScope.Enter((await catalog.FindByIdAsync("globex", ct))!);
         await Assert.ThrowsAsync<InvalidOperationException>(() => kept.SignAsync(queued, ct));
     }
@@ -779,6 +790,9 @@ public sealed class SharedSignalsTenantIsolationTests
             JwksUri = jwksUri ?? new Uri(issuer + JwksPath),
             EventsSupported = [MembershipChanged],
             DefaultSubjectsMode = StreamSubjectsMode.All,
+
+            // A test sweeps when it means to: a pass on a timer would deliver what the test expects its own to
+            PushDeliveryInterval = null,
 
             // The test receiver's name resolves nowhere, and the recording handler answers it instead
             AllowedReceiverAddresses = [new Uri(PushEndpoint)],
