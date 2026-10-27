@@ -137,19 +137,23 @@ internal class AccessTokenService(
 
 		authSession.ApplyTo(accessToken.Payload);
 
+		// The audience is settled once, before anything reads it, so the payload below and the encryption
+		// policy further down agree on who this token is for instead of each deriving its own answer. The scope
+		// follows it: the token carries the scopes of the resources it names (RFC 8707 section 2.2).
+		var audienceContext = authContext
+			.WithDefaultResource(tenant.DefaultResourceIndicator)
+			.NarrowedToItsResources(tenant);
+
 		// Every resource server the token reaches reads its claims, so the user's address travels in it only when
 		// the user-information endpoint would ask the host's provider for it, because of a scope or because the
 		// client named it for that endpoint. The endpoint rebuilds the session from this token and asks for the same
 		// claims, so it loses nothing.
-		if (!ReleasesEmail(tenant, authContext))
+		if (!ReleasesEmail(tenant, audienceContext))
 		{
 			accessToken.Payload.Email = null;
 			accessToken.Payload.EmailVerified = null;
 		}
 
-		// The audience is settled once, before anything reads it, so the payload below and the encryption
-		// policy further down agree on who this token is for instead of each deriving its own answer.
-		var audienceContext = authContext.WithDefaultResource(tenant.DefaultResourceIndicator);
 		audienceContext.ApplyTo(accessToken.Payload);
 
 		if (options.Value.FilterAuthorizationDetailsByLocation)
