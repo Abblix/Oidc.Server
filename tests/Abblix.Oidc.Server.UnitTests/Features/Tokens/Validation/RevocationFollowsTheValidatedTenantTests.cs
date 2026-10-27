@@ -62,7 +62,8 @@ public class RevocationFollowsTheValidatedTenantTests
     {
         var result = await ValidateAsync(recordedAt: Validated, recorded, servedAt: servedAtItsTenant ? Validated : Other);
 
-        Assert.True(result.TryGetFailure(out _));
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(RefusalOf(recorded), error.Error);
     }
 
     /// <summary>
@@ -80,6 +81,16 @@ public class RevocationFollowsTheValidatedTenantTests
 
         Assert.True(result.TryGetSuccess(out _));
     }
+
+    /// <summary>
+    /// The refusal what is recorded makes, so a refusal for any other reason does not pass for it.
+    /// </summary>
+    private static JwtError RefusalOf(Recorded recorded) => recorded switch
+    {
+        Recorded.TokenRevoked or Recorded.GrantRevoked or Recorded.CutOff => JwtError.TokenRevoked,
+        Recorded.TokenUsed => JwtError.TokenAlreadyUsed,
+        _ => throw new ArgumentOutOfRangeException(nameof(recorded), recorded, "A record without an expected refusal."),
+    };
 
     private static async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
         TenantDefinition recordedAt,

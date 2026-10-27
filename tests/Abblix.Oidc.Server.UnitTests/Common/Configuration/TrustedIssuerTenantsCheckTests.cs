@@ -19,25 +19,27 @@ namespace Abblix.Oidc.Server.UnitTests.Common.Configuration;
 /// A tenant of this server listed as a trusted issuer of the JWT bearer grant would have its revoked tokens accepted
 /// as assertions, so the tenant is refused; a tenant at any other issuer is not.
 /// </summary>
-public class TrustedJwtBearerIssuerCheckTests
+public class TrustedIssuerTenantsCheckTests
 {
     private static List<TenantRefusal> Check(string tenantIssuer, params string[] trusted)
-        => new TrustedJwtBearerIssuerCheck().Check(
+        => Check(tenantIssuer, softwareStatements: false, trusted);
+
+    private static List<TenantRefusal> Check(string tenantIssuer, bool softwareStatements, params string[] trusted)
+    {
+        TrustedIssuer[] listed =
+        [
+            ..trusted.Select(issuer => new TrustedIssuer { Issuer = issuer, JwksUri = new Uri("https://idp.example.com/jwks") }),
+        ];
+        var options = new OidcOptions();
+        if (softwareStatements)
+            options.SoftwareStatement.TrustedIssuers = listed;
+        else
+            options.JwtBearer = new JwtBearerOptions { TrustedIssuers = listed };
+
+        return new TrustedIssuerTenantsCheck().Check(
             [new TenantDefinition { Id = "acme", Issuer = new Uri(tenantIssuer) }],
-            new OidcOptions
-            {
-                JwtBearer = new JwtBearerOptions
-                {
-                    TrustedIssuers =
-                    [
-                        ..trusted.Select(issuer => new TrustedIssuer
-                        {
-                            Issuer = issuer,
-                            JwksUri = new Uri("https://idp.example.com/jwks"),
-                        }),
-                    ],
-                },
-            }).ToList();
+            options).ToList();
+    }
 
     /// <summary>
     /// A tenant whose issuer a trusted issuer names, as the grant compares them, scheme and host without regard to
@@ -65,6 +67,19 @@ public class TrustedJwtBearerIssuerCheckTests
     public void ATenantAtAnotherIssuer_Passes(string trusted)
     {
         Assert.Empty(Check("https://auth.example.com/tenants/acme", trusted));
+    }
+
+    /// <summary>
+    /// A tenant whose issuer a trusted issuer of software statements names is refused too, naming that setting.
+    /// </summary>
+    [Fact]
+    public void ATenantAtATrustedIssuerOfSoftwareStatements_IsRefused()
+    {
+        var refusal = Assert.Single(
+            Check("https://auth.example.com/tenants/acme", softwareStatements: true, "https://auth.example.com/tenants/acme"));
+
+        Assert.Equal("acme", Assert.Single(refusal.TenantIds));
+        Assert.Contains(nameof(OidcOptions.SoftwareStatement), refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

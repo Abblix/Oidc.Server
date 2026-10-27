@@ -32,11 +32,15 @@ public sealed class TrustedJwtBearerIssuerTenantTests
     private const string Globex = "/tenants/globex";
 
     /// <summary>
-    /// A server whose settings declare a tenant at the trusted issuer does not start.
+    /// A server whose settings declare a tenant at the trusted issuer does not start, and the same server declaring the
+    /// tenant at another issuer does, so the refusal is the trusted issuer's.
     /// </summary>
     [Fact]
     public async Task ATenantDeclaredAtATrustedIssuer_StopsTheServer()
     {
+        await using (var starts = await BuildAsync(store: null, Tenant("acme", Acme)))
+            await starts.StartAsync(TestContext.Current.CancellationToken);
+
         // Building the endpoints already reads the settings, so the refusal may come before the start itself
         await Assert.ThrowsAsync<OptionsValidationException>(async () =>
         {

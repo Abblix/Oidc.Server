@@ -64,6 +64,7 @@ internal static class LogEvents
             public const int AudienceFailedPermissive = Base + 15;
             public const int MissingExpiration = Base + 16;
             public const int TokenOfAnotherKind = Base + 17;
+            public const int IssuerIsServedTenant = Base + 18;
         }
 
         /// <summary>
@@ -346,6 +347,7 @@ internal static class LogEvents
 
             public const int ValidationFailed = Base + 1;
             public const int IssuerNotTrusted = Base + 2;
+            public const int IssuerIsServedTenant = Base + 3;
         }
 
         /// <summary>

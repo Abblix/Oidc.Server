@@ -62,10 +62,4 @@ partial class JwtBearerGrantHandler
 		Level = LogLevel.Information,
 		Message = "AUDIT: JWT Bearer grant SUCCESS - Client: {ClientId}, Subject: {Subject}, Issuer: {Issuer}, JTI: {JwtId}, KeyId: {KeyId}, IP: {ClientIp}")]
 	private partial void LogGrantSucceeded(string ClientId, Sanitized Subject, Sanitized Issuer, Sanitized JwtId, Sanitized KeyId, IPAddress? ClientIp);
-
-	[LoggerMessage(
-		EventId = LogEvents.Endpoints.JwtBearer.IssuerNotTrusted,
-		Level = LogLevel.Warning,
-		Message = "JWT Bearer assertion rejected: issuer {Issuer} is not trusted")]
-	private partial void LogIssuerNotTrusted(Sanitized Issuer);
 }

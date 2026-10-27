@@ -85,7 +85,7 @@ public class TokenStatusCheckTests
     /// breach signal of RFC 9700 Section 4.14.2 - the point at which the active token in the lineage is doomed.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_ReusedRefreshToken_RevokesFamilyAndReportsAlreadyUsed()
+    public async Task CheckAsync_ReusedRefreshToken_RevokesFamilyAndReportsAlreadyUsed()
     {
         Checking(RefreshToken(GrantId));
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, GrantId)).ReturnsAsync(JsonWebTokenStatus.Unknown);
@@ -108,7 +108,7 @@ public class TokenStatusCheckTests
     /// Unknown. The per-token status is never consulted - the family check short-circuits first.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_ActiveTokenOfRevokedFamily_IsRejected()
+    public async Task CheckAsync_ActiveTokenOfRevokedFamily_IsRejected()
     {
         Checking(RefreshToken(GrantId));
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, GrantId)).ReturnsAsync(JsonWebTokenStatus.Revoked);
@@ -125,7 +125,7 @@ public class TokenStatusCheckTests
     /// non-neutral status, so the check returns the inner validator's success without any registry write.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_LiveRefreshToken_PassesThrough()
+    public async Task CheckAsync_LiveRefreshToken_PassesThrough()
     {
         var token = RefreshToken(GrantId);
         Checking(token);
@@ -144,7 +144,7 @@ public class TokenStatusCheckTests
     /// proves the family logic is inert for non-refresh tokens rather than reaching for a null family key.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_UsedTokenWithoutFamily_RejectsWithoutTouchingAnyFamily()
+    public async Task CheckAsync_UsedTokenWithoutFamily_RejectsWithoutTouchingAnyFamily()
     {
         Checking(RefreshToken(grantId: null));
         _registry.Setup(r => r.GetStatusAsync(TestTenant.Matched, ActiveJwtId)).ReturnsAsync(JsonWebTokenStatus.Used);
@@ -164,7 +164,7 @@ public class TokenStatusCheckTests
     /// every session of that user - stops being accepted.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_TokenIssuedBeforeTheSubjectCutoff_IsRejected()
+    public async Task CheckAsync_TokenIssuedBeforeTheSubjectCutoff_IsRejected()
     {
         Checking(RefreshToken(GrantId));
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(1));
@@ -181,7 +181,7 @@ public class TokenStatusCheckTests
     /// this - it would keep refusing every later session too.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_TokenIssuedAfterTheSubjectCutoff_IsAccepted()
+    public async Task CheckAsync_TokenIssuedAfterTheSubjectCutoff_IsAccepted()
     {
         Checking(RefreshToken(GrantId));
         SetupCutoff(RevocationScope.Subject, Subject, IssuedAt.AddSeconds(-1));
@@ -200,7 +200,7 @@ public class TokenStatusCheckTests
     /// out of one device must not sign the user out of the rest.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_TokenOfACutOffSession_IsRejected()
+    public async Task CheckAsync_TokenOfACutOffSession_IsRejected()
     {
         Checking(RefreshToken(GrantId));
         SetupCutoff(RevocationScope.Session, SessionId, IssuedAt.AddSeconds(1));
@@ -218,7 +218,7 @@ public class TokenStatusCheckTests
     /// happen to be identified.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_TokenWithoutAnIdentifier_IsStillReachedByACutoff()
+    public async Task CheckAsync_TokenWithoutAnIdentifier_IsStillReachedByACutoff()
     {
         Checking(new JsonWebToken
         {
@@ -243,7 +243,7 @@ public class TokenStatusCheckTests
     /// would revoke tokens on the strength of a claim that was never there.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_TokenWithoutAnIssueTime_IsNotReachedByACutoff()
+    public async Task CheckAsync_TokenWithoutAnIssueTime_IsNotReachedByACutoff()
     {
         Checking(new JsonWebToken
         {
@@ -276,7 +276,7 @@ public class TokenStatusCheckTests
     /// tokens and silently misses every pairwise one - the deployment most likely to need it.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_PairwiseTokenOfARevokedSubject_IsRejected()
+    public async Task CheckAsync_PairwiseTokenOfARevokedSubject_IsRejected()
     {
         var pairwiseClient = new ClientInfo(ClientId)
         {
@@ -317,7 +317,7 @@ public class TokenStatusCheckTests
     /// party, or the second relying party of a multi-party logout.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WhenTheCallerDoesNotValidateLifetime_ACutoffDoesNotRefuse()
+    public async Task CheckAsync_WhenTheCallerDoesNotValidateLifetime_ACutoffDoesNotRefuse()
     {
         Checking(RefreshToken(GrantId));
         SetupCutoff(RevocationScope.Session, SessionId, IssuedAt.AddSeconds(1));
@@ -386,7 +386,7 @@ public class TokenStatusCheckTests
     /// compromised machine identity would otherwise start refusing that same client's assertions.
     /// </remarks>
     [Fact]
-    public async Task ValidateAsync_TokenFromAnotherIssuer_IsNotReachedByACutoff()
+    public async Task CheckAsync_TokenFromAnotherIssuer_IsNotReachedByACutoff()
     {
         Checking(new JsonWebToken
         {
@@ -424,7 +424,7 @@ public class TokenStatusCheckTests
     /// silently undone for exactly the deployment that chose the stricter privacy setting.
     /// </remarks>
     [Fact]
-    public async Task ValidateAsync_PairwisePseudonymThatCannotBeOpened_IsRefused()
+    public async Task CheckAsync_PairwisePseudonymThatCannotBeOpened_IsRefused()
     {
         var pairwiseClient = new ClientInfo(ClientId)
         {
@@ -459,12 +459,12 @@ public class TokenStatusCheckTests
     /// A client the store no longer knows leaves the subject unresolvable, and the token is refused.
     /// </summary>
     /// <remarks>
-    /// Separate from <see cref="ValidateAsync_PairwisePseudonymThatCannotBeOpened_IsRefused"/> because the two
+    /// Separate from <see cref="CheckAsync_PairwisePseudonymThatCannotBeOpened_IsRefused"/> because the two
     /// fail at different steps and only one of them involves the converter at all - a lookup returning nothing would
     /// otherwise read as "not pairwise, carry on".
     /// </remarks>
     [Fact]
-    public async Task ValidateAsync_TokenNamingAClientThatIsGone_IsRefused()
+    public async Task CheckAsync_TokenNamingAClientThatIsGone_IsRefused()
     {
         _clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync((ClientInfo?)null);
 
@@ -497,7 +497,7 @@ public class TokenStatusCheckTests
     /// that never ends.
     /// </remarks>
     [Fact]
-    public async Task ValidateAsync_TokenIssuedWithinTheSkewAfterACutoff_IsStillRefused()
+    public async Task CheckAsync_TokenIssuedWithinTheSkewAfterACutoff_IsStillRefused()
     {
         var check = new TokenStatusCheck(
             _registry.Object,

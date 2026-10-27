@@ -28,7 +28,7 @@ public interface IRevocationCutoffChecker
     /// <summary>
     /// The refusal a cutoff calls for on this token, or <c>null</c> when no cutoff reaches it.
     /// </summary>
-    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="tenant">The tenant the token is validated for, whose records are read.</param>
     /// <param name="payload">The payload of a token that has already passed signature and lifetime checks.</param>
     /// <returns>A validation error when the token is refused, otherwise <c>null</c>.</returns>
     Task<JwtValidationError?> CheckAsync(TenantDefinition tenant, JsonWebTokenPayload payload);

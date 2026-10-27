@@ -29,6 +29,11 @@ public static class JwtServiceCollectionExtensions
     /// <summary>
     /// Registers JWT formatting and validation services for authentication within the specified <see cref="IServiceCollection"/>.
     /// </summary>
+    /// <remarks>
+    /// The validator of this server's tokens refuses one revoked, rotated or cut off, so the records of revocation
+    /// come with it. Reading them needs the entity storage, the client information and the subject type converter,
+    /// which the server's registration brings; a host composing these registrations one by one registers those too.
+    /// </remarks>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the JWT authentication services to.</param>
     /// <returns>The <see cref="IServiceCollection"/> for chaining further service registrations.</returns>
     public static IServiceCollection AddAuthServiceJwt(this IServiceCollection services)
