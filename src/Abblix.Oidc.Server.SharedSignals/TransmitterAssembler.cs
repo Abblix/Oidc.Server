@@ -68,6 +68,7 @@ internal sealed class TransmitterAssembler(
             Streams = view,
             Store = store,
             Superseded = superseded,
+            Outbox = outbox,
             Signer = signer,
             Instruments = instruments,
             PollEndpoints = pollEndpoints,

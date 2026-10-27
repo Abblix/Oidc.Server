@@ -98,7 +98,7 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 			// as described in Section 5.3.2, when a response_type value is used that results in an Access Token being issued.
 			// However, when no Access Token is issued (which is the case for the response_type value id_token),
 			// the resulting Claims are returned in the ID Token.
-			scope = scope.Except([Scopes.Profile, Scopes.Email, Scopes.Address]).ToArray();
+			scope = scope.Except([Scopes.Profile, Scopes.Email, Scopes.Address, Scopes.Phone]).ToArray();
 		}
 
 		// Read before the claims provider is handed the session: it is a host seam, and this is what the

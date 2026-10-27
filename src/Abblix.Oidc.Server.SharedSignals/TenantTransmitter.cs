@@ -37,6 +37,9 @@ internal sealed class TenantTransmitter
     /// <summary>Whether a store of declared streams of another transmitter replaced this one's.</summary>
     public required Func<bool> Superseded { get; init; }
 
+    /// <summary>The tenant's queued events, kept apart in the outbox every tenant shares.</summary>
+    public required IEventOutbox Outbox { get; init; }
+
     /// <summary>Signs a queued event for delivery.</summary>
     public required QueuedEventSigner Signer { get; init; }
 

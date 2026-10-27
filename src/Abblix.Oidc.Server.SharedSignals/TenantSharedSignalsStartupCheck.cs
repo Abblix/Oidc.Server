@@ -76,6 +76,7 @@ internal sealed class TenantSharedSignalsStartupCheck(IServiceProvider servicePr
         // later registration replaced answers as itself, and would serve every tenant alike
         Require<IStreamStore, NoTenantStreamStore>(failures);
         Require<ITransmitterIdentity, NoTenantTransmitterIdentity>(failures);
+        Require<IEventOutbox, NoTenantEventOutbox>(failures);
         Require<IPushDeliverySweep, TenantPushDeliverySweep>(failures);
 
         var transmitter = serviceProvider.GetRequiredService<SharedSignalsTransmitterOptions>();
