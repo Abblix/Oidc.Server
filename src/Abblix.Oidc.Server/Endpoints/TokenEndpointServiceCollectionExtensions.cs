@@ -82,12 +82,15 @@ public static class TokenEndpointServiceCollectionExtensions
         //   AuthorizationGrantValidator, so what can refuse without the grant runs before it:
         //   DPoPTokenEndpointValidator, whose nonce challenge RFC 9449 section 8 answers with a retry that
         //   must still find the grant. DPoPBindingValidator reads the grant and follows it.
+        // - SingleResourceValidator reads the grant's resources, so it follows AuthorizationGrantValidator, and the
+        //   authorization code it may refuse a request for is spent only after validation.
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ClientValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, DPoPTokenEndpointValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, AuthorizationGrantValidator>(),
+            ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.SingleResourceValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, Token.Validation.RevokedSessionValidator>(),
             ServiceDescriptor.Singleton<ITokenContextValidator, DPoPBindingValidator>()
         ]);

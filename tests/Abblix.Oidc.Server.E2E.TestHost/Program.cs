@@ -106,6 +106,11 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
         Mint(TestConstants.DPoPOpportunisticClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: false),
         // RFC 9449 section 5 public client: same-key MUST be presented on refresh.
         Mint(TestConstants.DPoPPublicClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: false, isPublic: true),
+        // Its access tokens each name one resource, so a token request names the one of its grant it is for
+        Mint(TestConstants.SingleResourceClientId, secret, redirect, allowlist: null, idTokenRar: false) with
+        {
+            SingleResourceAccessTokens = true,
+        },
 
         // RFC 6749 section 4.4 client_credentials client, used to verify that an RFC 8707 resource
         // indicator reaches the issued access token's aud. This grant has no user-agent leg, so
