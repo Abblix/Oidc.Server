@@ -376,6 +376,39 @@ public sealed partial class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
+    /// The configuration of a stream a receiver created before its tenant moved names the issuer the tenant moved to,
+    /// read alone or in the receiver's list, as the events of that stream do.
+    /// </summary>
+    [Fact]
+    public async Task AStreamCreatedBeforeAMove_AnswersTheIssuerTheTenantMovedTo()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await store.AddAsync(TenantAt("acme"), ct);
+        await using var app = await StartAsync(store, new FakeTimeProvider());
+        var path = $"/tenants/acme{StreamPath}";
+        using var created = await ClientOf(app, "acme").PostAsJsonAsync(
+            path, new CreateStreamRequest { EventsRequested = [MembershipChanged] }, ct);
+        var before = (await created.Content.ReadFromJsonAsync<StreamConfiguration>(ct))!;
+        var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
+        Assert.Equal((await catalog.FindByIdAsync("acme", ct))!.Issuer.OriginalString, before.Issuer);
+
+        await MoveAsync(store, catalog, TenantAt("acme", MovedHost), ct);
+        var moved = (await catalog.FindByIdAsync("acme", ct))!;
+        Assert.NotEqual(before.Issuer, moved.Issuer.OriginalString);
+        var client = app.GetTestClient();
+        client.BaseAddress = new Uri(MovedHost);
+        client.DefaultRequestHeaders.Add("X-Test-Issuer", moved.Issuer.OriginalString);
+        client.DefaultRequestHeaders.Add("X-Test-Subject", ReceiverId);
+
+        var one = await client.GetFromJsonAsync<StreamConfiguration>($"{path}?stream_id={before.StreamId}", ct);
+        var all = await client.GetFromJsonAsync<StreamConfiguration[]>(path, ct);
+
+        Assert.Equal(moved.Issuer.OriginalString, one!.Issuer);
+        Assert.Equal(moved.Issuer.OriginalString, Assert.Single(all!).Issuer);
+    }
+
+    /// <summary>
     /// A receiver creating a stream while the store of the tenant's declared streams is replaced by a move has the
     /// stream created: the replaced store refuses the write, and it is made through the replacement.
     /// </summary>

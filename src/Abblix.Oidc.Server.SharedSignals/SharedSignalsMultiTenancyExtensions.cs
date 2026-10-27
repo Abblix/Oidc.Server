@@ -61,9 +61,9 @@ public static class SharedSignalsMultiTenancyExtensions
                 + $"AddSharedSignalsTransmitter() before {nameof(AddSharedSignals)}().");
         }
 
-        // The store the host registered holds every tenant's streams, so it is kept under a key of its own, and
-        // each tenant's transmitter reaches its part of it
-        services.DecorateKeyed<IStreamStore, SharedStreamStore>(TenantTransmitters.SharedStoreKey);
+        // The store and the outbox the host registered hold every tenant's data, so they are kept under keys of their
+        // own, and each tenant's transmitter reaches its part of them
+        SharedStores.Keep(services);
         DeclaredStreams(services);
         services.TryAddSingleton<TenantStreamStores>();
         services.TryAddSingleton<TransmitterAssembler>();
@@ -76,6 +76,7 @@ public static class SharedSignalsMultiTenancyExtensions
         // Where no tenant is served, it is the part of a transmitter that refuses once it reaches a tenant's data:
         // an endpoint's parts are resolved before its filters run, and the filter answering 404 must get to run
         services.Replace(ServiceDescriptor.Transient(provider => Served(provider).Streams));
+        services.Replace(ServiceDescriptor.Transient(provider => Served(provider).Outbox));
         services.Replace(ServiceDescriptor.Transient(provider => Served(provider).Identity));
         services.Replace(ServiceDescriptor.Transient(provider => Served(provider).Dispatcher));
         services.Replace(ServiceDescriptor.Transient(provider => Served(provider).Management));

@@ -45,5 +45,7 @@ internal sealed class NoTenantEventOutbox : IEventOutbox
         => throw NoTenant();
 
     private static InvalidOperationException NoTenant()
-        => new("Every queued event belongs to a tenant's stream, and no tenant is served here.");
+        => new("A part of the Shared Signals transmitter (here its outbox, which every queued event of a tenant's "
+               + "stream passes through) was resolved where no tenant was served. Resolve the transmitter's parts in "
+               + "the request or tenant scope of the tenant they serve, rather than keeping one across requests.");
 }
