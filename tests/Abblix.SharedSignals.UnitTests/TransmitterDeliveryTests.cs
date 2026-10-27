@@ -177,7 +177,7 @@ public class TransmitterDeliveryTests
             ReachingTheTestReceiver,
             logger,
             TestInstruments.Create(),
-            new QueuedEventSigner(new KeylessSigner()));
+            new QueuedEventSigner(new KeylessSigner(), new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" })));
 
         var outcome = await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
@@ -205,7 +205,7 @@ public class TransmitterDeliveryTests
             ReachingTheTestReceiver,
             logger,
             TestInstruments.Create(),
-            new QueuedEventSigner(new TimingOutSigner()));
+            new QueuedEventSigner(new TimingOutSigner(), new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" })));
 
         await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
 
@@ -266,7 +266,8 @@ public class TransmitterDeliveryTests
         var outbox = await OutboxWithAsync(
             new OutboxItem("jti-1", CompactToken: null, Unsigned: """{"header": {}, "claims": {}}"""));
         var logger = new CapturingLogger<PollEndpointHandler>();
-        var handler = new PollEndpointHandler(logger, outbox, new QueuedEventSigner(new KeylessSigner()));
+        var handler = new PollEndpointHandler(
+            logger, outbox, new QueuedEventSigner(new KeylessSigner(), new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" })));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(
             PushStream(), new PollRequest(), TestContext.Current.CancellationToken));
@@ -275,6 +276,41 @@ public class TransmitterDeliveryTests
         Assert.Equal(LogLevel.Error, written.Level);
         Assert.Equal(LogEvents.Transmitter.SetSigningFailed, written.Event.Id);
         Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A SET queued under an issuer the transmitter no longer issues under is pushed carrying the one it issues under
+    /// when the SET is sent (SSF 1.0 Section 4.1.6).
+    /// </summary>
+    [Fact]
+    public async Task Push_ASetQueuedBeforeTheIssuerChanged_CarriesTheIssuerOfThatMoment()
+    {
+        var handler = new StubHttpHandler().Enqueue(HttpStatusCode.Accepted);
+        var outbox = await OutboxWithAsync(new OutboxItem(
+            "jti-1", CompactToken: null, Unsigned: """{"header": {}, "claims": {"iss": "https://first.example.com"}}"""));
+        var signer = new IssuerNamingSigner();
+        var sender = new PushDeliverySender(
+            handler.CreateClient(),
+            outbox,
+            ReachingTheTestReceiver,
+            NullLogger<PushDeliverySender>.Instance,
+            TestInstruments.Create(),
+            new QueuedEventSigner(signer, new SwitchableTransmitterIdentity("https://second.example.com")));
+
+        await sender.SendPendingAsync(PushStream(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(["https://second.example.com"], handler.Requests.Select(request => request.Body));
+    }
+
+    /// <summary>
+    /// Signs a SET as the issuer it carries, so a test reads what was sent from the request body.
+    /// </summary>
+    private sealed class IssuerNamingSigner : Abblix.SecurityEvents.Abstractions.ISecurityEventTokenSigner
+    {
+        public Task<string> SignAsync(
+            Abblix.SecurityEvents.SecurityEventToken token,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(token.Token.Payload.Issuer!);
     }
 
     private sealed class KeylessSigner : Abblix.SecurityEvents.Abstractions.ISecurityEventTokenSigner

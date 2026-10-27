@@ -21,6 +21,20 @@ namespace Abblix.SharedSignals.Transmitter;
 internal sealed class StreamDeliveryFactory(ReceiverAddressPolicy addressPolicy, PollEndpointLocator pollEndpoints)
 {
     /// <summary>
+    /// The delivery a stream is answered with: a poll stream's at the address its events are polled at now, which
+    /// follows the transmitter's issuer, and any other as it was stored.
+    /// </summary>
+    /// <remarks>
+    /// A poll stream created before the transmitter's issuer changed stores the address under the old issuer. One
+    /// this transmitter has no address for any longer, which no longer serves poll delivery, is answered with the
+    /// address it stored.
+    /// </remarks>
+    public StreamDeliveryMethod AnsweredOf(StreamConfiguration configuration)
+        => configuration.Delivery is PollDeliveryMethod && pollEndpoints.Of(configuration.StreamId) is { } polledAt
+            ? new PollDeliveryMethod(polledAt)
+            : configuration.Delivery;
+
+    /// <summary>
     /// The delivery this transmitter will store for a proposal, or the refusal that stops it.
     /// </summary>
     /// <remarks>

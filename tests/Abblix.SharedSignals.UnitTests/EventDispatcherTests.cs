@@ -86,10 +86,14 @@ public class EventDispatcherTests
     };
 
     /// <summary>The SETs queued for <paramref name="streamId"/>, as they are signed when delivered.</summary>
-    private static async Task<List<SecurityEventToken>> MintedAsync(InMemoryEventOutbox outbox, string streamId)
+    private static async Task<List<SecurityEventToken>> MintedAsync(
+        InMemoryEventOutbox outbox,
+        string streamId,
+        ITransmitterIdentity? identity = null)
     {
         var signer = new CapturingSigner();
-        var queued = new QueuedEventSigner(signer);
+        var queued = new QueuedEventSigner(
+            signer, identity ?? new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = Issuer }));
         foreach (var item in await outbox.PendingAsync("receiver-a", streamId, null, TestContext.Current.CancellationToken))
         {
             Assert.Equal($"signed.{item.JwtId}", await queued.SignAsync(item, TestContext.Current.CancellationToken));
@@ -118,11 +122,11 @@ public class EventDispatcherTests
     }
 
     /// <summary>
-    /// The issuer is asked when a SET is minted rather than once at construction, so a host whose identity
-    /// answers per request - one issuer per tenant - signs each SET with the issuer serving it.
+    /// An event queued before the transmitter's issuer changed is sent under the issuer the transmitter issues under
+    /// when it is sent, the one the stream's configuration names then (SSF 1.0 Section 4.1.6).
     /// </summary>
     [Fact]
-    public async Task TheIssuer_IsReadWhenTheSetIsMinted()
+    public async Task AnEventQueuedBeforeTheIssuerChanged_IsSentUnderTheIssuerOfThatMoment()
     {
         var ct = TestContext.Current.CancellationToken;
         var store = new InMemoryStreamStore();
@@ -131,11 +135,11 @@ public class EventDispatcherTests
         var outbox = new InMemoryEventOutbox();
         var dispatcher = new EventDispatcher(
             NullLogger<EventDispatcher>.Instance, store, outbox, identity, TestInstruments.Create());
-
-        identity.Issuer = "https://second.example.com";
         Assert.Equal(1, (await dispatcher.DispatchAsync(Descriptor(), ct)).Reached);
 
-        Assert.Equal("https://second.example.com", Assert.Single(await MintedAsync(outbox, "s-1")).Issuer);
+        identity.Issuer = "https://second.example.com";
+
+        Assert.Equal("https://second.example.com", Assert.Single(await MintedAsync(outbox, "s-1", identity)).Issuer);
     }
 
     /// <summary>The outbox item as a version that signed on enqueue read it back from a durable outbox.</summary>

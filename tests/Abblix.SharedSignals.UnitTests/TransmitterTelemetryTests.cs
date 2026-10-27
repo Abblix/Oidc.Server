@@ -294,7 +294,11 @@ public sealed class TransmitterTelemetryTests : IDisposable
         Assert.Equal(1, (await Dispatcher(store, outbox).DispatchAsync(Descriptor(), ct)).Reached);
 
         var receiver = new StubHttpHandler();
-        await SendPendingAsync(receiver, outbox, signer: new QueuedEventSigner(new FailingSigner()));
+        await SendPendingAsync(
+            receiver,
+            outbox,
+            signer: new QueuedEventSigner(
+                new FailingSigner(), new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = Issuer })));
 
         Assert.Empty(receiver.Requests);
 
