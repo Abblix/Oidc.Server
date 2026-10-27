@@ -103,7 +103,7 @@ public class ResourceValidatorsInferenceTests
             {
                 var context = new TokenValidationContext(
                     new TokenRequest { GrantType = GrantTypes.ClientCredentials, Scope = scopes, Resources = resources },
-                    new ClientRequest { ClientId = ClientId });
+                    new ClientRequest { ClientId = ClientId }) { ClientInfo = client };
                 var error = await new TokenResourceValidator(resourceManager)
                     .ValidateAsync(options.Value.ToTenant(), context, TestContext.Current.CancellationToken);
 

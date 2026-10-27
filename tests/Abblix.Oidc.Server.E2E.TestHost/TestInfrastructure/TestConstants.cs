@@ -75,6 +75,10 @@ public static class TestConstants
     /// <c>invalid_scope</c> (RFC 6749 section 3.3).</summary>
     public const string ScopeRequiredClientId = "e2e-scope-required";
 
+    /// <summary>Client of the client_credentials and device authorization grants whose default scope is one only
+    /// <see cref="ApiResource"/> declares, and whose allowed scopes are wider than its default.</summary>
+    public const string DefaultResourceScopeClientId = "e2e-default-resource-scope";
+
     /// <summary>Client restricted to the client_credentials grant that authenticates with HTTP Basic
     /// (<c>client_secret_basic</c>, RFC 6749 section 2.3.1), so a test can see the token endpoint read the
     /// Authorization header.</summary>

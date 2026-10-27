@@ -274,8 +274,8 @@ public class ScopeValidatorTests
 
     /// <summary>
     /// A request of a grant starting from the client alone that names no scope is served with the client's default
-    /// scope, held to the client's allowed scopes as a scope it named would be, and the rest of the pipeline reads the
-    /// request with that scope (RFC 6749 section 3.3).
+    /// scope, not with the wider set the client is allowed, and held to that set as a scope it named would be
+    /// (RFC 6749 section 3.3).
     /// </summary>
     [Theory]
     [InlineData(GrantTypes.ClientCredentials)]
@@ -284,14 +284,28 @@ public class ScopeValidatorTests
     public async Task ARequestNamingNoScope_IsServedWithTheClientsDefault(string grantType)
     {
         var context = ContextOf(
-            grantType, new ClientInfo("test-client") { AllowedScopes = ["read"], DefaultScope = ["read"] });
+            grantType, new ClientInfo("test-client") { AllowedScopes = ["read", "write"], DefaultScope = ["read"] });
         SetupScopeManagerForScopes("read");
 
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
-        Assert.Equal(["read"], context.Request.Scope);
         Assert.Equal("read", Assert.Single(context.Scope).Scope);
+    }
+
+    /// <summary>
+    /// A client with allowed scopes and no default is served a request naming no scope with no scope, as before the
+    /// default existed, rather than with everything it is allowed.
+    /// </summary>
+    [Fact]
+    public async Task ARequestNamingNoScope_OfAClientWithNoDefault_IsServedWithNoScope()
+    {
+        var context = ContextOf(GrantTypes.ClientCredentials, new ClientInfo("test-client") { AllowedScopes = ["read"] });
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
+        Assert.Empty(context.Scope);
     }
 
     /// <summary>
@@ -318,6 +332,8 @@ public class ScopeValidatorTests
     [InlineData(GrantTypes.AuthorizationCode)]
     [InlineData(GrantTypes.RefreshToken)]
     [InlineData(GrantTypes.TokenExchange)]
+    [InlineData(GrantTypes.DeviceAuthorization)]
+    [InlineData(GrantTypes.Ciba)]
     public async Task ARequestOfAGrantCarryingItsScope_IsNotGivenTheDefault(string grantType)
     {
         var context = ContextOf(grantType, new ClientInfo("test-client") { DefaultScope = ["read"], RequireScope = true });
@@ -325,6 +341,6 @@ public class ScopeValidatorTests
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         Assert.Null(error);
-        Assert.Empty(context.Request.Scope);
+        Assert.Empty(context.Scope);
     }
 }

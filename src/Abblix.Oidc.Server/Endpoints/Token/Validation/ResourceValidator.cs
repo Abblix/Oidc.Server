@@ -46,13 +46,14 @@ public class ResourceValidator(IResourceManager resourceManager)
     protected override OidcError? Validate(TenantDefinition tenant, TokenValidationContext context)
     {
         var request = context.Request;
+        var scope = TokenRequestScope.ServedFor(context) ?? [];
 
         // A request naming its target as an audience (RFC 8693 section 2.1) has stated it, so nothing is inferred
         if (request.Resources is not { Length: > 0 } &&
             request.Audiences is not { Length: > 0 } &&
             !AuthorizedEarlier.Contains(request.GrantType))
         {
-            if (!ResourceInference.TryInfer(tenant, request.Scope, out var inferred, out var ambiguity))
+            if (!ResourceInference.TryInfer(tenant, scope, out var inferred, out var ambiguity))
                 return new OidcError(ErrorCodes.InvalidScope, ambiguity);
 
             // A grant the request itself authorizes builds its audience from the request, so the inferred
@@ -66,7 +67,7 @@ public class ResourceValidator(IResourceManager resourceManager)
 
         if (!resourceManager.Validate(tenant, 
                 request.Resources,
-                request.Scope,
+                scope,
                 out var resources,
                 out var errorDescription))
         {

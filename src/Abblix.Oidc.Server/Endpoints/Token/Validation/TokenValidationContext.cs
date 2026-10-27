@@ -19,12 +19,6 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// </summary>
 public record TokenValidationContext(TokenRequest Request, ClientRequest ClientRequest)
 {
-    /// <summary>
-    /// The token request as the validation has it so far: a validator serving the request with something it did not
-    /// name, such as the client's default scope, hands the rest of the pipeline the request as it is served.
-    /// </summary>
-    public TokenRequest Request { get; set; } = Request;
-
     private ClientInfo? _clientInfo;
     private AuthorizedGrant? _authorizedGrant;
 

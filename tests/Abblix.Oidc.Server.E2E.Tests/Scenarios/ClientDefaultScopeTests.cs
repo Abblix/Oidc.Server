@@ -49,6 +49,66 @@ public class ClientDefaultScopeTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(ErrorCodes.InvalidScope, body[ResponseParameters.Error]?.GetValue<string>());
     }
 
+    /// <summary>
+    /// A default made of a scope a resource declares serves a request naming that resource and no scope, as the same
+    /// request naming the scope is served: the token carries the scope.
+    /// </summary>
+    [Fact]
+    public async Task ARequestNamingAResourceAndNoScope_IsIssuedATokenWithTheResourcesDefaultScope()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var form = Form(TestConstants.DefaultResourceScopeClientId);
+        form[TokenRequest.Parameters.Resource] = TestConstants.ApiResource;
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, form);
+
+        var payload = DecodeJwtPayload(tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        Assert.Equal(TestConstants.ApiScope, payload[IanaClaimTypes.Scope]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// The device authorization endpoint serves the same request, a resource and no scope, with the client's default.
+    /// </summary>
+    [Fact]
+    public async Task ADeviceRequestNamingAResourceAndNoScope_IsServedWithTheResourcesDefaultScope()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        using var response = await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.DeviceAuthorizationEndpoint!,
+            new Dictionary<string, string>
+            {
+                [DeviceAuthorizationRequest.Parameters.Resource] = TestConstants.ApiResource,
+                [ClientRequest.Parameters.ClientId] = TestConstants.DefaultResourceScopeClientId,
+                [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            });
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(response.IsSuccessStatusCode, $"device authorization failed: {(int)response.StatusCode} {body}");
+    }
+
+    /// <summary>
+    /// The token endpoint authenticates the client before it reads the resources, since a request naming no scope is
+    /// judged with the client's default: a request failing both is refused as from a client that cannot authenticate.
+    /// </summary>
+    [Fact]
+    public async Task ARequestOfAClientFailingToAuthenticate_IsRefusedForThatBeforeItsResource()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var form = Form(TestConstants.DefaultResourceScopeClientId);
+        form[ClientRequest.Parameters.ClientSecret] = "not-the-secret";
+        form[TokenRequest.Parameters.Resource] = "https://unknown.example.com/";
+
+        using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, form);
+
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(ErrorCodes.InvalidClient, body[ResponseParameters.Error]?.GetValue<string>());
+    }
+
     private static Dictionary<string, string> Form(string clientId) => new()
     {
         [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,

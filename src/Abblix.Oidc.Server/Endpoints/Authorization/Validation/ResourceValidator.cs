@@ -39,10 +39,11 @@ public class ResourceValidator(IResourceManager resourceManager)
     {
         var request = context.Request;
         var requested = request.Resources;
+        var scope = context.ClientInfo.ScopeServedFor(request.Scope) ?? [];
 
         if (requested is not { Length: > 0 })
         {
-            if (!ResourceInference.TryInfer(tenant, request.Scope, out var inferred, out var ambiguity))
+            if (!ResourceInference.TryInfer(tenant, scope, out var inferred, out var ambiguity))
                 return context.Error(ErrorCodes.InvalidScope, ambiguity);
 
             if (inferred is null)
@@ -53,7 +54,7 @@ public class ResourceValidator(IResourceManager resourceManager)
 
         if (!resourceManager.Validate(tenant, 
                 requested,
-                request.Scope,
+                scope,
                 out var resources,
                 out var errorDescription))
         {

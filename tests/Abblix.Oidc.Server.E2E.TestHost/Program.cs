@@ -133,6 +133,14 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
             DefaultScope = [Scopes.Profile],
             RequireScope = true,
         },
+        new ClientInfo(TestConstants.DefaultResourceScopeClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials, GrantTypes.DeviceAuthorization],
+            AllowedScopes = [TestConstants.ApiScope, Scopes.Profile],
+            DefaultScope = [TestConstants.ApiScope],
+        },
         new ClientInfo(TestConstants.ClientSecretBasicClientId)
         {
             ClientSecrets = [secret],
