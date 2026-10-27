@@ -341,6 +341,7 @@ public sealed class SharedSignalsTenantIsolationTests
     [Theory]
     [InlineData(typeof(IStreamStore), typeof(InMemoryStreamStore))]
     [InlineData(typeof(ITransmitterIdentity), typeof(OptionsTransmitterIdentity))]
+    [InlineData(typeof(IEventOutbox), typeof(InMemoryEventOutbox))]
     [InlineData(typeof(IPushDeliverySweep), typeof(PushDeliverySweep))]
     public async Task APartReplacedAfterwards_StopsTheServer(Type service, Type replacement)
         => await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(
@@ -679,6 +680,72 @@ public sealed class SharedSignalsTenantIsolationTests
             await app.Services.GetRequiredService<IPushDeliverySweep>().SweepAsync(ct);
 
         Assert.Equal(Host + Globex, IssuerOf(Assert.Single(receiver.Tokens)));
+    }
+
+    /// <summary>
+    /// The outbox resolved while a tenant is served holds that tenant's queued events under the receiver and stream
+    /// identifiers the tenant knows them by, and none of another tenant's with the same identifiers.
+    /// </summary>
+    [Fact]
+    public async Task TheOutboxResolvedForATenant_HoldsItsOwnEventsAlone()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        ConfiguredStream[] declared =
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, EventsRequested = [MembershipChanged] }];
+        await using var app = await StartAsync(declare: server => server
+            .AddConfiguredStreams("acme", declared)
+            .AddConfiguredStreams("globex", declared));
+        var catalog = app.Services.GetRequiredService<ITenantCatalog>();
+
+        Assert.Equal(1, await DispatchAsync(app, "acme", ct));
+
+        using (TenantScope.Enter((await catalog.FindByIdAsync("acme", ct))!))
+            Assert.Single(await app.Services.GetRequiredService<IEventOutbox>().PendingAsync(ReceiverId, StreamId, null, ct));
+
+        using (TenantScope.Enter((await catalog.FindByIdAsync("globex", ct))!))
+            Assert.Empty(await app.Services.GetRequiredService<IEventOutbox>().PendingAsync(ReceiverId, StreamId, null, ct));
+    }
+
+    /// <summary>
+    /// An outbox the host registers after the transmitter's own is the one every tenant's events are queued in, as it
+    /// is the one the container resolves, each tenant's under the receiver identifier prefixed with its space.
+    /// </summary>
+    [Fact]
+    public async Task AnOutboxTheHostRegistersAfterTheTransmittersOwn_HoldsTheEvents()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var hosts = new InMemoryEventOutbox();
+        ConfiguredStream[] declared =
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, EventsRequested = [MembershipChanged] }];
+        await using var app = await StartAsync(
+            beforeMultiTenancy: services => services.AddSingleton<IEventOutbox>(hosts),
+            declare: server => server.AddConfiguredStreams("acme", declared));
+        var acme = await app.Services.GetRequiredService<ITenantCatalog>().FindByIdAsync("acme", ct);
+
+        Assert.Equal(1, await DispatchAsync(app, "acme", ct));
+
+        Assert.Single(await hosts.PendingAsync(TenantKey.Of(acme!, ReceiverId), StreamId, null, ct));
+    }
+
+    /// <summary>
+    /// An outbox the container builds for the host is disposed with the container, as it would be without tenants.
+    /// </summary>
+    [Fact]
+    public async Task AnOutboxTheContainerBuilds_IsDisposedWithIt()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var built = new DisposableEventOutbox();
+        ConfiguredStream[] declared =
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, EventsRequested = [MembershipChanged] }];
+        var app = await StartAsync(
+            beforeMultiTenancy: services => services.AddSingleton<IEventOutbox>(_ => built),
+            declare: server => server.AddConfiguredStreams("acme", declared));
+        Assert.Equal(1, await DispatchAsync(app, "acme", ct));
+        Assert.False(built.Disposed);
+
+        await app.DisposeAsync();
+
+        Assert.True(built.Disposed);
     }
 
     /// <summary>

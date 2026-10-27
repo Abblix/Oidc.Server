@@ -50,6 +50,12 @@ internal sealed partial class TenantTransmitters(
     internal const string SharedStoreKey = "Abblix.Oidc.Server.SharedSignals.StoreOfEveryTenant";
 
     /// <summary>
+    /// The key the outbox the host registered is kept under, shared by every tenant, while the unkeyed registration
+    /// answers with the outbox of the tenant being served.
+    /// </summary>
+    internal const string SharedOutboxKey = "Abblix.Oidc.Server.SharedSignals.OutboxOfEveryTenant";
+
+    /// <summary>
     /// A creation's transmitter and the issuer it was built for, told apart from another by reference, as its store
     /// of declared streams asks whether it is still the one installed.
     /// </summary>
