@@ -276,7 +276,7 @@ public class RefreshTokenServiceTests
     /// Verifies that when rotating a token (ReusePolicy Rotate), the previous refresh token is marked
     /// <see cref="JsonWebTokenStatus.Used"/> - superseded, not killed. Per the RFC 9700 Section 4.14.2
     /// rotation model, a later replay of a superseded token is the breach signal that
-    /// <see cref="TokenStatusValidatorDecorator"/> escalates into a whole-family revocation. Marking it
+    /// <see cref="TokenStatusCheck"/> escalates into a whole-family revocation. Marking it
     /// Revoked here would lose that signal by collapsing "superseded by rotation" into "explicitly killed".
     /// </summary>
     [Fact]

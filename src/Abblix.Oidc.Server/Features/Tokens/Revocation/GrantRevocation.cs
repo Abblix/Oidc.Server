@@ -33,7 +33,7 @@ public sealed class GrantRevocation(ITokenRegistry tokenRegistry, IClientInfoPro
     /// <summary>
     /// Revokes the grant <paramref name="refreshToken"/> was issued under; a token naming no grant revokes nothing.
     /// </summary>
-    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="tenant">The tenant the token is validated for, whose records are read.</param>
     /// <param name="refreshToken">The payload of a refresh token of the grant.</param>
     public async Task RevokeAsync(TenantDefinition tenant, JsonWebTokenPayload refreshToken)
     {

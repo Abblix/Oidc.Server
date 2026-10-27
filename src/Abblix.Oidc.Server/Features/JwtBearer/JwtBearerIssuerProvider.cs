@@ -74,17 +74,7 @@ public partial class JwtBearerIssuerProvider(
 			return null;
 		}
 
-		return oidcOptions.CurrentValue.JwtBearer.TrustedIssuers.FirstOrDefault(ti =>
-		{
-			if (!Uri.TryCreate(ti.Issuer, UriKind.Absolute, out var trustedUri))
-				return false;
-
-			// RFC 3986: scheme and host are case-insensitive, path is case-sensitive
-			return string.Equals(issuerUri.Scheme, trustedUri.Scheme, StringComparison.OrdinalIgnoreCase) &&
-			       string.Equals(issuerUri.Host, trustedUri.Host, StringComparison.OrdinalIgnoreCase) &&
-			       issuerUri.Port == trustedUri.Port &&
-			       issuerUri.AbsolutePath == trustedUri.AbsolutePath;
-		});
+		return oidcOptions.CurrentValue.JwtBearer.TrustedIssuers.FirstOrDefault(ti => ti.Names(issuerUri));
 	}
 
 	/// <summary>

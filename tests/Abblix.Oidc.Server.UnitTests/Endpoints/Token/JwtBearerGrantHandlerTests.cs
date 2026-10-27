@@ -478,6 +478,31 @@ public class JwtBearerGrantHandlerTests
 	}
 
 	/// <summary>
+	/// An assertion whose issuer is a tenant this server serves is refused even where the issuer provider trusts it, a
+	/// provider of the host's own included, since nothing this server records about its own tokens is read for an
+	/// assertion and a revoked one would pass.
+	/// </summary>
+	[Fact]
+	public async Task AnIssuerThatIsATenantOfThisServer_IsRefused_EvenWhereTrusted()
+	{
+		var (handler, mocks) = CreateHandler();
+		var jwt = CreateValidJwt();
+		ValidationParameters? capturedParams = null;
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.Callback(new Action<string, ValidationParameters>((_, p) => capturedParams = p))
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(jwt));
+		mocks.IssuerProvider.Setup(p => p.IsTrustedIssuerAsync(It.IsAny<Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition>(), It.IsAny<string>())).ReturnsAsync(true);
+		var tokenRequest = new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion };
+
+		await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+		var validateIssuer = capturedParams.NotNull(nameof(capturedParams)).ValidateIssuer.NotNull(nameof(ValidationParameters.ValidateIssuer));
+
+		Assert.False(await validateIssuer(SingleIssuer.Tenant.Issuer.OriginalString));
+		Assert.True(await validateIssuer(Issuer));
+	}
+
+	/// <summary>
 	/// The tolerance an unprofiled client's assertion is validated with is the one the serving tenant's profile
 	/// supplies, so a FAPI 2.0 tenant does not validate it with the looser default of a tenant without a profile.
 	/// </summary>
@@ -706,7 +731,8 @@ public class JwtBearerGrantHandlerTests
 			issuerProvider.Object,
 			requestInfoProvider.Object,
 			sessionIdGenerator.Object,
-			timeProvider);
+			timeProvider,
+			SingleIssuer.LicensedCatalog);
 
 		return (handler, new Mocks(jwtValidator, issuerProvider, requestInfoProvider, sessionIdGenerator, timeProvider));
 	}

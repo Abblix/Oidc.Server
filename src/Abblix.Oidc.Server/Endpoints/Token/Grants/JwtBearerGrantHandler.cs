@@ -51,6 +51,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="requestInfoProvider">Provides information about the current HTTP request for audience validation.</param>
 /// <param name="sessionIdGenerator">Generates unique session identifiers for authentication sessions.</param>
 /// <param name="timeProvider">Provides access to the current time for session timestamps.</param>
+/// <param name="catalog">Tells an issuer this server serves, whose assertions are refused.</param>
 /// <param name="logger">Logger for recording JWT Bearer grant validation events and errors.</param>
 public partial class JwtBearerGrantHandler(
 	ILogger<JwtBearerGrantHandler> logger,
@@ -58,11 +59,14 @@ public partial class JwtBearerGrantHandler(
 	IJwtBearerIssuerProvider issuerProvider,
 	IRequestInfoProvider requestInfoProvider,
 	ISessionIdGenerator sessionIdGenerator,
-	TimeProvider timeProvider) : IAuthorizationGrantHandler
+	TimeProvider timeProvider,
+	ITenantCatalog catalog) : IAuthorizationGrantHandler
 {
-	private readonly JwtBearerAudienceValidator _audienceValidator = new(logger, issuerProvider, requestInfoProvider);
 	private readonly JwtBearerAssertionPolicy _assertionPolicy =
 		new(logger, issuerProvider, timeProvider);
+
+	private readonly JwtBearerAssertionParameters _assertionParameters =
+		new(logger, issuerProvider, requestInfoProvider, catalog);
 
 	/// <summary>
 	/// Specifies the grant type that this handler supports, which is the JWT Bearer grant type.
@@ -132,24 +136,7 @@ public partial class JwtBearerGrantHandler(
 	{
 		var validationResult = await jwtValidator.ValidateAsync(
 			assertion,
-			new()
-			{
-				// RFC 7523 Section 3 item 4 is explicit that the assertion must bound its own
-				// window: "The JWT MUST contain an 'exp' (expiration time) claim that limits the
-				// time window during which the JWT can be used." Without the flag, an assertion
-				// omitting exp would be treated as having nothing to check rather than as invalid.
-				Options = ValidationOptions.Default | ValidationOptions.RequireExpirationTime,
-
-				// RFC 7523 defines no type for an assertion grant, so the assertion policy judges it after
-				// validation, against the deployment's list or, without one, against the other kinds of token
-				TokenTypes = TokenTypePolicy.CheckedByCaller,
-				ValidateIssuer = issuer => ValidateIssuer(tenant, issuer),
-				ValidateAudience = _audienceValidator.ValidateAsync,
-				ResolveIssuerSigningKeys = issuer => issuerProvider.GetSigningKeysAsync(tenant, issuer),
-				// The tolerance belongs to the profile this CLIENT is held to, ceiling included -
-				// RFC 7523 Section 3 names no ceiling of its own.
-				ClockSkew = _assertionPolicy.ResolveClockSkew(tenant, clientInfo),
-			});
+			_assertionParameters.For(tenant, _assertionPolicy.ResolveClockSkew(tenant, clientInfo)));
 
 		return validationResult.MapFailure(failure =>
 		{
@@ -241,36 +228,12 @@ public partial class JwtBearerGrantHandler(
 			clientInfo.ClientId, ctx.Subject, ctx.Issuer, ctx.Jwt.Payload.JwtId ?? "none",
 			ctx.Jwt.Header.KeyId ?? "none", requestInfoProvider.RemoteIpAddress);
 
-		// jwt-bearer is a direct grant: the token request itself IS the authorization, so the
-		// RFC 8707 resource indicators are the authorized audience and are passed to the context
-		// so they reach the issued token's aud claim. The resource validator has already rejected
-		// any unregistered target with invalid_target before this handler runs.
-		var context = new AuthorizationContext(clientInfo.ClientId, scope, null, resources);
-
-		var authSession = new AuthSession(
-			Subject: ctx.Subject,
-			SessionId: sessionIdGenerator.GenerateSessionId(),
-			AuthenticationTime: timeProvider.GetUtcNow(),
-			IdentityProvider: ctx.Issuer);
-
-		return new AuthorizedGrant(authSession, context);
-	}
-
-	/// <summary>
-	/// Validates that the JWT issuer is from a trusted identity provider per RFC 7523 Section 3.
-	/// </summary>
-	/// <param name="tenant">The tenant the grant is requested at.</param>
-	/// <param name="issuer">The issuer claim from the JWT.</param>
-	/// <returns>
-	/// A task that completes with true if the issuer is trusted for JWT Bearer grants; otherwise, false.
-	/// </returns>
-	private async Task<bool> ValidateIssuer(TenantDefinition tenant, string issuer)
-	{
-		var isTrusted = await issuerProvider.IsTrustedIssuerAsync(tenant, issuer);
-		if (!isTrusted)
-		{
-			LogIssuerNotTrusted(issuer);
-		}
-		return isTrusted;
+		return JwtBearerGrants.Of(
+			ctx,
+			clientInfo.ClientId,
+			scope,
+			resources,
+			sessionIdGenerator.GenerateSessionId(),
+			timeProvider.GetUtcNow());
 	}
 }

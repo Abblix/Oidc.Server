@@ -41,6 +41,7 @@ public static class TenantServiceCollectionExtensions
         services.TryAddSingleton<ITenantManager, TenantManager>();
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, TenantCatalogRefreshService>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, TrustedTenantIssuersWarning>());
 
         // A server minting its keys keeps a part of its key ring for each creation of each tenant served, named as
         // TenantKey.PartitionOf names it, so no two tenants share a key and a tenant gained at runtime has one; the

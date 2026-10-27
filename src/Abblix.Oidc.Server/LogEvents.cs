@@ -40,8 +40,8 @@ internal static class LogEvents
     public static class Endpoints
     {
         /// <summary>
-        /// <c>Endpoints/Token/Grants/JwtBearerGrantHandler.cs</c> - RFC 7523
-        /// JWT Bearer grant validation pipeline (sub-range 2000-2019).
+        /// <c>Endpoints/Token/Grants/JwtBearerGrantHandler.cs</c> and the parts it is built from, such as
+        /// <c>JwtBearerIssuerValidator.cs</c> - RFC 7523 JWT Bearer grant validation pipeline (sub-range 2000-2019).
         /// </summary>
         public static class JwtBearer
         {
@@ -64,6 +64,7 @@ internal static class LogEvents
             public const int AudienceFailedPermissive = Base + 15;
             public const int MissingExpiration = Base + 16;
             public const int TokenOfAnotherKind = Base + 17;
+            public const int IssuerIsServedTenant = Base + 18;
         }
 
         /// <summary>
@@ -346,6 +347,7 @@ internal static class LogEvents
 
             public const int ValidationFailed = Base + 1;
             public const int IssuerNotTrusted = Base + 2;
+            public const int IssuerIsServedTenant = Base + 3;
         }
 
         /// <summary>
@@ -1026,6 +1028,18 @@ internal static class LogEvents
             private const int Base = 10740;
 
             public const int RefreshFailed = Base;
+        }
+
+        /// <summary>
+        /// <c>Features/MultiTenancy/TrustedTenantIssuersWarning.cs</c> - a trusted issuer of the JWT bearer grant or
+        /// of software statements that is a tenant this server serves (sub-range 10760-10779).
+        /// </summary>
+        public static class TrustedTenantIssuersWarning
+        {
+            private const int Base = 10760;
+
+            public const int TrustedIssuerIsServedTenant = Base;
+            public const int TrustedIssuersNotChecked = Base + 1;
         }
     }
 

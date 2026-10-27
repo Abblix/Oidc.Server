@@ -39,7 +39,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 /// alike, and stays revoked as long as any token of the grant could still be valid.
 /// </summary>
 /// <remarks>
-/// Driven through the real refresh token service, revocation processor and status decorator over a registry that
+/// Driven through the real refresh token service, revocation processor and status check over a registry that
 /// forgets an entry at its expiry, as the storage behind the real registry does.
 /// </remarks>
 public class GrantRevocationTests
@@ -92,7 +92,7 @@ public class GrantRevocationTests
     private readonly ExpiringRegistry _registry;
     private readonly RefreshTokenService _service;
     private readonly RevocationRequestProcessor _processor;
-    private readonly TokenStatusValidatorDecorator _decorator;
+    private readonly TokenStatusCheck _check;
     private readonly Dictionary<string, JsonWebToken> _issued = new(StringComparer.Ordinal);
     private int _next;
 
@@ -120,13 +120,9 @@ public class GrantRevocationTests
             options, SingleIssuer.LicensedCatalog);
         _processor = new RevocationRequestProcessor(_registry, grants, _clock);
 
-        var inner = new Mock<IJsonWebTokenValidator>();
-        inner
-            .Setup(validator => validator.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
-            .ReturnsAsync((string jwt, ValidationParameters _) => (Result<JsonWebToken, JwtValidationError>)_issued[jwt]);
         var cutoff = new Mock<IRevocationCutoffChecker>();
         cutoff.Setup(checker => checker.CheckAsync(TestTenant.Matched, It.IsAny<JsonWebTokenPayload>())).ReturnsAsync((JwtValidationError?)null);
-        _decorator = new TokenStatusValidatorDecorator(_registry, cutoff.Object, grants, inner.Object, tenantAccessor: SingleIssuer.Accessor);
+        _check = new TokenStatusCheck(_registry, cutoff.Object, grants);
     }
 
     private ClientInfo _client = ClientWith(RefreshTokenReusePolicy.Rotate);
@@ -162,7 +158,7 @@ public class GrantRevocationTests
         new ValidRevocationRequest(new RevocationRequest { Token = token.Payload.JwtId! }, token));
 
     private async Task<bool> AcceptedAsync(JsonWebToken token)
-        => (await _decorator.ValidateAsync(token.Payload.JwtId!, new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller })).TryGetSuccess(out _);
+        => (await _check.CheckAsync(SingleIssuer.Tenant, _issued[token.Payload.JwtId!], ValidationOptions.Default)).TryGetSuccess(out _);
 
     private JsonWebToken AccessTokenOfTheGrant()
     {

@@ -63,7 +63,7 @@ public class RefreshTokenService(
 		}
 
 		// Spending marks the token Used ("superseded"), not Revoked ("killed"). A later presentation of a
-		// superseded token is the replay signal that TokenStatusValidatorDecorator turns into a whole-family
+		// superseded token is the replay signal that the token status check turns into a whole-family
 		// revocation (RFC 9700 section 4.14.2); a presentation losing the race to spend it is the same signal.
 		if (await tokenRegistry.TrySetStatusAsync(tenant, jwtId, JsonWebTokenStatus.Used, expiresAt))
 			return true;

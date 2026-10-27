@@ -20,6 +20,12 @@ partial class SoftwareStatementValidator
     private partial void LogValidationFailed(Sanitized Error);
 
     [LoggerMessage(
+        EventId = LogEvents.DynamicClientManagement.SoftwareStatementValidator.IssuerIsServedTenant,
+        Level = LogLevel.Warning,
+        Message = "Software statement issuer {Issuer} is a tenant this server serves")]
+    private partial void LogIssuerIsServedTenant(Sanitized Issuer);
+
+    [LoggerMessage(
         EventId = LogEvents.DynamicClientManagement.SoftwareStatementValidator.IssuerNotTrusted,
         Level = LogLevel.Debug,
         Message = "Software statement issuer {Issuer} is not trusted")]

@@ -29,7 +29,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 
 /// <summary>
-/// Every <see cref="JsonWebTokenStatus"/> is decided deliberately by the decorator rather than by falling off
+/// Every <see cref="JsonWebTokenStatus"/> is decided deliberately by the check rather than by falling off
 /// the end of its switch.
 /// </summary>
 /// <remarks>
@@ -40,7 +40,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 /// <para>
 /// One table answers both questions below, which is the point. An earlier version kept the coverage list and
 /// the drive-through cases separately, so a status added to the list and forgotten in the switch passed both
-/// - the list agreed with itself and nothing drove the decorator. Here the theory enumerates the enum and
+/// - the list agreed with itself and nothing drove the check. Here the theory enumerates the enum and
 /// looks each member up in the same table the coverage test checks, so a new status fails until somebody
 /// states its outcome, and stating it wrongly fails too.
 /// </para>
@@ -53,7 +53,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 public class TokenStatusCoverageTests
 {
     /// <summary>
-    /// What the decorator answers for each status: an error, or <c>null</c> for a token it lets through.
+    /// What the check answers for each status: an error, or <c>null</c> for a token it lets through.
     /// </summary>
     private static readonly Dictionary<JsonWebTokenStatus, JwtError?> Outcomes = new()
     {
@@ -80,12 +80,12 @@ public class TokenStatusCoverageTests
 
         Assert.True(
             undecided.Length == 0,
-            $"TokenStatusValidatorDecorator does not decide {string.Join(", ", undecided)}. Add the case to its "
+            $"{nameof(TokenStatusCheck)} does not decide {string.Join(", ", undecided)}. Add the case to its "
             + $"switch and the outcome to {nameof(Outcomes)}, saying whether such a token is accepted or refused.");
     }
 
     /// <summary>
-    /// And the outcome is what the table claims, driven through the decorator rather than asserted about it:
+    /// And the outcome is what the table claims, driven through the check rather than asserted about it:
     /// a table agreeing with itself would pass over a switch that had stopped refusing anything.
     /// </summary>
     [Theory]
@@ -94,7 +94,7 @@ public class TokenStatusCoverageTests
     {
         Assert.True(
             Outcomes.TryGetValue(status, out var expected),
-            $"No outcome is listed for {status}, so this theory cannot say what the decorator owes it.");
+            $"No outcome is listed for {status}, so this theory cannot say what the check owes it.");
 
         const string jwtId = "jti_1";
 
@@ -112,8 +112,7 @@ public class TokenStatusCoverageTests
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
             .ReturnsAsync(new ClientInfo("client_1") { SubjectType = SubjectTypes.Public });
 
-        var inner = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
-        Result<JsonWebToken, JwtValidationError> success = new JsonWebToken
+        var token = new JsonWebToken
         {
             Payload =
             {
@@ -124,11 +123,7 @@ public class TokenStatusCoverageTests
                 ExpiresAt = new DateTimeOffset(2024, 1, 15, 12, 0, 0, TimeSpan.Zero),
             }
         };
-        inner
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
-            .ReturnsAsync(success);
-
-        var decorator = new TokenStatusValidatorDecorator(
+        var check = new TokenStatusCheck(
             registry.Object,
             new RevocationCutoffChecker(
                 NullLogger<RevocationCutoffChecker>.Instance,
@@ -136,10 +131,9 @@ public class TokenStatusCoverageTests
                 Options.Create(new OidcOptions()),
                 clients.Object,
                 new FixedSubjectTypeConverter(new SubjectTypeConverter())),
-            new GrantRevocation(registry.Object, clients.Object),
-            inner.Object, tenantAccessor: SingleIssuer.Accessor);
+            new GrantRevocation(registry.Object, clients.Object));
 
-        var result = await decorator.ValidateAsync("opaque.jwt", new ValidationParameters { TokenTypes = TokenTypePolicy.CheckedByCaller });
+        var result = await check.CheckAsync(SingleIssuer.Tenant, token, ValidationOptions.Default);
 
         if (expected is null)
         {
