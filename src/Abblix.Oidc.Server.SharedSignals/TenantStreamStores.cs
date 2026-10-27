@@ -41,13 +41,7 @@ internal sealed class TenantStreamStores(ILogger<TenantStreamStores> logger, ISe
         TenantPartGuard guard)
     {
         var own = new GuardedStreamStore(
-            new ReleaseCheckingStreamStore(
-                logger,
-                new TenantStreamStore(
-                    serviceProvider.GetRequiredKeyedService<IStreamStore>(TenantTransmitters.SharedStoreKey),
-                    tenant),
-                released,
-                TenantKey.PartitionOf(tenant)),
+            new ReleaseCheckingStreamStore(logger, PartOf(tenant), released, TenantKey.PartitionOf(tenant)),
             guard);
 
         if (declared is null)
@@ -61,4 +55,16 @@ internal sealed class TenantStreamStores(ILogger<TenantStreamStores> logger, ISe
 
         return (store, declared.Served, () => !declared.IsInstalled());
     }
+
+    /// <summary>
+    /// <paramref name="tenant"/>'s part of the store the host chose: the store of the tenant's partition where the
+    /// store keeps partitions, so listing the tenant's streams reads the tenant's alone, or else the shared store
+    /// with the tenant's streams kept apart by a prefix on the receiver identifier.
+    /// </summary>
+    private IStreamStore PartOf(TenantDefinition tenant)
+        => serviceProvider.GetRequiredKeyedService<IStreamStore>(TenantTransmitters.SharedStoreKey) switch
+        {
+            IPartitionedStreamStore partitioned => partitioned.Partition(TenantKey.PartitionOf(tenant)),
+            var shared => new TenantStreamStore(shared, tenant),
+        };
 }
