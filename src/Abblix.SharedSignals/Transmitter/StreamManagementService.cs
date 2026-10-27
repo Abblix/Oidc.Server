@@ -556,10 +556,15 @@ public sealed class StreamManagementService(
     /// <summary>
     /// <paramref name="configuration"/> as the receiver is answered it, naming the issuer this transmitter issues its
     /// security event tokens under now, with which SSF 1.0 Section 8.1.1 requires the stream's issuer to be
-    /// identical: a stream created before the transmitter's issuer changed keeps the old one in its stored record.
+    /// identical, and the delivery as it is now: a stream created before the transmitter's issuer changed keeps the
+    /// old issuer, and a poll stream the address under it, in its stored record.
     /// </summary>
     private StreamConfiguration Answered(StreamConfiguration configuration)
-        => configuration with { Issuer = dispatcher.Issuer };
+        => configuration with
+        {
+            Issuer = dispatcher.Issuer,
+            Delivery = _deliveries.AnsweredOf(configuration),
+        };
 
     private static StreamStatus StatusOf(StreamState stream) => new()
     {

@@ -21,6 +21,7 @@ using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -376,8 +377,9 @@ public sealed partial class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
-    /// The configuration of a stream a receiver created before its tenant moved names the issuer the tenant moved to,
-    /// read alone or in the receiver's list, as the events of that stream do.
+    /// The configuration of a poll stream a receiver created before its tenant moved names the issuer the tenant moved
+    /// to and a poll address under it, read alone or in the receiver's list, and an event queued before the move is
+    /// polled there carrying that issuer.
     /// </summary>
     [Fact]
     public async Task AStreamCreatedBeforeAMove_AnswersTheIssuerTheTenantMovedTo()
@@ -388,10 +390,14 @@ public sealed partial class SharedSignalsTenantReleaseTests
         await using var app = await StartAsync(store, new FakeTimeProvider());
         var path = $"/tenants/acme{StreamPath}";
         using var created = await ClientOf(app, "acme").PostAsJsonAsync(
-            path, new CreateStreamRequest { EventsRequested = [MembershipChanged] }, ct);
+            path,
+            new CreateStreamRequest { EventsRequested = [MembershipChanged], Delivery = new PollDeliveryMethod() },
+            ct);
         var before = (await created.Content.ReadFromJsonAsync<StreamConfiguration>(ct))!;
         var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
-        Assert.Equal((await catalog.FindByIdAsync("acme", ct))!.Issuer.OriginalString, before.Issuer);
+        var first = (await catalog.FindByIdAsync("acme", ct))!;
+        Assert.Equal(first.Issuer.OriginalString, before.Issuer);
+        Assert.Equal(1, await DispatchAsync(app, first, ct));
 
         await MoveAsync(store, catalog, TenantAt("acme", MovedHost), ct);
         var moved = (await catalog.FindByIdAsync("acme", ct))!;
@@ -406,6 +412,64 @@ public sealed partial class SharedSignalsTenantReleaseTests
 
         Assert.Equal(moved.Issuer.OriginalString, one!.Issuer);
         Assert.Equal(moved.Issuer.OriginalString, Assert.Single(all!).Issuer);
+        var pollAt = Assert.IsType<Uri>(Assert.IsType<PollDeliveryMethod>(one.Delivery).EndpointUrl);
+        Assert.StartsWith(moved.Issuer.OriginalString, pollAt.OriginalString, StringComparison.Ordinal);
+        Assert.Equal(pollAt, Assert.IsType<PollDeliveryMethod>(Assert.Single(all!).Delivery).EndpointUrl);
+
+        using var polled = await client.PostAsJsonAsync(pollAt, new PollRequest { ReturnImmediately = true }, ct);
+        Assert.Equal(HttpStatusCode.OK, polled.StatusCode);
+        var token = Assert.Single((await polled.Content.ReadFromJsonAsync<PollResponse>(ct))!.Sets.Values);
+        var claims = JsonNode.Parse(Base64Url.DecodeFromChars(token.Split('.')[1]))!;
+        Assert.Equal(moved.Issuer.OriginalString, claims[JwtClaimTypes.Issuer]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A poll stream a tenant declares, served by a tenant catalog of the host's own, whose transmitter is built once
+    /// and kept rather than rebuilt on a move, is answered with a poll address under the issuer the tenant moved to,
+    /// and an event queued before the move is polled there carrying that issuer.
+    /// </summary>
+    [Fact]
+    public async Task ADeclaredPollStreamOfAHostsCatalog_FollowsTheTenantToTheIssuerItMovedTo()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var catalog = new MovingTenantCatalog(TenantAt("acme"));
+        await using var app = await StartAsync(
+            new MemoryTenantStore(),
+            new FakeTimeProvider(),
+            declare: server => server.AddConfiguredStreams(
+                "acme",
+                [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts", EventsRequested = [MembershipChanged] }]),
+            afterServer: services => services.Replace(ServiceDescriptor.Singleton<ITenantCatalog>(catalog)));
+        Assert.Equal(1, await DispatchAsync(app, catalog.Current, ct));
+        using (var before = ClientOf(app, "acme"))
+        {
+            var declared = await before.GetFromJsonAsync<StreamConfiguration>(
+                $"/tenants/acme{StreamPath}?stream_id=alerts", ct);
+            Assert.Equal(catalog.Current.Issuer.OriginalString, declared!.Issuer);
+        }
+
+        // The license names this issuer, and a catalog of the host's own is counted by the issuers it serves
+        catalog.Current = new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = new Uri($"{Host}/tenants/globex"),
+            SigningKeys = catalog.Current.SigningKeys,
+        };
+        var client = app.GetTestClient();
+        client.BaseAddress = new Uri(Host);
+        client.DefaultRequestHeaders.Add("X-Test-Issuer", catalog.Current.Issuer.OriginalString);
+        client.DefaultRequestHeaders.Add("X-Test-Subject", ReceiverId);
+
+        var stream = await client.GetFromJsonAsync<StreamConfiguration>($"/tenants/globex{StreamPath}?stream_id=alerts", ct);
+
+        Assert.Equal(catalog.Current.Issuer.OriginalString, stream!.Issuer);
+        var pollAt = Assert.IsType<Uri>(Assert.IsType<PollDeliveryMethod>(stream.Delivery).EndpointUrl);
+        Assert.StartsWith(catalog.Current.Issuer.OriginalString, pollAt.OriginalString, StringComparison.Ordinal);
+        using var polled = await client.PostAsJsonAsync(pollAt, new PollRequest { ReturnImmediately = true }, ct);
+        Assert.Equal(HttpStatusCode.OK, polled.StatusCode);
+        var token = Assert.Single((await polled.Content.ReadFromJsonAsync<PollResponse>(ct))!.Sets.Values);
+        var claims = JsonNode.Parse(Base64Url.DecodeFromChars(token.Split('.')[1]))!;
+        Assert.Equal(catalog.Current.Issuer.OriginalString, claims[JwtClaimTypes.Issuer]?.GetValue<string>());
     }
 
     /// <summary>

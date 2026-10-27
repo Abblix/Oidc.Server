@@ -19,5 +19,6 @@ namespace Abblix.SharedSignals.UnitTests;
 /// </remarks>
 internal static class TestQueuedEventSigner
 {
-    public static QueuedEventSigner Create(TimeProvider? clock = null) => new(new NamingSigner(), clock);
+    public static QueuedEventSigner Create(TimeProvider? clock = null)
+        => new(new NamingSigner(), new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" }), clock);
 }
