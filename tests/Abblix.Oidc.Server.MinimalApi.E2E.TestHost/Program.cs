@@ -108,6 +108,11 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
         Mint(TestConstants.DPoPOpportunisticClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: false),
         // RFC 9449 section 5 public client: same-key MUST be presented on refresh.
         Mint(TestConstants.DPoPPublicClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: false, isPublic: true),
+        // Its access tokens each name one resource, so a token request names the one of its grant it is for
+        Mint(TestConstants.SingleResourceClientId, secret, redirect, allowlist: null, idTokenRar: false) with
+        {
+            SingleResourceAccessTokens = true,
+        },
 
         // RFC 6749 section 4.4 client_credentials client, used to verify that an RFC 8707 resource
         // indicator reaches the issued access token's aud. This grant has no user-agent leg, so
@@ -177,11 +182,14 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
         },
     ];
 
-    // A single registered RFC 8707 resource indicator. The AS only mints audience-restricted
+    // Two registered RFC 8707 resource indicators, one scope each. The AS only mints audience-restricted
     // tokens for a resource it knows; an unregistered target is rejected with invalid_target.
     tenant.Resources =
     [
         new ResourceDefinition(new Uri(TestConstants.ApiResource), new ScopeDefinition(TestConstants.ApiScope)),
+        new ResourceDefinition(
+            new Uri(TestConstants.OtherApiResource),
+            new ScopeDefinition(TestConstants.OtherApiScope)),
     ];
 
     return;

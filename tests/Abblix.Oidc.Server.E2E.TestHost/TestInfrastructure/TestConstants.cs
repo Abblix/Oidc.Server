@@ -108,6 +108,17 @@ public static class TestConstants
     /// resource too.</summary>
     public const string ApiScope = "orders.read";
 
+    /// <summary>A second registered RFC 8707 resource indicator, so a request can name two resources.</summary>
+    [SuppressMessage("Minor Code Smell", "S1075",
+        Justification = "Canonical test resource indicator shared by resource-indicator scenarios; not a deployment URL.")]
+    public const string OtherApiResource = "https://api.example.com/payments";
+
+    /// <summary>A scope only <see cref="OtherApiResource"/> declares.</summary>
+    public const string OtherApiScope = "payments.read";
+
+    /// <summary>Confidential authorization code client whose access tokens each name one resource.</summary>
+    public const string SingleResourceClientId = "e2e-single-resource";
+
     /// <summary>The single canonical redirect_uri.</summary>
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri shared by every pre-seeded client; not a deployment URL.")]

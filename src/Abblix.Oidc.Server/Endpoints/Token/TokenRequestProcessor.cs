@@ -72,9 +72,8 @@ public class TokenRequestProcessor(
 
 		authContext = OfflineAccessIgnoredUnlessAllowed(clientInfo, authContext);
 
-		// Read before the token service is handed the context: the response advertises what was granted,
-		// and a service that narrowed the context in place would have this answer say what it decided
-		// rather than what the end user did.
+		// Read before the token service is handed the context: whether a refresh token and an ID token are issued
+		// follows what was granted, while the access token may carry less, narrowed to the resources it names.
 		string[] grantedScope = [..authContext.Scope];
 
 		var mayIssueDerivedTokens = MayIssueDerivedTokens(request.Model.GrantType);

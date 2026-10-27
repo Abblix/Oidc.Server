@@ -94,6 +94,15 @@ public record ClientInfo(string ClientId)
     public TimeSpan AccessTokenExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
 
     /// <summary>
+    /// Whether every access token issued to this client names one resource. An authorization may still grant several
+    /// resources, and each token request names the one its access token is for (RFC 8707 section 2.2): a token request
+    /// naming several, or naming none while its grant holds several, is refused with <c>invalid_target</c>. A request
+    /// that has no later token request to name one at, an authorization request returning an access token, a device
+    /// authorization request or a backchannel authentication request, is refused for naming several itself.
+    /// </summary>
+    public bool SingleResourceAccessTokens { get; set; }
+
+    /// <summary>
     /// Configures the behavior and properties of refresh tokens issued to this client,
     /// such as their expiration and renewal policies.
     /// </summary>

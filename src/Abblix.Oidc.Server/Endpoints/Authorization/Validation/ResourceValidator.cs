@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
@@ -59,6 +60,14 @@ public class ResourceValidator(IResourceManager resourceManager)
                 out var errorDescription))
         {
             return context.Error(ErrorCodes.InvalidTarget, errorDescription);
+        }
+
+        // An access token returned here has no token request to name one resource at
+        if (context.ClientInfo.SingleResourceAccessTokens &&
+            resources.Length > 1 &&
+            context.Request.ResponseType.HasFlag(ResponseTypes.Token))
+        {
+            return context.Error(ErrorCodes.InvalidTarget, ResourceRefusals.OnePerAccessToken);
         }
 
         context.Resources = resources;

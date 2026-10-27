@@ -50,6 +50,10 @@ public class ResourceValidator(IResourceManager resourceManager)
             return new OidcError(ErrorCodes.InvalidTarget, errorDescription);
         }
 
+        // The poll for the token spends the request, so it is held to one resource here
+        if (context.ClientInfo.SingleResourceAccessTokens && resources.Length > 1)
+            return new OidcError(ErrorCodes.InvalidTarget, ResourceRefusals.OnePerAccessToken);
+
         context.Resources = resources;
         return null;
     }

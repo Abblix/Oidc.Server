@@ -11,6 +11,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Model;
@@ -142,12 +143,13 @@ public abstract class TestBase(TestFactory factory)
     /// <summary>
     /// Drives /authorize, asserts the AS responded with a 302/303 back to <c>redirect_uri</c>,
     /// and returns the value of the requested callback-URI query parameter. Shared body of
-    /// <see cref="AuthorizeAndExtractCodeAsync"/> and <see cref="AuthorizeAndExtractErrorAsync"/>.
+    /// <see cref="AuthorizeAndExtractCodeAsync"/> and <see cref="AuthorizeAndExtractErrorAsync"/>, and called
+    /// directly by a scenario repeating a parameter, as one naming two resources does.
     /// </summary>
-    private static async Task<string> AuthorizeAndExtractFromCallbackAsync(
+    protected static async Task<string> AuthorizeAndExtractFromCallbackAsync(
         HttpClient client,
         DiscoveryDocument discovery,
-        Dictionary<string, string> queryParams,
+        IEnumerable<KeyValuePair<string, string>> queryParams,
         string paramName)
     {
         var uri = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, queryParams);
@@ -205,6 +207,21 @@ public abstract class TestBase(TestFactory factory)
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
     }
+
+    /// <summary>
+    /// The audiences a token payload names, whether its <c>aud</c> claim is one string or an array.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7519 section 4.1.3: aud is in the general case an array, and a token with one audience MAY carry it as a
+    /// single string.
+    /// </remarks>
+    protected static string[] ExtractAudiences(JsonObject payload) =>
+        payload[JwtClaimTypes.Audience] switch
+        {
+            JsonArray array => array.Select(node => node!.GetValue<string>()).ToArray(),
+            JsonValue value => [value.GetValue<string>()],
+            _ => [],
+        };
 
     /// <summary>
     /// The token response of an authorization code grant the confidential client is given for the registered
