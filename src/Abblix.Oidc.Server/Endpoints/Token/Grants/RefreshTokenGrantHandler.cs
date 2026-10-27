@@ -67,7 +67,9 @@ public class RefreshTokenGrantHandler(
 		// Validate the refresh token's JWT structure and authenticity using the JWT validator service.
 		var jwtValidationResult = await jwtValidator.ValidateAsync(
 			tenant,
-			request.RefreshToken, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
+			request.RefreshToken,
+			TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
+			RefreshTokenValidation.Options);
 
 		if (jwtValidationResult.TryGetFailure(out var error))
 		{

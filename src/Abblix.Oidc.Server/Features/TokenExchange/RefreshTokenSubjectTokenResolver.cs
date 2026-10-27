@@ -52,7 +52,11 @@ public sealed class RefreshTokenSubjectTokenResolver(
         Uri tokenType,
         CancellationToken cancellationToken)
     {
-        var validation = await jwtValidator.ValidateAsync(tenant, subjectToken, TokenTypePolicy.Exactly(JwtTypes.RefreshToken));
+        var validation = await jwtValidator.ValidateAsync(
+            tenant,
+            subjectToken,
+            TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
+            RefreshTokenValidation.Options);
         if (!validation.TryGetSuccess(out var jwt))
         {
             return new OidcError(
