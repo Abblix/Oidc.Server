@@ -406,19 +406,20 @@ public class IdentityTokenServiceTests
 
     /// <summary>
     /// Verifies that when includeUserClaims is false, the service filters out
-    /// profile, email, and address scopes per OIDC spec Section 5.4.
+    /// profile, email, address and phone scopes per OIDC spec Section 5.4.
     /// </summary>
     [Fact]
     public async Task CreateIdentityToken_WhenNotIncludingUserClaims_ShouldFilterScopes()
     {
         // Arrange
         var authSession = CreateAuthSession();
-        var scopes = new[] { Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Address, "custom_scope" };
+        var scopes = new[]
+            { Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Address, Scopes.Phone, "custom_scope" };
         var authContext = new AuthorizationContext(ClientId, scopes, null);
         var clientInfo = CreateClientInfo();
         var userClaims = CreateUserClaims();
 
-        // Expect only openid and custom_scope (profile, email, address filtered out)
+        // Expect only openid and custom_scope (profile, email, address, phone filtered out)
         var expectedScopes = new[] { Scopes.OpenId, "custom_scope" };
 
         _userClaimsProvider
@@ -457,7 +458,7 @@ public class IdentityTokenServiceTests
     {
         // Arrange
         var authSession = CreateAuthSession();
-        var scopes = new[] { Scopes.OpenId, Scopes.Profile, Scopes.Email };
+        var scopes = new[] { Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Phone };
         var authContext = new AuthorizationContext(ClientId, scopes, null);
         var clientInfo = CreateClientInfo();
         clientInfo.ForceUserClaimsInIdentityToken = true;
