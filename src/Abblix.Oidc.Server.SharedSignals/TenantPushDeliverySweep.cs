@@ -14,18 +14,19 @@ using Microsoft.Extensions.Logging;
 namespace Abblix.Oidc.Server.SharedSignals;
 
 /// <summary>
-/// Runs the push delivery pass once for each tenant the server serves, inside that tenant.
+/// Runs the push delivery pass of each tenant the server serves, through that tenant's own transmitter.
 /// </summary>
 /// <remarks>
-/// The pass runs on a timer, outside any request, so nothing names a tenant for it; without this it would find
-/// no streams, since every stream belongs to one. One tenant's failure is logged and the others still run.
+/// The pass runs on a timer, outside any request, so each tenant's pass runs inside that tenant's scope: its
+/// transmitter refuses to serve while any other tenant is, and a sweep a host sets off from one tenant's request
+/// still runs every tenant's pass. One tenant's failure is logged and the others still run.
 /// </remarks>
 /// <param name="logger">Records a tenant whose pass failed.</param>
-/// <param name="inner">The pass over one tenant's streams.</param>
+/// <param name="transmitters">The transmitter of each tenant, whose pass runs over that tenant's streams.</param>
 /// <param name="catalog">Names the tenants served now.</param>
-public sealed partial class TenantPushDeliverySweep(
+internal sealed partial class TenantPushDeliverySweep(
     ILogger<TenantPushDeliverySweep> logger,
-    IPushDeliverySweep inner,
+    TenantTransmitters transmitters,
     StoreTenantCatalog catalog) : IPushDeliverySweep
 {
     /// <inheritdoc />
@@ -33,10 +34,10 @@ public sealed partial class TenantPushDeliverySweep(
     {
         foreach (var tenant in catalog.ServedTenants.ToArray())
         {
-            using var scope = TenantScope.Enter(tenant);
             try
             {
-                await inner.SweepAsync(cancellationToken);
+                using var scope = TenantScope.Enter(tenant);
+                await transmitters.For(tenant).Sweep.SweepAsync(cancellationToken);
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {

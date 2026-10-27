@@ -16,7 +16,7 @@ namespace Abblix.SharedSignals.Transmitter;
 /// The address has the same two sources as the poll endpoint's, in the same order, and for the same
 /// reason - see <see cref="PollEndpointLocator"/>.
 /// <list type="bullet">
-///   <item><see cref="ServedAt"/> is what the mapping declared, because only the code that maps the
+///   <item><see cref="TransmitterRoutes.ServeManagementAt"/> is what the mapping declared, because only the code that maps the
 ///   routes knows the prefix they went on, and what it declares is the ADVERTISED prefix, so a proxy
 ///   that rewrites paths is covered.</item>
 ///   <item><see cref="SharedSignalsTransmitterOptions.ManagementEndpointFactory"/> is where a host says
@@ -38,9 +38,14 @@ namespace Abblix.SharedSignals.Transmitter;
 /// </remarks>
 /// <param name="options">The deployment's one-time decisions, holding the host's own source if it named
 /// one.</param>
-public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions options)
+/// <param name="routes">Where the routes were mapped, declared once by the code that mapped them.</param>
+/// <param name="identity">The transmitter whose management API this locates, whose address the mapped routes
+/// are reached under.</param>
+public sealed class ManagementEndpointLocator(
+    SharedSignalsTransmitterOptions options,
+    TransmitterRoutes routes,
+    ITransmitterIdentity identity)
 {
-    private Func<string, Uri>? _served;
 
     /// <summary>
     /// A source that hangs the management routes under one base address, for the common gateway whose
@@ -119,38 +124,11 @@ public sealed class ManagementEndpointLocator(SharedSignalsTransmitterOptions op
     }
 
     /// <summary>
-    /// Declares where the management routes are mapped, so the configuration document names the
-    /// addresses that lead back to them.
-    /// </summary>
-    /// <remarks>
-    /// Called by the code that maps the routes, at startup and before any document can be served. It is
-    /// not the host's call to make: a host naming its own addresses uses
-    /// <see cref="SharedSignalsTransmitterOptions.ManagementEndpointFactory"/>, which this never
-    /// overrides.
-    /// </remarks>
-    /// <param name="managementEndpointOf">Derives the advertised address of one management route.</param>
-    /// <exception cref="InvalidOperationException">The management API was already mapped. A transmitter
-    /// serves one, and a document served before a second mapping would name the first - so which
-    /// addresses a receiver cached would depend on when each call ran.</exception>
-    public void ServedAt(Func<string, Uri> managementEndpointOf)
-    {
-        ArgumentNullException.ThrowIfNull(managementEndpointOf);
-
-        if (_served is not null)
-        {
-            throw new InvalidOperationException(
-                "The Stream Management API is already mapped. A transmitter serves one, and its addresses "
-                + "go into the configuration document receivers cache.");
-        }
-
-        _served = managementEndpointOf;
-    }
-
-    /// <summary>
     /// The advertised address of one management route, or null where this transmitter offers no
     /// management API.
     /// </summary>
     /// <param name="route">The route as the specification names it, relative to wherever the API hangs.
     /// </param>
-    public Uri? Of(string route) => (options.ManagementEndpointFactory ?? _served)?.Invoke(route);
+    public Uri? Of(string route)
+        => options.ManagementEndpointFactory is { } hostsOwn ? hostsOwn(route) : routes.Management?.Invoke(identity, route);
 }

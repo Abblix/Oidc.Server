@@ -38,9 +38,11 @@ namespace Abblix.SharedSignals.Redis;
 /// TLS, authentication, and a database of its own.</para>
 /// </remarks>
 /// <param name="connection">The Redis connection; opening and configuring it is the host's.</param>
-/// <param name="identity">The transmitter's identity, read for the issuer the key is scoped by each time it is
-/// used.</param>
-public sealed class RedisStreamStore(IConnectionMultiplexer connection, ITransmitterIdentity identity)
+/// <param name="options">The transmitter's options, whose issuer the key is scoped by. It is the configured issuer
+/// rather than the one a request is answered as, so a deployment answering as many issuers keeps one registry, which
+/// keeps its tenants apart by the receiver identifiers it is handed, and a tenant moving to another issuer keeps its
+/// streams.</param>
+public sealed class RedisStreamStore(IConnectionMultiplexer connection, SharedSignalsTransmitterOptions options)
     : IStreamStore
 {
     /// <summary>
@@ -56,7 +58,7 @@ public sealed class RedisStreamStore(IConnectionMultiplexer connection, ITransmi
 
     private RedisKey HashKey
         => $"{nameof(Abblix)}.{nameof(SharedSignals)}:{nameof(RedisStreamStore)}:"
-           + Uri.EscapeDataString(identity.Issuer);
+           + Uri.EscapeDataString(options.Issuer);
 
     private readonly IDatabase _database = connection.GetDatabase();
 

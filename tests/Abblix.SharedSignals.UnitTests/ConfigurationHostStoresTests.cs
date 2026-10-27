@@ -41,7 +41,8 @@ public class ConfigurationHostStoresTests
     /// <summary>A transmitter offering no poll delivery at all: no factory, and no mapped route.</summary>
     private static SharedSignalsTransmitterOptions BareOptions => new() { Issuer = "https://tr.example.com" };
 
-    private static PollEndpointLocator PollEndpoints => new(TransmitterOptions);
+    private static PollEndpointLocator PollEndpoints
+        => new(TransmitterOptions, new TransmitterRoutes(), new OptionsTransmitterIdentity(TransmitterOptions));
 
     private static ITransmitterIdentity Identity => new OptionsTransmitterIdentity(TransmitterOptions);
 
@@ -245,7 +246,7 @@ public class ConfigurationHostStoresTests
         var undeliverable = Assert.Throws<InvalidOperationException>(() => new ConfigurationStreamStore(
             BareOptions,
             new OptionsTransmitterIdentity(BareOptions),
-            new PollEndpointLocator(BareOptions),
+            new PollEndpointLocator(BareOptions, new TransmitterRoutes(), new OptionsTransmitterIdentity(BareOptions)),
             [new ConfiguredStream { ReceiverId = "tenant", StreamId = "s-1" }],
             new InMemoryStreamStore()));
         Assert.Contains(nameof(ConfiguredStream.PushEndpointUrl), undeliverable.Message);

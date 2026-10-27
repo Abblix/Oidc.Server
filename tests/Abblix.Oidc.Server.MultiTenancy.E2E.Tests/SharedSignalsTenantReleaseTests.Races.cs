@@ -6,18 +6,22 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Buffers.Text;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.SharedSignals;
+using Abblix.SecurityEvents.Delivery;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 
@@ -29,6 +33,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
 
     // The event a stream written after its tenant's release is logged under when its writer cannot delete it
     private const int ReleasedStreamNotDeleted = 10802;
+    private const int WriteSentAgain = 10803;
 
     // How long a held write waits for the test to let it through, so a regression fails rather than hangs the run
     private static readonly TimeSpan HeldFor = TimeSpan.FromSeconds(30);
@@ -412,9 +417,9 @@ public sealed partial class SharedSignalsTenantReleaseTests
         var store = new MemoryTenantStore();
         await store.AddAsync(TenantAt("acme"), ct);
         var streams = HeldStore.HoldingTheFirstCreates(2);
-        var tenants = new SignallingTenantAccessor();
+        var logs = new SignallingLoggerProvider();
         await using var app = await StartAsync(
-            store, new FakeTimeProvider(), streams.Store, declare: DeclareAStream, tenants: tenants);
+            store, new FakeTimeProvider(), streams.Store, logs, declare: DeclareAStream);
         var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
 
         var deleting = ClientOf(app, "acme").DeleteAsync($"/tenants/acme{StreamPath}?stream_id=alerts", ct);
@@ -425,7 +430,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
         await streams.Entered(1).WaitAsync(HeldFor, ct);
 
         // The deletion, refused by the first store, picks the store it is sent to next: the replacement
-        var retried = tenants.NextRead();
+        var retried = logs.Next(WriteSentAgain);
         streams.Apply(0);
         await retried.WaitAsync(HeldFor, ct);
 
@@ -484,6 +489,36 @@ public sealed partial class SharedSignalsTenantReleaseTests
         var moved = (await catalog.FindByIdAsync("acme", ct))!;
 
         Assert.StartsWith(moved.Issuer.OriginalString, await PolledAtAsync(app, moved, ct), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A tenant whose key the store rotates at the same issuer signs its events with the new key from then on, an
+    /// event queued before the rotation included.
+    /// </summary>
+    [Fact]
+    public async Task AKeyRotatedInTheStore_SignsTheEventsPolledAfterIt()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new MemoryTenantStore();
+        await store.AddAsync(TenantAt("acme"), ct);
+        await using var app = await StartAsync(store, new FakeTimeProvider());
+        var client = ClientOf(app, "acme");
+        using var created = await client.PostAsJsonAsync(
+            $"/tenants/acme{StreamPath}",
+            new CreateStreamRequest { EventsRequested = [MembershipChanged], Delivery = new PollDeliveryMethod() },
+            ct);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
+        Assert.Equal(1, await DispatchAsync(app, (await catalog.FindByIdAsync("acme", ct))!, ct));
+
+        await MoveAsync(store, catalog, TenantAt("acme"), ct);
+        var rotated = (await catalog.FindByIdAsync("acme", ct))!;
+
+        using var polled = await client.PostAsJsonAsync(
+            await PolledAtAsync(app, rotated, ct), new PollRequest { ReturnImmediately = true }, ct);
+        var token = Assert.Single((await polled.Content.ReadFromJsonAsync<PollResponse>(ct))!.Sets.Values);
+        var header = JsonNode.Parse(Base64Url.DecodeFromChars(token.Split('.')[0]))!;
+        Assert.Equal(rotated.SigningKeys.Single().KeyId, header[JwtClaimTypes.KeyId]?.GetValue<string>());
     }
 
     private static async Task<string> PolledAtAsync(WebApplication app, TenantDefinition tenant, CancellationToken ct)
@@ -671,34 +706,54 @@ public sealed partial class SharedSignalsTenantReleaseTests
     }
 
     /// <summary>
-    /// The tenant of the request as the server reads it, telling the test when it is next read: every choice of the
-    /// store a tenant is served reads it.
+    /// Tells the test when the server next records an entry of one event id, as a write sent again through the
+    /// transmitter the tenant is served now, which is recorded once that transmitter is chosen.
     /// </summary>
-    private sealed class SignallingTenantAccessor : ITenantAccessor
+    private sealed class SignallingLoggerProvider : ILoggerProvider
     {
-        private ITenantAccessor? _inner;
-        private TaskCompletionSource? _next;
+        private readonly Lock _gate = new();
+        private (int EventId, TaskCompletionSource Signal)? _next;
 
-        public TenantContext? Current
+        public ILogger CreateLogger(string categoryName) => new Signalling(this);
+
+        public void Dispose()
         {
-            get
+            // Nothing is held
+        }
+
+        public Task Next(int eventId)
+        {
+            var signal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            lock (_gate)
+                _next = (eventId, signal);
+            return signal.Task;
+        }
+
+        private void Recorded(int eventId)
+        {
+            TaskCompletionSource? signal = null;
+            lock (_gate)
             {
-                Interlocked.Exchange(ref _next, null)?.TrySetResult();
-                return _inner?.Current;
+                if (_next is { } next && next.EventId == eventId)
+                {
+                    signal = next.Signal;
+                    _next = null;
+                }
             }
+
+            signal?.TrySetResult();
         }
 
-        public ITenantAccessor Over(ITenantAccessor inner)
+        private sealed class Signalling(SignallingLoggerProvider provider) : ILogger
         {
-            _inner = inner;
-            return this;
-        }
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-        public Task NextRead()
-        {
-            var next = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            Volatile.Write(ref _next, next);
-            return next.Task;
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter)
+                => provider.Recorded(eventId.Id);
         }
     }
 }

@@ -32,6 +32,10 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// answers with no tenant the server's catalog does not serve, or every request to that tenant needing a key fails,
 /// the key ring keeping no partition for it.
 /// </para>
+/// <para>
+/// The server uses the definition it is handed, so a catalog of the host's own answers with the definition in force,
+/// and the host enters a tenant scope with the definition in force too.
+/// </para>
 /// </remarks>
 public interface ITenantCatalog
 {

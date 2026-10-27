@@ -18,7 +18,7 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// <remarks>
 /// A refused write answers as one the store did not take: the store of declared streams retries it and gives up,
 /// a receiver's create or delete that went through the replaced store is sent again through the store the tenant
-/// is served then (<see cref="TenantConfiguredStreamStore"/>), and a receiver's update is read again and retried
+/// is served then (<see cref="TenantTransmitters"/>), and a receiver's update is read again and retried
 /// by the stream management.
 /// </remarks>
 /// <param name="inner">The tenant's part of the store.</param>

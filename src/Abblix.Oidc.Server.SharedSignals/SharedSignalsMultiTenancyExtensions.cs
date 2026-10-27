@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.SecurityEvents.Abstractions;
+using Abblix.SharedSignals.Telemetry;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -24,8 +25,9 @@ namespace Abblix.Oidc.Server.SharedSignals;
 public static class SharedSignalsMultiTenancyExtensions
 {
     /// <summary>
-    /// Keeps each tenant's streams apart, has the transmitter answer as the tenant serving the request and sign
-    /// with that tenant's keys, runs push delivery for each tenant served, and deletes a released tenant's streams.
+    /// Builds a transmitter for each tenant, bound to that tenant's issuer, part of the stores and signing keys,
+    /// answers each request with the transmitter of the tenant serving it, runs push delivery for each tenant served,
+    /// and deletes a released tenant's streams.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -33,8 +35,9 @@ public static class SharedSignalsMultiTenancyExtensions
     /// startup refuses a server in which a later registration replaced a part this kept apart. Call it once.
     /// </para>
     /// <para>
-    /// The queued events and the delivery claims need no wrapping: both are addressed by the stream, whose
-    /// identifier the transmitter mints unique, and reached only through a stream found in the tenant's own store.
+    /// The stores, the outbox and the delivery lease the host chose hold every tenant's data, and each tenant's
+    /// transmitter keeps its part of them apart by the tenant's space: a stream identifier alone does not, since a
+    /// stream a tenant declares carries the identifier its operator chose, and two tenants may choose the same one.
     /// </para>
     /// </remarks>
     /// <param name="builder">What registering the server returned.</param>
@@ -58,18 +61,51 @@ public static class SharedSignalsMultiTenancyExtensions
                 + $"AddSharedSignalsTransmitter() before {nameof(AddSharedSignals)}().");
         }
 
-        services.Decorate<IStreamStore, TenantStreamStore>();
+        // The store the host registered holds every tenant's streams, so it is kept under a key of its own, and
+        // each tenant's transmitter reaches its part of it
+        services.DecorateKeyed<IStreamStore, SharedStreamStore>(TenantTransmitters.SharedStoreKey);
         DeclaredStreams(services);
-        services.Decorate<IStreamStore, TenantConfiguredStreamStore>();
-        services.Decorate<IPushDeliverySweep, TenantPushDeliverySweep>();
-        services.Replace(ServiceDescriptor.Singleton<ITransmitterIdentity, TenantTransmitterIdentity>());
+        services.TryAddSingleton<TenantStreamStores>();
+        services.TryAddSingleton<TransmitterAssembler>();
+        services.TryAddSingleton<TenantTransmitterBuilder>();
+        services.TryAddSingleton<TenantTransmitters>();
+
+        // Each part a request, a host's job or an endpoint asks for is the part of the transmitter of the tenant served
+        // when it asks, resolved anew each time; one held across requests refuses once used while another tenant is
+        // served, rather than serving that tenant's events as its own.
+        // Where no tenant is served, it is the part of a transmitter that refuses once it reaches a tenant's data:
+        // an endpoint's parts are resolved before its filters run, and the filter answering 404 must get to run
+        services.Replace(ServiceDescriptor.Transient(provider => Served(provider).Streams));
+        services.Replace(ServiceDescriptor.Transient(provider => Served(provider).Identity));
+        services.Replace(ServiceDescriptor.Transient(provider => Served(provider).Dispatcher));
+        services.Replace(ServiceDescriptor.Transient(provider => Served(provider).Management));
+        services.Replace(ServiceDescriptor.Transient(provider => Served(provider).PollHandler));
+        services.Replace(ServiceDescriptor.Transient(provider => Served(provider).Signer));
+        services.Replace(ServiceDescriptor.Transient(provider => Served(provider).Instruments));
+        services.Replace(ServiceDescriptor.Transient(provider => Served(provider).PollEndpoints));
+        services.Replace(ServiceDescriptor.Transient(provider => Served(provider).ManagementEndpoints));
+
+        // The signer a host resolves reads the tenant served at each signing, so one kept across requests signs as
+        // the right tenant; each tenant's transmitter signs through its own
         services.Replace(ServiceDescriptor.Singleton<ISecurityEventTokenSigner, TenantSecurityEventTokenSigner>());
+        services.Replace(ServiceDescriptor.Singleton<IPushDeliverySweep, TenantPushDeliverySweep>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantClosing, TenantStreamsClosing>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, TenantSharedSignalsStartupCheck>());
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ServerWideStreamsValidator>());
 
         return builder;
+    }
+
+    /// <summary>
+    /// The transmitter of the tenant the request or scope is served at, or the one serving no tenant.
+    /// </summary>
+    private static TenantTransmitter Served(IServiceProvider provider)
+    {
+        var transmitters = provider.GetRequiredService<TenantTransmitters>();
+        return provider.GetRequiredService<ITenantAccessor>().Current is { } served
+            ? transmitters.Serving(served.Tenant)
+            : transmitters.None;
     }
 
     /// <summary>

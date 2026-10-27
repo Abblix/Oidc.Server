@@ -280,11 +280,11 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
         // advertises, and from the ADVERTISED prefix, because that is the one the outside world uses.
         // How an identifier is carried into that address, and why one that cannot be carried is refused
         // here rather than met by a receiver later, is on PollEndpointAddresses.PollEndpointOf.
-        var identity = endpoints.ServiceProvider.GetRequiredService<ITransmitterIdentity>();
         var advertisedPrefix = PollEndpointAddresses.AdvertisedPrefixOf(endpointOptions);
         var pollLogger = endpoints.ServiceProvider.GetRequiredService<ILoggerFactory>()
             .CreateLogger(typeof(SharedSignalsEndpointRouteBuilderExtensions));
-        endpoints.ServiceProvider.GetRequiredService<PollEndpointLocator>().ServedAt(streamId =>
+        var routes = endpoints.ServiceProvider.GetRequiredService<TransmitterRoutes>();
+        routes.ServePollAt((identity, streamId) =>
         {
             var (authority, prefix) = PollEndpointAddresses.ReachedAt(identity, advertisedPrefix);
             return PollEndpointAddresses.PollEndpointOf(pollLogger, authority, prefix, streamId);
@@ -293,7 +293,7 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
         // And the same declaration for the management routes just mapped, which is what lets the
         // configuration document name them. Without it the document has no way to tell this
         // deployment from one that maps the document alone and serves no management API.
-        endpoints.ServiceProvider.GetRequiredService<ManagementEndpointLocator>().ServedAt(route =>
+        routes.ServeManagementAt((identity, route) =>
         {
             var (authority, prefix) = PollEndpointAddresses.ReachedAt(identity, advertisedPrefix);
             return new Uri(authority, prefix.Add(route).Value!);

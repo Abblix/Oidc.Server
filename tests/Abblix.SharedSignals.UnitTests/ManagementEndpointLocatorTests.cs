@@ -28,7 +28,7 @@ public sealed class ManagementEndpointLocatorTests
     [Fact]
     public void WithNeitherSource_ThereIsNoAddress()
     {
-        var locator = new ManagementEndpointLocator(BareOptions());
+        var locator = LocatorOf(BareOptions());
 
         Assert.Null(locator.Of(Route));
     }
@@ -36,8 +36,8 @@ public sealed class ManagementEndpointLocatorTests
     [Fact]
     public void WithMappedRoutes_TheMappedAddressIsUsed()
     {
-        var locator = new ManagementEndpointLocator(BareOptions());
-        locator.ServedAt(route => new Uri($"{Issuer}/ssf{route}"));
+        var locator = LocatorOf(BareOptions());
+        _routes.ServeManagementAt((_, route) => new Uri($"{Issuer}/ssf{route}"));
 
         Assert.Equal(new Uri($"{Issuer}/ssf/stream"), locator.Of(Route));
     }
@@ -49,7 +49,7 @@ public sealed class ManagementEndpointLocatorTests
     [Fact]
     public void WithAHostsOwnSourceAndNoMapping_TheAddressIsStillNamed()
     {
-        var locator = new ManagementEndpointLocator(BareOptions() with
+        var locator = LocatorOf(BareOptions() with
         {
             ManagementEndpointFactory = route => new Uri($"https://gateway.example{route}"),
         });
@@ -64,11 +64,11 @@ public sealed class ManagementEndpointLocatorTests
     [Fact]
     public void WithBothSources_TheHostsSourceWins()
     {
-        var locator = new ManagementEndpointLocator(BareOptions() with
+        var locator = LocatorOf(BareOptions() with
         {
             ManagementEndpointFactory = route => new Uri($"https://gateway.example{route}"),
         });
-        locator.ServedAt(route => new Uri($"{Issuer}/ssf{route}"));
+        _routes.ServeManagementAt((_, route) => new Uri($"{Issuer}/ssf{route}"));
 
         Assert.Equal(new Uri("https://gateway.example/stream"), locator.Of(Route));
     }
@@ -80,11 +80,10 @@ public sealed class ManagementEndpointLocatorTests
     [Fact]
     public void ASecondMapping_IsRefused()
     {
-        var locator = new ManagementEndpointLocator(BareOptions());
-        locator.ServedAt(route => new Uri($"{Issuer}/ssf{route}"));
+        _routes.ServeManagementAt((_, route) => new Uri($"{Issuer}/ssf{route}"));
 
         Assert.Throws<InvalidOperationException>(
-            () => locator.ServedAt(route => new Uri($"{Issuer}/other{route}")));
+            () => _routes.ServeManagementAt((_, route) => new Uri($"{Issuer}/other{route}")));
     }
 
     /// <summary>
@@ -164,6 +163,11 @@ public sealed class ManagementEndpointLocatorTests
     {
         Assert.Throws<ArgumentException>(() => ManagementEndpointLocator.Under(new Uri(@base, kind)));
     }
+
+    private readonly TransmitterRoutes _routes = new();
+
+    private ManagementEndpointLocator LocatorOf(SharedSignalsTransmitterOptions options)
+        => new(options, _routes, new OptionsTransmitterIdentity(options));
 
     private static SharedSignalsTransmitterOptions BareOptions() => new() { Issuer = Issuer };
 }

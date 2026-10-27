@@ -135,11 +135,11 @@ public partial class MultiTenancyRegistrationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void AReceiver_OrTheTenantsSigner_Starts(bool tenantSigner)
+    public async Task AReceiver_OrTheTenantsSigner_Starts(bool tenantSigner)
     {
         using var provider = SigningEvents(null, tenantSigner ? UseTenantSigner : null);
 
-        Assert.NotNull(provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Null(await Record.ExceptionAsync(() => HostStartup.StartingAsync(provider)));
     }
 
     /// <summary>

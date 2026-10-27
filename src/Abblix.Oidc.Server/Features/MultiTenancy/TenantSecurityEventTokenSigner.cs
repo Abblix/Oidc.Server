@@ -38,18 +38,34 @@ public sealed class TenantSecurityEventTokenSigner(
 {
     /// <inheritdoc />
     public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
+        => SignAsync(tenantAccessor.CurrentTenant(), token, cancellationToken);
+
+    /// <summary>
+    /// Signs <paramref name="token"/> with a signing key of <paramref name="tenant"/>, as the Shared Signals
+    /// transmitter built for that tenant does.
+    /// </summary>
+    /// <param name="tenant">The tenant whose key signs the token.</param>
+    /// <param name="token">The token to sign.</param>
+    /// <param name="cancellationToken">Cancels reading the tenant's keys.</param>
+    internal Task<string> SignAsync(
+        TenantDefinition tenant,
+        SecurityEventToken token,
+        CancellationToken cancellationToken)
     {
         var allowed = options.Value.AllowedSigningAlgorithms ?? [.. SecurityEventsOptions.DefaultSigningAlgorithms];
-        return new DefaultSecurityEventTokenSigner(creator, ct => SigningKeyAsync(allowed, ct), allowed)
+        return new DefaultSecurityEventTokenSigner(creator, ct => SigningKeyAsync(tenant, allowed, ct), allowed)
             .SignAsync(token, cancellationToken);
     }
 
     /// <exception cref="InvalidOperationException">The tenant has no signing key of an allowed algorithm.</exception>
-    private async Task<JsonWebKey> SigningKeyAsync(string[] allowed, CancellationToken cancellationToken)
-        => await keys.GetSigningKeys(tenantAccessor.CurrentTenant(), true).FirstOrDefaultAsync(
+    private async Task<JsonWebKey> SigningKeyAsync(
+        TenantDefinition tenant,
+        string[] allowed,
+        CancellationToken cancellationToken)
+        => await keys.GetSigningKeys(tenant, true).FirstOrDefaultAsync(
                key => key.Algorithm is { } algorithm && allowed.Contains(algorithm, StringComparer.Ordinal),
                cancellationToken)
            ?? throw new InvalidOperationException(
-               "A security event token cannot be signed: the tenant serving the request has no signing key of " +
+               $"A security event token cannot be signed: the tenant '{tenant.Id}' has no signing key of " +
                $"an allowed algorithm ({string.Join(", ", allowed)}).");
 }

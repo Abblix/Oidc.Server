@@ -32,5 +32,9 @@ internal static class LogEvents
 
         /// <summary>A stream written after its tenant was released could not be deleted by its writer.</summary>
         public const int ReleasedStreamNotDeleted = Base + 2;
+
+        /// <summary>A write to a tenant's streams, refused by the transmitter it was served before it moved, is sent
+        /// again through the one it is served now.</summary>
+        public const int WriteSentAgain = Base + 3;
     }
 }

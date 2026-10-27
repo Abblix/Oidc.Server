@@ -22,6 +22,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.MinimalApi;
 using Abblix.Oidc.Server.SharedSignals;
+using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Infrastructure;
@@ -66,6 +67,9 @@ public sealed class SharedSignalsTenantIsolationTests
         Justification = "The push endpoint a test receiver registers; the recording handler answers it.")]
     private const string PushEndpoint = "https://receiver.example.com/events";
     private const string StreamId = "alerts";
+
+    /// <summary>How long a test waits for a delivery it holds to reach the receiver.</summary>
+    private static readonly TimeSpan HeldFor = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// A stream acme's receiver creates is acme's alone: globex's receiver, under the same identifier, lists none,
@@ -169,6 +173,81 @@ public sealed class SharedSignalsTenantIsolationTests
     }
 
     /// <summary>
+    /// A stream store the host registers after the transmitter's own is the one every tenant's streams are kept in,
+    /// as it is the one the container resolves.
+    /// </summary>
+    [Fact]
+    public async Task AStoreTheHostRegistersAfterTheTransmittersOwn_HoldsTheStreams()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var hosts = new InMemoryStreamStore();
+        await using var app = await StartAsync(beforeMultiTenancy: services => services.AddSingleton<IStreamStore>(hosts));
+
+        using var created = await ClientOf(app, Host + Acme).PostAsJsonAsync(
+            Acme + StreamPath, new CreateStreamRequest { EventsRequested = [MembershipChanged] }, ct);
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Single(await hosts.ListAllAsync(ct));
+    }
+
+    /// <summary>
+    /// A poll handler resolved where no tenant is served refuses once it reaches the queued events, rather than
+    /// answering from a queue no tenant owns.
+    /// </summary>
+    [Fact]
+    public async Task APollHandlerResolvedWhereNoTenantIsServed_RefusesOnceUsed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var app = await StartAsync();
+        var handler = app.Services.GetRequiredService<PollEndpointHandler>();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => handler.HandleAsync(AcmesStream(), new PollRequest { ReturnImmediately = true }, ct));
+    }
+
+    /// <summary>
+    /// A poll handler a host kept from acme's request refuses to read the queued events while globex is served,
+    /// rather than answering globex's caller from acme's queue.
+    /// </summary>
+    [Fact]
+    public async Task APollHandlerKeptFromAnotherTenantsRequest_RefusesOnceUsed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var app = await StartAsync();
+        var catalog = app.Services.GetRequiredService<ITenantCatalog>();
+
+        PollEndpointHandler kept;
+        using (TenantScope.Enter((await catalog.FindByIdAsync("acme", ct))!))
+        {
+            kept = app.Services.GetRequiredService<PollEndpointHandler>();
+            // Served in its own tenant, the kept part works, so only being used elsewhere is what refuses it
+            await kept.HandleAsync(AcmesStream(), new PollRequest { ReturnImmediately = true }, ct);
+        }
+
+        using var scope = TenantScope.Enter((await catalog.FindByIdAsync("globex", ct))!);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => kept.HandleAsync(AcmesStream(), new PollRequest { ReturnImmediately = true }, ct));
+    }
+
+    /// <summary>
+    /// A poll stream of acme's receiver, as the store hands it to the poll handler.
+    /// </summary>
+    private static StreamState AcmesStream() => new()
+    {
+        ReceiverId = ReceiverId,
+        Status = StreamStatuses.Enabled,
+        SubjectsMode = StreamSubjectsMode.All,
+        Configuration = new StreamConfiguration
+        {
+            StreamId = StreamId,
+            Issuer = Host + Acme,
+            Audiences = [ReceiverId],
+            EventsDelivered = [MembershipChanged],
+            Delivery = new PollDeliveryMethod(new Uri(Host + Acme + StreamPath)),
+        },
+    };
+
+    /// <summary>
     /// A receiver whose credentials globex issued, with the same identifier as acme's receiver, presents them under
     /// acme's address and is refused as holding a token that is invalid here, so it cannot reach acme's streams.
     /// </summary>
@@ -210,14 +289,10 @@ public sealed class SharedSignalsTenantIsolationTests
     {
         var ct = TestContext.Current.CancellationToken;
         var receiver = new RecordingReceiver();
-        await using var app = await StartAsync(beforeMultiTenancy: services => services.Replace(
-            ServiceDescriptor.Transient(provider => new PushDeliverySender(
-                new HttpClient(receiver),
-                provider.GetRequiredService<IEventOutbox>(),
-                provider.GetRequiredService<ReceiverAddressPolicy>(),
-                NullLogger<PushDeliverySender>.Instance,
-                provider.GetRequiredService<SharedSignalsInstruments>(),
-                provider.GetRequiredService<QueuedEventSigner>()))));
+        // The receiver stands where the network would, behind the client each tenant's sender posts through
+        await using var app = await StartAsync(beforeMultiTenancy: services => services
+            .AddHttpClient(nameof(PushDeliverySender))
+            .ConfigurePrimaryHttpMessageHandler(() => receiver));
 
         foreach (var tenant in (string[])[Acme, Globex])
         {
@@ -420,6 +495,205 @@ public sealed class SharedSignalsTenantIsolationTests
         Assert.Empty(globex!);
     }
 
+    /// <summary>
+    /// Two tenants may declare a stream under the same receiver and stream identifiers, since the operator names them:
+    /// each stream still queues its own tenant's events alone, so an event dispatched in acme is polled from acme's
+    /// stream and globex's receiver, polling its own, finds nothing.
+    /// </summary>
+    [Fact]
+    public async Task StreamsTwoTenantsDeclareUnderOneName_QueueEachTenantsEventsApart()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        ConfiguredStream[] declared =
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, EventsRequested = [MembershipChanged] }];
+        await using var app = await StartAsync(declare: server => server
+            .AddConfiguredStreams("acme", declared)
+            .AddConfiguredStreams("globex", declared));
+        var acme = ClientOf(app, Host + Acme);
+        var globex = ClientOf(app, Host + Globex);
+
+        Assert.Equal(1, await DispatchAsync(app, "acme", ct));
+
+        var atGlobex = await PollAsync(globex, Globex, ct);
+        Assert.Empty(atGlobex);
+
+        var token = Assert.Single(await PollAsync(acme, Acme, ct));
+        Assert.Equal(Host + Acme, IssuerOf(token));
+    }
+
+    /// <summary>
+    /// Two instances sweeping at once, the first holding its claim on acme's stream while it delivers, leave globex's
+    /// stream of the same identifiers to the second: each tenant's claims on its streams are its own.
+    /// </summary>
+    [Fact]
+    public async Task ADeliveryInProgress_DoesNotHoldAnotherTenantsStreamOfTheSameName()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var receiver = new HoldingReceiver(Host + Acme);
+        ConfiguredStream[] declared =
+        [
+            new ConfiguredStream
+            {
+                ReceiverId = ReceiverId,
+                StreamId = StreamId,
+                EventsRequested = [MembershipChanged],
+                PushEndpointUrl = new Uri(PushEndpoint),
+            },
+        ];
+        await using var app = await StartAsync(
+            beforeMultiTenancy: services => services
+                .AddHttpClient(nameof(PushDeliverySender))
+                .ConfigurePrimaryHttpMessageHandler(() => receiver),
+            declare: server => server
+                .AddConfiguredStreams("acme", declared)
+                .AddConfiguredStreams("globex", declared));
+        var sweep = app.Services.GetRequiredService<IPushDeliverySweep>();
+
+        Assert.Equal(1, await DispatchAsync(app, "acme", ct));
+        var delivering = sweep.SweepAsync(ct);
+        try
+        {
+            await receiver.Held.WaitAsync(HeldFor, ct);
+
+            // Queued once the first sweep holds acme's claim, so only the second sweep can deliver it
+            Assert.Equal(1, await DispatchAsync(app, "globex", ct));
+            await sweep.SweepAsync(ct);
+
+            var token = Assert.Single(receiver.Tokens);
+            Assert.Equal(Host + Globex, IssuerOf(token));
+        }
+        finally
+        {
+            receiver.Release();
+            await delivering;
+        }
+    }
+
+    /// <summary>
+    /// An event dispatcher a host kept from acme's request refuses to dispatch where acme is not served, as for
+    /// globex's event in globex's request or in a job of the host's that serves no tenant, rather than queueing the
+    /// event on acme's streams for acme's receivers.
+    /// </summary>
+    [Theory]
+    [InlineData("globex")]
+    [InlineData(null)]
+    public async Task ADispatcherKeptFromAnotherTenantsRequest_RefusesToDispatch(string? servedAt)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var app = await StartAsync();
+        var catalog = app.Services.GetRequiredService<ITenantCatalog>();
+
+        var descriptor =
+            new SecurityEventDescriptor { EventType = MembershipChanged, Subject = new EmailSubject("jdoe@example.com") };
+        EventDispatcher kept;
+        using (TenantScope.Enter((await catalog.FindByIdAsync("acme", ct))!))
+        {
+            kept = app.Services.GetRequiredService<EventDispatcher>();
+            // Served in its own tenant, the kept part works, so only being used elsewhere is what refuses it
+            await kept.DispatchAsync(descriptor, ct);
+        }
+
+        using var scope = servedAt is null ? null : TenantScope.Enter((await catalog.FindByIdAsync(servedAt, ct))!);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => kept.DispatchAsync(descriptor, ct));
+    }
+
+    /// <summary>
+    /// The signer of queued events a host kept from acme's request refuses to sign in globex's request, rather than
+    /// signing with acme's keys.
+    /// </summary>
+    [Fact]
+    public async Task ASignerKeptFromAnotherTenantsRequest_RefusesToSign()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var app = await StartAsync();
+        var catalog = app.Services.GetRequiredService<ITenantCatalog>();
+
+        var queued = new OutboxItem("event-1", CompactToken: null, Unsigned: QueuedEventSigner.ToQueued(
+            new SecurityEventToken(new JsonWebToken())));
+        QueuedEventSigner kept;
+        using (TenantScope.Enter((await catalog.FindByIdAsync("acme", ct))!))
+        {
+            kept = app.Services.GetRequiredService<QueuedEventSigner>();
+            // Served in its own tenant, the kept part works, so only being used elsewhere is what refuses it
+            Assert.NotNull(await kept.SignAsync(queued, ct));
+        }
+        using var scope = TenantScope.Enter((await catalog.FindByIdAsync("globex", ct))!);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => kept.SignAsync(queued, ct));
+    }
+
+    /// <summary>
+    /// A tenant whose key the host's own catalog rotates signs its events with the new key from then on, an event
+    /// queued before the rotation included.
+    /// </summary>
+    [Fact]
+    public async Task AKeyRotatedInTheHostsCatalog_SignsTheEventsPolledAfterIt()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        ConfiguredStream[] declared =
+            [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, EventsRequested = [MembershipChanged] }];
+        await using var app = await StartAsync(
+            beforeMultiTenancy: services =>
+            {
+                services.AddSingleton<HostCatalog>();
+                services.Replace(ServiceDescriptor.Singleton<ITenantCatalog>(
+                    provider => provider.GetRequiredService<HostCatalog>()));
+            },
+            declare: server => server.AddConfiguredStreams("acme", declared));
+        Assert.Equal(1, await DispatchAsync(app, "acme", ct));
+
+        var rotated = TenantAt("acme", Acme);
+        app.Services.GetRequiredService<HostCatalog>().Own = rotated;
+
+        var token = Assert.Single(await PollAsync(ClientOf(app, Host + Acme), Acme, ct));
+        Assert.Equal(rotated.SigningKeys.Single().KeyId, KeyIdOf(token));
+    }
+
+    /// <summary>
+    /// A push delivery sweep a host sets off from acme's request delivers globex's events as well: each tenant's pass
+    /// runs as that tenant.
+    /// </summary>
+    [Fact]
+    public async Task ASweepSetOffFromOneTenantsRequest_DeliversEveryTenantsEvents()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var receiver = new RecordingReceiver();
+        ConfiguredStream[] declared =
+        [
+            new ConfiguredStream
+            {
+                ReceiverId = ReceiverId,
+                StreamId = StreamId,
+                EventsRequested = [MembershipChanged],
+                PushEndpointUrl = new Uri(PushEndpoint),
+            },
+        ];
+        await using var app = await StartAsync(
+            beforeMultiTenancy: services => services
+                .AddHttpClient(nameof(PushDeliverySender))
+                .ConfigurePrimaryHttpMessageHandler(() => receiver),
+            declare: server => server.AddConfiguredStreams("globex", declared));
+        Assert.Equal(1, await DispatchAsync(app, "globex", ct));
+
+        var catalog = app.Services.GetRequiredService<ITenantCatalog>();
+        using (TenantScope.Enter((await catalog.FindByIdAsync("acme", ct))!))
+            await app.Services.GetRequiredService<IPushDeliverySweep>().SweepAsync(ct);
+
+        Assert.Equal(Host + Globex, IssuerOf(Assert.Single(receiver.Tokens)));
+    }
+
+    /// <summary>
+    /// The security event tokens the one stream the receiver has at <paramref name="tenant"/> holds, polled from the
+    /// address that stream names.
+    /// </summary>
+    private static async Task<string[]> PollAsync(HttpClient http, string tenant, CancellationToken ct)
+    {
+        var stream = Assert.Single((await http.GetFromJsonAsync<StreamConfiguration[]>(tenant + StreamPath, ct))!);
+        var address = Assert.IsType<Uri>(Assert.IsType<PollDeliveryMethod>(stream.Delivery).EndpointUrl);
+        using var polled = await http.PostAsJsonAsync(address, new PollRequest { ReturnImmediately = true }, ct);
+        Assert.Equal(HttpStatusCode.OK, polled.StatusCode);
+        return [.. (await polled.Content.ReadFromJsonAsync<PollResponse>(ct))!.Sets.Values];
+    }
+
     private static async Task<int> DispatchAsync(WebApplication app, string tenantId, CancellationToken ct)
     {
         var tenant = await app.Services.GetRequiredService<ITenantCatalog>().FindByIdAsync(tenantId, ct);
@@ -461,6 +735,12 @@ public sealed class SharedSignalsTenantIsolationTests
                 });
                 return rsa.VerifyData(signed, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             });
+    }
+
+    private static string? KeyIdOf(string compactToken)
+    {
+        var header = Base64Url.DecodeFromChars(compactToken.Split('.')[0]);
+        return JsonNode.Parse(header)?[JwtClaimTypes.KeyId]?.GetValue<string>();
     }
 
     private static string? IssuerOf(string compactToken)
@@ -510,6 +790,9 @@ public sealed class SharedSignalsTenantIsolationTests
             JwksUri = jwksUri ?? new Uri(issuer + JwksPath),
             EventsSupported = [MembershipChanged],
             DefaultSubjectsMode = StreamSubjectsMode.All,
+
+            // A test sweeps when it means to: a pass on a timer would deliver what the test expects its own to
+            PushDeliveryInterval = null,
 
             // The test receiver's name resolves nowhere, and the recording handler answers it instead
             AllowedReceiverAddresses = [new Uri(PushEndpoint)],
@@ -574,6 +857,61 @@ public sealed class SharedSignalsTenantIsolationTests
             CancellationToken cancellationToken)
         {
             Tokens.Add(await request.Content!.ReadAsStringAsync(cancellationToken));
+            return new HttpResponseMessage(HttpStatusCode.Accepted);
+        }
+    }
+
+    /// <summary>
+    /// A catalog of the host's own, which answers with its own definition of a tenant once it holds one and with the
+    /// server's otherwise.
+    /// </summary>
+    private sealed class HostCatalog(StoreTenantCatalog inner) : ITenantCatalog
+    {
+        public TenantDefinition? Own { get; set; }
+
+        public async ValueTask<TenantDefinition?> FindByIdAsync(string tenantId, CancellationToken cancellationToken)
+            => OwnFor(await inner.FindByIdAsync(tenantId, cancellationToken));
+
+        public async ValueTask<TenantDefinition?> FindByAddressAsync(
+            string host,
+            string path,
+            CancellationToken cancellationToken)
+            => OwnFor(await inner.FindByAddressAsync(host, path, cancellationToken));
+
+        private TenantDefinition? OwnFor(TenantDefinition? served)
+            => Own is { } own && served is not null && own.Id == served.Id ? own : served;
+    }
+
+    /// <summary>
+    /// A receiver's push endpoint that holds the delivery of every token one issuer signed until released, and keeps
+    /// every other token delivered to it.
+    /// </summary>
+    private sealed class HoldingReceiver(string heldIssuer) : HttpMessageHandler
+    {
+        private readonly TaskCompletionSource _held = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ConcurrentQueue<string> Tokens { get; } = [];
+
+        public Task Held => _held.Task;
+
+        public void Release() => _released.TrySetResult();
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var token = await request.Content!.ReadAsStringAsync(cancellationToken);
+            if (IssuerOf(token) == heldIssuer)
+            {
+                _held.TrySetResult();
+                await _released.Task.WaitAsync(cancellationToken);
+            }
+            else
+            {
+                Tokens.Enqueue(token);
+            }
+
             return new HttpResponseMessage(HttpStatusCode.Accepted);
         }
     }

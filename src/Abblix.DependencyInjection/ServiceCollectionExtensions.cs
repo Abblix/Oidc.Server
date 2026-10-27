@@ -972,8 +972,8 @@ public static class ServiceCollectionExtensions
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
     /// <remarks>
     /// This method allows decoration of keyed services registered using the keyed service APIs.
-    /// If the keyed service is not found, it falls back to decorating the non-keyed service
-    /// and registers the decorator as a keyed service. This is useful when you want to create
+    /// If the keyed service is not found, it falls back to decorating the non-keyed service the container
+    /// resolves, the last one registered, and registers the decorator as a keyed service. This is useful when you want to create
     /// a keyed variant of an existing non-keyed service with additional behavior.
     /// The decorator will wrap the existing implementation while preserving the service lifetime.
     /// </remarks>
@@ -1000,9 +1000,10 @@ public static class ServiceCollectionExtensions
                 return services;
             }
 
+            // The last non-keyed registration is the one the container resolves, so it is the one decorated
             if (services[i].ServiceKey == null)
             {
-                fallbackService = services[i];
+                fallbackService ??= services[i];
             }
         }
 
