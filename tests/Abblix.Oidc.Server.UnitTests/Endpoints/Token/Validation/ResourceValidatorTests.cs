@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
@@ -53,6 +54,33 @@ public class ResourceValidatorTests
         };
         var clientRequest = new ClientRequest();
         return new TokenValidationContext(tokenRequest, clientRequest);
+    }
+
+    /// <summary>
+    /// A client credentials request naming no resource and no scope, at a tenant inferring the resource from the
+    /// scope, is given the resource its client's default scope belongs to, as the same request naming the scope is.
+    /// </summary>
+    [Fact]
+    public async Task ARequestNamingNoScope_IsGivenTheResourceOfTheClientsDefault()
+    {
+        var tenant = new TestIssuer
+        {
+            InferResourceFromScope = true,
+            Resources = [new ResourceDefinition(Resource1, new ScopeDefinition("orders.read"))],
+        }.ToTenant();
+        var context = new TokenValidationContext(
+            new TokenRequest { GrantType = GrantTypes.ClientCredentials, Scope = [] },
+            new ClientRequest())
+        {
+            ClientInfo = new ClientInfo("test-client") { AllowedScopes = ["orders.read"], DefaultScope = ["orders.read"] },
+        };
+
+        var result = await new ResourceValidator(SingleIssuer.ResourceManager())
+            .ValidateAsync(tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Null(result);
+        Assert.Equal(Resource1, Assert.Single(context.Request.Resources ?? []));
+        Assert.Equal("orders.read", Assert.Single(Assert.Single(context.Resources).Scopes).Scope);
     }
 
     /// <summary>

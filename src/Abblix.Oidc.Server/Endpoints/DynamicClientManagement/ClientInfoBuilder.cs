@@ -25,6 +25,16 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
 {
     private string? _sectorIdentifier;
     private ClientSecret[]? _clientSecrets;
+    private string[]? _defaultScope;
+
+    /// <summary>
+    /// Sets the scope values the client may request when its metadata names none.
+    /// </summary>
+    public ClientInfoBuilder WithDefaultScope(string[]? defaultScope)
+    {
+        _defaultScope = defaultScope;
+        return this;
+    }
 
     /// <summary>
     /// Sets the sector identifier the client's pairwise subjects are computed under.
@@ -83,7 +93,8 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
 
         // RFC 7592 update is a full replacement: the scope must be re-applied, or an update omitting it
         // would revert the client to "any scope" (null = unrestricted) and defeat per-client scope enforcement.
-        clientInfo.AllowedScopes = model.Scope;
+        // Metadata naming none takes the host's default set, RFC 7591 section 2.
+        clientInfo.AllowedScopes = model.Scope ?? _defaultScope;
         clientInfo.OfflineAccess = model.OfflineAccess;
         clientInfo.ApplicationType = model.ApplicationType;
         clientInfo.SubjectType = model.SubjectType;

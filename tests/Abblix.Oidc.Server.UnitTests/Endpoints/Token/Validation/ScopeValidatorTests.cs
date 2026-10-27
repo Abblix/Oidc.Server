@@ -265,4 +265,82 @@ public class ScopeValidatorTests
             m => m.TryGet(TestTenant.Matched, "read", out It.Ref<ScopeDefinition?>.IsAny),
             Times.Once);
     }
+
+    private static TokenValidationContext ContextOf(string grantType, ClientInfo client) => new(
+        new TokenRequest { GrantType = grantType, Scope = [] }, new ClientRequest())
+    {
+        ClientInfo = client,
+    };
+
+    /// <summary>
+    /// A request of a grant starting from the client alone that names no scope is served with the client's default
+    /// scope, not with the wider set the client is allowed, and held to that set as a scope it named would be
+    /// (RFC 6749 section 3.3).
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.ClientCredentials)]
+    [InlineData(GrantTypes.Password)]
+    [InlineData(GrantTypes.JwtBearer)]
+    public async Task ARequestNamingNoScope_IsServedWithTheClientsDefault(string grantType)
+    {
+        var context = ContextOf(
+            grantType, new ClientInfo("test-client") { AllowedScopes = ["read", "write"], DefaultScope = ["read"] });
+        SetupScopeManagerForScopes("read");
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
+        Assert.Equal("read", Assert.Single(context.Scope).Scope);
+    }
+
+    /// <summary>
+    /// A client with allowed scopes and no default is served a request naming no scope with no scope, as before the
+    /// default existed, rather than with everything it is allowed.
+    /// </summary>
+    [Fact]
+    public async Task ARequestNamingNoScope_OfAClientWithNoDefault_IsServedWithNoScope()
+    {
+        var context = ContextOf(GrantTypes.ClientCredentials, new ClientInfo("test-client") { AllowedScopes = ["read"] });
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
+        Assert.Empty(context.Scope);
+    }
+
+    /// <summary>
+    /// A client required to name its scope is refused a request of such a grant naming none with
+    /// <c>invalid_scope</c>, the other answer RFC 6749 section 3.3 allows.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.ClientCredentials)]
+    [InlineData(GrantTypes.Password)]
+    [InlineData(GrantTypes.JwtBearer)]
+    public async Task ARequestNamingNoScope_OfAClientRequiredToNameOne_IsRefused(string grantType)
+    {
+        var context = ContextOf(grantType, new ClientInfo("test-client") { DefaultScope = ["read"], RequireScope = true });
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ErrorCodes.InvalidScope, error?.Error);
+    }
+
+    /// <summary>
+    /// A grant carrying the scope it was granted is not given the client's default, nor refused for naming none.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.AuthorizationCode)]
+    [InlineData(GrantTypes.RefreshToken)]
+    [InlineData(GrantTypes.TokenExchange)]
+    [InlineData(GrantTypes.DeviceAuthorization)]
+    [InlineData(GrantTypes.Ciba)]
+    public async Task ARequestOfAGrantCarryingItsScope_IsNotGivenTheDefault(string grantType)
+    {
+        var context = ContextOf(grantType, new ClientInfo("test-client") { DefaultScope = ["read"], RequireScope = true });
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
+        Assert.Empty(context.Scope);
+    }
 }

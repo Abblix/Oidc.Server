@@ -48,7 +48,13 @@ public class AuthorizationGrantValidator(IAuthorizationGrantHandler grantHandler
                 "The grant type is not allowed for this client");
         }
 
-        var result = await grantHandler.AuthorizeAsync(tenant, context.Request, context.ClientInfo, cancellationToken);
+        // A grant starting from the client alone builds its context from the request's scope, so it is handed the
+        // request with the scope it is served with
+        var result = await grantHandler.AuthorizeAsync(
+            tenant,
+            context.Request with { Scope = TokenRequestScope.ServedFor(context) ?? [] },
+            context.ClientInfo,
+            cancellationToken);
 
         if (result.TryGetFailure(out var error))
         {
