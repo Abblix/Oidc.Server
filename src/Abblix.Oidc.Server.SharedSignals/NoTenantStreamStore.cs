@@ -44,6 +44,7 @@ internal sealed class NoTenantStreamStore : IStreamStore
         => throw NoTenant();
 
     private static InvalidOperationException NoTenant()
-        => new("This stream store was resolved where no tenant was served, and every stream belongs to a tenant; "
-               + "resolve it in the request or tenant scope it serves rather than keeping one.");
+        => new("A part of the Shared Signals transmitter (here its stream store, which holds each tenant's streams) "
+               + "was resolved where no tenant was served. Resolve the transmitter's parts in the request or tenant "
+               + "scope of the tenant they serve, rather than keeping one across requests.");
 }
