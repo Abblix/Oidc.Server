@@ -319,7 +319,8 @@ public sealed partial class SharedSignalsTenantReleaseTests
         IStreamStore? streams = null,
         ILoggerProvider? logs = null,
         Action<IOidcServerBuilder>? declare = null,
-        bool multipleStreamsPerReceiver = false)
+        bool multipleStreamsPerReceiver = false,
+        Action<IServiceCollection>? afterServer = null)
     {
         await TestLicense.Loaded;
 
@@ -350,6 +351,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
 
         server.AddSharedSignals();
         declare?.Invoke(server);
+        afterServer?.Invoke(builder.Services);
 
         var app = builder.Build();
 

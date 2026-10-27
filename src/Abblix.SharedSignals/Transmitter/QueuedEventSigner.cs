@@ -20,12 +20,19 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <remarks>
 /// A receiver judges "iat" against its own clock, by default within five minutes. A token signed when it was queued
 /// carried that moment to every attempt, so an event that waited longer - a receiver down for a while, or the queue
-/// behind it - was refused as stale, and the refusal is one a transmitter drops the event for. The identifier and
-/// every other claim stay as they were queued, so a receiver that saw an earlier attempt recognizes the event.
+/// behind it - was refused as stale, and the refusal is one a transmitter drops the event for. The issuer is the one
+/// the transmitter issues under at that moment, since SSF 1.0 Section 4.1.6 requires it to match the issuer of the
+/// stream's configuration, which follows a tenant that moved to another issuer while the event waited. The
+/// identifier and every other claim stay as they were queued, so a receiver that saw an earlier attempt recognizes
+/// the event.
 /// </remarks>
 /// <param name="signer">Signs the event at the moment it is delivered.</param>
+/// <param name="identity">The transmitter the event leaves, whose issuer it carries.</param>
 /// <param name="clock">Supplies the issue time each delivery carries. Defaults to the system clock.</param>
-public sealed class QueuedEventSigner(ISecurityEventTokenSigner signer, TimeProvider? clock = null)
+public sealed class QueuedEventSigner(
+    ISecurityEventTokenSigner signer,
+    ITransmitterIdentity identity,
+    TimeProvider? clock = null)
 {
     private const string HeaderMember = "header";
     private const string ClaimsMember = "claims";
@@ -43,7 +50,8 @@ public sealed class QueuedEventSigner(ISecurityEventTokenSigner signer, TimeProv
         }.ToJsonString();
 
     /// <summary>
-    /// The SET to send for <paramref name="item"/>, signed now with the current time as its issue time.
+    /// The SET to send for <paramref name="item"/>, signed now with the current time as its issue time and the
+    /// transmitter's current issuer.
     /// </summary>
     /// <remarks>
     /// An item queued by a version that signed on enqueue already holds a compact token. It is sent as it is, so
@@ -68,6 +76,7 @@ public sealed class QueuedEventSigner(ISecurityEventTokenSigner signer, TimeProv
             Header = new JsonWebTokenHeader(queued[HeaderMember]!.AsObject()),
             Payload = new JsonWebTokenPayload(queued[ClaimsMember]!.AsObject()),
         };
+        token.Payload.Issuer = identity.Issuer;
         token.Payload.IssuedAt = _clock.GetUtcNow();
 
         return await signer.SignAsync(new SecurityEventToken(token), cancellationToken);

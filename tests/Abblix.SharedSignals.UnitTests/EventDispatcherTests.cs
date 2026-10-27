@@ -86,10 +86,14 @@ public class EventDispatcherTests
     };
 
     /// <summary>The SETs queued for <paramref name="streamId"/>, as they are signed when delivered.</summary>
-    private static async Task<List<SecurityEventToken>> MintedAsync(InMemoryEventOutbox outbox, string streamId)
+    private static async Task<List<SecurityEventToken>> MintedAsync(
+        InMemoryEventOutbox outbox,
+        string streamId,
+        ITransmitterIdentity? identity = null)
     {
         var signer = new CapturingSigner();
-        var queued = new QueuedEventSigner(signer);
+        var queued = new QueuedEventSigner(
+            signer, identity ?? new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = Issuer }));
         foreach (var item in await outbox.PendingAsync("receiver-a", streamId, null, TestContext.Current.CancellationToken))
         {
             Assert.Equal($"signed.{item.JwtId}", await queued.SignAsync(item, TestContext.Current.CancellationToken));
@@ -135,7 +139,28 @@ public class EventDispatcherTests
         identity.Issuer = "https://second.example.com";
         Assert.Equal(1, (await dispatcher.DispatchAsync(Descriptor(), ct)).Reached);
 
-        Assert.Equal("https://second.example.com", Assert.Single(await MintedAsync(outbox, "s-1")).Issuer);
+        Assert.Equal("https://second.example.com", Assert.Single(await MintedAsync(outbox, "s-1", identity)).Issuer);
+    }
+
+    /// <summary>
+    /// An event queued before the transmitter's issuer changed is sent under the issuer the transmitter issues under
+    /// when it is sent, the one the stream's configuration names then (SSF 1.0 Section 4.1.6).
+    /// </summary>
+    [Fact]
+    public async Task AnEventQueuedBeforeTheIssuerChanged_IsSentUnderTheIssuerOfThatMoment()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = new InMemoryStreamStore();
+        Assert.True(await store.TryCreateAsync(CreateStream("s-1", mode: StreamSubjectsMode.All), ct));
+        var identity = new SwitchableTransmitterIdentity("https://first.example.com");
+        var outbox = new InMemoryEventOutbox();
+        var dispatcher = new EventDispatcher(
+            NullLogger<EventDispatcher>.Instance, store, outbox, identity, TestInstruments.Create());
+        Assert.Equal(1, (await dispatcher.DispatchAsync(Descriptor(), ct)).Reached);
+
+        identity.Issuer = "https://second.example.com";
+
+        Assert.Equal("https://second.example.com", Assert.Single(await MintedAsync(outbox, "s-1", identity)).Issuer);
     }
 
     /// <summary>The outbox item as a version that signed on enqueue read it back from a durable outbox.</summary>

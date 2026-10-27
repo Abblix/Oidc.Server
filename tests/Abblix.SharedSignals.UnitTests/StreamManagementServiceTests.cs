@@ -169,6 +169,73 @@ public class StreamManagementServiceTests
         Assert.Equal("https://second.example.com", replaced.Body!.Issuer);
     }
 
+    /// <summary>
+    /// A poll stream created before the identity changed is answered with the address its events are polled at under
+    /// the issuer serving the request, read alone, in the receiver's list and in the answer to a change, though its
+    /// stored record keeps the address it was created with.
+    /// </summary>
+    [Fact]
+    public async Task APollStreamCreatedBeforeTheIdentityChanged_IsAnsweredWithTheAddressItIsPolledAtNow()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var identity = new SwitchableTransmitterIdentity("https://first.example.com");
+        var options = DefaultOptions() with { PollEndpointFactory = null };
+        var routes = new TransmitterRoutes();
+        routes.ServePollAt((transmitter, streamId) => new Uri($"{transmitter.Issuer}/ssf/poll/{streamId}"));
+        var store = new InMemoryStreamStore();
+        var outbox = new InMemoryEventOutbox();
+        var dispatcher = new EventDispatcher(
+            NullLogger<EventDispatcher>.Instance, store, outbox, identity, TestInstruments.Create());
+        var service = new StreamManagementService(
+            store, outbox, dispatcher, options, PolicyFor(options), new PollEndpointLocator(options, routes, identity));
+        var created = (await service.CreateStreamAsync(Receiver, new CreateStreamRequest(), ct)).Body!;
+
+        identity.Issuer = "https://second.example.com";
+
+        var pollAt = new Uri($"https://second.example.com/ssf/poll/{created.StreamId}");
+        var read = await service.GetStreamAsync(Receiver, created.StreamId, ct);
+        var listed = await service.ListStreamsAsync(Receiver, ct);
+        var changed = await service.UpdateStreamAsync(
+            Receiver, new UpdateStreamRequest { StreamId = created.StreamId, Description = "changed" }, ct);
+        Assert.Equal(
+            new Uri($"https://first.example.com/ssf/poll/{created.StreamId}"),
+            Assert.IsType<PollDeliveryMethod>(created.Delivery).EndpointUrl);
+        Assert.Equal(pollAt, Assert.IsType<PollDeliveryMethod>(read.Body!.Delivery).EndpointUrl);
+        Assert.Equal(pollAt, Assert.IsType<PollDeliveryMethod>(Assert.Single(listed.Body!).Delivery).EndpointUrl);
+        Assert.Equal(pollAt, Assert.IsType<PollDeliveryMethod>(changed.Body!.Delivery).EndpointUrl);
+    }
+
+    /// <summary>
+    /// A poll stream of a transmitter that no longer serves poll delivery is answered with the address it stored, as
+    /// a configuration names one for every poll stream.
+    /// </summary>
+    [Fact]
+    public async Task APollStreamOfATransmitterNoLongerServingPoll_IsAnsweredWithTheAddressItStored()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var harness = CreateHarness();
+        var created = await CreatedStreamAsync(harness);
+        var options = DefaultOptions() with { PollEndpointFactory = null };
+        var withoutPoll = new StreamManagementService(
+            harness.Store,
+            harness.Outbox,
+            new EventDispatcher(
+                NullLogger<EventDispatcher>.Instance,
+                harness.Store,
+                harness.Outbox,
+                new OptionsTransmitterIdentity(options),
+                TestInstruments.Create()),
+            options,
+            PolicyFor(options),
+            PollEndpointsOf(options));
+
+        var read = await withoutPoll.GetStreamAsync(Receiver, created.StreamId, ct);
+
+        Assert.Equal(
+            Assert.IsType<PollDeliveryMethod>(created.Delivery).EndpointUrl,
+            Assert.IsType<PollDeliveryMethod>(read.Body!.Delivery).EndpointUrl);
+    }
+
     [Fact]
     public async Task Create_SuppliesTheTransmitterHalf_AndDefaultsToPoll()
     {
@@ -617,7 +684,8 @@ public class StreamManagementServiceTests
         var queued = Assert.Single(await harness.Outbox.PendingAsync(
             Receiver, created.StreamId, null, TestContext.Current.CancellationToken));
         var signer = new StubSigner();
-        await new QueuedEventSigner(signer).SignAsync(queued, TestContext.Current.CancellationToken);
+        await new QueuedEventSigner(signer, new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" }))
+            .SignAsync(queued, TestContext.Current.CancellationToken);
         var minted = Assert.Single(signer.Signed);
         Assert.Equal(created.StreamId, Assert.IsType<OpaqueSubject>(minted.GetSubjectId()).Id);
 

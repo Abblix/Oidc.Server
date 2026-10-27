@@ -53,7 +53,9 @@ internal sealed class TransmitterAssembler(
         IDeliveryLease lease)
     {
         var (store, view, superseded) = streams;
-        var signer = serviceProvider.CreateService<QueuedEventSigner>(Dependency.Override(tokenSigner));
+        var signer = serviceProvider.CreateService<QueuedEventSigner>(
+            Dependency.Override(tokenSigner),
+            Dependency.Override(identity));
         var instruments = serviceProvider.CreateService<SharedSignalsInstruments>(Dependency.Override(identity));
 
         var dispatcher = serviceProvider.CreateService<EventDispatcher>(
