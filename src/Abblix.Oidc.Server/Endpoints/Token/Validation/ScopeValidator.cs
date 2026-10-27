@@ -35,7 +35,18 @@ public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidat
     /// </returns>
     protected override OidcError? Validate(TenantDefinition tenant, TokenValidationContext context)
     {
-        if (!scopeManager.Validate(tenant, 
+        // Only a grant starting from the client alone serves a request naming no scope with the client's default:
+        // a code, a refresh token, a device code or a backchannel request carries the scope it was granted, and a
+        // token exchange inherits the subject token's
+        if (context.Request.GrantType is GrantTypes.ClientCredentials or GrantTypes.Password or GrantTypes.JwtBearer)
+        {
+            if (context.ClientInfo.ScopeServedFor(context.Request.Scope) is not { } scope)
+                return new OidcError(ErrorCodes.InvalidScope, ScopeRefusals.NoneNamed);
+
+            context.Request = context.Request with { Scope = scope };
+        }
+
+        if (!scopeManager.Validate(tenant,
                 context.Request.Scope,
                 context.Resources,
                 context.ClientInfo.AllowedScopes,

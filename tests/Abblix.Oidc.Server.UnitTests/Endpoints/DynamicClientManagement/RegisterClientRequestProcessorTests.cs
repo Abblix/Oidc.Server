@@ -10,6 +10,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -38,7 +39,7 @@ public class RegisterClientRequestProcessorTests
 
     private RegisterClientRequestProcessor Processor() => Processor(_clients.Object);
 
-    private RegisterClientRequestProcessor Processor(IClientInfoManager clients)
+    private RegisterClientRequestProcessor Processor(IClientInfoManager clients, NewClientOptions? newClients = null)
     {
         var credentials = new Mock<IClientCredentialFactory>(MockBehavior.Strict);
         credentials
@@ -56,7 +57,8 @@ public class RegisterClientRequestProcessorTests
 
         return new RegisterClientRequestProcessor(
             _logger,
-            credentials.Object, clients, TimeProvider.System, tokenIds.Object, _tokens.Object);
+            credentials.Object, clients, TimeProvider.System, tokenIds.Object, _tokens.Object,
+            newClients ?? new NewClientOptions());
     }
 
     private static ValidClientRegistrationRequest Request() => new(
@@ -82,6 +84,37 @@ public class RegisterClientRequestProcessorTests
         _tokens.Verify(
             s => s.IssueTokenAsync(TestTenant.Matched, "client-1", It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), "jti-1"),
             Times.Once);
+    }
+
+    /// <summary>
+    /// A client registering without a scope member may request the default set the host names, RFC 7591 section 2,
+    /// and the registration is answered with that set; one naming its scope keeps the one it named.
+    /// </summary>
+    [Theory]
+    [InlineData(null, "read")]
+    [InlineData("write", "write")]
+    public async Task AClientRegisteringWithoutScope_MayRequestTheHostsDefaultSet(string? named, string allowed)
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+        var request = new ValidClientRegistrationRequest(
+            new ClientRegistrationRequest
+            {
+                ClientId = "client-1",
+                RedirectUris = [new Uri("https://client.example.com/cb")],
+                Scope = named is null ? null : [named],
+            },
+            SectorIdentifier: null);
+
+        var result = await Processor(_clients.Object, new NewClientOptions { Scope = ["read"] })
+            .ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetSuccess(out var response));
+        Assert.Equal((string[])[allowed], stored!.ClientInfo.AllowedScopes);
+        Assert.Equal((string[])[allowed], response.Metadata.Scope);
     }
 
     [Fact]

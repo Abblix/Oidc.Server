@@ -119,6 +119,23 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
             AllowedGrantTypes = [GrantTypes.ClientCredentials],
         },
+        new ClientInfo(TestConstants.DefaultScopeClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            AllowedScopes = [Scopes.Profile],
+            DefaultScope = [Scopes.Profile],
+        },
+        new ClientInfo(TestConstants.ScopeRequiredClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            AllowedScopes = [Scopes.Profile],
+            DefaultScope = [Scopes.Profile],
+            RequireScope = true,
+        },
         new ClientInfo(TestConstants.ClientSecretBasicClientId)
         {
             ClientSecrets = [secret],

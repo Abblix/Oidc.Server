@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -21,11 +22,18 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Processes requests to update existing client configurations per RFC 7592 Section 2.2.
 /// Updates client metadata while preserving credentials and system-managed fields.
 /// </summary>
+/// <param name="clientInfoManager">Stores the updated client.</param>
+/// <param name="registrationAccessTokenService">Issues the rotated registration access token.</param>
+/// <param name="tokenIdGenerator">Generates the rotated registration access token id.</param>
+/// <param name="clock">Provides the issue time.</param>
+/// <param name="newClientOptions">The defaults a client takes when its metadata omits them, its scope among them.
+/// </param>
 public class UpdateClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     IRegistrationAccessTokenService registrationAccessTokenService,
     ITokenIdGenerator tokenIdGenerator,
-    TimeProvider clock) : IUpdateClientRequestProcessor
+    TimeProvider clock,
+    NewClientOptions newClientOptions) : IUpdateClientRequestProcessor
 {
     /// <summary>
     /// Processes a valid update client request, updating client metadata and returning updated configuration.
@@ -48,6 +56,7 @@ public class UpdateClientRequestProcessor(
         // rather than updated here; the sector identifier the pairwise subjects hang on is kept too.
         var updatedClient = new ClientInfoBuilder(existingClient.ClientId, request.RegistrationRequest)
             .WithSectorIdentifier(existingClient.SectorIdentifier)
+            .WithDefaultScope(newClientOptions.Scope)
             .WithClientSecrets(existingClient.ClientSecrets)
             .Build();
 

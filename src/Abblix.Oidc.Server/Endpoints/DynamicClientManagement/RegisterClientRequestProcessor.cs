@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -29,13 +30,15 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// <param name="clock">Provides the issue time.</param>
 /// <param name="tokenIdGenerator">Generates the registration access token id.</param>
 /// <param name="registrationAccessTokenService">Issues the registration access token.</param>
+/// <param name="newClientOptions">The defaults a newly registered client takes, its scope among them.</param>
 public partial class RegisterClientRequestProcessor(
     ILogger<RegisterClientRequestProcessor> logger,
     IClientCredentialFactory credentialFactory,
     IClientInfoManager clientInfoManager,
     TimeProvider clock,
     ITokenIdGenerator tokenIdGenerator,
-    IRegistrationAccessTokenService registrationAccessTokenService) : IRegisterClientRequestProcessor
+    IRegistrationAccessTokenService registrationAccessTokenService,
+    NewClientOptions newClientOptions) : IRegisterClientRequestProcessor
 {
     /// <summary>
     /// Processes a valid client registration request, generating and storing the client's credentials and configuration.
@@ -102,12 +105,13 @@ public partial class RegisterClientRequestProcessor(
     /// <summary>
     /// Converts the registration request and credentials into a ClientInfo entity for storage.
     /// </summary>
-    private static ClientInfo ToClientInfo(
+    private ClientInfo ToClientInfo(
         ClientRegistrationRequest model,
         ClientCredentials credentials,
         string? sectorIdentifier)
         => new ClientInfoBuilder(credentials.ClientId, model)
             .WithSectorIdentifier(sectorIdentifier)
+            .WithDefaultScope(newClientOptions.Scope)
             .WithClientSecrets(ToClientSecrets(model.TokenEndpointAuthMethod, credentials))
             .Build();
 

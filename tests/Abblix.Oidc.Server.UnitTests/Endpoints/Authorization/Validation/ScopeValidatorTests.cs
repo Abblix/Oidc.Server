@@ -620,4 +620,36 @@ public class ScopeValidatorTests
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidScope, result.Error);
     }
+
+    /// <summary>
+    /// An authorization request naming no scope is served with the client's default scope, and goes on carrying it,
+    /// so the host's consent provider reads the scope the request is served with (RFC 6749 section 3.3).
+    /// </summary>
+    [Fact]
+    public async Task ARequestNamingNoScope_IsServedWithTheClientsDefault()
+    {
+        var context = CreateContext(scopes: []);
+        context.ClientInfo = new ClientInfo(ClientId) { AllowedScopes = [Scopes.Profile], DefaultScope = [Scopes.Profile] };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal([Scopes.Profile], context.Request.Scope);
+        Assert.Equal(Scopes.Profile, Assert.Single(context.Scope).Scope);
+    }
+
+    /// <summary>
+    /// A client required to name its scope is refused an authorization request naming none with
+    /// <c>invalid_scope</c>.
+    /// </summary>
+    [Fact]
+    public async Task ARequestNamingNoScope_OfAClientRequiredToNameOne_IsRefused()
+    {
+        var context = CreateContext(scopes: []);
+        context.ClientInfo = new ClientInfo(ClientId) { DefaultScope = [Scopes.Profile], RequireScope = true };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidScope, result?.Error);
+    }
 }

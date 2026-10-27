@@ -38,6 +38,13 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 	/// </returns>
 	protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
 	{
+		// The request goes on with the scope it is served with, so what follows, the host's consent provider
+		// included, reads the default a request naming none was given
+		if (context.ClientInfo.ScopeServedFor(context.Request.Scope) is not { } scope)
+			return context.InvalidScope(ScopeRefusals.NoneNamed);
+
+		context.Request = context.Request with { Scope = scope };
+
 		if (context.Request.Scope.Contains(Scopes.OfflineAccess))
 		{
 			// Ignored as if never asked for, so the host's consent provider, reading the request, is not shown it
