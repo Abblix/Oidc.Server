@@ -106,9 +106,9 @@ public static class DistributedCacheExtensions
 	/// is as long as another caller's whole redemption. What is still open is narrower and real: a writer
 	/// that takes no gate can land between the read and the removal, so this caller destroys that write
 	/// and is handed the earlier bytes. Nothing in this class closes THAT, and the SERIALIZATION survives
-	/// no second process at all - the lock protocol still admits at most one winner across nodes, but
-	/// nothing there holds the read and the removal together. A store whose own primitive returns the
-	/// removed value closes both, and issue 435 tracks it.
+	/// no second process at all: <see cref="TryRemoveAsync"/> says what the removal itself still decides
+	/// across nodes. A store whose own primitive returns the removed value closes both, and issue 435
+	/// tracks it.
 	/// </para>
 	/// <para>
 	/// <strong>Lock timeout:</strong> the claim auto-expires after the specified timeout (5 seconds by
