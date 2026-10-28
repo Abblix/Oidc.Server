@@ -7,9 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Generic;
+using System.Security.Cryptography;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.PairwiseIdentifiers;
@@ -27,6 +31,39 @@ public class SubjectTypeConverterTests
     private static readonly string TestSalt = Convert.ToBase64String(new byte[32]);
 
     private static SubjectTypeConverter CreateConverter() => new(new PairwiseSubjectSettings { Salt = TestSalt });
+
+    /// <summary>
+    /// A converter keyed by the settings a host binds from configuration, naming <paramref name="hashAlgorithm"/>.
+    /// </summary>
+    private static SubjectTypeConverter BoundFromConfiguration(string hashAlgorithm)
+    {
+        const string section = nameof(TenantDefinition.PairwiseSubject);
+        var settings = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [ConfigurationPath.Combine(section, nameof(PairwiseSubjectSettings.Salt))] = TestSalt,
+                [ConfigurationPath.Combine(section, nameof(PairwiseSubjectSettings.HashAlgorithm))] = hashAlgorithm,
+            })
+            .Build()
+            .GetSection(section)
+            .Get<PairwiseSubjectSettings>();
+
+        return new SubjectTypeConverter(settings);
+    }
+
+    /// <summary>
+    /// The hash a deployment names in its configuration keys the seal: bound from configuration with the same salt,
+    /// SHA256 and SHA512 give one subject different pseudonyms.
+    /// </summary>
+    [Fact]
+    public void Convert_HashAlgorithmBoundFromConfiguration_KeysTheSeal()
+    {
+        var client = CreatePairwiseClient("client", redirectUris: [new Uri("https://app.example.com/cb")]);
+
+        Assert.NotEqual(
+            BoundFromConfiguration(nameof(HashAlgorithmName.SHA256)).Convert(Subject, client),
+            BoundFromConfiguration(nameof(HashAlgorithmName.SHA512)).Convert(Subject, client));
+    }
 
     private static ClientInfo CreatePairwiseClient(
         string clientId,
