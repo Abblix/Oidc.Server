@@ -41,14 +41,13 @@ public static partial class TenantRequirement
 
         // Resolution that never ran looks exactly like a request naming no tenant, and would answer every
         // endpoint 404 with nothing to say why; the log names the cause. A server serving its one tenant without
-        // resolution reaches here only for a request its root issuer does not cover, which the call would not
-        // change, so the log names the path base instead.
+        // resolution needs no call, so its log says what kept this request from the tenant instead.
         if (accessor is HttpContextTenantAccessor && !TenantResolutionMiddleware.HasRun(context) &&
             context.RequestServices.GetService<ILoggerFactory>() is { } loggerFactory)
         {
             var logger = loggerFactory.CreateLogger(typeof(TenantRequirement));
             if (context.RequestServices.GetService<LoneTenant>() is { WhyTheCallIsNeeded: null })
-                LogLoneTenantNotUnderPathBase(logger, context.Request.PathBase.Value);
+                LogLoneTenantNotReached(logger, LoneTenantMissed(context));
             else
                 LogResolutionNotInPipeline(logger);
         }
@@ -56,12 +55,21 @@ public static partial class TenantRequirement
         return true;
     }
 
+    /// <summary>
+    /// What kept a request of a server serving its one tenant without resolution from that tenant.
+    /// </summary>
+    private static string LoneTenantMissed(HttpContext context)
+        => context.Request.PathBase.Value?.TrimEnd('/') is { Length: > 0 } pathBase
+            ? $"the request came under the path base {pathBase}, which the tenant's issuer at the root of its host " +
+              "does not cover"
+            : "the tenant is not served now, and the catalog's log of the tenants it left out says why";
+
     [LoggerMessage(
-        EventId = LogEvents.MultiTenancy.LoneTenantNotUnderPathBase,
+        EventId = LogEvents.MultiTenancy.LoneTenantNotReached,
         Level = LogLevel.Warning,
-        Message = "An OpenID endpoint was reached under the path base {PathBase}, which the issuer of the one tenant " +
-                  "this server serves does not cover, so it answers 404.")]
-    private static partial void LogLoneTenantNotUnderPathBase(ILogger logger, string? pathBase);
+        Message = "An OpenID endpoint of the server serving its one tenant without UseMultiTenancy() reached no " +
+                  "tenant, so it answers 404: {Cause}.")]
+    private static partial void LogLoneTenantNotReached(ILogger logger, string cause);
 
     [LoggerMessage(
         EventId = LogEvents.MultiTenancy.ResolutionNotInPipeline,

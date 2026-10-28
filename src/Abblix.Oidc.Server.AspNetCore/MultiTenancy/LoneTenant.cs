@@ -51,7 +51,7 @@ internal sealed class LoneTenant(IServiceProvider services, IOptions<OidcOptions
         }
 
         if (services.GetService<ITenantStoreWriter>() is not null)
-            return new(null, null, "it registers a tenant store writer, which changes the tenants while it runs");
+            return new(null, null, "it registers a tenant store writer, so its tenants are meant to change while it runs, which needs a tenant store of the host's own");
 
         return options.Tenants switch
         {

@@ -448,6 +448,33 @@ public partial class MultiTenancyRegistrationTests
         Assert.Equal(logged, logs.EventIds.Contains(LogEvents.MultiTenancy.ResolutionNotInPipeline));
     }
 
+    /// <summary>
+    /// A server serving its one tenant without resolution needs no call, so a request of its that reaches no tenant -
+    /// under a path base, or while the catalog serves no tenant, as before its first reading - is logged as missing
+    /// the tenant rather than the call.
+    /// </summary>
+    [Theory]
+    [InlineData("/x")]
+    [InlineData("")]
+    public async Task ALoneTenantNotReached_IsLoggedAsSuch_NotAsAMissingCall(string pathBase)
+    {
+        var logs = new EventRecorder();
+        var services = new ServiceCollection();
+        services.AddSingleton<ILoggerFactory>(logs);
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com") }));
+        await using var provider = services.BuildServiceProvider();
+
+        var context = new DefaultHttpContext { RequestServices = provider };
+        context.Request.Host = new HostString("auth.example.com");
+        context.Request.PathBase = new PathString(pathBase);
+        provider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
+
+        Assert.True(TenantRequirement.IsUnmet(context));
+        Assert.Contains(LogEvents.MultiTenancy.LoneTenantNotReached, logs.EventIds);
+        Assert.DoesNotContain(LogEvents.MultiTenancy.ResolutionNotInPipeline, logs.EventIds);
+    }
+
     private sealed class EventRecorder : ILoggerFactory, ILogger
     {
         public List<int> EventIds { get; } = [];
