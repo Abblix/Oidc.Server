@@ -94,6 +94,97 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute));
     }
 
+    /// <summary>
+    /// A registration naming a resource or a token exchange audience the host does not grant a registering client is
+    /// refused: which resources a client reaches is the server's policy, not the client's choice.
+    /// </summary>
+    [Theory]
+    [InlineData(RequestMembers.AllowedResources, TestConstants.OtherApiResource)]
+    [InlineData(RequestMembers.TokenExchangeAudiences, "https://elsewhere.example.com")]
+    public async Task A_registration_reaching_beyond_what_the_host_grants_is_refused(string member, string value)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("reaching-beyond-the-grant");
+        metadata[member] = new JsonArray(value);
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A client registering without the members is given the host's sets, and reading the registration back shows
+    /// them.
+    /// </summary>
+    [Fact]
+    public async Task A_registration_naming_neither_is_given_what_the_host_grants()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var registration = await RegisterAsync(client, discovery, "given-the-grant");
+
+        var read = await ReadJsonAsync(await client.SendAsync(
+            Request(HttpMethod.Get, registration.ConfigurationUri, registration.AccessToken),
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(TestConstants.ApiResource, Assert.Single(read[ResponseMembers.AllowedResources]!.AsArray())!.GetValue<string>());
+        Assert.Equal(
+            TestConstants.ExchangeAudience,
+            Assert.Single(read[ResponseMembers.TokenExchangeAudiences]!.AsArray())!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// An update naming neither member replaces the metadata whole, so the client is given the host's sets again, as a
+    /// registration naming neither is: a client that narrowed its list on registration gets the host's list back.
+    /// </summary>
+    [Fact]
+    public async Task An_update_naming_neither_is_given_what_the_host_grants()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("narrowed-then-updated");
+        metadata[RequestMembers.AllowedResources] = new JsonArray();
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+        Assert.Empty(registered[ResponseMembers.AllowedResources]!.AsArray());
+
+        var updated = NewClientMetadata("narrowed-then-updated");
+        updated[RequestMembers.ClientId] = registered[ResponseMembers.ClientId]!.GetValue<string>();
+        var update = Request(
+            HttpMethod.Put,
+            new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute),
+            registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>());
+        update.Content = JsonContent.Create(updated);
+        var response = await ReadJsonAsync(await client.SendAsync(update, TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            TestConstants.ApiResource,
+            Assert.Single(response[ResponseMembers.AllowedResources]!.AsArray())!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// An update is held to the same policy, so a client cannot widen its list after registering within it.
+    /// </summary>
+    [Fact]
+    public async Task An_update_widening_the_allowed_resources_is_refused()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var registration = await RegisterAsync(client, discovery, "widening-on-update");
+        var updated = NewClientMetadata("widening-on-update");
+        updated[RequestMembers.ClientId] = registration.ClientId;
+        updated[RequestMembers.AllowedResources] = new JsonArray(TestConstants.ApiResource, TestConstants.OtherApiResource);
+
+        var update = Request(HttpMethod.Put, registration.ConfigurationUri, registration.AccessToken);
+        update.Content = JsonContent.Create(updated);
+        var response = await client.SendAsync(update, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
     private static HttpRequestMessage Request(HttpMethod method, Uri uri, string? accessToken)
     {
         var request = new HttpRequestMessage(method, uri);
@@ -835,7 +926,8 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             [RequestMembers.OfflineAccess] = JsonSerializer.SerializeToNode(OfflineAccess.Disabled),
             [RequestMembers.AuthorizationDetailsTypes] = new JsonArray(TestConstants.PaymentInitiationType),
             [RequestMembers.TokenExchangeSubjectTokenTypes] = new JsonArray(TokenExchangeTokenTypes.AccessToken),
-            [RequestMembers.TokenExchangeAudiences] = new JsonArray("https://api.example.com"),
+            [RequestMembers.TokenExchangeAudiences] = new JsonArray(TestConstants.ExchangeAudience),
+            [RequestMembers.AllowedResources] = new JsonArray(TestConstants.ApiResource),
             [RequestMembers.BackChannelTokenDeliveryMode] = BackchannelTokenDeliveryModes.Ping,
             [RequestMembers.BackChannelClientNotificationEndpoint] = "https://client.example.com/ciba",
             [RequestMembers.BackChannelAuthenticationRequestSigningAlg] = SigningAlgorithms.ES256,

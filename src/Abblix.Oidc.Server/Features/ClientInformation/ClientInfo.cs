@@ -629,6 +629,25 @@ public record ClientInfo(string ClientId)
     public string[]? AllowedScopes { get; set; }
 
     /// <summary>
+    /// The resources this client may get an access token for (RFC 8707), checked against the audience each access
+    /// token carries: a resource the request names, one inferred from its scopes, one carried over from an earlier
+    /// grant and the tenant's default resource indicator alike. Unset, the client may get a token for any registered
+    /// resource, as a client with no <see cref="AllowedScopes"/> may ask for any scope.
+    /// </summary>
+    /// <remarks>
+    /// Not to be confused with <see cref="ResourceLocations"/>, which describes this client acting as a resource
+    /// server. The audiences a client names in token exchange are held to
+    /// <see cref="TokenExchangeAllowedAudiences"/> instead.
+    /// </remarks>
+    public Uri[]? AllowedResources { get; set; }
+
+    /// <summary>
+    /// Whether this client may get an access token addressed to <paramref name="resource"/>.
+    /// </summary>
+    public bool MayGetTokenFor(Uri resource)
+        => AllowedResources is not { } allowed || allowed.Contains(resource);
+
+    /// <summary>
     /// The scope a request of this client naming none is served with: the pre-defined default RFC 6749 section 3.3
     /// lets the server use when the client omits the scope parameter.
     /// </summary>

@@ -206,5 +206,9 @@ public record ClientRegistrationResponse : RegisteredClientMetadata
         /// <summary>The <c>token_exchange_audiences</c> echoed registration metadata member
         /// (non-standard extension).</summary>
         public const string TokenExchangeAudiences = "token_exchange_audiences";
+
+        /// <summary>The <c>allowed_resources</c> echoed registration metadata member (non-standard extension).
+        /// </summary>
+        public const string AllowedResources = "allowed_resources";
     }
 }

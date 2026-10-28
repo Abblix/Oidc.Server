@@ -198,6 +198,7 @@ public class RegisteredClientMetadataTests
         AuthorizationDetailsTypes = ["payment_initiation"],
         TokenExchangeSubjectTokenTypes = [new Uri(TokenExchangeTokenTypes.AccessToken)],
         TokenExchangeAudiences = ["https://api.example.com"],
+        AllowedResources = [new Uri("https://api.example.com/orders")],
         BackChannelLogoutUri = new Uri("https://client.example.com/bc-logout"),
         BackChannelLogoutSessionRequired = false,
         FrontChannelLogoutUri = new Uri("https://client.example.com/fc-logout"),

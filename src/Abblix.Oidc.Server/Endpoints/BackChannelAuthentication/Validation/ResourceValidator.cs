@@ -15,26 +15,24 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
 /// <summary>
-/// Validates resources specified in authorization requests to ensure they conform to registered definitions and policies.
-/// This validator checks whether the resources requested in the authorization process are recognized by the system
-/// and permitted for the requesting client, extending the base functionality of resource validation by incorporating
-/// integration with the authorization context.
+/// Settles the resources (RFC 8707) a backchannel authentication request is for: the ones it names, else the one its
+/// scopes refer to where the tenant infers it. Each has to be registered at the tenant and one the client may get an
+/// access token for. The token request polling for it spends the request, so the tenant's default resource when
+/// nothing names one, and one resource for a client held to one per token, are held here too.
 /// </summary>
 /// <param name="resourceManager">The manager responsible for retrieving and validating resource information.</param>
 public class ResourceValidator(IResourceManager resourceManager)
-    : IBackChannelAuthenticationContextValidator
+    : PolledRequestResourceValidator(resourceManager), IBackChannelAuthenticationContextValidator
 {
     /// <summary>
-    /// Performs the validation of resource identifiers specified in the authorization request against the allowed
-    /// resource definitions managed by the <see cref="IResourceManager"/>. This method ensures that the resources
-    /// requested are known to the system and align with security and access policies.
+    /// Settles the resources of the request in the context, or refuses the request for them.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The context containing the authorization request, which includes the resources to be
     /// validated.</param>
     /// <returns>
     /// An <see cref="AuthorizationRequestValidationError"/> containing error details if validation fails,
-    /// or null if the validation is successful, indicating that all requested resources are recognized and permissible.
+    /// or null once the request's resources are settled.
     /// </returns>
     public Task<OidcError?> ValidateAsync(TenantDefinition tenant, BackChannelAuthenticationValidationContext context)
         => Task.FromResult(Validate(tenant, context));
@@ -42,32 +40,16 @@ public class ResourceValidator(IResourceManager resourceManager)
     private OidcError? Validate(TenantDefinition tenant, BackChannelAuthenticationValidationContext context)
     {
         var request = context.Request;
-        var requested = request.Resources;
         var scope = context.ClientInfo.ScopeServedFor(request.Scope) ?? [];
 
-        if (requested is not { Length: > 0 })
-        {
-            if (!ResourceInference.TryInfer(tenant, scope, out var inferred, out var ambiguity))
-                return new OidcError(ErrorCodes.InvalidScope, ambiguity);
-
-            if (inferred is null)
-                return null;
-
-            requested = [inferred];
-        }
-
-        if (!resourceManager.Validate(tenant, 
-                requested,
-                scope,
-                out var resources,
-                out var errorDescription))
-        {
-            return new OidcError(ErrorCodes.InvalidTarget, errorDescription);
-        }
-
-        // The poll for the token spends the request, so it is held to one resource here
-        if (context.ClientInfo.SingleResourceAccessTokens && resources.Length > 1)
-            return new OidcError(ErrorCodes.InvalidTarget, ResourceRefusals.OnePerAccessToken);
+        var refusal = Settle(
+            tenant,
+            context.ClientInfo,
+            request.Resources,
+            scope,
+            out var resources);
+        if (refusal is not null)
+            return refusal;
 
         context.Resources = resources;
         return null;

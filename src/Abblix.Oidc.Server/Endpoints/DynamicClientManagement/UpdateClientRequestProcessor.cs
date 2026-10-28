@@ -57,6 +57,8 @@ public class UpdateClientRequestProcessor(
         var updatedClient = new ClientInfoBuilder(existingClient.ClientId, request.RegistrationRequest)
             .WithSectorIdentifier(existingClient.SectorIdentifier)
             .WithDefaultScope(newClientOptions.Scope)
+            .WithDefaultAllowedResources(newClientOptions.AllowedResources)
+            .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
             .WithClientSecrets(existingClient.ClientSecrets)
             .Build();
 

@@ -45,6 +45,7 @@ internal static class ClientRegistrationValidationServiceCollectionExtensions
             // profile-specific rejection.
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SecurityProfileValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.ScopeValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, HostGrantedMetadataValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SoftwareStatementValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SubjectTypeValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>(),

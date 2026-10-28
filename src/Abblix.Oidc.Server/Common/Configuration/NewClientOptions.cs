@@ -34,4 +34,25 @@ public record NewClientOptions
     /// metadata whole.
     /// </remarks>
     public string[]? Scope { get; init; }
+
+    /// <summary>
+    /// The resources a dynamically registered client may get an access token for: the list a client registering
+    /// without an <c>allowed_resources</c> member is given, and the set a list it sends has to stay within. Unset, a
+    /// client registering without the member may get a token for any registered resource, and one sending a resource
+    /// is refused, since which resources a client reaches is the server's policy rather than the client's choice.
+    /// </summary>
+    /// <remarks>
+    /// Applied on registration and on every RFC 7592 update, since an update replaces the metadata whole.
+    /// </remarks>
+    public Uri[]? AllowedResources { get; init; }
+
+    /// <summary>
+    /// The token exchange audiences a dynamically registered client may name: the list a client registering without
+    /// a <c>token_exchange_audiences</c> member is given, and the set a list it sends has to stay within. Unset, a
+    /// client registering without the member may name no audience, and one sending an audience is refused.
+    /// </summary>
+    /// <remarks>
+    /// Applied on registration and on every RFC 7592 update, since an update replaces the metadata whole.
+    /// </remarks>
+    public string[]? TokenExchangeAudiences { get; init; }
 }

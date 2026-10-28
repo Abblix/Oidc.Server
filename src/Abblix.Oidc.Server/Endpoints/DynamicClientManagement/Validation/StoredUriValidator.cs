@@ -77,6 +77,7 @@ public class StoredUriValidator : SyncClientRegistrationContextValidator
         request => Validate(Parameters.RequestUris, request.RequestUris),
         request => Validate(Parameters.TlsClientAuthSanUri, request.TlsClientAuthSanUri),
         request => Validate(Parameters.TokenExchangeSubjectTokenTypes, request.TokenExchangeSubjectTokenTypes),
+        request => Validate(Parameters.AllowedResources, request.AllowedResources),
     ];
 
     /// <summary>
