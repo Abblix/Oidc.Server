@@ -79,8 +79,8 @@ public class AuthorizationCodeReusePreventingDecorator(
         // protocol to the end with its own claim still in the store, so everything short of that arrives
         // here as one outcome - and there is no listing the ways, which is what the sibling comments this
         // branch rewrote were each short of. It reaches a single caller with no competitor as readily as
-        // a contended one: a first request refused for scope or resource never writes the grant back, so
-        // the client's next attempt with that code finds nothing.
+        // a contended one: a first request whose processing issues no tokens never writes the grant back,
+        // so the client's next attempt with that code finds nothing.
         //
         // The refusal below is the right answer for whatever arrived, and a diagnosis for none of it.
         // Whichever of them it was, this redemption loses - reject without issuing a second set.
