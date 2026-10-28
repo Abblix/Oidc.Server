@@ -40,15 +40,28 @@ public static partial class TenantRequirement
             return false;
 
         // Resolution that never ran looks exactly like a request naming no tenant, and would answer every
-        // endpoint 404 with nothing to say why; the log names the missing call.
+        // endpoint 404 with nothing to say why; the log names the cause. A server serving its one tenant without
+        // resolution reaches here only for a request its root issuer does not cover, which the call would not
+        // change, so the log names the path base instead.
         if (accessor is HttpContextTenantAccessor && !TenantResolutionMiddleware.HasRun(context) &&
             context.RequestServices.GetService<ILoggerFactory>() is { } loggerFactory)
         {
-            LogResolutionNotInPipeline(loggerFactory.CreateLogger(typeof(TenantRequirement)));
+            var logger = loggerFactory.CreateLogger(typeof(TenantRequirement));
+            if (context.RequestServices.GetService<LoneTenant>() is { WhyTheCallIsNeeded: null })
+                LogLoneTenantNotUnderPathBase(logger, context.Request.PathBase.Value);
+            else
+                LogResolutionNotInPipeline(logger);
         }
 
         return true;
     }
+
+    [LoggerMessage(
+        EventId = LogEvents.MultiTenancy.LoneTenantNotUnderPathBase,
+        Level = LogLevel.Warning,
+        Message = "An OpenID endpoint was reached under the path base {PathBase}, which the issuer of the one tenant " +
+                  "this server serves does not cover, so it answers 404.")]
+    private static partial void LogLoneTenantNotUnderPathBase(ILogger logger, string? pathBase);
 
     [LoggerMessage(
         EventId = LogEvents.MultiTenancy.ResolutionNotInPipeline,

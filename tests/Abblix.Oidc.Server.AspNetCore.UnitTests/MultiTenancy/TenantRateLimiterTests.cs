@@ -25,6 +25,11 @@ namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
 /// </summary>
 public sealed class TenantRateLimiterTests : IDisposable
 {
+    /// <summary>
+    /// Registers nothing that serves a lone tenant, so the accessor reads only the tenant a request was resolved to.
+    /// </summary>
+    private static readonly IServiceProvider NoLoneTenant = new ServiceCollection().BuildServiceProvider();
+
     private const string Address = "203.0.113.7";
     private const string ClientId = "client-1";
 
@@ -194,7 +199,7 @@ public sealed class TenantRateLimiterTests : IDisposable
                 built.Add(limiter);
                 return limiter;
             },
-            new HttpContextTenantAccessor(new HttpContextAccessor { HttpContext = InTenant("acme") }),
+            new HttpContextTenantAccessor(new HttpContextAccessor { HttpContext = InTenant("acme") }, NoLoneTenant),
             catalog);
         budget.AttemptAcquire(Address).Dispose();
 
@@ -242,7 +247,7 @@ public sealed class TenantRateLimiterTests : IDisposable
                 catalog.RefreshAsync(ct).GetAwaiter().GetResult();
                 return PartitionedRateLimiter.Create<string, string>(RateLimitPartition.GetNoLimiter);
             },
-            new HttpContextTenantAccessor(new HttpContextAccessor { HttpContext = InTenant("acme") }),
+            new HttpContextTenantAccessor(new HttpContextAccessor { HttpContext = InTenant("acme") }, NoLoneTenant),
             catalog);
 
         using var lease = budget.AttemptAcquire(Address);
@@ -264,7 +269,7 @@ public sealed class TenantRateLimiterTests : IDisposable
                 built.Add(limiter);
                 return limiter;
             },
-            new HttpContextTenantAccessor(httpContextAccessor),
+            new HttpContextTenantAccessor(httpContextAccessor, NoLoneTenant),
             Moq.Mock.Of<ITenantCatalog>());
 
         foreach (var tenantId in new[] { "acme", "globex" })
@@ -374,7 +379,7 @@ public sealed class TenantRateLimiterTests : IDisposable
                 bothBuilding.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
                 return shared;
             },
-            new HttpContextTenantAccessor(httpContextAccessor),
+            new HttpContextTenantAccessor(httpContextAccessor, NoLoneTenant),
             Moq.Mock.Of<ITenantCatalog>());
 
         var calls = new[] { "acme", "globex" }.Select(tenantId => System.Threading.Tasks.Task.Run(() =>
@@ -441,7 +446,7 @@ public sealed class TenantRateLimiterTests : IDisposable
                 secondArrived.Wait(TimeSpan.FromMilliseconds(500), TestContext.Current.CancellationToken);
                 return PartitionedRateLimiter.Create<string, string>(key => RateLimitPartition.GetNoLimiter(key));
             },
-            new HttpContextTenantAccessor(httpContextAccessor),
+            new HttpContextTenantAccessor(httpContextAccessor, NoLoneTenant),
             Moq.Mock.Of<ITenantCatalog>());
 
         await System.Threading.Tasks.Task.WhenAll(

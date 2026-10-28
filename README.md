@@ -90,7 +90,7 @@ app.MapOidcEndpoints();
 app.Run();
 ```
 
-An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead. A host serving several tenants, or one at an issuer with a path, also calls `app.UseMultiTenancy()` before its own routing, so each request reaches its tenant.
+An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead. A host serving several tenants, one at an issuer with a path, or tenants from a store or catalog of its own also calls `app.UseMultiTenancy()` before its own routing, so each request reaches its tenant.
 
 This is the outline, not a complete application: the server also needs a cache, the CORS middleware, a login page and your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) builds a complete, runnable solution step by step.
 

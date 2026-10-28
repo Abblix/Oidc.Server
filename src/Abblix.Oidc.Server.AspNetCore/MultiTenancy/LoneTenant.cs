@@ -45,17 +45,23 @@ internal sealed class LoneTenant(IServiceProvider services, IOptions<OidcOptions
     private static Judgement Judge(IServiceProvider services, OidcOptions options)
     {
         if (services.GetService<ITenantStore>() is not OptionsTenantStore ||
-            services.GetService<ITenantCatalog>() is not StoreTenantCatalog catalog ||
-            services.GetService<ITenantStoreWriter>() is not null)
+            services.GetService<ITenantCatalog>() is not StoreTenantCatalog catalog)
         {
             return new(null, null, "its tenants come from a store or catalog of the host's own, which may change them while it runs");
         }
+
+        if (services.GetService<ITenantStoreWriter>() is not null)
+            return new(null, null, "it registers a tenant store writer, which changes the tenants while it runs");
 
         return options.Tenants switch
         {
             [var tenant] when TenantAddress.Of(tenant.Issuer).Path.Length == 0 => new(catalog, tenant.Id, null),
             [_] => new(null, null, "the issuer of its tenant has a path, which is cut from each request before it is routed"),
+
+            // Not entered by a server that starts: TenantServicesStartupCheck refuses options declaring no tenant
+            // before this is first judged
             [] => new(null, null, "its options declare no tenant"),
+
             _ => new(null, null, "its options declare more than one tenant, and each request is matched to one by its address"),
         };
     }
