@@ -14,19 +14,19 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 
 /// <summary>
-/// Settles the resources of a request whose token is polled for afterwards, a device authorization or a backchannel
-/// authentication request: the token request polling for it spends it, so the resources its access token is
-/// addressed to are settled, and held to the client's rules, at the request itself.
+/// The base of the resource validators of a request whose token is polled for afterwards, a device authorization or
+/// a backchannel authentication request: the token request polling for it spends it, so the resources its access token
+/// is addressed to are settled, and held to the client's rules, at the request itself.
 /// </summary>
-internal static class PolledRequestResources
+/// <param name="resourceManager">The registry of the tenant's resources.</param>
+public abstract class PolledRequestResourceValidator(IResourceManager resourceManager)
 {
     /// <summary>
     /// Settles <paramref name="resources"/>: the ones the request names, else the one its scopes refer to where the
     /// tenant infers it, each registered at the tenant and one the client may get an access token for.
     /// </summary>
     /// <returns>The refusal of the request for its resources, or null once they are settled.</returns>
-    public static OidcError? Settle(
-        IResourceManager resourceManager,
+    protected OidcError? Settle(
         TenantDefinition tenant,
         ClientInfo client,
         Uri[]? requested,

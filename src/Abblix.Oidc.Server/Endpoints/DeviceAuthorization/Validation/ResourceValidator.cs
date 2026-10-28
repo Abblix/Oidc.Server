@@ -21,7 +21,7 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 /// </summary>
 /// <param name="resourceManager">The service for managing and validating resources.</param>
 public class ResourceValidator(IResourceManager resourceManager)
-    : IDeviceAuthorizationContextValidator
+    : PolledRequestResourceValidator(resourceManager), IDeviceAuthorizationContextValidator
 {
     /// <inheritdoc />
     public Task<OidcError?> ValidateAsync(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
@@ -32,8 +32,7 @@ public class ResourceValidator(IResourceManager resourceManager)
         var request = context.Request;
         var scope = context.ClientInfo.ScopeServedFor(request.Scope ?? []) ?? [];
 
-        var refusal = PolledRequestResources.Settle(
-            resourceManager,
+        var refusal = Settle(
             tenant,
             context.ClientInfo,
             request.Resources,

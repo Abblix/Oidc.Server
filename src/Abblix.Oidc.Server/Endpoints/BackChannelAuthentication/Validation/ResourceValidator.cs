@@ -22,7 +22,7 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// </summary>
 /// <param name="resourceManager">The manager responsible for retrieving and validating resource information.</param>
 public class ResourceValidator(IResourceManager resourceManager)
-    : IBackChannelAuthenticationContextValidator
+    : PolledRequestResourceValidator(resourceManager), IBackChannelAuthenticationContextValidator
 {
     /// <summary>
     /// Settles the resources of the request in the context, or refuses the request for them.
@@ -42,8 +42,7 @@ public class ResourceValidator(IResourceManager resourceManager)
         var request = context.Request;
         var scope = context.ClientInfo.ScopeServedFor(request.Scope) ?? [];
 
-        var refusal = PolledRequestResources.Settle(
-            resourceManager,
+        var refusal = Settle(
             tenant,
             context.ClientInfo,
             request.Resources,

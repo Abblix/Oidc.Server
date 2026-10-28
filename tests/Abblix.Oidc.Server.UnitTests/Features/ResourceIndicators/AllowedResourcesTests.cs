@@ -127,8 +127,10 @@ public class AllowedResourcesTests
         => Assert.Equal(error, await ValidateAsync(endpoint, Tenant(defaultResource: Billing), null));
 
     /// <summary>
-    /// At the token endpoint the access token is addressed to the resources the request names, else every resource of
-    /// its grant, else the tenant's default, and each is held to the list.
+    /// At the token endpoint every resource the request names and every resource its grant holds is held to the list,
+    /// and so is the tenant's default when the token, built from the grant's resources narrowed to the named ones,
+    /// would carry none and the grant names no audience. A grant holding a resource taken off the list is refused even
+    /// when the request narrows to a listed one.
     /// </summary>
     [Theory]
     [InlineData(new[] { "https://orders.example.com" }, null, null, null)]
@@ -138,6 +140,11 @@ public class AllowedResourcesTests
     [InlineData(null, null, "https://billing.example.com", ErrorCodes.InvalidTarget)]
     [InlineData(null, null, "https://orders.example.com", null)]
     [InlineData(new[] { "https://orders.example.com" }, null, "https://billing.example.com", ErrorCodes.InvalidTarget)]
+    [InlineData(
+        new[] { "https://orders.example.com" },
+        new[] { "https://orders.example.com", "https://billing.example.com" },
+        null,
+        ErrorCodes.InvalidTarget)]
     public async Task ATokenRequest_IsHeldToTheList(
         string[]? named,
         string[]? granted,

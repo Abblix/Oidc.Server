@@ -18,14 +18,14 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// (<see cref="Features.ClientInformation.ClientInfo.AllowedResources"/>).
 /// </summary>
 /// <remarks>
-/// The access token is built from its grant (<see cref="Token.TokenAuthorizationContextEvaluator"/>): the grant's
-/// resources, narrowed to the ones the request names, else, with no resource and no audience in its grant, the
-/// tenant's default resource indicator (<see cref="Common.AuthorizationContextExtensions.WithDefaultResource"/>).
-/// Those are held to the list, and so is every resource the request names, as at every other endpoint, whether the
-/// token carries it or not. Read once the grant is authorized and
-/// before an authorization code or a refresh token is spent, and whenever a token is requested, so a resource taken
-/// off the list is refused at the next use of a grant holding it. The audiences a token exchange names are held to
-/// the client's token exchange audiences instead.
+/// Every resource the request names and every resource its grant holds is held to the list, so a resource taken off
+/// the list refuses the next use of a grant holding it, whatever the request narrows the token to, and the grant does
+/// not carry it on into a renewed refresh token. The access token is built from its grant
+/// (<see cref="Token.TokenAuthorizationContextEvaluator"/>): the grant's resources narrowed to the ones the request
+/// names, and when none remain and the grant names no audience, the tenant's default resource indicator
+/// (<see cref="Common.AuthorizationContextExtensions.WithDefaultResource"/>), which is held too. Read once the grant
+/// is authorized and before an authorization code or a refresh token is spent. The audiences a token exchange names
+/// are held to the client's token exchange audiences instead.
 /// </remarks>
 public class AllowedResourceValidator : SyncTokenContextValidatorBase
 {
@@ -35,20 +35,20 @@ public class AllowedResourceValidator : SyncTokenContextValidatorBase
         var named = context.Request.Resources ?? [];
         var grant = context.AuthorizedGrant.Context;
 
-        // As the token is built: the grant's resources narrowed to the named ones, and the grant's audiences, since a
-        // token exchange carries the ones its request names into its grant and no other grant reads them off the request
-        Uri[] carried = grant.Resources ?? [];
-        if (carried.Length > 0 && named.Length > 0)
-            carried = [.. carried.Intersect(named)];
+        Uri[] held = [.. named, .. grant.Resources ?? []];
 
-        if (carried.Length == 0 &&
+        // The default reaches the token as it is built: when the grant's resources narrowed to the named ones leave none,
+        // and the grant names no audience, since a token exchange carries the ones its request names into its grant and
+        // no other grant reads them off the request
+        var carried = named.Length > 0 ? (grant.Resources ?? []).Intersect(named) : grant.Resources ?? [];
+        if (!carried.Any() &&
             grant.Audiences is not { Length: > 0 } &&
             tenant.DefaultResourceIndicator is { } defaultResource)
         {
-            carried = [defaultResource];
+            held = [.. held, defaultResource];
         }
 
-        if (named.Concat(carried).Any(resource => !context.ClientInfo.MayGetTokenFor(resource)))
+        if (held.Any(resource => !context.ClientInfo.MayGetTokenFor(resource)))
             return new OidcError(ErrorCodes.InvalidTarget, ResourceRefusals.NotAllowedForClient);
 
         return null;

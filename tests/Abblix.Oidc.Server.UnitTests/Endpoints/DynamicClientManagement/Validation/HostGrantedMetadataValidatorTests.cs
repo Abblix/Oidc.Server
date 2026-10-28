@@ -82,6 +82,17 @@ public class HostGrantedMetadataValidatorTests
                 new NewClientOptions { TokenExchangeAudiences = ["orders-api"] },
                 tokenExchangeAudiences: [null!, "billing-api"]));
 
+    /// <summary>
+    /// A value naming nothing is refused on its own, beside values the host grants.
+    /// </summary>
+    [Fact]
+    public async Task ANoValueBesideAGrantedOne_IsRefused()
+        => Assert.Equal(
+            ErrorCodes.InvalidClientMetadata,
+            await ValidateAsync(
+                new NewClientOptions { TokenExchangeAudiences = ["orders-api"] },
+                tokenExchangeAudiences: [null!, "orders-api"]));
+
     [Fact]
     public async Task AnAudienceAHostGrantingNoneDidNotGrant_IsRefused()
         => Assert.Equal(
