@@ -22,14 +22,17 @@ namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 /// <c>Startup</c> class alike, and adds nothing to the pipeline. A host that registers its own
 /// <see cref="ITenantAccessor"/> finds the tenant its own way, so the call is required only while the server's own
 /// accessor is in use, and a host running no web server, such as a worker sharing the web application's
-/// registration, has no pipeline to call it in.
+/// registration, has no pipeline to call it in. A server whose options declare one tenant at an issuer without a
+/// path serves it without the call (<see cref="LoneTenant"/>), and the refusal names why any other needs it.
 /// </remarks>
 /// <param name="accessor">Tells the tenant of a request.</param>
 /// <param name="call">Records whether the pipeline calls <see cref="MultiTenancyExtensions.UseMultiTenancy"/>.</param>
+/// <param name="lone">Tells whether the one tenant is served without the call, and why the call is needed if not.</param>
 /// <param name="services">Tells whether the host runs a web server.</param>
 internal sealed class MultiTenancyCallCheck(
     ITenantAccessor accessor,
     MultiTenancyCall call,
+    LoneTenant lone,
     IServiceProvider services) : IHostedLifecycleService
 {
     /// <inheritdoc />
@@ -41,12 +44,16 @@ internal sealed class MultiTenancyCallCheck(
     /// <inheritdoc />
     public Task StartedAsync(CancellationToken cancellationToken)
     {
-        if (services.GetService<IServer>() is not null && accessor is HttpContextTenantAccessor && !call.Made)
+        if (services.GetService<IServer>() is not null &&
+            accessor is HttpContextTenantAccessor &&
+            !call.Made &&
+            lone.WhyTheCallIsNeeded is { } why)
         {
             throw new InvalidOperationException(
-                $"The pipeline does not call {nameof(MultiTenancyExtensions.UseMultiTenancy)}(), so no request reaches " +
-                "a tenant and every endpoint of the server answers 404. Call " +
-                $"{nameof(MultiTenancyExtensions.UseMultiTenancy)}() before UseRouting() and UseAuthentication().");
+                $"The pipeline does not call {nameof(MultiTenancyExtensions.UseMultiTenancy)}(), which this server " +
+                $"needs because {why}: without it no request reaches a tenant and every endpoint of the server " +
+                $"answers 404. Call {nameof(MultiTenancyExtensions.UseMultiTenancy)}() before UseRouting() and " +
+                "UseAuthentication().");
         }
 
         return Task.CompletedTask;

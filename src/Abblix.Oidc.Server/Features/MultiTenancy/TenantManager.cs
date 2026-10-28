@@ -42,7 +42,9 @@ public sealed partial class TenantManager(
     private ITenantStoreWriter Writer => writer
         ?? throw new InvalidOperationException(
             $"The tenants cannot be changed through {nameof(ITenantManager)}: the store registers no " +
-            $"{nameof(ITenantStoreWriter)}. Register one beside the {nameof(ITenantStore)}.");
+            $"{nameof(ITenantStoreWriter)}. Changing the tenants while the server runs needs a store of the host's " +
+            $"own with an {nameof(ITenantStoreWriter)} registered beside the {nameof(ITenantStore)}, and a pipeline " +
+            "that resolves each request to its tenant with UseMultiTenancy().");
 
     /// <inheritdoc />
     public Task<Result<StoredTenant, TenantChangeRefusal>> CreateAsync(

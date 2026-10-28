@@ -37,6 +37,7 @@ public static class MultiTenancyExtensions
             services.Replace(ServiceDescriptor.Singleton<ITenantAccessor, HttpContextTenantAccessor>());
 
         services.TryAddSingleton<MultiTenancyCall>();
+        services.TryAddSingleton<LoneTenant>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, MultiTenancyCallCheck>());
         return services;
     }
@@ -54,7 +55,8 @@ public static class MultiTenancyExtensions
     /// before this call, by <c>UsePathBase</c> for one, is compared with the issuer's path exactly, the case of an
     /// encoded slash aside, so a request spelling it in another case reaches no tenant. A host registering the server
     /// through the MVC or Minimal API <c>AddOidcServices</c> whose pipeline leaves this call out does not start, unless
-    /// it registers its own <see cref="ITenantAccessor"/> or runs no web server.
+    /// it registers its own <see cref="ITenantAccessor"/>, runs no web server, or declares one tenant in its options at
+    /// an issuer without a path and nothing that changes the tenants while it runs, which is served without the call.
     /// </remarks>
     public static IApplicationBuilder UseMultiTenancy(this IApplicationBuilder app)
     {

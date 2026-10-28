@@ -46,8 +46,6 @@ builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefini
 
 var app = builder.Build();
 
-// Resolve each request to the tenant its address names, before routing
-app.UseMultiTenancy();
 app.UseAuthentication();
 app.UseAuthorization();
 

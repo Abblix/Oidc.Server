@@ -28,8 +28,9 @@ using Abblix.Oidc.Server.Mvc;
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// A host starts and serves its tenant when its pipeline calls <c>UseMultiTenancy()</c>, and does not start when it
-/// leaves the call out, under the minimal hosting model and under a <c>Startup</c> class alike.
+/// A host starts and serves its tenant when its pipeline calls <c>UseMultiTenancy()</c>, and so does a host of one
+/// tenant at an issuer without a path that leaves the call out, under the minimal hosting model and under a
+/// <c>Startup</c> class alike; the hosts that still need the call are covered in the multi-tenancy suite.
 /// </summary>
 public sealed class MultiTenancyCallTests
 {
@@ -49,15 +50,24 @@ public sealed class MultiTenancyCallTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    /// <summary>
+    /// A host whose options declare one tenant at an issuer without a path has nothing to resolve, and serves it
+    /// without the call.
+    /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task AHostLeavingOutUseMultiTenancy_DoesNotStart(bool underStartupClass)
+    public async Task AHostOfOneTenantLeavingOutUseMultiTenancy_ServesItsTenant(bool underStartupClass)
     {
         var ct = TestContext.Current.CancellationToken;
         using var host = Build(underStartupClass, callsMultiTenancy: false);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(ct));
+        await host.StartAsync(ct);
+
+        using var client = host.GetTestClient();
+        client.BaseAddress = TestServerAddress.BaseAddress;
+        using var response = await client.GetAsync("/.well-known/openid-configuration", ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     /// <summary>
