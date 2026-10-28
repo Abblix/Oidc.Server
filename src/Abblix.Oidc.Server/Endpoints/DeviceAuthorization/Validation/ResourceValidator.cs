@@ -8,7 +8,6 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -31,42 +30,19 @@ public class ResourceValidator(IResourceManager resourceManager)
     private OidcError? Validate(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
     {
         var request = context.Request;
-        var requested = request.Resources;
         var scope = context.ClientInfo.ScopeServedFor(request.Scope ?? []) ?? [];
 
-        if (requested is not { Length: > 0 })
-        {
-            if (!ResourceInference.TryInfer(tenant, scope, out var inferred, out var ambiguity))
-                return new OidcError(ErrorCodes.InvalidScope, ambiguity);
-
-            if (inferred is null)
-                return Refused(context.ClientInfo, tenant, []);
-
-            requested = [inferred];
-        }
-
-        if (!resourceManager.Validate(tenant, 
-                requested,
-                scope,
-                out var resources,
-                out var errorDescription))
-        {
-            return new OidcError(ErrorCodes.InvalidTarget, errorDescription);
-        }
-
-        if (Refused(context.ClientInfo, tenant, resources) is { } refusal)
+        var refusal = PolledRequestResources.Settle(
+            resourceManager,
+            tenant,
+            context.ClientInfo,
+            request.Resources,
+            scope,
+            out var resources);
+        if (refusal is not null)
             return refusal;
 
         context.Resources = resources;
         return null;
     }
-
-    /// <summary>
-    /// The refusal of the client's rules about <paramref name="resources"/>, or null. The token request polling for
-    /// this request spends it, so the resources its access token is addressed to are settled here.
-    /// </summary>
-    private static OidcError? Refused(ClientInfo client, TenantDefinition tenant, ResourceDefinition[] resources)
-        => ResourceRefusals.Of(client, tenant, resources, finalForItsToken: true) is { } refusal
-            ? new OidcError(ErrorCodes.InvalidTarget, refusal)
-            : null;
 }

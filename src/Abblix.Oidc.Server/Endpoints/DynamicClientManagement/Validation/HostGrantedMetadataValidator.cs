@@ -40,9 +40,11 @@ public class HostGrantedMetadataValidator(IOptionsMonitor<OidcOptions> options) 
     /// </summary>
     private static OidcError? WithinGranted<T>(T[]? sent, T[]? granted, string member)
     {
-        var outside = (sent ?? []).FirstOrDefault(value => granted is null || !granted.Contains(value));
-        return outside is not null
-            ? ErrorFactory.InvalidClientMetadata($"The server does not grant the {member} value {outside}")
+        // Every value is read, one naming nothing included, which the host's set does not hold either
+        var outside = (sent ?? []).Where(value => granted is null || !granted.Contains(value)).ToArray();
+        return outside.Length > 0
+            ? ErrorFactory.InvalidClientMetadata(
+                $"The server does not grant the {member} value {outside[0]?.ToString() ?? "null"}")
             : null;
     }
 }

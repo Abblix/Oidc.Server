@@ -137,6 +137,34 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// An update naming neither member replaces the metadata whole, so the client is given the host's sets again, as a
+    /// registration naming neither is: a client that narrowed its list on registration gets the host's list back.
+    /// </summary>
+    [Fact]
+    public async Task An_update_naming_neither_is_given_what_the_host_grants()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("narrowed-then-updated");
+        metadata[RequestMembers.AllowedResources] = new JsonArray();
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+        Assert.Empty(registered[ResponseMembers.AllowedResources]!.AsArray());
+
+        var updated = NewClientMetadata("narrowed-then-updated");
+        updated[RequestMembers.ClientId] = registered[ResponseMembers.ClientId]!.GetValue<string>();
+        var update = Request(
+            HttpMethod.Put,
+            new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute),
+            registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>());
+        update.Content = JsonContent.Create(updated);
+        var response = await ReadJsonAsync(await client.SendAsync(update, TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            TestConstants.ApiResource,
+            Assert.Single(response[ResponseMembers.AllowedResources]!.AsArray())!.GetValue<string>());
+    }
+
+    /// <summary>
     /// An update is held to the same policy, so a client cannot widen its list after registering within it.
     /// </summary>
     [Fact]

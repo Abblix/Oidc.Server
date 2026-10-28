@@ -18,8 +18,11 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// (<see cref="Features.ClientInformation.ClientInfo.AllowedResources"/>).
 /// </summary>
 /// <remarks>
-/// The access token is addressed to the resources the request names, else every resource of its grant, else, with
-/// no resource and no audience in its grant, the tenant's default resource indicator. Read once the grant is authorized and
+/// The access token is built from its grant (<see cref="Token.TokenAuthorizationContextEvaluator"/>): the grant's
+/// resources, narrowed to the ones the request names, else, with no resource and no audience in its grant, the
+/// tenant's default resource indicator (<see cref="Common.AuthorizationContextExtensions.WithDefaultResource"/>).
+/// Those are held to the list, and so is every resource the request names, as at every other endpoint, whether the
+/// token carries it or not. Read once the grant is authorized and
 /// before an authorization code or a refresh token is spent, and whenever a token is requested, so a resource taken
 /// off the list is refused at the next use of a grant holding it. The audiences a token exchange names are held to
 /// the client's token exchange audiences instead.
@@ -29,20 +32,23 @@ public class AllowedResourceValidator : SyncTokenContextValidatorBase
     /// <inheritdoc />
     protected override OidcError? Validate(TenantDefinition tenant, TokenValidationContext context)
     {
-        var request = context.Request;
+        var named = context.Request.Resources ?? [];
         var grant = context.AuthorizedGrant.Context;
-        var resources = request.Resources is { Length: > 0 } named ? named : grant.Resources ?? [];
 
-        // The token's audiences are the grant's: a token exchange carries the ones its request names into its grant,
-        // and no other grant reads them off the request
-        if (resources.Length == 0 &&
+        // As the token is built: the grant's resources narrowed to the named ones, and the grant's audiences, since a
+        // token exchange carries the ones its request names into its grant and no other grant reads them off the request
+        Uri[] carried = grant.Resources ?? [];
+        if (carried.Length > 0 && named.Length > 0)
+            carried = [.. carried.Intersect(named)];
+
+        if (carried.Length == 0 &&
             grant.Audiences is not { Length: > 0 } &&
             tenant.DefaultResourceIndicator is { } defaultResource)
         {
-            resources = [defaultResource];
+            carried = [defaultResource];
         }
 
-        if (resources.Any(resource => !context.ClientInfo.MayGetTokenFor(resource)))
+        if (named.Concat(carried).Any(resource => !context.ClientInfo.MayGetTokenFor(resource)))
             return new OidcError(ErrorCodes.InvalidTarget, ResourceRefusals.NotAllowedForClient);
 
         return null;

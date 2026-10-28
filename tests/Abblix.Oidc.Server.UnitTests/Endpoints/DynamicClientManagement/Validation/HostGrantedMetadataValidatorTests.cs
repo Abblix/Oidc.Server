@@ -70,6 +70,18 @@ public class HostGrantedMetadataValidatorTests
                 new NewClientOptions { TokenExchangeAudiences = ["orders-api"] },
                 tokenExchangeAudiences: ["billing-api"]));
 
+    /// <summary>
+    /// A value naming nothing is one the host did not grant, wherever it stands in the list, so the values after it
+    /// are not let through unread.
+    /// </summary>
+    [Fact]
+    public async Task AListLeadingWithNoValue_IsRefused()
+        => Assert.Equal(
+            ErrorCodes.InvalidClientMetadata,
+            await ValidateAsync(
+                new NewClientOptions { TokenExchangeAudiences = ["orders-api"] },
+                tokenExchangeAudiences: [null!, "billing-api"]));
+
     [Fact]
     public async Task AnAudienceAHostGrantingNoneDidNotGrant_IsRefused()
         => Assert.Equal(

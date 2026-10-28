@@ -137,6 +137,7 @@ public class AllowedResourcesTests
     [InlineData(null, new[] { "https://orders.example.com" }, null, null)]
     [InlineData(null, null, "https://billing.example.com", ErrorCodes.InvalidTarget)]
     [InlineData(null, null, "https://orders.example.com", null)]
+    [InlineData(new[] { "https://orders.example.com" }, null, "https://billing.example.com", ErrorCodes.InvalidTarget)]
     public async Task ATokenRequest_IsHeldToTheList(
         string[]? named,
         string[]? granted,
@@ -194,6 +195,31 @@ public class AllowedResourcesTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(ErrorCodes.InvalidTarget, refused?.Error);
+    }
+
+    /// <summary>
+    /// A grant naming an audience is addressed to it rather than to the tenant's default resource, so the default
+    /// off the list does not refuse it.
+    /// </summary>
+    [Fact]
+    public async Task AGrantNamingAnAudience_IsNotAddressedToTheDefaultResource()
+    {
+        var context = new TokenValidationContext(
+            new TokenRequest { GrantType = GrantTypes.TokenExchange, Audiences = ["orders-api"] },
+            new ClientRequest { ClientId = ClientId })
+        {
+            ClientInfo = Client(),
+            AuthorizedGrant = new AuthorizedGrant(
+                new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
+                new AuthorizationContext(ClientId, [], null) { Audiences = ["orders-api"] }),
+        };
+
+        var refused = await new AllowedResourceValidator().ValidateAsync(
+            Tenant(defaultResource: Billing),
+            context,
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(refused);
     }
 
     /// <summary>
