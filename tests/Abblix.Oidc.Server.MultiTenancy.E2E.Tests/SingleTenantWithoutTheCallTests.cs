@@ -27,6 +27,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
@@ -40,6 +41,8 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 public sealed class SingleTenantWithoutTheCallTests
 {
     private const string Host = "https://auth.example.com";
+
+    private static readonly TimeSpan WhileTheLoadIsHeld = TimeSpan.FromSeconds(2);
     private const string ClientId = "single-tenant-client";
     private const string ClientSecret = "single-tenant-secret";
     private const string RedirectUri = "https://client.example.com/callback";
@@ -63,6 +66,35 @@ public sealed class SingleTenantWithoutTheCallTests
         using var token = await RequestTokenAsync(http);
         Assert.Equal(HttpStatusCode.OK, token.StatusCode);
         Assert.Equal(Host, IssuerOf((await ReadJsonAsync(token))[ResponseParameters.AccessToken]!.GetValue<string>()));
+    }
+
+    /// <summary>
+    /// A request arriving while the tenant is still being loaded at startup - the host starting its services at once,
+    /// the tenant's preparation held open - waits for the load and is served, as on a host that calls the method.
+    /// </summary>
+    [Fact]
+    public async Task ARequestDuringTheFirstLoad_WaitsForItAndIsServed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var preparation = new HeldPreparation();
+        await using var app = Build([Tenant("acme", Host)], services =>
+        {
+            services.Configure<HostOptions>(host => host.ServicesStartConcurrently = true);
+            services.AddSingleton<ITenantOpening>(preparation);
+        });
+
+        var start = app.StartAsync(ct);
+        await preparation.Entered.Task.WaitAsync(ct);
+        using var http = Client(app);
+        var discovery = http.GetAsync("/.well-known/openid-configuration", ct);
+
+        // Long enough for a request that does not wait to be answered while the load is still held open
+        await Task.WhenAny(discovery, Task.Delay(WhileTheLoadIsHeld, ct));
+        preparation.Release.SetResult();
+        await start;
+
+        using var response = await discovery;
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     /// <summary>
@@ -338,6 +370,26 @@ public sealed class SingleTenantWithoutTheCallTests
         ],
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
     };
+
+    /// <summary>
+    /// A preparation of the tenants that holds the load open until the test releases it, as one fetching a key from a
+    /// vault does until the vault answers.
+    /// </summary>
+    private sealed class HeldPreparation : ITenantOpening
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
+            IReadOnlyCollection<TenantDefinition> tenants,
+            CancellationToken cancellationToken)
+        {
+            Entered.TrySetResult();
+            await Release.Task;
+            return new Dictionary<string, Exception>();
+        }
+    }
 
     /// <summary>
     /// A read-only tenant store of the host's own, as a host keeping its tenants in a database registers.
