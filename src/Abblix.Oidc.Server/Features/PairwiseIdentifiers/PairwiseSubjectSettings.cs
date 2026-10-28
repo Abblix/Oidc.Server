@@ -67,11 +67,19 @@ public record PairwiseSubjectSettings
 
     /// <summary>Why this hash cannot key the seal, or null when it can.</summary>
     /// <param name="name">The name a deployment configured.</param>
-    internal static string? HashAlgorithmRefusal(string? name)
-        => HashAlgorithmNamed(name) is null
-            ? $"The pairwise {nameof(HashAlgorithm)} '{name}' is not one the pairwise seal can use: " +
-              $"{string.Join(", ", SupportedHashAlgorithms.Select(algorithm => algorithm.Name))}."
-            : null;
+    /// <remarks>Public for the reason <see cref="SaltRefusal"/> is: a caller holding settings it did not write asks
+    /// here.</remarks>
+    public static string? HashAlgorithmRefusal(string? name)
+    {
+        if (HashAlgorithmNamed(name) is not null)
+            return null;
+
+        var supported = string.Join(", ", SupportedHashAlgorithms.Select(algorithm => algorithm.Name));
+        if (name is null)
+            return $"The pairwise {nameof(HashAlgorithm)} is not set: name one of {supported}.";
+
+        return $"The pairwise {nameof(HashAlgorithm)} '{name}' is not one the pairwise seal can use: {supported}.";
+    }
 
     /// <summary>Refuses a salt that cannot key the seal.</summary>
     /// <param name="salt">The base64 value a deployment configured.</param>

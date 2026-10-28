@@ -78,6 +78,40 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A tenant whose pairwise salt and hash are both unusable is told of both at once, so the host does not learn of
+    /// the hash only after fixing the salt and starting again.
+    /// </summary>
+    [Fact]
+    public void ATenantsUnusablePairwiseSaltAndHash_AreBothRefusedAtStartup()
+    {
+        var unusable = new PairwiseSubjectSettings
+        {
+            Salt = Convert.ToBase64String(new byte[16]),
+            HashAlgorithm = nameof(HashAlgorithmName.MD5),
+        };
+        var services = new ServiceCollection().AddServerStorage();
+        services.ServeTenants(options => options.Tenants.Add(new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = new Uri(AcmeIssuer),
+            PairwiseSubject = unusable,
+        }));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        foreach (var reason in new[]
+                 {
+                     PairwiseSubjectSettings.SaltRefusal(unusable.Salt),
+                     PairwiseSubjectSettings.HashAlgorithmRefusal(unusable.HashAlgorithm),
+                 })
+        {
+            Assert.NotNull(reason);
+            Assert.Contains(reason, refusal.Message, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
     /// A container serving keys from each tenant's settings, as a host that keeps its keys in configuration has.
     /// </summary>
     private static ServiceProvider KeysFromSettings(TenantDefinition tenant, Action<OidcOptions>? configure = null)
