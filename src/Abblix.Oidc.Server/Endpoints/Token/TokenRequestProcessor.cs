@@ -67,9 +67,6 @@ public class TokenRequestProcessor(
 
 		var authContext = tokenContextEvaluator.EvaluateAuthorizationContext(request);
 
-		if (RefuseWidening(request, authContext) is { } refusal)
-			return refusal;
-
 		authContext = OfflineAccessIgnoredUnlessAllowed(clientInfo, authContext);
 
 		// Read before the token service is handed the context: whether a refresh token and an ID token are issued
@@ -133,37 +130,6 @@ public class TokenRequestProcessor(
 			return authContext;
 
 		return authContext with { Scope = [.. authContext.Scope.Where(scope => scope != Scopes.OfflineAccess)] };
-	}
-
-	/// <summary>
-	/// Refuses a token request that reaches for scopes or resources the grant never held.
-	/// </summary>
-	/// <remarks>
-	/// RFC 6749 section 5.2/section 6 and RFC 8707 section 2.2: a token request may only narrow what the grant carries,
-	/// never reach for scopes or resources it never held. The evaluator intersects requested with
-	/// granted; a non-empty request that collapses to an empty intersection means the client asked
-	/// for scopes/resources the grant does not cover. Issuing a scopeless token, or one whose audience
-	/// silently falls back to the client id, would hand back different authority than was asked for.
-	/// </remarks>
-	private static OidcError? RefuseWidening(ValidTokenRequest request, AuthorizationContext authContext)
-	{
-		if (request.Scope is { Length: > 0 } && authContext.Scope is not { Length: > 0 })
-		{
-			return new OidcError(
-				ErrorCodes.InvalidScope,
-				"The requested scope exceeds the scope granted by the resource owner.");
-		}
-
-		var resourcesRequested = request.Resources is { Length: > 0 };
-		var resourcesGranted = request.AuthorizedGrant.Context.Resources is { Length: > 0 };
-		if (resourcesRequested && resourcesGranted && authContext.Resources is not { Length: > 0 })
-		{
-			return new OidcError(
-				ErrorCodes.InvalidTarget,
-				"The requested resource is not among the resources granted by the resource owner.");
-		}
-
-		return null;
 	}
 
 	/// <summary>

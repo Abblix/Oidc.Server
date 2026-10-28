@@ -33,6 +33,12 @@ public interface IAuthorizationGrantHandler : IGrantTypeInformer
 	/// <see cref="AuthorizedGrant"/> that will drive token issuance, or an <see cref="OidcError"/>
 	/// such as <c>invalid_grant</c>, <c>authorization_pending</c>, or <c>slow_down</c>.
 	/// </summary>
+	/// <remarks>
+	/// A grant the token request itself authorizes takes its resources from <see cref="TokenRequest.Resources"/>,
+	/// which already holds a resource inferred from the scope: a resource the request names that the grant does not
+	/// hold refuses the request (<see cref="Validation.GrantNarrowingValidator"/>). Which grants the request
+	/// authorizes itself is decided by <see cref="Validation.ResourceValidator"/>.
+	/// </remarks>
 	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The token request (already authenticated against the client).</param>
 	/// <param name="clientInfo">The authenticated client; used to enforce that the grant was

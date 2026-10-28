@@ -31,6 +31,11 @@ public static class ResourceRefusals
     public const string NotAllowedForClient = "The client may not get an access token for the resource";
 
     /// <summary>
+    /// A token request names a resource its grant does not hold.
+    /// </summary>
+    public const string NotGranted = "The requested resource is not among the resources granted by the resource owner.";
+
+    /// <summary>
     /// Why <paramref name="client"/> is refused a request settling <paramref name="resources"/>, or null.
     /// </summary>
     /// <param name="client">The client making the request.</param>

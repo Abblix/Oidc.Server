@@ -17,4 +17,9 @@ internal static class ScopeRefusals
     /// A request naming no scope from a client required to name one.
     /// </summary>
     public const string NoneNamed = "This client is required to name the scope it requests";
+
+    /// <summary>
+    /// A token request naming none of the scopes its grant holds.
+    /// </summary>
+    public const string NotGranted = "The requested scope exceeds the scope granted by the resource owner.";
 }
