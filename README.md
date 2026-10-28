@@ -64,7 +64,6 @@ dotnet add package Abblix.OIDC.Server.MinimalApi
 
 ```csharp
 using Abblix.Jwt;
-using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi;
@@ -79,7 +78,7 @@ builder.Services.AddConsentGrantedForEveryClient();
 builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
     Id = "main",
-    // The address the app is served on: a request to any other reaches no tenant and is answered 404
+    // The address the app is served on, written into every token it issues
     Issuer = new Uri("https://auth.example.com"),
     LoginUri = new Uri("/Auth/Login", UriKind.Relative),
     SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
@@ -87,13 +86,11 @@ builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefini
 
 var app = builder.Build();
 
-// Resolve each request to the tenant its address names, before routing
-app.UseMultiTenancy();
 app.MapOidcEndpoints();
 app.Run();
 ```
 
-An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead.
+An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead. A host serving several tenants, or one at an issuer with a path, also calls `app.UseMultiTenancy()` before its own routing, so each request reaches its tenant.
 
 This is the outline, not a complete application: the server also needs a cache, the CORS middleware, a login page and your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) builds a complete, runnable solution step by step.
 
