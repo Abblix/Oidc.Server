@@ -42,7 +42,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// the pre-seeded clients carry the device grant, so these tests register their own through dynamic client
 /// registration - which also gives each test a client of its own to prove the cross-client boundary.
 /// </remarks>
-public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
+public partial class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
 {
     [Fact]
     public async Task The_device_authorization_endpoint_is_published_in_discovery()

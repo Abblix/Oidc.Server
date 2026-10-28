@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.RandomGenerators;
+using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.Tokens;
 
 
@@ -160,7 +161,7 @@ public class TokenRequestProcessor(
 		{
 			return new OidcError(
 				ErrorCodes.InvalidTarget,
-				"The requested resource is not among the resources granted by the resource owner.");
+				ResourceRefusals.NotGranted);
 		}
 
 		return null;
