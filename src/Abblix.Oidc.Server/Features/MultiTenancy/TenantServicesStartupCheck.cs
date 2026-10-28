@@ -50,6 +50,17 @@ internal sealed class TenantServicesStartupCheck(
                 "serving one issuer declares one - or register a store of tenants they can be added to.");
         }
 
+        // The tenant manager writes through the writer and then reads the store again, and the settings never hold what
+        // it wrote: it would report a tenant created, changed or removed that the server does not serve as told
+        if (store is OptionsTenantStore && serviceProvider.GetService<ITenantStoreWriter>() is not null)
+        {
+            failures.Add(
+                $"An {nameof(ITenantStoreWriter)} is registered, but the tenants come from " +
+                $"{nameof(OidcOptions)}.{nameof(OidcOptions.Tenants)}, which never holds what it writes, so a tenant " +
+                $"changed through {nameof(ITenantManager)} would not be served as changed. Register an " +
+                $"{nameof(ITenantStore)} of your own that reads what the writer writes, or remove the writer.");
+        }
+
         failures.AddRange(new[]
             {
                 Replaced<IReplayCache, TenantReplayCache>(null),

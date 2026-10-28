@@ -202,7 +202,7 @@ public sealed class SingleTenantWithoutTheCallTests
     }
 
     /// <summary>
-    /// A tenant whose issuer has a path, several tenants, and a store, store writer or catalog of the host's own each
+    /// A tenant whose issuer has a path, several tenants, and a store or catalog of the host's own each
     /// need the call, and a host leaving it out does not start, told so by name. Several tenants at the roots of
     /// hosts of their own are judged in <c>LoneTenantTests</c>, since the suite's license names one host.
     /// </summary>
@@ -210,7 +210,6 @@ public sealed class SingleTenantWithoutTheCallTests
     [InlineData("path")]
     [InlineData("several")]
     [InlineData("store")]
-    [InlineData("writer")]
     [InlineData("catalog")]
     public async Task AHostNeedingTheCall_DoesNotStartWithoutIt(string why)
     {
@@ -218,13 +217,12 @@ public sealed class SingleTenantWithoutTheCallTests
         {
             "path" => [Tenant("acme", Host + "/tenants/acme")],
             "several" => [Tenant("acme", Host + "/tenants/acme"), Tenant("globex", Host + "/tenants/globex")],
-            "store" or "writer" or "catalog" => [Tenant("acme", Host)],
+            "store" or "catalog" => [Tenant("acme", Host)],
             _ => throw new ArgumentOutOfRangeException(nameof(why), why, null),
         };
         Action<IServiceCollection>? ownTenants = why switch
         {
             "store" => services => services.AddSingleton<ITenantStore, OwnStore>(),
-            "writer" => services => services.AddSingleton<ITenantStoreWriter>(new MemoryTenantStore()),
             "catalog" => services => services.AddSingleton<ITenantCatalog>(
                 provider => new OwnCatalog(provider.GetRequiredService<StoreTenantCatalog>())),
             _ => null,
@@ -235,6 +233,27 @@ public sealed class SingleTenantWithoutTheCallTests
             () => app.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains(nameof(MultiTenancyExtensions.UseMultiTenancy), refusal.Message, StringComparison.Ordinal);
+        await app.DisposeAsync();
+    }
+
+    /// <summary>
+    /// A tenant store writer beside the tenants of the options writes where the server never reads, so the host does
+    /// not start, with the call or without it, told so by the writer's name.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AWriterBesideTheTenantsOfTheOptions_DoesNotStart(bool callsMultiTenancy)
+    {
+        var app = Build(
+            [Tenant("acme", Host)],
+            services => services.AddSingleton<ITenantStoreWriter>(new MemoryTenantStore()),
+            callsMultiTenancy: callsMultiTenancy);
+
+        var refusal = await Assert.ThrowsAsync<OptionsValidationException>(
+            () => app.StartAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains(nameof(ITenantStoreWriter), refusal.Message, StringComparison.Ordinal);
         await app.DisposeAsync();
     }
 
