@@ -51,6 +51,33 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A tenant naming a pairwise hash the seal cannot use is refused at startup, naming the tenant and the setting,
+    /// rather than by a 500 the first time one of its clients is given a pairwise identifier.
+    /// </summary>
+    [Fact]
+    public void ATenantsUnusablePairwiseHash_IsRefusedAtStartup()
+    {
+        var unknownHash = new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = new Uri(AcmeIssuer),
+            PairwiseSubject = new PairwiseSubjectSettings
+            {
+                Salt = Convert.ToBase64String(new byte[32]),
+                HashAlgorithm = nameof(HashAlgorithmName.MD5),
+            },
+        };
+        var services = new ServiceCollection().AddServerStorage();
+        services.ServeTenants(options => options.Tenants.Add(unknownHash));
+        using var provider = services.BuildServiceProvider();
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains("Tenant 'acme'", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(PairwiseSubjectSettings.HashAlgorithm), refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A container serving keys from each tenant's settings, as a host that keeps its keys in configuration has.
     /// </summary>
     private static ServiceProvider KeysFromSettings(TenantDefinition tenant, Action<OidcOptions>? configure = null)

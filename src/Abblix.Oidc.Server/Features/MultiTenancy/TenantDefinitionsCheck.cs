@@ -118,8 +118,8 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
         // Refused here rather than when the first pairwise identifier is minted, which would answer with a 500
         failures.AddRange(
             from tenant in tenants
-            let refusal = tenant.PairwiseSubject is { Salt: var salt }
-                ? PairwiseSubjectSettings.SaltRefusal(salt)
+            let refusal = tenant.PairwiseSubject is { Salt: var salt, HashAlgorithm: var hashAlgorithm }
+                ? PairwiseSubjectSettings.SaltRefusal(salt) ?? PairwiseSubjectSettings.HashAlgorithmRefusal(hashAlgorithm)
                 : null
             where refusal is not null
             select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}': {refusal}"));
