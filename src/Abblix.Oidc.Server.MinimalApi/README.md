@@ -35,13 +35,19 @@ var builder = WebApplication.CreateBuilder(args);
 // to ask the end user for consent, register your own IUserConsentsProvider instead
 builder.Services.AddConsentGrantedForEveryClient();
 
-builder.Services.AddOidcServices(options =>
+// The server serves tenants; a host serving one issuer declares one, with its clients, scopes and signing keys
+builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
-    // configure issuer, clients, signing keys, enabled endpoints, ...
-});
+    Id = "main",
+    Issuer = new Uri("https://auth.example.com"),
+    LoginUri = new Uri("/Auth/Login", UriKind.Relative),
+    SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+}));
 
 var app = builder.Build();
 
+// Resolve each request to the tenant its address names, before routing
+app.UseMultiTenancy();
 app.UseAuthentication();
 app.UseAuthorization();
 
