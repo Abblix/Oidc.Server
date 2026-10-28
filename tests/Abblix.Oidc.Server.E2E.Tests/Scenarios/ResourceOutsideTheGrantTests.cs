@@ -97,6 +97,33 @@ public class ResourceOutsideTheGrantTests(TestFactory factory) : TestBase(factor
     }
 
     /// <summary>
+    /// A scope partly outside the grant is narrowed to the granted scopes rather than refused, and the response states
+    /// the scope the token carries.
+    /// </summary>
+    [Fact]
+    public async Task A_scope_partly_outside_its_grant_is_narrowed()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var (verifier, challenge) = GeneratePkcePair();
+        var parameters = CodeFlowParameters(TestConstants.ConfidentialClientId, challenge);
+        parameters[AuthorizationRequest.Parameters.Scope] = $"{Scopes.OpenId} {Scopes.Profile}";
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, parameters);
+
+        using var response = await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.TokenEndpoint,
+            [
+                .. RedeemForm(TestConstants.ConfidentialClientId, code, verifier),
+                new(TokenRequest.Parameters.Scope, $"{Scopes.Profile} {Scopes.Email}"),
+            ]);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
+
+        Assert.True(response.StatusCode == HttpStatusCode.OK, $"expected 200, got {(int)response.StatusCode}: {body}");
+        Assert.Equal(Scopes.Profile, body[ResponseParameters.Scope]?.GetValue<string>());
+    }
+
+    /// <summary>
     /// A client whose access tokens each name one resource is told a resource outside its grant was not granted,
     /// rather than that it named too many.
     /// </summary>

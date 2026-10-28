@@ -27,11 +27,13 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 public partial class BackChannelAuthenticationTests
 {
     /// <summary>
-    /// A backchannel request authenticated for one resource refuses a token request naming another beside it, as the
-    /// token endpoint refuses it for every grant authorized before the token request.
+    /// A backchannel request authenticated for one resource refuses a token request naming another, alone or beside
+    /// it, as the token endpoint refuses it for every grant authorized before the token request.
     /// </summary>
-    [Fact]
-    public async Task A_redemption_naming_a_resource_outside_its_grant_is_refused()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_redemption_naming_a_resource_outside_its_grant_is_refused(bool alsoNamesTheGranted)
     {
         await using var host = CreateCibaHost();
         var client = CreateClientFor(host);
@@ -71,14 +73,16 @@ public partial class BackChannelAuthenticationTests
                 .CompleteAsync(TestTenant.Of(host.Services), authRequestId, completed, TimeSpan.FromMinutes(5));
         }
 
+        string[] named = alsoNamesTheGranted
+            ? [TestConstants.ApiResource, TestConstants.OtherApiResource]
+            : [TestConstants.OtherApiResource];
         var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint,
         [
             new(TokenRequest.Parameters.GrantType, GrantTypes.Ciba),
             new(TokenRequest.Parameters.AuthenticationRequestId, authRequestId),
             new(ClientRequest.Parameters.ClientId, ciba.ClientId),
             new(ClientRequest.Parameters.ClientSecret, ciba.ClientSecret),
-            new(TokenRequest.Parameters.Resource, TestConstants.ApiResource),
-            new(TokenRequest.Parameters.Resource, TestConstants.OtherApiResource),
+            .. named.Select(resource => new KeyValuePair<string, string>(TokenRequest.Parameters.Resource, resource)),
         ]);
 
         var body = await ReadJsonAsync(response);

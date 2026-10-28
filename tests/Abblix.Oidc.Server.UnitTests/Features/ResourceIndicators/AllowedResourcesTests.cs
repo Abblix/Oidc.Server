@@ -127,20 +127,20 @@ public class AllowedResourcesTests
         => Assert.Equal(error, await ValidateAsync(endpoint, Tenant(defaultResource: Billing), null));
 
     /// <summary>
-    /// At the token endpoint every resource the request names and every resource its grant holds is held to the list,
-    /// and so is the tenant's default when the token, built from the grant's resources narrowed to the named ones,
-    /// would carry none and the grant names no audience. A grant holding a resource taken off the list is refused even
-    /// when the request narrows to a listed one.
+    /// At the token endpoint every resource the request names, each one inside its grant, and every resource its grant
+    /// holds is held to the list, and so is the tenant's default when the request names none, the grant holds none and
+    /// names no audience. A grant holding a resource taken off the list is refused even when the request narrows to a
+    /// listed one.
     /// </summary>
     [Theory]
-    [InlineData(new[] { "https://orders.example.com" }, null, null, null)]
-    [InlineData(new[] { "https://billing.example.com" }, null, null, ErrorCodes.InvalidTarget)]
+    [InlineData(new[] { "https://orders.example.com" }, new[] { "https://orders.example.com" }, null, null)]
+    [InlineData(new[] { "https://billing.example.com" }, new[] { "https://billing.example.com" }, null, ErrorCodes.InvalidTarget)]
     [InlineData(null, new[] { "https://billing.example.com" }, null, ErrorCodes.InvalidTarget)]
     [InlineData(null, new[] { "https://orders.example.com" }, null, null)]
     [InlineData(null, null, "https://billing.example.com", ErrorCodes.InvalidTarget)]
     [InlineData(null, null, "https://orders.example.com", null)]
     [InlineData(null, new[] { "https://orders.example.com" }, "https://billing.example.com", null)]
-    [InlineData(new[] { "https://orders.example.com" }, null, "https://billing.example.com", ErrorCodes.InvalidTarget)]
+    [InlineData(new[] { "https://orders.example.com" }, new[] { "https://orders.example.com" }, "https://billing.example.com", null)]
     [InlineData(
         new[] { "https://orders.example.com" },
         new[] { "https://orders.example.com", "https://billing.example.com" },
@@ -228,31 +228,6 @@ public class AllowedResourcesTests
             TestContext.Current.CancellationToken);
 
         Assert.Null(refused);
-    }
-
-    /// <summary>
-    /// A request narrowing the grant's resources to none leaves the token addressed to the tenant's default resource,
-    /// so the default off the list refuses it although every named and granted resource is listed.
-    /// </summary>
-    [Fact]
-    public async Task ANarrowingLeavingNone_IsHeldToTheDefaultResource()
-    {
-        var context = new TokenValidationContext(
-            new TokenRequest { GrantType = GrantTypes.RefreshToken, Resources = [Billing] },
-            new ClientRequest { ClientId = ClientId })
-        {
-            ClientInfo = new ClientInfo(ClientId) { AllowedResources = [Orders, Billing] },
-            AuthorizedGrant = new AuthorizedGrant(
-                new AuthSession("user", "session", DateTimeOffset.UnixEpoch, "local"),
-                new AuthorizationContext(ClientId, [], null, [Orders])),
-        };
-
-        var refused = await new AllowedResourceValidator().ValidateAsync(
-            Tenant(defaultResource: new Uri("https://default.example.com")),
-            context,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(ErrorCodes.InvalidTarget, refused?.Error);
     }
 
     /// <summary>
