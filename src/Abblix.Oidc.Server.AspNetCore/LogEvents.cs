@@ -26,11 +26,5 @@ internal static class LogEvents
 
         /// <summary>An OpenID endpoint reached while tenant resolution is not in the pipeline.</summary>
         public const int ResolutionNotInPipeline = Base;
-
-        /// <summary>
-        /// An OpenID endpoint of a server serving its one tenant without resolution, reached by a request that did
-        /// not get the tenant.
-        /// </summary>
-        public const int LoneTenantNotReached = Base + 1;
     }
 }

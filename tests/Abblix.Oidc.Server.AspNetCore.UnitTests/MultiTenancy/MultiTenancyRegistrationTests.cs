@@ -450,13 +450,14 @@ public partial class MultiTenancyRegistrationTests
 
     /// <summary>
     /// A server serving its one tenant without resolution needs no call, so a request of its that reaches no tenant -
-    /// under a path base, or while the catalog serves no tenant, as before its first reading - is logged as missing
-    /// the tenant rather than the call.
+    /// under a path base, or while the catalog serves no tenant, as before its first reading - is not logged as
+    /// missing it. That the recorder catches the event is shown by
+    /// <see cref="ARefusalWithoutResolution_IsLogged_AndOneAfterIt_IsNot"/>.
     /// </summary>
     [Theory]
     [InlineData("/x")]
     [InlineData("")]
-    public async Task ALoneTenantNotReached_IsLoggedAsSuch_NotAsAMissingCall(string pathBase)
+    public async Task ALoneTenantNotReached_IsNotLoggedAsAMissingCall(string pathBase)
     {
         var logs = new EventRecorder();
         var services = new ServiceCollection();
@@ -471,7 +472,6 @@ public partial class MultiTenancyRegistrationTests
         provider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
 
         Assert.True(TenantRequirement.IsUnmet(context));
-        Assert.Contains(LogEvents.MultiTenancy.LoneTenantNotReached, logs.EventIds);
         Assert.DoesNotContain(LogEvents.MultiTenancy.ResolutionNotInPipeline, logs.EventIds);
     }
 
