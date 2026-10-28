@@ -433,11 +433,7 @@ public partial class MultiTenancyRegistrationTests
         provider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
 
         var unmet = false;
-        RequestDelegate endpoint = httpContext =>
-        {
-            unmet = TenantRequirement.IsUnmet(httpContext);
-            return Task.CompletedTask;
-        };
+        RequestDelegate endpoint = async httpContext => unmet = await TenantRequirement.IsUnmetAsync(httpContext);
 
         if (resolutionRan)
             await new TenantResolutionMiddleware(endpoint, provider.GetRequiredService<ITenantCatalog>()).InvokeAsync(context);
@@ -450,14 +446,11 @@ public partial class MultiTenancyRegistrationTests
 
     /// <summary>
     /// A server serving its one tenant without resolution needs no call, so when one of its requests reaches no
-    /// tenant - under a path base, or while the catalog serves no tenant, as before its first reading - it is not
-    /// logged as missing the call. That the recorder catches the event is shown by
-    /// <see cref="ARefusalWithoutResolution_IsLogged_AndOneAfterIt_IsNot"/>.
+    /// tenant - under a path base - it is not logged as missing the call. That the recorder catches the event is
+    /// shown by <see cref="ARefusalWithoutResolution_IsLogged_AndOneAfterIt_IsNot"/>.
     /// </summary>
-    [Theory]
-    [InlineData("/x")]
-    [InlineData("")]
-    public async Task ALoneTenantNotReached_IsNotLoggedAsAMissingCall(string pathBase)
+    [Fact]
+    public async Task ALoneTenantNotReached_IsNotLoggedAsAMissingCall()
     {
         var logs = new EventRecorder();
         var services = new ServiceCollection();
@@ -468,11 +461,31 @@ public partial class MultiTenancyRegistrationTests
 
         var context = new DefaultHttpContext { RequestServices = provider };
         context.Request.Host = new HostString("auth.example.com");
-        context.Request.PathBase = new PathString(pathBase);
+        context.Request.PathBase = new PathString("/x");
         provider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
 
-        Assert.True(TenantRequirement.IsUnmet(context));
+        Assert.True(await TenantRequirement.IsUnmetAsync(context));
         Assert.DoesNotContain(LogEvents.MultiTenancy.ResolutionNotInPipeline, logs.EventIds);
+    }
+
+    /// <summary>
+    /// A request reaching a server that serves its one tenant without resolution before the catalog has loaded its
+    /// tenants waits for them, as resolution does, and reaches the tenant rather than none.
+    /// </summary>
+    [Fact]
+    public async Task ALoneTenantNotLoadedYet_IsReachedOnceLoaded()
+    {
+        var services = new ServiceCollection();
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com") }));
+        await using var provider = services.BuildServiceProvider();
+
+        var context = new DefaultHttpContext { RequestServices = provider };
+        context.Request.Host = new HostString("auth.example.com");
+        provider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
+
+        Assert.False(await TenantRequirement.IsUnmetAsync(context));
+        Assert.Equal("acme", TenantRequirement.CurrentTenant(context)?.Tenant.Id);
     }
 
     private sealed class EventRecorder : ILoggerFactory, ILogger
@@ -503,15 +516,15 @@ public partial class MultiTenancyRegistrationTests
     /// A request that names no tenant is refused at the OpenID endpoints, and one resolved to a tenant is served.
     /// </summary>
     [Fact]
-    public void TheTenantRequirement_HoldsForARequestNamingNoTenant()
+    public async Task TheTenantRequirement_HoldsForARequestNamingNoTenant()
     {
         using var multiTenant = BuildProvider();
 
         EnterTenant(multiTenant, null);
-        Assert.True(TenantRequirement.IsUnmet(new DefaultHttpContext { RequestServices = multiTenant }));
+        Assert.True(await TenantRequirement.IsUnmetAsync(new DefaultHttpContext { RequestServices = multiTenant }));
 
         EnterTenant(multiTenant, Acme);
-        Assert.False(TenantRequirement.IsUnmet(new DefaultHttpContext { RequestServices = multiTenant }));
+        Assert.False(await TenantRequirement.IsUnmetAsync(new DefaultHttpContext { RequestServices = multiTenant }));
     }
 
     /// <summary>
@@ -519,7 +532,7 @@ public partial class MultiTenancyRegistrationTests
     /// nothing on the request - is answered the same by the endpoints as by the issuer.
     /// </summary>
     [Fact]
-    public void AHostsOwnTenantAccessor_IsWhatEveryQuestionAsks()
+    public async Task AHostsOwnTenantAccessor_IsWhatEveryQuestionAsks()
     {
         var services = new ServiceCollection();
         services.AddSingleton<ITenantAccessor>(new FixedTenantAccessor(Acme));
@@ -528,7 +541,7 @@ public partial class MultiTenancyRegistrationTests
 
         var context = new DefaultHttpContext { RequestServices = provider };
 
-        Assert.False(TenantRequirement.IsUnmet(context));
+        Assert.False(await TenantRequirement.IsUnmetAsync(context));
         Assert.Same(Acme, TenantRequirement.CurrentTenant(context)?.Tenant);
         Assert.Equal(AcmeIssuer, provider.GetRequiredService<ITenantAccessor>().CurrentTenant().Issuer.OriginalString);
     }

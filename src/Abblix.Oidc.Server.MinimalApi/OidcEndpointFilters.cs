@@ -101,7 +101,7 @@ internal static class OidcEndpointFilters
     private static async ValueTask<object?> RequireTenantAsync(
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        return TenantRequirement.IsUnmet(context.HttpContext)
+        return await TenantRequirement.IsUnmetAsync(context.HttpContext)
             ? Results.NotFound()
             : await next(context);
     }

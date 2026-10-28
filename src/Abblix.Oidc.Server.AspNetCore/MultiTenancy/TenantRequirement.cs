@@ -33,17 +33,29 @@ public static partial class TenantRequirement
     /// Asked at the entry of every OpenID endpoint, in both transports: a registration without a tenant would
     /// store a client nobody owns, and an authorization request would park a code no tenant can redeem.
     /// </remarks>
-    public static bool IsUnmet(HttpContext context)
+    public static async ValueTask<bool> IsUnmetAsync(HttpContext context)
     {
         var accessor = context.RequestServices.GetRequiredService<ITenantAccessor>();
         if (accessor.Current is not null)
             return false;
 
+        var withoutResolution = accessor is HttpContextTenantAccessor && !TenantResolutionMiddleware.HasRun(context);
+        var lone = withoutResolution ? context.RequestServices.GetService<LoneTenant>() : null;
+
+        // Tenant resolution waits for the tenants still being loaded at startup, so a server serving its one tenant
+        // without it waits here, rather than answering such a request as one for no tenant
+        if (lone is not null)
+        {
+            await lone.LoadedAsync(context.RequestAborted);
+            if (accessor.Current is not null)
+                return false;
+        }
+
         // Resolution that never ran looks exactly like a request naming no tenant, and would answer every
         // endpoint 404 with nothing to say why; the log names the cause. A server serving its one tenant without
         // resolution needs no call, so it is not told it misses one.
-        if (accessor is HttpContextTenantAccessor && !TenantResolutionMiddleware.HasRun(context) &&
-            context.RequestServices.GetService<LoneTenant>() is not { WhyTheCallIsNeeded: null } &&
+        if (withoutResolution &&
+            lone is not { WhyTheCallIsNeeded: null } &&
             context.RequestServices.GetService<ILoggerFactory>() is { } loggerFactory)
         {
             LogResolutionNotInPipeline(loggerFactory.CreateLogger(typeof(TenantRequirement)));

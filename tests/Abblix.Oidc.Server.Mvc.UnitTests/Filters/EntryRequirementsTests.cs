@@ -140,7 +140,7 @@ public class EntryRequirementsTests
     [Theory]
     [InlineData(false, true)]
     [InlineData(true, false)]
-    public void TheFilter_Answers404_OnlyToATenantlessRequest(bool underTenant, bool refused)
+    public async Task TheFilter_Answers404_OnlyToATenantlessRequest(bool underTenant, bool refused)
     {
         var services = new ServiceCollection();
         services.AddHttpContextAccessor();
@@ -159,11 +159,18 @@ public class EntryRequirementsTests
         var context = new ResourceExecutingContext(
             new ActionContext(httpContext, new RouteData(), new ActionDescriptor()), [], []);
 
-        new RequireTenantAttribute().OnResourceExecuting(context);
+        var actionRan = false;
+        await new RequireTenantAttribute().OnResourceExecutionAsync(context, () =>
+        {
+            actionRan = true;
+            return Task.FromResult(new ResourceExecutedContext(context, []));
+        });
 
         if (refused)
             Assert.IsType<NotFoundResult>(context.Result);
         else
             Assert.Null(context.Result);
+
+        Assert.Equal(!refused, actionRan);
     }
 }
