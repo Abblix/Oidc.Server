@@ -449,9 +449,9 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// A server serving its one tenant without resolution needs no call, so a request of its that reaches no tenant -
-    /// under a path base, or while the catalog serves no tenant, as before its first reading - is not logged as
-    /// missing it. That the recorder catches the event is shown by
+    /// A server serving its one tenant without resolution needs no call, so when one of its requests reaches no
+    /// tenant - under a path base, or while the catalog serves no tenant, as before its first reading - it is not
+    /// logged as missing the call. That the recorder catches the event is shown by
     /// <see cref="ARefusalWithoutResolution_IsLogged_AndOneAfterIt_IsNot"/>.
     /// </summary>
     [Theory]
