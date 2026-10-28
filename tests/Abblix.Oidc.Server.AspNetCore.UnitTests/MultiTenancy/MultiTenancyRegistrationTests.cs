@@ -35,6 +35,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Moq;
 using Xunit;
 
 
@@ -276,6 +277,22 @@ public partial class MultiTenancyRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         Assert.Contains(nameof(OidcOptions.Tenants), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A tenant store writer beside the tenants of the settings writes where the server never reads, so every tenant
+    /// the tenant manager reported created, changed or removed would be one the server does not serve as told: the
+    /// server does not start, naming the writer.
+    /// </summary>
+    [Fact]
+    public async Task AWriterBesideTheTenantsOfTheSettings_RefusesTheStart()
+    {
+        var services = new ServiceCollection().AddServerStorage();
+        services.ServeTenants(options => options.Tenants.Add(Acme));
+        services.AddSingleton(new Mock<ITenantStoreWriter>().Object);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Contains(nameof(ITenantStoreWriter), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
     }
 
     /// <summary>
