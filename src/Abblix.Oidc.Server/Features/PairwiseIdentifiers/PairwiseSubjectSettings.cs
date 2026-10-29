@@ -47,8 +47,8 @@ public record PairwiseSubjectSettings
 
     /// <summary>
     /// The name of the hash the HKDF key derivation that keys the pairwise seal uses: SHA256, SHA384 or SHA512,
-    /// SHA256 when the setting is absent, while a setting with no value is refused. A name rather than a <see cref="HashAlgorithmName"/>, because the configuration binder
-    /// cannot convert a string into one.
+    /// SHA256 when the setting is absent, while a setting with no value is refused. A name rather than a
+    /// <see cref="HashAlgorithmName"/>, because the configuration binder cannot convert a string into one.
     /// </summary>
     /// <remarks>
     /// Judged with the salt, when the tenant declaring it enters the server. Like the salt, it is chosen once:
@@ -75,7 +75,7 @@ public record PairwiseSubjectSettings
             return null;
 
         var supported = string.Join(", ", SupportedHashAlgorithms.Select(algorithm => algorithm.Name));
-        if (name is null)
+        if (string.IsNullOrWhiteSpace(name))
             return $"The pairwise {nameof(HashAlgorithm)} has no value: name one of {supported}.";
 
         return $"The pairwise {nameof(HashAlgorithm)} '{name}' is not one the pairwise seal can use: {supported}.";
