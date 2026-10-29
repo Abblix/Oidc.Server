@@ -42,7 +42,11 @@ public sealed class SingleTenantWithoutTheCallTests
 {
     private const string Host = "https://auth.example.com";
 
+    // Long enough for a request that does not wait for the load to be answered
     private static readonly TimeSpan WhileTheLoadIsHeld = TimeSpan.FromSeconds(2);
+
+    // Long beyond any start, short of a run that hangs
+    private static readonly TimeSpan StartBound = TimeSpan.FromSeconds(30);
     private const string ClientId = "single-tenant-client";
     private const string ClientSecret = "single-tenant-secret";
     private const string RedirectUri = "https://client.example.com/callback";
@@ -70,31 +74,56 @@ public sealed class SingleTenantWithoutTheCallTests
 
     /// <summary>
     /// A request arriving while the tenant is still being loaded at startup - the host starting its services at once,
-    /// the tenant's preparation held open - waits for the load and is served, as on a host that calls the method.
+    /// or registering the server after its web host - waits for the load and is served, as on a host that calls the
+    /// method.
     /// </summary>
-    [Fact]
-    public async Task ARequestDuringTheFirstLoad_WaitsForItAndIsServed()
+    [Theory]
+    [InlineData(StartOrder.Concurrent)]
+    [InlineData(StartOrder.ServerAfterTheWebHost)]
+    public async Task ARequestDuringTheFirstLoad_WaitsForItAndIsServed(StartOrder order)
     {
         var ct = TestContext.Current.CancellationToken;
         var preparation = new HeldPreparation();
-        await using var app = Build([Tenant("acme", Host)], services =>
+        var arrival = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var host = order switch
         {
-            services.Configure<HostOptions>(host => host.ServicesStartConcurrently = true);
-            services.AddSingleton<ITenantOpening>(preparation);
-        });
+            StartOrder.Concurrent => Build([Tenant("acme", Host)], services =>
+            {
+                services.Configure<HostOptions>(options => options.ServicesStartConcurrently = true);
+                services.AddSingleton<ITenantOpening>(preparation);
+            }, arrival: arrival),
+            StartOrder.ServerAfterTheWebHost => BuildWithTheServerAfterTheWebHost(preparation, arrival),
+            _ => throw new ArgumentOutOfRangeException(nameof(order), order, null),
+        };
 
-        var start = app.StartAsync(ct);
-        await preparation.Entered.Task.WaitAsync(ct);
-        using var http = Client(app);
+        var start = host.StartAsync(ct);
+        await preparation.Entered.Task.WaitAsync(StartBound, ct);
+        using var http = host.GetTestClient();
+        http.BaseAddress = new Uri(Host);
         var discovery = http.GetAsync("/.well-known/openid-configuration", ct);
 
-        // Long enough for a request that does not wait to be answered while the load is still held open
+        // The request is inside the server while the load is held open, and a server that did not wait for the load
+        // answers it within the bound
+        await arrival.Task.WaitAsync(StartBound, ct);
         await Task.WhenAny(discovery, Task.Delay(WhileTheLoadIsHeld, ct));
+        Assert.False(discovery.IsCompleted);
+
         preparation.Release.SetResult();
         await start;
 
         using var response = await discovery;
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await host.StopAsync(ct);
+    }
+
+    /// <summary>The start orders in which a server may take requests before its tenants are loaded.</summary>
+    public enum StartOrder
+    {
+        /// <summary>The host starts its services at once.</summary>
+        Concurrent,
+
+        /// <summary>The server is registered after the web host, so the web host starts first.</summary>
+        ServerAfterTheWebHost,
     }
 
     /// <summary>
@@ -306,7 +335,8 @@ public sealed class SingleTenantWithoutTheCallTests
         Action<IServiceCollection>? ownTenants = null,
         string? pathBase = null,
         bool callsMultiTenancy = false,
-        bool readsTenantFirst = false)
+        bool readsTenantFirst = false,
+        TaskCompletionSource? arrival = null)
     {
         TestLicense.Loaded.GetAwaiter().GetResult();
 
@@ -325,6 +355,15 @@ public sealed class SingleTenantWithoutTheCallTests
         ownTenants?.Invoke(builder.Services);
 
         var app = builder.Build();
+
+        if (arrival is not null)
+        {
+            app.Use(async (context, next) =>
+            {
+                arrival.TrySetResult();
+                await next(context);
+            });
+        }
 
         // A host's own middleware reading the tenant before anything has resolved the request, as a logging one may
         if (readsTenantFirst)
@@ -347,6 +386,43 @@ public sealed class SingleTenantWithoutTheCallTests
         app.UseCors();
         app.MapOidcEndpoints();
         return app;
+    }
+
+    /// <summary>
+    /// A generic host registering the server after its web host, so the web host starts before the tenants load.
+    /// </summary>
+    private static IHost BuildWithTheServerAfterTheWebHost(HeldPreparation preparation, TaskCompletionSource arrival)
+    {
+        TestLicense.Loaded.GetAwaiter().GetResult();
+
+        return new HostBuilder()
+            .ConfigureWebHost(web => web
+                .UseTestServer()
+                .Configure(app =>
+                {
+                    app.Use(async (context, next) =>
+                    {
+                        arrival.TrySetResult();
+                        await next(context);
+                    });
+                    app.UseRouting();
+                    app.UseCors();
+                    app.UseEndpoints(endpoints => endpoints.MapOidcEndpoints());
+                }))
+            .ConfigureServices(services =>
+            {
+                services.AddRouting();
+                services.AddDistributedMemoryCache();
+                services.AddMemoryCache();
+                services.AddConsentGrantedForEveryClient();
+                services.AddOidcServices(options =>
+                {
+                    options.EnabledEndpoints = OidcEndpoints.Base;
+                    options.Tenants.Add(Tenant("acme", Host));
+                });
+                services.AddSingleton<ITenantOpening>(preparation);
+            })
+            .Build();
     }
 
     private static TenantDefinition Tenant(string id, string issuer) => new()

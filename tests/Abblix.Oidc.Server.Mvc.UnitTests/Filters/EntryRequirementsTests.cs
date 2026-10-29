@@ -7,10 +7,12 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Reflection;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.Extensions.Options;
 using Moq;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Abstractions;
@@ -140,7 +142,7 @@ public class EntryRequirementsTests
     [Theory]
     [InlineData(false, true)]
     [InlineData(true, false)]
-    public async Task TheFilter_Answers404_OnlyToATenantlessRequest(bool underTenant, bool refused)
+    public void TheFilter_Answers404_OnlyToATenantlessRequest(bool underTenant, bool refused)
     {
         var services = new ServiceCollection();
         services.AddHttpContextAccessor();
@@ -159,18 +161,72 @@ public class EntryRequirementsTests
         var context = new ResourceExecutingContext(
             new ActionContext(httpContext, new RouteData(), new ActionDescriptor()), [], []);
 
-        var actionRan = false;
-        await new RequireTenantAttribute().OnResourceExecutionAsync(context, () =>
-        {
-            actionRan = true;
-            return Task.FromResult(new ResourceExecutedContext(context, []));
-        });
+        new RequireTenantAttribute().OnResourceExecuting(context);
 
         if (refused)
             Assert.IsType<NotFoundResult>(context.Result);
         else
             Assert.Null(context.Result);
+    }
 
-        Assert.Equal(!refused, actionRan);
+    /// <summary>
+    /// On a server serving its one tenant without tenant resolution, the filter ahead of the HTTPS requirement waits
+    /// while the tenants are still being loaded, and afterwards the request reaches the tenant and is let through.
+    /// </summary>
+    [Fact]
+    public async Task TheLoadFilter_WaitsForTheTenantsStillBeingLoaded()
+    {
+        var preparation = new HeldPreparation();
+        var services = new ServiceCollection();
+        services.AddLogging().AddDistributedMemoryCache().AddMemoryCache().AddConsentGrantedForEveryClient();
+        services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = new Uri("https://auth.example.com"),
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+        }));
+        services.AddSingleton<ITenantOpening>(preparation);
+        await using var provider = services.BuildServiceProvider();
+
+        var httpContext = new DefaultHttpContext { RequestServices = provider };
+        httpContext.Request.Host = new HostString("auth.example.com");
+        provider.GetRequiredService<IHttpContextAccessor>().HttpContext = httpContext;
+        var context = new AuthorizationFilterContext(
+            new ActionContext(httpContext, new RouteData(), new ActionDescriptor()), []);
+
+        var wait = new AwaitTenantLoadAttribute().OnAuthorizationAsync(context);
+        Assert.False(wait.IsCompleted);
+        await preparation.Started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        preparation.Proceed.SetResult();
+        await wait;
+        Assert.Null(context.Result);
+        Assert.Equal("acme", TenantRequirement.CurrentTenant(httpContext)?.Tenant.Id);
+    }
+
+    /// <summary>
+    /// The filter waits ahead of the HTTPS requirement, which reads the tenant to waive itself for an issuer over http.
+    /// </summary>
+    [Fact]
+    public void TheLoadFilter_RunsBeforeTheHttpsRequirement()
+        => Assert.True(new AwaitTenantLoadAttribute().Order < new RequireHttpsUnlessHttpIssuerAttribute().Order);
+
+    /// <summary>
+    /// A preparation of the tenants that holds their load open until the test releases it.
+    /// </summary>
+    private sealed class HeldPreparation : ITenantOpening
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Proceed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
+            IReadOnlyCollection<TenantDefinition> tenants,
+            CancellationToken cancellationToken)
+        {
+            Started.TrySetResult();
+            await Proceed.Task;
+            return new Dictionary<string, Exception>();
+        }
     }
 }

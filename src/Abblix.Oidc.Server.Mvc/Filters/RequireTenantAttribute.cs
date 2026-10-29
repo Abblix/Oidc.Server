@@ -20,17 +20,18 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 /// requirement and CORS - and before model binding and the action, so nothing the action would store is stored.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class)]
-internal sealed class RequireTenantAttribute : Attribute, IAsyncResourceFilter
+internal sealed class RequireTenantAttribute : Attribute, IResourceFilter
 {
     /// <inheritdoc />
-    public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
+    public void OnResourceExecuting(ResourceExecutingContext context)
     {
-        if (await TenantRequirement.IsUnmetAsync(context.HttpContext))
-        {
+        if (TenantRequirement.IsUnmet(context.HttpContext))
             context.Result = new NotFoundResult();
-            return;
-        }
+    }
 
-        await next();
+    /// <inheritdoc />
+    public void OnResourceExecuted(ResourceExecutedContext context)
+    {
+        // Nothing to do after the action: the refusal is decided before it.
     }
 }

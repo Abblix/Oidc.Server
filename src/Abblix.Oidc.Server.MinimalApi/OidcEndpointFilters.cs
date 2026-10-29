@@ -28,6 +28,10 @@ internal static class OidcEndpointFilters
         // Outermost, because the HTTPS redirect below builds an address from the host too.
         oidcGroup.AddEndpointFilter(RequireHostAsync);
 
+        // Before every gate that reads the tenant of the request: a server serving its one tenant without tenant
+        // resolution waits here for the tenants still being loaded at startup, as resolution would.
+        oidcGroup.AddEndpointFilter(AwaitTenantLoadAsync);
+
         // Gate every OIDC endpoint on HTTPS, the public discovery and JWKS metadata included. This mirrors the
         // [RequireHttps] carried by every MVC controller (DiscoveryController included): the credential- and
         // token-bearing endpoints must never serve secrets in cleartext (RFC 6749 section 3.2/section 10.1), and the metadata must
@@ -96,12 +100,23 @@ internal static class OidcEndpointFilters
             : await next(context);
 
     /// <summary>
+    /// Group endpoint filter waiting, on a server serving its one tenant without tenant resolution, for the tenants
+    /// still being loaded at startup.
+    /// </summary>
+    private static async ValueTask<object?> AwaitTenantLoadAsync(
+        EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        await TenantLoad.AwaitAsync(context.HttpContext);
+        return await next(context);
+    }
+
+    /// <summary>
     /// Group endpoint filter answering 404 to a request no tenant was resolved for.
     /// </summary>
     private static async ValueTask<object?> RequireTenantAsync(
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        return await TenantRequirement.IsUnmetAsync(context.HttpContext)
+        return TenantRequirement.IsUnmet(context.HttpContext)
             ? Results.NotFound()
             : await next(context);
     }
