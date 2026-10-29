@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Core = Abblix.Oidc.Server.Model;
 
@@ -62,9 +63,9 @@ internal static class TokenEndpoints
     private static async Task<IResult> TokenAsync(
         TokenRequest tokenRequest,
         ClientRequest clientRequest,
-        ITokenHandler handler,
-        ITokenResponseFormatter formatter,
-        ITenantAccessor tenantAccessor,
+        [FromServices] ITokenHandler handler,
+        [FromServices] ITokenResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         CancellationToken cancellationToken)
     {
         Core.TokenRequest coreTokenRequest = tokenRequest;
@@ -80,9 +81,9 @@ internal static class TokenEndpoints
     private static async Task<IResult> RevocationAsync(
         RevocationRequest revocationRequest,
         ClientRequest clientRequest,
-        IRevocationHandler handler,
-        IRevocationResponseFormatter formatter,
-        ITenantAccessor tenantAccessor)
+        [FromServices] IRevocationHandler handler,
+        [FromServices] IRevocationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.RevocationRequest coreRevocationRequest = revocationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
@@ -94,9 +95,9 @@ internal static class TokenEndpoints
     private static async Task<IResult> IntrospectionAsync(
         IntrospectionRequest introspectionRequest,
         ClientRequest clientRequest,
-        IIntrospectionHandler handler,
-        IIntrospectionResponseFormatter formatter,
-        ITenantAccessor tenantAccessor)
+        [FromServices] IIntrospectionHandler handler,
+        [FromServices] IIntrospectionResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.IntrospectionRequest coreIntrospectionRequest = introspectionRequest;
         Core.ClientRequest coreClientRequest = clientRequest;

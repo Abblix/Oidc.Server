@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Core = Abblix.Oidc.Server.Model;
 
@@ -60,9 +61,9 @@ internal static class ClientRegistrationEndpoints
     private static async Task<IResult> RegisterClientAsync(
         ClientMetadataBody body,
         HttpContext context,
-        IRegisterClientHandler handler,
-        IRegisterClientResponseFormatter formatter,
-        ITenantAccessor tenantAccessor)
+        [FromServices] IRegisterClientHandler handler,
+        [FromServices] IRegisterClientResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         if (body is not { Request: { } request })
             return body.Refusal!;
@@ -75,9 +76,9 @@ internal static class ClientRegistrationEndpoints
     /// <summary>Reads a registered client's configuration (RFC 7592 section 2.1).</summary>
     private static async Task<IResult> ReadClientAsync(
         ClientAuthorizationRequest authorizationRequest,
-        IReadClientHandler handler,
-        IReadClientResponseFormatter formatter,
-        ITenantAccessor tenantAccessor)
+        [FromServices] IReadClientHandler handler,
+        [FromServices] IReadClientResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.ClientRequest coreClientRequest = authorizationRequest;
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreClientRequest);
@@ -88,9 +89,9 @@ internal static class ClientRegistrationEndpoints
     private static async Task<IResult> UpdateClientAsync(
         ClientAuthorizationRequest authorizationRequest,
         ClientMetadataBody body,
-        IUpdateClientHandler handler,
-        IUpdateClientResponseFormatter formatter,
-        ITenantAccessor tenantAccessor)
+        [FromServices] IUpdateClientHandler handler,
+        [FromServices] IUpdateClientResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         if (body is not { Request: { } registrationRequest })
             return body.Refusal!;
@@ -103,9 +104,9 @@ internal static class ClientRegistrationEndpoints
     /// <summary>Removes a registered client (RFC 7592 section 2.3).</summary>
     private static async Task<IResult> RemoveClientAsync(
         ClientAuthorizationRequest authorizationRequest,
-        IRemoveClientHandler handler,
-        IRemoveClientResponseFormatter formatter,
-        ITenantAccessor tenantAccessor)
+        [FromServices] IRemoveClientHandler handler,
+        [FromServices] IRemoveClientResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.ClientRequest coreClientRequest = authorizationRequest;
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreClientRequest);
