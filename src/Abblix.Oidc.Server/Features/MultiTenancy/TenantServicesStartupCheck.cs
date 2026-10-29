@@ -19,8 +19,9 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses to start a server that could serve no tenant, or whose tenants would share a service the server keeps
-/// apart for each: its replay cache or budgets, or the signer of its security events.
+/// Refuses to start a server that could serve no tenant, whose tenant store writer writes where its tenants are never
+/// read, or whose tenants would share a service the server keeps apart for each: its replay cache or budgets, or the
+/// signer of its security events.
 /// </summary>
 /// <remarks>
 /// A started service rather than a check of the settings: it builds the services it judges, and a host's service
@@ -52,7 +53,10 @@ internal sealed class TenantServicesStartupCheck(
 
         // The tenant manager writes through the writer and then reads the store again, and the settings never hold what
         // it wrote: it would report a tenant created, changed or removed that the server does not serve as told
-        if (store is OptionsTenantStore && serviceProvider.GetService<ITenantStoreWriter>() is not null)
+        // Asked whether one is registered rather than built, so a writer the host cannot build yet does not hide this
+        if (store is OptionsTenantStore &&
+            serviceProvider.GetService<IServiceProviderIsService>() is { } services &&
+            services.IsService(typeof(ITenantStoreWriter)))
         {
             failures.Add(
                 $"An {nameof(ITenantStoreWriter)} is registered, but the tenants come from " +

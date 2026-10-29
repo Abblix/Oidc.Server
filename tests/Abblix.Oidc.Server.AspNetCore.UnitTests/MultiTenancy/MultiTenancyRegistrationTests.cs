@@ -282,14 +282,19 @@ public partial class MultiTenancyRegistrationTests
     /// <summary>
     /// A tenant store writer beside the tenants of the settings writes where the server never reads, so every tenant
     /// the tenant manager reported created, changed or removed would be one the server does not serve as told: the
-    /// server does not start, naming the writer.
+    /// server does not start, naming the writer - also when the writer cannot be built yet.
     /// </summary>
-    [Fact]
-    public async Task AWriterBesideTheTenantsOfTheSettings_RefusesTheStart()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AWriterBesideTheTenantsOfTheSettings_RefusesTheStart(bool writerCannotBeBuilt)
     {
         var services = new ServiceCollection().AddServerStorage();
         services.ServeTenants(options => options.Tenants.Add(Acme));
-        services.AddSingleton(new Mock<ITenantStoreWriter>().Object);
+        if (writerCannotBeBuilt)
+            services.AddSingleton<ITenantStoreWriter>(_ => throw new InvalidOperationException("The store is not reachable."));
+        else
+            services.AddSingleton(new Mock<ITenantStoreWriter>().Object);
         using var provider = services.BuildServiceProvider();
 
         Assert.Contains(nameof(ITenantStoreWriter), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
