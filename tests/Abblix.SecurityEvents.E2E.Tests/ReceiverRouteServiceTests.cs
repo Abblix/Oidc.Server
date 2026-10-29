@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace Abblix.SecurityEvents.E2E.Tests;
@@ -86,7 +87,9 @@ public sealed class ReceiverRouteServiceTests
 
     private static async Task<WebApplication> StartAsync()
     {
-        var builder = WebApplication.CreateSlimBuilder();
+        // Outside Development, so no developer exception page turns the refusal into a page of its own
+        var builder = WebApplication.CreateSlimBuilder(
+            new WebApplicationOptions { EnvironmentName = Environments.Production });
         builder.WebHost.UseTestServer();
         var host = builder.Build();
         host.MapBackChannelLogoutEndpoint(LogoutRoute);
