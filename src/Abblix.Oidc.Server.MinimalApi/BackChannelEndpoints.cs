@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Core = Abblix.Oidc.Server.Model;
 
@@ -61,9 +62,9 @@ internal static class BackChannelEndpoints
     private static async Task<IResult> PushedAuthorizationAsync(
         PushedAuthorizationRequest authorizationRequest,
         ClientRequest clientRequest,
-        IPushedAuthorizationHandler handler,
-        IPushedAuthorizationResponseFormatter formatter,
-        ITenantAccessor tenantAccessor)
+        [FromServices] IPushedAuthorizationHandler handler,
+        [FromServices] IPushedAuthorizationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
@@ -78,9 +79,9 @@ internal static class BackChannelEndpoints
     private static async Task<IResult> BackChannelAuthenticationAsync(
         BackChannelAuthenticationRequest authenticationRequest,
         ClientRequest clientRequest,
-        IBackChannelAuthenticationHandler handler,
-        IBackChannelAuthenticationResponseFormatter formatter,
-        ITenantAccessor tenantAccessor)
+        [FromServices] IBackChannelAuthenticationHandler handler,
+        [FromServices] IBackChannelAuthenticationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.BackChannelAuthenticationRequest coreAuthenticationRequest = authenticationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
@@ -95,9 +96,9 @@ internal static class BackChannelEndpoints
     private static async Task<IResult> DeviceAuthorizationAsync(
         DeviceAuthorizationRequest deviceAuthorizationRequest,
         ClientRequest clientRequest,
-        IDeviceAuthorizationHandler handler,
-        IDeviceAuthorizationResponseFormatter formatter,
-        ITenantAccessor tenantAccessor)
+        [FromServices] IDeviceAuthorizationHandler handler,
+        [FromServices] IDeviceAuthorizationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.DeviceAuthorizationRequest coreDeviceAuthorizationRequest = deviceAuthorizationRequest;
         Core.ClientRequest coreClientRequest = clientRequest;

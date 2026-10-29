@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -69,7 +70,9 @@ internal static class DiscoveryEndpoints
     /// Returns the session-management iframe document (OpenID Connect Session Management).
     /// </summary>
     private static async Task<IResult> CheckSessionAsync(
-        ICheckSessionHandler handler, ICheckSessionResponseFormatter formatter, ITenantAccessor tenantAccessor)
+        [FromServices] ICheckSessionHandler handler,
+        [FromServices] ICheckSessionResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant());
         return await formatter.FormatResponseAsync(response);
@@ -79,7 +82,9 @@ internal static class DiscoveryEndpoints
     /// Returns the OpenID Provider configuration document (discovery metadata) for the current request.
     /// </summary>
     private static async Task<IResult> ConfigurationAsync(
-        IConfigurationHandler handler, IConfigurationResponseFormatter formatter, ITenantAccessor tenantAccessor)
+        [FromServices] IConfigurationHandler handler,
+        [FromServices] IConfigurationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant());
         return await formatter.FormatResponseAsync(response);
@@ -90,11 +95,11 @@ internal static class DiscoveryEndpoints
     /// issued tokens.
     /// </summary>
     private static async Task<IResult> KeysAsync(
-        IAuthServiceKeysProvider serviceKeysProvider,
-        ITenantAccessor tenantAccessor,
-        IOptions<OidcOptions> options,
+        [FromServices] IAuthServiceKeysProvider serviceKeysProvider,
+        [FromServices] ITenantAccessor tenantAccessor,
+        [FromServices] IOptions<OidcOptions> options,
         HttpResponse response,
-        ILogger<IAuthServiceKeysProvider> logger)
+        [FromServices] ILogger<IAuthServiceKeysProvider> logger)
     {
         var keys = await serviceKeysProvider.GetPublishedKeysAsync(tenantAccessor.CurrentTenant(), logger);
 

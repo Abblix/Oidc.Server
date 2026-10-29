@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Core = Abblix.Oidc.Server.Model;
 
@@ -62,9 +63,9 @@ internal static class InteractionEndpoints
     private static async Task<IResult> UserInfoAsync(
         UserInfoRequest userInfoRequest,
         ClientRequest clientRequest,
-        IUserInfoHandler handler,
-        IUserInfoResponseFormatter formatter,
-        ITenantAccessor tenantAccessor)
+        [FromServices] IUserInfoHandler handler,
+        [FromServices] IUserInfoResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.UserInfoRequest coreUserInfoRequest = userInfoRequest;
         Core.ClientRequest coreClientRequest = clientRequest;
@@ -78,9 +79,9 @@ internal static class InteractionEndpoints
     /// </summary>
     private static async Task<IResult> EndSessionAsync(
         EndSessionRequest endSessionRequest,
-        IEndSessionHandler handler,
-        IEndSessionResponseFormatter formatter,
-        ITenantAccessor tenantAccessor)
+        [FromServices] IEndSessionHandler handler,
+        [FromServices] IEndSessionResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.EndSessionRequest coreEndSessionRequest = endSessionRequest;
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreEndSessionRequest);
@@ -93,9 +94,9 @@ internal static class InteractionEndpoints
     /// </summary>
     private static async Task<IResult> AuthorizeAsync(
         AuthorizationRequest authorizationRequest,
-        IAuthorizationHandler handler,
-        IAuthorizationResponseFormatter formatter,
-        ITenantAccessor tenantAccessor)
+        [FromServices] IAuthorizationHandler handler,
+        [FromServices] IAuthorizationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreAuthorizationRequest);

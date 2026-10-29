@@ -23,7 +23,7 @@ internal static class StreamManagementHandlers
 {
     internal static async Task<IResult> CreateStreamAsync(
         HttpContext http,
-        StreamManagementService service,
+        [FromServices] StreamManagementService service,
         CreateStreamRequest request,
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
@@ -37,7 +37,7 @@ internal static class StreamManagementHandlers
     /// </summary>
     internal static async Task<IResult> GetStreamsAsync(
         HttpContext http,
-        StreamManagementService service,
+        [FromServices] StreamManagementService service,
         [FromQuery(Name = StreamMemberNames.StreamId)] string? streamId,
         CancellationToken cancellationToken)
     {
@@ -57,7 +57,7 @@ internal static class StreamManagementHandlers
 
     internal static async Task<IResult> UpdateStreamAsync(
         HttpContext http,
-        StreamManagementService service,
+        [FromServices] StreamManagementService service,
         UpdateStreamRequest request,
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
@@ -66,7 +66,7 @@ internal static class StreamManagementHandlers
 
     internal static async Task<IResult> ReplaceStreamAsync(
         HttpContext http,
-        StreamManagementService service,
+        [FromServices] StreamManagementService service,
         UpdateStreamRequest request,
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
@@ -75,7 +75,7 @@ internal static class StreamManagementHandlers
 
     internal static async Task<IResult> DeleteStreamAsync(
         HttpContext http,
-        StreamManagementService service,
+        [FromServices] StreamManagementService service,
         [FromQuery(Name = StreamMemberNames.StreamId)] string? streamId,
         CancellationToken cancellationToken)
     {
@@ -96,7 +96,7 @@ internal static class StreamManagementHandlers
 
     internal static async Task<IResult> GetStatusAsync(
         HttpContext http,
-        StreamManagementService service,
+        [FromServices] StreamManagementService service,
         [FromQuery(Name = StreamMemberNames.StreamId)] string? streamId,
         CancellationToken cancellationToken)
     {
@@ -115,7 +115,7 @@ internal static class StreamManagementHandlers
 
     internal static async Task<IResult> UpdateStatusAsync(
         HttpContext http,
-        StreamManagementService service,
+        [FromServices] StreamManagementService service,
         StreamStatus request,
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
@@ -124,7 +124,7 @@ internal static class StreamManagementHandlers
 
     internal static async Task<IResult> AddSubjectAsync(
         HttpContext http,
-        StreamManagementService service,
+        [FromServices] StreamManagementService service,
         AddSubjectRequest request,
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
@@ -133,7 +133,7 @@ internal static class StreamManagementHandlers
 
     internal static async Task<IResult> RemoveSubjectAsync(
         HttpContext http,
-        StreamManagementService service,
+        [FromServices] StreamManagementService service,
         RemoveSubjectRequest request,
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
@@ -142,7 +142,7 @@ internal static class StreamManagementHandlers
 
     internal static async Task<IResult> RequestVerificationAsync(
         HttpContext http,
-        StreamManagementService service,
+        [FromServices] StreamManagementService service,
         VerificationRequest request,
         CancellationToken cancellationToken)
         => ReceiverIdOf(http) is { } receiverId
@@ -151,8 +151,8 @@ internal static class StreamManagementHandlers
 
     internal static async Task<IResult> PollAsync(
         HttpContext http,
-        IStreamStore store,
-        PollEndpointHandler handler,
+        [FromServices] IStreamStore store,
+        [FromServices] PollEndpointHandler handler,
         string streamId,
         PollRequest request,
         CancellationToken cancellationToken)
