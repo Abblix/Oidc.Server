@@ -18,8 +18,8 @@ using Xunit;
 // configuration.
 //
 // TestFactory drives the default-flow host. Its embedded test license carries no
-// client_limit and a single valid_issuers entry (TestConstants.Issuer), so the
-// static LicenseChecker never tracks client growth and only ever sees one issuer:
+// client_limit and names only TestConstants.Issuer and its http form, so the
+// static LicenseChecker never tracks client growth and sees at most two issuers:
 // its ConcurrentDictionary state stays trivial and thread-safe under concurrent
 // tests, and the license cannot be lifted into a production host.
 //

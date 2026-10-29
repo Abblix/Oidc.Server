@@ -40,10 +40,46 @@ public record PairwiseSubjectSettings
     public required string Salt { get; init; }
 
     /// <summary>
-    /// The hash algorithm used for the HKDF key derivation that keys the pairwise seal. Defaults to SHA-256.
-    /// Supported algorithms: SHA256, SHA384, SHA512, SHA1.
+    /// The hashes the HKDF key derivation of the pairwise seal can use.
     /// </summary>
-    public HashAlgorithmName HashAlgorithm { get; init; } = HashAlgorithmName.SHA256;
+    private static readonly HashAlgorithmName[] SupportedHashAlgorithms =
+        [HashAlgorithmName.SHA256, HashAlgorithmName.SHA384, HashAlgorithmName.SHA512];
+
+    /// <summary>
+    /// The name of the hash the HKDF key derivation that keys the pairwise seal uses: SHA256, SHA384 or SHA512,
+    /// SHA256 when the setting is absent, while a setting with no value is refused. A name rather than a
+    /// <see cref="HashAlgorithmName"/>, because the configuration binder cannot convert a string into one.
+    /// </summary>
+    /// <remarks>
+    /// Judged with the salt, when the tenant declaring it enters the server. Like the salt, it is chosen once:
+    /// another hash derives another key, so every pairwise identifier already issued changes and none of them
+    /// can be opened back.
+    /// </remarks>
+    public string HashAlgorithm { get; init; } = nameof(HashAlgorithmName.SHA256);
+
+    /// <summary>The hash <paramref name="name"/> names, or null when it names none the seal can use.</summary>
+    /// <param name="name">The name a deployment configured.</param>
+    internal static HashAlgorithmName? HashAlgorithmNamed(string? name)
+        => SupportedHashAlgorithms
+            .Where(algorithm => algorithm.Name == name)
+            .Select(algorithm => (HashAlgorithmName?)algorithm)
+            .FirstOrDefault();
+
+    /// <summary>Why this hash cannot key the seal, or null when it can.</summary>
+    /// <param name="name">The name a deployment configured.</param>
+    /// <remarks>Public for the reason <see cref="ValidateSalt"/> is: a caller holding settings it did not write asks
+    /// here.</remarks>
+    public static string? HashAlgorithmRefusal(string? name)
+    {
+        if (HashAlgorithmNamed(name) is not null)
+            return null;
+
+        var supported = string.Join(", ", SupportedHashAlgorithms.Select(algorithm => algorithm.Name));
+        if (string.IsNullOrWhiteSpace(name))
+            return $"The pairwise {nameof(HashAlgorithm)} has no value: name one of {supported}.";
+
+        return $"The pairwise {nameof(HashAlgorithm)} '{name}' is not one the pairwise seal can use: {supported}.";
+    }
 
     /// <summary>Refuses a salt that cannot key the seal.</summary>
     /// <param name="salt">The base64 value a deployment configured.</param>

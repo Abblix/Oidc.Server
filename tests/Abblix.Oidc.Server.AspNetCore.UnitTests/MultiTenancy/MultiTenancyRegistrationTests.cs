@@ -35,6 +35,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Moq;
 using Xunit;
 
 
@@ -279,6 +280,27 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A tenant store writer beside the tenants of the settings writes where the server never reads, so every tenant
+    /// the tenant manager reported created, changed or removed would be one the server does not serve as told: the
+    /// server does not start, naming the writer - also when the writer cannot be built yet.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AWriterBesideTheTenantsOfTheSettings_RefusesTheStart(bool writerCannotBeBuilt)
+    {
+        var services = new ServiceCollection().AddServerStorage();
+        services.ServeTenants(options => options.Tenants.Add(Acme));
+        if (writerCannotBeBuilt)
+            services.AddSingleton<ITenantStoreWriter>(_ => throw new InvalidOperationException("The store is not reachable."));
+        else
+            services.AddSingleton(new Mock<ITenantStoreWriter>().Object);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Contains(nameof(ITenantStoreWriter), await HostStartup.RefusalAsync(provider), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A server whose tenants are kept in a store of the host's own starts with none, since they arrive while it
     /// runs.
     /// </summary>
@@ -473,6 +495,77 @@ public partial class MultiTenancyRegistrationTests
 
         Assert.True(TenantRequirement.IsUnmet(context));
         Assert.DoesNotContain(LogEvents.MultiTenancy.ResolutionNotInPipeline, logs.EventIds);
+    }
+
+    /// <summary>
+    /// On a server serving its one tenant without resolution, the step at the entry of the OpenID endpoints waits while
+    /// the tenants are still being loaded, and afterwards the request reaches the tenant.
+    /// </summary>
+    [Fact]
+    public async Task ALoneTenantStillLoading_IsWaitedFor_ThenReached()
+    {
+        var preparation = new HeldPreparation();
+        var services = new ServiceCollection();
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com") }));
+        services.AddSingleton<ITenantOpening>(preparation);
+        await using var provider = services.BuildServiceProvider();
+
+        var context = new DefaultHttpContext { RequestServices = provider };
+        context.Request.Host = new HostString("auth.example.com");
+        provider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
+
+        var wait = TenantLoad.AwaitAsync(context).AsTask();
+        Assert.False(wait.IsCompleted);
+        await preparation.Started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        preparation.Proceed.SetResult();
+        await wait;
+        Assert.False(TenantRequirement.IsUnmet(context));
+    }
+
+    /// <summary>
+    /// A host telling the tenant of a request its own way is not held by the loading of the server's catalog.
+    /// </summary>
+    [Fact]
+    public async Task AHostsOwnTenantAccessor_IsNotHeldByTheLoad()
+    {
+        var preparation = new HeldPreparation();
+        var services = new ServiceCollection();
+        services.AddSingleton<ITenantAccessor>(new NoTenantAccessor());
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com") }));
+        services.AddSingleton<ITenantOpening>(preparation);
+        await using var provider = services.BuildServiceProvider();
+
+        Assert.True(TenantLoad.AwaitAsync(new DefaultHttpContext { RequestServices = provider }).IsCompleted);
+    }
+
+    /// <summary>
+    /// A preparation of the tenants that holds their load open until the test releases it.
+    /// </summary>
+    private sealed class HeldPreparation : ITenantOpening
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Proceed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
+            IReadOnlyCollection<TenantDefinition> tenants,
+            CancellationToken cancellationToken)
+        {
+            Started.TrySetResult();
+            await Proceed.Task;
+            return new Dictionary<string, Exception>();
+        }
+    }
+
+    /// <summary>
+    /// A host's own accessor that tells no tenant for any request.
+    /// </summary>
+    private sealed class NoTenantAccessor : ITenantAccessor
+    {
+        public TenantContext? Current => null;
     }
 
     private sealed class EventRecorder : ILoggerFactory, ILogger
