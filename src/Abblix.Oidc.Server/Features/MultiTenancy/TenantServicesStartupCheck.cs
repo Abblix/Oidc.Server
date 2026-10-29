@@ -19,8 +19,9 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses to start a server that could serve no tenant, or whose tenants would share a service the server keeps
-/// apart for each: its replay cache or budgets, or the signer of its security events.
+/// Refuses to start a server that could serve no tenant, whose tenant store writer writes where its tenants are never
+/// read, or whose tenants would share a service the server keeps apart for each: its replay cache or budgets, or the
+/// signer of its security events.
 /// </summary>
 /// <remarks>
 /// A started service rather than a check of the settings: it builds the services it judges, and a host's service
@@ -30,10 +31,13 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="serviceProvider">The finished container.</param>
 /// <param name="options">The tenants the settings declare.</param>
 /// <param name="store">Where the tenants are read from.</param>
+/// <param name="registrations">Tells which services are registered without building them. The container the
+/// server is built in has to provide it, as the default container does.</param>
 internal sealed class TenantServicesStartupCheck(
     IServiceProvider serviceProvider,
     IOptions<OidcOptions> options,
-    ITenantStore store) : IHostedLifecycleService
+    ITenantStore store,
+    IServiceProviderIsService registrations) : IHostedLifecycleService
 {
     /// <inheritdoc />
     public Task StartingAsync(CancellationToken cancellationToken)
@@ -48,6 +52,18 @@ internal sealed class TenantServicesStartupCheck(
                 $"{nameof(OidcOptions)}.{nameof(OidcOptions.Tenants)} declares no tenant, and the tenants come from " +
                 "these settings alone, so the server could serve no request. Declare at least one tenant - a server " +
                 "serving one issuer declares one - or register a store of tenants they can be added to.");
+        }
+
+        // The tenant manager writes through the writer and then reads the store again, and the settings never hold what
+        // it wrote: it would report a tenant created, changed or removed that the server does not serve as told
+        // Asked whether one is registered rather than built, so a writer the host cannot build yet does not hide this
+        if (store is OptionsTenantStore && registrations.IsService(typeof(ITenantStoreWriter)))
+        {
+            failures.Add(
+                $"An {nameof(ITenantStoreWriter)} is registered, but the tenants come from " +
+                $"{nameof(OidcOptions)}.{nameof(OidcOptions.Tenants)}, which never holds what it writes, so a tenant " +
+                $"changed through {nameof(ITenantManager)} would not be served as changed. Register an " +
+                $"{nameof(ITenantStore)} of your own that reads what the writer writes, or remove the writer.");
         }
 
         failures.AddRange(new[]
@@ -122,8 +138,7 @@ internal sealed class TenantServicesStartupCheck(
     /// </summary>
     private string? SignerSharedByEveryTenant()
     {
-        if (serviceProvider.GetService<IServiceProviderIsService>() is not { } services ||
-            !services.IsService(typeof(ISecurityEventTokenSigner)))
+        if (!registrations.IsService(typeof(ISecurityEventTokenSigner)))
         {
             return null;
         }

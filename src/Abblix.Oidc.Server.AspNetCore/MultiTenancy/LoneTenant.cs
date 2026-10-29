@@ -19,9 +19,10 @@ namespace Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 /// </summary>
 /// <remarks>
 /// Judged once, from the configuration: the options declare exactly one tenant, at an issuer without a path, and
-/// the tenants come from the server's own store and catalog with no writer registered. Then nothing is left to
-/// resolve - no other tenant to tell it from, no issuer path to cut from a request before it is routed - and no
-/// tenant can join it while the server runs, since the options hold one list for the life of the process.
+/// the tenants come from the server's own store and catalog. Then nothing is left to resolve - no other tenant to tell
+/// it from, no issuer path to cut from a request before it is routed - and no tenant can join it while the server
+/// runs, since the options hold one list for the life of the process. A tenant store writer beside that store is not
+/// judged here: it refuses the start, since nothing would read what it writes.
 /// </remarks>
 /// <param name="services">Tells where the tenants come from.</param>
 /// <param name="options">Declares the tenants.</param>
@@ -60,9 +61,6 @@ internal sealed class LoneTenant(IServiceProvider services, IOptions<OidcOptions
         {
             return new(null, null, "its tenants come from a store or catalog of the host's own, which may change them while it runs");
         }
-
-        if (services.GetService<ITenantStoreWriter>() is not null)
-            return new(null, null, "it registers a tenant store writer, so its tenants are meant to change while it runs, which needs a tenant store of the host's own");
 
         return options.Tenants switch
         {

@@ -143,6 +143,21 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A host that signs nothing - no signer registered - starts, though a signing key for the whole server is
+    /// configured: there is no signer to sign every tenant's events alike.
+    /// </summary>
+    [Fact]
+    public async Task ASigningKeyWithoutASigner_Starts()
+    {
+        using var provider = SigningEvents(
+            options => options.SigningKeySource =
+                _ => Task.FromResult<JsonWebKey>(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)),
+            services => services.RemoveAll<ISecurityEventTokenSigner>());
+
+        Assert.Null(await Record.ExceptionAsync(() => HostStartup.StartingAsync(provider)));
+    }
+
+    /// <summary>
     /// The tenants' signer signs a token with a key of the tenant serving the request, so two tenants sign with
     /// different keys.
     /// </summary>
