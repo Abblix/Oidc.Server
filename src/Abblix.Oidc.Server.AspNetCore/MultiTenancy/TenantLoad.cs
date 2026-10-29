@@ -30,8 +30,7 @@ internal static class TenantLoad
     /// </summary>
     internal static ValueTask AwaitAsync(HttpContext context)
     {
-        if (context.RequestServices.GetRequiredService<ITenantAccessor>() is not HttpContextTenantAccessor ||
-            TenantResolutionMiddleware.HasRun(context) ||
+        if (!HttpContextTenantAccessor.AnswersWithoutResolution(context) ||
             context.RequestServices.GetService<LoneTenant>() is not { } lone)
         {
             return ValueTask.CompletedTask;

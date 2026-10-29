@@ -26,13 +26,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Filters;
 
 /// <summary>
-/// Every controller of the package carries <see cref="RequireHostAttribute"/> and <see cref="RequireTenantAttribute"/>
-/// itself, so the requirements reach this library's endpoints through its own controllers and no host's.
+/// Every controller of the package carries its entry requirements and the wait for the tenants still being loaded
+/// itself, so they reach this library's endpoints through its own controllers and no host's.
 /// </summary>
 public class EntryRequirementsTests
 {
     [Fact]
-    public void EveryControllerOfThePackageCarriesBothRequirements()
+    public void EveryControllerOfThePackageCarriesItsEntryFilters()
     {
         var packageControllers = typeof(TokenController).Assembly.GetTypes()
             .Where(type => typeof(ControllerBase).IsAssignableFrom(type) && !type.IsAbstract)
@@ -44,6 +44,7 @@ public class EntryRequirementsTests
             Assert.True(controller.IsDefined(typeof(RequireHostAttribute)), controller.Name);
             Assert.True(controller.IsDefined(typeof(RequireTenantAttribute)), controller.Name);
             Assert.True(controller.IsDefined(typeof(RequireHttpsUnlessHttpIssuerAttribute)), controller.Name);
+            Assert.True(controller.IsDefined(typeof(AwaitTenantLoadAttribute)), controller.Name);
         });
     }
 

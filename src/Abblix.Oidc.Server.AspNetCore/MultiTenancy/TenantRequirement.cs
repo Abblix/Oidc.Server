@@ -42,7 +42,7 @@ public static partial class TenantRequirement
         // Resolution that never ran looks exactly like a request naming no tenant, and would answer every
         // endpoint 404 with nothing to say why; the log names the cause. A server serving its one tenant without
         // resolution needs no call, so it is not told it misses one.
-        if (accessor is HttpContextTenantAccessor && !TenantResolutionMiddleware.HasRun(context) &&
+        if (HttpContextTenantAccessor.AnswersWithoutResolution(context) &&
             context.RequestServices.GetService<LoneTenant>() is not { WhyTheCallIsNeeded: null } &&
             context.RequestServices.GetService<ILoggerFactory>() is { } loggerFactory)
         {

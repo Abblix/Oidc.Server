@@ -511,7 +511,8 @@ public partial class MultiTenancyRegistrationTests
         var preparation = new HeldPreparation();
         var services = new ServiceCollection();
         services.AddSingleton<ITenantAccessor>(new NoTenantAccessor());
-        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(Acme));
+        services.AddServerStorage().ServeTenants(options => options.Tenants.Add(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com") }));
         services.AddSingleton<ITenantOpening>(preparation);
         await using var provider = services.BuildServiceProvider();
 
