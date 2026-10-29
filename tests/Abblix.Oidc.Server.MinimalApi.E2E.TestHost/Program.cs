@@ -32,8 +32,9 @@ using Abblix.Oidc.Server.MinimalApi.E2E.TestHost.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 // Load the embedded test license JWT before any OIDC service touches LicenseChecker.
-// The license is scoped to valid_issuers=["https://auth.example.com"] (TestConstants.Issuer)
-// with issuer_limit=1, so it physically cannot be lifted into a production host -
+// The license is scoped to valid_issuers=["https://auth.example.com", "http://auth.example.com"]
+// (TestConstants.Issuer, and its http form for a test of an http issuer) with issuer_limit=2,
+// so it physically cannot be lifted into a production host -
 // LicenseChecker.CheckIssuer throws on a non-matching issuer at startup.
 await LoadEmbeddedTestLicenseAsync();
 

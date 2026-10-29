@@ -45,6 +45,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 // steer clients onto attacker infrastructure. A host needing an ungated route (a health probe) adds its own.
 [RequireHttpsUnlessHttpIssuer]
 [RequireHost]
+[AwaitTenantLoad]
 [RequireTenant]
 [ReturnsOidcInvalidRequest]
 [ReturnsLibraryRefusalStatus]

@@ -116,15 +116,25 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
         failures.AddRange(NestedIssuers(tenants));
 
         // Refused here rather than when the first pairwise identifier is minted, which would answer with a 500
-        failures.AddRange(
-            from tenant in tenants
-            let refusal = tenant.PairwiseSubject is { Salt: var salt }
-                ? PairwiseSubjectSettings.SaltRefusal(salt)
-                : null
-            where refusal is not null
-            select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}': {refusal}"));
+        failures.AddRange(TenantRefusal.EachOf(tenants, tenant => PairwiseKeyRefusals(tenant.PairwiseSubject)));
 
         return failures;
+    }
+
+    /// <summary>
+    /// Everything that keeps a tenant's pairwise key from sealing, each reported, so a host fixing one does not learn
+    /// of the next only after starting again.
+    /// </summary>
+    private static IEnumerable<string> PairwiseKeyRefusals(PairwiseSubjectSettings? settings)
+    {
+        if (settings is null)
+            yield break;
+
+        if (PairwiseSubjectSettings.SaltRefusal(settings.Salt) is { } salt)
+            yield return salt;
+
+        if (PairwiseSubjectSettings.HashAlgorithmRefusal(settings.HashAlgorithm) is { } hashAlgorithm)
+            yield return hashAlgorithm;
     }
 
     /// <remarks>

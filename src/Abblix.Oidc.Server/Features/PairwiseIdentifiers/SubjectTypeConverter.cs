@@ -36,8 +36,11 @@ public class SubjectTypeConverter
     {
         _encryptor = settings switch
         {
-            { HashAlgorithm: var algorithm, Salt: {} salt }
-                => new DeterministicAeadEncryptor(algorithm, System.Convert.FromBase64String(salt)),
+            { HashAlgorithm: var name, Salt: {} salt }
+                => new DeterministicAeadEncryptor(
+                    PairwiseSubjectSettings.HashAlgorithmNamed(name) ??
+                    throw new ArgumentException(PairwiseSubjectSettings.HashAlgorithmRefusal(name), nameof(settings)),
+                    System.Convert.FromBase64String(salt)),
 
             _ => null,
         };
