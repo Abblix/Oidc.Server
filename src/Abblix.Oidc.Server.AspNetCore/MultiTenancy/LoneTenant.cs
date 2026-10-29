@@ -42,6 +42,17 @@ internal sealed class LoneTenant(IServiceProvider services, IOptions<OidcOptions
         ? catalog.ServedTenants.FirstOrDefault(tenant => tenant.Id == tenantId)
         : null;
 
+    /// <summary>
+    /// Waits, when the server serves its one tenant without the call, until the catalog has loaded its tenants, as
+    /// tenant resolution does: a request arriving while they are still being loaded at startup is then answered as
+    /// it is once they are, rather than as one for no tenant.
+    /// </summary>
+    public async ValueTask LoadedAsync(CancellationToken cancellationToken)
+    {
+        if (_judged.Value is { Catalog: { } catalog })
+            await catalog.LoadedAsync(cancellationToken);
+    }
+
     private static Judgement Judge(IServiceProvider services, OidcOptions options)
     {
         if (services.GetService<ITenantStore>() is not OptionsTenantStore ||

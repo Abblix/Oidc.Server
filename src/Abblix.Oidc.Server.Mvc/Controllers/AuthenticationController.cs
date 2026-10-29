@@ -42,6 +42,7 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 [SkipStatusCodePages]
 [RequireHttpsUnlessHttpIssuer]
 [RequireHost]
+[AwaitTenantLoad]
 [RequireTenant]
 [OidcRouteValue]
 [SuppressMessage("SonarLint", "S6967:ModelState.IsValid should be checked in controller actions", Justification = "ReturnsOidcInvalidRequest answers an invalid model state before any action runs")]
