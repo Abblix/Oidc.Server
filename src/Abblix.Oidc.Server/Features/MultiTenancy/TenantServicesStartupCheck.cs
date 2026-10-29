@@ -31,7 +31,8 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="serviceProvider">The finished container.</param>
 /// <param name="options">The tenants the settings declare.</param>
 /// <param name="store">Where the tenants are read from.</param>
-/// <param name="registrations">Tells which services are registered without building them.</param>
+/// <param name="registrations">Tells which services are registered without building them. The container the
+/// server is built in has to provide it, as the default container does.</param>
 internal sealed class TenantServicesStartupCheck(
     IServiceProvider serviceProvider,
     IOptions<OidcOptions> options,
@@ -137,8 +138,7 @@ internal sealed class TenantServicesStartupCheck(
     /// </summary>
     private string? SignerSharedByEveryTenant()
     {
-        if (serviceProvider.GetService<IServiceProviderIsService>() is not { } services ||
-            !services.IsService(typeof(ISecurityEventTokenSigner)))
+        if (!registrations.IsService(typeof(ISecurityEventTokenSigner)))
         {
             return null;
         }
