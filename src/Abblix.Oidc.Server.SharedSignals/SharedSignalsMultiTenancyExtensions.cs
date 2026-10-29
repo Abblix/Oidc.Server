@@ -70,6 +70,10 @@ public static class SharedSignalsMultiTenancyExtensions
         services.TryAddSingleton<TenantTransmitterBuilder>();
         services.TryAddSingleton<TenantTransmitters>();
 
+        // A request arriving while the tenants are still being loaded at startup reaches no tenant yet, so the
+        // transmitter's endpoints wait for the load before they pick the transmitter of the tenant served
+        TenantLoadReadiness.Register(services);
+
         // Each part a request, a host's job or an endpoint asks for is the part of the transmitter of the tenant served
         // when it asks, resolved anew each time; one held across requests refuses once used while another tenant is
         // served, rather than serving that tenant's events as its own.
