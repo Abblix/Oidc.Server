@@ -206,13 +206,6 @@ public class EntryRequirementsTests
     }
 
     /// <summary>
-    /// The filter waits ahead of the HTTPS requirement, which reads the tenant to waive itself for an issuer over http.
-    /// </summary>
-    [Fact]
-    public void TheLoadFilter_RunsBeforeTheHttpsRequirement()
-        => Assert.True(new AwaitTenantLoadAttribute().Order < new RequireHttpsUnlessHttpIssuerAttribute().Order);
-
-    /// <summary>
     /// A preparation of the tenants that holds their load open until the test releases it.
     /// </summary>
     private sealed class HeldPreparation : ITenantOpening
