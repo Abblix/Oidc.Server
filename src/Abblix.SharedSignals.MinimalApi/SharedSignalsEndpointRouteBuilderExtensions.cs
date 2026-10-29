@@ -80,6 +80,7 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
         // The group is assembled in steps (Builder): what every route shares first, then each area's
         // routes, then the addresses the mapped routes are published under.
         var group = endpoints.MapGroup(endpointOptions.ManagementPrefix.Value ?? string.Empty);
+        group.WaitForTheTransmitter();
         ApplyGroupConventions(group);
         MapStreamConfigurationRoutes(group);
         MapStreamStatusRoutes(group);
@@ -344,6 +345,7 @@ public static class SharedSignalsEndpointRouteBuilderExtensions
                 Results.Json(TransmitterConfigurationDocument.ConfigurationDocumentOf(
                     current, identity, pollEndpoints, managementEndpoints)));
 
+        document.WaitForTheTransmitter();
         document.AddEndpointFilter(TransmitterPresence.RefuseWhereNoneServesAsync);
         document.AnswersWithBody<TransmitterConfiguration>(StatusCodes.Status200OK);
         document.Answers(StatusCodes.Status404NotFound);
