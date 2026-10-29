@@ -130,6 +130,26 @@ public class SubjectTypeConverterTests
         Assert.Equal("settings", refusal.ParamName);
     }
 
+    /// <summary>
+    /// The converter is public, so settings that never passed the startup check reach it: a salt that cannot key the
+    /// seal is refused there, naming the settings and the rule the salt broke, rather than keying the seal, failing
+    /// on decoding, or leaving pairwise identifiers unsupported without a word.
+    /// </summary>
+    /// <param name="salt">The salt the settings carry.</param>
+    [Theory]
+    [InlineData("AAECAwQFBgcICQoLDA0ODw==")]
+    [InlineData("not base64!")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void Constructor_SaltTheSealCannotUse_IsRefused(string? salt)
+    {
+        var refusal = Assert.Throws<ArgumentException>(
+            () => new SubjectTypeConverter(new PairwiseSubjectSettings { Salt = salt! }));
+
+        Assert.Equal("settings", refusal.ParamName);
+        Assert.StartsWith(PairwiseSubjectSettings.SaltRefusal(salt)!, refusal.Message, StringComparison.Ordinal);
+    }
+
     private static ClientInfo CreatePairwiseClient(
         string clientId,
         string? sectorIdentifier = null,
