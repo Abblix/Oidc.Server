@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Security.Claims;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -34,6 +35,8 @@ public sealed class SharedSignalsFirstLoadTests
     private const string Host = "https://auth.example.com";
     private const string ConfigurationDocument = "/.well-known/ssf-configuration";
     private const string StreamPath = "/ssf/stream";
+    private const string ReceiverId = "https://receiver.example.com";
+    private const string SubjectHeader = "X-Test-Subject";
 
     // Long enough for a request that does not wait for the load to be answered
     private static readonly TimeSpan WhileTheLoadIsHeld = TimeSpan.FromSeconds(2);
@@ -52,17 +55,22 @@ public sealed class SharedSignalsFirstLoadTests
     }
 
     /// <summary>
-    /// The configuration document is answered 200 once the load completes, and a stream management request without
-    /// credentials is answered 401, as both are on a loaded server, rather than 404 for a transmitter not there yet.
+    /// The configuration document is answered 200 once the load completes, a stream management request without
+    /// credentials 401, and a receiver's request for its streams 200, as each is on a loaded server, rather than 404 for
+    /// a transmitter not there yet. The receiver's request reaches the handler, which uses the transmitter's parts
+    /// bound for the request, so it is answered from the tenant's transmitter only when the wait comes before binding.
     /// </summary>
     [Theory]
-    [InlineData(StartOrder.Concurrent, ConfigurationDocument, HttpStatusCode.OK)]
-    [InlineData(StartOrder.ServerAfterTheWebHost, ConfigurationDocument, HttpStatusCode.OK)]
-    [InlineData(StartOrder.Concurrent, StreamPath, HttpStatusCode.Unauthorized)]
-    [InlineData(StartOrder.ServerAfterTheWebHost, StreamPath, HttpStatusCode.Unauthorized)]
+    [InlineData(StartOrder.Concurrent, ConfigurationDocument, false, HttpStatusCode.OK)]
+    [InlineData(StartOrder.ServerAfterTheWebHost, ConfigurationDocument, false, HttpStatusCode.OK)]
+    [InlineData(StartOrder.Concurrent, StreamPath, false, HttpStatusCode.Unauthorized)]
+    [InlineData(StartOrder.ServerAfterTheWebHost, StreamPath, false, HttpStatusCode.Unauthorized)]
+    [InlineData(StartOrder.Concurrent, StreamPath, true, HttpStatusCode.OK)]
+    [InlineData(StartOrder.ServerAfterTheWebHost, StreamPath, true, HttpStatusCode.OK)]
     public async Task ARequestDuringTheFirstLoad_IsAnsweredAsOnceLoaded(
         StartOrder order,
         string path,
+        bool asReceiver,
         HttpStatusCode answer)
     {
         var ct = TestContext.Current.CancellationToken;
@@ -75,6 +83,9 @@ public sealed class SharedSignalsFirstLoadTests
         await preparation.Entered.Task.WaitAsync(StartBound, ct);
         using var http = host.GetTestClient();
         http.BaseAddress = new Uri(Host);
+        if (asReceiver)
+            http.DefaultRequestHeaders.Add(SubjectHeader, ReceiverId);
+
         var request = http.GetAsync(path, ct);
 
         // The request is inside the server while the load is held open, and a server that did not wait for the load
@@ -99,6 +110,22 @@ public sealed class SharedSignalsFirstLoadTests
             {
                 arrival.TrySetResult();
                 await next(context);
+            });
+
+            // What a host's bearer authentication leaves behind: the receiver, and the issuer of its credentials
+            app.Use((context, next) =>
+            {
+                if (context.Request.Headers.TryGetValue(SubjectHeader, out var subject))
+                {
+                    Claim[] claims =
+                    [
+                        new(IanaClaimTypes.Sub, subject.ToString()),
+                        new(IanaClaimTypes.Iss, Host),
+                    ];
+                    context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+                }
+
+                return next(context);
             });
             app.UseRouting();
             app.UseEndpoints(endpoints =>
