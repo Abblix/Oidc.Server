@@ -7,9 +7,16 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.PairwiseIdentifiers;
@@ -27,6 +34,101 @@ public class SubjectTypeConverterTests
     private static readonly string TestSalt = Convert.ToBase64String(new byte[32]);
 
     private static SubjectTypeConverter CreateConverter() => new(new PairwiseSubjectSettings { Salt = TestSalt });
+
+    /// <summary>Key material of the frozen pseudonyms: the bytes 0 to 31.</summary>
+    private static readonly string VectorSalt = Convert.ToBase64String(Enumerable.Range(0, 32).Select(i => (byte)i).ToArray());
+
+    private const string VectorSubject = "alice";
+
+    private static ClientInfo VectorClient => CreatePairwiseClient("client", redirectUris: [new Uri("https://app.example.com/cb")]);
+
+    /// <summary>
+    /// A converter keyed by the settings a host binds from configuration, naming <paramref name="hashAlgorithm"/>, or
+    /// leaving the key out when it is null.
+    /// </summary>
+    private static SubjectTypeConverter BoundFromConfiguration(string? hashAlgorithm)
+    {
+        const string section = nameof(TenantDefinition.PairwiseSubject);
+        var values = new Dictionary<string, string?>
+        {
+            [ConfigurationPath.Combine(section, nameof(PairwiseSubjectSettings.Salt))] = VectorSalt,
+        };
+        if (hashAlgorithm is not null)
+            values[ConfigurationPath.Combine(section, nameof(PairwiseSubjectSettings.HashAlgorithm))] = hashAlgorithm;
+
+        var settings = new ConfigurationBuilder()
+            .AddInMemoryCollection(values)
+            .Build()
+            .GetSection(section)
+            .Get<PairwiseSubjectSettings>();
+
+        return new SubjectTypeConverter(settings);
+    }
+
+    /// <summary>
+    /// A converter keyed by settings a host writes in code, naming <paramref name="hashAlgorithm"/>, or keeping the
+    /// default when it is null.
+    /// </summary>
+    private static SubjectTypeConverter SetInCode(string? hashAlgorithm)
+        => new(hashAlgorithm is null
+            ? new PairwiseSubjectSettings { Salt = VectorSalt }
+            : new PairwiseSubjectSettings { Salt = VectorSalt, HashAlgorithm = hashAlgorithm });
+
+    /// <summary>
+    /// Every pairwise identifier a server has issued must keep opening, so the pseudonym of one subject under one salt
+    /// is frozen for each hash and for settings naming none: a change to the default, or to the hash a name selects,
+    /// would give every end user new identifiers, and fails here wherever the settings come from.
+    /// </summary>
+    [Theory]
+    [InlineData(null, "QXh7x0xurArveU6Wqy0OVA")]
+    [InlineData(nameof(HashAlgorithmName.SHA256), "QXh7x0xurArveU6Wqy0OVA")]
+    [InlineData(nameof(HashAlgorithmName.SHA384), "cKQVG1mZuusj63PuBfj9eg")]
+    [InlineData(nameof(HashAlgorithmName.SHA512), "WvAf6Y-mPrzJi1-0d4Y0mA")]
+    public void Convert_HashAlgorithm_GivesTheFrozenPseudonym(string? hashAlgorithm, string pseudonym)
+    {
+        Assert.Equal(pseudonym, BoundFromConfiguration(hashAlgorithm).Convert(VectorSubject, VectorClient));
+        Assert.Equal(pseudonym, SetInCode(hashAlgorithm).Convert(VectorSubject, VectorClient));
+    }
+
+    /// <summary>
+    /// The converter is public, so settings that never passed the startup check reach it: a hash it cannot use is
+    /// refused there, naming the settings, rather than replaced by another one.
+    /// </summary>
+    [Fact]
+    public void Constructor_HashAlgorithmTheSealCannotUse_IsRefused()
+    {
+        var refusal = Assert.Throws<ArgumentException>(
+            () => new SubjectTypeConverter(new PairwiseSubjectSettings
+            {
+                Salt = TestSalt,
+                HashAlgorithm = nameof(HashAlgorithmName.MD5),
+            }));
+
+        Assert.Equal("settings", refusal.ParamName);
+    }
+
+    /// <summary>
+    /// A hash setting present in the configuration but carrying no name is refused like an unknown name, never read
+    /// as the default: taking it for SHA256 would be a choice nobody made, and a later change of the default would
+    /// then change every pairwise identifier the server has issued.
+    /// </summary>
+    /// <param name="hashAlgorithm">The JSON value of the setting.</param>
+    [Theory]
+    [InlineData("\"\"")]
+    [InlineData("\"   \"")]
+    [InlineData("null")]
+    public void Constructor_HashAlgorithmWithoutAName_IsRefused(string hashAlgorithm)
+    {
+        var json = $$"""{"{{nameof(PairwiseSubjectSettings.Salt)}}": "{{VectorSalt}}", "{{nameof(PairwiseSubjectSettings.HashAlgorithm)}}": {{hashAlgorithm}}}""";
+        var settings = new ConfigurationBuilder()
+            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
+            .Build()
+            .Get<PairwiseSubjectSettings>();
+
+        var refusal = Assert.Throws<ArgumentException>(() => new SubjectTypeConverter(settings));
+
+        Assert.Equal("settings", refusal.ParamName);
+    }
 
     private static ClientInfo CreatePairwiseClient(
         string clientId,
