@@ -99,7 +99,7 @@ public class SubjectTypeConverterTests
             () => new SubjectTypeConverter(new PairwiseSubjectSettings
             {
                 Salt = TestSalt,
-                HashAlgorithm = nameof(HashAlgorithmName.SHA512).ToLowerInvariant(),
+                HashAlgorithm = nameof(HashAlgorithmName.MD5),
             }));
 
         Assert.Equal("settings", refusal.ParamName);

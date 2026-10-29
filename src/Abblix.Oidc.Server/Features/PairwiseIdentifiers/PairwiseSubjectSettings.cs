@@ -47,7 +47,7 @@ public record PairwiseSubjectSettings
 
     /// <summary>
     /// The name of the hash the HKDF key derivation that keys the pairwise seal uses: SHA256, SHA384 or SHA512,
-    /// SHA256 when not set. A name rather than a <see cref="HashAlgorithmName"/>, because the configuration binder
+    /// SHA256 when the setting is absent, while a setting with no value is refused. A name rather than a <see cref="HashAlgorithmName"/>, because the configuration binder
     /// cannot convert a string into one.
     /// </summary>
     /// <remarks>
@@ -67,7 +67,7 @@ public record PairwiseSubjectSettings
 
     /// <summary>Why this hash cannot key the seal, or null when it can.</summary>
     /// <param name="name">The name a deployment configured.</param>
-    /// <remarks>Public for the reason <see cref="SaltRefusal"/> is: a caller holding settings it did not write asks
+    /// <remarks>Public for the reason <see cref="ValidateSalt"/> is: a caller holding settings it did not write asks
     /// here.</remarks>
     public static string? HashAlgorithmRefusal(string? name)
     {
@@ -76,7 +76,7 @@ public record PairwiseSubjectSettings
 
         var supported = string.Join(", ", SupportedHashAlgorithms.Select(algorithm => algorithm.Name));
         if (name is null)
-            return $"The pairwise {nameof(HashAlgorithm)} is not set: name one of {supported}.";
+            return $"The pairwise {nameof(HashAlgorithm)} has no value: name one of {supported}.";
 
         return $"The pairwise {nameof(HashAlgorithm)} '{name}' is not one the pairwise seal can use: {supported}.";
     }

@@ -116,10 +116,7 @@ public sealed class TenantDefinitionsCheck : ITenantsCheck
         failures.AddRange(NestedIssuers(tenants));
 
         // Refused here rather than when the first pairwise identifier is minted, which would answer with a 500
-        failures.AddRange(
-            from tenant in tenants
-            from refusal in PairwiseKeyRefusals(tenant.PairwiseSubject)
-            select TenantRefusal.Of(tenant, $"Tenant '{tenant.Id}': {refusal}"));
+        failures.AddRange(TenantRefusal.EachOf(tenants, tenant => PairwiseKeyRefusals(tenant.PairwiseSubject)));
 
         return failures;
     }
