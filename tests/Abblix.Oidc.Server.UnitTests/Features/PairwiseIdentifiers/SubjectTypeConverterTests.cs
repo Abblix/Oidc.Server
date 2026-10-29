@@ -8,8 +8,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -101,6 +103,29 @@ public class SubjectTypeConverterTests
                 Salt = TestSalt,
                 HashAlgorithm = nameof(HashAlgorithmName.MD5),
             }));
+
+        Assert.Equal("settings", refusal.ParamName);
+    }
+
+    /// <summary>
+    /// A hash setting present in the configuration but carrying no name is refused like an unknown name, never read
+    /// as the default: taking it for SHA256 would be a choice nobody made, and a later change of the default would
+    /// then change every pairwise identifier the server has issued.
+    /// </summary>
+    /// <param name="hashAlgorithm">The JSON value of the setting.</param>
+    [Theory]
+    [InlineData("\"\"")]
+    [InlineData("\"   \"")]
+    [InlineData("null")]
+    public void Constructor_HashAlgorithmWithoutAName_IsRefused(string hashAlgorithm)
+    {
+        var json = $$"""{"{{nameof(PairwiseSubjectSettings.Salt)}}": "{{VectorSalt}}", "{{nameof(PairwiseSubjectSettings.HashAlgorithm)}}": {{hashAlgorithm}}}""";
+        var settings = new ConfigurationBuilder()
+            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(json)))
+            .Build()
+            .Get<PairwiseSubjectSettings>();
+
+        var refusal = Assert.Throws<ArgumentException>(() => new SubjectTypeConverter(settings));
 
         Assert.Equal("settings", refusal.ParamName);
     }

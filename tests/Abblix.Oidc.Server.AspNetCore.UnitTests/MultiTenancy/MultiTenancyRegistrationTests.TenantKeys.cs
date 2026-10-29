@@ -52,10 +52,15 @@ public partial class MultiTenancyRegistrationTests
 
     /// <summary>
     /// A tenant naming a pairwise hash the seal cannot use is refused at startup, naming the tenant and the setting,
-    /// rather than by a 500 the first time one of its clients is given a pairwise identifier.
+    /// rather than by a 500 the first time one of its clients is given a pairwise identifier. A setting carrying no
+    /// name is refused too, rather than read as the default.
     /// </summary>
-    [Fact]
-    public void ATenantsUnusablePairwiseHash_IsRefusedAtStartup()
+    /// <param name="hashAlgorithm">The name the tenant's settings give.</param>
+    [Theory]
+    [InlineData(nameof(HashAlgorithmName.MD5))]
+    [InlineData("")]
+    [InlineData(null)]
+    public void ATenantsUnusablePairwiseHash_IsRefusedAtStartup(string? hashAlgorithm)
     {
         var unknownHash = new TenantDefinition
         {
@@ -64,7 +69,7 @@ public partial class MultiTenancyRegistrationTests
             PairwiseSubject = new PairwiseSubjectSettings
             {
                 Salt = Convert.ToBase64String(new byte[32]),
-                HashAlgorithm = nameof(HashAlgorithmName.MD5),
+                HashAlgorithm = hashAlgorithm!,
             },
         };
         var services = new ServiceCollection().AddServerStorage();
