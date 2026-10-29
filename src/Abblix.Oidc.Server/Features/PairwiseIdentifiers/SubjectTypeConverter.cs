@@ -32,18 +32,20 @@ public class SubjectTypeConverter
     /// pairwise request fails loud.
     /// </summary>
     /// <param name="settings">The pairwise salt and hash, or null when pairwise identifiers are not configured.</param>
+    /// <exception cref="ArgumentException">The settings name a hash or carry a salt the seal cannot use.</exception>
     public SubjectTypeConverter(PairwiseSubjectSettings? settings = null)
     {
-        _encryptor = settings switch
-        {
-            { HashAlgorithm: var name, Salt: {} salt }
-                => new DeterministicAeadEncryptor(
-                    PairwiseSubjectSettings.HashAlgorithmNamed(name) ??
-                    throw new ArgumentException(PairwiseSubjectSettings.HashAlgorithmRefusal(name), nameof(settings)),
-                    System.Convert.FromBase64String(salt)),
+        if (settings is null)
+            return;
 
-            _ => null,
-        };
+        var hashAlgorithm = PairwiseSubjectSettings.HashAlgorithmNamed(settings.HashAlgorithm) ??
+            throw new ArgumentException(
+                PairwiseSubjectSettings.HashAlgorithmRefusal(settings.HashAlgorithm), nameof(settings));
+
+        if (PairwiseSubjectSettings.SaltRefusal(settings.Salt) is { } saltRefusal)
+            throw new ArgumentException(saltRefusal, nameof(settings));
+
+        _encryptor = new DeterministicAeadEncryptor(hashAlgorithm, System.Convert.FromBase64String(settings.Salt));
     }
 
     /// <summary>
