@@ -32,16 +32,11 @@ namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 internal static class TestLicense
 {
     /// <summary>
-    /// The only issuer the test license recognizes. A test that needs an issuer uses this one; any other value
-    /// is refused by the license, which is the correct behavior and not something to work around.
+    /// The issuer the test license recognizes, beside its http form the end-to-end suites serve. A test that needs
+    /// an issuer uses this one; any other value is refused by the license, which is the correct behavior and not
+    /// something to work around.
     /// </summary>
     public const string Issuer = "https://auth.example.com";
-
-    /// <summary>
-    /// How many distinct issuers the license allows. Named here because a test that exercises the limit needs
-    /// to know where it sits, and reading it from the JWT at runtime would hide the number from the reader.
-    /// </summary>
-    public const int IssuerLimit = 1;
 
     private const string ResourceName = "Abblix.Oidc.Server.UnitTests.Resources.test-license.jwt";
 

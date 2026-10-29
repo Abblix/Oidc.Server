@@ -78,9 +78,9 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
     }
 
     [Fact]
-    public async Task Embedded_test_license_rejects_any_issuer_other_than_TestConstants_Issuer()
+    public async Task Embedded_test_license_rejects_an_issuer_it_does_not_name()
     {
-        // The embedded test license declares valid_issuers = [TestConstants.Issuer] only.
+        // The embedded test license names only TestConstants.Issuer and its http form.
         // Loading it at TestHost startup registers a permissive license, but
         // LicenseChecker.CheckIssuer throws on any issuer that is not on that whitelist -
         // physically preventing the license from being lifted into a production host with

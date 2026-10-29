@@ -248,6 +248,13 @@ public sealed partial class StoreTenantCatalog(
             : null;
 
     /// <summary>
+    /// Completes once the catalog holds a reading, waiting for the one in progress, or making it, when there is none
+    /// yet, so <see cref="ServedTenants"/> answers from the tenants as loaded rather than from none.
+    /// </summary>
+    internal async ValueTask LoadedAsync(CancellationToken cancellationToken)
+        => _ = await ReadingAsync(cancellationToken);
+
+    /// <summary>
     /// The last reading, made on the first question when nothing has refreshed the catalog yet - as in a container
     /// whose hosted services never ran. A reading that fails is not kept, so the next question reads again.
     /// </summary>

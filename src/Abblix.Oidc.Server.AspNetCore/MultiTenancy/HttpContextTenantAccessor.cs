@@ -33,6 +33,14 @@ public sealed class HttpContextTenantAccessor(IHttpContextAccessor httpContextAc
         };
 
     /// <summary>
+    /// True when this server's own accessor tells the tenant of <paramref name="context"/> and tenant resolution did
+    /// not run for it, so nothing in the pipeline has waited for the tenants or matched the request to one.
+    /// </summary>
+    internal static bool AnswersWithoutResolution(HttpContext context)
+        => context.RequestServices.GetRequiredService<ITenantAccessor>() is HttpContextTenantAccessor &&
+           !TenantResolutionMiddleware.HasRun(context);
+
+    /// <summary>
     /// The one tenant, for a request no resolution has seen and that reaches the server at the root of its host.
     /// </summary>
     /// <remarks>
