@@ -31,10 +31,12 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="serviceProvider">The finished container.</param>
 /// <param name="options">The tenants the settings declare.</param>
 /// <param name="store">Where the tenants are read from.</param>
+/// <param name="registrations">Tells which services are registered without building them.</param>
 internal sealed class TenantServicesStartupCheck(
     IServiceProvider serviceProvider,
     IOptions<OidcOptions> options,
-    ITenantStore store) : IHostedLifecycleService
+    ITenantStore store,
+    IServiceProviderIsService registrations) : IHostedLifecycleService
 {
     /// <inheritdoc />
     public Task StartingAsync(CancellationToken cancellationToken)
@@ -54,9 +56,7 @@ internal sealed class TenantServicesStartupCheck(
         // The tenant manager writes through the writer and then reads the store again, and the settings never hold what
         // it wrote: it would report a tenant created, changed or removed that the server does not serve as told
         // Asked whether one is registered rather than built, so a writer the host cannot build yet does not hide this
-        if (store is OptionsTenantStore &&
-            serviceProvider.GetService<IServiceProviderIsService>() is { } services &&
-            services.IsService(typeof(ITenantStoreWriter)))
+        if (store is OptionsTenantStore && registrations.IsService(typeof(ITenantStoreWriter)))
         {
             failures.Add(
                 $"An {nameof(ITenantStoreWriter)} is registered, but the tenants come from " +
