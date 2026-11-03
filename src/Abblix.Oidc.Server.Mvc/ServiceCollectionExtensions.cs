@@ -30,7 +30,8 @@ public static class ServiceCollectionExtensions
 	/// The endpoints are mapped by <see cref="EndpointRouteBuilderExtensions.MapOidcControllers"/>, which the
 	/// request pipeline calls in place of relying on <c>app.MapControllers()</c>: the library's controllers carry
 	/// no route of their own.
-	/// The request pipeline must call <c>app.UseCors()</c> after <c>app.UseRouting()</c>. The protocol
+	/// The request pipeline must call <c>app.UseCors()</c> after routing: after <c>app.UseRouting()</c>, or after
+	/// <c>app.UseMultiTenancy()</c>, which adds the routing itself. The protocol
 	/// controllers carry CORS metadata, because browser-based clients read the discovery document, the
 	/// key set and the token endpoint cross-origin - and ASP.NET Core routing refuses to serve any
 	/// endpoint whose CORS metadata no middleware honours, so without that call every protocol endpoint
@@ -59,8 +60,8 @@ public static class ServiceCollectionExtensions
 	/// Adds OIDC server services to the specified <see cref="IServiceCollection"/> with provided configuration options and service provider.
 	/// </summary>
 	/// <remarks>
-	/// The request pipeline must call <c>app.UseCors()</c> after <c>app.UseRouting()</c>; see the
-	/// remarks on <see cref="AddOidcServices(IServiceCollection, Action{OidcOptions})"/> for why the
+	/// The request pipeline must call <c>app.UseCors()</c> after routing; see the remarks on
+	/// <see cref="AddOidcServices(IServiceCollection, Action{OidcOptions})"/> for where it goes and why the
 	/// protocol endpoints refuse to answer without it.
 	/// </remarks>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
