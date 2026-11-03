@@ -41,9 +41,10 @@ public static class ServiceCollectionExtensions
     /// this line alone: what changes is the package reference and the endpoint mapping, not the registration.
     /// The server serves the tenants <see cref="OidcOptions.Tenants"/> declares, a host serving one issuer
     /// declaring one. When that one tenant's issuer has no path, the server serves it to every request reaching the
-    /// root of the host, and the pipeline needs nothing more. A host serving several tenants, one at an issuer with a
-    /// path, or tenants from a store or catalog of its own resolves each request to its tenant with
-    /// <c>app.UseMultiTenancy()</c> before routing and authentication.
+    /// root of the host, and the pipeline needs no call to resolve it. A host serving several tenants, a single tenant
+    /// at an issuer with a path, or tenants from a store or catalog of its own resolves each request to its tenant with
+    /// <c>app.UseMultiTenancy()</c> before routing and authentication, unless it is one of the hosts the remarks of
+    /// <see cref="MultiTenancyExtensions.UseMultiTenancy"/> exempt from the call.
     /// The server refuses a configuration it cannot serve while the host announces its start
     /// (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartingAsync"/>), as the Generic Host and
     /// <c>WebApplication</c> do. A host starting its services without that announcement, such as the obsolete
