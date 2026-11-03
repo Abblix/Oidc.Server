@@ -30,7 +30,9 @@ public static class ServiceCollectionExtensions
 	/// The endpoints are mapped by <see cref="EndpointRouteBuilderExtensions.MapOidcControllers"/>, which the
 	/// request pipeline calls in place of relying on <c>app.MapControllers()</c>: the library's controllers carry
 	/// no route of their own.
-	/// The request pipeline must call <c>app.UseCors()</c> after <c>app.UseRouting()</c>. The protocol
+	/// The request pipeline must call <c>app.UseCors()</c> after routing. <c>app.UseMultiTenancy()</c> adds the
+	/// routing itself; a pipeline without it calls <c>app.UseRouting()</c> first, or, in a <c>WebApplication</c>,
+	/// may leave routing to the application, which then routes at the head of the pipeline. The protocol
 	/// controllers carry CORS metadata, because browser-based clients read the discovery document, the
 	/// key set and the token endpoint cross-origin - and ASP.NET Core routing refuses to serve any
 	/// endpoint whose CORS metadata no middleware honours, so without that call every protocol endpoint
@@ -38,13 +40,14 @@ public static class ServiceCollectionExtensions
 	/// since the framework accepts the middleware only when it runs after routing has selected an
 	/// endpoint - a place no library can insert it from.
 	/// The server serves the tenants <see cref="OidcOptions.Tenants"/> declares, a host serving one issuer
-	/// declaring one, and the request pipeline resolves each request to its tenant with
-	/// <c>app.UseMultiTenancy()</c> before routing and authentication.
+	/// declaring one. The pipeline resolves each request to its tenant with <c>app.UseMultiTenancy()</c> before routing
+	/// and authentication; which hosts may leave the call out is said in the remarks of
+	/// <see cref="MultiTenancyExtensions.UseMultiTenancy"/>.
 	/// The server refuses a configuration it cannot serve while the host announces its start
 	/// (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartingAsync"/>), as the Generic Host and
 	/// <c>WebApplication</c> do. A host starting its services without that announcement, such as the obsolete
 	/// <c>WebHost</c>, is not supported: it would start the server without those checks.
-	/// A pipeline that leaves out <c>app.UseMultiTenancy()</c> is refused only once the host has started (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartedAsync"/>), when both hosting models have built it, so a request arriving before then is answered.
+	/// A host that needs <c>app.UseMultiTenancy()</c> and leaves it out of its pipeline is refused only once the host has started (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartedAsync"/>), when both hosting models have built it, so a request arriving before then is answered.
 	/// </remarks>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
 	/// <param name="configureOptions">A delegate to configure the <see cref="OidcOptions"/>.</param>
@@ -58,8 +61,8 @@ public static class ServiceCollectionExtensions
 	/// Adds OIDC server services to the specified <see cref="IServiceCollection"/> with provided configuration options and service provider.
 	/// </summary>
 	/// <remarks>
-	/// The request pipeline must call <c>app.UseCors()</c> after <c>app.UseRouting()</c>; see the
-	/// remarks on <see cref="AddOidcServices(IServiceCollection, Action{OidcOptions})"/> for why the
+	/// The request pipeline must call <c>app.UseCors()</c> after routing; see the remarks on
+	/// <see cref="AddOidcServices(IServiceCollection, Action{OidcOptions})"/> for where it goes and why the
 	/// protocol endpoints refuse to answer without it.
 	/// </remarks>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>

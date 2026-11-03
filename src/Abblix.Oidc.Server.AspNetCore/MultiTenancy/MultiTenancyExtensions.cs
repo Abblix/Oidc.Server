@@ -56,7 +56,8 @@ public static class MultiTenancyExtensions
     /// encoded slash aside, so a request spelling it in another case reaches no tenant. A host registering the server
     /// through the MVC or Minimal API <c>AddOidcServices</c> whose pipeline leaves this call out does not start, unless
     /// it registers its own <see cref="ITenantAccessor"/>, runs no web server, or declares one tenant in its options at
-    /// an issuer without a path and nothing that changes the tenants while it runs, which is served without the call.
+    /// an issuer without a path and takes its tenants from the options alone, with no tenant store or catalog of its
+    /// own, which is served without the call.
     /// </remarks>
     public static IApplicationBuilder UseMultiTenancy(this IApplicationBuilder app)
     {
