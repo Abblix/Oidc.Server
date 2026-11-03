@@ -38,13 +38,15 @@ public static class ServiceCollectionExtensions
 	/// since the framework accepts the middleware only when it runs after routing has selected an
 	/// endpoint - a place no library can insert it from.
 	/// The server serves the tenants <see cref="OidcOptions.Tenants"/> declares, a host serving one issuer
-	/// declaring one, and the request pipeline resolves each request to its tenant with
+	/// declaring one. When that one tenant's issuer has no path, the server serves it to every request reaching the
+	/// root of the host, and the pipeline needs nothing more. A host serving several tenants, one at an issuer with a
+	/// path, or tenants from a store or catalog of its own resolves each request to its tenant with
 	/// <c>app.UseMultiTenancy()</c> before routing and authentication.
 	/// The server refuses a configuration it cannot serve while the host announces its start
 	/// (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartingAsync"/>), as the Generic Host and
 	/// <c>WebApplication</c> do. A host starting its services without that announcement, such as the obsolete
 	/// <c>WebHost</c>, is not supported: it would start the server without those checks.
-	/// A pipeline that leaves out <c>app.UseMultiTenancy()</c> is refused only once the host has started (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartedAsync"/>), when both hosting models have built it, so a request arriving before then is answered.
+	/// A host that needs <c>app.UseMultiTenancy()</c> and leaves it out of its pipeline is refused only once the host has started (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartedAsync"/>), when both hosting models have built it, so a request arriving before then is answered.
 	/// </remarks>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
 	/// <param name="configureOptions">A delegate to configure the <see cref="OidcOptions"/>.</param>
