@@ -30,8 +30,9 @@ public static class ServiceCollectionExtensions
 	/// The endpoints are mapped by <see cref="EndpointRouteBuilderExtensions.MapOidcControllers"/>, which the
 	/// request pipeline calls in place of relying on <c>app.MapControllers()</c>: the library's controllers carry
 	/// no route of their own.
-	/// The request pipeline must call <c>app.UseCors()</c> after routing: after <c>app.UseRouting()</c>, or after
-	/// <c>app.UseMultiTenancy()</c>, which adds the routing itself. The protocol
+	/// The request pipeline must call <c>app.UseCors()</c> after routing. <c>app.UseMultiTenancy()</c> adds the
+	/// routing itself; a pipeline without it calls <c>app.UseRouting()</c> first, or, in a <c>WebApplication</c>,
+	/// may leave routing to the application, which then routes at the head of the pipeline. The protocol
 	/// controllers carry CORS metadata, because browser-based clients read the discovery document, the
 	/// key set and the token endpoint cross-origin - and ASP.NET Core routing refuses to serve any
 	/// endpoint whose CORS metadata no middleware honours, so without that call every protocol endpoint
