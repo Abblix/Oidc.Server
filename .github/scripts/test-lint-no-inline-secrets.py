@@ -5,7 +5,9 @@ would still answer OK on them.
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import pathlib
 import sys
 import tempfile
@@ -28,6 +30,16 @@ jobs:
           github.head_ref }}
       - name: trusted context
         run: echo "${{ runner.temp }}"
+      - run: echo "${{ github.ref_name }}"
+  second:
+    runs-on: ubuntu-latest
+    steps:
+      - name: second job
+        run: echo "${{ inputs.value }}"
+"""
+
+MALFORMED = """jobs:
+  broken: [
 """
 
 ACCEPTED = """\
@@ -46,11 +58,11 @@ jobs:
 """
 
 
-def load_scan_file():
+def load_module():
     spec = importlib.util.spec_from_file_location("lint_no_inline_secrets", SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.scan_file
+    return module
 
 
 def scan(scan_file, text: str) -> list[str]:
@@ -60,17 +72,38 @@ def scan(scan_file, text: str) -> list[str]:
         return scan_file(path)
 
 
+def run_main(main, text: str) -> int:
+    # main() reads .github/workflows relative to the working directory, and a .yaml
+    # name proves that extension is read too.
+    with tempfile.TemporaryDirectory() as folder:
+        workflows = pathlib.Path(folder) / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        (workflows / "planted.yaml").write_text(text, encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.chdir(folder):
+            return main()
+
+
 def main() -> int:
-    scan_file = load_scan_file()
+    module = load_module()
+    scan_file = module.scan_file
     failures: list[str] = []
 
     refused = scan(scan_file, REFUSED)
-    for step in ("index form", "function form", "split across lines", "trusted context"):
+    for step in ("index form", "function form", "split across lines", "trusted context",
+                 "step #4", "second job"):
         if not any(f"/ {step}:" in violation for violation in refused):
             failures.append(f'step "{step}" was not refused')
 
     accepted = scan(scan_file, ACCEPTED)
     failures.extend(f"refused a clean step: {violation}" for violation in accepted)
+
+    if not scan(scan_file, MALFORMED):
+        failures.append("a workflow that does not parse was accepted")
+
+    if run_main(module.main, REFUSED) != 1:
+        failures.append("main() did not fail on a .yaml workflow carrying an expression")
+    if run_main(module.main, ACCEPTED) != 0:
+        failures.append("main() failed on a clean .yaml workflow")
 
     if failures:
         print("lint-no-inline-secrets.py does not behave as planted:")
