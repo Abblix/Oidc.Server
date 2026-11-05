@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   no-inline-secrets:
-    name: Block inline untrusted-input interpolation
+    name: Block expressions inside run scripts
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -46,7 +46,11 @@ jobs:
             --require-hashes -r .github/workflows/requirements/lint-workflows.txt
 
         timeout-minutes: 3
-      - name: "Block inline untrusted-input interpolation in run: blocks"
+      - name: "Test the check on planted workflows"
+        run: python .github/scripts/test-lint-no-inline-secrets.py
+
+        timeout-minutes: 3
+      - name: "Block expressions inside run: scripts"
         run: python .github/scripts/lint-no-inline-secrets.py
 
         timeout-minutes: 3

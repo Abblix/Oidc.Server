@@ -1,53 +1,30 @@
 """
-Fail if any workflow interpolates an untrusted GitHub Actions context expression
-directly inside a `run:` block.
+Fail if any workflow step opens a GitHub Actions expression inside its `run:` script.
 
-GitHub interpolates `${{ ... }}` into shell command text BEFORE the shell parses it.
-If the interpolated value contains shell metacharacters, the script is vulnerable
-to command injection. Always pass through `env:` and reference as `$VAR`:
+The runner substitutes `${{ ... }}` into the script text BEFORE the shell parses it,
+so a value carrying shell metacharacters becomes part of the command. Pass the value
+through `env:` and reference it as `$VAR` instead:
 
     env:
       MY_SECRET: ${{ secrets.MY_SECRET }}
     run: |
       printf '%s' "$MY_SECRET" | ...
 
-The patterns flagged below are the untrusted-input contexts documented at
-https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions
-plus secrets and the implicit GITHUB_TOKEN.
-
-Outputs from previous steps (`needs.*.outputs.*`, `steps.*.outputs.*`) are NOT
-flagged by default to avoid noise on legitimately-validated values; if those
-outputs derive from user input, validation must happen at the producing step.
+Every expression is refused, not a list of dangerous contexts: `${{` is the only way
+the runner opens an expression, while a list of contexts misses every other spelling
+of the same value (`secrets['X']`, `toJSON(github.event)`, `format(...)`) and passes it.
+The `run:` value is read by parsing the YAML, so the check sees the script exactly as
+the runner receives it, whatever block style the file uses.
 """
 from __future__ import annotations
 
 import pathlib
-import re
 import sys
 from typing import Iterator
 
 import yaml
 
-DANGEROUS_PATTERNS = [
-    r"secrets\.[A-Za-z0-9_]+",
-    r"github\.token",
-    r"inputs\.[A-Za-z0-9_-]+",
-    r"github\.event\.inputs\.[A-Za-z0-9_-]+",
-    r"github\.event\.issue\.(title|body)",
-    r"github\.event\.pull_request\.(title|body)",
-    r"github\.event\.pull_request\.head\.(ref|label)",
-    r"github\.event\.pull_request\.head\.repo\.default_branch",
-    r"github\.event\.comment\.body",
-    r"github\.event\.review\.body",
-    r"github\.event\.review_comment\.body",
-    r"github\.event\.pages\.\*\.page_name",
-    r"github\.event\.commits\.\*\.(message|author\.(email|name))",
-    r"github\.event\.head_commit\.(message|author\.(email|name))",
-    r"github\.head_ref",
-]
-PATTERN = re.compile(
-    r"\$\{\{\s*(" + "|".join(DANGEROUS_PATTERNS) + r")\s*\}\}"
-)
+EXPRESSION_OPENER = "${{"
 WORKFLOWS_DIR = pathlib.Path(".github/workflows")
 
 
@@ -82,10 +59,9 @@ def scan_file(path: pathlib.Path) -> list[str]:
         return [f"{path}: YAML parse error: {exc}"]
 
     return [
-        f'{path}: job "{job_name}" / {step_label}: '
-        f'inline "{match.group(0)}" inside run:'
+        f'{path}: job "{job_name}" / {step_label}: expression opened inside run:'
         for job_name, step_label, run in _iter_run_blocks(doc)
-        for match in PATTERN.finditer(run)
+        if EXPRESSION_OPENER in run
     ]
 
 
@@ -103,7 +79,7 @@ def main() -> int:
 
     if all_violations:
         print(
-            "Untrusted-input interpolation detected inside run: scripts.\n"
+            "Expression interpolation detected inside run: scripts.\n"
             "Use the intermediate env-var pattern instead.\n"
             "https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions"
             "#using-an-intermediate-environment-variable\n"
@@ -112,7 +88,7 @@ def main() -> int:
             print(f"  - {violation}")
         return 1
 
-    print(f"OK: no untrusted-input interpolation across {len(files)} workflow file(s)")
+    print(f"OK: no expression inside run: across {len(files)} workflow file(s)")
     return 0
 
 
