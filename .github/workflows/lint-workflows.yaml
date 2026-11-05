@@ -46,12 +46,10 @@ jobs:
             --require-hashes -r .github/workflows/requirements/lint-workflows.txt
 
         timeout-minutes: 3
-      - name: "Test the check on planted workflows"
-        run: python .github/scripts/test-lint-no-inline-secrets.py
-
-        timeout-minutes: 3
-      - name: "Block expressions inside run: scripts"
-        run: python .github/scripts/lint-no-inline-secrets.py
+      - name: Block expressions inside executed values
+        # pinned commit (internal action, no semver tag) - one copy of the check for every repository;
+        # it tests itself on planted expressions before reading this one
+        uses: Abblix/.github/.github/actions/lint-workflow-expressions@9b0dd9cdb5a4a5b4c9f627c437d9f357146030a5
 
         timeout-minutes: 3
     timeout-minutes: 5
