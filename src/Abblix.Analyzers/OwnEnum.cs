@@ -14,7 +14,7 @@ namespace Abblix.Analyzers;
 /// An enum whose members the analyzed product decides: declared in an assembly of its family, and not [Flags].
 /// </summary>
 /// <remarks>
-/// The family is the first segment of the assembly name, so <c>Kezio.Domain</c> counts for <c>Kezio.AiLayer</c>.
+/// The family is the first segment of the assembly name, so <c>Contoso.Domain</c> counts for <c>Contoso.Billing</c>.
 /// Asked of the assembly rather than of source locations, because an IDE references a neighbour project as source
 /// and a build as metadata, and the two would disagree. A foreign enum is dispatched on and refused for the rest far
 /// more often than mapped; a [Flags] test asks about one bit rather than picking a member.
