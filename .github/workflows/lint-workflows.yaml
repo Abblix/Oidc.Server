@@ -47,7 +47,7 @@ jobs:
 
         timeout-minutes: 3
       - name: Block expressions inside executed values
-        # pinned commit (action in the public org repository, no semver tag) - one copy of the check for every repository;
+        # pinned commit (internal action, no semver tag) - one copy of the check for every repository;
         # it tests itself on planted expressions before reading this one
         uses: Abblix/.github/.github/actions/lint-workflow-expressions@9b0dd9cdb5a4a5b4c9f627c437d9f357146030a5
 
