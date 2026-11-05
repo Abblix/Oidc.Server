@@ -25,7 +25,7 @@ jobs:
       - name: function form
         run: echo '${{ toJSON(github.event) }}'
       - name: split across lines
-        run: >
+        run: |
           echo ${{
           github.head_ref }}
       - name: trusted context
