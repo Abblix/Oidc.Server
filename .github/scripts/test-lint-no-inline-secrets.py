@@ -72,13 +72,13 @@ def scan(scan_file, text: str) -> list[str]:
         return scan_file(path)
 
 
-def run_main(main, text: str) -> int:
-    # main() reads .github/workflows relative to the working directory, and a .yaml
-    # name proves that extension is read too.
+def run_main(main, text: str, extension: str) -> int:
+    # main() reads .github/workflows relative to the working directory; planting each
+    # extension on its own proves main() reads both.
     with tempfile.TemporaryDirectory() as folder:
         workflows = pathlib.Path(folder) / ".github" / "workflows"
         workflows.mkdir(parents=True)
-        (workflows / "planted.yaml").write_text(text, encoding="utf-8")
+        (workflows / f"planted{extension}").write_text(text, encoding="utf-8")
         with contextlib.redirect_stdout(io.StringIO()), contextlib.chdir(folder):
             return main()
 
@@ -100,10 +100,11 @@ def main() -> int:
     if not scan(scan_file, MALFORMED):
         failures.append("a workflow that does not parse was accepted")
 
-    if run_main(module.main, REFUSED) != 1:
-        failures.append("main() did not fail on a .yaml workflow carrying an expression")
-    if run_main(module.main, ACCEPTED) != 0:
-        failures.append("main() failed on a clean .yaml workflow")
+    for extension in (".yml", ".yaml"):
+        if run_main(module.main, REFUSED, extension) != 1:
+            failures.append(f"main() did not fail on a {extension} workflow carrying an expression")
+        if run_main(module.main, ACCEPTED, extension) != 0:
+            failures.append(f"main() failed on a clean {extension} workflow")
 
     if failures:
         print("lint-no-inline-secrets.py does not behave as planted:")
