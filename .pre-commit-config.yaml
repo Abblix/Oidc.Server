@@ -33,11 +33,18 @@ repos:
   - repo: local
     hooks:
       - id: no-inline-secrets
-        name: "Block inline untrusted-input interpolation in run: blocks"
+        name: "Block expressions inside run: scripts"
         entry: python .github/scripts/lint-no-inline-secrets.py
         language: python
         additional_dependencies: [pyyaml]
         files: ^\.github/(workflows/.*\.(yml|yaml)|scripts/lint-no-inline-secrets\.py)$
+        pass_filenames: false
+      - id: no-inline-secrets-test
+        name: "Test the expression check on planted workflows"
+        entry: python .github/scripts/test-lint-no-inline-secrets.py
+        language: python
+        additional_dependencies: [pyyaml]
+        files: ^\.github/scripts/(test-)?lint-no-inline-secrets\.py$
         pass_filenames: false
       - id: msbuild-xml-parses
         name: "Refuse a build XML file that does not parse"
