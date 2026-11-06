@@ -40,7 +40,7 @@ public class RevocationHandlerTests
     private static RevocationRequest CreateRevocationRequest() => new()
     {
         Token = "token_to_revoke",
-        TokenTypeHint = "access_token",
+        TokenTypeHint = TokenTypeHints.AccessToken,
     };
 
     private static ClientRequest CreateClientRequest() => new()
@@ -56,7 +56,7 @@ public class RevocationHandlerTests
 
     private static TokenRevoked CreateTokenRevoked() => new(
         "token_id_123",
-        "access_token",
+        TokenTypeHints.AccessToken,
         TimeProvider.System.GetUtcNow());
 
     /// <summary>

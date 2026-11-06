@@ -195,7 +195,7 @@ public class EssentialAcrTests(TestFactory factory) : TestBase(factory)
             discovery,
             await RequestAsync(client, discovery, RequiringLevels(Loa3), false, throughRequestUri: false));
 
-        Assert.Equal("unmet_authentication_requirements", error);
+        Assert.Equal(ErrorCodes.UnmetAuthenticationRequirements, error);
     }
 
     /// <summary>

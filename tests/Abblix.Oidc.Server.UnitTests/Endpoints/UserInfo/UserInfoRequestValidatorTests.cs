@@ -105,7 +105,7 @@ public class UserInfoRequestValidatorTests
     {
         return new AuthorizationContext(
             clientId: clientId,
-            scope: [TestConstants.DefaultScope, "profile"],
+            scope: [TestConstants.DefaultScope, Scopes.Profile],
             requestedClaims: null);
     }
 
@@ -198,7 +198,7 @@ public class UserInfoRequestValidatorTests
     {
         // Arrange
         var userInfoRequest = CreateUserInfoRequest();
-        var authHeader = new AuthenticationHeaderValue("Basic", "credentials");
+        var authHeader = new AuthenticationHeaderValue(TokenTypes.Basic, "credentials");
         var clientRequest = CreateClientRequest(authHeader: authHeader);
 
         // Act

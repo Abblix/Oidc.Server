@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// </summary>
 public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
 {
-    private const string TokenExchangeGrantType = "urn:ietf:params:oauth:grant-type:token-exchange";
+    private const string TokenExchangeGrantType = GrantTypes.TokenExchange;
 
     private const string PaymentInitiationWireJson =
         """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
@@ -111,8 +111,8 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
             [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
-            [RegistrationMembers.ResponseTypes] = new JsonArray { "code" },
-            [RegistrationMembers.TokenEndpointAuthMethod] = "client_secret_post",
+            [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
             [RegistrationMembers.TokenExchangeSubjectTokenTypes] = new JsonArray
             {
                 TokenExchangeTokenTypes.AccessToken,

@@ -127,9 +127,9 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
                 [ClientRequest.Parameters.ClientSecret] = ClientSecret,
                 [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
                 [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
-                [AuthorizationRequest.Parameters.Scope] = "openid",
+                [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
                 [AuthorizationRequest.Parameters.CodeChallenge] = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
-                [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
+                [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
             }),
             TestContext.Current.CancellationToken);
 

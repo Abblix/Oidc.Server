@@ -66,7 +66,7 @@ public class DiscoveryControllerMtlsTests
     private static ConfigurationResponse MinimalResponse() => new()
     {
         Issuer = new Uri("https://example.com"),
-        ResponseTypesSupported = ["code"],
+        ResponseTypesSupported = [ResponseTypes.Code],
         IdTokenSigningAlgValuesSupported = ["RS256"],
         SubjectTypesSupported = ["public"],
     };

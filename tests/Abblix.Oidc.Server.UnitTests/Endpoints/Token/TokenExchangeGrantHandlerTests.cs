@@ -78,7 +78,7 @@ public class TokenExchangeGrantHandlerTests
     public async Task ValidSubjectToken_DispatchedToTypedResolver_ReturnsAuthorizedGrant()
     {
         var ctx = new SubjectTokenContext(
-            Subject: TestSubject, Issuer: "https://issuer", Scope: ["openid"], AuthorizationDetails: null)
+            Subject: TestSubject, Issuer: "https://issuer", Scope: [Scopes.OpenId], AuthorizationDetails: null)
             { OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -210,7 +210,7 @@ public class TokenExchangeGrantHandlerTests
     [InlineData(null)]
     public async Task ExchangedGrant_CarriesTheSubjectTokensFamily(string? grantId)
     {
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = ClientId,
             GrantId = grantId,
@@ -237,7 +237,7 @@ public class TokenExchangeGrantHandlerTests
     public async Task ExchangedGrant_WithinAFamily_ExpiresNoLaterThanTheSubjectToken(string? grantId, bool capped)
     {
         var subjectExpiresAt = new DateTimeOffset(2024, 1, 15, 13, 0, 0, TimeSpan.Zero);
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = ClientId,
             GrantId = grantId,
@@ -259,7 +259,7 @@ public class TokenExchangeGrantHandlerTests
     public async Task DelegationFlow_BuildsActClaimWithActorSubject()
     {
         // Single-hop delegation: subject_token has no prior act chain. Result: act = { sub: <actor> }.
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null) { OriginalClientId = ClientId };
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null) { OriginalClientId = ClientId };
         var actor = new SubjectTokenContext("svc-worker-7", null, null, null) { OriginalClientId = ClientId };
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -294,7 +294,7 @@ public class TokenExchangeGrantHandlerTests
         // Subject_token already carries an act chain: { sub: prev-actor }. New actor wraps it:
         // result act = { sub: new-actor, act: { sub: prev-actor } }.
         var existingChain = new JsonObject { ["sub"] = "prev-actor" };
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null) { Act = existingChain, OriginalClientId = ClientId };
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null) { Act = existingChain, OriginalClientId = ClientId };
         var actor = new SubjectTokenContext("svc-worker-7", null, null, null) { OriginalClientId = ClientId };
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
@@ -356,7 +356,7 @@ public class TokenExchangeGrantHandlerTests
     {
         // actor_token resolution failure is wrapped so the wire client can distinguish actor
         // problems from subject problems even though both map to invalid_request.
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null) { OriginalClientId = ClientId };
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null) { OriginalClientId = ClientId };
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
@@ -418,8 +418,8 @@ public class TokenExchangeGrantHandlerTests
     [Fact]
     public async Task RequestScope_OverridesSubjectScope()
     {
-        var subjectScope = new[] { "openid", "profile", "email" };
-        var requestScope = new[] { "openid" };  // narrow to one
+        var subjectScope = new[] { Scopes.OpenId, Scopes.Profile, Scopes.Email };
+        var requestScope = new[] { Scopes.OpenId };  // narrow to one
         var ctx = new SubjectTokenContext(
             Subject: TestSubject, Issuer: null, Scope: subjectScope, AuthorizationDetails: null)
             { OriginalClientId = ClientId };
@@ -443,13 +443,13 @@ public class TokenExchangeGrantHandlerTests
     public async Task InheritedSubjectScope_FilteredToRequestingClientAllowedScopes()
     {
         var ctx = new SubjectTokenContext(
-            Subject: TestSubject, Issuer: null, Scope: ["openid", "profile", "admin"], AuthorizationDetails: null)
+            Subject: TestSubject, Issuer: null, Scope: [Scopes.OpenId, Scopes.Profile, "admin"], AuthorizationDetails: null)
             { OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenExchangeAllowedSubjectTokenTypes = [new Uri(TokenExchangeTokenTypes.AccessToken)],
-            AllowedScopes = ["openid", "profile"], // NOT registered for "admin"
+            AllowedScopes = [Scopes.OpenId, Scopes.Profile], // NOT registered for "admin"
         };
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken); // no explicit scope -> fallback
 
@@ -457,7 +457,7 @@ public class TokenExchangeGrantHandlerTests
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.DoesNotContain("admin", grant.Context.Scope);
-        Assert.Equal(["openid", "profile"], grant.Context.Scope);
+        Assert.Equal([Scopes.OpenId, Scopes.Profile], grant.Context.Scope);
     }
 
     /// <summary>
@@ -470,7 +470,7 @@ public class TokenExchangeGrantHandlerTests
     public async Task InheritedSubjectScope_WithNullAllowedScopes_PassesThroughUnfiltered()
     {
         var ctx = new SubjectTokenContext(
-            Subject: TestSubject, Issuer: null, Scope: ["openid", "admin"], AuthorizationDetails: null)
+            Subject: TestSubject, Issuer: null, Scope: [Scopes.OpenId, "admin"], AuthorizationDetails: null)
             { OriginalClientId = ClientId };
         var (handler, _) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, ctx);
         var clientInfo = new ClientInfo(ClientId)
@@ -483,7 +483,7 @@ public class TokenExchangeGrantHandlerTests
         var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, request, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
-        Assert.Equal(["openid", "admin"], grant.Context.Scope);
+        Assert.Equal([Scopes.OpenId, "admin"], grant.Context.Scope);
     }
 
     /// <summary>
@@ -564,7 +564,7 @@ public class TokenExchangeGrantHandlerTests
         // Subject token was issued to client-A; client-B presents it for exchange.
         // Default policy MUST reject -- otherwise any leaked AS-signed token is exchangeable
         // by any client (confused deputy).
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = "client-A",
         };
@@ -585,7 +585,7 @@ public class TokenExchangeGrantHandlerTests
         // A subject_token whose issuing client cannot be read is the case the confused-deputy check
         // cannot decide, so it must refuse rather than skip: a token shaped to hide its origin would
         // otherwise clear the guard that a token naming another client fails.
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = null,
         };
@@ -605,7 +605,7 @@ public class TokenExchangeGrantHandlerTests
     {
         // The opt-out covers both shapes the guard refuses: a token issued to another client, and one
         // whose issuer cannot be read at all. A broker trusted with the first is trusted with the second.
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = null,
         };
@@ -626,7 +626,7 @@ public class TokenExchangeGrantHandlerTests
     [Fact]
     public async Task S1_SubjectToken_cross_client_allowed_when_client_opted_in()
     {
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = "client-A",
         };
@@ -649,7 +649,7 @@ public class TokenExchangeGrantHandlerTests
     {
         // Baseline: when subject_token's original client == requesting client (the normal
         // self-exchange case), default policy accepts without opt-in.
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = ClientId,
         };
@@ -671,7 +671,7 @@ public class TokenExchangeGrantHandlerTests
         // The handler MUST reject -- without this check, Client A's expensive grants would
         // flow into Client B even if Client B was never authorised to use them.
         var ad = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
-        var subject = new SubjectTokenContext("alice", null, ["openid"], ad)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],ad)
         {
             OriginalClientId = ClientId,
         };
@@ -693,7 +693,7 @@ public class TokenExchangeGrantHandlerTests
     [Fact]
     public async Task S2_Audience_parameter_propagates_when_allowlisted()
     {
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = ClientId,
         };
@@ -718,7 +718,7 @@ public class TokenExchangeGrantHandlerTests
         // Default-deny: a client that requests an audience without an explicit
         // TokenExchangeAllowedAudiences allowlist is rejected with invalid_target. Otherwise the
         // client could mint a token for any target service it names in the issued token's aud.
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = ClientId,
         };
@@ -738,7 +738,7 @@ public class TokenExchangeGrantHandlerTests
     [Fact]
     public async Task Audience_rejected_when_not_in_allowlist()
     {
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = ClientId,
         };
@@ -767,7 +767,7 @@ public class TokenExchangeGrantHandlerTests
         // RFC 8707 resource values land in the issued token's aud claim exactly like RFC 8693
         // audience values do, so a client restricted to api1 must not escape to api2 simply by
         // renaming the parameter from audience to resource.
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = ClientId,
         };
@@ -789,7 +789,7 @@ public class TokenExchangeGrantHandlerTests
     [Fact]
     public async Task Resource_and_audience_propagate_when_both_in_declared_allowlist()
     {
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = ClientId,
         };
@@ -812,7 +812,7 @@ public class TokenExchangeGrantHandlerTests
     [Fact]
     public async Task S2_Resource_parameter_propagates_to_AuthorizationContext()
     {
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = ClientId,
         };
@@ -837,7 +837,7 @@ public class TokenExchangeGrantHandlerTests
         // Slice 1 issues only access_token. A client asking for id_token / refresh_token / jwt
         // must be rejected loudly rather than silently downgraded -- otherwise the client
         // assumes it got what it asked for and breaks downstream.
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = ClientId,
         };
@@ -861,7 +861,7 @@ public class TokenExchangeGrantHandlerTests
         // The TokenExchangeAllowedSubjectTokenTypes allowlist applies symmetrically to actor
         // tokens -- if the client is not permitted to exchange access_token as a SUBJECT, they
         // are not permitted to use access_token as an ACTOR either.
-        var subject = new SubjectTokenContext("alice", null, ["openid"], null)
+        var subject = new SubjectTokenContext("alice", null, [Scopes.OpenId],null)
         {
             OriginalClientId = ClientId,
         };

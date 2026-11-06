@@ -31,7 +31,7 @@ public partial class AuthorizationRequestProcessorTests
         // Arrange
         var request = CreateRequest(prompt: [Prompts.None]);
         var session = CreateAuthSession();
-        var consents = CreateConsents(pendingScopes: [new ScopeDefinition("email")]);
+        var consents = CreateConsents(pendingScopes: [new ScopeDefinition(Scopes.Email)]);
 
         _authSessionService
             .Setup(s => s.GetAvailableAuthSessions())
@@ -283,7 +283,7 @@ public partial class AuthorizationRequestProcessorTests
         // Arrange
         var request = CreateRequest();
         var session = CreateAuthSession();
-        var pendingScopes = new[] { new ScopeDefinition("email"), new ScopeDefinition("profile") };
+        var pendingScopes = new[] { new ScopeDefinition(Scopes.Email), new ScopeDefinition(Scopes.Profile) };
         var consents = CreateConsents(pendingScopes: pendingScopes);
 
         _authSessionService

@@ -52,7 +52,7 @@ public class UserCodeVerificationServiceTests
         // checked, because verification then answers InvalidUserCode. They are not vacuous - they
         // measure canonicalization exactly as named - so an expired fixture would break them for a
         // reason having nothing to do with what they are for.
-        var request = _request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var request = _request = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             ExpiresAt = Now.AddMinutes(5),
             AuthorizationDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation", ["amount"] = "200" }),
@@ -219,7 +219,7 @@ public class UserCodeVerificationServiceTests
     private static AuthorizedGrant GrantWith(JsonArray? authorizationDetails)
         => new(
             new AuthSession("subject", "session", Now, "pwd"),
-            new AuthorizationContext(ClientId, ["openid"], null)
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null)
             {
                 AuthorizationDetails = authorizationDetails,
             });
@@ -243,12 +243,12 @@ public class UserCodeVerificationServiceTests
     [Fact]
     public async Task ApproveAsync_AppliesTheDecision_ToTheRecordItReadForTheWrite()
     {
-        var fromUserCode = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var fromUserCode = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             ExpiresAt = Now.AddMinutes(5),
         };
 
-        var fromDeviceCode = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var fromDeviceCode = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             ExpiresAt = Now.AddMinutes(5),
         };
@@ -316,7 +316,7 @@ public class UserCodeVerificationServiceTests
     [Fact]
     public async Task Verify_OnAPendingRecordPastItsLifetime_RefusesAndCountsAFailure()
     {
-        var expired = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var expired = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             ExpiresAt = Now.AddSeconds(-1),
         };
@@ -369,7 +369,7 @@ public class UserCodeVerificationServiceTests
     [InlineData(false)]
     public async Task ADecisionOnARecordAtItsExpiry_IsRefused(bool approving)
     {
-        var expired = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var expired = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             ExpiresAt = Now,
         };
@@ -410,7 +410,7 @@ public class UserCodeVerificationServiceTests
         JsonArray? requestedDetails,
         out CapturingLogger<UserCodeVerificationService> logs)
     {
-        var request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var request = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             AuthorizationDetails = requestedDetails,
             ExpiresAt = Now.AddMinutes(5),
@@ -475,7 +475,7 @@ public class UserCodeVerificationServiceTests
     public async Task ADecisionOnARecordNoLongerPending_IsNotWrittenBack(
         bool approving, DeviceAuthorizationStatus? advancedTo)
     {
-        var request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var request = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             ExpiresAt = Now.AddMinutes(5),
         };
@@ -484,7 +484,7 @@ public class UserCodeVerificationServiceTests
         // having landed first, on a record that is still there.
         var current = advancedTo is null
             ? null
-            : new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+            : new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
             {
                 ExpiresAt = Now.AddMinutes(5),
                 Status = advancedTo.Value,

@@ -250,14 +250,14 @@ public partial class AuthorizationRequestProcessorTests
         // Arrange
         var nonce = "nonce_123";
         var codeChallenge = "challenge_123";
-        var codeChallengeMethod = "S256";
+        var codeChallengeMethod = CodeChallengeMethods.S256;
 
         var authRequest = new AuthorizationRequest
         {
             ClientId = TestConstants.DefaultClientId,
             ResponseType = [ResponseTypes.Code],
             RedirectUri = TestConstants.DefaultRedirectUri,
-            Scope = [Scopes.OpenId, "email"],
+            Scope = [Scopes.OpenId, Scopes.Email],
             Nonce = nonce,
             CodeChallenge = codeChallenge,
             CodeChallengeMethod = codeChallengeMethod,
@@ -268,7 +268,7 @@ public partial class AuthorizationRequestProcessorTests
             AuthorizationCodeExpiresIn = TimeSpan.FromMinutes(10),
         };
 
-        var grantedScopes = new[] { new ScopeDefinition(Scopes.OpenId), new ScopeDefinition("email") };
+        var grantedScopes = new[] { new ScopeDefinition(Scopes.OpenId), new ScopeDefinition(Scopes.Email) };
         var grantedResources = new[] { new ResourceDefinition(new Uri("https://api.example.com")) };
 
         var context = new AuthorizationValidationContext(authRequest)

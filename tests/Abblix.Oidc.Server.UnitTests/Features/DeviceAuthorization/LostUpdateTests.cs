@@ -94,7 +94,7 @@ public class LostUpdateTests
             // with nothing to issue from is a different state, handled by an arm of its own.
             request.AuthorizedGrant = new AuthorizedGrant(
                 new AuthSession("a-user", "a-session", _now, "device"),
-                new AuthorizationContext("a-client", ["openid"], null));
+                new AuthorizationContext("a-client", [Scopes.OpenId], null));
 
             await approving.UpdateAsync(SingleIssuer.Tenant, reference, request, TimeSpan.FromMinutes(5));
         });
@@ -318,7 +318,7 @@ public class LostUpdateTests
         VerificationUri = new Uri("https://auth.example.com/device"),
     };
 
-    private StoredDeviceRequest NewRequest() => new("a-client", ["openid"], null, UserCode)
+    private StoredDeviceRequest NewRequest() => new("a-client", [Scopes.OpenId], null, UserCode)
     {
         Status = DeviceAuthorizationStatus.Pending,
         ExpiresAt = _now.AddMinutes(5),

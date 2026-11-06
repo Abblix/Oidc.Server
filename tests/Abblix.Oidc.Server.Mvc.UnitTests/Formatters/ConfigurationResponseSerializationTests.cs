@@ -23,16 +23,16 @@ public class ConfigurationResponseSerializationTests
         var response = new ConfigurationResponse
         {
             Issuer = "https://example.com",
-            ScopesSupported = ["openid"],
+            ScopesSupported = [Scopes.OpenId],
             ClaimsSupported = ["sub"],
-            GrantTypesSupported = ["authorization_code"],
-            ResponseTypesSupported = ["code"],
-            ResponseModesSupported = ["query"],
-            TokenEndpointAuthMethodsSupported = ["client_secret_post"],
+            GrantTypesSupported = [GrantTypes.AuthorizationCode],
+            ResponseTypesSupported = [ResponseTypes.Code],
+            ResponseModesSupported = [ResponseModes.Query],
+            TokenEndpointAuthMethodsSupported = [ClientAuthenticationMethods.ClientSecretPost],
             IdTokenSigningAlgValuesSupported = ["RS256"],
             SubjectTypesSupported = ["public"],
-            CodeChallengeMethodsSupported = ["S256"],
-            PromptValuesSupported = ["login"],
+            CodeChallengeMethodsSupported = [CodeChallengeMethods.S256],
+            PromptValuesSupported = [Prompts.Login],
         };
 
         var json = JsonSerializer.Serialize(response, BuildOptions());
@@ -48,16 +48,16 @@ public class ConfigurationResponseSerializationTests
         var response = new ConfigurationResponse
         {
             Issuer = "https://example.com",
-            ScopesSupported = ["openid"],
+            ScopesSupported = [Scopes.OpenId],
             ClaimsSupported = ["sub"],
-            GrantTypesSupported = ["authorization_code"],
-            ResponseTypesSupported = ["code"],
-            ResponseModesSupported = ["query"],
-            TokenEndpointAuthMethodsSupported = ["client_secret_post"],
+            GrantTypesSupported = [GrantTypes.AuthorizationCode],
+            ResponseTypesSupported = [ResponseTypes.Code],
+            ResponseModesSupported = [ResponseModes.Query],
+            TokenEndpointAuthMethodsSupported = [ClientAuthenticationMethods.ClientSecretPost],
             IdTokenSigningAlgValuesSupported = ["RS256"],
             SubjectTypesSupported = ["public"],
-            CodeChallengeMethodsSupported = ["S256"],
-            PromptValuesSupported = ["login"],
+            CodeChallengeMethodsSupported = [CodeChallengeMethods.S256],
+            PromptValuesSupported = [Prompts.Login],
             AuthorizationResponseIssParameterSupported = true,
         };
 
@@ -84,7 +84,7 @@ public class ConfigurationResponseSerializationTests
         var response = new ConfigurationResponse
         {
             Issuer = "https://example.com",
-            ResponseTypesSupported = ["code"],
+            ResponseTypesSupported = [ResponseTypes.Code],
             IdTokenSigningAlgValuesSupported = ["RS256"],
             SubjectTypesSupported = ["public"],
         };

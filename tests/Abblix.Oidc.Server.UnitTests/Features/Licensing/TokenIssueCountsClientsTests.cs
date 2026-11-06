@@ -88,7 +88,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
             .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
             .ReturnsAsync("token");
         var session = new AuthSession("subject", "session", clock.GetUtcNow(), "local");
-        AuthorizationContext Context(string clientId) => new(clientId, ["openid"], null);
+        AuthorizationContext Context(string clientId) => new(clientId, [Scopes.OpenId], null);
 
         switch (kind)
         {

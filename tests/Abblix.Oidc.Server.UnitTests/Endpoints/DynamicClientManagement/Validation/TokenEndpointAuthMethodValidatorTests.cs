@@ -132,7 +132,7 @@ public class TokenEndpointAuthMethodValidatorTests
         // Arrange
         _clientAuthenticator
             .Setup(a => a.ClientAuthenticationMethodsSupported)
-            .Returns(["client_secret_basic"]);
+            .Returns([ClientAuthenticationMethods.ClientSecretBasic]);
 
         var context = CreateContext(tokenEndpointAuthMethod: "Client_Secret_Basic");
 

@@ -97,7 +97,7 @@ public class ScopeValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            scopes: [TestConstants.DefaultScope, "offline_access"],
+            scopes: [TestConstants.DefaultScope, Scopes.OfflineAccess],
             offlineAccess: OfflineAccess.Disabled);
 
         // Act
@@ -118,7 +118,7 @@ public class ScopeValidatorTests
     {
         // Arrange
         var openidDefinition = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
-        var offlineAccessDefinition = new ScopeDefinition("offline_access", Array.Empty<string>());
+        var offlineAccessDefinition = new ScopeDefinition(Scopes.OfflineAccess, Array.Empty<string>());
 
         _scopeManager
             .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
@@ -129,7 +129,7 @@ public class ScopeValidatorTests
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestTenant.Matched, "offline_access", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, Scopes.OfflineAccess, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = offlineAccessDefinition;
@@ -137,7 +137,7 @@ public class ScopeValidatorTests
             }));
 
         var context = CreateContext(
-            scopes: [TestConstants.DefaultScope, "offline_access"],
+            scopes: [TestConstants.DefaultScope, Scopes.OfflineAccess],
             offlineAccess: OfflineAccess.ConsentRequired);
 
         // Act
@@ -185,8 +185,8 @@ public class ScopeValidatorTests
     {
         // Arrange
         var openidDef = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
-        var profileDef = new ScopeDefinition("profile", Array.Empty<string>());
-        var emailDef = new ScopeDefinition("email", Array.Empty<string>());
+        var profileDef = new ScopeDefinition(Scopes.Profile, Array.Empty<string>());
+        var emailDef = new ScopeDefinition(Scopes.Email, Array.Empty<string>());
 
         _scopeManager
             .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
@@ -197,7 +197,7 @@ public class ScopeValidatorTests
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestTenant.Matched, "profile", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, Scopes.Profile, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = profileDef;
@@ -205,14 +205,14 @@ public class ScopeValidatorTests
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestTenant.Matched, "email", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(sm => sm.TryGet(TestTenant.Matched, Scopes.Email, out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = emailDef;
                 return true;
             }));
 
-        var context = CreateContext(scopes: [TestConstants.DefaultScope, "profile", "email"]);
+        var context = CreateContext(scopes: [TestConstants.DefaultScope, Scopes.Profile, Scopes.Email]);
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -322,7 +322,7 @@ public class ScopeValidatorTests
                 return false;
             }));
 
-        var context = CreateContext(scopes: [TestConstants.DefaultScope, "unknown", "profile"]);
+        var context = CreateContext(scopes: [TestConstants.DefaultScope, "unknown", Scopes.Profile]);
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -341,7 +341,7 @@ public class ScopeValidatorTests
     {
         // Arrange - No scope manager setup, should fail on offline_access check first
         var context = CreateContext(
-            scopes: [TestConstants.DefaultScope, "offline_access"],
+            scopes: [TestConstants.DefaultScope, Scopes.OfflineAccess],
             offlineAccess: OfflineAccess.Disabled);
 
         // Act

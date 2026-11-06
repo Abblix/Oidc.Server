@@ -26,7 +26,7 @@ public class JsonWebTokenPayloadClaimNamesTests
         { "sid", p => p.SessionId = "s" },
         { "client_id", p => p.ClientId = "c" },
         { "azp", p => p.AuthorizedParty = "c" },
-        { "scope", p => p.Scope = ["openid"] },
+        { "scope", p => p.Scope = [Scopes.OpenId] },
         { "idp", p => p.IdentityProvider = "local" },
         { "grant_id", p => p.GrantId = "g" },
         { "auth_time", p => p.AuthenticationTime = DateTimeOffset.UnixEpoch },

@@ -360,7 +360,7 @@ public class ProtobufSerializerTests
         // Arrange
         var context = new AuthorizationContext(
             "client-123",
-            [TestConstants.DefaultScope, "profile", "email"],
+            [TestConstants.DefaultScope, Scopes.Profile, Scopes.Email],
             new RequestedClaims
             {
                 IdToken = new() { ["sub"] = new RequestedClaimDetails { Essential = true } },
@@ -370,7 +370,7 @@ public class ProtobufSerializerTests
             RedirectUri = TestConstants.DefaultRedirectUri,
             Nonce = "nonce-789",
             CodeChallenge = "challenge-xyz",
-            CodeChallengeMethod = "S256",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
             Resources = [new Uri("https://api.example.com")],
         };
 
@@ -426,12 +426,12 @@ public class ProtobufSerializerTests
         // Arrange
         var request = new AuthorizationRequest
         {
-            Scope = [TestConstants.DefaultScope, "profile", "email"],
-            ResponseType = ["code"],
+            Scope = [TestConstants.DefaultScope, Scopes.Profile, Scopes.Email],
+            ResponseType = [ResponseTypes.Code],
             ClientId = "client-123",
             RedirectUri = TestConstants.DefaultRedirectUri,
             State = "state-xyz",
-            ResponseMode = "query",
+            ResponseMode = ResponseModes.Query,
             Nonce = "nonce-abc",
             Display = "page",
             Prompt = [Prompts.Consent],
@@ -442,7 +442,7 @@ public class ProtobufSerializerTests
             LoginHint = "user@example.com",
             AcrValues = ["urn:mace:incommon:iap:silver"],
             CodeChallenge = "challenge-xyz",
-            CodeChallengeMethod = "S256",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
             Request = "eyJhbGc...",
             RequestUri = new Uri("https://example.com/request.jwt"),
             Resources = [new Uri("https://api.example.com")],

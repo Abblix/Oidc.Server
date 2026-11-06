@@ -99,7 +99,7 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
             [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
             [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
-            [RegistrationMembers.TokenEndpointAuthMethod] = "client_secret_post",
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
             [ClientRegistrationRequest.Parameters.IntrospectionSignedResponseAlg] = introspectionSignedResponseAlg,
         };
         var registered = await RegisterClientAsync(httpClient, discovery, dcrBody);

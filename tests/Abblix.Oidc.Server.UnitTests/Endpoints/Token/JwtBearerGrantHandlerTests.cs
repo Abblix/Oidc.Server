@@ -287,7 +287,7 @@ public class JwtBearerGrantHandlerTests
 		var jwt = CreateValidJwt();
 		SetupValidJwtValidation(mocks.JwtValidator, jwt);
 		var clientInfo = new ClientInfo(ClientId);
-		var requestedScopes = new[] { TestConstants.DefaultScope, "profile", "email" };
+		var requestedScopes = new[] { TestConstants.DefaultScope, Scopes.Profile, Scopes.Email };
 		var tokenRequest = new TokenRequest
 		{
 			GrantType = GrantTypes.JwtBearer,

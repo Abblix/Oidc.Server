@@ -115,7 +115,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = [TestConstants.DefaultScope, "profile"],
+            Scope = [TestConstants.DefaultScope, Scopes.Profile],
             LoginHint = "user@example.com",
             BindingMessage = "Test message"
         };
@@ -239,7 +239,7 @@ public class BackChannelAuthenticationRequestValidatorTests
         // Arrange
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = [TestConstants.DefaultScope, "profile", "email"],
+            Scope = [TestConstants.DefaultScope, Scopes.Profile, Scopes.Email],
             LoginHint = "user@example.com"
         };
 
@@ -248,8 +248,8 @@ public class BackChannelAuthenticationRequestValidatorTests
         var scopeDefinitions = new[]
         {
             new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>()),
-            new ScopeDefinition("profile", "name", "given_name", "family_name"),
-            new ScopeDefinition("email", "email", "email_verified")
+            new ScopeDefinition(Scopes.Profile, "name", "given_name", "family_name"),
+            new ScopeDefinition(Scopes.Email, "email", "email_verified")
         };
 
         _contextValidator
@@ -270,8 +270,8 @@ public class BackChannelAuthenticationRequestValidatorTests
         Assert.True(result.TryGetSuccess(out var validRequest));
         Assert.Equal(3, validRequest.Scope.Length);
         Assert.Equal(TestConstants.DefaultScope, validRequest.Scope[0].Scope);
-        Assert.Equal("profile", validRequest.Scope[1].Scope);
-        Assert.Equal("email", validRequest.Scope[2].Scope);
+        Assert.Equal(Scopes.Profile, validRequest.Scope[1].Scope);
+        Assert.Equal(Scopes.Email, validRequest.Scope[2].Scope);
     }
 
     /// <summary>

@@ -45,7 +45,7 @@ public class RevocationRequestProcessorTests
     private static RevocationRequest CreateRevocationRequest() => new()
     {
         Token = "token_to_revoke",
-        TokenTypeHint = "access_token",
+        TokenTypeHint = TokenTypeHints.AccessToken,
     };
 
     private JsonWebToken CreateValidToken(string jwtId = "token_id_123")
@@ -223,7 +223,7 @@ public class RevocationRequestProcessorTests
         var request = new RevocationRequest
         {
             Token = "token_to_revoke",
-            TokenTypeHint = "refresh_token",
+            TokenTypeHint = TokenTypeHints.RefreshToken,
         };
         var token = CreateValidToken();
         var validRequest = CreateValidRevocationRequest(request, token);
@@ -241,7 +241,7 @@ public class RevocationRequestProcessorTests
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
-        Assert.Equal("refresh_token", revoked.TokenTypeHint);
+        Assert.Equal(TokenTypeHints.RefreshToken, revoked.TokenTypeHint);
     }
 
     /// <summary>

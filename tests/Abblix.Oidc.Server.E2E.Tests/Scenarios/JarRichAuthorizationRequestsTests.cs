@@ -62,8 +62,8 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
             [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
-            [RegistrationMembers.ResponseTypes] = new JsonArray { "code" },
-            [RegistrationMembers.TokenEndpointAuthMethod] = "client_secret_post",
+            [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
             [RegistrationMembers.Jwks] = JsonSerializer.SerializeToNode(PublicJwksFor(clientKey)),
             [RegistrationMembers.AuthorizationDetailsTypes] = new JsonArray { TestConstants.PaymentInitiationType },
         };
@@ -88,7 +88,7 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
                 ExpiresAt = now.AddMinutes(5),
             },
         };
-        requestJwt.Payload.Json[AuthorizationRequest.Parameters.ResponseType] = "code";
+        requestJwt.Payload.Json[AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code;
         requestJwt.Payload.Json[AuthorizationRequest.Parameters.ClientId] = clientId;
         requestJwt.Payload.Json[AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri;
         requestJwt.Payload.Json[AuthorizationRequest.Parameters.Scope] = Scopes.OpenId;

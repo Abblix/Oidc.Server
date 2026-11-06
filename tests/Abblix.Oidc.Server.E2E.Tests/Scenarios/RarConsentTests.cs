@@ -142,7 +142,7 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
         {
             [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-            [AuthorizationRequest.Parameters.ResponseType] = "code",
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
             [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
             [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
@@ -157,7 +157,7 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
             [AuthorizationRequest.Parameters.RequestUri] = requestUri,
         });
 
-        Assert.Equal("access_denied", error);
+        Assert.Equal(ErrorCodes.AccessDenied, error);
     }
 
     [Fact]

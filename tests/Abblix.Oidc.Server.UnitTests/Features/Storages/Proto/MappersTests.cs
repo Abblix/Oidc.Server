@@ -213,7 +213,7 @@ public class MappersTests
         // Arrange
         var context = new AuthorizationContext(
             "client-123",
-            [TestConstants.DefaultScope, "profile"],
+            [TestConstants.DefaultScope, Scopes.Profile],
             null)
         {
             RedirectUri = new Uri("https://example.com/callback?state=xyz"),
@@ -417,9 +417,9 @@ public class MappersTests
             RedirectUri = "https://example.com/cb",
             Nonce = "n-0S6_WzA2Mj",
             CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
-            CodeChallengeMethod = "S256",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
         };
-        preUpgradeProto.Scope.Add("openid");
+        preUpgradeProto.Scope.Add(Scopes.OpenId);
         preUpgradeProto.Resources.Add("https://api.example.com");
 
         // Round-trip through actual wire bytes so we're testing the protobuf parser, not a
@@ -478,7 +478,7 @@ public class MappersTests
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null)
         {
             CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
-            CodeChallengeMethod = "S256",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
             Nonce = "n-0S6_WzA2Mj",
         };
 
@@ -678,16 +678,16 @@ public class MappersTests
         // Arrange
         var request = new AuthorizationRequest
         {
-            Scope = [TestConstants.DefaultScope, "profile", "email"],
+            Scope = [TestConstants.DefaultScope, Scopes.Profile, Scopes.Email],
             Claims = new RequestedClaims
             {
                 IdToken = new() { ["email"] = new RequestedClaimDetails { Essential = true } },
             },
-            ResponseType = ["code", "id_token"],
+            ResponseType = [ResponseTypes.Code, ResponseTypes.IdToken],
             ClientId = "client-123",
             RedirectUri = TestConstants.DefaultRedirectUri,
             State = "state-xyz",
-            ResponseMode = "form_post",
+            ResponseMode = ResponseModes.FormPost,
             Nonce = "nonce-abc",
             Display = "popup",
             Prompt = [Prompts.Login, Prompts.Consent],
@@ -696,8 +696,8 @@ public class MappersTests
             LoginHint = "user@example.com",
             AcrValues = ["urn:mace:incommon:iap:silver"],
             CodeChallenge = "challenge",
-            CodeChallengeMethod = "S256",
-            Request = "eyJhbGc...",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
+            Request ="eyJhbGc...",
             RequestUri = new Uri("https://example.com/request.jwt"),
             Resources = [new Uri("https://api.example.com")],
         };
@@ -712,7 +712,7 @@ public class MappersTests
         Assert.Equal("client-123", proto.ClientId);
         Assert.Equal(TestConstants.DefaultRedirectUri.OriginalString, proto.RedirectUri);
         Assert.Equal("state-xyz", proto.State);
-        Assert.Equal("form_post", proto.ResponseMode);
+        Assert.Equal(ResponseModes.FormPost, proto.ResponseMode);
         Assert.Equal("nonce-abc", proto.Nonce);
         Assert.Equal("popup", proto.Display);
         Assert.Equal("login consent", proto.Prompt);
@@ -721,7 +721,7 @@ public class MappersTests
         Assert.Equal("user@example.com", proto.LoginHint);
         Assert.Single(proto.AcrValues);
         Assert.Equal("challenge", proto.CodeChallenge);
-        Assert.Equal("S256", proto.CodeChallengeMethod);
+        Assert.Equal(CodeChallengeMethods.S256, proto.CodeChallengeMethod);
         Assert.Equal("eyJhbGc...", proto.Request);
         Assert.Equal("https://example.com/request.jwt", proto.RequestUri);
         Assert.Single(proto.Resources);

@@ -230,7 +230,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
             [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
             [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
             [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
-            [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
         };
 
         var atAcme = await PostAsync(Acme, PushPath, AcmeOnlyClientId, Push());
@@ -256,7 +256,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
                 [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
                 [AuthorizationRequest.Parameters.Scope] = scope,
                 [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
-                [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
+                [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
             };
             if (resource is not null)
                 form[AuthorizationRequest.Parameters.Resource] = resource;
@@ -496,7 +496,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
             [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
             [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
             [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
-            [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
         });
         Assert.Equal(HttpStatusCode.Created, pushed.StatusCode);
         var requestUri = (await ReadJsonAsync(pushed))[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>();
@@ -528,7 +528,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
             [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
             [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
             [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
-            [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
         });
         var requestUri = (await ReadJsonAsync(pushed))[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>();
 

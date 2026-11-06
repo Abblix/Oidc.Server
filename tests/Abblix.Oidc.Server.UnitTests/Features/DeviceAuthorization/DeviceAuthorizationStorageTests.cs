@@ -74,7 +74,7 @@ public class DeviceAuthorizationStorageTests
     }
 
     private static DeviceAuthorizationRequest NewRequest(DateTimeOffset expiresAt) =>
-        new("client", ["openid"], null, UserCode)
+        new("client", [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
             ExpiresAt = expiresAt,
@@ -83,7 +83,7 @@ public class DeviceAuthorizationStorageTests
     [Fact]
     public async Task StoreAsync_SeedsExpiresAt_FromNowPlusLifetime()
     {
-        var request = new DeviceAuthorizationRequest("client", ["openid"], null, UserCode);
+        var request = new DeviceAuthorizationRequest("client", [Scopes.OpenId], null, UserCode);
 
         await _storage.StoreAsync(SingleIssuer.Tenant, DeviceCode, request, TimeSpan.FromMinutes(15));
 

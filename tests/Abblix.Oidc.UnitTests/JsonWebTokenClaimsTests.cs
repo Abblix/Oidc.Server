@@ -23,10 +23,10 @@ namespace Abblix.Oidc.UnitTests;
 public class JsonWebTokenClaimsTests
 {
     private const string RolesClaim = "roles";
-    private const string OpenIdScope = "openid";
+    private const string OpenIdScope = Scopes.OpenId;
     private const string ScopeClaim = "scope";
-    private const string ProfileScope = "profile";
-    private const string EmailScope = "email";
+    private const string ProfileScope = Scopes.Profile;
+    private const string EmailScope = Scopes.Email;
     private const string StreetKey = "street";
     private const string StreetValue = "123 Main St";
     private const string AddressClaim = "address";
@@ -324,7 +324,7 @@ public class JsonWebTokenClaimsTests
     public async Task SpaceSeparatedStringClaim_MultipleValues_RoundTrip_PreservesValues()
     {
         var token = CreateToken();
-        var scopes = new[] { OpenIdScope, ProfileScope, EmailScope, "phone" };
+        var scopes = new[] { OpenIdScope, ProfileScope, EmailScope, Scopes.Phone };
         token.Payload.Json.SetSpaceSeparatedStrings(ScopeClaim, scopes);
 
         var roundTripToken = await SignEncryptAndValidate(token);

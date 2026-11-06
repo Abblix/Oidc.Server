@@ -131,7 +131,7 @@ public class GrantTypeValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-        Assert.Contains("authorization_code", result.ErrorDescription);
+        Assert.Contains(GrantTypes.AuthorizationCode, result.ErrorDescription);
     }
 
     /// <summary>
@@ -152,7 +152,7 @@ public class GrantTypeValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-        Assert.Contains("implicit", result.ErrorDescription);
+        Assert.Contains(GrantTypes.Implicit, result.ErrorDescription);
     }
 
     /// <summary>
@@ -173,7 +173,7 @@ public class GrantTypeValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-        Assert.Contains("implicit", result.ErrorDescription);
+        Assert.Contains(GrantTypes.Implicit, result.ErrorDescription);
     }
 
     /// <summary>
@@ -194,7 +194,7 @@ public class GrantTypeValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-        Assert.Contains("authorization_code", result.ErrorDescription);
+        Assert.Contains(GrantTypes.AuthorizationCode, result.ErrorDescription);
     }
 
     /// <summary>
@@ -215,7 +215,7 @@ public class GrantTypeValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-        Assert.Contains("implicit", result.ErrorDescription);
+        Assert.Contains(GrantTypes.Implicit, result.ErrorDescription);
     }
 
     /// <summary>
@@ -236,8 +236,8 @@ public class GrantTypeValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-        Assert.Contains("authorization_code", result.ErrorDescription);
-        Assert.Contains("implicit", result.ErrorDescription);
+        Assert.Contains(GrantTypes.AuthorizationCode, result.ErrorDescription);
+        Assert.Contains(GrantTypes.Implicit, result.ErrorDescription);
     }
 
     /// <summary>
@@ -304,8 +304,8 @@ public class GrantTypeValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Contains("authorization_code", result.ErrorDescription);
-        Assert.Contains("implicit", result.ErrorDescription);
+        Assert.Contains(GrantTypes.AuthorizationCode, result.ErrorDescription);
+        Assert.Contains(GrantTypes.Implicit, result.ErrorDescription);
     }
 
     /// <summary>

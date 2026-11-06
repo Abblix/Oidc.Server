@@ -189,7 +189,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     {
         var request = new HttpRequestMessage(method, uri);
         if (accessToken is not null)
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
 
         return request;
     }

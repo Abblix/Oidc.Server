@@ -52,7 +52,7 @@ public class PushedAuthorizationResponseFormatterTests
             request,
             ErrorCodes.InvalidClient,
             "Client authentication failed",
-            ResponseMode: "query",
+            ResponseMode: ResponseModes.Query,
             RedirectUri: null);
 
         var result = await _formatter.FormatResponseAsync(request, error);
@@ -72,7 +72,7 @@ public class PushedAuthorizationResponseFormatterTests
             request,
             ErrorCodes.InvalidRequest,
             "Missing required parameter",
-            ResponseMode: "query",
+            ResponseMode: ResponseModes.Query,
             RedirectUri: null);
 
         var result = await _formatter.FormatResponseAsync(request, error);
@@ -94,7 +94,7 @@ public class PushedAuthorizationResponseFormatterTests
             request,
             ErrorCodes.InvalidClient,
             "test",
-            ResponseMode: "query",
+            ResponseMode: ResponseModes.Query,
             RedirectUri: new Uri("https://example.com/cb"));
 
         var result = await _formatter.FormatResponseAsync(request, error);

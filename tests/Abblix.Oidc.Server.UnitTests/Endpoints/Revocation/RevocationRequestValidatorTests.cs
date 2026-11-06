@@ -123,7 +123,7 @@ public class RevocationRequestValidatorTests
         return new RevocationRequest
         {
             Token = token,
-            TokenTypeHint = "access_token",
+            TokenTypeHint = TokenTypeHints.AccessToken,
         };
     }
 

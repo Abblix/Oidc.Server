@@ -261,8 +261,8 @@ public class ResourceValidatorTests
         var resourceDefinition = new ResourceDefinition(
             resourceUri,
             new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>()),
-            new ScopeDefinition("profile", Array.Empty<string>()),
-            new ScopeDefinition("email", Array.Empty<string>()));
+            new ScopeDefinition(Scopes.Profile, Array.Empty<string>()),
+            new ScopeDefinition(Scopes.Email, Array.Empty<string>()));
 
         _resourceManager
             .Setup(rm => rm.TryGet(TestTenant.Matched, resourceUri, out It.Ref<ResourceDefinition?>.IsAny))
@@ -274,7 +274,7 @@ public class ResourceValidatorTests
 
         var context = CreateContext(
             resources: [resourceUri],
-            scopes: [TestConstants.DefaultScope, "profile"]);
+            scopes: [TestConstants.DefaultScope, Scopes.Profile]);
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);

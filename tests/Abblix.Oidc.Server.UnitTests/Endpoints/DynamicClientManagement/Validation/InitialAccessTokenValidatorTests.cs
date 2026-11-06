@@ -125,13 +125,13 @@ public class InitialAccessTokenValidatorTests
     [Fact]
     public async Task ValidateAsync_WithWrongScheme_ShouldReturnInvalidToken()
     {
-        var context = CreateContext(new AuthenticationHeaderValue("Basic", "credentials"));
+        var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Basic, "credentials"));
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidToken, result.Error);
-        Assert.Contains("Basic", result.ErrorDescription);
+        Assert.Contains(TokenTypes.Basic, result.ErrorDescription);
     }
 
     [Fact]

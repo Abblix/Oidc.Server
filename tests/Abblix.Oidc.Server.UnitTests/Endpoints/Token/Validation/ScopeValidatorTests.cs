@@ -128,17 +128,17 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_ShouldPassCorrectParametersToScopeManager()
     {
         // Arrange
-        var scopes = new[] { TestConstants.DefaultScope, "profile", "email" };
+        var scopes = new[] { TestConstants.DefaultScope, Scopes.Profile, Scopes.Email };
         var context = CreateContext(scope: scopes);
-        SetupScopeManagerForScopes(TestConstants.DefaultScope, "profile", "email");
+        SetupScopeManagerForScopes(TestConstants.DefaultScope, Scopes.Profile, Scopes.Email);
 
         // Act
         await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         _scopeManager.Verify(m => m.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
-        _scopeManager.Verify(m => m.TryGet(TestTenant.Matched, "profile", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
-        _scopeManager.Verify(m => m.TryGet(TestTenant.Matched, "email", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet(TestTenant.Matched, Scopes.Profile, out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet(TestTenant.Matched, Scopes.Email, out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
     }
 
     /// <summary>
@@ -149,8 +149,8 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_OnSuccess_ShouldSetScopeInContext()
     {
         // Arrange
-        var context = CreateContext(scope: [TestConstants.DefaultScope, "profile"]);
-        SetupScopeManagerForScopes(TestConstants.DefaultScope, "profile");
+        var context = CreateContext(scope: [TestConstants.DefaultScope, Scopes.Profile]);
+        SetupScopeManagerForScopes(TestConstants.DefaultScope, Scopes.Profile);
 
         // Act
         await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
@@ -158,7 +158,7 @@ public class ScopeValidatorTests
         // Assert
         Assert.Equal(2, context.Scope.Length);
         Assert.Contains(context.Scope, s => s.Scope == TestConstants.DefaultScope);
-        Assert.Contains(context.Scope, s => s.Scope == "profile");
+        Assert.Contains(context.Scope, s => s.Scope == Scopes.Profile);
     }
 
     /// <summary>
@@ -211,7 +211,7 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithMultipleScopes_ShouldValidateAll()
     {
         // Arrange
-        var scopes = new[] { TestConstants.DefaultScope, "profile", "email", "address", "phone" };
+        var scopes = new[] { TestConstants.DefaultScope, Scopes.Profile, Scopes.Email, Scopes.Address, Scopes.Phone };
         var context = CreateContext(scope: scopes);
         SetupScopeManagerForScopes(scopes);
 
