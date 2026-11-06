@@ -45,7 +45,7 @@ public class IntrospectionRequestProcessorTests
     private static IntrospectionRequest CreateIntrospectionRequest() => new()
     {
         Token = "access_token_value",
-        TokenTypeHint = "access_token",
+        TokenTypeHint = TokenTypeHints.AccessToken,
     };
 
     private static JsonWebToken CreateValidToken()

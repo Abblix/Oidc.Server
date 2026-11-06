@@ -52,7 +52,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Basic", base64Credentials)
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
         };
     }
 
@@ -68,7 +68,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Bearer", base64Credentials)
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, base64Credentials)
         };
     }
 
@@ -79,7 +79,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Basic", base64Credentials)
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
         };
     }
 
@@ -90,7 +90,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Basic", base64Credentials)
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
         };
     }
 
@@ -101,7 +101,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Basic", base64Credentials)
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
         };
     }
 
@@ -119,7 +119,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         var authenticator = CreateAuthenticator(clientInfoProvider);
         var request = new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Basic")
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic)
         };
 
         // Act
@@ -145,7 +145,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         var request = new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Basic", base64Credentials)
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
         };
 
         // Act

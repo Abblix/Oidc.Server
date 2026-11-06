@@ -64,7 +64,7 @@ public class RefreshTokenSubjectTokenResolverTests
 
         var grant = new AuthorizedGrant(
             new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "https://idp.example.com"),
-            new AuthorizationContext("client-1", ["openid"], null));
+            new AuthorizationContext("client-1", [Scopes.OpenId], null));
 
         _refreshTokenService
             .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
@@ -75,7 +75,7 @@ public class RefreshTokenSubjectTokenResolverTests
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("user-9", ctx.Subject);
         Assert.Equal("https://idp.example.com", ctx.Issuer);
-        Assert.Equal(["openid"], ctx.Scope!);
+        Assert.Equal([Scopes.OpenId], ctx.Scope!);
     }
 
     /// <summary>
@@ -98,7 +98,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(new AuthorizedGrant(
                 new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self"),
-                new AuthorizationContext("client-1", ["openid"], null)));
+                new AuthorizationContext("client-1", [Scopes.OpenId], null)));
 
         var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
@@ -122,7 +122,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(new AuthorizedGrant(
                 new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self"),
-                new AuthorizationContext("client-1", ["openid"], null)));
+                new AuthorizationContext("client-1", [Scopes.OpenId], null)));
 
         var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
@@ -143,7 +143,7 @@ public class RefreshTokenSubjectTokenResolverTests
         var adNode = (JsonArray)JsonNode.Parse(adWire)!;
         var grant = new AuthorizedGrant(
             new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self"),
-            new AuthorizationContext("client-1", ["openid"], null) { AuthorizationDetails = adNode });
+            new AuthorizationContext("client-1", [Scopes.OpenId], null) { AuthorizationDetails = adNode });
 
         _refreshTokenService
             .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))

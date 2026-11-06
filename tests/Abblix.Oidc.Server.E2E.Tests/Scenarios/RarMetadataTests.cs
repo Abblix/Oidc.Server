@@ -43,7 +43,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         Assert.NotNull(discovery.GrantTypesSupported);
-        Assert.Contains("urn:ietf:params:oauth:grant-type:token-exchange", discovery.GrantTypesSupported);
+        Assert.Contains(GrantTypes.TokenExchange, discovery.GrantTypesSupported);
     }
 
     [Fact]
@@ -66,8 +66,8 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
             [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
-            [RegistrationMembers.ResponseTypes] = new JsonArray { "code" },
-            [RegistrationMembers.TokenEndpointAuthMethod] = "client_secret_post",
+            [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
             [RegistrationMembers.AuthorizationDetailsTypes] = new JsonArray { TestConstants.PaymentInitiationType },
         };
         var registered = await RegisterClientAsync(client, discovery, requested);

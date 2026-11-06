@@ -60,7 +60,7 @@ public class AuthorizationCodeReusePreventingDecoratorTests
     private static AuthorizedGrant CreateGrant(TokenInfo[]? issuedTokens = null)
         => new(
             new AuthSession("subject", "session-1", DateTimeOffset.UnixEpoch, "idp"),
-            new AuthorizationContext("client-1", ["openid"], null))
+            new AuthorizationContext("client-1", [Scopes.OpenId], null))
         {
             IssuedTokens = issuedTokens,
         };

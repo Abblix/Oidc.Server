@@ -41,8 +41,8 @@ public class ResourceScopesTests
     [Fact]
     public void AScopeOfAResourceTheTokenDoesNotName_IsDropped()
         => Assert.Equal(
-            ["openid", "orders.read"],
-            Narrowed([Orders], "openid", "orders.read", "payments.read"));
+            [Scopes.OpenId, "orders.read"],
+            Narrowed([Orders], Scopes.OpenId, "orders.read", "payments.read"));
 
     /// <summary>
     /// A token naming both resources keeps both resources' scopes.
@@ -65,7 +65,7 @@ public class ResourceScopesTests
     /// </summary>
     [Fact]
     public void ATokenNamingNoResource_KeepsOnlyTheScopesNoResourceDeclares()
-        => Assert.Equal(["openid"], Narrowed([], "openid", "orders.read"));
+        => Assert.Equal([Scopes.OpenId], Narrowed([], Scopes.OpenId, "orders.read"));
 
     /// <summary>
     /// A token naming a resource as an audience (RFC 8693) rather than a resource keeps that resource's scope and no

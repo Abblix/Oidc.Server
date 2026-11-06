@@ -45,7 +45,7 @@ public class ClientRequestValidatorTests
     private static ClientRequest Request() => new()
     {
         ClientId = ClientId,
-        AuthorizationHeader = new AuthenticationHeaderValue("Bearer", "registration.access.token"),
+        AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "registration.access.token"),
     };
 
     private void TokenCarries(string tokenId)

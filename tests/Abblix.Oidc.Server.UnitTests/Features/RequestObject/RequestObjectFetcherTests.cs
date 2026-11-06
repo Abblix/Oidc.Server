@@ -721,7 +721,7 @@ public class RequestObjectFetcherTests
             [RequestParameters.RedirectUri] = "https://new.example.com/callback",
             [RequestParameters.State] = "complex_state_123",
             [RequestParameters.Nonce] = "nonce_value",
-            [RequestParameters.ResponseType] = "code"
+            [RequestParameters.ResponseType] = ResponseTypes.Code
         };
         var token = new JsonWebToken
         {

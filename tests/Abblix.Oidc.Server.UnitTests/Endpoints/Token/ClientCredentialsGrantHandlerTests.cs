@@ -56,7 +56,7 @@ public class ClientCredentialsGrantHandlerTests
         Assert.Equal(ClientId, grant.Context.ClientId);
         Assert.Equal(requestedScopes, grant.Context.Scope);
         Assert.Equal(ClientId, grant.AuthSession.Subject);
-        Assert.Equal("client_credentials", grant.AuthSession.IdentityProvider);
+        Assert.Equal(GrantTypes.ClientCredentials, grant.AuthSession.IdentityProvider);
         Assert.NotNull(grant.AuthSession.SessionId);
     }
 
@@ -198,7 +198,7 @@ public class ClientCredentialsGrantHandlerTests
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
-        Assert.Equal("client_credentials", grant.AuthSession.IdentityProvider);
+        Assert.Equal(GrantTypes.ClientCredentials, grant.AuthSession.IdentityProvider);
     }
 
     /// <summary>

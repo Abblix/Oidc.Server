@@ -32,7 +32,7 @@ public class ConfigurationHandlerTests
     public async Task TheDocument_ListsTheScopesClaimsAndSubjectTypesOfTheTenantItIsBuiltFor()
     {
         var scopesAndClaims = new Mock<IScopesAndClaimsProvider>();
-        scopesAndClaims.Setup(p => p.ScopesSupported(TestTenant.Matched)).Returns(["openid", "orders"]);
+        scopesAndClaims.Setup(p => p.ScopesSupported(TestTenant.Matched)).Returns([Scopes.OpenId, "orders"]);
         scopesAndClaims.Setup(p => p.ClaimsSupported(TestTenant.Matched)).Returns(["sub", "order_id"]);
         scopesAndClaims.Setup(p => p.SubjectTypesSupported(TestTenant.Matched)).Returns(["public", "pairwise"]);
         var acr = new Mock<IAcrMetadataProvider>();
@@ -58,7 +58,7 @@ public class ConfigurationHandlerTests
         var document = await handler.HandleAsync(SingleIssuer.Tenant);
 
         Assert.Equal(SingleIssuer.Tenant.Issuer, document.Issuer);
-        Assert.Equal(["openid", "orders"], document.ScopesSupported);
+        Assert.Equal([Scopes.OpenId, "orders"], document.ScopesSupported);
         Assert.Equal(["sub", "order_id"], document.ClaimsSupported);
         Assert.Equal(["public", "pairwise"], document.SubjectTypesSupported);
         Assert.Equal(["urn:example:acr:strong"], document.AcrValuesSupported);

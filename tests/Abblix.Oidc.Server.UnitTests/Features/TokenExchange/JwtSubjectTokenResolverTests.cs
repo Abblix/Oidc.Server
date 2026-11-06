@@ -60,7 +60,7 @@ public class JwtSubjectTokenResolverTests
     public async Task ValidJwt_ReturnsContextWithSubjectIssuerScope()
     {
         var jwt = NewJwt(subject: "user-1", issuer: "https://idp.example.com");
-        jwt.Payload.Scope = ["openid", "profile"];
+        jwt.Payload.Scope = [Scopes.OpenId, Scopes.Profile];
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
@@ -70,7 +70,7 @@ public class JwtSubjectTokenResolverTests
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("user-1", ctx.Subject);
         Assert.Equal("https://idp.example.com", ctx.Issuer);
-        Assert.Equal(["openid", "profile"], ctx.Scope!);
+        Assert.Equal([Scopes.OpenId, Scopes.Profile], ctx.Scope!);
         Assert.Null(ctx.AuthorizationDetails);
     }
 

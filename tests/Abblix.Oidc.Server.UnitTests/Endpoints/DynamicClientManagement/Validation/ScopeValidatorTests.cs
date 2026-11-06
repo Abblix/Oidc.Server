@@ -62,15 +62,15 @@ public class ScopeValidatorTests
     {
         ScopeDefinition? def = new(Scopes.OpenId);
         _scopeManager
-            .Setup(m => m.TryGet(TestTenant.Matched, "openid", out def))
+            .Setup(m => m.TryGet(TestTenant.Matched, Scopes.OpenId, out def))
             .Returns(true);
 
         ScopeDefinition? def2 = new(Scopes.Profile);
         _scopeManager
-            .Setup(m => m.TryGet(TestTenant.Matched, "profile", out def2))
+            .Setup(m => m.TryGet(TestTenant.Matched, Scopes.Profile, out def2))
             .Returns(true);
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(["openid", "profile"]));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext([Scopes.OpenId, Scopes.Profile]));
         Assert.Null(result);
     }
 
@@ -79,10 +79,10 @@ public class ScopeValidatorTests
     {
         ScopeDefinition? def = new(Scopes.OpenId);
         _scopeManager
-            .Setup(m => m.TryGet(TestTenant.Matched, "openid", out def))
+            .Setup(m => m.TryGet(TestTenant.Matched, Scopes.OpenId, out def))
             .Returns(true);
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(["openid", "unknown_scope"]));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext([Scopes.OpenId, "unknown_scope"]));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);

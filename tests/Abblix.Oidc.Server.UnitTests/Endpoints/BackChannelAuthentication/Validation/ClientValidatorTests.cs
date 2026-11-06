@@ -40,7 +40,7 @@ public class ClientValidatorTests
     {
         var request = new BackChannelAuthenticationRequest
         {
-            Scope = [TestConstants.DefaultScope, "profile"],
+            Scope = [TestConstants.DefaultScope, Scopes.Profile],
         };
 
         var clientRequest = new ClientRequest

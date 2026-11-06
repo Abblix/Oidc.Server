@@ -166,7 +166,7 @@ public class PkceValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("plain", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.Plain, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(context.ValidRedirectUri, result.RedirectUri);
         Assert.Equal(context.ResponseMode, result.ResponseMode);
     }
@@ -356,7 +356,7 @@ public class PkceValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("plain", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.Plain, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -588,7 +588,7 @@ public class PkceValidatorTests
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("S256", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.S256, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -607,7 +607,7 @@ public class PkceValidatorTests
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("S256", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.S256, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -626,7 +626,7 @@ public class PkceValidatorTests
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("S256", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.S256, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -665,7 +665,7 @@ public class PkceValidatorTests
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("S256", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.S256, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -692,7 +692,7 @@ public class PkceValidatorTests
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("S256", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.S256, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

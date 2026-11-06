@@ -57,7 +57,7 @@ public class AuthorizationRequestStorageTests
         return new AuthorizationRequest
         {
             ClientId = TestConstants.DefaultClientId,
-            ResponseType = ["code"],
+            ResponseType = [ResponseTypes.Code],
             RedirectUri = new Uri("https://client.example.com/callback"),
             Scope = [TestConstants.DefaultScope],
         };
@@ -72,13 +72,13 @@ public class AuthorizationRequestStorageTests
         return new AuthorizationRequest
         {
             ClientId = "client_456",
-            ResponseType = ["code", "id_token"],
+            ResponseType = [ResponseTypes.Code, ResponseTypes.IdToken],
             RedirectUri = new Uri("https://client.example.com/callback"),
-            Scope = [TestConstants.DefaultScope, "profile", "email", "offline_access"],
+            Scope = [TestConstants.DefaultScope, Scopes.Profile, Scopes.Email, Scopes.OfflineAccess],
             State = "state_xyz",
-            ResponseMode = "form_post",
+            ResponseMode = ResponseModes.FormPost,
             Nonce = "nonce_abc",
-            Display = "page",
+            Display = DisplayModes.Page,
             Prompt = [Prompts.Consent],
             MaxAge = TimeSpan.FromHours(2),
             UiLocales = [CultureInfo.GetCultureInfo("en-US"), CultureInfo.GetCultureInfo("fr-FR")],
@@ -86,7 +86,7 @@ public class AuthorizationRequestStorageTests
             LoginHint = "user@example.com",
             AcrValues = ["urn:mace:incommon:iap:silver"],
             CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
-            CodeChallengeMethod = "S256",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
         };
     }
 

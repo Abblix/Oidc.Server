@@ -39,7 +39,7 @@ public class JwtSecuredAuthorizationResponseTests(TestFactory factory) : TestBas
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
             [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
             [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
-            [RegistrationMembers.TokenEndpointAuthMethod] = "client_secret_post",
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
         };
         var registered = await RegisterClientAsync(httpClient, discovery, dcrBody);
         var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();

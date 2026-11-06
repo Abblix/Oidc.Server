@@ -71,7 +71,7 @@ public class IntrospectionRequestValidatorTests
         return new IntrospectionRequest
         {
             Token = token,
-            TokenTypeHint = "access_token",
+            TokenTypeHint = TokenTypeHints.AccessToken,
         };
     }
 

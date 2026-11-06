@@ -120,7 +120,7 @@ public class UserCodeVerificationServiceRateLimitTests
     }
 
     private DeviceAuthorizationRequest PendingCode() =>
-        new("a-client", ["openid"], null, TheCode) { ExpiresAt = _now.AddMinutes(5) };
+        new("a-client", [Scopes.OpenId], null, TheCode) { ExpiresAt = _now.AddMinutes(5) };
 
     /// <summary>
     /// A refusal the typed value had nothing to do with says how long to wait.
@@ -342,7 +342,7 @@ public class UserCodeVerificationServiceRateLimitTests
         var guessing = ServiceOver(null);
         var grant = new AuthorizedGrant(
             new AuthSession("a-user", "a-session", _now, "device"),
-            new AuthorizationContext("a-client", ["openid"], null));
+            new AuthorizationContext("a-client", [Scopes.OpenId], null));
 
         for (var i = 0; i < 10; i++)
         {
@@ -386,7 +386,7 @@ public class UserCodeVerificationServiceRateLimitTests
         var service = ServiceOver(PendingCode());
         var grant = new AuthorizedGrant(
             new AuthSession("a-user", "a-session", _now, "device"),
-            new AuthorizationContext("a-client", ["openid"], null));
+            new AuthorizationContext("a-client", [Scopes.OpenId], null));
 
         Assert.True(approve
             ? await service.ApproveAsync(SingleIssuer.Tenant, "1234-5678", grant)
@@ -406,7 +406,7 @@ public class UserCodeVerificationServiceRateLimitTests
         var service = ServiceOver(decided);
         var grant = new AuthorizedGrant(
             new AuthSession("a-user", "a-session", _now, "device"),
-            new AuthorizationContext("a-client", ["openid"], null));
+            new AuthorizationContext("a-client", [Scopes.OpenId], null));
 
         Assert.False(approve
             ? await service.ApproveAsync(SingleIssuer.Tenant, TheCode, grant)
@@ -496,7 +496,7 @@ public class UserCodeVerificationServiceRateLimitTests
 
         var grant = new AuthorizedGrant(
             new AuthSession("a-user", "a-session", _now, "device"),
-            new AuthorizationContext("a-client", ["openid"], null));
+            new AuthorizationContext("a-client", [Scopes.OpenId], null));
 
         Assert.False(await service.ApproveAsync(SingleIssuer.Tenant, TheCode, grant));
         Assert.False(await service.DenyAsync(SingleIssuer.Tenant, TheCode));
@@ -515,7 +515,7 @@ public class UserCodeVerificationServiceRateLimitTests
     {
         var grant = new AuthorizedGrant(
             new AuthSession("a-user", "a-session", _now, "device"),
-            new AuthorizationContext("a-client", ["openid"], null));
+            new AuthorizationContext("a-client", [Scopes.OpenId], null));
 
         // Ninety-nine wrong values through approval and denial, which is one short of the budget.
         for (var i = 0; i < 99; i++)
@@ -562,7 +562,7 @@ public class UserCodeVerificationServiceRateLimitTests
         var service = ServiceOver(request);
         var grant = new AuthorizedGrant(
             new AuthSession("a-user", "a-session", _now, "device"),
-            new AuthorizationContext("a-client", ["openid"], null));
+            new AuthorizationContext("a-client", [Scopes.OpenId], null));
 
         for (var i = 0; i < 5; i++)
         {

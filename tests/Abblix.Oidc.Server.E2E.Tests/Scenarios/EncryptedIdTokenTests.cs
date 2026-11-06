@@ -64,7 +64,7 @@ public class EncryptedIdTokenTests(TestFactory factory) : TestBase(factory)
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
             [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
             [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
-            [RegistrationMembers.TokenEndpointAuthMethod] = "client_secret_post",
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
             [ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseAlg] = keyManagementAlgorithm,
             [ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseEnc] = contentEncryptionAlgorithm,
             [ClientRegistrationRequest.Parameters.Jwks] =

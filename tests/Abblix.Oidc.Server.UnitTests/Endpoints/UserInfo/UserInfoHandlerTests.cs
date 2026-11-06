@@ -59,7 +59,7 @@ public class UserInfoHandlerTests
 
         var authContext = new AuthorizationContext(
             TestConstants.DefaultClientId,
-            [TestConstants.DefaultScope, "profile"],
+            [TestConstants.DefaultScope, Scopes.Profile],
             null);
 
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId);

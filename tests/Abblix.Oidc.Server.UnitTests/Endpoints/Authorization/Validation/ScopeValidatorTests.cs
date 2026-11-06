@@ -153,14 +153,14 @@ public class ScopeValidatorTests
     /// Ignored, it leaves the request itself too, which the host's consent provider reads.
     /// </summary>
     [Theory]
-    [InlineData(FlowTypes.AuthorizationCode, "code", true, OfflineAccess.ConsentRequired, true)]
-    [InlineData(FlowTypes.AuthorizationCode, "code", false, OfflineAccess.Allowed, true)]
-    [InlineData(FlowTypes.AuthorizationCode, "code", false, OfflineAccess.ConsentRequired, false)]
-    [InlineData(FlowTypes.Hybrid, "code id_token", true, OfflineAccess.ConsentRequired, true)]
-    [InlineData(FlowTypes.Hybrid, "code id_token", false, OfflineAccess.ConsentRequired, false)]
-    [InlineData(FlowTypes.Hybrid, "code token", true, OfflineAccess.Allowed, false)]
-    [InlineData(FlowTypes.Hybrid, "code id_token token", true, OfflineAccess.Allowed, false)]
-    [InlineData(FlowTypes.None, "none", true, OfflineAccess.Allowed, false)]
+    [InlineData(FlowTypes.AuthorizationCode, ResponseTypes.Code, true, OfflineAccess.ConsentRequired, true)]
+    [InlineData(FlowTypes.AuthorizationCode, ResponseTypes.Code, false, OfflineAccess.Allowed, true)]
+    [InlineData(FlowTypes.AuthorizationCode, ResponseTypes.Code, false, OfflineAccess.ConsentRequired, false)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.IdToken}", true, OfflineAccess.ConsentRequired, true)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.IdToken}", false, OfflineAccess.ConsentRequired, false)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.Token}", true, OfflineAccess.Allowed, false)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.IdToken} {ResponseTypes.Token}", true, OfflineAccess.Allowed, false)]
+    [InlineData(FlowTypes.None, ResponseTypes.None, true, OfflineAccess.Allowed, false)]
     public async Task ValidateAsync_OfflineAccess_IsReceivedOnlyWithConsentPromptOrClientConditions(
         FlowTypes flowType, string responseType, bool promptConsent, OfflineAccess offlineAccess, bool received)
     {
@@ -206,10 +206,10 @@ public class ScopeValidatorTests
     /// OpenID Connect Core 1.0 has the server ignore offline_access, it is ignored for this client too.
     /// </summary>
     [Theory]
-    [InlineData(FlowTypes.AuthorizationCode, "code", true, true)]
-    [InlineData(FlowTypes.AuthorizationCode, "code", false, false)]
-    [InlineData(FlowTypes.Implicit, "id_token token", true, false)]
-    [InlineData(FlowTypes.Hybrid, "code token", true, false)]
+    [InlineData(FlowTypes.AuthorizationCode, ResponseTypes.Code, true, true)]
+    [InlineData(FlowTypes.AuthorizationCode, ResponseTypes.Code, false, false)]
+    [InlineData(FlowTypes.Implicit, $"{ResponseTypes.IdToken} {ResponseTypes.Token}", true, false)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.Token}", true, false)]
     public async Task ValidateAsync_OfflineAccessWhenClientNotAuthorized_IsRefusedOnlyWhereReceived(
         FlowTypes flowType, string responseType, bool promptConsent, bool refused)
     {

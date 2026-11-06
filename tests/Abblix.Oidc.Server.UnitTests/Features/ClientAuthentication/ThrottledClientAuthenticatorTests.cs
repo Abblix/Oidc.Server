@@ -264,7 +264,7 @@ public class ThrottledClientAuthenticatorTests
     [Fact]
     public void TheSupportedMethods_AreTheOnesItWraps()
     {
-        var methods = new[] { "client_secret_basic", "private_key_jwt" };
+        var methods = new[] { ClientAuthenticationMethods.ClientSecretBasic, ClientAuthenticationMethods.PrivateKeyJwt };
         _inner.Setup(a => a.ClientAuthenticationMethodsSupported).Returns(methods);
 
         Assert.Equal(methods, CreateAuthenticator(permitLimit: 1).ClientAuthenticationMethodsSupported);
