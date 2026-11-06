@@ -144,7 +144,8 @@ jobs:
       # "Unit tests" check AND that the branch be up to date with develop before merging, so the tree a
       # squash merge produces is the tree the check ran on. The commit came from a merged pull request,
       # which an admin's direct push, allowed to bypass that rule, did not. And that pull request's head
-      # has the check green. Anything else, including an answer that did not arrive, leaves the suite to
+      # has the check green with the solution build behind it, since a pull request outside the suite's reach passes
+      # the check with nothing run. Anything else, including an answer that did not arrive, leaves the suite to
       # run below: a failed lookup costs minutes, never an untested package. Not asked: an admin merging an
       # out-of-date branch through the same bypass, which the rule cannot see from here.
       - name: Look up whether the merged pull request tested this tree
@@ -169,14 +170,20 @@ jobs:
             [ "$rc" -eq 0 ] || head=""
 
             passed=0
+            built=0
             if [ -n "$head" ]; then
               rc=0
               passed=$(gh api "repos/$REPO/commits/$head/check-runs?check_name=Unit%20tests" --jq '[.check_runs[] | select(.conclusion == "success")] | length') || rc=$?
               [ "$rc" -eq 0 ] || passed=0
+              # "Unit tests" also passes when the pull request changed nothing the suite reads and skipped it, which
+              # proves nothing about this tree; the solution build runs only when the suite does
+              rc=0
+              built=$(gh api "repos/$REPO/commits/$head/check-runs?check_name=Build%20the%20solution" --jq '[.check_runs[] | select(.conclusion == "success")] | length') || rc=$?
+              [ "$rc" -eq 0 ] || built=0
             fi
 
-            echo "rule=$rule pull-request-head=${head:-none} unit-tests-green=$passed"
-            if [ "$rule" -ge 1 ] && [ "$passed" -ge 1 ]; then
+            echo "rule=$rule pull-request-head=${head:-none} unit-tests-green=$passed suite-ran=$built"
+            if [ "$rule" -ge 1 ] && [ "$passed" -ge 1 ] && [ "$built" -ge 1 ]; then
               covered=true
             fi
           fi
