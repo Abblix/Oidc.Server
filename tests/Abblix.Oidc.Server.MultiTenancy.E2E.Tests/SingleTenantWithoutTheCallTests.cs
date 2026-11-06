@@ -41,6 +41,11 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 public sealed class SingleTenantWithoutTheCallTests
 {
     private const string Host = "https://auth.example.com";
+    private const string OtherHost = "https://other.example.com";
+
+    // A host's own endpoint answering which tenant its code sees, inside a scope it enters and after it
+    private const string TenantPath = "/tenant";
+    private const char Separator = '|';
 
     // Long enough for a request that does not wait for the load to be answered
     private static readonly TimeSpan WhileTheLoadIsHeld = TimeSpan.FromSeconds(2);
@@ -144,6 +149,48 @@ public sealed class SingleTenantWithoutTheCallTests
     }
 
     /// <summary>
+    /// Without the call nothing compares the request's host name with the issuer's, so a request on another host name
+    /// is served as the one tenant, under the configured issuer.
+    /// </summary>
+    [Fact]
+    public async Task ARequestOnAnotherHost_IsServedAsTheOneTenant()
+    {
+        await using var app = await StartAsync([Tenant("acme", Host)]);
+        using var http = app.GetTestClient();
+        http.BaseAddress = new Uri(OtherHost);
+
+        using var response = await http.GetAsync("/.well-known/openid-configuration", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(Host, (await ReadJsonAsync(response))[ConfigurationResponse.Parameters.Issuer]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Without the call a tenant scope the host enters takes precedence over the one tenant, since the work it wraps
+    /// was addressed to another tenant on purpose, and the request is the one tenant's again once the scope ends.
+    /// </summary>
+    [Fact]
+    public async Task AScopeTheHostEnters_TakesPrecedenceOverTheOneTenant()
+    {
+        var globex = Tenant("globex", Host + "/tenants/globex");
+        await using var app = await StartAsync(
+            [Tenant("acme", Host)],
+            hostEndpoints: endpoints => endpoints.MapGet(TenantPath, (ITenantAccessor accessor) =>
+            {
+                string? inScope;
+                using (TenantScope.Enter(globex))
+                    inScope = accessor.Current?.Tenant.Id;
+
+                return Results.Text($"{inScope}{Separator}{accessor.Current?.Tenant.Id}");
+            }));
+        using var http = Client(app);
+
+        var seen = await http.GetStringAsync(TenantPath, TestContext.Current.CancellationToken);
+
+        Assert.Equal($"globex{Separator}acme", seen);
+    }
+
+    /// <summary>
     /// With the call in the pipeline the one tenant is resolved as before: a request on another host name reaches no
     /// tenant, rather than being served as the one.
     /// </summary>
@@ -152,7 +199,7 @@ public sealed class SingleTenantWithoutTheCallTests
     {
         await using var app = await StartAsync([Tenant("acme", Host)], callsMultiTenancy: true);
         using var http = app.GetTestClient();
-        http.BaseAddress = new Uri("https://other.example.com");
+        http.BaseAddress = new Uri(OtherHost);
 
         using var response = await http.GetAsync("/.well-known/openid-configuration", TestContext.Current.CancellationToken);
 
@@ -168,7 +215,7 @@ public sealed class SingleTenantWithoutTheCallTests
     {
         await using var app = await StartAsync([Tenant("acme", Host)], callsMultiTenancy: true, readsTenantFirst: true);
         using var http = app.GetTestClient();
-        http.BaseAddress = new Uri("https://other.example.com");
+        http.BaseAddress = new Uri(OtherHost);
 
         using var response = await http.GetAsync("/.well-known/openid-configuration", TestContext.Current.CancellationToken);
 
@@ -338,13 +385,15 @@ public sealed class SingleTenantWithoutTheCallTests
         TenantDefinition[] tenants,
         string? pathBase = null,
         bool callsMultiTenancy = false,
-        bool readsTenantFirst = false)
+        bool readsTenantFirst = false,
+        Action<WebApplication>? hostEndpoints = null)
     {
         var app = Build(
             tenants,
             pathBase: pathBase,
             callsMultiTenancy: callsMultiTenancy,
-            readsTenantFirst: readsTenantFirst);
+            readsTenantFirst: readsTenantFirst,
+            hostEndpoints: hostEndpoints);
         await app.StartAsync(TestContext.Current.CancellationToken);
         return app;
     }
@@ -355,7 +404,8 @@ public sealed class SingleTenantWithoutTheCallTests
         string? pathBase = null,
         bool callsMultiTenancy = false,
         bool readsTenantFirst = false,
-        TaskCompletionSource? arrival = null)
+        TaskCompletionSource? arrival = null,
+        Action<WebApplication>? hostEndpoints = null)
     {
         TestLicense.Loaded.GetAwaiter().GetResult();
 
@@ -404,6 +454,7 @@ public sealed class SingleTenantWithoutTheCallTests
 
         app.UseCors();
         app.MapOidcEndpoints();
+        hostEndpoints?.Invoke(app);
         return app;
     }
 
