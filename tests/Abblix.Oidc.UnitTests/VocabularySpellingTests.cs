@@ -14,10 +14,10 @@ using Xunit;
 namespace Abblix.Oidc.UnitTests;
 
 /// <summary>
-/// The server writes these values and every other test reads them through the same constants, so a mistyped value
-/// would pass the whole suite while every client stopped understanding it. These tables write each value a second
-/// time, apart from its constant, which is why they are literals here and nowhere else. A constant added to a class
-/// without a row here fails its table, so a new value is spelled twice from the start.
+/// The server writes these values and most tests read them through the same constants, so a mistyped value would
+/// pass the whole suite while every client stopped understanding it. These tables write each value a second time,
+/// apart from its constant. A constant added to one of the classes below without a row fails that class's table, so
+/// a new value is spelled twice from the start.
 /// </summary>
 public class VocabularySpellingTests
 {
