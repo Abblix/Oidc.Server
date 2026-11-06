@@ -8,9 +8,9 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Oidc;
+using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using Xunit;
-using ErrorParameters = Abblix.Oidc.Server.Model.ErrorResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -41,6 +41,6 @@ public class HostlessRequestTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
         var body = await JsonNode.ParseAsync(context.Response.Body, cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Equal(ErrorCodes.InvalidRequest, body?[ErrorParameters.Error]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body?[ErrorResponse.Parameters.Error]?.GetValue<string>());
     }
 }

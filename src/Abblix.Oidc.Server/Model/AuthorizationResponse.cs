@@ -21,7 +21,6 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 public record AuthorizationResponse
 {
-
     /// <summary>The error code when the authorization request failed.</summary>
     [JsonPropertyName(Parameters.Error)]
     public string? Error { init; get; }

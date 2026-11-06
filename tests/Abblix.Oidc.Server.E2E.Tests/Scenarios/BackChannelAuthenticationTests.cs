@@ -230,11 +230,11 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
         // Token - sit beside each other with nothing tying the first to the last, and a client following
         // its own MUST to check that this claim matches the identifier it asked about cannot accept the
         // notification at all.
-        //
+        var idToken = DecodeJwtPayload(payload[BackChannelPushNotificationRequest.Parameters.IdToken]!.GetValue<string>());
+
         // Read out of the delivered ID Token rather than out of storage, because storage would prove
         // only that the value was known. Asserted as the literal claim name a client reads off the wire,
         // for the reason the refusal tests give: comparing a constant with itself lets a rename pass.
-        var idToken = DecodeJwtPayload(payload[BackChannelPushNotificationRequest.Parameters.IdToken]!.GetValue<string>());
         Assert.Equal(
             authRequestId,
             idToken["urn:openid:params:jwt:claim:auth_req_id"]!.GetValue<string>());
