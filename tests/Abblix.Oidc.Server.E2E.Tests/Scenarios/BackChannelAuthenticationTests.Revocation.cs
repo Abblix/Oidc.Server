@@ -21,7 +21,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using RegistrationResponse = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -192,13 +191,13 @@ public partial class BackChannelAuthenticationTests
                 if (refused)
                 {
                     Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-                    Assert.Equal(ErrorCodes.InvalidGrant, body[ResponseParameters.Error]!.GetValue<string>());
-                    Assert.Null(body[ResponseParameters.AccessToken]);
+                    Assert.Equal(ErrorCodes.InvalidGrant, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+                    Assert.Null(body[TokenResponse.Parameters.AccessToken]);
                     return;
                 }
 
                 Assert.True(response.IsSuccessStatusCode, $"the request should be redeemed, got {body}");
-                Assert.False(string.IsNullOrEmpty(body[ResponseParameters.AccessToken]?.GetValue<string>()));
+                Assert.False(string.IsNullOrEmpty(body[TokenResponse.Parameters.AccessToken]?.GetValue<string>()));
                 return;
 
             case BackchannelTokenDeliveryModes.Push:

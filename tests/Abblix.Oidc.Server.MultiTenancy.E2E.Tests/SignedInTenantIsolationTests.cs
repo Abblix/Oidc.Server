@@ -28,7 +28,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
@@ -103,7 +102,7 @@ public sealed class SignedInTenantIsolationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, atGlobex.StatusCode);
         Assert.Equal(
             ErrorCodes.InvalidGrant,
-            (await ReadJsonAsync(atGlobex))[ResponseParameters.Error]?.GetValue<string>());
+            (await ReadJsonAsync(atGlobex))[ErrorResponse.Parameters.Error]?.GetValue<string>());
 
         var atAcme = await RedeemAtAsync(Acme, code);
         Assert.Equal(HttpStatusCode.OK, atAcme.StatusCode);
@@ -116,7 +115,7 @@ public sealed class SignedInTenantIsolationTests : IAsyncLifetime
     public async Task AnIdTokenOfOneTenant_IsRefusedAsALogoutHintAtTheOther()
     {
         var tokens = await ReadJsonAsync(await RedeemAtAsync(Acme, await CodeAtAsync(Acme)));
-        var idToken = tokens[ResponseParameters.IdToken]!.GetValue<string>();
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
         Task<HttpResponseMessage> EndSessionAtAsync(string tenant)
         {

@@ -15,7 +15,6 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Model;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -107,7 +106,7 @@ public class RefreshTokenTamperingTests(TestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
         return (client, discovery, refreshToken);
     }
 
@@ -125,7 +124,7 @@ public class RefreshTokenTamperingTests(TestFactory factory) : TestBase(factory)
         var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = JsonNode.Parse(raw)!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidGrant, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidGrant, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     private static string Base64UrlEncode(string value) =>

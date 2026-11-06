@@ -20,7 +20,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using CibaParameters = Abblix.Oidc.Server.Model.BackChannelAuthenticationRequest.Parameters;
 using CibaResponse = Abblix.Oidc.Server.Model.BackChannelAuthenticationSuccess.Parameters;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -86,7 +85,7 @@ public partial class BackChannelAuthenticationTests
         ]);
 
         var body = await ReadJsonAsync(response);
-        Assert.Equal(ErrorCodes.InvalidTarget, body[ResponseParameters.Error]?.GetValue<string>());
-        Assert.Equal(ResourceRefusals.NotGranted, body[ResponseParameters.ErrorDescription]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidTarget, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
+        Assert.Equal(ResourceRefusals.NotGranted, body[ErrorResponse.Parameters.ErrorDescription]?.GetValue<string>());
     }
 }

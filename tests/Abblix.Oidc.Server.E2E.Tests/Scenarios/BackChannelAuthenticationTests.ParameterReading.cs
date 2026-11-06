@@ -12,7 +12,6 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 using CibaParameters = Abblix.Oidc.Server.Model.BackChannelAuthenticationRequest.Parameters;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -37,7 +36,7 @@ public partial class BackChannelAuthenticationTests
         var response = await FormPostHelpers.PostFormAsync(client, discovery.BackChannelAuthenticationEndpoint!, form);
 
         var body = await ReadJsonAsync(response);
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>
@@ -55,7 +54,7 @@ public partial class BackChannelAuthenticationTests
         var response = await FormPostHelpers.PostFormAsync(client, discovery.BackChannelAuthenticationEndpoint!, form);
 
         var body = await ReadJsonAsync(response);
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>

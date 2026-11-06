@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
@@ -64,14 +65,14 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         var requested = new JsonObject
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
-            ["response_types"] = new JsonArray { "code" },
-            ["token_endpoint_auth_method"] = "client_secret_post",
-            ["authorization_details_types"] = new JsonArray { TestConstants.PaymentInitiationType },
+            [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [RegistrationMembers.ResponseTypes] = new JsonArray { "code" },
+            [RegistrationMembers.TokenEndpointAuthMethod] = "client_secret_post",
+            [RegistrationMembers.AuthorizationDetailsTypes] = new JsonArray { TestConstants.PaymentInitiationType },
         };
         var registered = await RegisterClientAsync(client, discovery, requested);
 
-        var echoed = registered["authorization_details_types"] as JsonArray;
+        var echoed = registered[ClientRegistrationResponse.Parameters.AuthorizationDetailsTypes] as JsonArray;
         Assert.NotNull(echoed);
         Assert.Single(echoed);
         Assert.Equal(TestConstants.PaymentInitiationType, echoed[0]!.GetValue<string>());
@@ -105,7 +106,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         var tokenResponse = await PerformParFlowAsync(
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
-        var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
@@ -114,7 +115,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         using var introspectRequest = new HttpRequestMessage(HttpMethod.Post, discovery.IntrospectionEndpoint);
         introspectRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             [IntrospectionRequest.Parameters.Token] = accessToken,
             [IntrospectionRequest.Parameters.TokenTypeHint] = UserInfoRequest.Parameters.AccessToken,
@@ -127,7 +128,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         Assert.NotNull(body);
         Assert.True(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
 
-        var echoed = body[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray;
+        var echoed = body[IanaClaimTypes.AuthorizationDetails] as JsonArray;
         Assert.NotNull(echoed);
         Assert.Equal(PaymentInitiationWireJson, echoed.ToJsonString());
     }

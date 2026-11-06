@@ -12,7 +12,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -40,8 +39,8 @@ public class RequirePushedAuthorizationRequestsTests(TestFactory factory) : Test
                 ClientAuthenticationMethods.ClientSecretPost,
             [ClientRegistrationRequest.Parameters.RequirePushedAuthorizationRequests] = true,
         });
-        var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
-        var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>();
         Assert.True(
             registered[ClientRegistrationRequest.Parameters.RequirePushedAuthorizationRequests]!.GetValue<bool>());
 
@@ -60,7 +59,7 @@ public class RequirePushedAuthorizationRequestsTests(TestFactory factory) : Test
             [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
         });
-        var requestUri = parResponse[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
+        var requestUri = parResponse[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>();
 
         // 3. /authorize with the PAR-issued request_uri completes and yields a code.
         var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
@@ -88,6 +87,6 @@ public class RequirePushedAuthorizationRequestsTests(TestFactory factory) : Test
         Assert.Equal(HttpStatusCode.BadRequest, plainResponse.StatusCode);
         var responseText = await plainResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var body = JsonNode.Parse(responseText)!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidRequestObject, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequestObject, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 }

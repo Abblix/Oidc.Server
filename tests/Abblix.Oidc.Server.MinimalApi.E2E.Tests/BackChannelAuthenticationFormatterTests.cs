@@ -28,7 +28,6 @@ using Microsoft.Net.Http.Headers;
 using Xunit;
 using CibaParameters = Abblix.Oidc.Server.Model.BackChannelAuthenticationRequest.Parameters;
 using ClientParameters = Abblix.Oidc.Server.Model.ClientRequest.Parameters;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Abblix.Oidc.Server.E2E.Tests;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
@@ -90,8 +89,8 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
         var body = await ReadJsonAsync(response);
         Assert.True(response.IsSuccessStatusCode, $"registering a CIBA client failed: {(int)response.StatusCode} {body}");
 
-        var clientId = body[ClientParameters.ClientId];
-        var secret = body[ClientParameters.ClientSecret];
+        var clientId = body[ClientRegistrationResponse.Parameters.ClientId];
+        var secret = body[ClientRegistrationResponse.Parameters.ClientSecret];
         Assert.NotNull(clientId);
         Assert.NotNull(secret);
 
@@ -136,7 +135,7 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
         Assert.Contains(TestConstants.Issuer, challenge, StringComparison.Ordinal);
 
         var body = await ReadJsonAsync(response);
-        var error = body[ResponseParameters.Error];
+        var error = body[ErrorResponse.Parameters.Error];
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.AccessDenied, error.GetValue<string>());
     }
@@ -197,7 +196,7 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
         Assert.False(response.Headers.Contains(HeaderNames.WWWAuthenticate));
 
         var body = await ReadJsonAsync(response);
-        var error = body[ResponseParameters.Error];
+        var error = body[ErrorResponse.Parameters.Error];
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.AccessDenied, error.GetValue<string>());
     }
@@ -224,7 +223,7 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
         Assert.False(response.Headers.Contains(HeaderNames.WWWAuthenticate));
 
         var body = await ReadJsonAsync(response);
-        Assert.False(string.IsNullOrEmpty(body[ResponseParameters.Error]?.GetValue<string>()));
+        Assert.False(string.IsNullOrEmpty(body[ErrorResponse.Parameters.Error]?.GetValue<string>()));
     }
 
     /// <summary>

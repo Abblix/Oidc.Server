@@ -19,15 +19,26 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 public record TokenResponse
 {
-    private static class Parameters
+    /// <summary>
+    /// Wire-level member names of the token endpoint's JSON response.
+    /// </summary>
+    public static class Parameters
     {
+        /// <summary>The <c>access_token</c> the authorization server issued.</summary>
         public const string AccessToken = "access_token";
+        /// <summary>The <c>token_type</c> of the issued access token.</summary>
         public const string TokenType = "token_type";
+        /// <summary>The <c>issued_token_type</c> of a token exchange response.</summary>
         public const string IssuedTokenType = "issued_token_type";
+        /// <summary>The <c>expires_in</c> access-token lifetime in seconds.</summary>
         public const string ExpiresIn = "expires_in";
+        /// <summary>The <c>refresh_token</c> for obtaining new access tokens.</summary>
         public const string RefreshToken = "refresh_token";
+        /// <summary>The <c>scope</c> of the issued access token.</summary>
         public const string Scope = "scope";
+        /// <summary>The <c>id_token</c> issued alongside the access token.</summary>
         public const string IdToken = "id_token";
+        /// <summary>The <c>authorization_details</c> granted to the access token.</summary>
         public const string AuthorizationDetails = "authorization_details";
     }
 

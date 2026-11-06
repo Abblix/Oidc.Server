@@ -23,18 +23,27 @@ public readonly record struct ConfirmationRequiredResponse(
 	string ErrorDescription,
 	string Confirmation)
 {
+	/// <summary>
+	/// Wire-level member names of this response beyond the standard error members of <see cref="ErrorResponse"/>.
+	/// </summary>
+	public static class Parameters
+	{
+		/// <summary>The <c>confirmation</c> value to send back with the end user's answer.</summary>
+		public const string Confirmation = "confirmation";
+	}
+
 	/// <inheritdoc cref="ErrorResponse.Error"/>
-	[JsonPropertyName("error")]
+	[JsonPropertyName(ErrorResponse.Parameters.Error)]
 	public string Error { get; init; } = Error;
 
 	/// <inheritdoc cref="ErrorResponse.ErrorDescription"/>
-	[JsonPropertyName("error_description")]
+	[JsonPropertyName(ErrorResponse.Parameters.ErrorDescription)]
 	public string ErrorDescription { get; init; } = ErrorDescription;
 
 	/// <summary>
 	/// The value this server issued for the session the question is about. It is good for one use and expires
 	/// with <see cref="Common.Configuration.OidcOptions.LogoutConfirmationLifetime"/>.
 	/// </summary>
-	[JsonPropertyName("confirmation")]
+	[JsonPropertyName(Parameters.Confirmation)]
 	public string Confirmation { get; init; } = Confirmation;
 }

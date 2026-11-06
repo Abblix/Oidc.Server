@@ -40,7 +40,7 @@ public abstract class TestBase(TestFactory factory)
         var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
-        Assert.Equal(ErrorCodes.InvalidRequest, JsonNode.Parse(raw)![ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, JsonNode.Parse(raw)![ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>
@@ -117,7 +117,7 @@ public abstract class TestBase(TestFactory factory)
         DiscoveryDocument discovery,
         Dictionary<string, string> queryParams) =>
         await AuthorizeAndExtractFromCallbackAsync(
-            client, discovery, queryParams, TokenRequest.Parameters.Code);
+            client, discovery, queryParams, ResponseParameters.Code);
 
     /// <summary>
     /// Drives /authorize and asserts the AS redirected back to <c>redirect_uri</c> with an
@@ -128,7 +128,7 @@ public abstract class TestBase(TestFactory factory)
         HttpClient client,
         DiscoveryDocument discovery,
         Dictionary<string, string> queryParams) =>
-        await AuthorizeAndExtractFromCallbackAsync(client, discovery, queryParams, "error");
+        await AuthorizeAndExtractFromCallbackAsync(client, discovery, queryParams, ResponseParameters.Error);
 
     /// <summary>
     /// Drives /authorize for a JARM (JWT Secured Authorization Response Mode) request and returns the value of
@@ -138,7 +138,7 @@ public abstract class TestBase(TestFactory factory)
         HttpClient client,
         DiscoveryDocument discovery,
         Dictionary<string, string> queryParams) =>
-        await AuthorizeAndExtractFromCallbackAsync(client, discovery, queryParams, "response");
+        await AuthorizeAndExtractFromCallbackAsync(client, discovery, queryParams, ResponseParameters.Response);
 
     /// <summary>
     /// Drives /authorize, asserts the AS responded with a 302/303 back to <c>redirect_uri</c>,
@@ -201,9 +201,9 @@ public abstract class TestBase(TestFactory factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
     }
@@ -240,9 +240,9 @@ public abstract class TestBase(TestFactory factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
     }
@@ -271,7 +271,7 @@ public abstract class TestBase(TestFactory factory)
         using var request = new HttpRequestMessage(HttpMethod.Post, discovery.IntrospectionEndpoint);
         request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            [AuthorizationRequest.Parameters.ClientId] = callerClientId,
+            [ClientRequest.Parameters.ClientId] = callerClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             [IntrospectionRequest.Parameters.Token] = token,
             [IntrospectionRequest.Parameters.TokenTypeHint] = UserInfoRequest.Parameters.AccessToken,
@@ -317,7 +317,7 @@ public abstract class TestBase(TestFactory factory)
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
             [AuthorizationRequest.Parameters.AuthorizationDetails] = authorizationDetailsWireJson,
         });
-        var requestUri = parResponse[AuthorizationRequest.Parameters.RequestUri]?.GetValue<string>()
+        var requestUri = parResponse[PushedAuthorizationResponse.Parameters.RequestUri]?.GetValue<string>()
             ?? throw new InvalidOperationException("PAR did not return request_uri");
 
         var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
@@ -330,9 +330,9 @@ public abstract class TestBase(TestFactory factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = redirectUri,
+            [TokenRequest.Parameters.RedirectUri] = redirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
     }
@@ -378,7 +378,7 @@ public abstract class TestBase(TestFactory factory)
         Assert.False(response.IsSuccessStatusCode,
             $"Expected error response but got {(int)response.StatusCode}: {raw}");
         var body = JsonNode.Parse(raw)?.AsObject();
-        var errorCode = body?[ResponseParameters.Error]?.GetValue<string>();
+        var errorCode = body?[ErrorResponse.Parameters.Error]?.GetValue<string>();
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, errorCode);
     }
 

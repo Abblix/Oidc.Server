@@ -8,6 +8,7 @@
 
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
@@ -50,13 +51,13 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
             TransferOf200,
             client: client);
 
-        var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         Assert.Equal(
             transferOf100,
-            DecodeJwtPayload(accessToken)[AuthorizationRequest.Parameters.AuthorizationDetails]!.ToJsonString());
+            DecodeJwtPayload(accessToken)[IanaClaimTypes.AuthorizationDetails]!.ToJsonString());
         Assert.Equal(
             transferOf100,
-            tokenResponse[AuthorizationRequest.Parameters.AuthorizationDetails]!.ToJsonString());
+            tokenResponse[TokenResponse.Parameters.AuthorizationDetails]!.ToJsonString());
 
         var discovery = await FetchDiscoveryAsync(client);
         using var introspection = await client.PostAsync(
@@ -64,7 +65,7 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
             new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 [IntrospectionRequest.Parameters.Token] = accessToken,
-                [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
                 [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             }),
             TestContext.Current.CancellationToken);
@@ -72,7 +73,7 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
             TestContext.Current.CancellationToken);
         Assert.Equal(
             transferOf100,
-            introspected![AuthorizationRequest.Parameters.AuthorizationDetails]!.ToJsonString());
+            introspected![IanaClaimTypes.AuthorizationDetails]!.ToJsonString());
     }
 
     /// <summary>
@@ -106,14 +107,14 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
             {
                 [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
                 [AuthorizationRequest.Parameters.RequestUri] =
-                    parResponse[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>(),
+                    parResponse[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>(),
             }),
             TestContext.Current.CancellationToken);
         var callback = System.Web.HttpUtility.ParseQueryString(response.Headers.Location!.Query);
 
         Assert.StartsWith(TestConstants.RedirectUri, response.Headers.Location.OriginalString);
         Assert.Equal(ErrorCodes.AccessDenied, callback[ResponseParameters.Error]);
-        Assert.Null(callback[TokenRequest.Parameters.Code]);
+        Assert.Null(callback[ResponseParameters.Code]);
     }
 
     [Fact]
@@ -148,7 +149,7 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
             [AuthorizationRequest.Parameters.AuthorizationDetails] = PaymentInitiationWireJson,
         });
-        var requestUri = parResponse[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
+        var requestUri = parResponse[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>();
 
         var error = await AuthorizeAndExtractErrorAsync(client, discovery, new Dictionary<string, string>
         {
@@ -204,8 +205,8 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
 
-        var payload = DecodeJwtPayload(tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[IanaClaimTypes.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 
@@ -216,7 +217,7 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson,
             scope: Scopes.OpenId + " " + Scopes.OfflineAccess);
-        var refreshToken = initial[GrantTypes.RefreshToken]?.GetValue<string>()
+        var refreshToken = initial[TokenResponse.Parameters.RefreshToken]?.GetValue<string>()
             ?? throw new InvalidOperationException("Initial token response missing refresh_token");
 
         var client = CreateClient();
@@ -224,13 +225,13 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
         var refreshed = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
-            [GrantTypes.RefreshToken] = refreshToken,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [TokenRequest.Parameters.RefreshToken] = refreshToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
-        var payload = DecodeJwtPayload(refreshed[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(refreshed[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[IanaClaimTypes.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 
@@ -250,8 +251,8 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, requestedWireJson, client: client);
 
-        var payload = DecodeJwtPayload(tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[IanaClaimTypes.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(grantedWireJson, claim.ToJsonString());
         return claim;
     }

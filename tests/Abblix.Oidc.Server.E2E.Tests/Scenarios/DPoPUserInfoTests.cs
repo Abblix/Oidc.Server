@@ -82,7 +82,7 @@ public class DPoPUserInfoTests(TestFactory factory) : DPoPTestBase(factory)
             client, discovery,
             clientId: TestConstants.DPoPOpportunisticClientId,
             parProof: null, tokenProof: null);
-        var unboundAccessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var unboundAccessToken = tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         // Attach a syntactically valid proof to make sure the rejection is about the
         // token's binding state, not about a missing proof header.
@@ -134,7 +134,7 @@ public class DPoPUserInfoTests(TestFactory factory) : DPoPTestBase(factory)
             client, discovery,
             clientId: TestConstants.DPoPOpportunisticClientId,
             parProof: null, tokenProof: null);
-        var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
@@ -161,7 +161,7 @@ public class DPoPUserInfoTests(TestFactory factory) : DPoPTestBase(factory)
             clientId: TestConstants.DPoPOpportunisticClientId,
             parProof: null, tokenProof: tokenProof);
         AssertDPoPBound(tokenResponse, expectedThumbprint: proofKey.Thumbprint);
-        return tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        return tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
     }
 
     /// <summary>

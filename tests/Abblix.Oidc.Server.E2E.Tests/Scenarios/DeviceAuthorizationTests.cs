@@ -23,7 +23,6 @@ using DeviceRequest = Abblix.Oidc.Server.Model.DeviceAuthorizationRequest;
 using DeviceResponse = Abblix.Oidc.Server.Model.DeviceAuthorizationResponse;
 using RegistrationRequest = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using RegistrationResponse = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -83,7 +82,7 @@ public partial class DeviceAuthorizationTests(TestFactory factory) : TestBase(fa
         // No token of any kind may ride along with the refusal. An error body that also carried an access
         // token would satisfy an error-code check and still hand over the session.
         var body = await ReadJsonAsync(response);
-        Assert.Null(body[ResponseParameters.AccessToken]);
+        Assert.Null(body[TokenResponse.Parameters.AccessToken]);
     }
 
     [Fact]
@@ -208,7 +207,7 @@ public partial class DeviceAuthorizationTests(TestFactory factory) : TestBase(fa
         // Throttling must not become a way through: the early poll is refused without a token, exactly like
         // a well-timed poll of an unapproved code.
         var body = await ReadJsonAsync(response);
-        Assert.Null(body[ResponseParameters.AccessToken]);
+        Assert.Null(body[TokenResponse.Parameters.AccessToken]);
     }
 
     /// <summary>A dynamically registered client allowed to use the device authorization grant.</summary>
@@ -308,6 +307,6 @@ public partial class DeviceAuthorizationTests(TestFactory factory) : TestBase(fa
     {
         var body = await ReadJsonAsync(response);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(expectedError, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(expectedError, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 }

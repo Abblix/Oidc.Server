@@ -61,15 +61,15 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         var dcrBody = new JsonObject
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
-            ["response_types"] = new JsonArray { "code" },
-            ["token_endpoint_auth_method"] = "client_secret_post",
-            ["jwks"] = JsonSerializer.SerializeToNode(PublicJwksFor(clientKey)),
-            ["authorization_details_types"] = new JsonArray { TestConstants.PaymentInitiationType },
+            [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [RegistrationMembers.ResponseTypes] = new JsonArray { "code" },
+            [RegistrationMembers.TokenEndpointAuthMethod] = "client_secret_post",
+            [RegistrationMembers.Jwks] = JsonSerializer.SerializeToNode(PublicJwksFor(clientKey)),
+            [RegistrationMembers.AuthorizationDetailsTypes] = new JsonArray { TestConstants.PaymentInitiationType },
         };
         var registered = await RegisterClientAsync(httpClient, discovery, dcrBody);
-        var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
-        var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>();
 
         // 3. Build the request JWT containing every authorize parameter -- including the wire-shape
         // authorization_details JSON array attached as a custom claim. RFC 9101 section 6: iss = client_id,
@@ -107,7 +107,7 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         var code = await AuthorizeAndExtractCodeAsync(httpClient, discovery, new Dictionary<string, string>
         {
             [AuthorizationRequest.Parameters.ClientId] = clientId,
-            ["request"] = signedRequest,
+            [AuthorizationRequest.Parameters.Request] = signedRequest,
         });
 
         // 5. /token exchange.
@@ -115,9 +115,9 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
 
@@ -125,8 +125,8 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         // byte-exact. This is the JAR + RAR invariant: signed request object preserves nested
         // claims through every layer (JWT validation -> request-object fetcher -> standard
         // authorize pipeline -> RAR per-type validator -> consent -> token emission).
-        var payload = DecodeJwtPayload(tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[IanaClaimTypes.AuthorizationDetails] as JsonArray)!;
         Assert.NotNull(claim);
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }

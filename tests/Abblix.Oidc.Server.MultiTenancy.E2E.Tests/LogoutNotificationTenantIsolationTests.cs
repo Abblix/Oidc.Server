@@ -20,7 +20,6 @@ using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -88,10 +87,10 @@ public sealed class LogoutNotificationTenantIsolationTests : IAsyncLifetime
         var asked = await Http.GetAsync($"{tenant}{EndSessionPath}?{query}", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, asked.StatusCode);
         var question = JsonNode.Parse(await asked.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
-        Assert.Equal(ErrorCodes.ConfirmationRequired, question[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.ConfirmationRequired, question[ErrorResponse.Parameters.Error]!.GetValue<string>());
 
         query[EndSessionRequest.Parameters.Confirmation] =
-            question[EndSessionRequest.Parameters.Confirmation]!.GetValue<string>();
+            question[ConfirmationRequiredResponse.Parameters.Confirmation]!.GetValue<string>();
         return await Http.GetAsync($"{tenant}{EndSessionPath}?{query}", TestContext.Current.CancellationToken);
     }
 

@@ -19,7 +19,6 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -292,9 +291,9 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
@@ -308,9 +307,9 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
     }
@@ -361,7 +360,7 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
     }
 
     private static string IdTokenOf(JsonObject tokens) =>
-        tokens[ResponseParameters.IdToken]!.GetValue<string>();
+        tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
     private static string SubjectOf(JsonObject tokens) =>
         DecodeJwtPayload(IdTokenOf(tokens))[IanaClaimTypes.Sub]!.GetValue<string>();

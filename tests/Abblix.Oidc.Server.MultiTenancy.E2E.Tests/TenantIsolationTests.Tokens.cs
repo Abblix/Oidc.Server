@@ -11,7 +11,6 @@ using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Model;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -69,7 +68,7 @@ public sealed partial class TenantIsolationTests
     public async Task ARefreshTokenOfOneTenant_IsRefusedAtTheOther()
     {
         var tokens = await TokensOfADeviceFlowAsync(Acme, $"{Scopes.OpenId} {Scopes.OfflineAccess}");
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
 
         Dictionary<string, string> Refresh() => new()
         {
@@ -81,10 +80,10 @@ public sealed partial class TenantIsolationTests
         Assert.Equal(HttpStatusCode.BadRequest, atGlobex.StatusCode);
         Assert.Equal(
             ErrorCodes.InvalidGrant,
-            (await ReadJsonAsync(atGlobex))[ResponseParameters.Error]?.GetValue<string>());
+            (await ReadJsonAsync(atGlobex))[ErrorResponse.Parameters.Error]?.GetValue<string>());
 
         var atAcme = await PostAsync(Acme, TokenPath, PairwiseClientId, Refresh());
         Assert.Equal(HttpStatusCode.OK, atAcme.StatusCode);
-        Assert.NotNull((await ReadJsonAsync(atAcme))[ResponseParameters.AccessToken]);
+        Assert.NotNull((await ReadJsonAsync(atAcme))[TokenResponse.Parameters.AccessToken]);
     }
 }

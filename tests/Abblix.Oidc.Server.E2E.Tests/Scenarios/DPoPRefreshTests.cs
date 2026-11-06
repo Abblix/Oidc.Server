@@ -15,7 +15,6 @@ using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -167,7 +166,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, refreshHttp.StatusCode);
         var body = JsonNode.Parse(await refreshHttp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidDPoPProof, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidDPoPProof, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     [Fact]
@@ -197,7 +196,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, refreshHttp.StatusCode);
         var body = JsonNode.Parse(await refreshHttp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidDPoPProof, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidDPoPProof, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>
@@ -223,7 +222,7 @@ public class DPoPRefreshTests(TestFactory factory) : DPoPTestBase(factory)
             clientSecret: clientSecret);
 
         AssertDPoPBound(initial, expectedThumbprint: proofKey.Thumbprint);
-        return initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        return initial[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
     }
 
     /// <summary>

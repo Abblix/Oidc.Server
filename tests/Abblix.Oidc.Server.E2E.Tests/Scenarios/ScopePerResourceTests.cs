@@ -68,7 +68,7 @@ public class ScopePerResourceTests(TestFactory factory) : TestBase(factory)
                 new(AuthorizationRequest.Parameters.Resource, TestConstants.ApiResource),
                 new(AuthorizationRequest.Parameters.Resource, TestConstants.OtherApiResource),
             ],
-            TokenRequest.Parameters.Code);
+            ResponseParameters.Code);
         return (code, verifier);
     }
 
@@ -100,7 +100,7 @@ public class ScopePerResourceTests(TestFactory factory) : TestBase(factory)
             discovery,
             RedeemForm(TestConstants.SingleResourceClientId, second, TestConstants.OtherApiResource));
 
-        Assert.Equal(ErrorCodes.InvalidTarget, refusal[ResponseParameters.Error]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidTarget, refusal[ErrorResponse.Parameters.Error]?.GetValue<string>());
         AssertAddressed(orders, [TestConstants.ApiResource], [Scopes.OpenId, TestConstants.ApiScope]);
         AssertAddressed(payments, [TestConstants.OtherApiResource], [Scopes.OpenId, TestConstants.OtherApiScope]);
     }
@@ -128,9 +128,9 @@ public class ScopePerResourceTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = grant.Code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = grant.Verifier,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         };
         if (resource is not null)
@@ -145,10 +145,10 @@ public class ScopePerResourceTests(TestFactory factory) : TestBase(factory)
     /// </summary>
     private static void AssertAddressed(JsonObject response, string[] resources, string[] scope)
     {
-        var payload = DecodeJwtPayload(response[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var payload = DecodeJwtPayload(response[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
 
         Assert.Equal(resources.Order(), ExtractAudiences(payload).Order());
         Assert.Equal(scope.Order(), payload[IanaClaimTypes.Scope]!.GetValue<string>().Split(' ').Order());
-        Assert.Equal(scope.Order(), response[TokenRequest.Parameters.Scope]!.GetValue<string>().Split(' ').Order());
+        Assert.Equal(scope.Order(), response[TokenResponse.Parameters.Scope]!.GetValue<string>().Split(' ').Order());
     }
 }

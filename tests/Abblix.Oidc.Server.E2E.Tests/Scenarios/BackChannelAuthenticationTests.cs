@@ -31,7 +31,6 @@ using CibaParameters = Abblix.Oidc.Server.Model.BackChannelAuthenticationRequest
 using CibaResponse = Abblix.Oidc.Server.Model.BackChannelAuthenticationSuccess.Parameters;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using RegistrationResponse = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -75,11 +74,11 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
         var body = await ReadJsonAsync(response);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.AuthorizationPending, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.AuthorizationPending, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
 
         // The half that matters: an error code alongside a usable token would be the breach this test exists
         // to catch.
-        Assert.Null(body[ResponseParameters.AccessToken]);
+        Assert.Null(body[TokenResponse.Parameters.AccessToken]);
     }
 
     [Fact]
@@ -102,8 +101,8 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
         var body = await ReadJsonAsync(response);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidGrant, body[ResponseParameters.Error]!.GetValue<string>());
-        Assert.Null(body[ResponseParameters.AccessToken]);
+        Assert.Equal(ErrorCodes.InvalidGrant, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+        Assert.Null(body[TokenResponse.Parameters.AccessToken]);
     }
 
     [Fact]
@@ -129,7 +128,7 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
 
         var body = await ReadJsonAsync(response);
         Assert.False(response.IsSuccessStatusCode, $"a hintless request must not be accepted: {body}");
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
         Assert.Null(body[CibaResponse.AuthenticationRequestId]);
     }
 
@@ -153,7 +152,7 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
 
         var body = await ReadJsonAsync(response);
         Assert.False(response.IsSuccessStatusCode, $"an unauthenticated request must not be accepted: {body}");
-        Assert.Equal(ErrorCodes.UnauthorizedClient, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.UnauthorizedClient, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
         Assert.Null(body[CibaResponse.AuthenticationRequestId]);
     }
 
@@ -177,7 +176,7 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
 
         var body = await ReadJsonAsync(response);
         Assert.False(response.IsSuccessStatusCode, $"an unknown auth_req_id must not be accepted: {body}");
-        Assert.Null(body[ResponseParameters.AccessToken]);
+        Assert.Null(body[TokenResponse.Parameters.AccessToken]);
     }
 
     [Fact]
@@ -231,11 +230,11 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
         // Token - sit beside each other with nothing tying the first to the last, and a client following
         // its own MUST to check that this claim matches the identifier it asked about cannot accept the
         // notification at all.
-        //
+        var idToken = DecodeJwtPayload(payload[BackChannelPushNotificationRequest.Parameters.IdToken]!.GetValue<string>());
+
         // Read out of the delivered ID Token rather than out of storage, because storage would prove
         // only that the value was known. Asserted as the literal claim name a client reads off the wire,
         // for the reason the refusal tests give: comparing a constant with itself lets a rename pass.
-        var idToken = DecodeJwtPayload(payload["id_token"]!.GetValue<string>());
         Assert.Equal(
             authRequestId,
             idToken["urn:openid:params:jwt:claim:auth_req_id"]!.GetValue<string>());
@@ -272,7 +271,7 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
         await CompleteAsync(host, authRequestId, ApprovedDetail);
 
         var delivered = Assert.Single(deliveries.Received);
-        var granted = ReadAuthorizationDetails(delivered.Payload["access_token"]!.GetValue<string>());
+        var granted = ReadAuthorizationDetails(delivered.Payload[BackChannelPushNotificationRequest.Parameters.AccessToken]!.GetValue<string>());
 
         var entry = Assert.Single(granted);
         Assert.Equal(TestConstants.PaymentInitiationType, entry!["type"]!.GetValue<string>());

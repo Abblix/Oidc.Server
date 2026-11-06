@@ -21,7 +21,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.WebUtilities;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -221,13 +220,13 @@ public class EssentialAcrTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
-        var idToken = tokens[ResponseParameters.IdToken]!.GetValue<string>();
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
         Assert.Equal(Loa3, DecodeJwtPayload(idToken)[IanaClaimTypes.Acr]!.GetValue<string>());
     }
 
@@ -301,7 +300,7 @@ public class EssentialAcrTests(TestFactory factory) : TestBase(factory)
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidRequest, body["error"]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>A request whose two qualifiers accept no level at all.</summary>
@@ -332,13 +331,13 @@ public class EssentialAcrTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
-        var idToken = tokens[ResponseParameters.IdToken]!.GetValue<string>();
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
         Assert.Equal(Loa3, DecodeJwtPayload(idToken)[IanaClaimTypes.Acr]!.GetValue<string>());
     }
 
@@ -406,7 +405,7 @@ public class EssentialAcrTests(TestFactory factory) : TestBase(factory)
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(response.IsSuccessStatusCode, $"pushing the request failed: {(int)response.StatusCode} {body}");
 
-        return JsonNode.Parse(body)!["request_uri"]!.GetValue<string>();
+        return JsonNode.Parse(body)![PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>();
     }
 
     private static async Task<Uri> AuthorizeForInteractionAsync(

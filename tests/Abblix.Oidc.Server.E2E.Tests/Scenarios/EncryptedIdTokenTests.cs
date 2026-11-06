@@ -14,7 +14,6 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -63,16 +62,16 @@ public class EncryptedIdTokenTests(TestFactory factory) : TestBase(factory)
         var registered = await RegisterClientAsync(httpClient, discovery, new JsonObject
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
-            ["response_types"] = new JsonArray { ResponseTypes.Code },
-            ["token_endpoint_auth_method"] = "client_secret_post",
+            [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [RegistrationMembers.TokenEndpointAuthMethod] = "client_secret_post",
             [ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseAlg] = keyManagementAlgorithm,
             [ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseEnc] = contentEncryptionAlgorithm,
             [ClientRegistrationRequest.Parameters.Jwks] =
                 JsonSerializer.SerializeToNode(new JsonWebKeySet([clientPublicJwk])),
         });
-        var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
-        var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>();
 
         var code = await AuthorizeAndExtractCodeAsync(httpClient, discovery, new Dictionary<string, string>
         {
@@ -90,13 +89,13 @@ public class EncryptedIdTokenTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
 
-        var idToken = tokenResponse[ResponseParameters.IdToken]!.GetValue<string>();
+        var idToken = tokenResponse[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
         // The ID token arrives as a JWE (five parts) declaring the registered algorithms; in Direct
         // Key Agreement mode the encrypted key is empty and the agreement travels as 'epk'.

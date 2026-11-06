@@ -74,7 +74,7 @@ public sealed class SingleTenantWithoutTheCallTests
 
         using var token = await RequestTokenAsync(http);
         Assert.Equal(HttpStatusCode.OK, token.StatusCode);
-        Assert.Equal(Host, IssuerOf((await ReadJsonAsync(token))[ResponseParameters.AccessToken]!.GetValue<string>()));
+        Assert.Equal(Host, IssuerOf((await ReadJsonAsync(token))[TokenResponse.Parameters.AccessToken]!.GetValue<string>()));
     }
 
     /// <summary>
@@ -308,7 +308,7 @@ public sealed class SingleTenantWithoutTheCallTests
             ct);
 
         Assert.Equal(HttpStatusCode.OK, token.StatusCode);
-        Assert.Equal(Host, IssuerOf((await ReadJsonAsync(token))[ResponseParameters.IdToken]!.GetValue<string>()));
+        Assert.Equal(Host, IssuerOf((await ReadJsonAsync(token))[TokenResponse.Parameters.IdToken]!.GetValue<string>()));
     }
 
     /// <summary>

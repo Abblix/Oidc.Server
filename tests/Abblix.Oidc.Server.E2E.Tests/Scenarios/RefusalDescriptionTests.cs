@@ -12,7 +12,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -44,8 +43,8 @@ public class RefusalDescriptionTests(TestFactory factory) : TestBase(factory)
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
-        var description = body[ResponseParameters.ErrorDescription]!.GetValue<string>();
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+        var description = body[ErrorResponse.Parameters.ErrorDescription]!.GetValue<string>();
         Assert.All(description, character => Assert.True(IsAllowed(character), $"U+{(int)character:X4} in '{description}'"));
         Assert.Contains(AuthorizationRequest.Parameters.UiLocales, description, StringComparison.Ordinal);
         Assert.DoesNotContain(AsEchoed(uiLocales), description, StringComparison.Ordinal);
@@ -76,7 +75,7 @@ public class RefusalDescriptionTests(TestFactory factory) : TestBase(factory)
         var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
-        var description = JsonNode.Parse(raw)![ResponseParameters.ErrorDescription]!.GetValue<string>();
+        var description = JsonNode.Parse(raw)![ErrorResponse.Parameters.ErrorDescription]!.GetValue<string>();
         Assert.All(description, character => Assert.True(IsAllowed(character), $"U+{(int)character:X4} in '{description}'"));
         Assert.Contains(parameter, description, StringComparison.Ordinal);
         Assert.DoesNotContain(AsEchoed(value), description, StringComparison.Ordinal);
@@ -103,7 +102,7 @@ public class RefusalDescriptionTests(TestFactory factory) : TestBase(factory)
         var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
-        var description = JsonNode.Parse(raw)![ResponseParameters.ErrorDescription]!.GetValue<string>();
+        var description = JsonNode.Parse(raw)![ErrorResponse.Parameters.ErrorDescription]!.GetValue<string>();
         Assert.All(description, character => Assert.True(IsAllowed(character), $"U+{(int)character:X4} in '{description}'"));
         Assert.Contains(TokenRequest.Parameters.Resource, description, StringComparison.Ordinal);
         Assert.DoesNotContain(AsEchoed(form[TokenRequest.Parameters.Resource]), description, StringComparison.Ordinal);

@@ -21,9 +21,6 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// </summary>
 public class IssuerAsWrittenTests(TestFactory factory) : TestBase(factory)
 {
-    private const string TokenEndpointIdToken = "id_token";
-    private const string TokenEndpointAccessToken = "access_token";
-
     [Fact]
     public async Task TheIssuer_IsWrittenAsGiven_InDiscoveryAndInEveryToken()
     {
@@ -35,7 +32,7 @@ public class IssuerAsWrittenTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(expected, document[ConfigurationResponse.Parameters.Issuer]!.GetValue<string>());
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, await FetchDiscoveryAsync(client));
-        foreach (var name in new[] { TokenEndpointIdToken, TokenEndpointAccessToken })
+        foreach (var name in new[] { TokenResponse.Parameters.IdToken, TokenResponse.Parameters.AccessToken })
         {
             var payload = DecodeJwtPayload(tokens[name]!.GetValue<string>());
             Assert.Equal(expected, payload[JwtClaimTypes.Issuer]!.GetValue<string>());
