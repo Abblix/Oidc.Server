@@ -29,7 +29,6 @@ using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.MinimalApi;
 using Abblix.Oidc.Server.Model;
 using ValidUserCode = Abblix.Oidc.Server.Features.DeviceAuthorization.ValidUserCode;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -239,7 +238,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
 
         var atGlobex = await PostAsync(Globex, PushPath, AcmeOnlyClientId, Push());
         Assert.Equal(HttpStatusCode.Unauthorized, atGlobex.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidClient, (await ReadJsonAsync(atGlobex))[ResponseParameters.Error]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidClient, (await ReadJsonAsync(atGlobex))[ErrorResponse.Parameters.Error]?.GetValue<string>());
     }
 
     /// <summary>
@@ -266,13 +265,13 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Created, (await PostAsync(Acme, PushPath, Push("openid " + AcmeScope))).StatusCode);
         var scopeAtGlobex = await PostAsync(Globex, PushPath, Push("openid " + AcmeScope));
-        Assert.Equal(ErrorCodes.InvalidScope, (await ReadJsonAsync(scopeAtGlobex))[ResponseParameters.Error]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidScope, (await ReadJsonAsync(scopeAtGlobex))[ErrorResponse.Parameters.Error]?.GetValue<string>());
 
         Assert.Equal(
             HttpStatusCode.Created,
             (await PostAsync(Acme, PushPath, Push("openid " + AcmeScope, AcmeResource))).StatusCode);
         var resourceAtGlobex = await PostAsync(Globex, PushPath, Push(Scopes.OpenId, AcmeResource));
-        Assert.Equal(ErrorCodes.InvalidTarget, (await ReadJsonAsync(resourceAtGlobex))[ResponseParameters.Error]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidTarget, (await ReadJsonAsync(resourceAtGlobex))[ErrorResponse.Parameters.Error]?.GetValue<string>());
     }
 
     /// <summary>
@@ -440,7 +439,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
     /// signs in approves its device.
     /// </summary>
     private async Task<string> AccessTokenOfADeviceFlowAsync(string tenant)
-        => (await TokensOfADeviceFlowAsync(tenant, Scopes.OpenId))[ResponseParameters.AccessToken]!.GetValue<string>();
+        => (await TokensOfADeviceFlowAsync(tenant, Scopes.OpenId))[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
     /// <summary>
     /// The token response the pairwise client gets at <paramref name="tenant"/> for <paramref name="scope"/> once the
@@ -500,7 +499,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
         });
         Assert.Equal(HttpStatusCode.Created, pushed.StatusCode);
-        var requestUri = (await ReadJsonAsync(pushed))[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
+        var requestUri = (await ReadJsonAsync(pushed))[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>();
 
         var query = $"/connect/authorize?client_id={ClientId}&request_uri={Uri.EscapeDataString(requestUri)}";
 
@@ -531,7 +530,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
             [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = "S256",
         });
-        var requestUri = (await ReadJsonAsync(pushed))[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
+        var requestUri = (await ReadJsonAsync(pushed))[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>();
 
         var atGlobex = await Http.GetAsync(
             Globex + $"/connect/authorize?client_id={ClientId}&request_uri={Uri.EscapeDataString(requestUri)}",
@@ -561,10 +560,10 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
         };
 
         var atGlobex = await PostAsync(Globex, TokenPath, new Dictionary<string, string>(poll));
-        Assert.Equal(ErrorCodes.InvalidGrant, (await ReadJsonAsync(atGlobex))[ResponseParameters.Error]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidGrant, (await ReadJsonAsync(atGlobex))[ErrorResponse.Parameters.Error]?.GetValue<string>());
 
         var atAcme = await PostAsync(Acme, TokenPath, new Dictionary<string, string>(poll));
-        Assert.Equal(ErrorCodes.AuthorizationPending, (await ReadJsonAsync(atAcme))[ResponseParameters.Error]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.AuthorizationPending, (await ReadJsonAsync(atAcme))[ErrorResponse.Parameters.Error]?.GetValue<string>());
     }
 
     /// <summary>
@@ -598,7 +597,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
             [TokenRequest.Parameters.DeviceCode] = deviceCode,
         });
         Assert.Equal(HttpStatusCode.OK, tokens.StatusCode);
-        var accessToken = (await ReadJsonAsync(tokens))[ResponseParameters.AccessToken]!.GetValue<string>();
+        var accessToken = (await ReadJsonAsync(tokens))[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var payload = JsonNode.Parse(Base64Url.DecodeFromChars(accessToken.Split('.')[1]))!;
         Assert.Contains(AcmeResource, payload[IanaClaimTypes.Aud]!.ToJsonString(), StringComparison.Ordinal);
     }
@@ -612,7 +611,7 @@ public sealed partial class TenantIsolationTests : IAsyncLifetime
     {
         var tokens = await TokensOfADeviceFlowAsync(Acme, $"{Scopes.OpenId} {AcmeOrdersScope}");
 
-        var accessToken = tokens[ResponseParameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var payload = JsonNode.Parse(Base64Url.DecodeFromChars(accessToken.Split('.')[1]))!;
         Assert.Equal(AcmeOrdersResource, payload[IanaClaimTypes.Aud]!.GetValue<string>());
         Assert.Contains(AcmeOrdersScope, payload[IanaClaimTypes.Scope]!.GetValue<string>().Split(' '));

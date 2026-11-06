@@ -10,12 +10,12 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -109,8 +109,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
 
         private bool _refused;
 
-        public Task<UserConsents> GetUserConsentsAsync(
-            Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession)
+        public Task<UserConsents> GetUserConsentsAsync(TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession)
             => Task.FromResult(new UserConsents
             {
                 Granted = _refused ? new ConsentDefinition([], []) : new ConsentDefinition(request.Scope, request.Resources),
@@ -221,13 +220,13 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
         var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
-            [TokenRequest.Parameters.Code] = QueryValue(location, TokenRequest.Parameters.Code)!,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.Code] = QueryValue(location, ResponseParameters.Code)!,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
-        var idToken = DecodeJwtPayload(tokens[ResponseParameters.IdToken]!.GetValue<string>());
+        var idToken = DecodeJwtPayload(tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>());
         return idToken[IanaClaimTypes.AuthTime]!.GetValue<long>();
     }
 
@@ -270,7 +269,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
 
     private static void AssertCode(Uri location)
         => Assert.False(
-            string.IsNullOrEmpty(QueryValue(location, TokenRequest.Parameters.Code)),
+            string.IsNullOrEmpty(QueryValue(location, ResponseParameters.Code)),
             $"the request went to {location} rather than back to the client with a code");
 
     /// <summary>
@@ -323,7 +322,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
         return data;
     }
 
-    public static TheoryData<RequestTransport> Transports() => new(Enum.GetValues<RequestTransport>());
+    public static TheoryData<RequestTransport> Transports() => [with(Enum.GetValues<RequestTransport>())];
 
     /// <summary>
     /// Sends the authorization request carrying <paramref name="prompt"/> the way <paramref name="transport"/> names,
@@ -349,7 +348,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
                 return (TestConstants.ConfidentialClientId, await RedirectOf(client, Authorize(
                     discovery,
                     TestConstants.ConfidentialClientId,
-                    pushed[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>())));
+                    pushed[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>())));
             }
 
             case RequestTransport.RequestObject:
@@ -422,7 +421,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
         var discovery = await FetchDiscoveryAsync(client);
         var metadata = JsonNode.Parse(await client.GetStringAsync(
             "/.well-known/openid-configuration", TestContext.Current.CancellationToken))!;
-        var listed = metadata[Abblix.Oidc.Server.Model.ConfigurationResponse.Parameters.PromptValuesSupported]!
+        var listed = metadata[ConfigurationResponse.Parameters.PromptValuesSupported]!
             .AsArray()
             .Select(value => value!.GetValue<string>())
             .ToArray();
@@ -453,7 +452,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
         var location = await ReturnFromPage(client, discovery, clientId, sentTo);
         Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
         Assert.Equal(ErrorCodes.AccessDenied, QueryValue(location, ResponseParameters.Error));
-        Assert.Equal(State, QueryValue(location, AuthorizationRequest.Parameters.State));
+        Assert.Equal(State, QueryValue(location, ResponseParameters.State));
     }
 
     /// <summary>
@@ -484,9 +483,9 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
         await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
-            [TokenRequest.Parameters.Code] = QueryValue(location, TokenRequest.Parameters.Code)!,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [TokenRequest.Parameters.Code] = QueryValue(location, ResponseParameters.Code)!,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [ClientRequest.Parameters.ClientId] = clientId,
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
     }
@@ -563,7 +562,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
 
         Assert.StartsWith(TestConstants.RedirectUri, location.OriginalString);
         Assert.Equal(ErrorCodes.InvalidRequest, QueryValue(location, ResponseParameters.Error));
-        Assert.Equal(State, QueryValue(location, AuthorizationRequest.Parameters.State));
+        Assert.Equal(State, QueryValue(location, ResponseParameters.State));
     }
 
     /// <summary>
@@ -610,7 +609,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>
@@ -988,7 +987,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>
@@ -1060,7 +1059,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>
@@ -1097,7 +1096,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
             [AuthorizationRequest.Parameters.Request] = requestObject,
         });
-        var requestUri = pushed[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
+        var requestUri = pushed[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>();
         AssertCode(await RedirectOf(client, Authorize(discovery, clientId, requestUri)));
 
         var replay = await client.GetAsync(
@@ -1123,7 +1122,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
         var pushedUri = Authorize(
             discovery,
             TestConstants.ConfidentialClientId,
-            pushed[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>());
+            pushed[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>());
 
         var sentTo = await RedirectOf(client, pushedUri);
         Assert.Equal(LoginPath, PathOf(await RedirectOf(client, pushedUri)));
@@ -1212,7 +1211,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
         return Authorize(
             discovery,
             TestConstants.ConfidentialClientId,
-            pushed[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>());
+            pushed[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>());
     }
 
     [Fact]
@@ -1258,7 +1257,7 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
             [AuthorizationRequest.Parameters.Request] = requestObject,
         });
-        return Authorize(discovery, clientId, response[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>());
+        return Authorize(discovery, clientId, response[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>());
     }
 
     /// <summary>
@@ -1291,8 +1290,8 @@ public partial class PromptReturnTripTests(TestFactory factory) : TestBase(facto
             [RegistrationMembers.PkceRequired] = pkceRequired,
             [RegistrationMembers.RequestUris] = requestUris is null ? null : new JsonArray([.. requestUris.Select(uri => (JsonNode)uri)]),
         });
-        var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
-        var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>();
 
         var now = TimeProvider.System.GetUtcNow();
         var token = new JsonWebToken

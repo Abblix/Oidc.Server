@@ -19,7 +19,6 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -50,7 +49,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
         var subject = SubjectOf(tokens);
 
         // The token works before the revocation. Without this the test would pass against a server that
@@ -59,7 +58,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         Assert.True(
             beforeRevocation.IsSuccessStatusCode,
             $"the refresh token should work before the revocation, got {(int)beforeRevocation.StatusCode}");
-        var rotated = (await ReadJsonAsync(beforeRevocation))[TokenRequest.Parameters.RefreshToken]!
+        var rotated = (await ReadJsonAsync(beforeRevocation))[TokenResponse.Parameters.RefreshToken]!
             .GetValue<string>();
 
         await RevokerOf(host).RevokeSubjectAsync(
@@ -83,7 +82,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
         var subject = SubjectOf(tokens);
 
         var anHourAgo = ClockOf(host).GetUtcNow().AddHours(-1);
@@ -107,7 +106,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
 
         await RevokerOf(host).RevokeSubjectAsync(
             TestTenant.Of(host.Services),
@@ -131,13 +130,13 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
 
         var beforeRevocation = await RefreshAsync(client, discovery, refreshToken);
         Assert.True(
             beforeRevocation.IsSuccessStatusCode,
             $"the refresh token should work before the revocation, got {(int)beforeRevocation.StatusCode}");
-        var rotated = (await ReadJsonAsync(beforeRevocation))[TokenRequest.Parameters.RefreshToken]!
+        var rotated = (await ReadJsonAsync(beforeRevocation))[TokenResponse.Parameters.RefreshToken]!
             .GetValue<string>();
 
         await RevokerOf(host).RevokeSubjectAtClientAsync(
@@ -162,7 +161,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
 
         await RevokerOf(host).RevokeSubjectAtClientAsync(
             TestTenant.Of(host.Services),
@@ -192,14 +191,14 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
-        var idToken = tokens[ResponseParameters.IdToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
         var beforeLogout = await RefreshAsync(client, discovery, refreshToken);
         Assert.True(
             beforeLogout.IsSuccessStatusCode,
             $"the refresh token should work before the logout, got {(int)beforeLogout.StatusCode}");
-        var rotated = (await ReadJsonAsync(beforeLogout))[TokenRequest.Parameters.RefreshToken]!
+        var rotated = (await ReadJsonAsync(beforeLogout))[TokenResponse.Parameters.RefreshToken]!
             .GetValue<string>();
 
         await EndSessionAsync(client, discovery, idToken);
@@ -224,8 +223,8 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
-        var idToken = tokens[ResponseParameters.IdToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
         await EndSessionAsync(client, discovery, idToken);
 
@@ -408,7 +407,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var idToken = tokens[ResponseParameters.IdToken]!.GetValue<string>();
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
         var beforeRevocation = await ExchangeIdTokenAsync(client, discovery, idToken);
         Assert.True(
@@ -466,9 +465,9 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
@@ -501,7 +500,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
 
     private static string SessionOf(JsonObject tokens)
     {
-        var payload = DecodeJwtPayload(tokens[ResponseParameters.IdToken]!.GetValue<string>());
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>());
         return payload[IanaClaimTypes.Sid]!.GetValue<string>();
     }
 
@@ -542,7 +541,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
 
     private static string SubjectOf(JsonObject tokens)
     {
-        var payload = DecodeJwtPayload(tokens[ResponseParameters.IdToken]!.GetValue<string>());
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>());
         return payload[IanaClaimTypes.Sub]!.GetValue<string>();
     }
 
@@ -563,6 +562,6 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     {
         var body = await ReadJsonAsync(response);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidGrant, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidGrant, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 }

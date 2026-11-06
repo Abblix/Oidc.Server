@@ -56,7 +56,7 @@ public class NoneResponseTypeTests(TestFactory factory) : TestBase(factory)
 
         // section 4: a successful none response carries state (and iss per RFC 9207) but no credentials.
         Assert.Equal(state, callback[ResponseParameters.State]);
-        Assert.Equal(TestConstants.Issuer, callback["iss"]);
+        Assert.Equal(TestConstants.Issuer, callback[ResponseParameters.Issuer]);
         Assert.Null(callback[ResponseParameters.Error]);
         Assert.Null(callback[ResponseParameters.Code]);
         Assert.Null(callback[ResponseParameters.AccessToken]);

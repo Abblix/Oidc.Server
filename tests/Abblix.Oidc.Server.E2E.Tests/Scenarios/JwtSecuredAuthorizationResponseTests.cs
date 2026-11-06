@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -36,13 +37,13 @@ public class JwtSecuredAuthorizationResponseTests(TestFactory factory) : TestBas
         var dcrBody = new JsonObject
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
-            ["response_types"] = new JsonArray { ResponseTypes.Code },
-            ["token_endpoint_auth_method"] = "client_secret_post",
+            [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [RegistrationMembers.TokenEndpointAuthMethod] = "client_secret_post",
         };
         var registered = await RegisterClientAsync(httpClient, discovery, dcrBody);
-        var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
-        var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>();
 
         var state = Guid.NewGuid().ToString("N");
 
@@ -69,13 +70,13 @@ public class JwtSecuredAuthorizationResponseTests(TestFactory factory) : TestBas
         // the issuer identifier does not).
         Assert.Equal(
             discovery.Issuer.AbsoluteUri.TrimEnd('/'),
-            payload["iss"]!.GetValue<string>().TrimEnd('/'));
+            payload[ResponseParameters.Issuer]!.GetValue<string>().TrimEnd('/'));
         Assert.Equal(clientId, payload["aud"]!.GetValue<string>());
         Assert.NotNull(payload["exp"]);
 
         // The authorization response parameters are inside the JWT, not on the wire.
-        Assert.Equal(state, payload[AuthorizationRequest.Parameters.State]!.GetValue<string>());
-        var code = payload[TokenRequest.Parameters.Code]!.GetValue<string>();
+        Assert.Equal(state, payload[ResponseParameters.State]!.GetValue<string>());
+        var code = payload[ResponseParameters.Code]!.GetValue<string>();
         Assert.False(string.IsNullOrEmpty(code));
 
         // The code extracted from the response JWT is a real, redeemable authorization code.
@@ -83,12 +84,12 @@ public class JwtSecuredAuthorizationResponseTests(TestFactory factory) : TestBas
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
 
-        Assert.NotNull(tokenResponse[UserInfoRequest.Parameters.AccessToken]);
+        Assert.NotNull(tokenResponse[TokenResponse.Parameters.AccessToken]);
     }
 }

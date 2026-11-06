@@ -167,8 +167,8 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
     {
         var discovery = await FetchDiscoveryAsync(client);
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
 
         using (var userInfo = new HttpRequestMessage(HttpMethod.Get, discovery.UserInfoEndpoint))
         {
@@ -183,7 +183,7 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
             (TokenRequest.Parameters.RefreshToken, refreshToken)));
 
         (await FormPostHelpers.PostFormAsync(client, discovery.RevocationEndpoint!, Confidential(
-            (RevocationRequest.Parameters.Token, refreshed[TokenRequest.Parameters.RefreshToken]!.GetValue<string>()))))
+            (RevocationRequest.Parameters.Token, refreshed[TokenResponse.Parameters.RefreshToken]!.GetValue<string>()))))
             .EnsureSuccessStatusCode();
 
         var refusal = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, Confidential(
@@ -228,7 +228,7 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
     {
         var form = new Dictionary<string, string>
         {
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         };
         foreach (var (key, value) in parameters)

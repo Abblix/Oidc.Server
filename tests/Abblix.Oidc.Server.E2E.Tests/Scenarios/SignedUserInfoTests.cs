@@ -17,7 +17,6 @@ using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -55,8 +54,8 @@ public class SignedUserInfoTests(TestFactory factory) : TestBase(factory)
         });
 
         return (
-            registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>(),
-            registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>());
+            registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>(),
+            registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>());
     }
 
     /// <summary>Runs the auth-code flow for the given client and returns its access token.</summary>
@@ -81,13 +80,13 @@ public class SignedUserInfoTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
 
-        return tokens[ResponseParameters.AccessToken]!.GetValue<string>();
+        return tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
     }
 
     private static async Task<HttpResponseMessage> CallUserInfoAsync(
@@ -166,7 +165,7 @@ public class SignedUserInfoTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(httpClient);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(httpClient, discovery);
-        var accessToken = tokens[ResponseParameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         var response = await CallUserInfoAsync(httpClient, discovery, accessToken);
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);

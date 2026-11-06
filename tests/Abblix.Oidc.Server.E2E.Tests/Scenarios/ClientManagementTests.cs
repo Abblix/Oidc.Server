@@ -60,10 +60,10 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     // Named once: the same member is written into a request and looked for in a response and in an
     // extension's view, and those three have to agree.
     /// <summary>The JSON member every refusal in this suite reads its code out of.</summary>
-    private const string ErrorMember = "error";
+    private const string ErrorMember = ErrorResponse.Parameters.Error;
 
     /// <summary>The JSON member carrying the human-readable half of a refusal.</summary>
-    private const string DescriptionMember = "error_description";
+    private const string DescriptionMember = ErrorResponse.Parameters.ErrorDescription;
 
     private const string VendorTier = "x_vendor_tier";
 
@@ -1076,7 +1076,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, read.StatusCode);
-        Assert.Equal("after-update", (await ReadJsonAsync(read))[RequestMembers.ClientName]!.GetValue<string>());
+        Assert.Equal("after-update", (await ReadJsonAsync(read))[ResponseMembers.ClientName]!.GetValue<string>());
     }
 
     [Fact]
@@ -1136,7 +1136,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             Request(HttpMethod.Get, victim.ConfigurationUri, victim.AccessToken),
             TestContext.Current.CancellationToken);
 
-        var redirectUris = (await ReadJsonAsync(read))[RequestMembers.RedirectUris]!.AsArray();
+        var redirectUris = (await ReadJsonAsync(read))[ResponseMembers.RedirectUris]!.AsArray();
         Assert.DoesNotContain(
             redirectUris,
             uri => uri!.GetValue<string>().Contains("attacker.example.com", StringComparison.Ordinal));

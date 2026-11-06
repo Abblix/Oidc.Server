@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
@@ -41,12 +42,12 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : RarTestBase(f
             TestConstants.RedirectUri, PaymentInitiationWireJson);
 
         // RFC 9396 section 7: authorization_details echoed byte-exact in the token response
-        var echoed = (tokenResponse[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
+        var echoed = (tokenResponse[TokenResponse.Parameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, echoed.ToJsonString());
 
         // Access token carries the claim byte-exact
-        var payload = DecodeJwtPayload(tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[IanaClaimTypes.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 
@@ -57,7 +58,7 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : RarTestBase(f
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, MultiEntryWireJson);
 
-        var echoed = (tokenResponse[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
+        var echoed = (tokenResponse[TokenResponse.Parameters.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(MultiEntryWireJson, echoed.ToJsonString());
         Assert.Equal(2, echoed.Count);
     }
@@ -69,8 +70,8 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : RarTestBase(f
             TestConstants.IdTokenRarClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
 
-        var idTokenPayload = DecodeJwtPayload(tokenResponse[BackChannelTokenPushRequest.Parameters.IdToken]!.GetValue<string>());
-        var claim = (idTokenPayload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
+        var idTokenPayload = DecodeJwtPayload(tokenResponse[TokenResponse.Parameters.IdToken]!.GetValue<string>());
+        var claim = (idTokenPayload[IanaClaimTypes.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 
@@ -81,8 +82,8 @@ public class RichAuthorizationRequestsTests(TestFactory factory) : RarTestBase(f
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
 
-        var idTokenPayload = DecodeJwtPayload(tokenResponse[BackChannelTokenPushRequest.Parameters.IdToken]!.GetValue<string>());
-        Assert.Null(idTokenPayload[AuthorizationRequest.Parameters.AuthorizationDetails]);
+        var idTokenPayload = DecodeJwtPayload(tokenResponse[TokenResponse.Parameters.IdToken]!.GetValue<string>());
+        Assert.Null(idTokenPayload[IanaClaimTypes.AuthorizationDetails]);
     }
 
     [Fact]

@@ -17,7 +17,6 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -35,7 +34,7 @@ public class ClientDefaultScopeTests(TestFactory factory) : TestBase(factory)
 
         var tokens = await ExchangeCodeForTokensAsync(client, discovery, Form(TestConstants.DefaultScopeClientId));
 
-        var payload = DecodeJwtPayload(tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
         Assert.Equal(Scopes.Profile, payload[IanaClaimTypes.Scope]?.GetValue<string>());
     }
 
@@ -50,7 +49,7 @@ public class ClientDefaultScopeTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
-        Assert.Equal(ErrorCodes.InvalidScope, body[ResponseParameters.Error]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidScope, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
     }
 
     /// <summary>
@@ -67,7 +66,7 @@ public class ClientDefaultScopeTests(TestFactory factory) : TestBase(factory)
 
         var tokens = await ExchangeCodeForTokensAsync(client, discovery, form);
 
-        var payload = DecodeJwtPayload(tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
         Assert.Equal(TestConstants.ApiScope, payload[IanaClaimTypes.Scope]?.GetValue<string>());
     }
 
@@ -118,13 +117,13 @@ public class ClientDefaultScopeTests(TestFactory factory) : TestBase(factory)
         using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, form);
 
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
-        Assert.Equal(ErrorCodes.InvalidClient, body[ResponseParameters.Error]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidClient, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
     }
 
     private static Dictionary<string, string> Form(string clientId) => new()
     {
         [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
-        [AuthorizationRequest.Parameters.ClientId] = clientId,
+        [ClientRequest.Parameters.ClientId] = clientId,
         [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
     };
 }

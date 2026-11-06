@@ -15,7 +15,6 @@ using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Model;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -93,7 +92,7 @@ public class ResourceOutsideTheGrantTests(TestFactory factory) : TestBase(factor
             discovery,
             RedeemForm(TestConstants.ConfidentialClientId, code, verifier).ToDictionary());
 
-        Assert.Equal([TestConstants.ApiResource], ExtractAudiences(DecodeJwtPayload(tokens[ResponseParameters.AccessToken]!.GetValue<string>())));
+        Assert.Equal([TestConstants.ApiResource], ExtractAudiences(DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>())));
     }
 
     /// <summary>
@@ -120,7 +119,7 @@ public class ResourceOutsideTheGrantTests(TestFactory factory) : TestBase(factor
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
 
         Assert.True(response.StatusCode == HttpStatusCode.OK, $"expected 200, got {(int)response.StatusCode}: {body}");
-        Assert.Equal(Scopes.Profile, body[ResponseParameters.Scope]?.GetValue<string>());
+        Assert.Equal(Scopes.Profile, body[TokenResponse.Parameters.Scope]?.GetValue<string>());
     }
 
     /// <summary>
@@ -144,7 +143,7 @@ public class ResourceOutsideTheGrantTests(TestFactory factory) : TestBase(factor
             ]);
         var body = await AssertRefusedAsync(response, ErrorCodes.InvalidTarget);
 
-        Assert.Equal(ResourceRefusals.NotGranted, body[ResponseParameters.ErrorDescription]?.GetValue<string>());
+        Assert.Equal(ResourceRefusals.NotGranted, body[ErrorResponse.Parameters.ErrorDescription]?.GetValue<string>());
     }
 
     private static async Task<HttpResponseMessage> RedeemNamingAsync(
@@ -175,8 +174,8 @@ public class ResourceOutsideTheGrantTests(TestFactory factory) : TestBase(factor
                     discovery.TokenEndpoint,
                     [
                         new(TokenRequest.Parameters.GrantType, GrantTypes.RefreshToken),
-                        new(TokenRequest.Parameters.RefreshToken, tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>()),
-                        new(AuthorizationRequest.Parameters.ClientId, TestConstants.ConfidentialClientId),
+                        new(TokenRequest.Parameters.RefreshToken, tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>()),
+                        new(ClientRequest.Parameters.ClientId, TestConstants.ConfidentialClientId),
                         new(ClientRequest.Parameters.ClientSecret, TestConstants.ConfidentialClientSecret),
                         .. resources,
                     ]);
@@ -205,9 +204,9 @@ public class ResourceOutsideTheGrantTests(TestFactory factory) : TestBase(factor
     [
         new(TokenRequest.Parameters.GrantType, GrantTypes.AuthorizationCode),
         new(TokenRequest.Parameters.Code, code),
-        new(AuthorizationRequest.Parameters.RedirectUri, TestConstants.RedirectUri),
+        new(TokenRequest.Parameters.RedirectUri, TestConstants.RedirectUri),
         new(TokenRequest.Parameters.CodeVerifier, verifier),
-        new(AuthorizationRequest.Parameters.ClientId, clientId),
+        new(ClientRequest.Parameters.ClientId, clientId),
         new(ClientRequest.Parameters.ClientSecret, TestConstants.ConfidentialClientSecret),
     ];
 
@@ -215,7 +214,7 @@ public class ResourceOutsideTheGrantTests(TestFactory factory) : TestBase(factor
     {
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"expected 400 {error}, got {(int)response.StatusCode}: {body}");
-        Assert.Equal(error, body[ResponseParameters.Error]?.GetValue<string>());
+        Assert.Equal(error, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
         return body;
     }
 }

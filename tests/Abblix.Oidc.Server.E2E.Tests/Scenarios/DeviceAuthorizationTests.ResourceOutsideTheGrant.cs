@@ -19,7 +19,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DeviceRequest = Abblix.Oidc.Server.Model.DeviceAuthorizationRequest;
 using DeviceResponse = Abblix.Oidc.Server.Model.DeviceAuthorizationResponse;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -81,6 +80,6 @@ public partial class DeviceAuthorizationTests
 
         var body = await ReadJsonAsync(response);
         await AssertRefusedAsync(response, ErrorCodes.InvalidTarget);
-        Assert.Equal(ResourceRefusals.NotGranted, body[ResponseParameters.ErrorDescription]?.GetValue<string>());
+        Assert.Equal(ResourceRefusals.NotGranted, body[ErrorResponse.Parameters.ErrorDescription]?.GetValue<string>());
     }
 }

@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using CorePushedAuthorizationResponse =
     Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces.PushedAuthorizationResponse;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.MinimalApi.UnitTests;
 
@@ -98,6 +97,6 @@ public class PushedAuthorizationResponseFormatterTests
         Assert.False(
             result.Headers.ContainsKey(Microsoft.Net.Http.Headers.HeaderNames.Location),
             "a pushed authorization error must be answered to the caller, never redirected to a browser");
-        Assert.Contains(ResponseParameters.Error, result.Body);
+        Assert.Contains(ErrorResponse.Parameters.Error, result.Body);
     }
 }

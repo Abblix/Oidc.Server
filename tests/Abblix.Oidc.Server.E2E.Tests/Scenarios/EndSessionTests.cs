@@ -25,7 +25,6 @@ using Xunit;
 using EndSessionParameters = Abblix.Oidc.Server.Model.EndSessionRequest.Parameters;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using RegistrationResponseMembers = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -86,7 +85,7 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         Assert.Null(response.Headers.Location);
 
         var body = await ReadJsonAsync(response);
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>
@@ -108,7 +107,7 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = await ReadJsonAsync(response);
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     [Fact]
@@ -195,7 +194,7 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         });
         var body = await ReadJsonAsync(replayed);
         Assert.Equal(HttpStatusCode.BadRequest, replayed.StatusCode);
-        Assert.Equal(ErrorCodes.ConfirmationRequired, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.ConfirmationRequired, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     [Fact]
@@ -216,7 +215,7 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
 
         var body = await ReadJsonAsync(response);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.ConfirmationRequired, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.ConfirmationRequired, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     [Fact]
@@ -370,7 +369,7 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var idToken = tokens[IdentityTokenName]!.GetValue<string>();
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
         // No client_id: the endpoint has to take it from the hint's audience.
         var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
@@ -383,8 +382,6 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
             response.StatusCode is HttpStatusCode.NoContent or HttpStatusCode.Redirect,
             $"/end_session refused a valid id_token_hint: {(int)response.StatusCode} {body}");
     }
-
-    private const string IdentityTokenName = "id_token";
 
     /// <summary>
     /// Signs a client with a front-channel logout address in to the session and logs the session out with the
@@ -476,9 +473,9 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         var body = await ReadJsonAsync(asked);
 
         Assert.Equal(HttpStatusCode.BadRequest, asked.StatusCode);
-        Assert.Equal(ErrorCodes.ConfirmationRequired, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.ConfirmationRequired, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
 
-        return body[EndSessionParameters.Confirmation]!.GetValue<string>();
+        return body[ConfirmationRequiredResponse.Parameters.Confirmation]!.GetValue<string>();
     }
 
     private static async Task<HttpResponseMessage> EndSessionAsync(

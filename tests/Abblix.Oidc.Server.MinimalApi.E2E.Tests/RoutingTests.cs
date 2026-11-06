@@ -24,7 +24,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Abblix.Oidc.Server.E2E.Tests;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
@@ -137,7 +136,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         var response = await client.GetAsync(OidcFlows.BuildQuery(
             OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), new Dictionary<string, string>
             {
-                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
                 [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
                 [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
                 [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
@@ -150,7 +149,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         Assert.Equal(MediaTypeNames.Application.Json, response.Content.Headers.ContentType?.MediaType);
         var body = JsonNode.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     [Fact]
@@ -216,7 +215,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = JsonNode.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        var registrationClientUri = body["registration_client_uri"]!.GetValue<string>();
+        var registrationClientUri = body[ClientRegistrationResponse.Parameters.RegistrationClientUri]!.GetValue<string>();
 
         Assert.StartsWith("/oauth/connect/register/", new Uri(registrationClientUri).AbsolutePath);
     }

@@ -34,7 +34,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
 {
     // The claim the server names the tenant under, which this project cannot reference
     private const string TenantClaim = "abblix_tenant";
-    private const string ErrorMember = "error";
+    private const string ErrorMember = ErrorResponse.Parameters.Error;
 
     private static readonly IServiceProvider JwtServices = BuildJwtServices();
 
@@ -154,7 +154,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
         var (client, discovery, tokens) = await GenuineAsync();
 
         var (status, body) = await RefreshAsync(client, discovery, RefreshTokenOf(tokens));
-        var accessToken = body![UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = body![TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var introspected = await IntrospectAsync(client, discovery, accessToken, TestConstants.ConfidentialClientId);
 
         Assert.Equal(HttpStatusCode.OK, status);
@@ -231,7 +231,7 @@ public class RefreshTokenTenantTests(TestFactory factory) : TestBase(factory)
     }
 
     private static string RefreshTokenOf(JsonObject tokens)
-        => tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        => tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
 
     private Task<string> WithoutTenantAsync(JsonObject tokens)
         => ResignAsync(RefreshTokenOf(tokens), payload => payload.Remove(TenantClaim));

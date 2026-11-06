@@ -123,7 +123,7 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
             tenant + "/connect/par",
             new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                [ClientRequest.Parameters.ClientId] = ClientId,
+                [AuthorizationRequest.Parameters.ClientId] = ClientId,
                 [ClientRequest.Parameters.ClientSecret] = ClientSecret,
                 [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
                 [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,

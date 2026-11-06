@@ -148,7 +148,7 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
 
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
         Assert.True(response.IsSuccessStatusCode, $"backchannel authentication should start: {body}");
-        return body["auth_req_id"]!.GetValue<string>();
+        return body[BackChannelAuthenticationSuccess.Parameters.AuthenticationRequestId]!.GetValue<string>();
     }
 
     /// <summary>
@@ -211,8 +211,8 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
 
         var delivery = Assert.Single(_deliveries.Received);
         Assert.Equal(NotificationEndpointOf("acme"), delivery.Endpoint);
-        Assert.False(string.IsNullOrEmpty(delivery.Payload["access_token"]?.GetValue<string>()));
-        Assert.Null(delivery.Payload["error"]);
+        Assert.False(string.IsNullOrEmpty(delivery.Payload[BackChannelPushNotificationRequest.Parameters.AccessToken]?.GetValue<string>()));
+        Assert.Null(delivery.Payload[BackChannelPushErrorNotificationRequest.Parameters.Error]);
         Assert.Equal([acme.Id], _userInfo.AskedAt);
     }
 
@@ -230,7 +230,7 @@ public sealed class CibaTenantIsolationTests : IAsyncLifetime
 
         var delivery = Assert.Single(_deliveries.Received);
         Assert.Equal(NotificationEndpointOf("acme"), delivery.Endpoint);
-        Assert.False(string.IsNullOrEmpty(delivery.Payload["id_token"]?.GetValue<string>()));
+        Assert.False(string.IsNullOrEmpty(delivery.Payload[BackChannelPushNotificationRequest.Parameters.IdToken]?.GetValue<string>()));
         Assert.Equal([acme.Id], _userInfo.AskedAt);
     }
 

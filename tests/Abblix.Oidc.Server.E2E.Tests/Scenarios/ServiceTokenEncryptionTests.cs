@@ -44,7 +44,7 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         Assert.Equal(5, SegmentCount(accessToken));
 
@@ -72,8 +72,8 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
 
         Assert.Equal(3, SegmentCount(accessToken));
         Assert.Equal(5, SegmentCount(refreshToken));
@@ -86,7 +86,7 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
-        Assert.NotNull(refreshed[UserInfoRequest.Parameters.AccessToken]);
+        Assert.NotNull(refreshed[TokenResponse.Parameters.AccessToken]);
     }
 
     /// <summary>

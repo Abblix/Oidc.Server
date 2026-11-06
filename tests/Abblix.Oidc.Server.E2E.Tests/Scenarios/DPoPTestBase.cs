@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Model;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -73,7 +72,7 @@ public abstract class DPoPTestBase(TestFactory factory) : TestBase(factory)
             $"/token unexpectedly succeeded: {await tokenResponse.Content.ReadAsStringAsync()}");
         Assert.Equal(HttpStatusCode.BadRequest, tokenResponse.StatusCode);
         var body = JsonNode.Parse(await tokenResponse.Content.ReadAsStringAsync())!.AsObject();
-        return body[ResponseParameters.Error]!.GetValue<string>();
+        return body[ErrorResponse.Parameters.Error]!.GetValue<string>();
     }
 
     /// <summary>
@@ -97,7 +96,7 @@ public abstract class DPoPTestBase(TestFactory factory) : TestBase(factory)
         Assert.True(parResponse.IsSuccessStatusCode,
             $"PAR failed: {(int)parResponse.StatusCode} {await parResponse.Content.ReadAsStringAsync()}");
         var parBody = JsonNode.Parse(await parResponse.Content.ReadAsStringAsync())!.AsObject();
-        var requestUri = parBody[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
+        var requestUri = parBody[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>();
 
         var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
         {
@@ -157,11 +156,11 @@ public abstract class DPoPTestBase(TestFactory factory) : TestBase(factory)
 
     protected static void AssertDPoPBound(JsonObject tokenResponse, string expectedThumbprint)
     {
-        var tokenType = tokenResponse[BackChannelTokenPushRequest.Parameters.TokenType]!.GetValue<string>();
+        var tokenType = tokenResponse[TokenResponse.Parameters.TokenType]!.GetValue<string>();
         Assert.Equal(TokenTypes.DPoP, tokenType);
 
         // RFC 9449 section 6: the issued access token carries cnf.jkt = the proof key's JWK thumbprint.
-        var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var payload = DecodeJwtPayload(accessToken);
 
         var cnf = payload["cnf"]?.AsObject();
@@ -173,10 +172,10 @@ public abstract class DPoPTestBase(TestFactory factory) : TestBase(factory)
 
     protected static void AssertBearer(JsonObject tokenResponse)
     {
-        var tokenType = tokenResponse[BackChannelTokenPushRequest.Parameters.TokenType]!.GetValue<string>();
+        var tokenType = tokenResponse[TokenResponse.Parameters.TokenType]!.GetValue<string>();
         Assert.Equal(TokenTypes.Bearer, tokenType);
 
-        var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var payload = DecodeJwtPayload(accessToken);
 
         Assert.Null(payload["cnf"]);

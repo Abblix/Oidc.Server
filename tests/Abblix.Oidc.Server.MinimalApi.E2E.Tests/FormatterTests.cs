@@ -54,7 +54,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
             OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint),
             new Dictionary<string, string>
             {
-                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
                 [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
                 [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
                 [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
@@ -80,7 +80,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         var code = payload[ResponseParameters.Code]!.GetValue<string>();
         var token = await OidcFlows.ExchangeCodeAsync(
             client, discovery, code, verifier, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret);
-        Assert.NotNull(token[ResponseParameters.AccessToken]);
+        Assert.NotNull(token[TokenResponse.Parameters.AccessToken]);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         var response = await client.GetAsync(OidcFlows.BuildQuery(
             OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), new Dictionary<string, string>
             {
-                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
                 [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
                 [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
                 [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
@@ -184,11 +184,11 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
             TestContext.Current.CancellationToken);
         var registered = JsonNode.Parse(
             await registerResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        var clientId = registered[ClientRequest.Parameters.ClientId]!.GetValue<string>();
-        var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>();
 
         var accessToken = (await client.AuthCodeTokensViaParAsync(discovery, clientId, clientSecret))
-            [ResponseParameters.AccessToken]!.GetValue<string>();
+            [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var introspectionEndpoint = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.IntrospectionEndpoint);
 
         // The +jwt media type yields a 3-segment signed JWT carried under that content type.

@@ -76,8 +76,8 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
 
         var tokens = await ExchangeAsync(client, discovery, clientId, code, verifier);
 
-        Assert.NotNull(tokens[UserInfoRequest.Parameters.AccessToken]);
-        Assert.Null(tokens[TokenRequest.Parameters.RefreshToken]);
+        Assert.NotNull(tokens[TokenResponse.Parameters.AccessToken]);
+        Assert.Null(tokens[TokenResponse.Parameters.RefreshToken]);
     }
 
     /// <summary>
@@ -114,12 +114,12 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
                 [AuthorizationRequest.Parameters.RequestUri] =
                     QueryValue(page, AuthorizationRequest.Parameters.RequestUri)!,
             }));
-        var code = QueryValue(back, TokenRequest.Parameters.Code);
+        var code = QueryValue(back, ResponseParameters.Code);
         Assert.NotNull(code);
 
         var tokens = await ExchangeAsync(client, discovery, clientId, code, verifier);
 
-        Assert.NotNull(tokens[TokenRequest.Parameters.RefreshToken]);
+        Assert.NotNull(tokens[TokenResponse.Parameters.RefreshToken]);
     }
 
     /// <summary>
@@ -170,7 +170,7 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var error = await response.Content.ReadFromJsonAsync<JsonObject>(TestContext.Current.CancellationToken);
-        Assert.Equal(ErrorCodes.InvalidClientMetadata, error?[ResponseParameters.Error]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, error?[ErrorResponse.Parameters.Error]?.GetValue<string>());
     }
 
     private static JsonObject PublicClient() => new()
@@ -194,9 +194,9 @@ public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
         });
 
     /// <summary>

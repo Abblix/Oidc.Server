@@ -12,7 +12,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -42,7 +41,7 @@ public class FormParameterReadingTests(TestFactory factory) : TestBase(factory)
         var (status, body) = await PostTokenAsync([new(name, value), new(name, value)]);
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>
@@ -57,7 +56,7 @@ public class FormParameterReadingTests(TestFactory factory) : TestBase(factory)
             [new(TokenRequest.Parameters.Resource, first), new(TokenRequest.Parameters.Resource, second)],
             withResource: false);
 
-        Assert.Equal(ErrorCodes.InvalidTarget, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidTarget, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>
@@ -92,7 +91,7 @@ public class FormParameterReadingTests(TestFactory factory) : TestBase(factory)
             [.. Enumerable.Range(0, 1100).Select(index => new KeyValuePair<string, string>($"extra{index}", "x"))]);
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     [Fact]
@@ -115,7 +114,7 @@ public class FormParameterReadingTests(TestFactory factory) : TestBase(factory)
         var (_, challenge) = GeneratePkcePair();
         KeyValuePair<string, string>[] form =
         [
-            new(ClientRequest.Parameters.ClientId, TestConstants.ConfidentialClientId),
+            new(AuthorizationRequest.Parameters.ClientId, TestConstants.ConfidentialClientId),
             new(ClientRequest.Parameters.ClientSecret, TestConstants.ConfidentialClientSecret),
             new(AuthorizationRequest.Parameters.ResponseType, ResponseTypes.Code),
             new(AuthorizationRequest.Parameters.RedirectUri, TestConstants.RedirectUri),
@@ -141,7 +140,7 @@ public class FormParameterReadingTests(TestFactory factory) : TestBase(factory)
             stateInTheQuery.IsSuccessStatusCode,
             await stateInTheQuery.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidRequest, (await ReadJsonAsync(refused))[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, (await ReadJsonAsync(refused))[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     private Task<(HttpStatusCode Status, JsonObject Body)> PostTokenAsync(

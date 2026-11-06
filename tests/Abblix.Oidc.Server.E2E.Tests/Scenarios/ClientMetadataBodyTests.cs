@@ -16,7 +16,7 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Xunit;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using ResponseMembers = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
+using ErrorMembers = Abblix.Oidc.Server.Model.ErrorResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -109,9 +109,9 @@ public class ClientMetadataBodyTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(MediaTypeNames.Application.Json, response.Content.Headers.ContentType?.MediaType);
 
         var members = JsonNode.Parse(raw)!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidClientMetadata, members[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, members[ErrorMembers.Error]!.GetValue<string>());
 
-        var description = members[ResponseParameters.ErrorDescription]!.GetValue<string>();
+        var description = members[ErrorMembers.ErrorDescription]!.GetValue<string>();
         Assert.All(description, character => Assert.True(
             RefusalDescriptionTests.IsAllowed(character), $"U+{(int)character:X4} in '{description}'"));
         Assert.DoesNotContain(nameof(System), description, StringComparison.Ordinal);

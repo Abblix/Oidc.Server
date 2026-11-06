@@ -23,7 +23,6 @@ using Xunit;
 #if !MINIMAL_API_TRANSPORT
 using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 #endif
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -121,7 +120,7 @@ public class LibraryRoutesTests(TestFactory factory) : TestBase(factory)
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         Assert.True(response.StatusCode == HttpStatusCode.OK, body);
-        Assert.NotNull(JsonNode.Parse(body)![ResponseParameters.AccessToken]);
+        Assert.NotNull(JsonNode.Parse(body)![TokenResponse.Parameters.AccessToken]);
     }
 
 #if !MINIMAL_API_TRANSPORT

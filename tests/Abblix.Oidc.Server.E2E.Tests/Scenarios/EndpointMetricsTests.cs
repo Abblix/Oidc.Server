@@ -157,7 +157,7 @@ public sealed class EndpointMetricsTests(TestFactory factory) : TestBase(factory
     {
         var discovery = await FetchDiscoveryAsync(client);
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         var refusal = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
         {

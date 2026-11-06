@@ -97,9 +97,9 @@ public class RequestObjectFetcherTests
     // RFC 9101 section 6.3 processing can be exercised where parameter names line up with the object's claims.
     private record JarTestRequest
     {
-        [JsonPropertyName("client_id")] public string? ClientId { get; init; }
-        [JsonPropertyName("state")] public string? State { get; init; }
-        [JsonPropertyName("request")] public string? Request { get; init; }
+        [JsonPropertyName(RequestParameters.ClientId)] public string? ClientId { get; init; }
+        [JsonPropertyName(RequestParameters.State)] public string? State { get; init; }
+        [JsonPropertyName(RequestParameters.Request)] public string? Request { get; init; }
     }
 
     /// <summary>
@@ -718,10 +718,10 @@ public class RequestObjectFetcherTests
         var payload = new JsonObject
         {
             [RequestParameters.ClientId] = TestConstants.DefaultClientId,
-            ["redirect_uri"] = "https://new.example.com/callback",
+            [RequestParameters.RedirectUri] = "https://new.example.com/callback",
             [RequestParameters.State] = "complex_state_123",
-            ["nonce"] = "nonce_value",
-            ["response_type"] = "code"
+            [RequestParameters.Nonce] = "nonce_value",
+            [RequestParameters.ResponseType] = "code"
         };
         var token = new JsonWebToken
         {

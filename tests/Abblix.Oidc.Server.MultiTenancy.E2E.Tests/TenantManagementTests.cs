@@ -25,7 +25,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Abblix.Oidc.Server.Features.Consents;
 
 
@@ -137,7 +136,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
 
     private static async Task<string> IssuerOfTheAccessTokenAsync(HttpResponseMessage response)
     {
-        var accessToken = (await ReadJsonAsync(response))[ResponseParameters.AccessToken]!.GetValue<string>();
+        var accessToken = (await ReadJsonAsync(response))[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var payload = JsonNode.Parse(Base64Url.DecodeFromChars(accessToken.Split('.')[1]))!;
         return payload[JwtClaimTypes.Issuer]!.GetValue<string>();
     }
@@ -186,7 +185,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, dropped.StatusCode);
         Assert.Equal(
             ErrorCodes.InvalidClient,
-            (await ReadJsonAsync(dropped))[ResponseParameters.Error]?.GetValue<string>());
+            (await ReadJsonAsync(dropped))[ErrorResponse.Parameters.Error]?.GetValue<string>());
 
         var gained = await RequestTokenAsync(Acme, AcmeNewClient);
         Assert.Equal(HttpStatusCode.OK, gained.StatusCode);
