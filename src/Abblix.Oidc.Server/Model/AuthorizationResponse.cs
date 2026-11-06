@@ -8,6 +8,7 @@
 
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
+using Parameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.Model;
 
@@ -20,22 +21,6 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 public record AuthorizationResponse
 {
-    private static class Parameters
-    {
-        public const string State = "state";
-        public const string Code = "code";
-        public const string TokenType = "token_type";
-        public const string AccessToken = "access_token";
-        public const string ExpiresIn = "expires_in";
-        public const string IdToken = "id_token";
-        public const string Error = "error";
-        public const string ErrorDescription = "error_description";
-        public const string ErrorUri = "error_uri";
-        public const string Scope = "scope";
-        public const string SessionState = "session_state";
-        public const string Issuer = "iss";
-        public const string Response = "response";
-    }
 
     /// <summary>The error code when the authorization request failed.</summary>
     [JsonPropertyName(Parameters.Error)]
