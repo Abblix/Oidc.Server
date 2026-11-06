@@ -41,6 +41,8 @@ on:
       - '**/*.slnx'
       - '**/*.sln'
       - 'NuGet.config'
+      # The SDK it names decides which framework the packages are compiled against, so a new SDK is a new build.
+      - 'global.json'
       # The analyzer package carries rule data in files none of the patterns above match - the banned
       # member list and its severity - and every Abblix repository takes that data from this feed.
       - 'src/Abblix.Analyzers/**'
