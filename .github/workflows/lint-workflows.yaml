@@ -16,7 +16,9 @@ permissions:
 
 concurrency:
   group: lint-workflows-${{ github.ref }}
-  cancel-in-progress: true
+  # A pull request's stale run is cancelled by its next push; a run on master or develop never is, since it
+  # is the verdict on that commit and cancelling it would hide a red result behind the next push.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   no-inline-secrets:
