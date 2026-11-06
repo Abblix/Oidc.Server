@@ -41,7 +41,8 @@ public class BackChannelPushErrorNotificationRequestTests
 
         // Literals on purpose: this test holds the member names as CIBA Core 1.0 section 12 spells them. Read through
         // BackChannelPushErrorNotificationRequest.Parameters, the same constants the payload is written with, the
-        // test would compare a constant with itself, and renaming one would break every client while this stays green
+        // test would compare a constant with itself, and changing one's value would break every client while this
+        // stays green
         Assert.Equal(AuthReqId, root.GetProperty("auth_req_id").GetString());
         Assert.Equal(ErrorCodes.AccessDenied, root.GetProperty("error").GetString());
         Assert.Equal(
