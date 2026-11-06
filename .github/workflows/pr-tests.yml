@@ -49,8 +49,12 @@ jobs:
           while IFS= read -r -d '' file; do
             # Written as what does NOT need the build and the tests, so a folder added later runs them. Markdown
             # elsewhere is not on it: the tests compile the READMEs and the analyzers read their release notes.
+            # Nothing the build or the tests read lives under .github/, so the suite says nothing about a change
+            # there - except to the three workflows that RUN the suite, which this pull request is the only
+            # place to execute. The workflow lints check the rest for syntax and shell, never by running it.
             case "$file" in
-              docs/* | .github/ISSUE_TEMPLATE/*) ;;
+              .github/workflows/pr-tests.yml | .github/workflows/test-shards.yml | .github/workflows/discover-test-projects.yml) code=true ;;
+              docs/* | .github/*) ;;
               *) code=true ;;
             esac
           done < "$RUNNER_TEMP/changed"
