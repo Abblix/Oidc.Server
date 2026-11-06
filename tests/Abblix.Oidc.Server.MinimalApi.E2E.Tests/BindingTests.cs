@@ -195,7 +195,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
             [ClientRegistrationRequest.Parameters.ClientName] = "Renamed Client",
         };
         if (registered[ClientRegistrationResponse.Parameters.ClientSecret]?.GetValue<string>() is { } secret)
-            updateBody[ClientRequest.Parameters.ClientSecret] = secret;
+            updateBody[ClientRegistrationRequest.Parameters.ClientSecret] = secret;
         var update = await SendWithBearerAsync(
             client, HttpMethod.Put, registrationClientUri, registrationAccessToken, updateBody);
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);

@@ -731,6 +731,10 @@ public record ClientRegistrationRequest
         /// may accept or ignore.</summary>
         public const string ClientId = "client_id";
 
+        /// <summary>The <c>client_secret</c> a client update request carries when the server issued one
+        /// (RFC 7592 section 2.2); the update keeps the issued secret whatever this member says.</summary>
+        public const string ClientSecret = "client_secret";
+
         /// <summary>The <c>client_name</c> registration parameter providing a human-readable display name
         /// shown to end-users on consent screens.</summary>
         public const string ClientName = "client_name";
