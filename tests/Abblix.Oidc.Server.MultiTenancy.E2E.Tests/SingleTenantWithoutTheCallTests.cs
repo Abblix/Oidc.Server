@@ -179,7 +179,9 @@ public sealed class SingleTenantWithoutTheCallTests
             {
                 string? inScope;
                 using (TenantScope.Enter(globex))
+                {
                     inScope = accessor.Current?.Tenant.Id;
+                }
 
                 return Results.Text($"{inScope}{Separator}{accessor.Current?.Tenant.Id}");
             }));
