@@ -18,7 +18,8 @@ namespace Abblix.Oidc.Server.UnitTests.Model;
 /// <summary>
 /// Every other test reads these responses through the same constants the server writes them with, so a changed
 /// constant would pass the whole suite while every client stopped finding the member. These tests hold the names
-/// as the specifications spell them, which is why they are literals here and nowhere else.
+/// as the specifications and the end-session request spell them, which is why, for these responses, they are
+/// literals here and nowhere else.
 /// </summary>
 public class ResponseMemberNamesTests
 {
