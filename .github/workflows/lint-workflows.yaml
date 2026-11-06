@@ -5,8 +5,8 @@ on:
   # pull request targeting one. A path filter here made them required-but-absent for any PR outside
   # .github/, and a missing check can never be satisfied - the only way to merge was an admin bypass,
   # on every such PR. A required check has to be one CI can actually produce.
-  # A release branch too: a pull request there changing only .github/ skips the tests, so these lints are its
-  # only check.
+  # A release branch too: a pull request there changing only .github/, outside the workflows that run the suite,
+  # skips the tests, so these lints are its only check.
   pull_request:
     branches: [master, develop, "release/**"]
   push:
