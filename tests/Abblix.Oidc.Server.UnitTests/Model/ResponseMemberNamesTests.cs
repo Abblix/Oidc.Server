@@ -30,7 +30,7 @@ public class ResponseMemberNamesTests
         {
             AccessToken = "access",
             TokenType = TokenTypes.Bearer,
-            IssuedTokenType = new Uri("urn:ietf:params:oauth:token-type:access_token"),
+            IssuedTokenType = new Uri(TokenExchangeTokenTypes.AccessToken),
             ExpiresIn = TimeSpan.FromMinutes(5),
             RefreshToken = "refresh",
             Scope = [Scopes.OpenId],
@@ -51,7 +51,7 @@ public class ResponseMemberNamesTests
     {
         Assert.Equal(
             ["error", "error_description"],
-            MemberNames(new ErrorResponse(ErrorCodes.InvalidRequest,"description")));
+            MemberNames(new ErrorResponse(ErrorCodes.InvalidRequest, "description")));
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class ResponseMemberNamesTests
         Assert.Equal(EndSessionRequest.Parameters.Confirmation, ConfirmationRequiredResponse.Parameters.Confirmation);
         Assert.Equal(
             ["confirmation", "error", "error_description"],
-            MemberNames(new ConfirmationRequiredResponse(ErrorCodes.ConfirmationRequired,"description", "value")));
+            MemberNames(new ConfirmationRequiredResponse(ErrorCodes.ConfirmationRequired, "description", "value")));
     }
 
     private static string[] MemberNames<T>(T response)

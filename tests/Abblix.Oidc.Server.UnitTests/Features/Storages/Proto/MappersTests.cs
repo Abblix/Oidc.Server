@@ -689,7 +689,7 @@ public class MappersTests
             State = "state-xyz",
             ResponseMode = ResponseModes.FormPost,
             Nonce = "nonce-abc",
-            Display = "popup",
+            Display = DisplayModes.Popup,
             Prompt = [Prompts.Login, Prompts.Consent],
             MaxAge = TimeSpan.FromMinutes(15),
             IdTokenHint = "eyJhbGc...",
@@ -697,7 +697,7 @@ public class MappersTests
             AcrValues = ["urn:mace:incommon:iap:silver"],
             CodeChallenge = "challenge",
             CodeChallengeMethod = CodeChallengeMethods.S256,
-            Request ="eyJhbGc...",
+            Request = "eyJhbGc...",
             RequestUri = new Uri("https://example.com/request.jwt"),
             Resources = [new Uri("https://api.example.com")],
         };
@@ -714,7 +714,7 @@ public class MappersTests
         Assert.Equal("state-xyz", proto.State);
         Assert.Equal(ResponseModes.FormPost, proto.ResponseMode);
         Assert.Equal("nonce-abc", proto.Nonce);
-        Assert.Equal("popup", proto.Display);
+        Assert.Equal(DisplayModes.Popup, proto.Display);
         Assert.Equal("login consent", proto.Prompt);
         Assert.NotNull(proto.MaxAge);
         Assert.Equal("eyJhbGc...", proto.IdTokenHint);

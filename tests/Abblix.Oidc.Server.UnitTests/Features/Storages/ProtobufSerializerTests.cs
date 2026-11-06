@@ -433,7 +433,7 @@ public class ProtobufSerializerTests
             State = "state-xyz",
             ResponseMode = ResponseModes.Query,
             Nonce = "nonce-abc",
-            Display = "page",
+            Display = DisplayModes.Page,
             Prompt = [Prompts.Consent],
             MaxAge = TimeSpan.FromMinutes(30),
             UiLocales = [new CultureInfo("en-US"), new CultureInfo("fr-FR")],

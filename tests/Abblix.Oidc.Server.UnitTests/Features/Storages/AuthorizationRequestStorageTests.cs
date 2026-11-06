@@ -78,7 +78,7 @@ public class AuthorizationRequestStorageTests
             State = "state_xyz",
             ResponseMode = ResponseModes.FormPost,
             Nonce = "nonce_abc",
-            Display = "page",
+            Display = DisplayModes.Page,
             Prompt = [Prompts.Consent],
             MaxAge = TimeSpan.FromHours(2),
             UiLocales = [CultureInfo.GetCultureInfo("en-US"), CultureInfo.GetCultureInfo("fr-FR")],
@@ -86,7 +86,7 @@ public class AuthorizationRequestStorageTests
             LoginHint = "user@example.com",
             AcrValues = ["urn:mace:incommon:iap:silver"],
             CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
-            CodeChallengeMethod = "S256",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
         };
     }
 
