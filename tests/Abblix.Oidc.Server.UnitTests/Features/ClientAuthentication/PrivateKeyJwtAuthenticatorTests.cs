@@ -565,10 +565,10 @@ public class PrivateKeyJwtAuthenticatorTests
 
     /// <summary>
     /// RFC 10070 section 4, case B: the authorization server "MUST reject any JWT that does not contain its
-    /// issuer identifier as its sole audience value", and the token endpoint URL "MUST NOT be used as an
-    /// audience value". The rule is the specification's own, so it holds whatever profile governs the client;
-    /// an issuer named beside another recipient is refused too, or an assertion minted for that recipient
-    /// could be replayed here.
+    /// issuer identifier as its sole audience value", and "the token endpoint URL of the authorization server
+    /// MUST NOT be used as an audience value". The rule is the specification's own, so it holds whatever
+    /// profile governs the client. An issuer named beside another recipient is refused too, or an assertion
+    /// minted for that recipient could be replayed here.
     /// </summary>
     [Theory]
     [MemberData(nameof(AudiencesOtherThanTheIssuerAlone))]
@@ -613,7 +613,67 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// The issuer alone is accepted under every profile, which keeps the refusals in
+    /// A member that is not a string still counts as an audience value, so the issuer beside one is not the
+    /// sole value RFC 10070 section 4 requires, whatever the profile.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None)]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    public async Task AssertionAudienceWithAMemberThatIsNotAString_ShouldReturnNull(ClientSecurityProfile profile)
+    {
+        var (authenticator, mocks) = CreateAuthenticator();
+        var clientInfo = CreateClientInfo(ClientId);
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "audience-with-a-number",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+        token.Payload.Json[JwtClaimTypes.Audience] = new JsonArray(IssuerIdentifier, 42);
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// RFC 10070 section 4 admits the issuer as the one member of an array, while FAPI 2.0 section 5.3.2.1 has a
+    /// server held to the profile "only accept its issuer identifier value (as defined in [RFC8414]) as a string in
+    /// the aud claim received in client authentication assertions".
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, false)]
+    public async Task AssertionAudienceAsAnArrayOfTheIssuer_IsAcceptedOutsideFapi2Only(
+        ClientSecurityProfile profile, bool accepted)
+    {
+        var (authenticator, mocks) = CreateAuthenticator();
+        var clientInfo = CreateClientInfo(ClientId);
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "audience-as-an-array",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+        token.Payload.Json[JwtClaimTypes.Audience] = new JsonArray(IssuerIdentifier);
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+
+        Assert.Equal(accepted, result is not null);
+    }
+
+    /// <summary>
+    /// The issuer alone, as a string, is accepted under every profile, which keeps the refusals in
     /// <see cref="AssertionAudienceIsNotTheIssuerAlone_ShouldReturnNull"/> from being a check that refuses
     /// every assertion.
     /// </summary>

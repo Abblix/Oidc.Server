@@ -90,8 +90,8 @@ partial class JwtAssertionAuthenticatorBase
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotTheIssuerAlone,
         Level = LogLevel.Warning,
-        Message = "The client assertion for {ClientId} carries {Audiences} where the profile "
-                  + "governing it accepts the issuer identifier {IssuerIdentifier} alone")]
+        Message = "The client assertion for {ClientId} carries {Audiences} where only the issuer identifier "
+                  + "{IssuerIdentifier}, alone and in the form the client's profile accepts, is its audience")]
     private partial void LogAudienceIsNotTheIssuerAlone(
         string ClientId,
         Sanitized[] Audiences,

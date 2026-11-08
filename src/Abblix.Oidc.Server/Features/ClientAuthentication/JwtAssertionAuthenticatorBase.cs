@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -66,7 +67,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// assertion can be used", which RFC 7523 Section 3 item 4 spells as a MUST on exp. The audience stays
     /// required, so an assertion without one is still refused by the validator.
     /// </remarks>
-    protected const ValidationOptions AssertionValidationOptions =
+    protected static ValidationOptions AssertionValidationOptions { get; } =
         (ValidationOptions.Default & ~ValidationOptions.ValidateAudience) | ValidationOptions.RequireExpirationTime;
 
     /// <summary>
@@ -124,25 +125,40 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// Answers whether the assertion names this tenant's issuer identifier as its sole audience.
     /// </summary>
     /// <remarks>
-    /// RFC 10070 section 4 (case B, client authentication) and section 5 (pushed authorization requests):
-    /// the authorization server "MUST reject any JWT that does not contain its issuer identifier as its sole
-    /// audience value", and the token endpoint URL "MUST NOT be used as an audience value". The value must be
-    /// the issuer rather than any address this server answers on, because a client reads the issuer alone
-    /// back from metadata it can check; and it must stand alone, or an assertion minted for a different
-    /// recipient could be replayed here by naming both. Compared as written, by RFC 3986 section 6.2.1, which
-    /// RFC 7523 Section 3 prescribes in the absence of a profile saying otherwise.
+    /// RFC 10070 section 4 (case B, client authentication): the authorization server "MUST reject any JWT that
+    /// does not contain its issuer identifier as its sole audience value", and "the token endpoint URL of the
+    /// authorization server MUST NOT be used as an audience value". Section 5 says the same of an assertion at
+    /// the pushed authorization request endpoint. Section 7 names the attacks this closes: an audience other than
+    /// the issuer, or one beside it, lets an assertion minted for another server be replayed here. The claim is
+    /// read as written rather than through the typed accessor, which skips members that are not strings and
+    /// would read the issuer beside one as the sole value. Compared by RFC 3986 section 6.2.1, as section 4
+    /// prescribes. A profile may narrow the form further: FAPI 2.0 section 5.3.2.1 takes the issuer only as a
+    /// string, never as the one member of an array.
     /// </remarks>
     private bool AudienceIsTheIssuerAlone(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo)
     {
         var issuerIdentifier = tenant.Issuer.OriginalString;
-        var audiences = token.Payload.Audiences.ToArray();
-        if (audiences is [var onlyAudience] && onlyAudience == issuerIdentifier)
+        var asStringOnly = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile)
+            .RequireStringAudienceInClientAssertion;
+
+        var isTheIssuerAlone = token.Payload.Json[JwtClaimTypes.Audience] switch
+        {
+            JsonValue value => IsTheIssuer(value),
+            JsonArray { Count: 1 } array when !asStringOnly => array[0] is JsonValue onlyMember && IsTheIssuer(onlyMember),
+            _ => false,
+        };
+
+        if (isTheIssuerAlone)
         {
             return true;
         }
 
-        LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, Sanitized.Values(audiences), issuerIdentifier);
+        LogAudienceIsNotTheIssuerAlone(
+            clientInfo.ClientId, Sanitized.Values(token.Payload.Audiences.ToArray()), issuerIdentifier);
         return false;
+
+        bool IsTheIssuer(JsonValue value)
+            => value.TryGetValue<string>(out var audience) && audience == issuerIdentifier;
     }
 
     /// <summary>
@@ -295,13 +311,13 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// </summary>
     private bool TypeIsClientAuthentication(JsonWebToken token, ClientInfo clientInfo)
     {
-        // An assertion authenticates the client; it is not a token this server issued. RFC 10070 section 4 asks
-        // that such a JWT be typed "client-authentication+jwt" or another more specific explicit type value
-        // defined by a specification profiling this specification - a SHOULD on the sender, which admits values
-        // we cannot list, and the section calls refusing an untyped one NOT RECOMMENDED, so the exact value
-        // cannot be demanded. What can be refused is a JWT declaring
-        // itself some other type this class names, which is the replay RFC 8725 section 3.11 describes. The client
-        // signs this one itself, so the types within its reach are not only the ones this server issued.
+        // An assertion authenticates the client; it is not a token this server issued. RFC 10070 section 4 says
+        // client authentication JWTs "SHOULD be explicitly typed by using the "typ" header parameter value
+        // "client-authentication+jwt" or another more specific explicit type value defined by a specification
+        // profiling this specification", and calls it "NOT RECOMMENDED for servers to reject JWTs that do not have
+        // explicit types", so the exact value cannot be demanded. What can be refused is a JWT declaring itself some
+        // other type this class names, which is the replay RFC 8725 section 3.11 describes. The client signs this
+        // one itself, so the types within its reach are not only the ones this server issued.
         var tokenType = token.Header.Type;
         if (JwtTypes.IsPermitted(tokenType, JsonWebTokenTypes.ClientAuthentication))
         {

@@ -619,9 +619,11 @@ public class JwtBearerGrantHandlerTests
 	[MemberData(nameof(ThisServerSpelledOtherwise))]
 	public async Task AnAudienceSpellingThisServerOtherwise_IsRefused(string audience)
 	{
-		var validateAudience = await AudienceCheckAsync(strict: false);
-
-		Assert.False(await validateAudience([audience]));
+		foreach (var strict in new[] { true, false })
+		{
+			var validateAudience = await AudienceCheckAsync(strict);
+			Assert.False(await validateAudience([audience]), $"accepted with strict={strict}");
+		}
 	}
 
 	public static TheoryData<string> ThisServerSpelledOtherwise() =>

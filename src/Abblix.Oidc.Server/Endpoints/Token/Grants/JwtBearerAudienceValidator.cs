@@ -21,8 +21,8 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <remarks>
 /// RFC 10070 section 4 lets the server be identified "by either its issuer identifier or its token endpoint URL",
 /// and has the values compared "using the Simple String Comparison method defined in Section 6.2.1 of [RFC3986]",
-/// so each is compared as written. The configured policy picks one of two sets (Strategy): strict accepts those
-/// two, permissive also accepts the application URI.
+/// so each is compared as written. The strict policy accepts those two, the permissive one also accepts the
+/// application URI.
 /// </remarks>
 /// <param name="logger">Records why an assertion's audience was refused.</param>
 /// <param name="issuerProvider">Carries the audience policy.</param>

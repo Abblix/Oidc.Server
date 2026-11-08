@@ -27,7 +27,9 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <remarks>
 /// The class is used for validating tokens like client authentication JWTs and request objects in OpenID Connect
 /// flows. It checks the authenticity of the JWT issuer, audience, and cryptographic signatures to ensure that
-/// only valid and authorized clients can interact with the authentication service.
+/// only valid and authorized clients can interact with the authentication service. A client authentication JWT
+/// is validated without the audience check: <c>JwtAssertionAuthenticatorBase</c> judges its audience, which
+/// RFC 10070 section 4 restricts to the issuer identifier alone.
 /// </remarks>
 /// <param name="logger">The logger used for recording validation activities and outcomes.</param>
 /// <param name="requestInfoProvider">Provides information about the current request, including the request URI.</param>
@@ -159,9 +161,10 @@ public partial class ClientJwtValidator(
     }
 
     /// <summary>
-    /// Validates the audience by checking if it matches either the request URI (token endpoint)
-    /// or the authorization server's issuer identifier.
-    /// Per RFC 7523 Section 3 and OpenID Connect Core 1.0 Section 9, both values are acceptable.
+    /// Validates the audience of a JWT the client sent other than a client authentication assertion - a request
+    /// object, a login hint token - by checking that it names either the request URI or the authorization
+    /// server's issuer identifier. The server's own client authenticators validate an assertion without this
+    /// check and judge its audience in <c>JwtAssertionAuthenticatorBase</c>.
     /// </summary>
     /// <param name="tenant">The tenant whose issuer identifier is an audience the assertion may name.</param>
     /// <param name="audiences">The collection of audiences to validate against valid audience values.</param>

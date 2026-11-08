@@ -56,10 +56,10 @@ public class ClientSecretJwtThroughTheValidatorTests
     }
 
     /// <summary>
-    /// RFC 10070 section 4: the token endpoint URL "MUST NOT be used as an audience value", and an assertion
-    /// without the issuer as its sole audience is refused - also when it carries no audience at all, which
-    /// the validator refuses before the authenticator looks. Driven through the real validator, since the
-    /// authenticator hands it the audience requirement and judges the value itself.
+    /// RFC 10070 section 4: "the token endpoint URL of the authorization server MUST NOT be used as an audience
+    /// value", and an assertion without the issuer as its sole audience is refused, also when it carries no
+    /// audience at all. Driven through the real validator, since the authenticator hands it the audience
+    /// requirement and judges the value itself.
     /// </summary>
     [Theory]
     [InlineData(TokenUri)]
