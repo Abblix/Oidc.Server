@@ -155,8 +155,8 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return true;
         }
 
-        // Logged from the claim itself: the typed accessor skips members that are not strings, so it would show only
-        // the issuer for an audience that is being refused
+        // Logged from the claim itself: the typed accessor skips members that are not strings, so for the issuer
+        // beside such a member it would log the issuer alone next to the refusal
         LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, Sanitized.Value(audience?.ToJsonString()), issuerIdentifier);
         return false;
 

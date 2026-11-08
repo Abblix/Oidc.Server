@@ -718,8 +718,8 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// Asserts the refusal came from the audience link, so a refusal for any other reason - an expired assertion
-    /// on a later day, a check added before this one - cannot keep a refusal row green.
+    /// Asserts the refusal came from the audience link rather than from a check that runs before it, so a row
+    /// cannot stay green on a refusal it was not written for.
     /// </summary>
     private static void AssertRefusedForItsAudience(Mocks mocks)
         => mocks.Logger.Verify(
