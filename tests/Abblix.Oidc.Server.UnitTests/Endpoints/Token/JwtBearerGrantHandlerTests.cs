@@ -582,82 +582,82 @@ public class JwtBearerGrantHandlerTests
 	}
 
 	/// <summary>
-	/// Verifies that with StrictAudienceValidation=false, the application base URI is accepted as valid audience.
-	/// Per RFC 7523 Section 3, this is a relaxation of the "SHOULD be token endpoint" recommendation.
+	/// RFC 10070 section 4, case A: for the authorization grant "an authorization server MAY be identified by either
+	/// its issuer identifier or its token endpoint URL", so an assertion naming either one is addressed here in both
+	/// policies, beside any other audience it names; the application URI is accepted only by the permissive policy.
+	/// Asked of the audience check the handler hands the JWT validator, since a validator double never runs it.
 	/// </summary>
-	[Fact]
-	public async Task PermissiveAudienceValidation_WithApplicationUri_ShouldSucceed()
+	[Theory]
+	[InlineData(true, nameof(TokenEndpointUri), true)]
+	[InlineData(true, nameof(TenantIssuer), true)]
+	[InlineData(true, nameof(ApplicationUri), false)]
+	[InlineData(false, nameof(TokenEndpointUri), true)]
+	[InlineData(false, nameof(TenantIssuer), true)]
+	[InlineData(false, nameof(ApplicationUri), true)]
+	public async Task AnAudienceNamingThisServer_IsAcceptedAsThePolicyAllows(bool strict, string named, bool accepted)
 	{
-		// Arrange
-		var (handler, mocks) = CreateHandler(strictAudienceValidation: false);
-		var jwt = CreateValidJwt();
-		jwt.Payload.Audiences = ["https://authorization-server.example.com"];
-		SetupValidJwtValidation(mocks.JwtValidator, jwt);
-		var clientInfo = new ClientInfo(ClientId);
-		var tokenRequest = new TokenRequest
+		var validateAudience = await AudienceCheckAsync(strict);
+
+		var audience = named switch
 		{
-			GrantType = GrantTypes.JwtBearer,
-			Assertion = Assertion
+			nameof(TokenEndpointUri) => TokenEndpointUri,
+			nameof(TenantIssuer) => TenantIssuer,
+			nameof(ApplicationUri) => ApplicationUri,
+			_ => throw new ArgumentOutOfRangeException(nameof(named), named, null),
 		};
 
-		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-
-		// Assert
-		Assert.True(result.TryGetSuccess(out var grant));
-		Assert.Equal(Subject, grant.AuthSession.Subject);
+		Assert.Equal(accepted, await validateAudience([audience]));
+		Assert.Equal(accepted, await validateAudience(["https://another-server.example.com", audience]));
 	}
 
 	/// <summary>
-	/// Verifies that with StrictAudienceValidation=true (default), only the token endpoint URL is accepted.
-	/// Application base URI should be rejected per RFC 7523 Section 3 strict interpretation.
+	/// RFC 10070 section 4: "applications MUST compare the audience values using the Simple String Comparison method
+	/// defined in Section 6.2.1 of [RFC3986]", so the server's own addresses spelled otherwise, in another case, with
+	/// a trailing slash or a default port, are not this server.
 	/// </summary>
-	[Fact]
-	public async Task StrictAudienceValidation_WithApplicationUri_ShouldFail()
+	[Theory]
+	[MemberData(nameof(ThisServerSpelledOtherwise))]
+	public async Task AnAudienceSpellingThisServerOtherwise_IsRefused(string audience)
 	{
-		// Arrange
-		var (handler, mocks) = CreateHandler(strictAudienceValidation: true);
-		var jwt = CreateValidJwt();
-		jwt.Payload.Audiences = ["https://authorization-server.example.com"];
-		SetupInvalidJwtValidation(mocks.JwtValidator);
-		var clientInfo = new ClientInfo(ClientId);
-		var tokenRequest = new TokenRequest
-		{
-			GrantType = GrantTypes.JwtBearer,
-			Assertion = Assertion
-		};
+		var validateAudience = await AudienceCheckAsync(strict: false);
 
-		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-
-		// Assert
-		Assert.True(result.TryGetFailure(out var error));
-		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+		Assert.False(await validateAudience([audience]));
 	}
 
+	public static TheoryData<string> ThisServerSpelledOtherwise() =>
+	[
+		"https://AUTHORIZATION-SERVER.example.com/token",
+		TokenEndpointUri + "/",
+		"https://authorization-server.example.com:443/token",
+		ApplicationUri + "/",
+		TenantIssuer + "/",
+	];
+
+	private const string TokenEndpointUri = "https://authorization-server.example.com/token";
+	private const string ApplicationUri = "https://authorization-server.example.com";
+	private static string TenantIssuer => SingleIssuer.Tenant.Issuer.OriginalString;
+
 	/// <summary>
-	/// Verifies that with StrictAudienceValidation=true, the token endpoint URL is still accepted.
+	/// The audience check the handler hands the JWT validator for an assertion presented at
+	/// <see cref="SingleIssuer.Tenant"/>, under the strict or the permissive policy.
 	/// </summary>
-	[Fact]
-	public async Task StrictAudienceValidation_WithTokenEndpoint_ShouldSucceed()
+	private static async Task<ValidationParameters.ValidateAudienceDelegate> AudienceCheckAsync(bool strict)
 	{
-		// Arrange
-		var (handler, mocks) = CreateHandler(strictAudienceValidation: true);
-		var jwt = CreateValidJwt();
-		SetupValidJwtValidation(mocks.JwtValidator, jwt);
-		var clientInfo = new ClientInfo(ClientId);
-		var tokenRequest = new TokenRequest
-		{
-			GrantType = GrantTypes.JwtBearer,
-			Assertion = Assertion
-		};
+		var (handler, mocks) = CreateHandler(
+			tokenEndpoint: TokenEndpointUri, applicationUri: ApplicationUri, strictAudienceValidation: strict);
+		ValidationParameters? captured = null;
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.Callback(new Action<string, ValidationParameters>((_, p) => captured = p))
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)new JwtValidationError(JwtError.InvalidToken, "not the subject of this test"));
 
-		// Act
-		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		await handler.AuthorizeAsync(
+			SingleIssuer.Tenant,
+			new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion },
+			new ClientInfo(ClientId),
+			TestContext.Current.CancellationToken);
 
-		// Assert
-		Assert.True(result.TryGetSuccess(out var grant));
-		Assert.Equal(Subject, grant.AuthSession.Subject);
+		return captured!.ValidateAudience!;
 	}
 
 	private record Mocks(

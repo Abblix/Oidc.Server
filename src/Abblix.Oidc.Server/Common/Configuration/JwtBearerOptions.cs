@@ -105,9 +105,9 @@ public record JwtBearerOptions
 	public int MaxJwtSize { get; set; } = 8192;
 
 	/// <summary>
-	/// When true, the JWT audience claim must exactly match the token endpoint URL per RFC 7523 Section 3.
-	/// When false, the application base URI is also accepted for compatibility with common implementations.
-	/// Default is true for strict RFC 7523 compliance and security.
+	/// When true, the JWT audience claim must name the token endpoint URL or the tenant's issuer identifier, each
+	/// compared as written, per RFC 7523 Section 3 as RFC 10070 section 4 updates it. When false, the application
+	/// base URI is also accepted for compatibility with common implementations. Default is true.
 	/// </summary>
 	/// <remarks>
 	/// Set to false only if you have legacy clients that use the application base URI as audience.
