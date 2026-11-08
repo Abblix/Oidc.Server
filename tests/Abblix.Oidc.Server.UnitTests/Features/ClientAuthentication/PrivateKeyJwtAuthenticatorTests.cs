@@ -644,16 +644,21 @@ public class PrivateKeyJwtAuthenticatorTests
     /// <summary>
     /// RFC 10070 section 4 admits the issuer as the one member of an array, while FAPI 2.0 section 5.3.2.1 has a
     /// server held to the profile "only accept its issuer identifier value (as defined in [RFC8414]) as a string in
-    /// the aud claim received in client authentication assertions".
+    /// the aud claim received in client authentication assertions". The profile governing the client is the
+    /// tenant's default tightened by the client's own, so a client registered under FAPI 2.0 is held to it at a
+    /// tenant without a profile, and one registering no profile cannot step below the tenant's.
     /// </summary>
     [Theory]
-    [InlineData(ClientSecurityProfile.None, true)]
-    [InlineData(ClientSecurityProfile.Fapi2, false)]
+    [InlineData(ClientSecurityProfile.None, null, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, null, false)]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, false)]
+    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, false)]
     public async Task AssertionAudienceAsAnArrayOfTheIssuer_IsAcceptedOutsideFapi2Only(
-        ClientSecurityProfile profile, bool accepted)
+        ClientSecurityProfile profile, ClientSecurityProfile? clientProfile, bool accepted)
     {
         var (authenticator, mocks) = CreateAuthenticator();
         var clientInfo = CreateClientInfo(ClientId);
+        clientInfo.SecurityProfile = clientProfile;
         var token = CreateValidJwtTokenWithJtiAndExp(
             ClientId, ClientId, "audience-as-an-array",
             DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));

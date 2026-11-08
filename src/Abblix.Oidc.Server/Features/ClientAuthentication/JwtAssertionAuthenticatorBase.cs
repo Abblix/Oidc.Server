@@ -128,8 +128,9 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// RFC 10070 section 4 (case B, client authentication): the authorization server "MUST reject any JWT that
     /// does not contain its issuer identifier as its sole audience value", and "the token endpoint URL of the
     /// authorization server MUST NOT be used as an audience value". Section 5 says the same of an assertion at
-    /// the pushed authorization request endpoint. Section 7 names the attacks this closes: an audience other than
-    /// the issuer, or one beside it, lets an assertion minted for another server be replayed here. The claim is
+    /// the pushed authorization request endpoint, and section 7 refers to [private_key_jwt.Disclosure] and
+    /// [Audience.Injection] for the attacks this closes: an audience other than the issuer, or one beside it,
+    /// would let an assertion a client minted for another server be presented here. The claim is
     /// read as written rather than through the typed accessor, which skips members that are not strings and
     /// would read the issuer beside one as the sole value. Compared by RFC 3986 section 6.2.1, as section 4
     /// prescribes. A profile may narrow the form further: FAPI 2.0 section 5.3.2.1 takes the issuer only as a
@@ -141,7 +142,8 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         var asStringOnly = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile)
             .RequireStringAudienceInClientAssertion;
 
-        var isTheIssuerAlone = token.Payload.Json[JwtClaimTypes.Audience] switch
+        var audience = token.Payload.Json[JwtClaimTypes.Audience];
+        var isTheIssuerAlone = audience switch
         {
             JsonValue value => IsTheIssuer(value),
             JsonArray { Count: 1 } array when !asStringOnly => array[0] is JsonValue onlyMember && IsTheIssuer(onlyMember),
@@ -153,12 +155,12 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return true;
         }
 
-        LogAudienceIsNotTheIssuerAlone(
-            clientInfo.ClientId, Sanitized.Values(token.Payload.Audiences.ToArray()), issuerIdentifier);
+        // Logged as written, since the reading the decision distrusts would show the issuer beside a refusal
+        LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, Sanitized.Value(audience?.ToJsonString()), issuerIdentifier);
         return false;
 
         bool IsTheIssuer(JsonValue value)
-            => value.TryGetValue<string>(out var audience) && audience == issuerIdentifier;
+            => value.TryGetValue<string>(out var written) && written == issuerIdentifier;
     }
 
     /// <summary>
