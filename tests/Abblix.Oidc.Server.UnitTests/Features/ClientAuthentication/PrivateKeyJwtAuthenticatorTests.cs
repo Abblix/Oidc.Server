@@ -20,6 +20,7 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using Microsoft.Extensions.Options;
@@ -43,6 +44,12 @@ public class PrivateKeyJwtAuthenticatorTests
     /// the sole audience a client authentication assertion may carry; the token helpers write it by default.
     /// </summary>
     private const string IssuerIdentifier = "https://issuer.example.com";
+
+    /// <summary>
+    /// The instant the authenticator reads, before the expiry every assertion here carries, so no assertion is
+    /// refused for its age on whatever day the suite runs.
+    /// </summary>
+    private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-06-01T00:00:00Z", CultureInfo.InvariantCulture);
 
     public PrivateKeyJwtAuthenticatorTests()
     {
@@ -593,6 +600,7 @@ public class PrivateKeyJwtAuthenticatorTests
         });
 
         Assert.Null(result);
+        AssertRefusedForItsAudience(mocks);
     }
 
     /// <summary>
@@ -639,6 +647,7 @@ public class PrivateKeyJwtAuthenticatorTests
         });
 
         Assert.Null(result);
+        AssertRefusedForItsAudience(mocks);
     }
 
     /// <summary>
@@ -646,7 +655,7 @@ public class PrivateKeyJwtAuthenticatorTests
     /// server held to the profile "only accept its issuer identifier value (as defined in [RFC8414]) as a string in
     /// the aud claim received in client authentication assertions". The profile governing the client is the
     /// tenant's default tightened by the client's own, so a client registered under FAPI 2.0 is held to it at a
-    /// tenant without a profile, and one registering no profile cannot step below the tenant's.
+    /// tenant without a profile, and one naming None cannot step below the tenant's.
     /// </summary>
     [Theory]
     [InlineData(ClientSecurityProfile.None, null, true)]
@@ -675,6 +684,8 @@ public class PrivateKeyJwtAuthenticatorTests
         });
 
         Assert.Equal(accepted, result is not null);
+        if (!accepted)
+            AssertRefusedForItsAudience(mocks);
     }
 
     /// <summary>
@@ -707,6 +718,20 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
+    /// Asserts the refusal came from the audience link, so a refusal for any other reason - an expired assertion
+    /// on a later day, a check added before this one - cannot keep a refusal row green.
+    /// </summary>
+    private static void AssertRefusedForItsAudience(Mocks mocks)
+        => mocks.Logger.Verify(
+            l => l.Log(
+                LogLevel.Warning,
+                It.Is<EventId>(e => e.Id == LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotTheIssuerAlone),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+
+    /// <summary>
     /// The tenant a request is served at, holding its clients to <paramref name="profile"/> by default.
     /// </summary>
     private static TenantDefinition TenantAt(ClientSecurityProfile profile)
@@ -719,6 +744,7 @@ public class PrivateKeyJwtAuthenticatorTests
     private (PrivateKeyJwtAuthenticator authenticator, Mocks mocks) CreateAuthenticator()
     {
         var logger = new Mock<ILogger<PrivateKeyJwtAuthenticator>>();
+        logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
         var replayCache = new Mock<IReplayCache>(MockBehavior.Strict);
         var clientJwtValidator = new Mock<IClientJwtValidator>(MockBehavior.Strict);
 
@@ -736,7 +762,7 @@ public class PrivateKeyJwtAuthenticatorTests
             logger.Object,
             replayCache.Object,
             serviceProvider,
-            TimeProvider.System);
+            new FakeTimeProvider(Now));
 
         var mocks = new Mocks
         {

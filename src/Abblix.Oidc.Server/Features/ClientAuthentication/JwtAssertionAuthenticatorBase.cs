@@ -155,7 +155,8 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return true;
         }
 
-        // Logged as written, since the reading the decision distrusts would show the issuer beside a refusal
+        // Logged from the claim itself: the typed accessor skips members that are not strings, so it would show only
+        // the issuer for an audience that is being refused
         LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, Sanitized.Value(audience?.ToJsonString()), issuerIdentifier);
         return false;
 
