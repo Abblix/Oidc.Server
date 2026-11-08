@@ -436,10 +436,8 @@ public class SecurityProfileTests
     }
 
     /// <summary>
-    /// The remaining two requirements are read by services rather than by the consistency check, so
-    /// what is asserted here is that the profile carries them at all. That each flag has a consumer
-    /// that reads it is answered elsewhere in this project: the audience refusals in
-    /// PrivateKeyJwtAuthenticatorTests, and the rotation case in RefreshTokenServiceTests.
+    /// The requirements below are read by services rather than by the consistency check, so what is
+    /// asserted here is that the profile carries them at all.
     /// </summary>
     [Fact]
     public void Fapi2_CarriesTheRemainingRequirements()
@@ -448,7 +446,6 @@ public class SecurityProfileTests
 
         Assert.True(requirements.RequireConfidentialClient);
         Assert.True(requirements.RequireKeyBasedClientAuthentication);
-        Assert.True(requirements.RequireIssuerAudienceInClientAssertion);
     }
     /// <summary>
     /// The mistake the guard exists to catch, driven directly: a profile that drops rotation and
@@ -575,7 +572,6 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireStrictRequestObjectProcessing);
         Assert.True(requirements.RequireConfidentialClient);
         Assert.True(requirements.RequireKeyBasedClientAuthentication);
-        Assert.True(requirements.RequireIssuerAudienceInClientAssertion);
     }
 
     /// <summary>

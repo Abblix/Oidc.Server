@@ -132,6 +132,13 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
             AllowedGrantTypes = [GrantTypes.ClientCredentials],
         },
+        // The raw value is kept because client_secret_jwt verifies the assertion with the secret itself
+        new ClientInfo(TestConstants.ClientSecretJwtClientId)
+        {
+            ClientSecrets = [new ClientSecret { Value = TestConstants.ClientSecretJwtSecret }],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+        },
         new ClientInfo(TestConstants.DefaultScopeClientId)
         {
             ClientSecrets = [secret],

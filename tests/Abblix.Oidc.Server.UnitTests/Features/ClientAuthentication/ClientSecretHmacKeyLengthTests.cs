@@ -77,7 +77,7 @@ public class ClientSecretHmacKeyLengthTests
                 JwtId = System.Guid.NewGuid().ToString("N"),
                 Issuer = "client-a",
                 Subject = "client-a",
-                Audiences = ["https://auth.example.com/token"],
+                Audiences = ["https://auth.example.com"],
                 IssuedAt = issuedAt,
                 NotBefore = issuedAt,
                 ExpiresAt = issuedAt + System.TimeSpan.FromMinutes(5),

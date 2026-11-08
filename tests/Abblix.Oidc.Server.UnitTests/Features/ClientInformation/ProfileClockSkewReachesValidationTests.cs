@@ -60,7 +60,6 @@ public class ProfileClockSkewReachesValidationTests
             NullLogger<ClientSecretJwtAuthenticator>.Instance,
             tokenValidator.Object,
             clientInfoProvider.Object,
-            new Mock<IRequestInfoProvider>().Object,
             TimeProvider.System,
             new Mock<IReplayCache>().Object);
 

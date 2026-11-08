@@ -156,14 +156,6 @@ public sealed record SecurityProfileRequirements
     public bool RequireKeyBasedClientAuthentication { get; init; }
 
     /// <summary>
-    /// The profile accepts only the server's issuer identifier, and only as a string, in the
-    /// audience of a client authentication assertion, narrowing what the underlying specification
-    /// otherwise permits. Enforced by
-    /// <c>Features.ClientAuthentication.JwtAssertionAuthenticatorBase</c>.
-    /// </summary>
-    public bool RequireIssuerAudienceInClientAssertion { get; init; }
-
-    /// <summary>
     /// The profile forbids refresh token rotation, which is the one flag that removes a control
     /// rather than requiring one. See the remarks on this type for why that is admissible here and
     /// what stands in its place. Enforced by
@@ -188,7 +180,6 @@ public sealed record SecurityProfileRequirements
         RequireStrictRequestObjectProcessing = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
-        RequireIssuerAudienceInClientAssertion = true,
         ForbidRefreshTokenRotation = true,
     };
 
@@ -331,7 +322,6 @@ public sealed record SecurityProfileRequirements
         RequireStrictRequestObjectProcessing = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
-        RequireIssuerAudienceInClientAssertion = true,
     };
 
     /// <summary>
@@ -413,8 +403,6 @@ public sealed record SecurityProfileRequirements
             RequireConfidentialClient = RequireConfidentialClient || other.RequireConfidentialClient,
             RequireKeyBasedClientAuthentication =
                 RequireKeyBasedClientAuthentication || other.RequireKeyBasedClientAuthentication,
-            RequireIssuerAudienceInClientAssertion =
-                RequireIssuerAudienceInClientAssertion || other.RequireIssuerAudienceInClientAssertion,
             ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
         };
 

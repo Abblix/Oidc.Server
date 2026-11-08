@@ -139,14 +139,10 @@ public class UnreadableAssertionTimestampTests
             .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
-        var requestInfoProvider = new Mock<IRequestInfoProvider>();
-        requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri(Issuer));
-
         var authenticator = new ClientSecretJwtAuthenticator(
             Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
             tokenValidator.Object,
             clientInfoProvider.Object,
-            requestInfoProvider.Object,
             new FakeTimeProvider(Now),
             replayCache.Object);
 
