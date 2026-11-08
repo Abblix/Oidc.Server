@@ -156,12 +156,11 @@ public sealed record SecurityProfileRequirements
     public bool RequireKeyBasedClientAuthentication { get; init; }
 
     /// <summary>
-    /// The profile accepts only the server's issuer identifier, and only as a string, in the
-    /// audience of a client authentication assertion, narrowing what the underlying specification
-    /// otherwise permits. Enforced by
+    /// The profile accepts the issuer identifier in the audience of a client authentication assertion only as a
+    /// string, never as the one member of an array, which RFC 10070 section 4 otherwise admits. Enforced by
     /// <c>Features.ClientAuthentication.JwtAssertionAuthenticatorBase</c>.
     /// </summary>
-    public bool RequireIssuerAudienceInClientAssertion { get; init; }
+    public bool RequireStringAudienceInClientAssertion { get; init; }
 
     /// <summary>
     /// The profile forbids refresh token rotation, which is the one flag that removes a control
@@ -188,7 +187,7 @@ public sealed record SecurityProfileRequirements
         RequireStrictRequestObjectProcessing = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
-        RequireIssuerAudienceInClientAssertion = true,
+        RequireStringAudienceInClientAssertion = true,
         ForbidRefreshTokenRotation = true,
     };
 
@@ -331,7 +330,7 @@ public sealed record SecurityProfileRequirements
         RequireStrictRequestObjectProcessing = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
-        RequireIssuerAudienceInClientAssertion = true,
+        RequireStringAudienceInClientAssertion = true,
     };
 
     /// <summary>
@@ -413,8 +412,8 @@ public sealed record SecurityProfileRequirements
             RequireConfidentialClient = RequireConfidentialClient || other.RequireConfidentialClient,
             RequireKeyBasedClientAuthentication =
                 RequireKeyBasedClientAuthentication || other.RequireKeyBasedClientAuthentication,
-            RequireIssuerAudienceInClientAssertion =
-                RequireIssuerAudienceInClientAssertion || other.RequireIssuerAudienceInClientAssertion,
+            RequireStringAudienceInClientAssertion =
+                RequireStringAudienceInClientAssertion || other.RequireStringAudienceInClientAssertion,
             ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
         };
 

@@ -46,12 +46,44 @@ public class ClientSecretJwtThroughTheValidatorTests
     [Fact]
     public async Task AClientRegisteredOnlyAtAnotherTenant_IsRefused()
     {
+        await using var jwt = JsonWebTokenServices();
+        var authenticator = Authenticator(jwt);
+
+        // Each assertion names the issuer of the tenant it is presented at, so the client lookup alone
+        // decides the second one
+        Assert.NotNull(await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, [Globex.Issuer.OriginalString])));
+        Assert.Null(await authenticator.TryAuthenticateClientAsync(Acme, await RequestAsync(jwt, [Acme.Issuer.OriginalString])));
+    }
+
+    /// <summary>
+    /// RFC 10070 section 4: "the token endpoint URL of the authorization server MUST NOT be used as an audience
+    /// value", and an assertion without the issuer as its sole audience is refused, also when it carries no
+    /// audience at all. Driven through the real validator, since the authenticator hands it the audience
+    /// requirement and judges the value itself.
+    /// </summary>
+    [Theory]
+    [InlineData(TokenUri)]
+    [InlineData(null)]
+    public async Task AnAssertionNotNamingTheIssuerAlone_IsRefused(string? audience)
+    {
+        await using var jwt = JsonWebTokenServices();
+        var authenticator = Authenticator(jwt);
+
+        string[] audiences = audience is null ? [] : [audience];
+        Assert.Null(await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, audiences)));
+    }
+
+    private static ServiceProvider JsonWebTokenServices()
+    {
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
-        await using var jwt = services.BuildServiceProvider();
+        return services.BuildServiceProvider();
+    }
 
+    private static ClientSecretJwtAuthenticator Authenticator(IServiceProvider jwt)
+    {
         var client = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
@@ -61,26 +93,20 @@ public class ClientSecretJwtThroughTheValidatorTests
         clients
             .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), ClientId))
             .ReturnsAsync((TenantDefinition tenant, string _) => tenant.Id == Globex.Id ? client : null);
-        var requestInfo = new Mock<IRequestInfoProvider>();
-        requestInfo.Setup(r => r.RequestUri).Returns(new Uri(TokenUri));
         var replayCache = new Mock<IReplayCache>();
         replayCache
             .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
-        var authenticator = new ClientSecretJwtAuthenticator(
+        return new ClientSecretJwtAuthenticator(
             NullLogger<ClientSecretJwtAuthenticator>.Instance,
             jwt.GetRequiredService<IJsonWebTokenValidator>(),
             clients.Object,
-            requestInfo.Object,
             TimeProvider.System,
             replayCache.Object);
-
-        Assert.NotNull(await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt)));
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(Acme, await RequestAsync(jwt)));
     }
 
-    private static async Task<ClientRequest> RequestAsync(IServiceProvider jwt)
+    private static async Task<ClientRequest> RequestAsync(IServiceProvider jwt, string[] audiences)
     {
         var now = TimeProvider.System.GetUtcNow();
         var token = new JsonWebToken
@@ -91,7 +117,7 @@ public class ClientSecretJwtThroughTheValidatorTests
                 JwtId = Guid.NewGuid().ToString("N"),
                 Issuer = ClientId,
                 Subject = ClientId,
-                Audiences = [TokenUri],
+                Audiences = audiences,
                 IssuedAt = now,
                 NotBefore = now,
                 ExpiresAt = now.AddMinutes(1),

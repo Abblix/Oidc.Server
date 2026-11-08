@@ -74,7 +74,7 @@ public static class JsonWebTokenTypes
 	/// </summary>
 	public const string TokenIntrospection = "token-introspection+jwt";
 
-	/// <summary>A JWT used to authenticate a client, per RFC 7523bis (approved, awaiting its number).</summary>
+	/// <summary>A JWT used to authenticate a client, per RFC 10070 section 4.</summary>
 	public const string ClientAuthentication = "client-authentication+jwt";
 
 	/// <summary>An OAuth 2.0 request object, per RFC 9101.</summary>
@@ -177,9 +177,9 @@ public static class JsonWebTokenTypes
 	/// </returns>
 	/// <remarks>
 	/// This enumerates what to refuse rather than what to accept, which is the opposite of the usual
-	/// preference, and the reason is that the accepting side cannot be enumerated. RFC 7523bis allows a client
-	/// authentication JWT to be typed "client-authentication+jwt or another more specific explicit type value
-	/// defined by a specification profiling this specification", and RFC 9101 Section 4 observes of the request
+	/// preference, and the reason is that the accepting side cannot be enumerated. RFC 10070 section 4 allows a
+	/// client authentication JWT to be typed "client-authentication+jwt" or "another more specific explicit type
+	/// value defined by a specification profiling this specification", and RFC 9101 Section 4 observes of the request
 	/// object that "some existing deployments may alternatively be using the type application/jwt". An allow
 	/// list would refuse conformant senders on both counts, so an absent, generic or unfamiliar value passes
 	/// untouched and a sender that never heard of explicit typing is unaffected.

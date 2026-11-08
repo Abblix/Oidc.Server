@@ -40,13 +40,12 @@ public class ClientSecretJwtAuthenticatorTests
 {
     private const string ClientId = TestConstants.DefaultClientId;
     private const string ClientSecret = "test_secret_for_hmac_signing";
-    private const string RequestUri = "https://auth.example.com/token";
+    private const string IssuerIdentifier = "https://issuer.example.com";
 
-    private static readonly TenantDefinition Tenant = new TestIssuer { Issuer = new Uri("https://issuer.example.com") }.ToTenant();
+    private static readonly TenantDefinition Tenant = new TestIssuer { Issuer = new Uri(IssuerIdentifier) }.ToTenant();
 
     private readonly Mock<IJsonWebTokenValidator> _tokenValidator;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
-    private readonly Mock<IRequestInfoProvider> _requestInfoProvider;
     private readonly FakeTimeProvider _clock;
     private readonly Mock<IReplayCache> _replayCache;
     private readonly ClientSecretJwtAuthenticator _authenticator;
@@ -56,19 +55,13 @@ public class ClientSecretJwtAuthenticatorTests
         var logger = new Mock<ILogger<ClientSecretJwtAuthenticator>>();
         _tokenValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        _requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
         _clock = new FakeTimeProvider();
         _replayCache = new Mock<IReplayCache>(MockBehavior.Strict);
-
-        _requestInfoProvider
-            .Setup(p => p.RequestUri)
-            .Returns(new Uri(RequestUri));
 
         _authenticator = new ClientSecretJwtAuthenticator(
             logger.Object,
             _tokenValidator.Object,
             _clientInfoProvider.Object,
-            _requestInfoProvider.Object,
             _clock,
             _replayCache.Object);
     }
@@ -158,30 +151,51 @@ public class ClientSecretJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// The audience is compared with the request address as written (RFC 7519 section 4.1.3), so a spelling of the
-    /// same address in another case or with its default port is refused.
+    /// RFC 10070 section 4: the issuer identifier is the sole audience a client authentication assertion may
+    /// carry, compared as written (RFC 3986 section 6.2.1), so the token endpoint, the issuer spelled in
+    /// another case, with its default port or a trailing slash, and the issuer beside another recipient are
+    /// all refused - before the assertion's identifier is reserved, which the strict replay cache would report.
     /// </summary>
     [Theory]
-    [InlineData("https://AUTH.example.com/token")]
-    [InlineData("HTTPS://auth.example.com/token")]
-    [InlineData("https://auth.example.com:443/token")]
-    public async Task TryAuthenticateClientAsync_TheRequestAddressSpelledOtherwise_IsRefused(string audience)
+    [InlineData(IssuerIdentifier + "/token")]
+    [InlineData("https://ISSUER.example.com")]
+    [InlineData("HTTPS://issuer.example.com")]
+    [InlineData("https://issuer.example.com:443")]
+    [InlineData(IssuerIdentifier + "/")]
+    [InlineData(IssuerIdentifier, "https://another.example.com")]
+    public async Task TryAuthenticateClientAsync_AnAudienceOtherThanTheIssuerAlone_IsRefused(params string[] audiences)
     {
         const string jwt = "valid.jwt.token";
-        ValidationParameters? captured = null;
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            ClientSecrets = [new ClientSecret { Value = ClientSecret }]
+        };
+
+        var token = CreateMockToken(ClientId, ClientId, [IssuerIdentifier], "jti", _clock.GetUtcNow().AddMinutes(5));
+        token.Payload.Audiences = audiences;
+
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>((_, parameters) => captured = parameters)
-            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Invalid audience"));
+            .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
+            {
+                await parameters.ResolveIssuerSigningKeys!(ClientId).ToArrayAsync();
+                return await parameters.ValidateIssuer!(ClientId)
+                    ? token
+                    : new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
+            }));
 
-        await _authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .ReturnsAsync(clientInfo);
+
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = jwt,
         });
 
-        Assert.False(await captured!.ValidateAudience!([audience]));
-        Assert.True(await captured.ValidateAudience!([RequestUri]));
+        Assert.Null(result);
     }
 
     /// <summary>
@@ -202,7 +216,7 @@ public class ClientSecretJwtAuthenticatorTests
             ClientSecrets = [new ClientSecret { Value = ClientSecret }]
         };
 
-        var token = CreateMockToken(ClientId, ClientId, [RequestUri], jwtId, expiresAt);
+        var token = CreateMockToken(ClientId, ClientId, [IssuerIdentifier], jwtId, expiresAt);
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
@@ -265,7 +279,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // CreateMockToken signs with HS256, which does not match the registered HS384.
-        var token = CreateMockToken(ClientId, ClientId, [RequestUri], "jti", _clock.GetUtcNow().AddMinutes(5));
+        var token = CreateMockToken(ClientId, ClientId, [IssuerIdentifier], "jti", _clock.GetUtcNow().AddMinutes(5));
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
@@ -316,7 +330,7 @@ public class ClientSecretJwtAuthenticatorTests
             ClientSecrets = [new ClientSecret { Value = ClientSecret }],
         };
 
-        var token = CreateMockToken(ClientId, ClientId, [RequestUri], jwtId, _clock.GetUtcNow().AddMinutes(5));
+        var token = CreateMockToken(ClientId, ClientId, [IssuerIdentifier], jwtId, _clock.GetUtcNow().AddMinutes(5));
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
@@ -394,7 +408,7 @@ public class ClientSecretJwtAuthenticatorTests
             ClientSecrets = [new ClientSecret { Value = ClientSecret }]
         };
 
-        var token = CreateMockToken(ClientId, ClientId, [RequestUri], "jti", _clock.GetUtcNow().AddMinutes(5));
+        var token = CreateMockToken(ClientId, ClientId, [IssuerIdentifier], "jti", _clock.GetUtcNow().AddMinutes(5));
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
@@ -447,7 +461,7 @@ public class ClientSecretJwtAuthenticatorTests
             ClientSecrets = [new ClientSecret { Value = ClientSecret }]
         };
 
-        var token = CreateMockToken(ClientId, "different-subject", [RequestUri], "jti", _clock.GetUtcNow().AddMinutes(5));
+        var token = CreateMockToken(ClientId, "different-subject", [IssuerIdentifier], "jti", _clock.GetUtcNow().AddMinutes(5));
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
@@ -501,7 +515,7 @@ public class ClientSecretJwtAuthenticatorTests
             ClientSecrets = [new ClientSecret { Value = ClientSecret }]
         };
 
-        var token = CreateMockToken(ClientId, ClientId, [RequestUri], null, _clock.GetUtcNow().AddMinutes(5));
+        var token = CreateMockToken(ClientId, ClientId, [IssuerIdentifier], null, _clock.GetUtcNow().AddMinutes(5));
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))

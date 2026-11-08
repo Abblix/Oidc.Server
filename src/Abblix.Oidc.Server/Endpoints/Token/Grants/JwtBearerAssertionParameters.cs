@@ -49,7 +49,7 @@ internal sealed class JwtBearerAssertionParameters(
 		// validation, against the deployment's list or, without one, against the other kinds of token
 		TokenTypes = TokenTypePolicy.CheckedByCaller,
 		ValidateIssuer = issuer => _issuerValidator.ValidateAsync(tenant, issuer),
-		ValidateAudience = _audienceValidator.ValidateAsync,
+		ValidateAudience = audiences => _audienceValidator.ValidateAsync(tenant, audiences),
 		ResolveIssuerSigningKeys = issuer => issuerProvider.GetSigningKeysAsync(tenant, issuer),
 		ClockSkew = clockSkew,
 	};

@@ -253,7 +253,6 @@ internal static class LogEvents
         {
             private const int Base = 3040;
 
-            public const int AudienceValidationFailed = Base + 1;
             public const int WrongAuthMethod = Base + 2;
             public const int NoSecretsConfigured = Base + 3;
             public const int SecretWithoutRawValue = Base + 4;

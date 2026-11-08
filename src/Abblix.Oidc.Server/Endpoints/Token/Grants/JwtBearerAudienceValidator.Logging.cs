@@ -16,12 +16,12 @@ partial class JwtBearerAudienceValidator
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.JwtBearer.AudienceFailedStrict,
 		Level = LogLevel.Warning,
-		Message = "JWT Bearer assertion rejected: audience validation failed. Expected {TokenEndpoint}, got {Audiences}")]
-	private partial void LogAudienceFailedStrict(Uri TokenEndpoint, Sanitized[] Audiences);
+		Message = "JWT Bearer assertion rejected: audience validation failed. Expected {TokenEndpoint} or {Issuer}, got {Audiences}")]
+	private partial void LogAudienceFailedStrict(string TokenEndpoint, string Issuer, Sanitized[] Audiences);
 
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.JwtBearer.AudienceFailedPermissive,
 		Level = LogLevel.Warning,
-		Message = "JWT Bearer assertion rejected: audience validation failed. Expected {TokenEndpoint} or {ApplicationUri}, got {Audiences}")]
-	private partial void LogAudienceFailedPermissive(Uri TokenEndpoint, Uri ApplicationUri, Sanitized[] Audiences);
+		Message = "JWT Bearer assertion rejected: audience validation failed. Expected {TokenEndpoint}, {Issuer} or {ApplicationUri}, got {Audiences}")]
+	private partial void LogAudienceFailedPermissive(string TokenEndpoint, string Issuer, string ApplicationUri, Sanitized[] Audiences);
 }

@@ -59,14 +59,10 @@ public class PrivateKeyJwtAuthenticator(
         using var scope = serviceProvider.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
 
-        // Stated rather than left to the default, because the requirement is this grant's and not
-        // the validator's: RFC 7521 Section 5.2 requires the assertion to carry an "Expires At
-        // entity that limits the time window during which the assertion can be used", which
-        // RFC 7523 Section 3 item 4 spells as a MUST on exp.
-        //
-        // RFC 7523bis types an assertion only by a SHOULD on the sender and admits more specific values, so the base
-        // class judges the type after validation.
+        // Stated rather than left to the default, because the requirements are this method's and not the
+        // validator's, which also reads request objects: the base class judges the type and the audience after
+        // validation, by RFC 10070 section 4.
         return await tokenValidator.ValidateAsync(
-            tenant, jwt, TokenTypePolicy.CheckedByCaller, ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
+            tenant, jwt, TokenTypePolicy.CheckedByCaller, AssertionValidationOptions);
     }
 }

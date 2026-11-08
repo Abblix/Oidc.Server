@@ -30,14 +30,12 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="logger">Logger for recording the authentication process and any issues encountered.</param>
 /// <param name="tokenValidator">Validator for JSON Web Tokens.</param>
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
-/// <param name="requestInfoProvider">Provider for retrieving request information.</param>
 /// <param name="clock">Time provider for checking secret expiration.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 public partial class ClientSecretJwtAuthenticator(
     ILogger<ClientSecretJwtAuthenticator> logger,
     IJsonWebTokenValidator tokenValidator,
     IClientInfoProvider clientInfoProvider,
-    IRequestInfoProvider requestInfoProvider,
     TimeProvider clock,
     IReplayCache replayCache)
     : JwtAssertionAuthenticatorBase(logger, replayCache, clock)
@@ -70,19 +68,13 @@ public partial class ClientSecretJwtAuthenticator(
             jwt,
             new ValidationParameters
             {
-                // A client assertion must carry its own expiry: RFC 7521 Section 5.2 requires an
-                // "Expires At entity that limits the time window during which the assertion can be
-                // used", and RFC 7523 Section 3 item 4 states it as a MUST on the exp claim.
-                Options = ValidationOptions.Default | ValidationOptions.RequireExpirationTime,
-
-                // RFC 7523bis types an assertion only by a SHOULD on the sender and admits more specific values,
-                // so the base class judges the type after validation
+                // The base class judges the type and the audience after validation, by RFC 10070 section 4
+                Options = AssertionValidationOptions,
                 TokenTypes = TokenTypePolicy.CheckedByCaller,
 
                 // The tolerance belongs to the tenant's default profile, ceiling included -
                 // RFC 7523 Section 3 names no ceiling of its own.
                 ClockSkew = DefaultProfileRequirementsOf(tenant).ClockSkewOrDefault(),
-                ValidateAudience = ValidateAudience,
                 ValidateIssuer = issuer => ValidateIssuer(tenant, issuer, context),
                 ResolveIssuerSigningKeys = issuer => ResolveIssuerSigningKeys(tenant, issuer, context),
             });
@@ -99,24 +91,6 @@ public partial class ClientSecretJwtAuthenticator(
         /// The client information resolved during the validation process.
         /// </summary>
         public ClientInfo? ClientInfo { get; set; }
-    }
-
-    /// <summary>
-    /// Validates that the JWT's audience claim matches the current request URI.
-    /// </summary>
-    /// <param name="audiences">The audiences from the JWT to validate.</param>
-    /// <returns>True if the audience is valid; otherwise, false.</returns>
-    private Task<bool> ValidateAudience(IEnumerable<string> audiences)
-    {
-        var requestUri = requestInfoProvider.RequestUri.OriginalString;
-        var materialized = audiences.Materialize();
-        var result = materialized.Contains(requestUri);
-        if (!result)
-        {
-            LogAudienceValidationFailed(Sanitized.Values(materialized), requestUri);
-        }
-
-        return Task.FromResult(result);
     }
 
     /// <summary>

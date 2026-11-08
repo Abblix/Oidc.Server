@@ -14,12 +14,6 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 partial class ClientSecretJwtAuthenticator
 {
     [LoggerMessage(
-        EventId = LogEvents.ClientAuth.ClientSecretJwtAuthenticator.AudienceValidationFailed,
-        Level = LogLevel.Warning,
-        Message = "Audience validation failed, token audiences: {Audiences}, actual requestUri: {RequestUri}")]
-    private partial void LogAudienceValidationFailed(Sanitized[] Audiences, string RequestUri);
-
-    [LoggerMessage(
         EventId = LogEvents.ClientAuth.ClientSecretJwtAuthenticator.WrongAuthMethod,
         Level = LogLevel.Debug,
         Message = "Client authentication failed: client {ClientId} uses another authentication method")]
