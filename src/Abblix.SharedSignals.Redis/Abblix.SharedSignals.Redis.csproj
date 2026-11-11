@@ -17,7 +17,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>A transmitter that runs as more than one replica needs a queue that every replica sees the same way. This outbox keeps each stream's pending events in Redis list and hash structures and performs enqueue, claim and acknowledge as atomic server-side operations, so two replicas cannot deliver the same event twice or lose one between them - which a queue over a plain distributed cache cannot promise. Drop-in for the default in-process outbox. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>A transmitter that runs as more than one replica needs a queue that every replica sees the same way. This outbox keeps each stream's pending events in Redis list and hash structures and performs enqueue, claim and acknowledge as atomic server-side operations, so two replicas cannot deliver the same event twice or lose one between them - which a queue over a plain distributed cache cannot promise. Drop-in for the default in-process outbox. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v3.0</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 

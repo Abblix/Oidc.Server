@@ -17,7 +17,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <Copyright>Copyright (c) $([System.DateTime]::Now.Year) Abblix LLP. All rights reserved.</Copyright>
-    <PackageReleaseNotes>Keep signing keys in Azure Key Vault. With this package Abblix JWT and Abblix OIDC Server sign tokens and unwrap encryption keys through the vault, so the private half of a key never enters the application process; only public halves reach the JWKS endpoint, and verification stays local. A key that has to be minted in the process is sealed to a vault key before it is stored. One registration call wires the custodian, and a placement call after it names the keys it holds. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v2.4</PackageReleaseNotes>
+    <PackageReleaseNotes>Keep signing keys in Azure Key Vault. With this package Abblix JWT and Abblix OIDC Server sign tokens and unwrap encryption keys through the vault, so the private half of a key never enters the application process; only public halves reach the JWKS endpoint, and verification stays local. A key that has to be minted in the process is sealed to a vault key before it is stored. One registration call wires the custodian, and a placement call after it names the keys it holds. Full details: https://github.com/Abblix/Oidc.Server/releases/tag/v3.0</PackageReleaseNotes>
     <PackageIcon>Abblix.png</PackageIcon>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 
