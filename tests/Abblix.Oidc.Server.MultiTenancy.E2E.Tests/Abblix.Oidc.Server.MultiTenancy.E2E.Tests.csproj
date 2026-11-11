@@ -27,11 +27,7 @@
 		<PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
 		<PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
 		<PackageReference Include="Moq" />
-		<PackageReference Include="Microsoft.Garnet" />
-		<!-- Garnet's own floor for its Azure tiering exceeds the centrally pinned versions the
-		     product uses; the override lifts them for THIS test host alone. -->
-		<PackageReference Include="Azure.Identity" VersionOverride="1.17.0" />
-		<PackageReference Include="Azure.Storage.Blobs" VersionOverride="12.27.0" />
+		<PackageReference Include="Testcontainers.Redis" />
 		<PackageReference Include="xunit.v3.mtp-v2" />
 		<PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
 		<PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
@@ -52,7 +48,7 @@
 		<ProjectReference Include="..\..\src\Abblix.SecurityEvents.MinimalApi\Abblix.SecurityEvents.MinimalApi.csproj" />
 		<ProjectReference Include="..\..\src\Abblix.SharedSignals.MinimalApi\Abblix.SharedSignals.MinimalApi.csproj" />
 		<ProjectReference Include="..\..\src\Abblix.SharedSignals.Redis\Abblix.SharedSignals.Redis.csproj" />
-		<Compile Include="../Shared/GarnetFixture.cs" Link="Shared/GarnetFixture.cs" />
+		<Compile Include="../Shared/RedisFixture.cs" Link="Shared/RedisFixture.cs" />
 	</ItemGroup>
 
 </Project>

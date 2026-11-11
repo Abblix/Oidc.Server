@@ -12,8 +12,7 @@ using Xunit;
 namespace Abblix.SharedSignals.Redis.UnitTests;
 
 /// <summary>
-/// Pins the delivery claim against a REAL Redis-protocol server - the embedded Garnet the fixture
-/// starts - because the property being claimed is server-side: one conditional write decides
+/// Pins the delivery claim against a REAL Redis server - the container the fixture starts - because the property being claimed is server-side: one conditional write decides
 /// between askers that share nothing else. A mock of the client API would agree with whatever this
 /// implementation asked it, which is the one thing that must not decide the answer.
 /// </summary>
@@ -21,13 +20,13 @@ namespace Abblix.SharedSignals.Redis.UnitTests;
 /// Each test names its own claim, since the fixture is one shared server and a collision between
 /// tests would read as a product defect.
 /// </remarks>
-public sealed class RedisDeliveryLeaseTests(GarnetFixture garnet) : IClassFixture<GarnetFixture>
+public sealed class RedisDeliveryLeaseTests(RedisFixture redis) : IClassFixture<RedisFixture>
 {
     private static readonly TimeSpan Minute = TimeSpan.FromMinutes(1);
 
     private static string NewName() => $"push:{Guid.NewGuid():N}";
 
-    private RedisDeliveryLease NewLease() => new(garnet.Connection);
+    private RedisDeliveryLease NewLease() => new(redis.Connection);
 
     [Fact]
     public async Task OfTwoInstancesAskingForOneName_ExactlyOneIsAccepted()

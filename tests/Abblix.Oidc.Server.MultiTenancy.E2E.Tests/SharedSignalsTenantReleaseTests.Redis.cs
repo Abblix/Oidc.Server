@@ -35,7 +35,7 @@ using StreamConfiguration = Abblix.SharedSignals.Model.StreamConfiguration;
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
-// The Redis stream store under tenants, against an embedded Redis-compatible server
+// The Redis stream store under tenants, against a real Redis server in a container
 public sealed partial class SharedSignalsTenantReleaseTests
 {
     /// <summary>
@@ -56,14 +56,14 @@ public sealed partial class SharedSignalsTenantReleaseTests
     public async Task TheRedisStoreUnderTenants_ReadsAndWritesOnlyTheTenantsHash()
     {
         var ct = TestContext.Current.CancellationToken;
-        using var garnet = new GarnetFixture();
+        using var redis = new RedisFixture();
         var calls = new ConcurrentQueue<(string Method, string Key)>();
         var store = new MemoryTenantStore();
         var time = new FakeTimeProvider();
         await store.AddAsync(TenantAt("acme"), ct);
         await store.AddAsync(TenantAt("globex"), ct);
         await using var app = await StartOverRedisAsync(
-            store, time, RecordingRedisProxy<IConnectionMultiplexer>.Over(garnet.Connection, calls));
+            store, time, RecordingRedisProxy<IConnectionMultiplexer>.Over(redis.Connection, calls));
 
         foreach (var tenantId in (string[])["acme", "globex"])
         {
@@ -75,7 +75,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
         var catalog = app.Services.GetRequiredService<StoreTenantCatalog>();
         var acme = (await catalog.FindByIdAsync("acme", ct))!;
         var globex = (await catalog.FindByIdAsync("globex", ct))!;
-        var database = garnet.Connection.GetDatabase();
+        var database = redis.Connection.GetDatabase();
         Assert.Equal(1, await database.HashLengthAsync(PartitionHash(acme)));
         Assert.Equal(1, await database.HashLengthAsync(PartitionHash(globex)));
         Assert.False(await database.KeyExistsAsync(TransmitterHash));
@@ -107,12 +107,12 @@ public sealed partial class SharedSignalsTenantReleaseTests
     [Fact]
     public async Task AStoreWrappingTheRedisStoreWithoutItsPartitions_StopsTheServer()
     {
-        using var garnet = new GarnetFixture();
+        using var redis = new RedisFixture();
 
         await Assert.ThrowsAsync<OptionsValidationException>(() => StartOverRedisAsync(
             new MemoryTenantStore(),
             new FakeTimeProvider(),
-            garnet.Connection,
+            redis.Connection,
             streamStore: services => services
                 .AddSharedSignalsRedisStreamStore()
                 .AddSingleton<IStreamStore>(provider =>
@@ -127,7 +127,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
     public async Task AStoreWrappingTheRedisStoreWithItsPartitions_ReadsTheTenantsHash()
     {
         var ct = TestContext.Current.CancellationToken;
-        using var garnet = new GarnetFixture();
+        using var redis = new RedisFixture();
         var store = new MemoryTenantStore();
         await store.AddAsync(TenantAt("acme"), ct);
         await store.AddAsync(TenantAt("globex"), ct);
@@ -136,7 +136,7 @@ public sealed partial class SharedSignalsTenantReleaseTests
         await using var app = await StartOverRedisAsync(
             store,
             new FakeTimeProvider(),
-            RecordingRedisProxy<IConnectionMultiplexer>.Over(garnet.Connection, calls),
+            RecordingRedisProxy<IConnectionMultiplexer>.Over(redis.Connection, calls),
             streamStore: services => services
                 .AddSharedSignalsRedisStreamStore()
                 .AddSingleton<IStreamStore>(provider =>
@@ -167,12 +167,12 @@ public sealed partial class SharedSignalsTenantReleaseTests
     [Fact]
     public async Task TheRedisStoreRegisteredAfterTheTenantsTransmitter_IsRefusedForThatAlone()
     {
-        using var garnet = new GarnetFixture();
+        using var redis = new RedisFixture();
 
         var refused = await Assert.ThrowsAsync<OptionsValidationException>(() => StartOverRedisAsync(
             new MemoryTenantStore(),
             new FakeTimeProvider(),
-            garnet.Connection,
+            redis.Connection,
             streamStore: _ => { },
             afterSharedSignals: services => services.AddSharedSignalsRedisStreamStore()));
 

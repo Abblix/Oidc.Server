@@ -15,12 +15,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.Garnet" />
-        <!-- Garnet's own floor for its Azure tiering exceeds the centrally pinned versions the
-             product uses; the override lifts them for THIS test host alone, so the embedded
-             server restores without moving the product's Azure dependencies. -->
-        <PackageReference Include="Azure.Identity" VersionOverride="1.17.0" />
-        <PackageReference Include="Azure.Storage.Blobs" VersionOverride="12.27.0" />
+        <PackageReference Include="Testcontainers.Redis" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
         <PackageReference Include="xunit.v3.mtp-v2" />
         <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
@@ -36,7 +31,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Compile Include="../Shared/GarnetFixture.cs" Link="Shared/GarnetFixture.cs" />
+        <Compile Include="../Shared/RedisFixture.cs" Link="Shared/RedisFixture.cs" />
     </ItemGroup>
 
 </Project>
