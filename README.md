@@ -35,6 +35,7 @@ Add a certified OpenID Connect provider to your own ASP.NET Core app, one you em
 - [Quickstart](#-quickstart)
 - [Certification](#-certification)
 - [How to Install](#-how-to-install)
+- [Upgrading to 3.0](#%EF%B8%8F-upgrading-to-30)
 - [Documentation](#-documentation)
 - [Abblix Account](#-abblix-account)
 - [Feedback and Contributions](#-feedback-and-contributions)
@@ -141,6 +142,24 @@ dotnet add package Abblix.OIDC.Server.MinimalApi
 ```
 
 Both adapters expose the same OpenID Connect endpoints and pull in the core `Abblix.OIDC.Server` package as a dependency, so pick the one that matches how your application maps requests. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
+
+## ⚠️ Upgrading to 3.0
+
+Version 3.0 changes how a host registers and configures the server. The changes most hosts meet:
+
+- The library targets .NET 11 only.
+- Every server serves tenants. A deployment with one issuer declares one `TenantDefinition` in `OidcOptions.Tenants`, and the settings of an issuer (its clients, scopes, resources, keys, pages and security profile) move from `OidcOptions` into that definition.
+- The host's own services are told the tenant of each call: `IUserInfoProvider.GetUserInfoAsync`, `IClientInfoProvider` and the other registries take a `TenantDefinition` as their first parameter.
+- A host calls `app.UseMultiTenancy()` before its own routing when it serves several tenants, one tenant at an issuer with a path, or tenants from a store or catalog of its own. A host with one tenant at an issuer without a path does not need the call.
+- An MVC host maps the endpoints with `app.MapOidcControllers()`, a Minimal API host with `app.MapOidcEndpoints()`.
+- A host chooses how end-user consent is obtained, or it does not start: it registers its own `IUserConsentsProvider`, or calls `AddConsentGrantedForEveryClient()`.
+- Neither logout channel is served unless the host registers it, with `AddBackChannelLogout()` or `AddFrontChannelLogout()`.
+- Refresh token reuse is set by `RefreshTokenOptions.ReusePolicy`, and a client gets refresh tokens only as its `ClientInfo.OfflineAccess` allows.
+- Every JWT validation states the token types it accepts in `ValidationParameters.TokenTypes`.
+- A client signing its own authentication JWT names the issuer as its only audience, as RFC 10070 requires.
+- What 2.x stored is not read by 3.0, so end users sign in again and earlier grants end once.
+
+The complete list, with what each change asks of a host, is in the [3.0 release notes](https://github.com/Abblix/Oidc.Server/releases/tag/v3.0). The [Upgrading to 3.0](https://docs.abblix.com/docs/upgrading-to-3-0) guide walks a 2.x deployment through the move, including how to keep the signing keys it minted.
 
 ## 📚 Documentation
 

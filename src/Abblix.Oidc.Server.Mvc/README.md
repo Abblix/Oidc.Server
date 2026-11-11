@@ -2,15 +2,16 @@
 
 Abblix.OIDC.Server.MVC integrates the Abblix OIDC Server with ASP.NET Core MVC, providing controller classes, model binding, and routing for the OpenID Connect endpoints. This is the recommended package for controller-based ASP.NET Core applications; hosts without MVC take [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) instead.
 
-## What's New in Version 2.4
+## What's New in Version 3.0
+
+Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://docs.abblix.com/docs/upgrading-to-3-0) before moving a 2.x deployment.
 
 🚀 Features
-- Opt-in registration of the endpoints beyond the core set: dynamic client registration, CIBA, check session, revocation, introspection and device authorization
-- Authorization Server Metadata served at its OAuth 2.0 well-known address ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414))
+- The endpoints are mapped with `MapOidcControllers()`, at the routes `OidcRouteOptions` sets
+- Every tenant of a multi-tenant server is served through the same controllers
 
 ✏️ Improvements
-- A default cross-origin policy for the OIDC endpoints, so a browser client reads discovery, the key set and the token and UserInfo responses without the host configuring anything
-- Referencing both transport adapters is refused at startup with a message naming which package to drop, instead of every OIDC request failing with `AmbiguousMatchException` once the new Minimal API sibling joins the dependency graph
+- The MVC and Minimal API hosts read a request the same way
 
 ## Key Features
 
