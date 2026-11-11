@@ -25,7 +25,10 @@
 
 repos:
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.10
+    # A commit of main rather than a release: v1.7.12 and older hang on Windows on a run: step longer
+    # than about 4 KB (rhysd/actionlint#651 fixed it). Move to the first release that contains it.
+    # shellcheck must be on PATH: without it actionlint skips the shell checks and still reports Passed.
+    rev: 011a6d15e749bb3f2d771eed9c7aa0e7e3e10ee7
     hooks:
       - id: actionlint
         files: ^\.github/workflows/.*\.(yml|yaml)$
