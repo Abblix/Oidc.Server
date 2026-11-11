@@ -224,7 +224,7 @@ public partial class MultiTenancyRegistrationTests
             () => withTheRule.GetRequiredService<IOptions<OidcOptions>>().Value);
         Assert.Contains($"Tenant 'acme': {HostRule}", refusal.Message, StringComparison.Ordinal);
 
-        ServiceProvider TwoSigningKeys(bool hostRule)
+        static ServiceProvider TwoSigningKeys(bool hostRule)
         {
             var services = new ServiceCollection();
             services.AddOptions<OidcOptions>();
@@ -253,7 +253,7 @@ public partial class MultiTenancyRegistrationTests
     [Fact]
     public async Task ATokenEncryptedToOneTenant_IsReadThere_AndByNoOther()
     {
-        TenantDefinition TenantWithKeys(string id) => new()
+        static TenantDefinition TenantWithKeys(string id) => new()
         {
             Id = id,
             Issuer = new Uri($"https://auth.example.com/tenants/{id}"),
@@ -323,7 +323,7 @@ public partial class MultiTenancyRegistrationTests
     [Fact]
     public async Task EachTenant_DecryptsAndSignsWithItsOwnKeysOnly()
     {
-        TenantDefinition TenantWithKeys(string id) => new()
+        static TenantDefinition TenantWithKeys(string id) => new()
         {
             Id = id,
             Issuer = new Uri($"https://auth.example.com/tenants/{id}"),

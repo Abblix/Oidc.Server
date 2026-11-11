@@ -905,7 +905,7 @@ public class RevocationRequestValidatorTests
 
         // Act
         var last = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
-        for (var attempt = 1; attempt <= defaults.PermitLimit!.Value; attempt++)
+        for (var attempt = 1; attempt <= defaults.PermitLimit.Value; attempt++)
             last = await validator.ValidateAsync(SingleIssuer.Tenant, CreateRevocationRequest(), CreateClientRequest());
 
         // Assert

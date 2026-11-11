@@ -174,7 +174,7 @@ public class GrantRevocationTests
                 GrantId = GrantId,
             },
         };
-        _issued[token.Payload.JwtId!] = token;
+        _issued[token.Payload.JwtId] = token;
         return token;
     }
 

@@ -58,7 +58,7 @@ public class RegistrationAccessTokenServiceTests
         await _service.IssueTokenAsync(SingleIssuer.Tenant, ClientId, IssuedAt, TimeSpan.FromDays(30), TokenId);
 
         Assert.NotNull(captured);
-        return captured!;
+        return captured;
     }
 
     /// <summary>

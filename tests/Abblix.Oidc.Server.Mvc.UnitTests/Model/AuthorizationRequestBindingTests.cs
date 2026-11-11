@@ -32,7 +32,7 @@ public class AuthorizationRequestBindingTests
         Core.AuthorizationRequest core = mvcModel;
 
         Assert.NotNull(core.AuthorizationDetails);
-        Assert.Equal(wireJson, core.AuthorizationDetails!.ToJsonString());
+        Assert.Equal(wireJson, core.AuthorizationDetails.ToJsonString());
     }
 
     [Fact]

@@ -80,7 +80,7 @@ public class AuthServiceJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify issuer validation callback
-        var issuerValidationResult = await capturedParams!.ValidateIssuer!(ExpectedIssuer);
+        var issuerValidationResult = await capturedParams.ValidateIssuer!(ExpectedIssuer);
         Assert.True(issuerValidationResult);
     }
 
@@ -132,7 +132,7 @@ public class AuthServiceJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify issuer validation callback rejects invalid issuer
-        var issuerValidationResult = await capturedParams!.ValidateIssuer!(invalidIssuer);
+        var issuerValidationResult = await capturedParams.ValidateIssuer!(invalidIssuer);
         Assert.False(issuerValidationResult);
     }
 
@@ -185,7 +185,7 @@ public class AuthServiceJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify issuer validation callback rejects null issuer
-        var issuerValidationResult = await capturedParams!.ValidateIssuer!(null!);
+        var issuerValidationResult = await capturedParams.ValidateIssuer!(null!);
         Assert.False(issuerValidationResult);
     }
 
@@ -212,7 +212,7 @@ public class AuthServiceJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify issuer validation callback rejects empty issuer
-        var issuerValidationResult = await capturedParams!.ValidateIssuer!(string.Empty);
+        var issuerValidationResult = await capturedParams.ValidateIssuer!(string.Empty);
         Assert.False(issuerValidationResult);
     }
 
@@ -238,7 +238,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.True(await capturedParams!.ValidateAudience!([ExpectedIssuer]));
+        Assert.True(await capturedParams.ValidateAudience!([ExpectedIssuer]));
     }
 
     /// <summary>
@@ -264,7 +264,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.False(await capturedParams!.ValidateAudience!([ValidClientId]));
+        Assert.False(await capturedParams.ValidateAudience!([ValidClientId]));
 
         // The client store is a strict mock with nothing set up for this identifier, so reaching it at all
         // would throw. Passing is the evidence that audience validation no longer consults it.
@@ -293,7 +293,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.True(await capturedParams!.ValidateAudience!(audiences));
+        Assert.True(await capturedParams.ValidateAudience!(audiences));
     }
 
     /// <summary>
@@ -320,7 +320,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.False(await capturedParams!.ValidateAudience!(audiences));
+        Assert.False(await capturedParams.ValidateAudience!(audiences));
     }
 
     /// <summary>
@@ -346,7 +346,7 @@ public class AuthServiceJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify audience validation callback rejects empty collection
-        var audienceValidationResult = await capturedParams!.ValidateAudience!([]);
+        var audienceValidationResult = await capturedParams.ValidateAudience!([]);
         Assert.False(audienceValidationResult);
     }
 
@@ -371,7 +371,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.Equal(ValidationOptions.Default, capturedParams!.Options);
+        Assert.Equal(ValidationOptions.Default, capturedParams.Options);
     }
 
     /// <summary>
@@ -397,7 +397,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.Equal(customOptions, capturedParams!.Options);
+        Assert.Equal(customOptions, capturedParams.Options);
     }
 
     /// <summary>
@@ -423,7 +423,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.Equal(noOptions, capturedParams!.Options);
+        Assert.Equal(noOptions, capturedParams.Options);
     }
 
     /// <summary>
@@ -457,7 +457,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(null!).ToArrayAsync(TestContext.Current.CancellationToken);
+        var resolvedKeys = await capturedParams.ResolveIssuerSigningKeys!(null!).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Equal(signingKeys.Length, resolvedKeys.Length);
     }
 
@@ -492,7 +492,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveTokenDecryptionKeys!(null!).ToArrayAsync(TestContext.Current.CancellationToken);
+        var resolvedKeys = await capturedParams.ResolveTokenDecryptionKeys!(null!).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Equal(encryptionKeys.Length, resolvedKeys.Length);
 
         // Verify GetEncryptionKeys was called with includePrivate=true
@@ -526,7 +526,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(null!).ToArrayAsync(TestContext.Current.CancellationToken);
+        var resolvedKeys = await capturedParams.ResolveIssuerSigningKeys!(null!).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Empty(resolvedKeys);
     }
 
@@ -628,7 +628,7 @@ public class AuthServiceJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.NotNull(capturedParams!.ValidateIssuer);
+        Assert.NotNull(capturedParams.ValidateIssuer);
         Assert.NotNull(capturedParams.ValidateAudience);
         Assert.NotNull(capturedParams.ResolveIssuerSigningKeys);
         Assert.NotNull(capturedParams.ResolveTokenDecryptionKeys);

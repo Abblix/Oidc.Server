@@ -118,7 +118,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(JsonWebTokenTypes.LogoutToken, capturedToken!.Header.Type);
+        Assert.Equal(JsonWebTokenTypes.LogoutToken, capturedToken.Header.Type);
         // The default ClientInfo registers RS256 for ID Token signing, and section 2.4 signs the logout
         // token in the same manner as the ID Token.
         Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
@@ -146,7 +146,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(algorithm, capturedToken!.Header.Algorithm);
+        Assert.Equal(algorithm, capturedToken.Header.Algorithm);
     }
 
     /// <summary>
@@ -170,7 +170,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SigningAlgorithms.PS512, capturedToken!.Header.Algorithm);
+        Assert.Equal(SigningAlgorithms.PS512, capturedToken.Header.Algorithm);
     }
 
     /// <summary>
@@ -195,7 +195,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SigningAlgorithms.RS256, capturedToken!.Header.Algorithm);
+        Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
     }
 
     /// <summary>
@@ -217,7 +217,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(Issuer, capturedToken!.Payload.Issuer);
+        Assert.Equal(Issuer, capturedToken.Payload.Issuer);
     }
 
     /// <summary>
@@ -239,7 +239,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Contains(ClientId, capturedToken!.Payload.Audiences);
+        Assert.Contains(ClientId, capturedToken.Payload.Audiences);
     }
 
     /// <summary>
@@ -269,8 +269,8 @@ public class LogoutTokenServiceTests
         // Assert
         Assert.NotNull(token1);
         Assert.NotNull(token2);
-        Assert.NotNull(token1!.Payload.JwtId);
-        Assert.NotNull(token2!.Payload.JwtId);
+        Assert.NotNull(token1.Payload.JwtId);
+        Assert.NotNull(token2.Payload.JwtId);
         Assert.NotEqual(token1.Payload.JwtId, token2.Payload.JwtId);
     }
 
@@ -293,7 +293,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime, capturedToken!.Payload.IssuedAt);
+        Assert.Equal(_currentTime, capturedToken.Payload.IssuedAt);
     }
 
     /// <summary>
@@ -315,7 +315,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime, capturedToken!.Payload.NotBefore);
+        Assert.Equal(_currentTime, capturedToken.Payload.NotBefore);
     }
 
     /// <summary>
@@ -338,7 +338,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime + expiresIn, capturedToken!.Payload.ExpiresAt);
+        Assert.Equal(_currentTime + expiresIn, capturedToken.Payload.ExpiresAt);
     }
 
     /// <summary>
@@ -360,7 +360,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SubjectId, capturedToken!.Payload.Subject);
+        Assert.Equal(SubjectId, capturedToken.Payload.Subject);
 
         _subjectTypeConverter.Verify(c => c.Convert(TestTenant.Matched, SubjectId, clientInfo), Times.Once);
     }
@@ -384,7 +384,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SessionId, capturedToken!.Payload.SessionId);
+        Assert.Equal(SessionId, capturedToken.Payload.SessionId);
     }
 
     /// <summary>
@@ -406,7 +406,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.True(capturedToken!.Payload.Json.ContainsKey(IanaClaimTypes.Events));
+        Assert.True(capturedToken.Payload.Json.ContainsKey(IanaClaimTypes.Events));
 
         var events = capturedToken.Payload.Json[IanaClaimTypes.Events] as JsonObject;
         Assert.NotNull(events);
@@ -433,7 +433,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Null(capturedToken!.Payload.Nonce);
+        Assert.Null(capturedToken.Payload.Nonce);
     }
 
     /// <summary>
@@ -522,7 +522,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SubjectId, capturedToken!.Payload.Subject);
+        Assert.Equal(SubjectId, capturedToken.Payload.Subject);
         Assert.True(string.IsNullOrEmpty(capturedToken.Payload.SessionId));
     }
 
@@ -554,7 +554,7 @@ public class LogoutTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.True(string.IsNullOrEmpty(capturedToken!.Payload.Subject));
+        Assert.True(string.IsNullOrEmpty(capturedToken.Payload.Subject));
         Assert.Equal(SessionId, capturedToken.Payload.SessionId);
     }
 

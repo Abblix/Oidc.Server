@@ -102,7 +102,7 @@ public class AccessTokenServiceTests
         await _service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, CreateClientInfo(), grantId: null, null);
 
         Assert.NotNull(capturedToken);
-        Assert.Equal(emailGranted ? "user@example.com" : null, capturedToken!.Payload.Email);
+        Assert.Equal(emailGranted ? "user@example.com" : null, capturedToken.Payload.Email);
         Assert.Equal(emailGranted ? true : null, capturedToken.Payload.EmailVerified);
     }
 
@@ -146,7 +146,7 @@ public class AccessTokenServiceTests
         await service.CreateAccessTokenAsync(tenant, authSession, authContext, CreateClientInfo(), grantId: null, null);
 
         Assert.NotNull(capturedToken);
-        Assert.Equal("user@example.com", capturedToken!.Payload.Email);
+        Assert.Equal("user@example.com", capturedToken.Payload.Email);
         Assert.True(capturedToken.Payload.EmailVerified);
     }
 
@@ -231,7 +231,7 @@ public class AccessTokenServiceTests
         await _service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, CreateClientInfo(), grantId: null, null);
 
         Assert.NotNull(capturedToken);
-        Assert.Null(capturedToken!.Payload.Email);
+        Assert.Null(capturedToken.Payload.Email);
         Assert.Null(capturedToken.Payload.EmailVerified);
     }
 
@@ -259,7 +259,7 @@ public class AccessTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(JsonWebTokenTypes.AccessToken, capturedToken!.Header.Type);
+        Assert.Equal(JsonWebTokenTypes.AccessToken, capturedToken.Header.Type);
         Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
     }
 
@@ -290,7 +290,7 @@ public class AccessTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime, capturedToken!.Payload.IssuedAt);
+        Assert.Equal(_currentTime, capturedToken.Payload.IssuedAt);
         Assert.Equal(_currentTime, capturedToken.Payload.NotBefore);
         Assert.Equal(_currentTime.AddMinutes(30), capturedToken.Payload.ExpiresAt);
         Assert.Equal(Issuer, capturedToken.Payload.Issuer);
@@ -317,7 +317,7 @@ public class AccessTokenServiceTests
             CreateAuthSession(), CreateAuthorizationContext(), CreateClientInfo(), grantId, null);
 
         Assert.NotNull(capturedToken);
-        Assert.Equal(grantId, capturedToken!.Payload.GrantId);
+        Assert.Equal(grantId, capturedToken.Payload.GrantId);
         Assert.Equal(grantId is not null, capturedToken.Payload.Json.ContainsKey(OidcClaimTypes.GrantId));
     }
 
@@ -353,7 +353,7 @@ public class AccessTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(UserId, capturedToken!.Payload.Subject);
+        Assert.Equal(UserId, capturedToken.Payload.Subject);
         Assert.Equal(SessionId, capturedToken.Payload.SessionId);
         Assert.Equal(authTime, capturedToken.Payload.AuthenticationTime);
         Assert.Equal("google", capturedToken.Payload.IdentityProvider);
@@ -389,7 +389,7 @@ public class AccessTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(ClientId, capturedToken!.Payload.ClientId);
+        Assert.Equal(ClientId, capturedToken.Payload.ClientId);
         Assert.Equal(scopes, capturedToken.Payload.Scope);
         Assert.Equal(["https://api.example.com", "https://api2.example.com"], capturedToken.Payload.Audiences);
     }
@@ -419,7 +419,7 @@ public class AccessTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal([Issuer], capturedToken!.Payload.Audiences);
+        Assert.Equal([Issuer], capturedToken.Payload.Audiences);
     }
 
     /// <summary>
@@ -458,7 +458,7 @@ public class AccessTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal("Engineering", capturedToken!.Payload["department"]?.GetValue<string>());
+        Assert.Equal("Engineering", capturedToken.Payload["department"]?.GetValue<string>());
         Assert.Equal("EMP123", capturedToken.Payload["employee_id"]?.GetValue<string>());
         var roles = capturedToken.Payload["roles"]?.AsArray();
         Assert.NotNull(roles);
@@ -558,8 +558,8 @@ public class AccessTokenServiceTests
         Assert.Equal(ClientId, authContext.ClientId);
         Assert.Equal(scopes, authContext.Scope);
         Assert.NotNull(authContext.Resources);
-        Assert.Single(authContext.Resources!);
-        Assert.Equal("https://api.example.com/", authContext.Resources![0].ToString());
+        Assert.Single(authContext.Resources);
+        Assert.Equal("https://api.example.com/", authContext.Resources[0].ToString());
     }
 
     /// <summary>
@@ -619,7 +619,7 @@ public class AccessTokenServiceTests
 
         // Assert
         Assert.NotNull(authSession.AdditionalClaims);
-        Assert.Equal("Engineering", authSession.AdditionalClaims!["department"]?.GetValue<string>());
+        Assert.Equal("Engineering", authSession.AdditionalClaims["department"]?.GetValue<string>());
         Assert.Equal("EMP123", authSession.AdditionalClaims["employee_id"]?.GetValue<string>());
     }
 
@@ -670,7 +670,7 @@ public class AccessTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime + customExpiration, capturedToken!.Payload.ExpiresAt);
+        Assert.Equal(_currentTime + customExpiration, capturedToken.Payload.ExpiresAt);
     }
 
     /// <summary>
@@ -830,7 +830,7 @@ public class AccessTokenServiceTests
             SingleIssuer.Tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
 
         Assert.NotNull(capturedPolicy);
-        Assert.Same(resourceKey, capturedPolicy!.Key);
+        Assert.Same(resourceKey, capturedPolicy.Key);
     }
 
     /// <summary>
@@ -853,7 +853,7 @@ public class AccessTokenServiceTests
             SingleIssuer.Tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
 
         Assert.NotNull(capturedPolicy);
-        Assert.Null(capturedPolicy!.Key);
+        Assert.Null(capturedPolicy.Key);
     }
 
     /// <summary>
@@ -906,7 +906,7 @@ public class AccessTokenServiceTests
         await service.CreateAccessTokenAsync(SingleIssuer.Tenant, CreateAuthSession(), context, CreateClientInfo(), grantId: null, null);
 
         Assert.NotNull(captured);
-        return captured!;
+        return captured;
     }
 
     /// <summary>

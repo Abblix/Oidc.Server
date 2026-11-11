@@ -256,7 +256,7 @@ public class RollingHmacNonceServiceTests
     {
         var winner = new NonceSecret { Value = ByteString.CopyFrom(new byte[32]) };
 
-        INonceService Build(IEntityStorage storage)
+        static INonceService Build(IEntityStorage storage)
         {
             var services = new ServiceCollection().AddLogging();
             services.AddSingleton<TimeProvider>(new FakeTimeProvider(Anchor));

@@ -143,7 +143,7 @@ public class DiscoverySignedMetadataTests
         await _formatter.FormatResponseAsync(MinimalResponse());
 
         Assert.NotNull(capturedToken);
-        var payload = capturedToken!.Payload.Json;
+        var payload = capturedToken.Payload.Json;
 
         Assert.Equal(Issuer, (string?)payload["iss"]);
         Assert.Equal(Issuer, (string?)payload["issuer"]);

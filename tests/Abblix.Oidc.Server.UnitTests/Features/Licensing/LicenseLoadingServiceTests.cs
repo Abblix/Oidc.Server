@@ -200,7 +200,7 @@ public class LicenseLoadingServiceTests
         var loggerFactory = NullLoggerFactory.Instance;
 
         // Create async enumerable that yields slowly and checks cancellation
-        async IAsyncEnumerable<string> SlowLicenses([EnumeratorCancellation] CancellationToken ct = default)
+        static async IAsyncEnumerable<string> SlowLicenses([EnumeratorCancellation] CancellationToken ct = default)
         {
             await Task.Delay(100, ct);
             yield return "test.license.jwt";

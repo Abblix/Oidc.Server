@@ -51,7 +51,7 @@ public class SecretLengthOptionsValidatorTests
         var result = _validator.Validate(null, options);
 
         Assert.True(result.Failed);
-        Assert.Contains(result.Failures!, f => f.Contains("ClientSecret"));
+        Assert.Contains(result.Failures, f => f.Contains("ClientSecret"));
     }
 
     /// <summary>
@@ -69,6 +69,6 @@ public class SecretLengthOptionsValidatorTests
         var result = _validator.Validate(null, options);
 
         Assert.True(result.Failed);
-        Assert.Contains(result.Failures!, f => f.Contains(nameof(OidcOptions.AuthorizationCodeLength)));
+        Assert.Contains(result.Failures, f => f.Contains(nameof(OidcOptions.AuthorizationCodeLength)));
     }
 }

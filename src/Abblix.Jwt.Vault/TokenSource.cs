@@ -142,7 +142,9 @@ internal sealed partial class TokenSource(
                 var renewal = await loginClient.RenewSelfAsync(alive.Token, CancellationToken.None);
                 switch (renewal.Status)
                 {
+#pragma warning disable S8969 // The compiler does warn here without it (CS8602): Lease is null unless the status is Renewed
                     case RenewStatus.Renewed when renewal.Lease!.LeaseDuration >= alive.FullLease:
+#pragma warning restore S8969
                         Publish(renewal.Lease);
                         return;
 

@@ -31,7 +31,7 @@ public partial class MultiTenancyRegistrationTests
     [Fact]
     public async Task TenantsChangedDefinition_ServesClientsItNowDeclares()
     {
-        TenantDefinition Acme(string clientId)
+        static TenantDefinition Acme(string clientId)
             => new() { Id = "acme", Issuer = new Uri(AcmeIssuer), Clients = [new ClientInfo(clientId)] };
 
         var services = new ServiceCollection();

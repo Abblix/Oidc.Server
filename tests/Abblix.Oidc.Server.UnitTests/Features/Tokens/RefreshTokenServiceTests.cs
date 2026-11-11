@@ -100,7 +100,7 @@ public class RefreshTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(JwtTypes.RefreshToken, capturedToken!.Header.Type);
+        Assert.Equal(JwtTypes.RefreshToken, capturedToken.Header.Type);
         Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
     }
 
@@ -137,7 +137,7 @@ public class RefreshTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime, capturedToken!.Payload.IssuedAt);
+        Assert.Equal(_currentTime, capturedToken.Payload.IssuedAt);
         Assert.Equal(_currentTime, capturedToken.Payload.NotBefore);
         Assert.Equal(_currentTime + absoluteExpiry, capturedToken.Payload.ExpiresAt);
         Assert.Equal(Issuer, capturedToken.Payload.Issuer);
@@ -169,7 +169,7 @@ public class RefreshTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Single(capturedToken!.Payload.Audiences);
+        Assert.Single(capturedToken.Payload.Audiences);
         Assert.Equal(Issuer, capturedToken.Payload.Audiences.Single());
     }
 
@@ -204,7 +204,7 @@ public class RefreshTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(UserId, capturedToken!.Payload.Subject);
+        Assert.Equal(UserId, capturedToken.Payload.Subject);
         Assert.Equal(SessionId, capturedToken.Payload.SessionId);
     }
 
@@ -235,7 +235,7 @@ public class RefreshTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(ClientId, capturedToken!.Payload.ClientId);
+        Assert.Equal(ClientId, capturedToken.Payload.ClientId);
         Assert.Equal(scopes, capturedToken.Payload.Scope);
     }
 
@@ -337,7 +337,7 @@ public class RefreshTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(GrantId, capturedToken!.Payload.GrantId);
+        Assert.Equal(GrantId, capturedToken.Payload.GrantId);
     }
 
     /// <summary>
@@ -416,7 +416,7 @@ public class RefreshTokenServiceTests
         // Assert
         Assert.NotNull(result);
         Assert.NotNull(capturedToken);
-        Assert.Equal(originalIssuedAt, capturedToken!.Payload.IssuedAt);
+        Assert.Equal(originalIssuedAt, capturedToken.Payload.IssuedAt);
         Assert.Equal(_currentTime, capturedToken.Payload.NotBefore); // NotBefore is still current time
     }
 
@@ -449,7 +449,7 @@ public class RefreshTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime + absoluteExpiry, capturedToken!.Payload.ExpiresAt);
+        Assert.Equal(_currentTime + absoluteExpiry, capturedToken.Payload.ExpiresAt);
     }
 
     /// <summary>
@@ -501,7 +501,7 @@ public class RefreshTokenServiceTests
         // now + 2h < originalIssuedAt + 30days, so the slid window wins - and it is LATER than the
         // old token's expiry (originalIssuedAt + 2h), proving the window actually extended.
         var expectedExpiry = _currentTime + slidingExpiry;
-        Assert.Equal(expectedExpiry, capturedToken!.Payload.ExpiresAt);
+        Assert.Equal(expectedExpiry, capturedToken.Payload.ExpiresAt);
         Assert.True(capturedToken.Payload.ExpiresAt > oldToken.Payload.ExpiresAt);
     }
 
@@ -552,7 +552,7 @@ public class RefreshTokenServiceTests
         // Sliding: -7h + 10h = +3h from now
         // Absolute is shorter, so it wins
         var expectedExpiry = originalIssuedAt + absoluteExpiry;
-        Assert.Equal(expectedExpiry, capturedToken!.Payload.ExpiresAt);
+        Assert.Equal(expectedExpiry, capturedToken.Payload.ExpiresAt);
     }
 
     /// <summary>

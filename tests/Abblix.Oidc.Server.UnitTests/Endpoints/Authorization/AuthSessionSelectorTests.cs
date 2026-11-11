@@ -133,7 +133,7 @@ public class AuthSessionSelectorTests
         Assert.True(result.TryGetFailure(out var response));
         var selection = Assert.IsType<AccountSelectionRequired>(response);
         Assert.Equal(Now, selection.Model.Prompted![Prompts.SelectAccount]);
-        Assert.Equal(Now, selection.Model.Prompted![Prompts.Login]);
+        Assert.Equal(Now, selection.Model.Prompted[Prompts.Login]);
         Assert.Empty(selection.Users);
     }
 

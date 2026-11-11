@@ -144,7 +144,7 @@ public class MappersTests
         var result = RequestedClaimsMapper.FromProto(proto);
         Assert.NotNull(result);
         Assert.NotNull(result.UserInfo);
-        Assert.True(result.UserInfo!.ContainsKey("email"));
+        Assert.True(result.UserInfo.ContainsKey("email"));
     }
 
     [Fact]
@@ -235,7 +235,7 @@ public class MappersTests
         Assert.Equal(context.RedirectUri, result.RedirectUri);
         Assert.NotNull(result.Resources);
         Assert.Equal(2, result.Resources.Length);
-        Assert.Equal(context.Resources![0], result.Resources[0]);
+        Assert.Equal(context.Resources[0], result.Resources[0]);
     }
 
     /// <summary>
@@ -276,7 +276,7 @@ public class MappersTests
 
         // Assert - byte-exact preservation through the proto string field.
         Assert.NotNull(result.AuthorizationDetails);
-        Assert.Equal(wireJson, result.AuthorizationDetails!.ToJsonString());
+        Assert.Equal(wireJson, result.AuthorizationDetails.ToJsonString());
         Assert.Equal(wireJson, proto.AuthorizationDetailsJson);
     }
 
@@ -300,7 +300,7 @@ public class MappersTests
 
         Assert.Equal(wireJson, proto.AuthorizationDetailsJson);
         Assert.NotNull(result.AuthorizationDetails);
-        Assert.Equal(wireJson, result.AuthorizationDetails!.ToJsonString());
+        Assert.Equal(wireJson, result.AuthorizationDetails.ToJsonString());
     }
 
     [Fact]
@@ -361,7 +361,7 @@ public class MappersTests
 
         Assert.Equal(actorJson, proto.ActorJson);
         Assert.NotNull(result.Actor);
-        Assert.Equal(actorJson, result.Actor!.ToJsonString());
+        Assert.Equal(actorJson, result.Actor.ToJsonString());
     }
 
     [Fact]
@@ -383,7 +383,7 @@ public class MappersTests
         var result = AuthorizationContextMapper.FromProto(proto);
 
         Assert.NotNull(result.Actor);
-        Assert.Equal(chainedActorJson, result.Actor!.ToJsonString());
+        Assert.Equal(chainedActorJson, result.Actor.ToJsonString());
         // The nested act member must remain a JsonObject (not coerced into a string).
         Assert.IsType<JsonObject>(result.Actor["act"]);
     }

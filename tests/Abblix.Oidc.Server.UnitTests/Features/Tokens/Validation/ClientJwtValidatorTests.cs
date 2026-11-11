@@ -108,7 +108,7 @@ public class ClientJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify audience validation callback accepts request URI
-        var audienceValidationResult = await capturedParams!.ValidateAudience!([RequestUri]);
+        var audienceValidationResult = await capturedParams.ValidateAudience!([RequestUri]);
         Assert.True(audienceValidationResult);
     }
 
@@ -186,7 +186,7 @@ public class ClientJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify audience validation callback accepts issuer identifier
-        var audienceValidationResult = await capturedParams!.ValidateAudience!([Issuer]);
+        var audienceValidationResult = await capturedParams.ValidateAudience!([Issuer]);
         Assert.True(audienceValidationResult);
     }
 
@@ -226,7 +226,7 @@ public class ClientJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify audience validation callback rejects wrong audience
-        var audienceValidationResult = await capturedParams!.ValidateAudience!([wrongAudience]);
+        var audienceValidationResult = await capturedParams.ValidateAudience!([wrongAudience]);
         Assert.False(audienceValidationResult);
     }
 
@@ -249,7 +249,7 @@ public class ClientJwtValidatorTests
         await _validator.ValidateAsync(SingleIssuer.Tenant, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         Assert.False(await capturedParams!.ValidateAudience!([audience]));
-        Assert.True(await capturedParams.ValidateAudience!([RequestUri]));
+        Assert.True(await capturedParams.ValidateAudience([RequestUri]));
     }
 
     /// <summary>
@@ -290,7 +290,7 @@ public class ClientJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify audience validation accepts when one matches
-        var audienceValidationResult = await capturedParams!.ValidateAudience!(audiences);
+        var audienceValidationResult = await capturedParams.ValidateAudience!(audiences);
         Assert.True(audienceValidationResult);
     }
 
@@ -328,7 +328,7 @@ public class ClientJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify audience validation rejects empty collection
-        var audienceValidationResult = await capturedParams!.ValidateAudience!([]);
+        var audienceValidationResult = await capturedParams.ValidateAudience!([]);
         Assert.False(audienceValidationResult);
     }
 
@@ -372,7 +372,7 @@ public class ClientJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify issuer validation callback
-        var issuerValidationResult = await capturedParams!.ValidateIssuer!(ValidClientId);
+        var issuerValidationResult = await capturedParams.ValidateIssuer!(ValidClientId);
         Assert.True(issuerValidationResult);
     }
 
@@ -410,7 +410,7 @@ public class ClientJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify issuer validation callback rejects unknown issuer
-        var issuerValidationResult = await capturedParams!.ValidateIssuer!(unknownIssuer);
+        var issuerValidationResult = await capturedParams.ValidateIssuer!(unknownIssuer);
         Assert.False(issuerValidationResult);
     }
 
@@ -461,7 +461,7 @@ public class ClientJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Second call with different issuer should return false (already looked up different client)
-        var result = await capturedParams!.ValidateIssuer!(AnotherClientId);
+        var result = await capturedParams.ValidateIssuer!(AnotherClientId);
         Assert.False(result);
     }
 
@@ -574,7 +574,7 @@ public class ClientJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync(TestContext.Current.CancellationToken);
+        var resolvedKeys = await capturedParams.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Equal(signingKeys.Length, resolvedKeys.Length);
 
         _clientKeysProvider.Verify(p => p.GetSigningKeys(clientInfo), Times.Once);
@@ -615,7 +615,7 @@ public class ClientJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync(TestContext.Current.CancellationToken);
+        var resolvedKeys = await capturedParams.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Empty(resolvedKeys);
     }
 
@@ -649,7 +649,7 @@ public class ClientJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(unknownIssuer).ToArrayAsync(TestContext.Current.CancellationToken);
+        var resolvedKeys = await capturedParams.ResolveIssuerSigningKeys!(unknownIssuer).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Empty(resolvedKeys);
 
         // Verify GetSigningKeys was never called for unknown client
@@ -692,8 +692,8 @@ public class ClientJwtValidatorTests
 
         // Assert - the decryption-key resolver is configured and yields the server's private keys.
         Assert.NotNull(capturedParams);
-        Assert.NotNull(capturedParams!.ResolveTokenDecryptionKeys);
-        var decryptionKeys = await capturedParams.ResolveTokenDecryptionKeys!(string.Empty)
+        Assert.NotNull(capturedParams.ResolveTokenDecryptionKeys);
+        var decryptionKeys = await capturedParams.ResolveTokenDecryptionKeys(string.Empty)
             .ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Contains(_serverDecryptionKey, decryptionKeys);
     }
@@ -733,7 +733,7 @@ public class ClientJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.Equal(ValidationOptions.Default, capturedParams!.Options);
+        Assert.Equal(ValidationOptions.Default, capturedParams.Options);
     }
 
     /// <summary>
@@ -773,7 +773,7 @@ public class ClientJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.Equal(customOptions, capturedParams!.Options);
+        Assert.Equal(customOptions, capturedParams.Options);
     }
 
     /// <summary>
@@ -909,7 +909,7 @@ public class ClientJwtValidatorTests
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.NotNull(capturedParams!.ValidateIssuer);
+        Assert.NotNull(capturedParams.ValidateIssuer);
         Assert.NotNull(capturedParams.ValidateAudience);
         Assert.NotNull(capturedParams.ResolveIssuerSigningKeys);
         Assert.Equal(ValidationOptions.Default, capturedParams.Options);

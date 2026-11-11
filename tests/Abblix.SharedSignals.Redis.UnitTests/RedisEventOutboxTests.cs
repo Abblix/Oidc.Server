@@ -356,7 +356,9 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
 
         var written = garnet.Connection.GetServer(garnet.Connection.GetEndPoints()[0])
             .Keys(pattern: $"Abblix.SharedSignals:RedisEventOutbox:*{marker}*")
+#pragma warning disable S8969 // The compiler does warn here without it (CS8600): a RedisKey converts to a nullable string
             .Select(key => (string)key!)
+#pragma warning restore S8969
             .ToArray();
 
         Assert.Equal(2, written.Length);

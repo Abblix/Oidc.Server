@@ -152,7 +152,7 @@ public class JwtSubjectTokenResolverTests
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.NotNull(ctx.AuthorizationDetails);
-        Assert.Equal(adWire, ctx.AuthorizationDetails!.ToJsonString());
+        Assert.Equal(adWire, ctx.AuthorizationDetails.ToJsonString());
         // The clone must be detached from the JWT payload -- mutating one must not affect the other.
         Assert.NotSame(jwt.Payload.Json[IanaClaimTypes.AuthorizationDetails], ctx.AuthorizationDetails);
     }

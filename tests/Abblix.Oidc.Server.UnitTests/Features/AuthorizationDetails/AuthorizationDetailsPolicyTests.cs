@@ -566,7 +566,7 @@ public class AuthorizationDetailsPolicyTests
         var sp = BuildProvider(registerValidators: services =>
             services.AddAuthorizationDetailValidator<ServedTenantOnlyValidator>("payment_initiation"));
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
-        JsonArray Raw() => new(new JsonObject { ["type"] = "payment_initiation" });
+        static JsonArray Raw() => new(new JsonObject { ["type"] = "payment_initiation" });
 
         var requested = await composite.ApplyAsync(SingleIssuer.Tenant, Raw(), TestClient, TestContext.Current.CancellationToken);
         var granted = await composite.ApplyGrantedAsync(
@@ -840,7 +840,7 @@ public class AuthorizationDetailsPolicyTests
         Assert.Equal("Payment transfer", descriptor.Title);
         Assert.Equal("Transfer 500 EUR to IBAN DE02 ...", descriptor.Summary);
         Assert.NotNull(descriptor.Details);
-        Assert.Contains(descriptor.Details!,
+        Assert.Contains(descriptor.Details,
             kv => kv.Key == "Amount" && kv.Value == "500.00 EUR");
     }
 

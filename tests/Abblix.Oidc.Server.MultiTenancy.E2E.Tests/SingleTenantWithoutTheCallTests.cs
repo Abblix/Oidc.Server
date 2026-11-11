@@ -299,7 +299,7 @@ public sealed class SingleTenantWithoutTheCallTests
             new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
-                [TokenRequest.Parameters.Code] = code!,
+                [TokenRequest.Parameters.Code] = code,
                 [TokenRequest.Parameters.RedirectUri] = RedirectUri,
                 [TokenRequest.Parameters.CodeVerifier] = CodeVerifier,
                 [ClientRequest.Parameters.ClientId] = ClientId,

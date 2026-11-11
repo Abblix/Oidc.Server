@@ -133,7 +133,7 @@ public class IntrospectionResponseFormatterTests
         // RFC 9701 section 5: typ header is the introspection JWT type, signed with the client's algorithm, addressed to
         // the client, and the response carried under the token_introspection claim.
         Assert.NotNull(capturedToken);
-        Assert.Equal(JsonWebTokenTypes.TokenIntrospection, capturedToken!.Header.Type);
+        Assert.Equal(JsonWebTokenTypes.TokenIntrospection, capturedToken.Header.Type);
         Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
         Assert.Contains(ClientId, capturedToken.Payload.Audiences);
 

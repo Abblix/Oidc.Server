@@ -92,7 +92,7 @@ public partial class MultiTenancyRegistrationTests
                 .ToAsyncEnumerable());
         custodian
             .Setup(c => c.UnwrapKeyAsync(
-                keyEncryptionKey.KeyId!, Moq.It.IsAny<string>(), Moq.It.IsAny<JsonWebTokenHeader>(),
+                keyEncryptionKey.KeyId, Moq.It.IsAny<string>(), Moq.It.IsAny<JsonWebTokenHeader>(),
                 Moq.It.IsAny<byte[]>(), Moq.It.IsAny<CancellationToken>()))
             .Returns((string _, string algorithm, JsonWebTokenHeader _, byte[] encryptedKey, CancellationToken _) =>
                 Task.FromResult<byte[]?>(Unwrap(keyEncryptionKey, algorithm, encryptedKey)));

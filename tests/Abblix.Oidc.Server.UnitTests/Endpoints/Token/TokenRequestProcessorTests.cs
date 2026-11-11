@@ -311,7 +311,7 @@ public class TokenRequestProcessorTests
 
         // Assert
         Assert.NotNull(captured);
-        Assert.Equal("the-auth-req-id", captured!.AuthenticationRequestId);
+        Assert.Equal("the-auth-req-id", captured.AuthenticationRequestId);
         Assert.Equal(refreshToken.EncodedJwt, captured.RefreshToken);
     }
 

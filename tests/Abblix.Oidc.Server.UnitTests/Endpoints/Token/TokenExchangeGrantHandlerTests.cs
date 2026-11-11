@@ -107,7 +107,7 @@ public class TokenExchangeGrantHandlerTests
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant.Context.AuthorizationDetails);
-        Assert.Equal(adWire, grant.Context.AuthorizationDetails!.ToJsonString());
+        Assert.Equal(adWire, grant.Context.AuthorizationDetails.ToJsonString());
     }
 
     [Fact]
@@ -282,7 +282,7 @@ public class TokenExchangeGrantHandlerTests
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal("alice", grant.AuthSession.Subject);
         Assert.NotNull(grant.Context.Actor);
-        Assert.Equal("svc-worker-7", grant.Context.Actor!["sub"]!.GetValue<string>());
+        Assert.Equal("svc-worker-7", grant.Context.Actor["sub"]!.GetValue<string>());
         Assert.Null(grant.Context.Actor["act"]);
         resolverMock.Verify(r => r.ResolveAsync(TestTenant.Matched, SubjectTokenWire, It.IsAny<Uri>(), caller.Token), Times.Once);
         resolverMock.Verify(r => r.ResolveAsync(TestTenant.Matched, actorWire, It.IsAny<Uri>(), caller.Token), Times.Once);
@@ -827,8 +827,8 @@ public class TokenExchangeGrantHandlerTests
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant.Context.Resources);
-        Assert.Single(grant.Context.Resources!);
-        Assert.Equal(request.Resources[0], grant.Context.Resources![0]);
+        Assert.Single(grant.Context.Resources);
+        Assert.Equal(request.Resources[0], grant.Context.Resources[0]);
     }
 
     [Fact]

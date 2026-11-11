@@ -324,7 +324,7 @@ public class SigningAlgorithmPolicyTests
 
         // And the way out, which the inbound copy alone leaves open: what the getter hands back is a copy
         // too, so writing into it does not reach the signer.
-        options.AllowedSigningAlgorithms![0] = SigningAlgorithms.None;
+        options.AllowedSigningAlgorithms[0] = SigningAlgorithms.None;
 
         Assert.DoesNotContain(SigningAlgorithms.None, options.EffectiveSigningAlgorithms);
     }

@@ -96,7 +96,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SigningAlgorithms.RS256, capturedToken!.Header.Algorithm);
+        Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
     }
 
     /// <summary>
@@ -150,7 +150,7 @@ public class IdentityTokenServiceTests
 
         Assert.Equal(
             authenticationRequestId,
-            capturedToken!.Payload[OidcClaimTypes.AuthenticationRequestId]!.GetValue<string>());
+            capturedToken.Payload[OidcClaimTypes.AuthenticationRequestId]!.GetValue<string>());
 
         Assert.Equal(
             refreshTokenHash,
@@ -189,7 +189,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.NotNull(capturedToken!.Payload[OidcClaimTypes.AuthenticationRequestId]);
+        Assert.NotNull(capturedToken.Payload[OidcClaimTypes.AuthenticationRequestId]);
         Assert.Null(capturedToken.Payload[OidcClaimTypes.RefreshTokenHash]);
     }
 
@@ -228,7 +228,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Null(capturedToken!.Payload[OidcClaimTypes.AuthenticationRequestId]);
+        Assert.Null(capturedToken.Payload[OidcClaimTypes.AuthenticationRequestId]);
         Assert.Null(capturedToken.Payload[OidcClaimTypes.RefreshTokenHash]);
     }
 
@@ -259,7 +259,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime, capturedToken!.Payload.IssuedAt);
+        Assert.Equal(_currentTime, capturedToken.Payload.IssuedAt);
         Assert.Equal(_currentTime, capturedToken.Payload.NotBefore);
         Assert.Equal(_currentTime.AddMinutes(15), capturedToken.Payload.ExpiresAt);
         Assert.Equal(Issuer, capturedToken.Payload.Issuer);
@@ -302,7 +302,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SessionId, capturedToken!.Payload.SessionId);
+        Assert.Equal(SessionId, capturedToken.Payload.SessionId);
         Assert.Equal(authTime, capturedToken.Payload.AuthenticationTime);
         Assert.Equal("urn:oasis:names:tc:SAML:2.0:ac:classes:Password", capturedToken.Payload.AuthContextClassRef);
         Assert.Equal(["pwd", "mfa"], capturedToken.Payload.AuthenticationMethodReferences);
@@ -338,7 +338,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal([ClientId], capturedToken!.Payload.Audiences);
+        Assert.Equal([ClientId], capturedToken.Payload.Audiences);
         Assert.Equal("nonce_xyz123", capturedToken.Payload.Nonce);
     }
 
@@ -375,7 +375,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(UserId, capturedToken!.Payload.Subject);
+        Assert.Equal(UserId, capturedToken.Payload.Subject);
         Assert.Equal("John Doe", capturedToken.Payload["name"]?.GetValue<string>());
         Assert.Equal("john.doe@example.com", capturedToken.Payload["email"]?.GetValue<string>());
         Assert.True(capturedToken.Payload["email_verified"]?.GetValue<bool>());
@@ -520,7 +520,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        var cHash = capturedToken!.Payload[IanaClaimTypes.CHash];
+        var cHash = capturedToken.Payload[IanaClaimTypes.CHash];
         Assert.NotNull(cHash);
         Assert.IsType<string>(cHash?.GetValue<string>());
         Assert.NotEmpty(cHash.GetValue<string>());
@@ -555,7 +555,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        var atHash = capturedToken!.Payload[IanaClaimTypes.AtHash];
+        var atHash = capturedToken.Payload[IanaClaimTypes.AtHash];
         Assert.NotNull(atHash);
         Assert.IsType<string>(atHash?.GetValue<string>());
         Assert.NotEmpty(atHash.GetValue<string>());
@@ -589,7 +589,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        var cHash = capturedToken!.Payload[IanaClaimTypes.CHash];
+        var cHash = capturedToken.Payload[IanaClaimTypes.CHash];
         var atHash = capturedToken.Payload[IanaClaimTypes.AtHash];
 
         Assert.NotNull(cHash);
@@ -634,7 +634,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        var cHash = capturedToken!.Payload[IanaClaimTypes.CHash]?.GetValue<string>();
+        var cHash = capturedToken.Payload[IanaClaimTypes.CHash]?.GetValue<string>();
         var atHash = capturedToken.Payload[IanaClaimTypes.AtHash]?.GetValue<string>();
         Assert.NotNull(cHash);
         Assert.NotNull(atHash);
@@ -669,7 +669,7 @@ public class IdentityTokenServiceTests
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.False(capturedToken!.Payload.Json.ContainsKey(IanaClaimTypes.CHash));
+        Assert.False(capturedToken.Payload.Json.ContainsKey(IanaClaimTypes.CHash));
         Assert.False(capturedToken.Payload.Json.ContainsKey(IanaClaimTypes.AtHash));
     }
 

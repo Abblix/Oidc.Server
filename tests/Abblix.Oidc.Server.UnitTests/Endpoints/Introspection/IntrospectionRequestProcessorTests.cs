@@ -215,7 +215,7 @@ public class IntrospectionRequestProcessorTests
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
         Assert.NotNull(success.Claims);
-        Assert.False(success.Claims!.ContainsKey(IanaClaimTypes.Sub));
+        Assert.False(success.Claims.ContainsKey(IanaClaimTypes.Sub));
         Assert.False(success.Claims.ContainsKey("department"));
 
         // The caller still gets what it came for: who the token is for and what it may do.

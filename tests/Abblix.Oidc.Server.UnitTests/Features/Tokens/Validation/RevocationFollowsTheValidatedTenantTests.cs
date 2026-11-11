@@ -116,7 +116,7 @@ public class RevocationFollowsTheValidatedTenantTests
                 async (_, parameters) =>
                 {
                     if (parameters.ValidateIssuer != null)
-                        await parameters.ValidateIssuer(token.Payload.Issuer!);
+                        await parameters.ValidateIssuer(token.Payload.Issuer);
 
                     return token;
                 }));

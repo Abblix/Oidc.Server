@@ -71,7 +71,7 @@ public class HmacSignerTests
         string algorithm, int keyLengthBytes)
     {
         var key = new OctetJsonWebKey { KeyValue = RandomBytes(keyLengthBytes) };
-        var legitimateSignature = ComputeHmac(algorithm, key.KeyValue!, SampleData);
+        var legitimateSignature = ComputeHmac(algorithm, key.KeyValue, SampleData);
         var signer = new HmacSigner(algorithm);
 
         Assert.False(signer.Verify(key, SampleData, legitimateSignature));

@@ -162,7 +162,7 @@ public class DistributedCacheStorageTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(absoluteExpiration, capturedOptions!.AbsoluteExpiration);
+        Assert.Equal(absoluteExpiration, capturedOptions.AbsoluteExpiration);
         Assert.Equal(relativeExpiration, capturedOptions.AbsoluteExpirationRelativeToNow);
         Assert.Equal(slidingExpiration, capturedOptions.SlidingExpiration);
     }
@@ -200,7 +200,7 @@ public class DistributedCacheStorageTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(absoluteExpiration, capturedOptions!.AbsoluteExpiration);
+        Assert.Equal(absoluteExpiration, capturedOptions.AbsoluteExpiration);
     }
 
     /// <summary>
@@ -236,7 +236,7 @@ public class DistributedCacheStorageTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(relativeExpiration, capturedOptions!.AbsoluteExpirationRelativeToNow);
+        Assert.Equal(relativeExpiration, capturedOptions.AbsoluteExpirationRelativeToNow);
     }
 
     /// <summary>
@@ -272,7 +272,7 @@ public class DistributedCacheStorageTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(slidingExpiration, capturedOptions!.SlidingExpiration);
+        Assert.Equal(slidingExpiration, capturedOptions.SlidingExpiration);
     }
 
     /// <summary>

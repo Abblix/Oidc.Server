@@ -62,7 +62,7 @@ public class ServiceTokensAlgorithmsValidatorTests
         var result = _validator.Validate(null, options);
 
         Assert.True(result.Failed);
-        Assert.Contains(result.Failures!, f => f.Contains("AccessToken.Signing.Algorithm"));
+        Assert.Contains(result.Failures, f => f.Contains("AccessToken.Signing.Algorithm"));
     }
 
     /// <summary>
@@ -77,7 +77,7 @@ public class ServiceTokensAlgorithmsValidatorTests
         var result = _validator.Validate(null, options);
 
         Assert.True(result.Failed);
-        Assert.Contains(result.Failures!, f => f.Contains("RefreshToken.Encryption.Algorithm"));
+        Assert.Contains(result.Failures, f => f.Contains("RefreshToken.Encryption.Algorithm"));
     }
 
     /// <summary>
