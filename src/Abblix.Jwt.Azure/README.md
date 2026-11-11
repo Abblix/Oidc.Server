@@ -100,7 +100,7 @@ Blank is an opt-in, and it looks identical to a typo: a misspelled configuration
 
 ### The HTTP pipeline
 
-Both transports come from the host's `IHttpClientFactory`, so retries, a circuit breaker, timeouts, a proxy or a client certificate are added with the standard APIs and nothing of ours.
+Both transports come from the host's `IHttpClientFactory`, so retries, a circuit breaker, timeouts, a proxy or a client certificate are added with the standard APIs and nothing of ours. The examples below use `AddStandardResilienceHandler` from [Microsoft.Extensions.Http.Resilience](https://www.nuget.org/packages/Microsoft.Extensions.Http.Resilience), which your application installs itself.
 
 To make every outbound client of your application resilient, including these two, name none of them:
 

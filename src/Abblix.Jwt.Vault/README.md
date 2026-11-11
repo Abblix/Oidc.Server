@@ -139,7 +139,7 @@ Reach Vault over TLS in every environment that is not a local dev container: the
 
 ### The HTTP pipeline
 
-Both engines share one client from the host's `IHttpClientFactory`, so retries, a circuit breaker, timeouts, a proxy or a client certificate are added with the standard APIs and nothing of ours.
+Both engines share one client from the host's `IHttpClientFactory`, so retries, a circuit breaker, timeouts, a proxy or a client certificate are added with the standard APIs and nothing of ours. The examples below use `AddStandardResilienceHandler` from [Microsoft.Extensions.Http.Resilience](https://www.nuget.org/packages/Microsoft.Extensions.Http.Resilience), which your application installs itself.
 
 To make every outbound client of your application resilient, including this one, name none of them:
 

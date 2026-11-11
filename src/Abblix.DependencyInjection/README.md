@@ -56,7 +56,7 @@ Both operations have keyed counterparts: `ComposeKeyed` and `DecorateKeyed`.
 
 ## Per-call overrides
 
-`Dependency.Override` constructs a service from the container while substituting only the named dependencies - the clean alternative to hand-built factories that freeze a constructor's shape into calling code:
+`Dependency.Override` constructs a service from the container while substituting only the named dependencies - the clean alternative to hand-built factories that freeze a constructor's shape into calling code. The example registers the replay cache of [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) (namespace `Abblix.Jwt.ReplayPrevention`) under a key prefix of its own:
 
 ```csharp
 services.AddSingleton<IReplayCache>(provider =>
