@@ -7,17 +7,32 @@
 # Run manually on all files:
 #   pre-commit run --all-files
 #
-# Bypass once (NOT recommended, and not a safety net): EVERY hook here runs in this clone or nowhere.
+# Bypass once (NOT recommended, and not a safety net). Of everything below, CI re-runs only actionlint;
+# EVERY OTHER hook here runs in this clone or nowhere. The check for expressions inside executed values
+# runs in CI alone, through the shared action the lint workflow pins:
 #   git commit --no-verify
 #
-# actionlint is not a hook here: on Windows a release up to v1.7.12 hangs on a run: step longer than
-# about 4 KB (rhysd/actionlint#651, fixed on main). It comes back as a hook with the first release that
-# contains the fix. Until then workflows are checked by actionlint in CI, and so is the check for
-# expressions inside executed values, through the shared action the lint workflow pins.
+# actionlint through this hook has twice failed to finish inside ten minutes, while the same binary
+# on the same file answers in one second when run directly, and the stalled processes had used 0.2s
+# of CPU - so they were blocked rather than working. The cause is not known; stdin was the obvious
+# suspect and a direct run without it redirected finishes anyway.
+#
+# It is the one hook CI re-runs, so skip that ONE (SKIP=actionlint) rather than reaching for
+# --no-verify, which drops the ones that run in this clone or nowhere - and run the binary yourself,
+# or its two halves: actionlint -shellcheck= for the schema, shellcheck on the extracted run: body.
 #
 # Rules and rationale: the workspace's GitHub Actions security checklist.
 
 repos:
+  - repo: https://github.com/rhysd/actionlint
+    # A commit of main rather than a release: v1.7.12 and older hang on Windows on a run: step longer
+    # than about 4 KB (rhysd/actionlint#651 fixed it). Move to the first release that contains it.
+    # shellcheck must be on PATH: without it actionlint skips the shell checks and still reports Passed.
+    rev: 011a6d15e749bb3f2d771eed9c7aa0e7e3e10ee7
+    hooks:
+      - id: actionlint
+        files: ^\.github/workflows/.*\.(yml|yaml)$
+
   - repo: local
     hooks:
       - id: msbuild-xml-parses
