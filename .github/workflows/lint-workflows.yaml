@@ -63,11 +63,11 @@ jobs:
     permissions:
       contents: read
     env:
-      ACTIONLINT_VERSION: '1.7.10'
+      ACTIONLINT_VERSION: '1.7.12'
       # The checksum is mandatory: without it the step trusts whatever the network returns
       # and runs it with the job's permissions. When bumping the version, take the sum from
       # actionlint_<version>_checksums.txt of that same release.
-      ACTIONLINT_SHA256: 'f4c76b71db5755a713e6055cbb0857ed07e103e028bda117817660ebadb4386f'
+      ACTIONLINT_SHA256: '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
