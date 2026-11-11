@@ -95,8 +95,9 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
     /// The OpenAPI generator most hosts run builds the whole document with the library's endpoints in it. A
     /// generator keys the fields of a form by name, so a field described twice stops it building anything.
     /// </summary>
-    [Fact]
-    public async Task SwashbuckleBuildsTheDocumentWithTheLibrarysEndpoints()
+    [Theory]
+    [MemberData(nameof(SpecVersions))]
+    public async Task SwashbuckleBuildsTheDocumentWithTheLibrarysEndpoints(OpenApiSpecVersion version)
     {
         await using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             services.AddSwaggerGen(options => options.SwaggerDoc(Document, new OpenApiInfo()))));
@@ -105,7 +106,7 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
 
         Assert.Contains("/connect/token", document.Paths.Keys);
         AssertTheFormsAreDescribedAsSent(
-            await document.SerializeAsJsonAsync(OpenApiSpecVersion.OpenApi3_0, TestContext.Current.CancellationToken));
+            await document.SerializeAsJsonAsync(version, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -131,8 +132,9 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>The OpenAPI generator ASP.NET Core ships builds the document with the library's endpoints in it.</summary>
-    [Fact]
-    public async Task TheAspNetCoreGeneratorBuildsTheDocumentWithTheLibrarysEndpoints()
+    [Theory]
+    [MemberData(nameof(SpecVersions))]
+    public async Task TheAspNetCoreGeneratorBuildsTheDocumentWithTheLibrarysEndpoints(OpenApiSpecVersion version)
     {
         await using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             services.AddOpenApi(Document)));
@@ -142,8 +144,16 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
 
         Assert.Contains("/connect/token", document.Paths.Keys);
         AssertTheFormsAreDescribedAsSent(
-            await document.SerializeAsJsonAsync(OpenApiSpecVersion.OpenApi3_0, TestContext.Current.CancellationToken));
+            await document.SerializeAsJsonAsync(version, TestContext.Current.CancellationToken));
     }
+
+    /// <summary>Every 3.x form of the document, since a host serves whichever its generator defaults to.</summary>
+    public static TheoryData<OpenApiSpecVersion> SpecVersions =>
+    [
+        OpenApiSpecVersion.OpenApi3_0,
+        OpenApiSpecVersion.OpenApi3_1,
+        OpenApiSpecVersion.OpenApi3_2,
+    ];
 
     /// <summary>
     /// A field the library reads through a binder of its own is described as the value the request carries: the
