@@ -237,8 +237,8 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
 
         var par = FormFields(document, "/connect/par");
         Assert.Equal("string", TypeOf(par, AuthorizationRequest.Parameters.Claims));
-        // The platform's generator leaves the type of a number out, so a client may send it as a string too, and says
-        // what it is through the format alone
+        // The platform's generator lets a number arrive as a string too, so it names no single type (an anyOf in 3.0, a
+        // list of types from 3.1 on) and says what the field is through the format
         Assert.Equal("int32", par.GetValueOrDefault(AuthorizationRequest.Parameters.MaxAge)?["format"]?.GetValue<string>());
         Assert.Equal("string", TypeOf(par, AuthorizationRequest.Parameters.Scope));
         Assert.DoesNotContain(par, field => field.Key.Contains('.'));
