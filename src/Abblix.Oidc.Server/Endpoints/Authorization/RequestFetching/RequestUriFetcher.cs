@@ -99,7 +99,9 @@ public partial class RequestUriFetcher(
         var contentResult = await secureHttpFetcher.FetchAsync<string>(requestUri);
 
         return contentResult.Match<Result<AuthorizationRequest, AuthorizationRequestValidationError>>(
-            requestObject => request with { RedirectUri = null, Request = requestObject },
+            // The fetched object takes the reference's place rather than standing beside it: a request kept for a
+            // later page is stored as this model, and on its way back would carry both, which only one may
+            requestObject => request with { RedirectUri = null, Request = requestObject, RequestUri = null },
             contentError => AuthorizationErrorFactory.InvalidRequestUri(contentError.ErrorDescription));
     }
 }

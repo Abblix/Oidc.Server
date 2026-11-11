@@ -200,6 +200,37 @@ public partial class PromptReturnTripTests
     }
 
     /// <summary>
+    /// A request object the client serves at its request_uri comes back from the login page as the request it was:
+    /// the end user signs in, returns with the request_uri the page was handed, and the request ends in a code.
+    /// </summary>
+    [Fact]
+    public async Task RequestObjectByReference_ReturnsFromTheLoginPage_WithACode()
+    {
+        var served = new RequestObjectServer();
+        var endUser = new SignedInEndUser();
+        var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<IAuthSessionService>(endUser));
+            services.Replace(ServiceDescriptor.Singleton<ISecureHttpFetcher>(served));
+        }));
+        using var _ = host;
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
+            client, discovery, Prompts.Login, requestUris: [RequestObjectServer.Address]);
+
+        using var response = await SendRequestObjectAsync(
+            client, discovery, clientId, clientSecret, requestObject, RequestObjectPassing.ByReference, served);
+
+        await WalkPagesAsync(
+            client, discovery, clientId, response.Headers.Location!, false, (LoginPath, endUser.SignInAgain));
+    }
+
+    /// <summary>
     /// Sends a signed request object the way <paramref name="passing"/> names and returns the server's answer.
     /// </summary>
     private static async Task<HttpResponseMessage> SendRequestObjectAsync(
