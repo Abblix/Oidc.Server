@@ -114,7 +114,7 @@ public class HttpNotificationDeliveryServiceTests
             l => l.Log(
                 LogLevel.Information,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((o, t) => o.ToString()!.Contains("Successfully sent CIBA ping notification")),
+                It.Is<It.IsAnyType>((o, t) => o!.ToString()!.Contains("Successfully sent CIBA ping notification")),
                 null,
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -150,7 +150,7 @@ public class HttpNotificationDeliveryServiceTests
             l => l.Log(
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((o, t) => o.ToString()!.Contains("Failed to send CIBA ping notification")),
+                It.Is<It.IsAnyType>((o, t) => o!.ToString()!.Contains("Failed to send CIBA ping notification")),
                 null,
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -187,7 +187,7 @@ public class HttpNotificationDeliveryServiceTests
             l => l.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((o, t) => o.ToString()!.Contains("Error sending CIBA ping notification")),
+                It.Is<It.IsAnyType>((o, t) => o!.ToString()!.Contains("Error sending CIBA ping notification")),
                 expectedException,
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);

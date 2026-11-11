@@ -361,7 +361,7 @@ public class ResponseModeValidatorTests
             x => x.Log(
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("not compatible")),
+                It.Is<It.IsAnyType>((v, t) => v!.ToString()!.Contains("not compatible")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -711,7 +711,7 @@ public class ResponseModeValidatorTests
             x => x.Log(
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("not allowed for the client")),
+                It.Is<It.IsAnyType>((v, t) => v!.ToString()!.Contains("not allowed for the client")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
