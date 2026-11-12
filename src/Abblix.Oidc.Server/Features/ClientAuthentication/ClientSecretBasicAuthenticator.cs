@@ -62,8 +62,8 @@ public class ClientSecretBasicAuthenticator(
 		if (request.AuthorizationHeader is not { Parameter: { } parameter } header || !header.HasScheme(TokenTypes.Basic))
 			return null;
 
-		// Credentials that are not base64 are the client's malformed request, so this method does not authenticate it
-		// and the caller answers invalid_client, as RFC 6749 section 5.2 has a failed client authentication answered
+		// Credentials that are not base64 leave the client unauthenticated here, so the caller answers invalid_client
+		// (RFC 6749 section 5.2)
 		var decoded = new byte[parameter.Length];
 		if (!Convert.TryFromBase64String(parameter, decoded, out var length))
 			return null;
