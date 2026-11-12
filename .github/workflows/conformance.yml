@@ -1,0 +1,91 @@
+name: OIDF conformance
+
+# Runs the OpenID Foundation conformance plans the library is certified against, on the suite's newest numbered
+# release, against the conformance test host. The release workflow calls it before it creates a tag; a pull request
+# touching the run itself runs it too, and it can be started by hand.
+on:
+  pull_request:
+    branches: [develop, 'release/**']
+    paths:
+      - 'conformance/**'
+      - 'tests/Abblix.Oidc.Server.MinimalApi.Conformance.TestHost/**'
+      - '.github/workflows/conformance.yml'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Called from the release workflow, github.workflow is the caller's name, so this group never equals the
+  # release's own; only a pull request's superseded run is cancelled
+  group: ${{ github.workflow }}-conformance-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  oidf:
+    name: OIDF certified plans
+    # GitHub-hosted for every trigger, an exception to the self-hosted rule: the run starts the suite, its database,
+    # the host and the browser as containers on one network, which needs a Docker daemon, and the shared runners carry
+    # none by design. The job holds no secret, and a pull request from a fork runs on a runner thrown away afterwards
+    runs-on: ubuntu-latest
+    # The 43 plans take about 15 minutes on a workstation; there are no CI durations yet, so the ceiling is wide and
+    # is set again from five healthy runs
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # MinVer reads the latest tag and the commit height, so the host's build needs the full history
+          fetch-depth: 0
+          persist-credentials: false
+        timeout-minutes: 3
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+        timeout-minutes: 3
+
+      - name: Run the certified plans
+        shell: pwsh
+        env:
+          RESULTS: ${{ runner.temp }}/conformance-results
+        run: ./conformance/run.ps1 -ResultsPath $env:RESULTS
+        # Inside the job's ceiling with room for the steps around it
+        timeout-minutes: 50
+
+      # A step killed at its ceiling runs no finally block, so the containers may still be there holding the logs
+      - name: Collect what a killed run left
+        if: failure()
+        shell: pwsh
+        env:
+          RESULTS: ${{ runner.temp }}/conformance-results
+        run: |
+          New-Item -ItemType Directory -Force $env:RESULTS | Out-Null
+          foreach ($container in 'oidc-host', 'oidf-browser') {
+            if (docker ps -aq --filter "name=^$container$") {
+              docker logs $container *> (Join-Path $env:RESULTS "$container.log")
+            }
+          }
+          if (docker ps -aq --filter 'name=^oidf-browser$') {
+            docker cp 'oidf-browser:/tmp/screenshots' (Join-Path $env:RESULTS 'screenshots')
+          }
+        timeout-minutes: 3
+
+      - name: Upload the evidence of a failed run
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: conformance-results
+          path: ${{ runner.temp }}/conformance-results
+          retention-days: 3
+          if-no-files-found: warn
+        timeout-minutes: 3

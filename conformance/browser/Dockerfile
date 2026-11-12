@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/playwright/python:v1.64.1-noble
 
 WORKDIR /driver
 COPY requirements.txt .
-RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+RUN pip install --no-cache-dir --break-system-packages --only-binary :all: --require-hashes -r requirements.txt
 
 COPY driver.py .
 
