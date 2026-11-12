@@ -52,6 +52,7 @@ $SuiteUrl = 'https://localhost.emobix.co.uk:8443/'
 $SuiteMtlsUrl = 'https://localhost.emobix.co.uk:8444/'
 $DiscoveryUrl = 'https://oidc-host:9443/.well-known/openid-configuration'
 $RotateUrl = 'https://oidc-host:9443/conformance/rotate-keys'
+$KeyRotationModule = 'oidcc-server-rotate-keys'
 
 $RuntimeImage = 'mcr.microsoft.com/dotnet/aspnet:11.0'
 $ProbeImage = 'curlimages/curl:8.10.1'
@@ -109,23 +110,34 @@ function Test-HostReady {
     return ($status -join '') -eq '200'
 }
 
-function Select-ExpectedFailures {
-    # The entries that apply to the plans of this run: one naming no plans applies to every run, one naming plans
-    # only when a plan of this run is among them, and the plan list itself is not something the runner reads
+function Split-KeyRotation {
+    # The plan specification the runner gets, without the key rotation module, and whether the plan had that module.
+    # The runner starts the module the moment it is configured, before anyone can rotate the server's keys, so it
+    # runs in a step of its own; a specification already naming its modules keeps the others it names
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $Entries,
-        [Parameter(Mandatory)] [string[]] $Plan
+        [Parameter(Mandatory)] [string] $Specification,
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $AvailablePlans
     )
-    $planNames = @($Plan | ForEach-Object { ($_ -split '[\[:]', 2)[0].Trim() })
-    $selected = foreach ($entry in $Entries) {
-        $plansProperty = $entry.PSObject.Properties['plans']
-        $named = if ($plansProperty) { @($plansProperty.Value) } else { @() }
-        if ($named.Count -eq 0 -or @($named | Where-Object { $planNames -contains $_ }).Count -gt 0) {
-            $entry | Select-Object -Property * -ExcludeProperty plans
-        }
+    $parts = $Specification -split ':', 2
+    $name = ($parts[0] -split '\[', 2)[0].Trim()
+    $modules = if ($parts.Count -eq 2) {
+        @($parts[1] -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     }
-    return , @($selected)
+    else {
+        $available = $AvailablePlans | Where-Object { $_.planName -is [string] -and $_.planName -eq $name } |
+            Select-Object -First 1
+        if (-not $available) {
+            throw "The suite has no test plan named '$name'"
+        }
+        @($available.modules | ForEach-Object { $_.testModule })
+    }
+
+    if ($modules -notcontains $KeyRotationModule) {
+        return [pscustomobject]@{ Runner = $Specification; KeyRotation = $false }
+    }
+    $others = @($modules | Where-Object { $_ -ne $KeyRotationModule })
+    return [pscustomobject]@{ Runner = "$($parts[0]):$($others -join ',')"; KeyRotation = $true }
 }
 
 function Remove-Everything {
@@ -198,24 +210,32 @@ try {
         $BrowserImage | Out-Null
     Assert-LastExit 'docker run (browser driver)'
 
-    # The runner fails a run in which an expected failure does not occur, so an entry naming its plans reaches the
-    # runner only when one of them is run here
-    $expectedDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-expected'
-    New-Item -ItemType Directory -Force $expectedDirectory | Out-Null
-    $expectedFailures = Select-ExpectedFailures `
-        -Entries (Get-Content -Raw (Join-Path $PSScriptRoot 'expected-failures.json') | ConvertFrom-Json) `
-        -Plan $Plan
-    ConvertTo-Json -InputObject $expectedFailures -Depth 5 |
-        Set-Content -Encoding utf8NoBOM (Join-Path $expectedDirectory 'expected-failures.json')
+    # Invoke-RestMethod hands a JSON array on as one object, so it is enumerated here into the plans it holds
+    $availablePlans = @(Invoke-RestMethod -Uri "${SuiteUrl}api/plan/available" -SkipCertificateCheck |
+        ForEach-Object { $_ })
+    $split = @($Plan | ForEach-Object { Split-KeyRotation -Specification $_ -AvailablePlans $availablePlans })
+    $keyRotationPlans = @($split | Where-Object KeyRotation | ForEach-Object { ($_.Runner -split ':', 2)[0] })
+
+    # A plan naming every module but one outgrows the command line Windows allows a process, so the runner's
+    # arguments go in a file, one per line, which the container reads into its own argument list
+    $argumentsDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-arguments'
+    New-Item -ItemType Directory -Force $argumentsDirectory | Out-Null
+    $runnerArguments = @('--expected-failures-file', '/config/expected-failures.json')
+    foreach ($spec in $split) {
+        $runnerArguments += $spec.Runner, '/config/oidcc.json'
+    }
+    # Line feeds alone: the shell's read keeps a carriage return as part of the argument
+    [IO.File]::WriteAllText((Join-Path $argumentsDirectory 'runner.txt'), (($runnerArguments -join "`n") + "`n"))
 
     Write-Step "Running $($Plan.Count) test plan(s)"
-    # The runner's dependencies are installed in a throwaway container rather than on this machine, and the plan
-    # specifications reach it as separate arguments, so their brackets and spaces are never re-parsed by a shell
+    # The runner's dependencies are installed in a throwaway container rather than on this machine, and each plan
+    # specification is one line of the arguments file, so its brackets and spaces are never re-parsed by a shell
+    $readArguments = 'set --; while IFS= read -r line; do set -- "$@" "$line"; done < /arguments/runner.txt'
     $runner = @(
         'run', '--rm', '--network', $Network,
         '-v', "${SuitePath}:/suite:ro",
         '-v', "${PSScriptRoot}:/config:ro",
-        '-v', "${expectedDirectory}:/expected:ro",
+        '-v', "${argumentsDirectory}:/arguments:ro",
         '-w', '/suite/scripts',
         '-e', "CONFORMANCE_SERVER=$SuiteUrl",
         '-e', "CONFORMANCE_SERVER_MTLS=$SuiteMtlsUrl",
@@ -225,20 +245,14 @@ try {
         # another - the report on all of them is what the run is for
         '-e', 'CONFORMANCE_MAX_CONSECUTIVE_FAILURES=1000',
         $RunnerImage,
-        'sh', '-c', 'pip install -q --root-user-action=ignore -r requirements.txt && exec python run-test-plan.py "$@"', 'sh',
-        # Failures this setup cannot avoid, each with its reason, so they neither fail the run nor hide a new one
-        '--expected-failures-file', '/expected/expected-failures.json'
+        'sh', '-c', "pip install -q --root-user-action=ignore -r requirements.txt && $readArguments && exec python run-test-plan.py `"`$@`""
     )
-    foreach ($spec in $Plan) {
-        $runner += $spec, '/config/oidcc.json'
-    }
     docker @runner
     $exitCode = $LASTEXITCODE
 
-    # The plan runner starts the key rotation module the moment it is configured, so inside a plan it fails by
-    # construction; here it runs once more with the host rotating its keys between the module's two reads, as the
-    # operator does at certification
-    Write-Step 'Running the server key rotation module with the host rotating its keys'
+    # The key rotation module, kept out of the runner's plans, runs once in each of them with the host rotating its
+    # keys between the module's two reads of the key set, as the operator does at certification
+    Write-Step "Running the key rotation module in $($keyRotationPlans.Count) plan(s) with the host rotating its keys"
     $rotation = @(
         'run', '--rm', '--network', $Network,
         '-v', "${SuitePath}:/suite:ro",
@@ -249,11 +263,13 @@ try {
         '-e', 'PYTHONPATH=/suite/scripts',
         $RunnerImage,
         'sh', '-c', 'pip install -q --root-user-action=ignore -r requirements.txt && exec python /config/rotate-keys.py "$@"', 'sh',
-        'oidcc-dynamic-certification-test-plan', '{"response_type":"code"}', '/config/oidcc.json'
-    )
-    docker @rotation
-    if ($LASTEXITCODE -ne 0 -and $exitCode -eq 0) {
-        $exitCode = $LASTEXITCODE
+        '/config/oidcc.json'
+    ) + $keyRotationPlans
+    if ($keyRotationPlans.Count -gt 0) {
+        docker @rotation
+        if ($LASTEXITCODE -ne 0 -and $exitCode -eq 0) {
+            $exitCode = $LASTEXITCODE
+        }
     }
 
     # The driver reports each module it could not drive once it is told to stop

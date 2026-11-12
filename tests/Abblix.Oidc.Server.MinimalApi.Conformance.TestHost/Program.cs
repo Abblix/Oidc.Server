@@ -8,9 +8,10 @@
 
 // The server the OpenID Foundation conformance suite is pointed at. It runs as a container on the suite's own
 // Docker network, so the suite's browser and its back channel reach it by one name, and it reaches the suite by
-// the name the suite writes into every URL it hands out. See conformance/README.md for how a run is driven.
+// the name the suite writes into every URL it hands out. conformance/run.ps1 drives a run.
 
 using System.Net;
+using System.Text;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Abblix.Jwt;
@@ -111,7 +112,13 @@ app.UseCors();
 app.UseAuthorization();
 app.MapOidcEndpoints();
 
-app.MapGet("/login", (string request_uri) => Results.Content(LoginPage(request_uri, error: null), "text/html"));
+app.MapGet("/login", async (
+        string request_uri,
+        IAuthorizationRequestStorage pendingRequests,
+        IClientInfoProvider clients) =>
+    Results.Content(
+        LoginPage(request_uri, error: null, await PendingClientAsync(request_uri, pendingRequests, clients)),
+        "text/html"));
 
 // The operator's part of the suite's key rotation module, called by the run script between the module's two reads
 // of the published key set; this host is reachable only on the suite's network
@@ -130,10 +137,14 @@ app.MapPost("/login", async (
         ISessionIdGenerator sessionIdGenerator,
         TimeProvider timeProvider,
         IAuthorizationRequestStorage pendingRequests,
+        IClientInfoProvider clients,
         ConformanceUser conformanceUser) =>
     {
         if (!conformanceUser.Matches(email, password))
-            return Results.Content(LoginPage(requestUri, "Invalid email or password"), "text/html");
+        {
+            var client = await PendingClientAsync(requestUri, pendingRequests, clients);
+            return Results.Content(LoginPage(requestUri, "Invalid email or password", client), "text/html");
+        }
 
         // The server keeps only the sessions at a level the request asked for, so a sign-in recording none would
         // be sent straight back here. A password is the one factor this host has, and it is taken as whichever
@@ -175,15 +186,38 @@ static X509Certificate2 CreateCertificate(string hostName)
     return X509CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx), password: null);
 }
 
-static string LoginPage(string requestUri, string? error)
+// The client the pending authorization request is for, whose name, logo, policy and terms the login page shows
+async Task<ClientInfo?> PendingClientAsync(
+    string requestUri,
+    IAuthorizationRequestStorage pendingRequests,
+    IClientInfoProvider clients)
+{
+    var pending = await pendingRequests.TryGetAsync(tenant, new Uri(requestUri));
+    return pending?.ClientId is { } clientId ? await clients.TryFindClientAsync(tenant, clientId) : null;
+}
+
+// The suite's registration modules ask the reviewer to confirm the page shows the logo, policy and terms the client
+// registered, and the browser driver checks for them by id
+static string LoginPage(string requestUri, string? error, ClientInfo? client)
 {
     var errorBlock = error == null ? "" : $"<p id=\"error\">{WebUtility.HtmlEncode(error)}</p>";
+    var clientBlock = new StringBuilder();
+    if (client is { ClientName: { } name })
+        clientBlock.Append($"<p id=\"client-name\">{WebUtility.HtmlEncode(name)}</p>");
+    if (client is { LogoUri: { } logo })
+        clientBlock.Append($"<p><img id=\"client-logo\" src=\"{WebUtility.HtmlEncode(logo.OriginalString)}\" alt=\"Client logo\" /></p>");
+    if (client is { PolicyUri: { } policy })
+        clientBlock.Append($"<p><a id=\"client-policy\" href=\"{WebUtility.HtmlEncode(policy.OriginalString)}\">Privacy policy</a></p>");
+    if (client is { TermsOfServiceUri: { } terms })
+        clientBlock.Append($"<p><a id=\"client-tos\" href=\"{WebUtility.HtmlEncode(terms.OriginalString)}\">Terms of service</a></p>");
+
     return $"""
         <!DOCTYPE html>
         <html>
         <head><title>Conformance host</title></head>
         <body>
             <h1>Sign in</h1>
+            {clientBlock}
             {errorBlock}
             <form method="post" action="/login">
                 <input type="hidden" name="requestUri" value="{WebUtility.HtmlEncode(requestUri)}" />

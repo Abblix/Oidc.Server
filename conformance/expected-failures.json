@@ -1,12 +1,1 @@
-[
-    {
-        "test-name": "oidcc-server-rotate-keys",
-        "plans": ["oidcc-dynamic-certification-test-plan", "oidcc-test-plan"],
-        "variant": "*",
-        "configuration-filename": "*",
-        "current-block": "",
-        "condition": "VerifyNewJwksHasNewSigningKey",
-        "expected-result": "failure",
-        "comment": "The plan runner starts this module the moment it is configured, before anyone can rotate the server's keys; run.ps1 runs it again afterwards with the host rotating its keys between the module's two reads"
-    }
-]
+[]

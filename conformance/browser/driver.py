@@ -128,6 +128,37 @@ class Screenshot:
     size: int
     page_url: str
     kind: str
+    facts: PageFacts
+
+
+@dataclass
+class PageFacts:
+    """What a captured page of the server under test shows, read from its structure when it was captured."""
+    login_form: bool
+    client_logo: str | None
+    client_policy: str | None
+    client_terms: str | None
+
+
+# What the page a module waits to see has to show, by module, so a run fails on a wrong page rather than handing it
+# to a reviewer: a second sign-in for the modules that make the server ask again, the client's registered logo,
+# policy and terms on the login page, and for a bad request or a logout a page of the server that is not a login form,
+# rather than a redirect back to the client
+def expectation_for(module: str):
+    if module in ("oidcc-prompt-login", "oidcc-max-age-1"):
+        return "a login form", lambda shot: shot.facts.login_form
+    if module == "oidcc-registration-logo-uri":
+        return "the client's logo", lambda shot: bool(shot.facts.client_logo)
+    if module == "oidcc-registration-policy-uri":
+        return "a link to the client's policy", lambda shot: bool(shot.facts.client_policy)
+    if module == "oidcc-registration-tos-uri":
+        return "a link to the client's terms", lambda shot: bool(shot.facts.client_terms)
+    if module in ("oidcc-ensure-redirect-uri-in-authorization-request", "oidcc-redirect-uri-query-mismatch",
+                  "oidcc-redirect-uri-query-added", "oidcc-ensure-registered-redirect-uri") \
+            or module.startswith("oidcc-rp-initiated-logout"):
+        return "a page of the server that is not a login form", \
+            lambda shot: shot.kind == "server page" and not shot.facts.login_form
+    return None
 
 
 @dataclass
@@ -209,6 +240,7 @@ class ModuleDriver:
         self.api = api
         self.browser = browser
         self.scope = test_id
+        self.module_name = ""
         self.marked_urls: set[str] = set()
         self.filled_placeholders: set[str] = set()
         self.last_visit: VisitResult | None = None
@@ -228,7 +260,8 @@ class ModuleDriver:
                         raise ModuleFailure("the runner lists this module, but the suite keeps no test info for it")
                     await asyncio.sleep(self.settings.poll_seconds)
                     continue
-                self.scope = f"{info.get('testName', '?')} {self.test_id}"
+                self.module_name = info.get("testName", "")
+                self.scope = f"{self.module_name or '?'} {self.test_id}"
                 status = info.get("status")
                 if not status:
                     raise ModuleFailure("the suite's test info carries no status")
@@ -399,15 +432,29 @@ class ModuleDriver:
             {"full_page": True, "type": "jpeg", "quality": 40},
             {"full_page": False, "type": "jpeg", "quality": 40},
         ]
+        facts = PageFacts(
+            login_form=await self.is_login_page(page),
+            client_logo=await self.attribute_of(page, "#client-logo", "src"),
+            client_policy=await self.attribute_of(page, "#client-policy", "href"),
+            client_terms=await self.attribute_of(page, "#client-tos", "href"),
+        )
         for options in attempts:
             image = await page.screenshot(**options)
             if len(image) <= UPLOAD_SIZE_LIMIT:
                 mime = "image/png" if options["type"] == "png" else "image/jpeg"
-                shot = Screenshot(f"data:{mime};base64,{base64.b64encode(image).decode('ascii')}", len(image), page.url, kind)
+                shot = Screenshot(
+                    f"data:{mime};base64,{base64.b64encode(image).decode('ascii')}", len(image), page.url, kind, facts)
                 log(self.scope, "screenshot", f"{kind}, {len(image)} bytes {mime}, of {page.url}")
                 self.save_copy(image, options["type"])
                 return shot
         raise ModuleFailure(f"no screenshot of {page.url} fits the suite's {UPLOAD_SIZE_LIMIT} byte upload limit")
+
+    @staticmethod
+    async def attribute_of(page: Page, selector: str, attribute: str) -> str | None:
+        element = page.locator(selector)
+        if await element.count() == 0:
+            return None
+        return await element.first.get_attribute(attribute)
 
     def save_copy(self, image: bytes, extension: str) -> None:
         if not self.settings.screenshot_dir:
@@ -429,6 +476,15 @@ class ModuleDriver:
         if shot is None:
             raise ModuleFailure("the module waits for a screenshot, but its last visit showed no page of the "
                                 "server under test")
+        expectation = expectation_for(self.module_name)
+        if expectation is None:
+            raise ModuleFailure(f"the module waits for a screenshot, and the driver knows no check of what its page "
+                                f"has to show; add one to expectation_for")
+        description, holds = expectation
+        if not holds(shot):
+            raise ModuleFailure(f"the page captured for review should show {description}, "
+                                f"but {shot.page_url} shows {shot.facts}")
+        log(self.scope, "check", f"the page shows {description}")
         placeholder = remaining[0]
         await self.api.fill_placeholder(self.test_id, placeholder, shot.data_uri)
         self.filled_placeholders.add(placeholder)
