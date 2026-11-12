@@ -112,6 +112,21 @@ public class PushedAuthorizationRequestValidatorTests
             .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)new ProofError(reason));
 
+    /// <summary>
+    /// RFC 9126 section 2.1: the request_uri parameter "MUST NOT be provided" in a pushed request, and section 2.3
+    /// answers with the codes of RFC 6749, where a request carrying a parameter it must not is invalid_request.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_RequestUriInThePushedRequest_ReturnsInvalidRequest()
+    {
+        var request = BuildRequest() with { RequestUri = new Uri("https://client.example.com/request.jwt") };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, BuildClientRequest());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
     [Fact]
     public async Task ValidateAsync_NoDPoPHeaderNoParameter_PassesThrough()
     {

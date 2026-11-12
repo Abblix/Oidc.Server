@@ -55,9 +55,11 @@ public class PushedAuthorizationRequestValidator(
             return ErrorFactory.InvalidClient("The client is not authorized");
         }
 
+        // RFC 9126 section 2.1: request_uri "MUST NOT be provided" here, and section 2.3 answers with the codes of
+        // RFC 6749, which name a parameter that must not be sent invalid_request
         if (authorizationRequest.RequestUri is not null)
         {
-            return ErrorFactory.InvalidRequestUri(
+            return ErrorFactory.InvalidRequest(
                 $"{RequestUri} is prohibited to use in pushed authorization request");
         }
 
