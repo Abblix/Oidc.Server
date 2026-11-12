@@ -274,200 +274,183 @@ function Get-RunContainers {
     @($named + $composed | Where-Object { $_ } | Sort-Object -Unique)
 }
 
-# Held from before the check to the end of the run, so a second run started in the same seconds, before this one has
-# any container to be seen by, is refused too; .NET holds it on Windows and Linux alike
-$lockPath = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance.lock'
-try {
-    $runLock = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
-}
-catch [IO.IOException] {
-    throw "Another conformance run is going on this machine: it holds $lockPath"
+$running = Get-RunContainers
+if ($running) {
+    throw "Another conformance run is going on this machine, or one left its containers: $($running -join ', '). " +
+        "Wait for it to finish, or remove them with: docker rm -f $HostContainer $BrowserContainer; docker compose -p $ProjectName down --remove-orphans"
 }
 
-# Released on every way out, since a run started with the call operator shares the caller's process, and a lock left
-# open there would refuse every later run in that session
-try {
-    $running = Get-RunContainers
-    if ($running) {
-        throw "Another conformance run is going on this machine, or one left its containers: $($running -join ', '). " +
-            "Wait for it to finish, or remove them with: docker rm -f $HostContainer $BrowserContainer; docker compose -p $ProjectName down --remove-orphans"
+if ($ResultsPath) {
+    # Two runs' evidence in one place cannot be told apart afterwards
+    if ((Test-Path -LiteralPath $ResultsPath) -and (-not (Test-Path -LiteralPath $ResultsPath -PathType Container) -or
+            (Get-ChildItem -LiteralPath $ResultsPath -Force | Select-Object -First 1))) {
+        throw "$ResultsPath is not an empty directory: -ResultsPath has to name a new or empty directory"
     }
+    # Created before anything else changes, since the finally block writes the evidence into it
+    $ResultsPath = (New-Item -ItemType Directory -Force $ResultsPath).FullName
+}
 
-    if ($ResultsPath) {
-        # Two runs' evidence in one place cannot be told apart afterwards
-        if ((Test-Path -LiteralPath $ResultsPath) -and (-not (Test-Path -LiteralPath $ResultsPath -PathType Container) -or
-                (Get-ChildItem -LiteralPath $ResultsPath -Force | Select-Object -First 1))) {
-            throw "$ResultsPath is not an empty directory: -ResultsPath has to name a new or empty directory"
+$imageTagBefore = $env:IMAGE_TAG
+$ComposeFile = $null
+$exitCode = 1
+try {
+    if (-not $SuitePath) {
+        $release = Resolve-SuiteRelease
+        $SuitePath = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-suite'
+        if (Test-Path -LiteralPath $SuitePath) {
+            Remove-SuiteClone $SuitePath
         }
-        # Created before anything else changes, since the finally block writes the evidence into it
-        $ResultsPath = (New-Item -ItemType Directory -Force $ResultsPath).FullName
+        git clone --quiet --depth 1 --branch $release $SuiteRepository $SuitePath
+        Assert-LastExit "git clone (conformance suite $release)"
+        # Read by the suite's compose file, which names both of its images by it
+        $env:IMAGE_TAG = $release
     }
 
-    $imageTagBefore = $env:IMAGE_TAG
-    $ComposeFile = $null
-    $exitCode = 1
+    $SuitePath = (Resolve-Path -LiteralPath $SuitePath).Path
+    foreach ($required in 'docker-compose-prebuilt.yml', 'scripts/run-test-plan.py') {
+        if (-not (Test-Path -LiteralPath (Join-Path $SuitePath $required) -PathType Leaf)) {
+            throw "$required is missing from $SuitePath`: -SuitePath has to point at a checkout of the conformance suite"
+        }
+    }
+    $ComposeFile = Join-Path $SuitePath 'docker-compose-prebuilt.yml'
+
+    Write-Step "Starting the conformance suite, images $($env:IMAGE_TAG ?? 'latest'), scripts from $SuitePath"
+    docker compose -f $ComposeFile -p $ProjectName up -d
+    Assert-LastExit 'docker compose up'
+    Wait-Until -What 'The conformance suite' -Condition { Test-SuiteReady }
+
+    Write-Step 'Publishing the conformance test host'
+    dotnet publish $HostProject -c Release -o $PublishDirectory --nologo -v quiet
+    Assert-LastExit 'dotnet publish'
+
+    Write-Step "Starting the host as $HostContainer on $Network"
+    docker rm -f $HostContainer 2>$null | Out-Null
+    docker run -d --name $HostContainer --network $Network -v "${PublishDirectory}:/app:ro" -w /app `
+        $RuntimeImage dotnet $HostAssembly | Out-Null
+    Assert-LastExit 'docker run (host)'
     try {
-        if (-not $SuitePath) {
-            $release = Resolve-SuiteRelease
-            $SuitePath = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-suite'
-            if (Test-Path -LiteralPath $SuitePath) {
-                Remove-SuiteClone $SuitePath
-            }
-            git clone --quiet --depth 1 --branch $release $SuiteRepository $SuitePath
-            Assert-LastExit "git clone (conformance suite $release)"
-            # Read by the suite's compose file, which names both of its images by it
-            $env:IMAGE_TAG = $release
-        }
+        Wait-Until -What 'The conformance test host' -TimeoutSeconds 60 -Condition { Test-HostReady }
+    }
+    catch {
+        docker logs --tail 50 $HostContainer
+        throw
+    }
 
-        $SuitePath = (Resolve-Path -LiteralPath $SuitePath).Path
-        foreach ($required in 'docker-compose-prebuilt.yml', 'scripts/run-test-plan.py') {
-            if (-not (Test-Path -LiteralPath (Join-Path $SuitePath $required) -PathType Leaf)) {
-                throw "$required is missing from $SuitePath`: -SuitePath has to point at a checkout of the conformance suite"
-            }
-        }
-        $ComposeFile = Join-Path $SuitePath 'docker-compose-prebuilt.yml'
+    # A real browser plays the end user for every page the suite publishes, in place of the suite's own headless
+    # one, which can neither take the screenshots review modules wait for nor run the session check's hashing
+    Write-Step 'Starting the browser driver'
+    docker build -q -t $BrowserImage (Join-Path $PSScriptRoot 'browser') | Out-Null
+    Assert-LastExit 'docker build (browser driver)'
+    $hostSettings = (Get-Content -Raw (Join-Path $HostProject 'appsettings.json') | ConvertFrom-Json).Conformance
+    docker rm -f $BrowserContainer 2>$null | Out-Null
+    # The screenshots stay inside the container and are copied out at the end, so whoever owns the results
+    # directory does not decide whether the driver can write them
+    docker run -d --name $BrowserContainer --network $Network --shm-size 1g `
+        -e "CONFORMANCE_SERVER=$SuiteUrl" `
+        -e "HOST_ORIGIN=$($hostSettings.Issuer)" `
+        -e "LOGIN_EMAIL=$($hostSettings.UserEmail)" `
+        -e "LOGIN_PASSWORD=$($hostSettings.UserPassword)" `
+        -e 'DRIVER_DEADLINE_SECONDS=14400' `
+        -e "DRIVER_SCREENSHOT_DIR=$BrowserScreenshots" `
+        $BrowserImage | Out-Null
+    Assert-LastExit 'docker run (browser driver)'
 
-        Write-Step "Starting the conformance suite, images $($env:IMAGE_TAG ?? 'latest'), scripts from $SuitePath"
-        docker compose -f $ComposeFile -p $ProjectName up -d
-        Assert-LastExit 'docker compose up'
-        Wait-Until -What 'The conformance suite' -Condition { Test-SuiteReady }
+    # Invoke-RestMethod hands a JSON array on as one object, so it is enumerated here into the plans it holds
+    $availablePlans = @(Invoke-RestMethod -Uri "${SuiteUrl}api/plan/available" -SkipCertificateCheck |
+        ForEach-Object { $_ })
+    $split = @($Plan | ForEach-Object { Split-KeyRotation -Specification $_ -AvailablePlans $availablePlans })
+    $keyRotationPlans = @($split | Where-Object KeyRotation | ForEach-Object { ($_.Runner -split ':', 2)[0] })
 
-        Write-Step 'Publishing the conformance test host'
-        dotnet publish $HostProject -c Release -o $PublishDirectory --nologo -v quiet
-        Assert-LastExit 'dotnet publish'
+    # A plan naming every module but one outgrows the command line Windows allows a process, so the runner's
+    # arguments go in a file, one per line, which the container reads into its own argument list
+    $argumentsDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-arguments'
+    New-Item -ItemType Directory -Force $argumentsDirectory | Out-Null
+    $runnerArguments = @('--expected-failures-file', '/config/expected-failures.json')
+    $exportMount = @()
+    if ($ResultsPath) {
+        $exportDirectory = (New-Item -ItemType Directory -Force (Join-Path $ResultsPath 'export')).FullName
+        $exportMount = @('-v', "${exportDirectory}:/export")
+        $runnerArguments += '--export-dir', '/export'
+    }
+    foreach ($spec in $split) {
+        $runnerArguments += $spec.Runner, '/config/oidcc.json'
+    }
+    # Line feeds alone: the shell's read keeps a carriage return as part of the argument
+    [IO.File]::WriteAllText((Join-Path $argumentsDirectory 'runner.txt'), (($runnerArguments -join "`n") + "`n"))
 
-        Write-Step "Starting the host as $HostContainer on $Network"
-        docker rm -f $HostContainer 2>$null | Out-Null
-        docker run -d --name $HostContainer --network $Network -v "${PublishDirectory}:/app:ro" -w /app `
-            $RuntimeImage dotnet $HostAssembly | Out-Null
-        Assert-LastExit 'docker run (host)'
-        try {
-            Wait-Until -What 'The conformance test host' -TimeoutSeconds 60 -Condition { Test-HostReady }
-        }
-        catch {
-            docker logs --tail 50 $HostContainer
-            throw
-        }
+    Write-Step "Running $($Plan.Count) test plan(s)"
+    # The runner's dependencies are installed in a throwaway container rather than on this machine, and each plan
+    # specification is one line of the arguments file, so its brackets and spaces are never re-parsed by a shell
+    $readArguments = 'set --; while IFS= read -r line; do set -- "$@" "$line"; done < /arguments/runner.txt'
+    $runner = @(
+        'run', '--rm', '--network', $Network,
+        '-v', "${SuitePath}:/suite:ro",
+        '-v', "${PSScriptRoot}:/config:ro",
+        '-v', "${argumentsDirectory}:/arguments:ro"
+    ) + $exportMount + @(
+        '-w', '/suite/scripts',
+        '-e', "CONFORMANCE_SERVER=$SuiteUrl",
+        '-e', "CONFORMANCE_SERVER_MTLS=$SuiteMtlsUrl",
+        '-e', 'CONFORMANCE_DEV_MODE=1',
+        # The runner gives up after a few modules in a row fail to finish, taking that for a dead server. Here the
+        # host is alive by construction, and one broken behavior fails every module that exercises it, one after
+        # another - the report on all of them is what the run is for
+        '-e', 'CONFORMANCE_MAX_CONSECUTIVE_FAILURES=1000',
+        $RunnerImage,
+        'sh', '-c', "$RunnerInstall && $readArguments && exec python run-test-plan.py `"`$@`""
+    )
+    docker @runner
+    $exitCode = $LASTEXITCODE
 
-        # A real browser plays the end user for every page the suite publishes, in place of the suite's own headless
-        # one, which can neither take the screenshots review modules wait for nor run the session check's hashing
-        Write-Step 'Starting the browser driver'
-        docker build -q -t $BrowserImage (Join-Path $PSScriptRoot 'browser') | Out-Null
-        Assert-LastExit 'docker build (browser driver)'
-        $hostSettings = (Get-Content -Raw (Join-Path $HostProject 'appsettings.json') | ConvertFrom-Json).Conformance
-        docker rm -f $BrowserContainer 2>$null | Out-Null
-        # The screenshots stay inside the container and are copied out at the end, so whoever owns the results
-        # directory does not decide whether the driver can write them
-        docker run -d --name $BrowserContainer --network $Network --shm-size 1g `
-            -e "CONFORMANCE_SERVER=$SuiteUrl" `
-            -e "HOST_ORIGIN=$($hostSettings.Issuer)" `
-            -e "LOGIN_EMAIL=$($hostSettings.UserEmail)" `
-            -e "LOGIN_PASSWORD=$($hostSettings.UserPassword)" `
-            -e 'DRIVER_DEADLINE_SECONDS=14400' `
-            -e "DRIVER_SCREENSHOT_DIR=$BrowserScreenshots" `
-            $BrowserImage | Out-Null
-        Assert-LastExit 'docker run (browser driver)'
-
-        # Invoke-RestMethod hands a JSON array on as one object, so it is enumerated here into the plans it holds
-        $availablePlans = @(Invoke-RestMethod -Uri "${SuiteUrl}api/plan/available" -SkipCertificateCheck |
-            ForEach-Object { $_ })
-        $split = @($Plan | ForEach-Object { Split-KeyRotation -Specification $_ -AvailablePlans $availablePlans })
-        $keyRotationPlans = @($split | Where-Object KeyRotation | ForEach-Object { ($_.Runner -split ':', 2)[0] })
-
-        # A plan naming every module but one outgrows the command line Windows allows a process, so the runner's
-        # arguments go in a file, one per line, which the container reads into its own argument list
-        $argumentsDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-arguments'
-        New-Item -ItemType Directory -Force $argumentsDirectory | Out-Null
-        $runnerArguments = @('--expected-failures-file', '/config/expected-failures.json')
-        $exportMount = @()
-        if ($ResultsPath) {
-            $exportDirectory = (New-Item -ItemType Directory -Force (Join-Path $ResultsPath 'export')).FullName
-            $exportMount = @('-v', "${exportDirectory}:/export")
-            $runnerArguments += '--export-dir', '/export'
-        }
-        foreach ($spec in $split) {
-            $runnerArguments += $spec.Runner, '/config/oidcc.json'
-        }
-        # Line feeds alone: the shell's read keeps a carriage return as part of the argument
-        [IO.File]::WriteAllText((Join-Path $argumentsDirectory 'runner.txt'), (($runnerArguments -join "`n") + "`n"))
-
-        Write-Step "Running $($Plan.Count) test plan(s)"
-        # The runner's dependencies are installed in a throwaway container rather than on this machine, and each plan
-        # specification is one line of the arguments file, so its brackets and spaces are never re-parsed by a shell
-        $readArguments = 'set --; while IFS= read -r line; do set -- "$@" "$line"; done < /arguments/runner.txt'
-        $runner = @(
-            'run', '--rm', '--network', $Network,
-            '-v', "${SuitePath}:/suite:ro",
-            '-v', "${PSScriptRoot}:/config:ro",
-            '-v', "${argumentsDirectory}:/arguments:ro"
-        ) + $exportMount + @(
-            '-w', '/suite/scripts',
-            '-e', "CONFORMANCE_SERVER=$SuiteUrl",
-            '-e', "CONFORMANCE_SERVER_MTLS=$SuiteMtlsUrl",
-            '-e', 'CONFORMANCE_DEV_MODE=1',
-            # The runner gives up after a few modules in a row fail to finish, taking that for a dead server. Here the
-            # host is alive by construction, and one broken behavior fails every module that exercises it, one after
-            # another - the report on all of them is what the run is for
-            '-e', 'CONFORMANCE_MAX_CONSECUTIVE_FAILURES=1000',
-            $RunnerImage,
-            'sh', '-c', "$RunnerInstall && $readArguments && exec python run-test-plan.py `"`$@`""
-        )
-        docker @runner
-        $exitCode = $LASTEXITCODE
-
-        # The key rotation module, kept out of the runner's plans, runs once in each of them with the host rotating its
-        # keys between the module's two reads of the key set, as the operator does at certification
-        Write-Step "Running the key rotation module in $($keyRotationPlans.Count) plan(s) with the host rotating its keys"
-        $rotation = @(
-            'run', '--rm', '--network', $Network,
-            '-v', "${SuitePath}:/suite:ro",
-            '-v', "${PSScriptRoot}:/config:ro",
-            '-w', '/suite/scripts',
-            '-e', "CONFORMANCE_SERVER=$SuiteUrl",
-            '-e', "HOST_ROTATE_URL=$RotateUrl",
-            '-e', 'PYTHONPATH=/suite/scripts',
-            $RunnerImage,
-            'sh', '-c', "$RunnerInstall && exec python /config/rotate-keys.py `"`$@`"", 'sh',
-            '/config/oidcc.json'
-        ) + $keyRotationPlans
-        if ($keyRotationPlans.Count -gt 0) {
-            docker @rotation
-            if ($LASTEXITCODE -ne 0 -and $exitCode -eq 0) {
-                $exitCode = $LASTEXITCODE
-            }
-        }
-
-        # The driver reports each module it could not drive once it is told to stop
-        Write-Step 'Stopping the browser driver'
-        docker stop -t 30 $BrowserContainer | Out-Null
-        $driverExit = [int](docker wait $BrowserContainer)
-        docker logs $BrowserContainer 2>&1 | Select-Object -Last 40
-        if ($driverExit -ne 0 -and $exitCode -eq 0) {
-            $exitCode = $driverExit
+    # The key rotation module, kept out of the runner's plans, runs once in each of them with the host rotating its
+    # keys between the module's two reads of the key set, as the operator does at certification
+    Write-Step "Running the key rotation module in $($keyRotationPlans.Count) plan(s) with the host rotating its keys"
+    $rotation = @(
+        'run', '--rm', '--network', $Network,
+        '-v', "${SuitePath}:/suite:ro",
+        '-v', "${PSScriptRoot}:/config:ro",
+        '-w', '/suite/scripts',
+        '-e', "CONFORMANCE_SERVER=$SuiteUrl",
+        '-e', "HOST_ROTATE_URL=$RotateUrl",
+        '-e', 'PYTHONPATH=/suite/scripts',
+        $RunnerImage,
+        'sh', '-c', "$RunnerInstall && exec python /config/rotate-keys.py `"`$@`"", 'sh',
+        '/config/oidcc.json'
+    ) + $keyRotationPlans
+    if ($keyRotationPlans.Count -gt 0) {
+        docker @rotation
+        if ($LASTEXITCODE -ne 0 -and $exitCode -eq 0) {
+            $exitCode = $LASTEXITCODE
         }
     }
-    finally {
-        $env:IMAGE_TAG = $imageTagBefore
-        # Collecting the evidence must neither hide why the run failed nor stop the cleanup after it
-        try {
-            Save-Evidence
-        }
-        catch {
-            Write-Warning "The evidence of the run was not saved in full: $($_.Exception.Message)"
-        }
-        if ($KeepRunning) {
-            Write-Step "Left running: the suite at $SuiteUrl and the host as $HostContainer; stop them with"
-            $stopSuite = if ($ComposeFile) { "; docker compose -f `"$ComposeFile`" -p $ProjectName down" } else { '' }
-            Write-Host "  docker rm -f $HostContainer$stopSuite"
-        }
-        else {
-            Write-Step 'Removing the host and the suite'
-            Remove-Everything
-        }
+
+    # The driver reports each module it could not drive once it is told to stop
+    Write-Step 'Stopping the browser driver'
+    docker stop -t 30 $BrowserContainer | Out-Null
+    $driverExit = [int](docker wait $BrowserContainer)
+    docker logs $BrowserContainer 2>&1 | Select-Object -Last 40
+    if ($driverExit -ne 0 -and $exitCode -eq 0) {
+        $exitCode = $driverExit
     }
 }
 finally {
-    $runLock.Dispose()
+    $env:IMAGE_TAG = $imageTagBefore
+    # Collecting the evidence must neither hide why the run failed nor stop the cleanup after it
+    try {
+        Save-Evidence
+    }
+    catch {
+        Write-Warning "The evidence of the run was not saved in full: $($_.Exception.Message)"
+    }
+    if ($KeepRunning) {
+        Write-Step "Left running: the suite at $SuiteUrl and the host as $HostContainer; stop them with"
+        $stopSuite = if ($ComposeFile) { "; docker compose -f `"$ComposeFile`" -p $ProjectName down" } else { '' }
+        Write-Host "  docker rm -f $HostContainer$stopSuite"
+    }
+    else {
+        Write-Step 'Removing the host and the suite'
+        Remove-Everything
+    }
 }
 
 exit $exitCode
