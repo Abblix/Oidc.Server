@@ -41,4 +41,18 @@ public class ResponseNullMembersTests
 
         Assert.DoesNotContain(written, member => member.Value is null);
     }
+
+    /// <summary>
+    /// A token response carries required members an uninitialized object would leave null, so it is built with
+    /// those alone: everything RFC 6749 section 5.1 makes optional, a refresh token above all, is then absent.
+    /// </summary>
+    [Fact]
+    public void ATokenResponseWithOnlyItsRequiredMembersWritesNoNull()
+    {
+        var response = new TokenResponse { AccessToken = "access-token", TokenType = "Bearer" };
+
+        var written = JsonNode.Parse(JsonSerializer.Serialize(response, new JsonSerializerOptions()))!.AsObject();
+
+        Assert.DoesNotContain(written, member => member.Value is null);
+    }
 }

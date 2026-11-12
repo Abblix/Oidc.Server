@@ -53,6 +53,7 @@ public record TokenResponse
 
     /// <summary>The type of the issued token, typically an absolute URI identifying the token type.</summary>
     [JsonPropertyName(Parameters.IssuedTokenType)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonPropertyOrder(2)]
     public Uri? IssuedTokenType { get; set; }
 
@@ -72,17 +73,20 @@ public record TokenResponse
 
     /// <summary>The refresh token, used to obtain new access tokens using the same authorization grant.</summary>
     [JsonPropertyName(Parameters.RefreshToken)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonPropertyOrder(5)]
     public string? RefreshToken { get; init; }
 
     /// <summary>The scope of the access token as granted by the resource owner.</summary>
     [JsonPropertyName(Parameters.Scope)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonPropertyOrder(6)]
     [JsonConverter(typeof(SpaceSeparatedValuesConverter))]
     public string[]? Scope { get; init; }
 
     /// <summary>The ID token (a JWT carrying the user's identity), present in OpenID Connect flows.</summary>
     [JsonPropertyName(Parameters.IdToken)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonPropertyOrder(7)]
     public string? IdToken { get; init; }
 
@@ -91,6 +95,7 @@ public record TokenResponse
     /// back to the client byte-exact. Omitted when no Rich Authorization Request was used.
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetails)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonPropertyOrder(8)]
     public JsonArray? AuthorizationDetails { get; init; }
 }
