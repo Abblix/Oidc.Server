@@ -101,12 +101,34 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireSenderConstrainedTokens);
     }
 
+    /// <summary>
+    /// FAPI 2.0 section 5.3.2.1 has the server "only accept its issuer identifier value ... as a string in the aud
+    /// claim received in client authentication assertions", so a client allowed the token endpoint URL there is
+    /// misconfigured; with no profile the same client is consistent, since RFC 10070 leaves room for a transition.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, true, 1)]
+    [InlineData(ClientSecurityProfile.Fapi2, false, 0)]
+    [InlineData(ClientSecurityProfile.None, true, 0)]
+    public void FindViolations_TokenEndpointAudience_IsAViolationUnderFapi2Only(
+        ClientSecurityProfile profile, bool acceptsTokenEndpointAudience, int expected)
+    {
+        var violations = SecurityProfileConsistency.FindViolations(
+            [[ResponseTypes.Code]],
+            ClientAuthenticationMethods.PrivateKeyJwt,
+            acceptsTokenEndpointAudience,
+            SecurityProfileRequirements.Resolve(profile));
+
+        Assert.Equal(expected, violations.Count);
+    }
+
     [Fact]
     public void FindViolations_Fapi2CodeOnly_NoViolations()
     {
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             ClientAuthenticationMethods.PrivateKeyJwt,
+            acceptsTokenEndpointAudience: false,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Empty(violations);
@@ -122,6 +144,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [["Code"]],
             ClientAuthenticationMethods.PrivateKeyJwt,
+            acceptsTokenEndpointAudience: false,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Empty(violations);
@@ -133,6 +156,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.IdToken]],
             ClientAuthenticationMethods.PrivateKeyJwt,
+            acceptsTokenEndpointAudience: false,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Equal(2, violations.Count);
@@ -144,6 +168,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]],
             ClientAuthenticationMethods.PrivateKeyJwt,
+            acceptsTokenEndpointAudience: false,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         // code is allowed, so only the implicit/hybrid violation remains.
@@ -156,6 +181,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.IdToken]],
             ClientAuthenticationMethods.PrivateKeyJwt,
+            acceptsTokenEndpointAudience: false,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.None));
 
         Assert.Empty(violations);
@@ -319,6 +345,26 @@ public class SecurityProfileTests
     }
 
     /// <summary>
+    /// A client allowed the token endpoint URL as its assertion's audience is refused at startup under FAPI 2.0,
+    /// whose section 5.3.2.1 accepts the issuer identifier alone, and passes at a tenant naming no profile.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, true)]
+    [InlineData(ClientSecurityProfile.None, false)]
+    public void Check_TokenEndpointAudienceException_IsRefusedUnderFapi2Only(ClientSecurityProfile profile, bool refused)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AcceptTokenEndpointAsClientAssertionAudience = true,
+        };
+
+        var refusals = Check(Tenant(profile, client));
+
+        Assert.Equal(refused, refusals.Count > 0);
+    }
+
+    /// <summary>
     /// The default is a tenant's own, so a client is held to the floor of the tenant that lists it and to no
     /// other: the same hybrid client is refused at the FAPI 2.0 tenant and passes at the tenant naming no profile.
     /// </summary>
@@ -354,6 +400,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             ClientAuthenticationMethods.None,
+            acceptsTokenEndpointAudience: false,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Contains(violations, violation => violation.Contains("confidential clients only"));
@@ -373,6 +420,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             method,
+            acceptsTokenEndpointAudience: false,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Contains(violations, violation => violation.Contains("mutual TLS or a private key JWT"));
@@ -392,6 +440,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             method,
+            acceptsTokenEndpointAudience: false,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Empty(violations);
@@ -407,6 +456,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             ClientAuthenticationMethods.None,
+            acceptsTokenEndpointAudience: false,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.None));
 
         Assert.Empty(violations);

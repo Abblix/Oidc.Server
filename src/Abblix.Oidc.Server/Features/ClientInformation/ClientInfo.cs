@@ -345,6 +345,31 @@ public record ClientInfo(string ClientId)
     public bool AllowCrossClientIntrospection { get; set; } = false;
 
     /// <summary>
+    /// Lets this client's authentication assertions name the token endpoint URL as their audience, as OpenID Connect
+    /// Core 1.0 section 9 recommends, beside the issuer identifier RFC 10070 section 4 requires.
+    /// </summary>
+    /// <remarks>
+    /// RFC 10070 makes the authorization server "reject any JWT that does not contain its issuer identifier as its sole
+    /// audience value", which a client written to Core's "The Audience SHOULD be the URL of the Authorization Server's
+    /// Token Endpoint" does not meet. Section 6 of the same RFC expects such clients to need time to change, and this is
+    /// that time, given to one client at a time while every other client stays held to the rule. The exception is
+    /// narrow: the token endpoint URL alone and as a string - the path the endpoint is served at on the issuer
+    /// identifier's scheme, host and port, written either as the issuer identifier writes them or normalized, never
+    /// the host a request names - and never in an array, beside another value, or as the pushed authorization request
+    /// endpoint URL.
+    /// <para>
+    /// A client held to FAPI 2.0 cannot have it: section 5.3.2.1 has the server "only accept its issuer identifier
+    /// value ... as a string in the aud claim received in client authentication assertions", so such a configuration is
+    /// refused at startup and when the client authenticates.
+    /// </para>
+    /// This is granted by the host, never through dynamic client registration. Granting it reopens, for this client, the
+    /// audience confusion RFC 10070 closes, so it belongs to a client that cannot yet be changed and is removed when it is.
+    /// An update of a dynamically registered client (RFC 7592) builds the client anew from its metadata, so a host that
+    /// granted the exception grants it again on update.
+    /// </remarks>
+    public bool AcceptTokenEndpointAsClientAssertionAudience { get; set; } = false;
+
+    /// <summary>
     /// Describes how the client authenticates to the token endpoint per RFC 6749 section 2.3 / OIDC Core section 9.
     /// Common values include <c>client_secret_basic</c>, <c>client_secret_post</c>, <c>private_key_jwt</c>,
     /// <c>client_secret_jwt</c>, <c>tls_client_auth</c> (RFC 8705), and <c>none</c> (public clients).

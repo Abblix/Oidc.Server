@@ -29,16 +29,25 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="logger">logger for recording the authentication process and any issues encountered.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 /// <param name="timeProvider">Judges the assertion's timestamps against the client's own profile.</param>
+/// <param name="serviceProvider">Resolves, per request, where the transport serves the token endpoint, for a client
+/// allowed that URL as its assertion's audience.</param>
 public abstract partial class JwtAssertionAuthenticatorBase(
     ILogger logger,
     IReplayCache replayCache,
-    TimeProvider timeProvider) : IClientAuthenticator
+    TimeProvider timeProvider,
+    IServiceProvider serviceProvider) : IClientAuthenticator
 {
     /// <summary>
     /// The clock this class judges an assertion's timestamps by, exposed so a derived authenticator
     /// reads the same instant rather than capturing a second copy of the same dependency.
     /// </summary>
     protected TimeProvider Clock => timeProvider;
+
+    /// <summary>
+    /// The provider scoped dependencies are resolved from, exposed so a derived authenticator uses the same one
+    /// rather than capturing a second copy of the same dependency.
+    /// </summary>
+    protected IServiceProvider Services => serviceProvider;
 
     /// <summary>
     /// The checks a validated assertion must pass before its timestamps are read.
@@ -55,12 +64,12 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             static (self, _, token, client) => self.SigningAlgorithmMatchesRegistration(token, client),
             static (self, _, token, _) => self.IssuerMatchesSubject(token),
             static (self, _, token, client) => self.TypeIsClientAuthentication(token, client),
-            static (self, tenant, token, client) => self.AudienceIsTheIssuerAlone(tenant, token, client),
+            static (self, tenant, token, client) => self.AudienceIsAccepted(tenant, token, client),
         ];
 
     /// <summary>
     /// The checks a derived authenticator hands the JWT validator: the defaults, an expiry the assertion must
-    /// carry, and the audience left out, since <see cref="AudienceIsTheIssuerAlone"/> alone judges it.
+    /// carry, and the audience left out, since <see cref="AudienceIsAccepted"/> alone judges it.
     /// </summary>
     /// <remarks>
     /// RFC 7521 Section 5.2 requires an "Expires At entity that limits the time window during which the
@@ -122,7 +131,8 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     }
 
     /// <summary>
-    /// Answers whether the assertion names this tenant's issuer identifier as its sole audience.
+    /// Answers whether the assertion names this tenant's issuer identifier as its sole audience, or, for a client
+    /// granted <see cref="ClientInfo.AcceptTokenEndpointAsClientAssertionAudience"/>, the token endpoint URL alone.
     /// </summary>
     /// <remarks>
     /// RFC 10070 section 4 (case B, client authentication): the authorization server "MUST reject any JWT that
@@ -136,7 +146,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// prescribes. A profile may narrow the form further: FAPI 2.0 section 5.3.2.1 takes the issuer only as a
     /// string, never as the one member of an array.
     /// </remarks>
-    private bool AudienceIsTheIssuerAlone(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo)
+    private bool AudienceIsAccepted(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo)
     {
         var issuerIdentifier = tenant.Issuer.OriginalString;
         var asStringOnly = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile)
@@ -155,6 +165,12 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return true;
         }
 
+        if (!asStringOnly && IsTheTokenEndpointThisClientIsAllowed(tenant, clientInfo, audience))
+        {
+            LogTokenEndpointAudienceAccepted(clientInfo.ClientId);
+            return true;
+        }
+
         // Logged from the claim itself: the typed accessor skips members that are not strings, so for the issuer
         // beside such a member it would log the issuer alone next to the refusal
         LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, Sanitized.Value(audience?.ToJsonString()), issuerIdentifier);
@@ -163,6 +179,20 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         bool IsTheIssuer(JsonValue value)
             => value.TryGetValue<string>(out var written) && written == issuerIdentifier;
     }
+
+    /// <summary>
+    /// Answers whether the audience is the tenant's token endpoint URL alone, as a string, written by a client granted
+    /// <see cref="ClientInfo.AcceptTokenEndpointAsClientAssertionAudience"/>.
+    /// </summary>
+    /// <remarks>
+    /// Its caller skips it under a profile that takes the issuer only as a string, which FAPI 2.0 section 5.3.2.1
+    /// does, so such a client is refused here before its jti is spent, whatever order the authenticators run in.
+    /// </remarks>
+    private bool IsTheTokenEndpointThisClientIsAllowed(TenantDefinition tenant, ClientInfo clientInfo, JsonNode? audience)
+        => clientInfo.AcceptTokenEndpointAsClientAssertionAudience &&
+           audience is JsonValue only &&
+           only.TryGetValue<string>(out var named) &&
+           tenant.TokenEndpointSpellings(serviceProvider).Contains(named, StringComparer.Ordinal);
 
     /// <summary>
     /// Attempts to authenticate a client using JWT assertion by validating the JWT provided in the client request.

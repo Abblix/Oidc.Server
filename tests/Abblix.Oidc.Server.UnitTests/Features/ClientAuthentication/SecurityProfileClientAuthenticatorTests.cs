@@ -225,6 +225,28 @@ public class SecurityProfileClientAuthenticatorTests
                 .ProfileIsNotOneThisServerDefines);
     }
 
+    /// <summary>
+    /// A client allowed the token endpoint URL as its assertion's audience authenticates at a tenant naming no
+    /// profile and is refused under FAPI 2.0, whose section 5.3.2.1 accepts the issuer identifier alone, whichever
+    /// way it was stored.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, false)]
+    public async Task TokenEndpointAudienceException_IsRefusedUnderFapi2(ClientSecurityProfile profile, bool accepted)
+    {
+        var (authenticator, inner) = CreateAuthenticator();
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AcceptTokenEndpointAsClientAssertionAudience = true,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest());
+
+        Assert.Equal(accepted, result is not null);
+    }
+
     private static void Authenticates(Mock<IClientAuthenticator> inner, ClientInfo clientInfo)
         => inner.Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
             .ReturnsAsync(clientInfo);

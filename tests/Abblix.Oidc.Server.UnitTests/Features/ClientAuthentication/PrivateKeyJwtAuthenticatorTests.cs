@@ -12,6 +12,7 @@ using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt.ReplayPrevention;
@@ -44,6 +45,13 @@ public class PrivateKeyJwtAuthenticatorTests
     /// the sole audience a client authentication assertion may carry; the token helpers write it by default.
     /// </summary>
     private const string IssuerIdentifier = "https://issuer.example.com";
+
+    /// <summary>
+    /// Where the transport serves the tenant's token endpoint, as its endpoint resolver answers it.
+    /// </summary>
+    private const string TokenEndpoint = IssuerIdentifier + "/connect/token";
+
+    private const string PushedAuthorizationRequestEndpoint = IssuerIdentifier + "/connect/par";
 
     /// <summary>
     /// The instant the authenticator reads, before the expiry every assertion here carries, so no assertion is
@@ -718,6 +726,204 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
+    /// A client the host still lets use the token endpoint URL, as OpenID Connect Core 1.0 section 9 recommended
+    /// before RFC 10070, is accepted with that URL alone and as a string, the form such a client writes. The
+    /// exception reaches no further: the URL in an array or beside the issuer, and the pushed authorization request
+    /// endpoint URL, are still refused, and so is the token endpoint URL for a client without the exception.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AudiencesUnderTheTokenEndpointException))]
+    public async Task TokenEndpointAudience_IsAcceptedOnlyAloneAndOnlyForAClientAllowedIt(
+        bool allowed, JsonNode audience, bool accepted)
+    {
+        var (authenticator, mocks) = CreateAuthenticator();
+        var clientInfo = CreateClientInfo(ClientId);
+        clientInfo.AcceptTokenEndpointAsClientAssertionAudience = allowed;
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "token-endpoint-audience",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+        token.Payload.Json[JwtClaimTypes.Audience] = audience.DeepClone();
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+
+        Assert.Equal(accepted, result is not null);
+        if (!accepted)
+            AssertRefusedForItsAudience(mocks);
+    }
+
+    public static TheoryData<bool, JsonNode, bool> AudiencesUnderTheTokenEndpointException() => new()
+    {
+        { true, JsonValue.Create(TokenEndpoint), true },
+        { true, JsonValue.Create(IssuerIdentifier), true },
+        { true, new JsonArray(TokenEndpoint), false },
+        { true, new JsonArray(IssuerIdentifier, TokenEndpoint), false },
+        { true, JsonValue.Create(PushedAuthorizationRequestEndpoint), false },
+        { false, JsonValue.Create(TokenEndpoint), false },
+    };
+
+    /// <summary>
+    /// The URL a flagged client may name is the tenant's token endpoint on the issuer's own host, whatever host the
+    /// request names. A caller sending an assertion minted for another server under the same path, with that server's
+    /// host in the request, is refused; the same path on the issuer's host is accepted, as discovery advertises it.
+    /// </summary>
+    [Theory]
+    [InlineData("https://other-as.example/connect/token", false)]
+    [InlineData(TokenEndpoint, true)]
+    public async Task TokenEndpointAudience_IsTheIssuersHostNotTheRequests(string audience, bool accepted)
+    {
+        var (authenticator, mocks) = CreateAuthenticator(new Uri("https://other-as.example/connect/token"));
+        var result = await AuthenticateFlaggedClient(authenticator, mocks, ClientSecurityProfile.None, audience);
+
+        Assert.Equal(accepted, result is not null);
+        if (!accepted)
+            AssertRefusedForItsAudience(mocks);
+    }
+
+    /// <summary>
+    /// For an issuer written with its default port and an upper-case host, the token endpoint is accepted both as
+    /// discovery advertises it, on the normalized authority, and on the authority as the issuer writes it; each is
+    /// compared as written, so a third spelling of the same host, and another host, are refused.
+    /// </summary>
+    [Theory]
+    [InlineData("https://issuer.example.com/connect/token", true)]
+    [InlineData("https://ISSUER.example.com:443/connect/token", true)]
+    [InlineData("https://issuer.example.com:443/connect/token", false)]
+    [InlineData("https://other-as.example/connect/token", false)]
+    public async Task TokenEndpointAudience_IsAcceptedOnTheIssuersAuthorityEitherWayItIsWritten(string audience, bool accepted)
+    {
+        var (authenticator, mocks) = CreateAuthenticator();
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AcceptTokenEndpointAsClientAssertionAudience = true,
+        };
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "normalized-authority",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+        token.Payload.Json[JwtClaimTypes.Audience] = audience;
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var tenant = new TestIssuer { Issuer = new Uri("https://ISSUER.example.com:443") }.ToTenant();
+        var result = await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+
+        Assert.Equal(accepted, result is not null);
+        if (!accepted)
+            AssertRefusedForItsAudience(mocks);
+    }
+
+    /// <summary>
+    /// A tenant served under a path carries that path in the resolved endpoint already, so the spelling on the issuer's
+    /// authority as written takes the authority alone: the tenant's path appears once, and a spelling repeating it is
+    /// refused.
+    /// </summary>
+    [Theory]
+    [InlineData("https://ISSUER.example.com:443/tenants/acme/connect/token", true)]
+    [InlineData("https://issuer.example.com/tenants/acme/connect/token", true)]
+    [InlineData("https://ISSUER.example.com:443/tenants/acme/tenants/acme/connect/token", false)]
+    public async Task TokenEndpointAudience_ForATenantUnderAPath_NamesThePathOnce(string audience, bool accepted)
+    {
+        var (authenticator, mocks) = CreateAuthenticator(new Uri("https://issuer.example.com/tenants/acme/connect/token"));
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AcceptTokenEndpointAsClientAssertionAudience = true,
+        };
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "tenant-under-a-path",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+        token.Payload.Json[JwtClaimTypes.Audience] = audience;
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var tenant = new TestIssuer { Issuer = new Uri("https://ISSUER.example.com:443/tenants/acme") }.ToTenant();
+        var result = await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+
+        Assert.Equal(accepted, result is not null);
+        if (!accepted)
+            AssertRefusedForItsAudience(mocks);
+    }
+
+    /// <summary>
+    /// The exception does not reach a client held to FAPI 2.0, whose section 5.3.2.1 accepts the issuer identifier
+    /// alone: the audience link refuses it itself, before its jti is spent, whatever runs after it.
+    /// </summary>
+    [Fact]
+    public async Task TokenEndpointAudience_IsRefusedUnderFapi2EvenForAFlaggedClient()
+    {
+        var (authenticator, mocks) = CreateAuthenticator();
+        var result = await AuthenticateFlaggedClient(authenticator, mocks, ClientSecurityProfile.Fapi2, TokenEndpoint);
+
+        Assert.Null(result);
+        AssertRefusedForItsAudience(mocks);
+        mocks.ReplayCache.Verify(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Where nothing resolves the token endpoint - a host running the core without a transport, or an endpoint that is
+    /// not mapped - a flagged client's token endpoint audience matches nothing and is refused, without an exception.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TokenEndpointAudience_IsRefusedWhereNothingResolvesTheEndpoint(bool resolverRegistered)
+    {
+        var (authenticator, mocks) = CreateAuthenticator(tokenEndpoint: null, resolverRegistered);
+        var result = await AuthenticateFlaggedClient(authenticator, mocks, ClientSecurityProfile.None, TokenEndpoint);
+
+        Assert.Null(result);
+        AssertRefusedForItsAudience(mocks);
+    }
+
+    /// <summary>
+    /// A client allowed the token endpoint URL, authenticating with an assertion whose audience is
+    /// <paramref name="audience"/> at a tenant held to <paramref name="profile"/>.
+    /// </summary>
+    private async Task<ClientInfo?> AuthenticateFlaggedClient(
+        PrivateKeyJwtAuthenticator authenticator, Mocks mocks, ClientSecurityProfile profile, string audience)
+    {
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AcceptTokenEndpointAsClientAssertionAudience = true,
+        };
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "flagged-client",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+        token.Payload.Json[JwtClaimTypes.Audience] = audience;
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        return await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+    }
+
+    /// <summary>
     /// Asserts the refusal came from the audience link rather than from a check that runs before it, so a row
     /// cannot stay green on a refusal it was not written for.
     /// </summary>
@@ -742,6 +948,14 @@ public class PrivateKeyJwtAuthenticatorTests
     /// </summary>
     /// <returns>A tuple containing the authenticator instance and the mock objects.</returns>
     private (PrivateKeyJwtAuthenticator authenticator, Mocks mocks) CreateAuthenticator()
+        => CreateAuthenticator(new Uri(TokenEndpoint));
+
+    /// <summary>
+    /// The authenticator over a transport whose resolver answers <paramref name="tokenEndpoint"/> for the token
+    /// endpoint, or over a host with no resolver registered at all.
+    /// </summary>
+    private (PrivateKeyJwtAuthenticator authenticator, Mocks mocks) CreateAuthenticator(
+        Uri? tokenEndpoint, bool resolverRegistered = true)
     {
         var logger = new Mock<ILogger<PrivateKeyJwtAuthenticator>>();
         logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
@@ -754,9 +968,16 @@ public class PrivateKeyJwtAuthenticatorTests
             .ReturnsAsync(true);
 
         // Create service provider with scoped services
+        var endpointResolver = new Mock<IOidcEndpointResolver>();
+        endpointResolver.Setup(r => r.Resolve(OidcEndpoints.Token)).Returns(tokenEndpoint);
+        endpointResolver.Setup(r => r.Resolve(OidcEndpoints.PushedAuthorizationRequest))
+            .Returns(new Uri(PushedAuthorizationRequestEndpoint));
+
         var services = new ServiceCollection();
         services.AddScoped<IClientJwtValidator>(_ => clientJwtValidator.Object);
-        var serviceProvider = services.BuildServiceProvider();
+        if (resolverRegistered)
+            services.AddScoped<IOidcEndpointResolver>(_ => endpointResolver.Object);
+        var serviceProvider = services.BuildServiceProvider(validateScopes: true);
 
         var authenticator = new PrivateKeyJwtAuthenticator(
             logger.Object,

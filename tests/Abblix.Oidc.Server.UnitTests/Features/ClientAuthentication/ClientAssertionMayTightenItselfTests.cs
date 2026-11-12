@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
@@ -277,7 +278,8 @@ public class ClientAssertionMayTightenItselfTests
             tokenValidator.Object,
             clientInfoProvider.Object,
             new FakeTimeProvider(Now),
-            replayCache.Object);
+            replayCache.Object,
+            new ServiceCollection().BuildServiceProvider());
 
         var tenant = new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = tenantProfile }.ToTenant();
         return await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest

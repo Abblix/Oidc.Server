@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -61,7 +62,8 @@ public class ProfileClockSkewReachesValidationTests
             tokenValidator.Object,
             clientInfoProvider.Object,
             TimeProvider.System,
-            new Mock<IReplayCache>().Object);
+            new Mock<IReplayCache>().Object,
+            new ServiceCollection().BuildServiceProvider());
 
         await authenticator.TryAuthenticateClientAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), new ClientRequest
         {

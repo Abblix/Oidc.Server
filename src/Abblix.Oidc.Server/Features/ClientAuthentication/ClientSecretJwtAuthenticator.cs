@@ -32,13 +32,16 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
 /// <param name="clock">Time provider for checking secret expiration.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
+/// <param name="serviceProvider">Resolves per request where the token endpoint is served, for a client allowed that URL
+/// as its assertion's audience.</param>
 public partial class ClientSecretJwtAuthenticator(
     ILogger<ClientSecretJwtAuthenticator> logger,
     IJsonWebTokenValidator tokenValidator,
     IClientInfoProvider clientInfoProvider,
     TimeProvider clock,
-    IReplayCache replayCache)
-    : JwtAssertionAuthenticatorBase(logger, replayCache, clock)
+    IReplayCache replayCache,
+    IServiceProvider serviceProvider)
+    : JwtAssertionAuthenticatorBase(logger, replayCache, clock, serviceProvider)
 {
     /// <summary>
     /// Specifies the client authentication method this authenticator supports, which is 'client_secret_jwt'.

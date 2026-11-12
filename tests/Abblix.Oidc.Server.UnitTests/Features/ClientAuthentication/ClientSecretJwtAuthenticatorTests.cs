@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -63,7 +64,8 @@ public class ClientSecretJwtAuthenticatorTests
             _tokenValidator.Object,
             _clientInfoProvider.Object,
             _clock,
-            _replayCache.Object);
+            _replayCache.Object,
+            new ServiceCollection().BuildServiceProvider());
     }
 
     /// <summary>
@@ -196,6 +198,68 @@ public class ClientSecretJwtAuthenticatorTests
         });
 
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// The exception a host gives a client that still names the token endpoint, as OpenID Connect Core 1.0 section 9
+    /// recommends, holds for a client signing with its secret as for one signing with its key: the token endpoint URL
+    /// on the issuer's host is accepted for a flagged client and refused for any other.
+    /// </summary>
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task TryAuthenticateClientAsync_TokenEndpointAudience_IsAcceptedForAFlaggedClientOnly(
+        bool allowed, bool accepted)
+    {
+        const string jwt = "valid.jwt.token";
+        const string tokenEndpoint = IssuerIdentifier + "/connect/token";
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            ClientSecrets = [new ClientSecret { Value = ClientSecret }],
+            AcceptTokenEndpointAsClientAssertionAudience = allowed,
+        };
+
+        var token = CreateMockToken(ClientId, ClientId, [tokenEndpoint], "jti-token-endpoint", _clock.GetUtcNow().AddMinutes(5));
+
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
+            .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
+            {
+                await parameters.ResolveIssuerSigningKeys!(ClientId).ToArrayAsync();
+                return await parameters.ValidateIssuer!(ClientId)
+                    ? token
+                    : new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
+            }));
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .ReturnsAsync(clientInfo);
+
+        _replayCache
+            .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        var endpointResolver = new Mock<IOidcEndpointResolver>();
+        endpointResolver.Setup(r => r.Resolve(OidcEndpoints.Token)).Returns(new Uri(tokenEndpoint));
+        var services = new ServiceCollection();
+        services.AddScoped<IOidcEndpointResolver>(_ => endpointResolver.Object);
+
+        var authenticator = new ClientSecretJwtAuthenticator(
+            Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
+            _tokenValidator.Object,
+            _clientInfoProvider.Object,
+            _clock,
+            _replayCache.Object,
+            services.BuildServiceProvider(validateScopes: true));
+
+        var result = await authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = jwt,
+        });
+
+        Assert.Equal(accepted, result is not null);
     }
 
     /// <summary>

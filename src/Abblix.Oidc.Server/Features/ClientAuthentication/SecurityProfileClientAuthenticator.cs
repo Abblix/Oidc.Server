@@ -72,6 +72,7 @@ internal partial class SecurityProfileClientAuthenticator(
         var violations = SecurityProfileConsistency.FindViolations(
             clientInfo.EffectiveResponseTypes,
             clientInfo.TokenEndpointAuthMethod,
+            clientInfo.AcceptTokenEndpointAsClientAssertionAudience,
             SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile));
 
         if (violations.Count == 0)

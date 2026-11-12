@@ -102,4 +102,11 @@ partial class JwtAssertionAuthenticatorBase
         Level = LogLevel.Warning,
         Message = "The client assertion for {ClientId} carries a timestamp that cannot be read: {WhyUnreadable}")]
     private partial void LogTimestampUnreadable(string ClientId, Sanitized WhyUnreadable);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.TokenEndpointAudienceAccepted,
+        Level = LogLevel.Debug,
+        Message = "The client assertion for {ClientId} names the token endpoint URL as its audience, accepted because "
+                  + "the client is allowed it in place of the issuer identifier")]
+    private partial void LogTokenEndpointAudienceAccepted(string ClientId);
 }

@@ -74,6 +74,19 @@ public static class UriExtensions
 	}
 
 	/// <summary>
+	/// <paramref name="uri"/>'s path, exactly as resolved and still escaped, on the scheme, host and port of
+	/// <paramref name="authority"/>, whose own path is not used.
+	/// </summary>
+	/// <remarks>
+	/// Joined as text rather than resolved as a reference: a resolved path opening with an empty segment is a
+	/// network-path reference to RFC 3986 section 4.2 and would name a host.
+	/// </remarks>
+	/// <param name="uri">The absolute URI whose path is kept.</param>
+	/// <param name="authority">The absolute URI whose scheme, host and port the result takes.</param>
+	public static Uri OnAuthorityOf(this Uri uri, Uri authority)
+		=> new(authority.GetLeftPart(UriPartial.Authority) + uri.AbsolutePath);
+
+	/// <summary>
 	/// Appends a trailing slash to a URI string if it does not already end with one.
 	/// </summary>
 	/// <param name="uri">The URI string to which a trailing slash will be appended.</param>

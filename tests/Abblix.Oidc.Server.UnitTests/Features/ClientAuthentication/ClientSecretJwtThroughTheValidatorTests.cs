@@ -103,7 +103,8 @@ public class ClientSecretJwtThroughTheValidatorTests
             jwt.GetRequiredService<IJsonWebTokenValidator>(),
             clients.Object,
             TimeProvider.System,
-            replayCache.Object);
+            replayCache.Object,
+            new ServiceCollection().BuildServiceProvider());
     }
 
     private static async Task<ClientRequest> RequestAsync(IServiceProvider jwt, string[] audiences)
