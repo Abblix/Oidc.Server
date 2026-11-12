@@ -58,7 +58,10 @@ public class PushedAuthorizationHandler(
         if (fetchResult.TryGetFailure(out var fetchError))
             return new AuthorizationError(authorizationRequest, fetchError);
 
-        authorizationRequest = fetchResult.GetSuccess();
+        // RFC 9126 section 2.1 forbids request_uri in a pushed request, and strict request object processing rebuilds
+        // the request from the object alone, so the one sent beside the object is carried on for the validator to refuse
+        var fetched = fetchResult.GetSuccess();
+        authorizationRequest = fetched with { RequestUri = fetched.RequestUri ?? authorizationRequest.RequestUri };
 
         var validationResult = await validator.ValidateAsync(tenant, authorizationRequest, clientRequest);
 

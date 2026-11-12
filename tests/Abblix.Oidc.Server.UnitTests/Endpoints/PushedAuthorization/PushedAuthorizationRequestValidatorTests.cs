@@ -114,7 +114,7 @@ public class PushedAuthorizationRequestValidatorTests
 
     /// <summary>
     /// RFC 9126 section 2.1: the request_uri parameter "MUST NOT be provided" in a pushed request, and section 2.3
-    /// answers with the codes of RFC 6749, where a request carrying a parameter it must not is invalid_request.
+    /// takes its codes from RFC 6749, where a request carrying it is malformed: invalid_request.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_RequestUriInThePushedRequest_ReturnsInvalidRequest()
