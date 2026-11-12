@@ -67,7 +67,7 @@ public class AuthServiceJwtValidator(
 				// These are tokens this server issued and reads back, often on another instance whose clock lags
 				// the issuing one, so a token dated a little ahead is still this server's own. Only that direction
 				// is tolerated: the expiry the issuing instance set is a deadline no instance moves. A value above
-				// a tenant's profile ceiling is refused at startup by ClockSkewCeilingCheck
+				// a tenant's profile ceiling gets that tenant refused by ClockSkewCeilingCheck
 				ClockSkew = new ClockSkew { Past = TimeSpan.Zero, Future = oidcOptions.Value.ClockSkew },
 			});
 

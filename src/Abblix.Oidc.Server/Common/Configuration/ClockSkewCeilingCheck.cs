@@ -24,8 +24,8 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// to the bound by the validator whatever is configured, so there the refusal exists because a setting silently
 /// clamped is worse than one refused: a deployment could read the setting back and believe a number the validator
 /// was cutting down. The drift between this server's own instances is applied as configured, so above the bound
-/// it would let a token this server issued be accepted dated further ahead than the profile allows, and this check
-/// is what keeps that from happening.
+/// it would let a token this server issued be accepted dated further ahead than the profile allows, and for a
+/// tenant whose default profile bounds it this check is what keeps that from happening.
 /// </para>
 /// </remarks>
 public sealed class ClockSkewCeilingCheck : ITenantsCheck
@@ -52,10 +52,15 @@ public sealed class ClockSkewCeilingCheck : ITenantsCheck
 
         return TenantRefusal.EachOf(
             tenants,
-            tenant => settings.SelectMany(setting => Failures(tenant, setting.Name, setting.Value, setting.Consequence)));
+            tenant => settings.SelectMany(
+                setting => Failures(tenant, setting.Name, setting.Value, setting.Consequence)));
     }
 
-    private static IEnumerable<string> Failures(TenantDefinition tenant, string setting, TimeSpan skew, string consequence)
+    private static IEnumerable<string> Failures(
+        TenantDefinition tenant,
+        string setting,
+        TimeSpan skew,
+        string consequence)
     {
         // A profile that names no bound leaves the question to RFC 7523, which does not answer it, and a profile
         // the enumeration does not define is refused by the check of the profiles
@@ -66,6 +71,8 @@ public sealed class ClockSkewCeilingCheck : ITenantsCheck
             yield break;
         }
 
-        yield return $"{setting} is {skew}, above the {ceiling} the {tenant.DefaultSecurityProfile} profile allows. {consequence}";
+        yield return
+            $"{setting} is {skew}, above the {ceiling} the {tenant.DefaultSecurityProfile} profile allows. " +
+            consequence;
     }
 }
