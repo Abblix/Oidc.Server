@@ -58,11 +58,13 @@ public interface IJwtBearerIssuerProvider
 	/// </summary>
 	/// <param name="tenant">The tenant the grant is requested at.</param>
 	/// <param name="issuer">The issuer identifier from the JWT's 'iss' claim.</param>
+	/// <param name="refetch">Whether to read the issuer's keys at its JWKS URI again past the copy held, as on a
+	/// kid the copy does not hold.</param>
 	/// <returns>
 	/// An async enumerable of JSON Web Keys that can be used to verify signatures for JWTs
 	/// issued by this issuer. Returns empty if the issuer is not trusted or has no configured keys.
 	/// </returns>
-	IAsyncEnumerable<JsonWebKey> GetSigningKeysAsync(TenantDefinition tenant, string issuer);
+	IAsyncEnumerable<JsonWebKey> GetSigningKeysAsync(TenantDefinition tenant, string issuer, bool refetch = false);
 
 	/// <summary>
 	/// Atomically records the JWT's JTI for replay protection and reports whether it had already

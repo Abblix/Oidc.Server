@@ -74,6 +74,7 @@ public partial class SoftwareStatementValidator(
 
             ValidateIssuer = issuer => ValidateIssuer(softwareStatementOptions, issuer),
             ResolveIssuerSigningKeys = issuer => ResolveSigningKeysAsync(softwareStatementOptions, issuer),
+            RefetchIssuerSigningKeys = issuer => ResolveSigningKeysAsync(softwareStatementOptions, issuer, refetch: true),
         };
 
         var result = await jwtValidator.ValidateAsync(softwareStatement, validationParameters);
@@ -153,14 +154,15 @@ public partial class SoftwareStatementValidator(
     /// </summary>
     private async IAsyncEnumerable<JsonWebKey> ResolveSigningKeysAsync(
         SoftwareStatementOptions statementOptions,
-        string issuer)
+        string issuer,
+        bool refetch = false)
     {
         var trustedIssuer = FindTrustedIssuer(statementOptions, issuer);
         if (trustedIssuer == null)
             yield break;
 
         var keys = secureFetcher.FetchKeysAsync(
-            trustedIssuer.JwksUri, logger, issuer, KeySetOwners.SoftwareStatementIssuer);
+            trustedIssuer.JwksUri, logger, issuer, KeySetOwners.SoftwareStatementIssuer, refetch);
         await foreach (var key in keys.Where(k => k.Usage is null or PublicKeyUsages.Signature))
         {
             yield return key;

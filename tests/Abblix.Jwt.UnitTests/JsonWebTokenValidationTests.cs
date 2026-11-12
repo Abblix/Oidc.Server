@@ -140,6 +140,38 @@ public partial class JsonWebTokenValidationTests
     }
 
     /// <summary>
+    /// OpenID Connect Core 1.0 section 10.1.1: "The verifier knows to go back to the jwks_uri location to re-retrieve
+    /// the keys when it sees an unfamiliar kid value". A token naming a key the set first returned lacks is checked
+    /// once more against the keys read again, so a signer's rotated key is accepted; one naming a key the set holds,
+    /// or naming none, is judged on the set first returned and the keys are not read again.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false, true, true, 1)]
+    [InlineData(true, false, false, false, 1)]
+    [InlineData(false, false, true, true, 0)]
+    [InlineData(true, true, true, false, 0)]
+    public async Task ATokenNamingAnUnfamiliarKey_IsCheckedOnceMoreAgainstTheKeysReadAgain(
+        bool firstSetIsStale, bool headerNamesNoKey, bool keysReadAgainHoldIt, bool accepted, int refetches)
+    {
+        var signingKey = headerNamesNoKey ? SigningKey with { KeyId = null } : SigningKey;
+        var jwt = await IssueToken(CreateValidToken(), signingKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var refetched = 0;
+        var parameters = CreateValidationParameters(firstSetIsStale ? WrongSigningKey : SigningKey);
+        parameters.RefetchIssuerSigningKeys = _ =>
+        {
+            refetched++;
+            return (keysReadAgainHoldIt ? SigningKey : WrongSigningKey).ToAsync();
+        };
+
+        var result = await validator.ValidateAsync(jwt, parameters);
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+        Assert.Equal(refetches, refetched);
+    }
+
+    /// <summary>
     /// Verifies that expired JWTs fail lifetime validation.
     /// Tests enforcement of ExpiresAt (exp) claim per RFC 7519 Section 4.1.4.
     /// Critical for security - expired tokens must be rejected to prevent replay attacks.

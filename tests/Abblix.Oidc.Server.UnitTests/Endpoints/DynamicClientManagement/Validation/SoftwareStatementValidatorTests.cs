@@ -7,9 +7,11 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -170,6 +172,35 @@ public class SoftwareStatementValidatorTests
 
         Assert.False(await validateIssuer(served));
         Assert.True(await validateIssuer("https://trusted-issuer.example.com"));
+    }
+
+    /// <summary>
+    /// The keys read again on an unfamiliar kid are the trusted issuer's, fetched past the copy held, while the keys
+    /// first returned come from the copy.
+    /// </summary>
+    [Fact]
+    public async Task TheTrustedIssuersKeys_AreReadPastTheCopyOnlyForTheRefetch()
+    {
+        var jwksUri = new Uri("https://trusted-issuer.example.com/.well-known/jwks.json");
+        _oidcOptions.SoftwareStatement.TrustedIssuers =
+        [
+            new TrustedIssuer { Issuer = "https://trusted-issuer.example.com", JwksUri = jwksUri },
+        ];
+        ValidationParameters? captured = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
+            .Callback(new Action<string, ValidationParameters>((_, p) => captured = p))
+            .ReturnsAsync(new JsonWebToken());
+        _secureFetcher
+            .Setup(f => f.FetchAsync<JsonWebKeySet>(jwksUri, It.IsAny<bool>()))
+            .ReturnsAsync(new OidcError(ErrorCodes.ServerError, "not the subject of this test"));
+
+        await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
+        await captured!.ResolveIssuerSigningKeys!("https://trusted-issuer.example.com").ToArrayAsync(TestContext.Current.CancellationToken);
+        await captured.RefetchIssuerSigningKeys!("https://trusted-issuer.example.com").ToArrayAsync(TestContext.Current.CancellationToken);
+
+        _secureFetcher.Verify(f => f.FetchAsync<JsonWebKeySet>(jwksUri, false), Times.Once);
+        _secureFetcher.Verify(f => f.FetchAsync<JsonWebKeySet>(jwksUri, true), Times.Once);
     }
 
     /// <summary>

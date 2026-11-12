@@ -133,7 +133,26 @@ internal sealed class JwsSignatureValidator(IJsonWebTokenSigner signer)
                 $"but the host did not provide {nameof(ValidationParameters.ResolveIssuerSigningKeys)}.");
         }
 
-        var error = await signer.ValidateAsync(jwtParts, token.Header, resolveIssuerSigningKeys(issuer));
+        var signingKeys = await resolveIssuerSigningKeys(issuer).ToArrayAsync();
+        if (parameters.RefetchIssuerSigningKeys is { } refetch && NamesAnUnfamiliarKey(token.Header, signingKeys))
+        {
+            signingKeys = await refetch(issuer).ToArrayAsync();
+        }
+
+        var error = await signer.ValidateAsync(jwtParts, token.Header, signingKeys.ToAsyncEnumerable());
         return error is null ? token : error;
     }
+
+    /// <summary>
+    /// Whether the header names a key by its <c>kid</c> that none of <paramref name="signingKeys"/> carries, the
+    /// signal OpenID Connect Core 1.0 section 10.1.1 gives a verifier to read the signer's keys again.
+    /// </summary>
+    /// <remarks>
+    /// A header naming no key gives no such signal: a key set rotated under it reads the same as a signature that
+    /// does not match, and reading the keys again on every such failure would let any caller make this server fetch
+    /// the signer's set at will.
+    /// </remarks>
+    private static bool NamesAnUnfamiliarKey(JsonWebTokenHeader header, JsonWebKey[] signingKeys)
+        => header.KeyId is { Length: > 0 } keyId &&
+           !signingKeys.Any(key => string.Equals(key.KeyId, keyId, StringComparison.Ordinal));
 }

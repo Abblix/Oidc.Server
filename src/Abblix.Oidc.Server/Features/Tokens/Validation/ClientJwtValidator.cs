@@ -78,7 +78,8 @@ public partial class ClientJwtValidator(
                 TokenTypes = tokenTypes,
                 ValidateAudience = audiences => ValidateAudience(tenant, audiences),
                 ValidateIssuer = context.ValidateIssuer,
-                ResolveIssuerSigningKeys = context.ResolveIssuerSigningKeys,
+                ResolveIssuerSigningKeys = issuer => context.ResolveIssuerSigningKeys(issuer),
+                RefetchIssuerSigningKeys = issuer => context.ResolveIssuerSigningKeys(issuer, refetch: true),
                 // RFC 9101 section 6.1: a request object may be JWE-encrypted to the server. Decrypt it with
                 // the server's own private keys; the inner JWS is then verified with the client's key
                 // via ResolveIssuerSigningKeys. Harmless for plain JWS client assertions (the JWE path
@@ -239,10 +240,11 @@ public partial class ClientJwtValidator(
         /// If issuer is not present, returns empty sequence as client will be identified by client_id claim.
         /// </summary>
         /// <param name="issuer">The issuer URL whose signing keys are to be resolved.</param>
+        /// <param name="refetch">Whether to read the client's published keys again past the copy held.</param>
         /// <returns>
         /// An asynchronous stream of <see cref="JsonWebKey" /> objects representing the issuer's signing keys.
         /// </returns>
-        public async IAsyncEnumerable<JsonWebKey> ResolveIssuerSigningKeys(string issuer)
+        public async IAsyncEnumerable<JsonWebKey> ResolveIssuerSigningKeys(string issuer, bool refetch = false)
         {
             // If issuer is not present, return empty sequence - client will be identified by client_id claim
             if (string.IsNullOrEmpty(issuer))
@@ -252,7 +254,7 @@ public partial class ClientJwtValidator(
                 yield break;
 
             var clientInfo = ClientInfo.NotNull(nameof(ClientInfo));
-            await foreach (var key in clientJwksProvider.GetSigningKeys(clientInfo))
+            await foreach (var key in clientJwksProvider.GetSigningKeys(clientInfo, refetch))
                 yield return key;
         }
     }

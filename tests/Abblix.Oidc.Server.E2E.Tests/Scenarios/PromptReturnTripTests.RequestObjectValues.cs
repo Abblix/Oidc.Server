@@ -288,7 +288,7 @@ public partial class PromptReturnTripTests
         /// <summary>The address the server last fetched a request object from.</summary>
         public Uri? Fetched { get; private set; }
 
-        public Task<Result<T, OidcError>> FetchAsync<T>(Uri uri)
+        public Task<Result<T, OidcError>> FetchAsync<T>(Uri uri, bool refetch = false)
         {
             Fetched = uri;
             return Task.FromResult<Result<T, OidcError>>((T)(object)Content!);

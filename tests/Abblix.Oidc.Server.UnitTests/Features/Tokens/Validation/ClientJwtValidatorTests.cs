@@ -113,6 +113,35 @@ public class ClientJwtValidatorTests
     }
 
     /// <summary>
+    /// The keys read again on an unfamiliar kid (OpenID Connect Core 1.0 section 10.1.1) are the client's own, asked
+    /// for past the copy held, while the keys first returned come from the copy.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ReadsTheClientsKeysAgainOnlyForTheRefetch()
+    {
+        var clientInfo = CreateClientInfo(ValidClientId);
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns(async (string _, ValidationParameters p) =>
+            {
+                await p.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync();
+                await p.RefetchIssuerSigningKeys!(ValidClientId).ToArrayAsync();
+                return CreateValidToken();
+            });
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .ReturnsAsync(clientInfo);
+        _clientKeysProvider
+            .Setup(p => p.GetSigningKeys(clientInfo, It.IsAny<bool>()))
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
+
+        await _validator.ValidateAsync(SingleIssuer.Tenant, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        _clientKeysProvider.Verify(p => p.GetSigningKeys(clientInfo, false), Times.Once);
+        _clientKeysProvider.Verify(p => p.GetSigningKeys(clientInfo, true), Times.Once);
+    }
+
+    /// <summary>
     /// The token types the caller accepts reach the JWT validator unchanged, which is what refuses a token of
     /// another type.
     /// </summary>

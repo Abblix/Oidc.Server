@@ -83,6 +83,7 @@ public partial class JwtBearerIssuerProvider(
 	/// </summary>
 	/// <param name="tenant">The tenant the grant is requested at.</param>
 	/// <param name="issuer">The issuer identifier from the JWT's 'iss' claim.</param>
+	/// <param name="refetch">Whether to read the issuer's keys at its JWKS URI again past the copy held.</param>
 	/// <returns>
 	/// An async enumerable of JSON Web Keys from the issuer's JWKS endpoint.
 	/// Returns empty if the issuer is not trusted or if fetching JWKS fails.
@@ -95,7 +96,7 @@ public partial class JwtBearerIssuerProvider(
 	/// - Filters keys to return only those suitable for signature verification
 	/// - Logs warnings if JWKS fetching fails
 	/// </remarks>
-	public async IAsyncEnumerable<JsonWebKey> GetSigningKeysAsync(TenantDefinition tenant, string issuer)
+	public async IAsyncEnumerable<JsonWebKey> GetSigningKeysAsync(TenantDefinition tenant, string issuer, bool refetch = false)
 	{
 		var trustedIssuer = FindTrustedIssuer(issuer);
 
@@ -105,7 +106,7 @@ public partial class JwtBearerIssuerProvider(
 			yield break;
 		}
 
-		var keys = secureFetcher.FetchKeysAsync(trustedIssuer.JwksUri, logger, issuer, KeySetOwners.Issuer);
+		var keys = secureFetcher.FetchKeysAsync(trustedIssuer.JwksUri, logger, issuer, KeySetOwners.Issuer, refetch);
 		await foreach (var key in keys.Where(k => k.Usage is null or PublicKeyUsages.Signature))
 		{
 			yield return key;

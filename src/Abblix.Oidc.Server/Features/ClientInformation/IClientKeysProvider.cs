@@ -38,10 +38,12 @@ public interface IClientKeysProvider
     /// signatures on JWT tokens or other signed payloads originating from that client.
     /// </summary>
     /// <param name="clientInfo">The client's information, used to identify the correct set of signing keys.</param>
+    /// <param name="refetch">Whether to read the keys the client publishes at its JWKS URI again past the copy held,
+    /// as OpenID Connect Core 1.0 section 10.1.1 has a verifier do on an unfamiliar kid.</param>
     /// <returns>An asynchronous stream (<see cref="IAsyncEnumerable{T}"/>) of <see cref="JsonWebKey"/>, providing access to each key.</returns>
     /// <remarks>
     /// This method supports secure client-server interactions by enabling the service to verify the authenticity
     /// of incoming signed data, ensuring it was not tampered with and was indeed issued by the claiming client.
     /// </remarks>
-    IAsyncEnumerable<JsonWebKey> GetSigningKeys(ClientInfo clientInfo);
+    IAsyncEnumerable<JsonWebKey> GetSigningKeys(ClientInfo clientInfo, bool refetch = false);
 }

@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.JwtBearer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -660,6 +661,36 @@ public class JwtBearerGrantHandlerTests
 			TestContext.Current.CancellationToken);
 
 		return captured!.ValidateAudience!;
+	}
+
+	/// <summary>
+	/// The keys read again on an unfamiliar kid are the trusted issuer's, asked for past the copy held, while the keys
+	/// first returned come from the copy.
+	/// </summary>
+	[Fact]
+	public async Task TheIssuersKeys_AreReadPastTheCopyOnlyForTheRefetch()
+	{
+		const string issuer = "https://trusted-issuer.example.com";
+		var (handler, mocks) = CreateHandler(tokenEndpoint: TokenEndpointUri);
+		ValidationParameters? captured = null;
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.Callback(new Action<string, ValidationParameters>((_, p) => captured = p))
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)new JwtValidationError(JwtError.InvalidToken, "not the subject of this test"));
+		mocks.IssuerProvider
+			.Setup(p => p.GetSigningKeysAsync(It.IsAny<TenantDefinition>(), issuer, It.IsAny<bool>()))
+			.Returns(AsyncEnumerable.Empty<JsonWebKey>());
+
+		await handler.AuthorizeAsync(
+			SingleIssuer.Tenant,
+			new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion },
+			new ClientInfo(ClientId),
+			TestContext.Current.CancellationToken);
+		await captured!.ResolveIssuerSigningKeys!(issuer).ToArrayAsync(TestContext.Current.CancellationToken);
+		await captured.RefetchIssuerSigningKeys!(issuer).ToArrayAsync(TestContext.Current.CancellationToken);
+
+		mocks.IssuerProvider.Verify(p => p.GetSigningKeysAsync(It.IsAny<TenantDefinition>(), issuer, false), Times.Once);
+		mocks.IssuerProvider.Verify(p => p.GetSigningKeysAsync(It.IsAny<TenantDefinition>(), issuer, true), Times.Once);
 	}
 
 	private record Mocks(

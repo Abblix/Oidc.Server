@@ -33,6 +33,17 @@ public record ValidationParameters
 	public ResolveIssuerSigningKeysDelegate? ResolveIssuerSigningKeys { get; set; }
 
 	/// <summary>
+	/// Delegate that reads the issuer's signing keys again from their source, past any copy held of them, used once
+	/// when the keys <see cref="ResolveIssuerSigningKeys"/> returned hold none with the <c>kid</c> the token names.
+	/// </summary>
+	/// <remarks>
+	/// OpenID Connect Core 1.0 section 10.1.1: "The verifier knows to go back to the jwks_uri location to re-retrieve
+	/// the keys when it sees an unfamiliar kid value", which is how a signer's rotated key reaches a verifier holding a
+	/// cached set. Unset, a token naming an unfamiliar key is refused on the set first returned.
+	/// </remarks>
+	public ResolveIssuerSigningKeysDelegate? RefetchIssuerSigningKeys { get; set; }
+
+	/// <summary>
 	/// Delegate that resolves decryption keys for a given issuer, used during token decryption.
 	/// </summary>
 	public ResolveTokenDecryptionKeysDelegate? ResolveTokenDecryptionKeys { get; set; }
