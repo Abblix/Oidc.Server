@@ -51,7 +51,7 @@ Custom `System.Text.Json` converters for the shapes protocol messages actually u
 
 ### One load for many callers
 
-`CoalescingLoader<TKey, TValue>` is for documents read from someone else's server when the requests reaching your server decide how often they are read, such as a key set fetched for a token that names an unfamiliar key. Callers that ask while a load runs wait for that load, and the finished load, whether it succeeded or failed, is served for a hold you choose, so a server that is down is asked once per hold rather than once per request. The load runs under no caller's cancellation, and an entry leaves the map when its hold ends. The limit holds within one process: each instance of your service loads on its own.
+`CoalescingLoader<TKey, TValue>` is for documents read from someone else's server when the requests reaching your server decide how often they are read, such as a key set fetched for a token that names an unfamiliar key. Callers that ask while a load runs wait for that load, and the finished load, whether it succeeded or failed, is served for a hold you choose, so a server that is down is asked once per hold rather than once per request. The load runs under no caller's cancellation, and an entry past its hold is removed the next time a load is added, so keys nobody asks for again do not pile up. The limit holds within one process: each instance of your service loads on its own.
 
 ### Collections and enums
 

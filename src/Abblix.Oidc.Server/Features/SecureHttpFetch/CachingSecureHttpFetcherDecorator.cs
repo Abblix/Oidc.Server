@@ -52,15 +52,16 @@ public class CachingSecureHttpFetcherDecorator(
 		if (cache.TryGetValue<T>(cacheKey, out var cached) && !ReferenceEquals(cached, null))
 			return cached;
 
+		var hold = HoldFor();
 		return (Result<T, OidcError>)await fetches.LoadAsync(
-			FetchKey<T>(uri),
+			FetchKey<T>(uri, hold),
 			async _ =>
 			{
 				var result = await inner.FetchAsync<T>(uri);
 				Store(cacheKey, result);
 				return result;
 			},
-			HoldFor());
+			hold);
 	}
 
 	/// <summary>
@@ -72,10 +73,13 @@ public class CachingSecureHttpFetcherDecorator(
 	/// read the old set does not answer the refetch a rotated key asks for.
 	/// </remarks>
 	private async Task<Result<T, OidcError>> RefetchAsync<T>(Uri uri)
-		=> (Result<T, OidcError>)await fetches.LoadAsync(
-			RefetchKey<T>(uri),
+	{
+		var hold = HoldFor();
+		return (Result<T, OidcError>)await fetches.LoadAsync(
+			RefetchKey<T>(uri, hold),
 			async _ => await FetchAnewAsync<T>(uri),
-			HoldFor());
+			hold);
+	}
 
 	/// <summary>
 	/// How long one fetch answers the next: the refetch interval, but never longer than the copy itself is held.
@@ -127,9 +131,12 @@ public class CachingSecureHttpFetcherDecorator(
 	private static string CacheKey(Uri uri)
 		=> $"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(Features)}.{nameof(SecureHttpFetch)}:{uri}";
 
-	// Apart from the document itself, so a held fetch lasts its interval whatever the document's lifetime, and typed,
-	// since one URI read as two types is two fetches
-	private static string FetchKey<T>(Uri uri) => $"{CacheKey(uri)}:fetch:{typeof(T).FullName}";
+	// Apart from the document itself, so a held fetch lasts its interval whatever the document's lifetime; typed, since
+	// one URI read as two types is two fetches; and carrying the hold, since the loader is shared by every consumer and a
+	// consumer caching for less, or not at all, must not be answered with a fetch held for another one's interval
+	private static string FetchKey<T>(Uri uri, TimeSpan hold)
+		=> $"{CacheKey(uri)}:fetch:{typeof(T).FullName}:{hold.Ticks}";
 
-	private static string RefetchKey<T>(Uri uri) => $"{CacheKey(uri)}:refetch:{typeof(T).FullName}";
+	private static string RefetchKey<T>(Uri uri, TimeSpan hold)
+		=> $"{CacheKey(uri)}:refetch:{typeof(T).FullName}:{hold.Ticks}";
 }

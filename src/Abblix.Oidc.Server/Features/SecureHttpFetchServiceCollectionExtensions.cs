@@ -62,6 +62,16 @@ public static class SecureHttpFetchServiceCollectionExtensions
             optionsBuilder.Configure(configure);
         }
 
+        // A host calling this again to configure the options gets only that: decorating the fetchers a second time
+        // would wrap each in another cached fetcher sharing the loader under the same key, and the inner one would ask
+        // the loader for the very load it is running
+        if (services.Any(descriptor =>
+                descriptor is { IsKeyedService: true, ServiceKey: FetchesKey, ServiceType: var serviceType }
+                && serviceType == typeof(CoalescingLoader<string, object>)))
+        {
+            return services;
+        }
+
         // The framework resolves every registered validator, so this joins the set rather than replacing
         // whatever a host registered for the same options.
         services.TryAddEnumerable(

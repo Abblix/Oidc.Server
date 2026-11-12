@@ -419,16 +419,60 @@ public class JwksIssuerKeyResolverTests
         var handler = new GatedJwksHandler(new JsonWebKeySet([key]));
         var resolver = Resolver(handler, new FakeTimeProvider(Now));
 
+        // Every resolution has asked before the issuer answers
         var resolutions = Enumerable.Range(0, 16)
-            .Select(_ => Task.Run(() => Resolve(resolver, "kid-that-exists-nowhere")))
+            .Select(_ => Resolve(resolver, "kid-that-exists-nowhere"))
             .ToArray();
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        while (handler.Requests == 0)
-            await Task.Delay(TimeSpan.FromMilliseconds(5), deadline.Token);
         handler.Release.SetResult();
 
         Assert.All(await Task.WhenAll(resolutions), keys => Assert.Equal(key.KeyId, Assert.Single(keys).KeyId));
         Assert.Equal(1, handler.Requests);
+    }
+
+    /// <summary>
+    /// A resolution giving up ends its own wait only: the fetch it started goes on for the
+    /// resolutions waiting beside it, and the issuer is not asked again for them.
+    /// </summary>
+    [Fact]
+    public async Task AResolutionGivingUp_DoesNotFailTheFetchForTheOthers()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new GatedJwksHandler(new JsonWebKeySet([key]));
+        var resolver = Resolver(handler, new FakeTimeProvider(Now));
+        using var givingUp = new CancellationTokenSource();
+
+        var abandoned = resolver.ResolveSigningKeysAsync(Issuer, null, givingUp.Token)
+            .GetAsyncEnumerator(givingUp.Token).MoveNextAsync().AsTask();
+        var waiting = Resolve(resolver);
+        await givingUp.CancelAsync();
+        handler.Release.SetResult();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => abandoned);
+        Assert.Equal(key.KeyId, Assert.Single(await waiting).KeyId);
+        Assert.Equal(1, handler.Requests);
+    }
+
+    /// <summary>
+    /// A copy whose lifetime is shorter than the cooldown is fetched anew once it expires, so a key
+    /// the issuer removed stops verifying when the host said it would, not when the cooldown ends.
+    /// </summary>
+    [Fact]
+    public async Task ACacheLifetimeShorterThanTheCooldown_StillRefetchesOnExpiry()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+        var clock = new FakeTimeProvider(Now);
+        var resolver = Resolver(handler, clock, new JwksKeyResolutionOptions
+        {
+            CacheLifetime = TimeSpan.FromSeconds(5),
+            RolloverRefetchCooldown = TimeSpan.FromSeconds(30),
+        });
+
+        await Resolve(resolver);
+        clock.Advance(TimeSpan.FromSeconds(6));
+        await Resolve(resolver);
+
+        Assert.Equal(2, handler.Requests.Count);
     }
 
     /// <summary>

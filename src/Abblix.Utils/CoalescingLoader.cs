@@ -20,9 +20,9 @@ namespace Abblix.Utils;
 /// that is failing is asked again by every request until it recovers, so its load grows exactly while it is down.
 /// </para>
 /// <para>
-/// The hold is counted from the moment the load completes, so a slow load does not use it up. An entry leaves the
-/// map when its hold ends, so keys that a caller chose and never asks for again do not accumulate. The hold of an
-/// entry is the one passed by the caller that started its load.
+/// The hold is counted from the moment the load completes, so a slow load does not use it up, and the hold of an
+/// entry is the one passed by the caller that started its load. An entry past its hold is no longer served, and it is
+/// removed when a later load is added, so keys a caller chose and never asks for again do not accumulate.
 /// </para>
 /// <para>
 /// The load runs under no caller's cancellation: it is shared, so one caller giving up must not fail the others.
@@ -38,10 +38,14 @@ public sealed class CoalescingLoader<TKey, TValue>(TimeProvider clock, IEquality
 {
     private sealed class Entry
     {
+        // Ticks of the instant the entry stops being served; the largest value while its load still runs
+        private long _servedUntil = long.MaxValue;
+
         public Lazy<Task<TValue>> Load { get; set; } = null!;
 
-        // Referenced from the entry so the pending timer stays alive as long as the entry is in the map
-        public ITimer? Release { get; set; }
+        public void Complete(DateTimeOffset servedUntil) => Volatile.Write(ref _servedUntil, servedUntil.UtcTicks);
+
+        public bool IsServedAt(DateTimeOffset now) => now.UtcTicks < Volatile.Read(ref _servedUntil);
     }
 
     private readonly ConcurrentDictionary<TKey, Entry> _entries = new(comparer);
@@ -63,15 +67,36 @@ public sealed class CoalescingLoader<TKey, TValue>(TimeProvider clock, IEquality
     {
         ArgumentNullException.ThrowIfNull(load);
 
-        var entry = _entries.GetOrAdd(key, added => CreateEntry(added, load, hold));
-        return entry.Load.Value.WaitAsync(cancellationToken);
+        while (true)
+        {
+            var now = clock.GetUtcNow();
+            if (_entries.TryGetValue(key, out var held))
+            {
+                if (held.IsServedAt(now))
+                    return held.Load.Value.WaitAsync(cancellationToken);
+
+                // Replaces this entry only: a caller that replaced it first has started the next load, which is served
+                var next = CreateEntry(key, load, hold);
+                if (_entries.TryUpdate(key, next, held))
+                    return next.Load.Value.WaitAsync(cancellationToken);
+            }
+            else
+            {
+                var added = CreateEntry(key, load, hold);
+                if (_entries.TryAdd(key, added))
+                {
+                    RemoveExpired(now);
+                    return added.Load.Value.WaitAsync(cancellationToken);
+                }
+            }
+        }
     }
 
     private Entry CreateEntry(TKey key, Func<TKey, Task<TValue>> load, TimeSpan hold)
     {
-        // GetOrAdd may build an entry it then discards; the load starts only when the stored one is first asked for
+        // An entry that loses the race to be stored is dropped before its load is ever asked for
         var entry = new Entry();
-        entry.Load = new Lazy<Task<TValue>>(() => RunAsync(key, entry, load, hold));
+        entry.Load = new Lazy<Task<TValue>>(() => Observed(RunAsync(key, entry, load, hold)));
         return entry;
     }
 
@@ -83,30 +108,33 @@ public sealed class CoalescingLoader<TKey, TValue>(TimeProvider clock, IEquality
         }
         finally
         {
-            Release(key, entry, hold);
+            // Compared before adding, so no hold, however long or negative, makes the instant overflow
+            var now = clock.GetUtcNow();
+            if (hold <= TimeSpan.Zero)
+                entry.Complete(now);
+            else
+                entry.Complete(hold < DateTimeOffset.MaxValue - now ? now + hold : DateTimeOffset.MaxValue);
         }
     }
 
-    private void Release(TKey key, Entry entry, TimeSpan hold)
+    // Every caller may have stopped waiting before a load fails, and an exception nobody reads is reported as
+    // unobserved; the callers still waiting read it from the same task
+    private static Task<TValue> Observed(Task<TValue> task)
     {
-        if (hold <= TimeSpan.Zero)
-        {
-            Remove(key, entry);
-            return;
-        }
-
-        entry.Release = clock.CreateTimer(
-            _ =>
-            {
-                Remove(key, entry);
-                entry.Release?.Dispose();
-            },
-            state: null,
-            dueTime: hold,
-            period: Timeout.InfiniteTimeSpan);
+        task.ContinueWith(
+            static faulted => _ = faulted.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        return task;
     }
 
-    // Removes this entry only: a later load for the same key has its own and keeps it
-    private void Remove(TKey key, Entry entry)
-        => _entries.TryRemove(new KeyValuePair<TKey, Entry>(key, entry));
+    private void RemoveExpired(DateTimeOffset now)
+    {
+        foreach (var (key, entry) in _entries)
+        {
+            if (!entry.IsServedAt(now))
+                _entries.TryRemove(new KeyValuePair<TKey, Entry>(key, entry));
+        }
+    }
 }

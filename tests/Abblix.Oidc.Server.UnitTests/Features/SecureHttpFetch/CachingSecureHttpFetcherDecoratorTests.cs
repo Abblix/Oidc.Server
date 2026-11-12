@@ -119,14 +119,40 @@ public class CachingSecureHttpFetcherDecoratorTests
         var pending = new TaskCompletionSource<Result<string, OidcError>>();
         inner.Setup(f => f.FetchAsync<string>(KeySetUri)).Returns(pending.Task);
 
+        // Every request has asked before the URI answers, so neither the cache nor the hold can answer for the sharing
         var fetches = Enumerable.Range(0, 32)
-            .Select(_ => Task.Run(() => decorator.FetchAsync<string>(KeySetUri)))
+            .Select(_ => decorator.FetchAsync<string>(KeySetUri))
             .ToArray();
         pending.SetResult("key-set");
 
         foreach (var fetch in await Task.WhenAll(fetches))
             Assert.Equal("key-set", fetch.GetSuccess());
         inner.Verify(f => f.FetchAsync<string>(KeySetUri), Times.Once);
+    }
+
+    /// <summary>
+    /// The loader is shared by every consumer, and a consumer caching for less, or not at all, is not answered with a
+    /// failure another consumer holds for its own interval: it reaches the URI itself.
+    /// </summary>
+    [Fact]
+    public async Task AFailureHeldForOneConsumer_DoesNotAnswerAConsumerThatHoldsNothing()
+    {
+        var time = new FakeTimeProvider();
+        var inner = new Mock<ISecureHttpFetcher>(MockBehavior.Strict);
+        inner
+            .Setup(f => f.FetchAsync<string>(KeySetUri))
+            .ReturnsAsync(new OidcError(ErrorCodes.ServerError, "unreachable"));
+        var cache = new MemoryCache(new MemoryCacheOptions { Clock = new StoreClock(time) });
+        var options = new Mock<IOptionsMonitor<SecureHttpFetchOptions>>();
+        options.Setup(monitor => monitor.CurrentValue).Returns(new SecureHttpFetchOptions());
+        var fetches = new CoalescingLoader<string, object>(time);
+        var caching = new CachingSecureHttpFetcherDecorator(inner.Object, cache, TimeSpan.FromHours(1), options.Object, fetches);
+        var uncached = new CachingSecureHttpFetcherDecorator(inner.Object, cache, TimeSpan.Zero, options.Object, fetches);
+
+        await caching.FetchAsync<string>(KeySetUri);
+        await uncached.FetchAsync<string>(KeySetUri);
+
+        inner.Verify(f => f.FetchAsync<string>(KeySetUri), Times.Exactly(2));
     }
 
     /// <summary>

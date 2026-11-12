@@ -53,6 +53,11 @@ public class SecureHttpFetchOptions
     /// rotating its key twice within it waits for the interval to pass before the second key is accepted. A refetch is
     /// never served longer than the copy itself is held, so a consumer caching for less, or not at all, refetches more
     /// often. Zero or less turns the limit off, and every refetch reaches the URI.
+    /// <para>
+    /// The interval also follows a fetch that failed, an ordinary one included: the fetches of that URI inside it get
+    /// the failure rather than each reaching a host that is down, so a URI that recovers is read again once the
+    /// interval has passed. Requests arriving while a fetch runs wait for it rather than starting their own.
+    /// </para>
     /// </remarks>
     public TimeSpan RefetchInterval { get; set; } = TimeSpan.FromMinutes(1);
 

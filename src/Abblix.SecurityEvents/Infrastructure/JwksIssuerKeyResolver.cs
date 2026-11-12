@@ -71,7 +71,7 @@ public sealed class JwksIssuerKeyResolver(
             entry = await _fetches.LoadAsync(
                 issuer,
                 async key => new CachedKeySet(await FetchKeysAsync(key, CancellationToken.None), clock.GetUtcNow()),
-                options.Value.RolloverRefetchCooldown,
+                HoldFor(),
                 cancellationToken);
             _cache[issuer] = entry;
         }
@@ -80,6 +80,21 @@ public sealed class JwksIssuerKeyResolver(
         {
             yield return key;
         }
+    }
+
+    /// <summary>
+    /// How long one fetch answers the resolutions after it: the cooldown, but never longer than a key set is cached.
+    /// </summary>
+    /// <remarks>
+    /// The expiry of the cache and an unseen "kid" ask for the same fetch, so a fetch held past the cache lifetime
+    /// would answer an expired copy with the set it just replaced, and a key the issuer removed would keep verifying
+    /// for longer than the host allowed.
+    /// </remarks>
+    private TimeSpan HoldFor()
+    {
+        var cooldown = options.Value.RolloverRefetchCooldown;
+        var lifetime = options.Value.CacheLifetime;
+        return cooldown < lifetime ? cooldown : lifetime;
     }
 
     private bool ShouldFetch(CachedKeySet? entry, string? keyId, DateTimeOffset now)
