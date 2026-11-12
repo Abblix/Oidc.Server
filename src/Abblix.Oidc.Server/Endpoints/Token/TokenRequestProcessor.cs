@@ -136,7 +136,8 @@ public class TokenRequestProcessor(
 	/// never named does not count. The other grants naming no scope in the token request are given one by the server
 	/// - the subject token's on an exchange, the client's default otherwise, whatever a host's own grant supplies - and
 	/// a token left with none of it answers a request that asked for nothing. A refresh token is minted only with
-	/// offline_access, which no resource declares, so a refreshed token naming no scope never ends with none.
+	/// offline_access, so a refresh naming no scope keeps it and never ends with none - unless a host declares
+	/// offline_access as the scope of a resource the refreshed token does not address.
 	/// </remarks>
 	private static bool ClientNamedScope(ValidTokenRequest request, AuthorizationContext context)
 		=> request.Model.Scope is { Length: > 0 } ||

@@ -38,9 +38,16 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 	/// </returns>
 	protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
 	{
+		// An offline_access the server ignores is as if never asked for, so it is set aside before deciding whether
+		// the request named a scope at all: otherwise a request naming it alone is served nothing here and its
+		// default only when it comes back from a page, an answer that would depend on the route
+		var named = OfflineAccessReceived(context)
+			? context.Request.Scope
+			: [.. context.Request.Scope.Where(value => value != Scopes.OfflineAccess)];
+
 		// The request goes on with the scope it is served with, so what follows, the host's consent provider
 		// included, reads the default a request naming none was given
-		if (context.ClientInfo.ScopeServedFor(context.Request.Scope) is not { } scope)
+		if (context.ClientInfo.ScopeServedFor(named) is not { } scope)
 			return context.InvalidScope(ScopeRefusals.NoneNamed);
 
 		// A request coming back from a page already carries the default it was served with, so whether the client
@@ -48,7 +55,7 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 		context.Request = context.Request with
 		{
 			Scope = scope,
-			ClientNamedNoScope = context.Request.ClientNamedNoScope || context.Request.Scope.Length == 0,
+			ClientNamedNoScope = context.Request.ClientNamedNoScope || named.Length == 0,
 		};
 
 		if (context.Request.Scope.Contains(Scopes.OfflineAccess))

@@ -223,6 +223,41 @@ public partial class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
+    /// Whether the client named a scope is read from the record the server stored, so a host completing with a
+    /// context it built from scratch, which carries no such fact, does not change it.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CompleteAuthenticationAsync_KeepsWhetherTheClientNamedAScope_FromTheStoredRecord(
+        bool clientNamedNoScope)
+    {
+        var authSession = new AuthSession(UserId, "session_123", ApprovedAt.AddHours(-1), "backchannel");
+        StoredRecordIs(new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(
+                authSession,
+                new AuthorizationContext(ClientId, [Scopes.OpenId], null) { ClientNamedNoScope = clientNamedNoScope }),
+            TimeProvider.System.GetUtcNow().AddMinutes(5)));
+        var rebuiltByTheHost = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(authSession, new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
+            TimeProvider.System.GetUtcNow().AddMinutes(5));
+
+        BackChannelAuthenticationRequest? written = null;
+        _storage.Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, It.IsAny<BackChannelAuthenticationRequest>(), _expiresIn))
+            .Callback((TenantDefinition _, string _, BackChannelAuthenticationRequest request, TimeSpan _) => written = request)
+            .Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant,
+            AuthReqId,
+            rebuiltByTheHost,
+            new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll },
+            _expiresIn);
+
+        Assert.Equal(clientNamedNoScope, written?.AuthorizedGrant.Context.ClientNamedNoScope);
+    }
+
+    /// <summary>
     /// Verifies that when notification endpoint is null (poll mode),
     /// only storage update is performed and no notification is sent.
     /// </summary>

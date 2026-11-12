@@ -209,9 +209,15 @@ public abstract partial class AuthenticationCompletionHandler(
 
         // When the end user approved it, unless the host already said: a revocation of the end user at this client is
         // measured against it at redemption, and the session the host hands over may be older than the approval
+        // Whether the client named a scope is a fact about the request the server stored, not about the context the
+        // host may have rebuilt, so it is set from that record as the device approval sets it
         request.AuthorizedGrant = request.AuthorizedGrant with
         {
             AuthorizedAt = request.AuthorizedGrant.AuthorizedAt ?? clock.GetUtcNow(),
+            Context = request.AuthorizedGrant.Context with
+            {
+                ClientNamedNoScope = stored.AuthorizedGrant.Context.ClientNamedNoScope,
+            },
         };
 
         // Update status to Authenticated before handling delivery
