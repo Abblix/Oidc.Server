@@ -1,15 +1,20 @@
 #Requires -Version 7.3
 <#
 .SYNOPSIS
-Runs OpenID Foundation conformance test plans against the conformance test host, locally and without a browser.
+Runs OpenID Foundation conformance test plans against the conformance test host, locally and without a person.
 
 .DESCRIPTION
 Starts the suite from its published images, publishes the test host and runs it as a container on the suite's
 network, runs the suite's own plan runner, then removes what it started. The exit code is the runner's: zero when
 every module passed or waits only for a reviewer to look at a screenshot, non-zero on any unexpected failure.
 
+Without -SuitePath the run takes the suite's newest numbered release: its scripts from the git tag and its images
+under the same tag. A release that is tagged but whose images are not published yet stops the run, naming it, rather
+than falling back to an older release.
+
 .PARAMETER SuitePath
-A checkout of https://gitlab.com/openid/conformance-suite. Its runner script and compose file are used as they are.
+A checkout of https://gitlab.com/openid/conformance-suite to take the runner script and compose file from, instead
+of the newest release. The images are then the ones the IMAGE_TAG environment variable names, or latest.
 
 .PARAMETER Plan
 Test plans to run, each with its variants and optionally a module list after a colon, in the runner's syntax.
@@ -20,23 +25,28 @@ string, so there one plan goes here and several go in a file named by -PlanFile.
 A file with one plan per line, lines starting with # ignored. Used when -Plan is not given; by default the plans
 Abblix OIDC Server is certified against, certified-plans.txt.
 
+.PARAMETER ResultsPath
+A directory to leave the evidence of the run in: the runner's exported results, the screenshots the browser driver
+took, and the logs of the host and the driver.
+
 .PARAMETER KeepRunning
 Leaves the suite and the host running afterwards, so a failed module can be opened in the suite's web interface.
 
 .EXAMPLE
-./conformance/run.ps1 -SuitePath ../conformance-suite
+./conformance/run.ps1
 
 .EXAMPLE
 ./conformance/run.ps1 -SuitePath ../conformance-suite -Plan 'oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=dynamic_client]:oidcc-server'
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)]
     [string] $SuitePath,
 
     [string[]] $Plan,
 
     [string] $PlanFile = (Join-Path $PSScriptRoot 'certified-plans.txt'),
+
+    [string] $ResultsPath,
 
     [switch] $KeepRunning
 )
@@ -54,6 +64,11 @@ $DiscoveryUrl = 'https://oidc-host:9443/.well-known/openid-configuration'
 $RotateUrl = 'https://oidc-host:9443/conformance/rotate-keys'
 $KeyRotationModule = 'oidcc-server-rotate-keys'
 
+# Where the suite's releases come from: the git tags carry the scripts, the registry the images built from them
+$SuiteRepository = 'https://gitlab.com/openid/conformance-suite.git'
+$SuiteProjectApi = 'https://gitlab.com/api/v4/projects/openid%2Fconformance-suite'
+$SuiteImages = @('openid/conformance-suite', 'openid/conformance-suite/nginx')
+
 $RuntimeImage = 'mcr.microsoft.com/dotnet/aspnet:11.0'
 $ProbeImage = 'curlimages/curl:8.10.1'
 $RunnerImage = 'python:3.12-slim'
@@ -64,6 +79,10 @@ $HostAssembly = 'Abblix.Oidc.Server.MinimalApi.Conformance.TestHost.dll'
 $PublishDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-host'
 $BrowserContainer = 'oidf-browser'
 $BrowserImage = 'abblix-oidf-browser'
+$BrowserScreenshots = '/tmp/screenshots'
+
+# The runner's own dependencies, pinned with their hashes in place of the suite's unpinned requirements.txt
+$RunnerInstall = 'pip install -q --root-user-action=ignore --only-binary :all: --require-hashes -r /config/requirements-runner.txt'
 
 function Write-Step([string] $Message) {
     Write-Host "==> $Message" -ForegroundColor Cyan
@@ -110,6 +129,69 @@ function Test-HostReady {
     return ($status -join '') -eq '200'
 }
 
+function Select-SuiteReleases {
+    # The numbered releases among the tags, newest first, compared as versions so that release-v5.3.10 comes before
+    # release-v5.3.4; a tag of any other shape is not a release and is left out
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [string[]] $Tags
+    )
+    @($Tags | ForEach-Object {
+            if ($_ -match '^release-v(\d+)\.(\d+)\.(\d+)$') {
+                [pscustomobject]@{ Tag = $_; Version = [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3]) }
+            }
+        } | Sort-Object -Property Version -Descending | ForEach-Object { $_.Tag })
+}
+
+function Get-SuiteReleaseTags {
+    [CmdletBinding()]
+    param()
+    $lines = @(git ls-remote --tags --refs $SuiteRepository 'release-v*')
+    Assert-LastExit 'git ls-remote (conformance suite tags)'
+    @($lines | ForEach-Object { ($_ -split "`t", 2)[1] } | Where-Object { $_ } | ForEach-Object { $_ -replace '^refs/tags/', '' })
+}
+
+function Test-SuiteImagesPublished {
+    # Whether every image the compose file starts is published under the tag; an answer other than found or not
+    # found is a failure of the question, never a no
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $Tag,
+        [Parameter(Mandatory)] [object[]] $Repositories
+    )
+    foreach ($repository in $Repositories) {
+        $response = Invoke-WebRequest -Uri "$SuiteProjectApi/registry/repositories/$($repository.id)/tags/$Tag" `
+            -SkipHttpErrorCheck -TimeoutSec 30
+        if ($response.StatusCode -eq 404) {
+            return $false
+        }
+        if ($response.StatusCode -ne 200) {
+            throw "The suite's registry answered $($response.StatusCode) about $($repository.path):$Tag"
+        }
+    }
+    return $true
+}
+
+function Resolve-SuiteRelease {
+    # The newest numbered release of the suite. A newer release that is tagged but not yet built stops the run instead
+    # of being passed over, because then the run would test against a release the suite has already replaced
+    [CmdletBinding()]
+    param()
+    $repositories = @(Invoke-RestMethod -Uri "$SuiteProjectApi/registry/repositories?per_page=100" -TimeoutSec 30 |
+        ForEach-Object { $_ } | Where-Object { $_.path -in $SuiteImages })
+    if ($repositories.Count -ne $SuiteImages.Count) {
+        throw "The suite's registry does not list all of $($SuiteImages -join ', ')"
+    }
+    $newest = @(Select-SuiteReleases -Tags @(Get-SuiteReleaseTags)) | Select-Object -First 1
+    if (-not $newest) {
+        throw "The suite has no tag shaped like release-vX.Y.Z at $SuiteRepository"
+    }
+    if (-not (Test-SuiteImagesPublished -Tag $newest -Repositories $repositories)) {
+        throw "The suite's newest release $newest is tagged, but its images are not published yet; run again once they are"
+    }
+    return $newest
+}
+
 function Split-KeyRotation {
     # The plan specification the runner gets, without the key rotation module, and whether the plan had that module.
     # The runner starts the module the moment it is configured, before anyone can rotate the server's keys, so it
@@ -140,20 +222,81 @@ function Split-KeyRotation {
     return [pscustomobject]@{ Runner = "$($parts[0]):$($others -join ',')"; KeyRotation = $true }
 }
 
+function Get-SuiteTime {
+    # The suite's clock, read from the Date header of one of its answers; whole seconds, which is how the plan
+    # listing compares a start time
+    [CmdletBinding()]
+    param()
+    $response = Invoke-WebRequest -Uri "${SuiteUrl}api/runner/available" -SkipCertificateCheck -TimeoutSec 30
+    $date = @($response.Headers['Date']) | Select-Object -First 1
+    if (-not $date) {
+        throw "The suite answered without a Date header, so the start of this run cannot be read off its clock"
+    }
+    [DateTimeOffset]::ParseExact($date, 'r', [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Get-UnfinishedModules {
+    # Every module of the plans started since $Since that ran and did not end FINISHED with PASSED or REVIEW. The suite's
+    # runner counts a module the suite INTERRUPTED as complete and passes it when its log holds no FAILURE entry, so
+    # the outcome is read from the suite itself. A module that never ran is not judged here: each plan deliberately
+    # leaves some out, and the runner already reports a module it meant to run and did not.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [DateTimeOffset] $Since,
+        [Parameter(Mandatory)] [int] $ExpectedPlans
+    )
+    $pageSize = 1000
+    # Formatted by the invariant culture, since a culture's own time separator or calendar makes the suite refuse it
+    $stamp = $Since.UtcDateTime.ToString("yyyy-MM-dd'T'HH':'mm':'ss'Z'", [Globalization.CultureInfo]::InvariantCulture)
+    $from = [Uri]::EscapeDataString($stamp)
+    $plans = @()
+    for ($start = 0; ; $start += $pageSize) {
+        $page = Invoke-RestMethod -Uri "${SuiteUrl}api/plan?from=$from&start=$start&length=$pageSize" -SkipCertificateCheck
+        $plans += @($page.data | ForEach-Object { $_ } | Where-Object { $_._id })
+        if (@($page.data).Count -lt $pageSize) {
+            break
+        }
+    }
+    if ($plans.Count -lt $ExpectedPlans) {
+        throw "The suite lists $($plans.Count) plan(s) started since $Since, fewer than the $ExpectedPlans this run started"
+    }
+
+    foreach ($plan in $plans) {
+        $detail = Invoke-RestMethod -Uri "${SuiteUrl}api/plan/$($plan._id)" -SkipCertificateCheck
+        foreach ($module in @($detail.modules | ForEach-Object { $_ } | Where-Object { $_.status })) {
+            if ($module.status -ne 'FINISHED' -or $module.result -notin 'PASSED', 'REVIEW') {
+                [pscustomobject]@{ Plan = $detail.planName; Module = $module.testModule; Status = $module.status; Result = $module.result }
+            }
+        }
+    }
+}
+
+function Save-Evidence {
+    # Written before the containers are removed, since the logs and the screenshots live in them
+    if (-not $ResultsPath) {
+        return
+    }
+    docker logs $HostContainer *> (Join-Path $ResultsPath 'host.log')
+    docker logs $BrowserContainer *> (Join-Path $ResultsPath 'driver.log')
+    docker cp "${BrowserContainer}:$BrowserScreenshots" (Join-Path $ResultsPath 'screenshots') *> $null
+}
+
 function Remove-Everything {
     docker rm -f $BrowserContainer 2>$null | Out-Null
     docker rm -f $HostContainer 2>$null | Out-Null
-    docker compose -f $ComposeFile -p $ProjectName down 2>$null | Out-Null
-}
-
-$SuitePath = (Resolve-Path -LiteralPath $SuitePath).Path
-$ComposeFile = Join-Path $SuitePath 'docker-compose-prebuilt.yml'
-$RunnerScript = Join-Path $SuitePath 'scripts/run-test-plan.py'
-foreach ($required in $ComposeFile, $RunnerScript) {
-    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-        throw "$required is missing: -SuitePath has to point at a checkout of the conformance suite"
+    if ($ComposeFile) {
+        docker compose -f $ComposeFile -p $ProjectName down 2>$null | Out-Null
     }
 }
+
+function Remove-SuiteClone([string] $Path) {
+    # The suite's database writes its files into the clone as its own user, which the user running this script may not
+    # be allowed to delete on Linux, so a container removes them first
+    docker run --rm -v "${Path}:/suite" $RunnerImage rm -rf /suite/mongo | Out-Null
+    Assert-LastExit 'docker run (removing the database files of the previous suite clone)'
+    Remove-Item -LiteralPath $Path -Recurse -Force
+}
+
 if ($Plan) {
     # Quotes typed around a plan survive pwsh -File and would reach the runner as part of the name
     $Plan = @($Plan | ForEach-Object { $_.Trim().Trim("'", '"') } | Where-Object { $_ })
@@ -170,9 +313,57 @@ if (-not (Get-Command docker -CommandType Application -ErrorAction SilentlyConti
     throw 'docker was not found on PATH: the suite and the host both run in containers'
 }
 
+function Get-RunContainers {
+    # The containers a run starts are found by their fixed names and by the compose project, so another run on this
+    # machine, or one left running with -KeepRunning, is seen before this one touches anything of it
+    $named = @(docker ps -a --format '{{.Names}}' --filter "name=^${HostContainer}$" --filter "name=^${BrowserContainer}$")
+    Assert-LastExit 'docker ps'
+    $composed = @(docker ps -a --format '{{.Names}}' --filter "label=com.docker.compose.project=$ProjectName")
+    Assert-LastExit 'docker ps'
+    @($named + $composed | Where-Object { $_ } | Sort-Object -Unique)
+}
+
+$running = Get-RunContainers
+if ($running) {
+    throw "Another conformance run is going on this machine, or one left its containers: $($running -join ', '). " +
+        "Wait for it to finish, or remove them with: docker rm -f $HostContainer $BrowserContainer; docker compose -p $ProjectName down --remove-orphans"
+}
+
+if ($ResultsPath) {
+    # Two runs' evidence in one place cannot be told apart afterwards
+    if ((Test-Path -LiteralPath $ResultsPath) -and (-not (Test-Path -LiteralPath $ResultsPath -PathType Container) -or
+            (Get-ChildItem -LiteralPath $ResultsPath -Force | Select-Object -First 1))) {
+        throw "$ResultsPath is not an empty directory: -ResultsPath has to name a new or empty directory"
+    }
+    # Created before anything else changes, since the finally block writes the evidence into it
+    $ResultsPath = (New-Item -ItemType Directory -Force $ResultsPath).FullName
+}
+
+$imageTagBefore = $env:IMAGE_TAG
+$ComposeFile = $null
 $exitCode = 1
 try {
-    Write-Step 'Starting the conformance suite from its published images'
+    if (-not $SuitePath) {
+        $release = Resolve-SuiteRelease
+        $SuitePath = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-suite'
+        if (Test-Path -LiteralPath $SuitePath) {
+            Remove-SuiteClone $SuitePath
+        }
+        git clone --quiet --depth 1 --branch $release $SuiteRepository $SuitePath
+        Assert-LastExit "git clone (conformance suite $release)"
+        # Read by the suite's compose file, which names both of its images by it
+        $env:IMAGE_TAG = $release
+    }
+
+    $SuitePath = (Resolve-Path -LiteralPath $SuitePath).Path
+    foreach ($required in 'docker-compose-prebuilt.yml', 'scripts/run-test-plan.py') {
+        if (-not (Test-Path -LiteralPath (Join-Path $SuitePath $required) -PathType Leaf)) {
+            throw "$required is missing from $SuitePath`: -SuitePath has to point at a checkout of the conformance suite"
+        }
+    }
+    $ComposeFile = Join-Path $SuitePath 'docker-compose-prebuilt.yml'
+
+    Write-Step "Starting the conformance suite, images $($env:IMAGE_TAG ?? 'latest'), scripts from $SuitePath"
     docker compose -f $ComposeFile -p $ProjectName up -d
     Assert-LastExit 'docker compose up'
     Wait-Until -What 'The conformance suite' -Condition { Test-SuiteReady }
@@ -201,12 +392,15 @@ try {
     Assert-LastExit 'docker build (browser driver)'
     $hostSettings = (Get-Content -Raw (Join-Path $HostProject 'appsettings.json') | ConvertFrom-Json).Conformance
     docker rm -f $BrowserContainer 2>$null | Out-Null
+    # The screenshots stay inside the container and are copied out at the end, so whoever owns the results
+    # directory does not decide whether the driver can write them
     docker run -d --name $BrowserContainer --network $Network --shm-size 1g `
         -e "CONFORMANCE_SERVER=$SuiteUrl" `
         -e "HOST_ORIGIN=$($hostSettings.Issuer)" `
         -e "LOGIN_EMAIL=$($hostSettings.UserEmail)" `
         -e "LOGIN_PASSWORD=$($hostSettings.UserPassword)" `
         -e 'DRIVER_DEADLINE_SECONDS=14400' `
+        -e "DRIVER_SCREENSHOT_DIR=$BrowserScreenshots" `
         $BrowserImage | Out-Null
     Assert-LastExit 'docker run (browser driver)'
 
@@ -221,12 +415,21 @@ try {
     $argumentsDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-arguments'
     New-Item -ItemType Directory -Force $argumentsDirectory | Out-Null
     $runnerArguments = @('--expected-failures-file', '/config/expected-failures.json')
+    $exportMount = @()
+    if ($ResultsPath) {
+        $exportDirectory = (New-Item -ItemType Directory -Force (Join-Path $ResultsPath 'export')).FullName
+        $exportMount = @('-v', "${exportDirectory}:/export")
+        $runnerArguments += '--export-dir', '/export'
+    }
     foreach ($spec in $split) {
         $runnerArguments += $spec.Runner, '/config/oidcc.json'
     }
     # Line feeds alone: the shell's read keeps a carriage return as part of the argument
     [IO.File]::WriteAllText((Join-Path $argumentsDirectory 'runner.txt'), (($runnerArguments -join "`n") + "`n"))
 
+    # The plans of this run are found by when they started, on the suite's own clock, which in a container may differ
+    # from this machine's
+    $plansSince = Get-SuiteTime
     Write-Step "Running $($Plan.Count) test plan(s)"
     # The runner's dependencies are installed in a throwaway container rather than on this machine, and each plan
     # specification is one line of the arguments file, so its brackets and spaces are never re-parsed by a shell
@@ -235,7 +438,8 @@ try {
         'run', '--rm', '--network', $Network,
         '-v', "${SuitePath}:/suite:ro",
         '-v', "${PSScriptRoot}:/config:ro",
-        '-v', "${argumentsDirectory}:/arguments:ro",
+        '-v', "${argumentsDirectory}:/arguments:ro"
+    ) + $exportMount + @(
         '-w', '/suite/scripts',
         '-e', "CONFORMANCE_SERVER=$SuiteUrl",
         '-e', "CONFORMANCE_SERVER_MTLS=$SuiteMtlsUrl",
@@ -245,7 +449,7 @@ try {
         # another - the report on all of them is what the run is for
         '-e', 'CONFORMANCE_MAX_CONSECUTIVE_FAILURES=1000',
         $RunnerImage,
-        'sh', '-c', "pip install -q --root-user-action=ignore -r requirements.txt && $readArguments && exec python run-test-plan.py `"`$@`""
+        'sh', '-c', "$RunnerInstall && $readArguments && exec python run-test-plan.py `"`$@`""
     )
     docker @runner
     $exitCode = $LASTEXITCODE
@@ -262,7 +466,7 @@ try {
         '-e', "HOST_ROTATE_URL=$RotateUrl",
         '-e', 'PYTHONPATH=/suite/scripts',
         $RunnerImage,
-        'sh', '-c', 'pip install -q --root-user-action=ignore -r requirements.txt && exec python /config/rotate-keys.py "$@"', 'sh',
+        'sh', '-c', "$RunnerInstall && exec python /config/rotate-keys.py `"`$@`"", 'sh',
         '/config/oidcc.json'
     ) + $keyRotationPlans
     if ($keyRotationPlans.Count -gt 0) {
@@ -280,11 +484,30 @@ try {
     if ($driverExit -ne 0 -and $exitCode -eq 0) {
         $exitCode = $driverExit
     }
+
+    Write-Step 'Reading the outcome of every module from the suite'
+    $unfinished = @(Get-UnfinishedModules -Since $plansSince -ExpectedPlans ($Plan.Count + $keyRotationPlans.Count))
+    if ($unfinished) {
+        $unfinished | Format-Table -AutoSize | Out-String | Write-Host
+        Write-Host "$($unfinished.Count) module(s) did not finish with PASSED or REVIEW" -ForegroundColor Red
+        if ($exitCode -eq 0) {
+            $exitCode = 1
+        }
+    }
 }
 finally {
+    $env:IMAGE_TAG = $imageTagBefore
+    # Collecting the evidence must neither hide why the run failed nor stop the cleanup after it
+    try {
+        Save-Evidence
+    }
+    catch {
+        Write-Warning "The evidence of the run was not saved in full: $($_.Exception.Message)"
+    }
     if ($KeepRunning) {
         Write-Step "Left running: the suite at $SuiteUrl and the host as $HostContainer; stop them with"
-        Write-Host "  docker rm -f $HostContainer; docker compose -f `"$ComposeFile`" -p $ProjectName down"
+        $stopSuite = if ($ComposeFile) { "; docker compose -f `"$ComposeFile`" -p $ProjectName down" } else { '' }
+        Write-Host "  docker rm -f $HostContainer$stopSuite"
     }
     else {
         Write-Step 'Removing the host and the suite'
