@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Hashing;
@@ -58,7 +59,7 @@ public class ClientSecretBasicAuthenticator(
 	/// </returns>
 	public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
-		if (request.AuthorizationHeader is not { Scheme: "Basic", Parameter: { } parameter })
+		if (request.AuthorizationHeader is not { Parameter: { } parameter } header || !header.HasScheme(TokenTypes.Basic))
 			return null;
 
 		var value = Encoding.UTF8.GetString(Convert.FromBase64String(parameter));

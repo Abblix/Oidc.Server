@@ -44,7 +44,7 @@ public class InitialAccessTokenValidator(
                 $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
         }
 
-        if (header.Scheme != TokenTypes.Bearer)
+        if (!header.HasScheme(TokenTypes.Bearer))
         {
             return new OidcError(ErrorCodes.InvalidToken,
                 $"The scheme name '{header.Scheme}' is not supported");

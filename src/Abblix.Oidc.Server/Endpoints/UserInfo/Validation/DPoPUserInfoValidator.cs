@@ -46,7 +46,7 @@ public partial class DPoPUserInfoValidator(
         JsonWebToken accessToken,
         [Credential] string rawAccessToken)
     {
-        var schemeDPoP = clientRequest is { AuthorizationHeader.Scheme: TokenTypes.DPoP };
+        var schemeDPoP = clientRequest.AuthorizationHeader.HasScheme(TokenTypes.DPoP);
 
         return accessToken is { Payload.Confirmation.JwkThumbprint: {} committed }
             ? await ValidateBoundPresentationAsync(tenant, clientRequest, schemeDPoP, committed, rawAccessToken)

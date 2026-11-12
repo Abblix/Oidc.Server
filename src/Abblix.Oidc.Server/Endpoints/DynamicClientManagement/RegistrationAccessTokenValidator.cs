@@ -36,7 +36,7 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
         if (header?.Parameter == null)
             return Refused($"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
 
-        if (header.Scheme != TokenTypes.Bearer)
+        if (!header.HasScheme(TokenTypes.Bearer))
             return Refused($"The scheme name '{header.Scheme}' is not supported");
 
         // The audience is required and checked: it names this server, which is what reads the token. Which

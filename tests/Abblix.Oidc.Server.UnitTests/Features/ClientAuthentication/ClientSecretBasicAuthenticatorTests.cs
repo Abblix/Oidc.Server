@@ -56,6 +56,31 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         };
     }
 
+    /// <summary>
+    /// RFC 9110 section 11.1 identifies the scheme by a case-insensitive token, so credentials under the Basic scheme
+    /// in another case authenticate the client the same way.
+    /// </summary>
+    [Fact]
+    public async Task ValidAuthentication_UnderTheSchemeInAnotherCase_ShouldAuthenticate()
+    {
+        var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .ReturnsAsync(CreateClientInfo(ClientSecret));
+        var valid = PrepareValidRequest(ClientId, ClientSecret);
+        var request = valid with
+        {
+            AuthorizationHeader = new AuthenticationHeaderValue(
+                TokenTypes.Basic.ToLowerInvariant(),
+                valid.AuthorizationHeader!.Parameter),
+        };
+
+        var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+
+        Assert.NotNull(result);
+        Assert.Equal(ClientId, result.ClientId);
+    }
+
     protected override ClientRequest PrepareMissingPrimaryCredentialRequest()
     {
         return new ClientRequest();

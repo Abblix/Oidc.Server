@@ -191,10 +191,17 @@ public class InitialAccessTokenValidatorTests
         Assert.Contains("subject", result.ErrorDescription);
     }
 
-    [Fact]
-    public async Task ValidateAsync_WithValidToken_ShouldReturnNull()
+    /// <summary>
+    /// RFC 9110 section 11.1 identifies the scheme by a case-insensitive token, so the scheme in any case carries
+    /// the same token.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ValidateAsync_WithValidToken_ShouldReturnNull(bool schemeInLowerCase)
     {
-        var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "valid-jwt"));
+        var scheme = schemeInLowerCase ? TokenTypes.Bearer.ToLowerInvariant() : TokenTypes.Bearer;
+        var context = CreateContext(new AuthenticationHeaderValue(scheme, "valid-jwt"));
         var token = CreateValidToken();
 
         _jwtValidator

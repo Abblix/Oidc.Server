@@ -79,11 +79,18 @@ public class DPoPUserInfoValidatorTests
         Assert.Null(error);
     }
 
-    [Fact]
-    public async Task ValidateAsync_BearerTokenWithDPoPScheme_ReturnsInvalidToken()
+    /// <remarks>
+    /// RFC 9110 section 11.1 identifies the scheme by a case-insensitive token, so the DPoP scheme in another case is
+    /// still the DPoP scheme and an unbound token under it is refused the same way.
+    /// </remarks>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ValidateAsync_BearerTokenWithDPoPScheme_ReturnsInvalidToken(bool schemeInLowerCase)
     {
         var token = BuildAccessToken(jwkThumbprint: null);
-        var clientRequest = BuildClientRequest(scheme: TokenTypes.DPoP, dpopProof: ProofJwt);
+        var scheme = schemeInLowerCase ? TokenTypes.DPoP.ToLowerInvariant() : TokenTypes.DPoP;
+        var clientRequest = BuildClientRequest(scheme: scheme, dpopProof: ProofJwt);
 
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, clientRequest, token, AccessTokenJwt);
 
