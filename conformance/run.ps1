@@ -222,6 +222,40 @@ function Split-KeyRotation {
     return [pscustomobject]@{ Runner = "$($parts[0]):$($others -join ',')"; KeyRotation = $true }
 }
 
+function Get-UnfinishedModules {
+    # Every module of the plans started since $Since that ran and did not end FINISHED with PASSED or REVIEW. The suite's
+    # runner counts a module the suite INTERRUPTED as complete and passes it when its log holds no FAILURE entry, so
+    # the outcome is read from the suite itself. A module that never ran is not judged here: each plan deliberately
+    # leaves some out, and the runner already reports a module it meant to run and did not.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [DateTimeOffset] $Since,
+        [Parameter(Mandatory)] [int] $ExpectedPlans
+    )
+    $pageSize = 1000
+    $from = [Uri]::EscapeDataString($Since.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))
+    $plans = @()
+    for ($start = 0; ; $start += $pageSize) {
+        $page = Invoke-RestMethod -Uri "${SuiteUrl}api/plan?from=$from&start=$start&length=$pageSize" -SkipCertificateCheck
+        $plans += @($page.data | ForEach-Object { $_ } | Where-Object { $_._id })
+        if (@($page.data).Count -lt $pageSize) {
+            break
+        }
+    }
+    if ($plans.Count -lt $ExpectedPlans) {
+        throw "The suite lists $($plans.Count) plan(s) started since $Since, fewer than the $ExpectedPlans this run started"
+    }
+
+    foreach ($plan in $plans) {
+        $detail = Invoke-RestMethod -Uri "${SuiteUrl}api/plan/$($plan._id)" -SkipCertificateCheck
+        foreach ($module in @($detail.modules | ForEach-Object { $_ } | Where-Object { $_.status })) {
+            if ($module.status -ne 'FINISHED' -or $module.result -notin 'PASSED', 'REVIEW') {
+                [pscustomobject]@{ Plan = $detail.planName; Module = $module.testModule; Status = $module.status; Result = $module.result }
+            }
+        }
+    }
+}
+
 function Save-Evidence {
     # Written before the containers are removed, since the logs and the screenshots live in them
     if (-not $ResultsPath) {
@@ -378,6 +412,8 @@ try {
     # Line feeds alone: the shell's read keeps a carriage return as part of the argument
     [IO.File]::WriteAllText((Join-Path $argumentsDirectory 'runner.txt'), (($runnerArguments -join "`n") + "`n"))
 
+    # The plans of this run are found by when they started; the suite's clock may run a little behind this machine's
+    $plansSince = [DateTimeOffset]::UtcNow.AddMinutes(-1)
     Write-Step "Running $($Plan.Count) test plan(s)"
     # The runner's dependencies are installed in a throwaway container rather than on this machine, and each plan
     # specification is one line of the arguments file, so its brackets and spaces are never re-parsed by a shell
@@ -421,6 +457,16 @@ try {
         docker @rotation
         if ($LASTEXITCODE -ne 0 -and $exitCode -eq 0) {
             $exitCode = $LASTEXITCODE
+        }
+    }
+
+    Write-Step 'Reading the outcome of every module from the suite'
+    $unfinished = @(Get-UnfinishedModules -Since $plansSince -ExpectedPlans ($Plan.Count + $keyRotationPlans.Count))
+    if ($unfinished) {
+        $unfinished | Format-Table -AutoSize | Out-String | Write-Host
+        Write-Host "$($unfinished.Count) module(s) did not finish with PASSED or REVIEW" -ForegroundColor Red
+        if ($exitCode -eq 0) {
+            $exitCode = 1
         }
     }
 
