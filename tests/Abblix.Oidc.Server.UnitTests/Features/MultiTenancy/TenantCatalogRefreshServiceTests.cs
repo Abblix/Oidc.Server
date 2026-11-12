@@ -123,7 +123,16 @@ public class TenantCatalogRefreshServiceTests
         _store.Tenants.Add(Stored("globex"));
         await AdvanceUntilReadAsync(_store.Readings + 1);
 
-        Assert.NotNull(await _catalog.FindByIdAsync("globex", ct));
+        // A reading is counted as it starts and its tenants are served once it completes, so the look waits for that
+        TenantDefinition? served = null;
+        for (var polls = 0; served is null && polls < MaxPolls; polls++)
+        {
+            served = await _catalog.FindByIdAsync("globex", ct);
+            if (served is null)
+                await Task.Delay(PollInterval, ct);
+        }
+
+        Assert.NotNull(served);
         await service.StopAsync(ct);
     }
 
