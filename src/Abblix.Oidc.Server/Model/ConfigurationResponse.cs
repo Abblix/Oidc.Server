@@ -25,6 +25,7 @@ namespace Abblix.Oidc.Server.Model;
 /// (including <c>Microsoft.IdentityModel</c>) reject a discovery document that contains <c>null</c> values for
 /// fields they do not expect to be present.
 /// </remarks>
+[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 public record ConfigurationResponse
 {
     /// <summary>
@@ -257,7 +258,6 @@ public record ConfigurationResponse
     /// rather than writing a null.
     /// </remarks>
     [JsonPropertyName(Parameters.Issuer)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public required string Issuer { init; get; }
 
     /// <summary>
@@ -265,63 +265,54 @@ public record ConfigurationResponse
     /// keys, enabling clients to verify signatures and encrypt messages to the provider.
     /// </summary>
     [JsonPropertyName(Parameters.JwksUri)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? JwksUri { init; get; }
 
     /// <summary>
     /// The URL of the authorization endpoint through which the provider handles authentication requests and user consent.
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? AuthorizationEndpoint { init; get; }
 
     /// <summary>
     /// The URL of the token endpoint where the provider issues tokens (e.g., access tokens, refresh tokens) to clients.
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? TokenEndpoint { init; get; }
 
     /// <summary>
     /// The URL of the user information endpoint from which the provider returns claims about the authenticated user.
     /// </summary>
     [JsonPropertyName(Parameters.UserInfoEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? UserInfoEndpoint { init; get; }
 
     /// <summary>
     /// The URL of the end session endpoint that supports logging out users from the provider.
     /// </summary>
     [JsonPropertyName(Parameters.EndSessionEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? EndSessionEndpoint { init; get; }
 
     /// <summary>
     /// The URL of the iframe used by the provider to facilitate session management in client applications.
     /// </summary>
     [JsonPropertyName(Parameters.CheckSessionIframe)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? CheckSessionIframe { init; get; }
 
     /// <summary>
     /// The URL of the revocation endpoint where clients can revoke access tokens or refresh tokens.
     /// </summary>
     [JsonPropertyName(Parameters.RevocationEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? RevocationEndpoint { init; get; }
 
     /// <summary>
     /// The URL of the introspection endpoint where clients can obtain information about tokens' current state.
     /// </summary>
     [JsonPropertyName(Parameters.IntrospectionEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? IntrospectionEndpoint { init; get; }
 
     /// <summary>
     /// The URL of the client registration endpoint that supports dynamic registration of client applications.
     /// </summary>
     [JsonPropertyName(Parameters.RegistrationEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? RegistrationEndpoint { init; get; }
 
     /// <summary>
@@ -329,14 +320,12 @@ public record ConfigurationResponse
     /// requests.
     /// </summary>
     [JsonPropertyName(Parameters.PushedAuthorizationRequestEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? PushedAuthorizationRequestEndpoint { get; set; }
 
     /// <summary>
     /// Indicates whether the provider requires clients to use the Pushed Authorization Requests (PAR) only.
     /// </summary>
     [JsonPropertyName(Parameters.RequirePushedAuthorizationRequests)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? RequirePushedAuthorizationRequests { get; set; }
 
     /// <summary>
@@ -344,7 +333,6 @@ public record ConfigurationResponse
     /// across multiple applications.
     /// </summary>
     [JsonPropertyName(Parameters.FrontChannelLogoutSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? FrontChannelLogoutSupported { init; get; }
 
     /// <summary>
@@ -352,7 +340,6 @@ public record ConfigurationResponse
     /// enabling clients to identify which user session is being logged out.
     /// </summary>
     [JsonPropertyName(Parameters.FrontChannelLogoutSessionSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? FrontChannelLogoutSessionSupported { init; get; }
 
     /// <summary>
@@ -360,7 +347,6 @@ public record ConfigurationResponse
     /// through direct back-channel communication.
     /// </summary>
     [JsonPropertyName(Parameters.BackChannelLogoutSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? BackChannelLogoutSupported { init; get; }
 
     /// <summary>
@@ -368,7 +354,6 @@ public record ConfigurationResponse
     /// enabling secure and direct notification of user logout.
     /// </summary>
     [JsonPropertyName(Parameters.BackChannelLogoutSessionSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? BackChannelLogoutSessionSupported { init; get; }
 
     /// <summary>
@@ -376,14 +361,12 @@ public record ConfigurationResponse
     /// allowing clients to request specific claims in the ID token.
     /// </summary>
     [JsonPropertyName(Parameters.ClaimsParameterSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? ClaimsParameterSupported { init; get; }
 
     /// <summary>
     /// Lists the scopes supported by the OpenID Provider, defining the extent of access granted by the authorization.
     /// </summary>
     [JsonPropertyName(Parameters.ScopesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? ScopesSupported { init; get; }
 
     /// <summary>
@@ -391,7 +374,6 @@ public record ConfigurationResponse
     /// in the ID token or obtained from the UserInfo endpoint.
     /// </summary>
     [JsonPropertyName(Parameters.ClaimsSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? ClaimsSupported { init; get; }
 
     /// <summary>
@@ -399,7 +381,6 @@ public record ConfigurationResponse
     /// clients can request tokens.
     /// </summary>
     [JsonPropertyName(Parameters.GrantTypesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? GrantTypesSupported { init; get; }
 
     /// <summary>
@@ -407,7 +388,6 @@ public record ConfigurationResponse
     /// for the authorization response.
     /// </summary>
     [JsonPropertyName(Parameters.ResponseTypesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public required IEnumerable<string> ResponseTypesSupported { init; get; }
 
     /// <summary>
@@ -415,7 +395,6 @@ public record ConfigurationResponse
     /// should be delivered to the client.
     /// </summary>
     [JsonPropertyName(Parameters.ResponseModesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? ResponseModesSupported { init; get; }
 
     /// <summary>
@@ -423,7 +402,6 @@ public record ConfigurationResponse
     /// specifying how clients authenticate to the token endpoint.
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthMethodsSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? TokenEndpointAuthMethodsSupported { init; get; }
 
     /// <summary>
@@ -432,7 +410,6 @@ public record ConfigurationResponse
     /// ensuring the integrity and authenticity of the requests.
     /// </summary>
     [JsonPropertyName(Parameters.TokenEndpointAuthSigningAlgValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? TokenEndpointAuthSigningAlgValuesSupported { get; init; }
 
     /// <summary>
@@ -440,7 +417,6 @@ public record ConfigurationResponse
     /// indicating the algorithms that can be used to sign the ID token.
     /// </summary>
     [JsonPropertyName(Parameters.IdTokenSigningAlgValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public required IEnumerable<string> IdTokenSigningAlgValuesSupported { init; get; }
 
     /// <summary>
@@ -448,7 +424,6 @@ public record ConfigurationResponse
     /// defining how the subject's identifier is formatted and presented to the client.
     /// </summary>
     [JsonPropertyName(Parameters.SubjectTypesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public required IEnumerable<string> SubjectTypesSupported { init; get; }
 
     /// <summary>
@@ -456,7 +431,6 @@ public record ConfigurationResponse
     /// enhancing the security of the authorization code flow.
     /// </summary>
     [JsonPropertyName(Parameters.CodeChallengeMethodsSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? CodeChallengeMethodsSupported { init; get; }
 
     /// <summary>
@@ -471,7 +445,6 @@ public record ConfigurationResponse
     /// specifying how the provider should prompt the user during authentication.
     /// </summary>
     [JsonPropertyName(Parameters.PromptValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? PromptValuesSupported { init; get; }
 
     /// <summary>
@@ -480,7 +453,6 @@ public record ConfigurationResponse
     /// and authentication of the information source.
     /// </summary>
     [JsonPropertyName(Parameters.UserInfoSigningAlgValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? UserInfoSigningAlgValuesSupported { init; get; }
 
     /// <summary>
@@ -488,7 +460,6 @@ public record ConfigurationResponse
     /// (<c>dpop_signing_alg_values_supported</c>).
     /// </summary>
     [JsonPropertyName(Parameters.DpopSigningAlgValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? DpopSigningAlgValuesSupported { init; get; }
 
     /// <summary>
@@ -497,7 +468,6 @@ public record ConfigurationResponse
     /// security measures against tampering and ensuring the authenticity of the request.
     /// </summary>
     [JsonPropertyName(Parameters.RequestObjectSigningAlgValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? RequestObjectSigningAlgValuesSupported { init; get; }
 
     /// <summary>
@@ -505,7 +475,6 @@ public record ConfigurationResponse
     /// when a client encrypts a request object to the provider (RFC 9101 section 6.1).
     /// </summary>
     [JsonPropertyName(Parameters.RequestObjectEncryptionAlgValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? RequestObjectEncryptionAlgValuesSupported { init; get; }
 
     /// <summary>
@@ -513,14 +482,12 @@ public record ConfigurationResponse
     /// when a client encrypts a request object to the provider (RFC 9101 section 6.1).
     /// </summary>
     [JsonPropertyName(Parameters.RequestObjectEncryptionEncValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? RequestObjectEncryptionEncValuesSupported { init; get; }
 
     /// <summary>
     /// Specifies the JWS algorithms the OpenID Provider uses to sign JARM authorization responses (JARM section 4).
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationSigningAlgValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? AuthorizationSigningAlgValuesSupported { init; get; }
 
     /// <summary>
@@ -528,7 +495,6 @@ public record ConfigurationResponse
     /// JARM authorization responses (JARM section 4).
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationEncryptionAlgValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? AuthorizationEncryptionAlgValuesSupported { init; get; }
 
     /// <summary>
@@ -536,14 +502,12 @@ public record ConfigurationResponse
     /// encrypt JARM authorization responses (JARM section 4).
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationEncryptionEncValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? AuthorizationEncryptionEncValuesSupported { init; get; }
 
     /// <summary>
     /// Specifies the JWS algorithms the OpenID Provider uses to sign JWT introspection responses (RFC 9701 section 7).
     /// </summary>
     [JsonPropertyName(Parameters.IntrospectionSigningAlgValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? IntrospectionSigningAlgValuesSupported { init; get; }
 
     /// <summary>
@@ -551,7 +515,6 @@ public record ConfigurationResponse
     /// JWT introspection responses (RFC 9701 section 7).
     /// </summary>
     [JsonPropertyName(Parameters.IntrospectionEncryptionAlgValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? IntrospectionEncryptionAlgValuesSupported { init; get; }
 
     /// <summary>
@@ -559,7 +522,6 @@ public record ConfigurationResponse
     /// encrypt JWT introspection responses (RFC 9701 section 7).
     /// </summary>
     [JsonPropertyName(Parameters.IntrospectionEncryptionEncValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? IntrospectionEncryptionEncValuesSupported { init; get; }
 
     /// <summary>
@@ -568,14 +530,12 @@ public record ConfigurationResponse
     /// integrity of request objects received by the provider.
     /// </summary>
     [JsonPropertyName(Parameters.RequireSignedRequestObject)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? RequireSignedRequestObject { init; get; }
 
     /// <summary>
     /// Lists the supported backchannel token delivery modes for client-initiated backchannel authentication.
     /// </summary>
     [JsonPropertyName(Parameters.BackchannelTokenDeliveryModesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? BackChannelTokenDeliveryModesSupported { get; init; }
 
     /// <summary>
@@ -583,21 +543,18 @@ public record ConfigurationResponse
     /// requests.
     /// </summary>
     [JsonPropertyName(Parameters.BackchannelAuthenticationEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? BackChannelAuthenticationEndpoint { get; init; }
 
     /// <summary>
     /// Lists the supported signing algorithms for backchannel authentication requests.
     /// </summary>
     [JsonPropertyName(Parameters.BackchannelAuthenticationRequestSigningAlgValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? BackChannelAuthenticationRequestSigningAlgValuesSupported { get; init; }
 
     /// <summary>
     /// Indicates whether the OpenID Provider supports the backchannel user code parameter for CIBA.
     /// </summary>
     [JsonPropertyName(Parameters.BackchannelUserCodeParameterSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? BackChannelUserCodeParameterSupported { get; init; }
 
     /// <summary>
@@ -605,14 +562,12 @@ public record ConfigurationResponse
     /// This endpoint is used to initiate the Device Authorization Grant flow.
     /// </summary>
     [JsonPropertyName(Parameters.DeviceAuthorizationEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? DeviceAuthorizationEndpoint { get; init; }
 
     /// <summary>
     /// RFC 8705: mTLS endpoint aliases block to advertise alternate endpoints served on an mTLS-bound host.
     /// </summary>
     [JsonPropertyName(Parameters.MtlsEndpointAliases)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public MtlsAliases? MtlsEndpointAliases { get; init; }
 
     /// <summary>
@@ -621,7 +576,6 @@ public record ConfigurationResponse
     /// enforces the binding at its protected resources; omitted otherwise.
     /// </summary>
     [JsonPropertyName(Parameters.TlsClientCertificateBoundAccessTokens)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? TlsClientCertificateBoundAccessTokens { get; init; }
 
     /// <summary>
@@ -629,7 +583,6 @@ public record ConfigurationResponse
     /// These values represent authentication assurance levels that can be requested and achieved.
     /// </summary>
     [JsonPropertyName(Parameters.AcrValuesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? AcrValuesSupported { get; init; }
 
     /// <summary>
@@ -637,7 +590,6 @@ public record ConfigurationResponse
     /// Clients that inspect this flag activate mix-up attack defenses.
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationResponseIssParameterSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? AuthorizationResponseIssParameterSupported { get; init; }
 
     /// <summary>
@@ -649,7 +601,6 @@ public record ConfigurationResponse
     /// payload never contains this field itself.
     /// </summary>
     [JsonPropertyName(Parameters.SignedMetadata)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SignedMetadata { get; init; }
 
     /// <summary>
@@ -661,6 +612,5 @@ public record ConfigurationResponse
     /// follows the OIDC discovery convention: absent = unsupported, not the empty array.
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetailsTypesSupported)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IEnumerable<string>? AuthorizationDetailsTypesSupported { get; init; }
 }

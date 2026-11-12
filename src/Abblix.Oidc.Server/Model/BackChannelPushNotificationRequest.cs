@@ -15,6 +15,7 @@ namespace Abblix.Oidc.Server.Model;
 /// <summary>
 /// Represents the token delivery payload sent to the client in push mode.
 /// </summary>
+[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 public sealed record BackChannelPushNotificationRequest : IBackChannelNotificationRequest
 {
     /// <summary>
@@ -46,14 +47,12 @@ public sealed record BackChannelPushNotificationRequest : IBackChannelNotificati
     /// The ID token, if requested.
     /// </summary>
     [JsonPropertyName(Parameters.IdToken)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? IdToken { get; init; }
 
     /// <summary>
     /// The refresh token, if issued.
     /// </summary>
     [JsonPropertyName(Parameters.RefreshToken)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? RefreshToken { get; init; }
 
     /// <summary>
