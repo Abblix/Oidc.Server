@@ -54,7 +54,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// seconds, so a token minted in the same second as a revocation reads as older than it and is refused. That
 /// errs towards refusing a token the revocation did not mean to catch, which is the direction to err in.
 /// Clock differences between instances run the other way and are not bounded by the token, which is what
-/// <see cref="OidcOptions.RevocationCutoffSkew"/> answers - on this side and on a grant redeemed against a cutoff
+/// <see cref="OidcOptions.ClockSkew"/> answers - on this side and on a grant redeemed against a cutoff
 /// at its client, whose tokens the window refuses anyway. The session side takes no
 /// tolerance, because there the same widening would refuse the fresh sign-in a user answers the refusal
 /// with, and the retry lands in the same window.
@@ -161,7 +161,7 @@ public partial class RevocationCutoffChecker(
         return true;
     }
 
-    private TimeSpan Skew => options.Value.RevocationCutoffSkew;
+    private TimeSpan Skew => options.Value.ClockSkew;
 
     private static JwtValidationError RevokedByCutoff => new(
         JwtError.TokenRevoked, "Tokens issued to this principal before the revocation cutoff are rejected");
@@ -231,7 +231,7 @@ public partial class RevocationCutoffChecker(
     /// is one retry. On a token it costs the whole window: every token minted inside it carries an issue
     /// time inside it, so a user reinstated a moment after being suspended waits the window out. That is
     /// worth paying for a value sized to clock drift, which is what
-    /// <see cref="OidcOptions.RevocationCutoffSkew"/> is.
+    /// <see cref="OidcOptions.ClockSkew"/> is.
     /// <para>
     /// On a session the same widening costs the user the only remedy they have: the fresh sign-in they would
     /// answer the refusal with lands inside the window and is refused again, so it buys a loop rather than a

@@ -8,7 +8,6 @@
 
 using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.Extensions.Options;
-using Moq;
 
 namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
@@ -18,8 +17,7 @@ namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 public static class TestOidcOptions
 {
     /// <summary>
-    /// A monitor answering with the given options, or the defaults when none are given.
+    /// The given options, or the defaults when none are given.
     /// </summary>
-    public static IOptionsMonitor<OidcOptions> Monitor(OidcOptions? options = null)
-        => Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == (options ?? new OidcOptions()));
+    public static IOptions<OidcOptions> Defaults(OidcOptions? options = null) => Options.Create(options ?? new OidcOptions());
 }

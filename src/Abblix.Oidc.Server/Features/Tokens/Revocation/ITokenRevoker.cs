@@ -49,7 +49,7 @@ public interface ITokenRevoker
     /// session authenticated earlier stops being reusable, so the authorization endpoint will not mint a
     /// replacement against one. Signing in again works immediately and leaves nothing to clean up: the new
     /// session is later than the cutoff and passes. Its tokens follow once
-    /// <see cref="Common.Configuration.OidcOptions.RevocationCutoffSkew"/> has elapsed, since inside that
+    /// <see cref="Common.Configuration.OidcOptions.ClockSkew"/> has elapsed, since inside that
     /// window a freshly minted token cannot be told from one whose clock ran ahead.
     /// </remarks>
     /// <param name="tenant">The tenant the caller passes, which outside a request is the definition the tenant catalog returns.</param>

@@ -29,13 +29,20 @@ public sealed class ClockSkewCeilingCheck : ITenantsCheck
 {
     /// <inheritdoc />
     public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options)
-        // Only a value this deployment set is worth refusing. Absence means it asked the profile to decide, and what
-        // the profile decides is by construction what the profile allows
-        => options.JwtBearer.ClockSkew is { } skew && skew >= TimeSpan.Zero
-            ? TenantRefusal.EachOf(tenants, tenant => Failures(tenant, skew))
-            : [];
+    {
+        // The drift between this server's own instances is always set, since it has a default. Of the tolerance for
+        // other parties' assertions only a value this deployment set is worth refusing: absence means it asked the
+        // profile to decide, and what the profile decides is by construction what the profile allows
+        var settings = new List<(string Name, TimeSpan Value)> { (nameof(OidcOptions.ClockSkew), options.ClockSkew) };
+        if (options.JwtBearer.ClockSkew is { } skew && skew >= TimeSpan.Zero)
+            settings.Add(($"{nameof(OidcOptions.JwtBearer)}.{nameof(JwtBearerOptions.ClockSkew)}", skew));
 
-    private static IEnumerable<string> Failures(TenantDefinition tenant, TimeSpan skew)
+        return TenantRefusal.EachOf(
+            tenants,
+            tenant => settings.SelectMany(setting => Failures(tenant, setting.Name, setting.Value)));
+    }
+
+    private static IEnumerable<string> Failures(TenantDefinition tenant, string setting, TimeSpan skew)
     {
         // A profile that names no bound leaves the question to RFC 7523, which does not answer it, and a profile
         // the enumeration does not define is refused by the check of the profiles
@@ -47,7 +54,7 @@ public sealed class ClockSkewCeilingCheck : ITenantsCheck
         }
 
         yield return
-            $"{nameof(OidcOptions.JwtBearer)}.{nameof(JwtBearerOptions.ClockSkew)} is {skew}, above the {ceiling} " +
+            $"{setting} is {skew}, above the {ceiling} " +
             $"the {tenant.DefaultSecurityProfile} profile allows. The value is held to that bound in both directions " +
             "whatever is configured, so a larger one widens nothing while reading as though it did.";
     }

@@ -141,7 +141,7 @@ public class RevocationFollowsTheValidatedTenantTests
                 registry.Object,
                 cutoffs.Object,
                 new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>())),
-            TestOidcOptions.Monitor());
+            TestOidcOptions.Defaults());
 
         // The request served at a tenant, as tenant resolution leaves it, around the validation
         using var request = TenantScope.Enter(servedAt);

@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
+using ClockSkew = Abblix.Jwt.ClockSkew;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
@@ -27,14 +28,14 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="serviceKeysProvider">The provider used to retrieve the cryptographic keys for signing and
 /// decrypting tokens.</param>
 /// <param name="statusCheck">Refuses a token revoked, rotated or cut off at the tenant it is validated for.</param>
-/// <param name="oidcOptions">Supplies <see cref="OidcOptions.IssuedTokenClockSkew"/>, read on each validation so a host
-/// changing it at runtime is honored.</param>
+/// <param name="oidcOptions">Supplies <see cref="OidcOptions.ClockSkew"/>, the drift between this server's
+/// instances.</param>
 public class AuthServiceJwtValidator(
 	IJsonWebTokenValidator validator,
 	ITenantCatalog catalog,
 	IAuthServiceKeysProvider serviceKeysProvider,
 	TokenStatusCheck statusCheck,
-	IOptionsMonitor<OidcOptions> oidcOptions) : IAuthServiceJwtValidator
+	IOptions<OidcOptions> oidcOptions) : IAuthServiceJwtValidator
 {
 
 	/// <summary>
@@ -64,11 +65,11 @@ public class AuthServiceJwtValidator(
 				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(tenant),
 				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
 
-				// These are tokens this server issued and reads back, often on another node whose clock lags the
-				// issuing one, so a token dated a little ahead is still this server's own. Only that direction is
-				// tolerated: the expiry the issuing node set is a deadline no node moves. A profile's bound on a
-				// third party's freshness is not the question here.
-				ClockSkew = new ClockSkew { Past = TimeSpan.Zero, Future = oidcOptions.CurrentValue.IssuedTokenClockSkew },
+				// These are tokens this server issued and reads back, often on another instance whose clock lags
+				// the issuing one, so a token dated a little ahead is still this server's own. Only that direction
+				// is tolerated: the expiry the issuing instance set is a deadline no instance moves. A value above
+				// a tenant's profile ceiling is refused at startup by ClockSkewCeilingCheck
+				ClockSkew = new ClockSkew { Past = TimeSpan.Zero, Future = oidcOptions.Value.ClockSkew },
 			});
 
 		if (!result.TryGetSuccess(out var token))

@@ -67,7 +67,7 @@ public class RevocationCutoffCheckerSessionTests
             NullLogger<RevocationCutoffChecker>.Instance,
             _cutoffs.Object,
             Options.Create(skew is { } configured
-                ? new OidcOptions { RevocationCutoffSkew = configured }
+                ? new OidcOptions { ClockSkew = configured }
                 : new OidcOptions()),
             _clients.Object,
             new FixedSubjectTypeConverter(new SubjectTypeConverter()));

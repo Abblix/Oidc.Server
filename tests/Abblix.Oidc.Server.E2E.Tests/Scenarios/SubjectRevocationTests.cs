@@ -373,7 +373,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     {
         // No clock tolerance, so the code approved right after the revocation is past it at once; the tolerance a
         // grant gets is pinned by the checker's unit tests
-        await using var host = CreateIsolatedHost(options => options.RevocationCutoffSkew = TimeSpan.Zero);
+        await using var host = CreateIsolatedHost(options => options.ClockSkew = TimeSpan.Zero);
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
