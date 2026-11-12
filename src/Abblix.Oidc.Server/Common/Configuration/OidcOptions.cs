@@ -493,7 +493,8 @@ public record OidcOptions
 	/// </para>
 	/// <para>
 	/// Zero is allowed and means the tokens are trusted to carry comparable instants, which is true of a
-	/// single-instance deployment and of nothing else. A tenant held to FAPI 2.0 bounds it by that profile's ceiling.
+	/// single-instance deployment and of nothing else. A tenant held to FAPI 2.0 refuses a value above that profile's
+	/// ceiling at startup.
 	/// </para>
 	/// </remarks>
 	public TimeSpan ClockSkew { get; set; } = TimeSpan.FromSeconds(5);

@@ -67,7 +67,7 @@ public class ClockSkewCeilingCheckTests
         var refusal = Assert.Single(Check(TimeSpan.FromSeconds(seconds)));
 
         Assert.Equal("acme", Assert.Single(refusal.TenantIds));
-        Assert.Contains(nameof(JwtBearerOptions.ClockSkew), refusal.Message);
+        Assert.Contains($"{nameof(OidcOptions.JwtBearer)}.{nameof(JwtBearerOptions.ClockSkew)}", refusal.Message);
     }
 
     /// <summary>
@@ -309,7 +309,7 @@ public class ClockSkewCeilingCheckTests
         var refusal = Assert.Single(CheckDrift(TimeSpan.FromSeconds(61)));
 
         Assert.Equal("acme", Assert.Single(refusal.TenantIds));
-        Assert.Contains(nameof(OidcOptions.ClockSkew), refusal.Message);
+        Assert.Contains($"{nameof(OidcOptions)}.{nameof(OidcOptions.ClockSkew)}", refusal.Message);
         Assert.DoesNotContain(nameof(OidcOptions.JwtBearer), refusal.Message);
     }
 

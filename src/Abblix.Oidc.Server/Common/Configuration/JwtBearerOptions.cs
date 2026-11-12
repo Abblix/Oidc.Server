@@ -57,6 +57,10 @@ public record JwtBearerOptions
 	/// It bounds two things, both about the same clock: how far a timestamp may sit either side of
 	/// this server's, and how much older than <see cref="MaxJwtAge"/> an assertion may be.
 	/// </para>
+	/// <para>
+	/// Not the drift between this server's own instances, which a token it issued is read back across:
+	/// that is <see cref="OidcOptions.ClockSkew"/>.
+	/// </para>
 	/// </remarks>
 	public TimeSpan? ClockSkew { get; set; }
 

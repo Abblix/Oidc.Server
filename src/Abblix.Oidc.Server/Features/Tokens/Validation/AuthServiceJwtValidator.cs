@@ -15,7 +15,6 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
-using ClockSkew = Abblix.Jwt.ClockSkew;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
