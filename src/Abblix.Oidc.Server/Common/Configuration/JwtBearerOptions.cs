@@ -59,7 +59,7 @@ public record JwtBearerOptions
 	/// </para>
 	/// <para>
 	/// Not the drift between this server's own instances, which a token it issued is read back across:
-	/// that is <see cref="OidcOptions.ClockSkew"/>.
+	/// that is <see cref="OidcOptions.ReplicaClockSkew"/>.
 	/// </para>
 	/// </remarks>
 	public TimeSpan? ClockSkew { get; set; }

@@ -25,7 +25,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Validation;
 /// <summary>
 /// A token this server issued is read back by whichever node the next request reaches, and that node's clock may lag
 /// the one that issued it. Its <c>nbf</c> and <c>iat</c> may therefore be a little ahead of the reading node's clock,
-/// within <see cref="OidcOptions.ClockSkew"/>, while its <c>exp</c> is held to the reading clock as it is.
+/// within <see cref="OidcOptions.ReplicaClockSkew"/>, while its <c>exp</c> is held to the reading clock as it is.
 /// </summary>
 public class IssuedTokenOnALaggingInstanceTests
 {
@@ -98,7 +98,7 @@ public class IssuedTokenOnALaggingInstanceTests
     [Fact]
     public async Task ATokenDatedExactlyTheToleranceAhead_IsAccepted()
     {
-        await using var provider = ReadingNode(new OidcOptions().ClockSkew);
+        await using var provider = ReadingNode(new OidcOptions().ReplicaClockSkew);
 
         var result = await IssueAndReadAsync(provider, TimeSpan.FromMinutes(5));
 
@@ -120,7 +120,7 @@ public class IssuedTokenOnALaggingInstanceTests
     {
         await using var provider = ReadingNode(
             TimeSpan.FromSeconds(1),
-            options => options.ClockSkew = TimeSpan.Zero);
+            options => options.ReplicaClockSkew = TimeSpan.Zero);
 
         var result = await IssueAndReadAsync(provider, TimeSpan.FromMinutes(5));
 

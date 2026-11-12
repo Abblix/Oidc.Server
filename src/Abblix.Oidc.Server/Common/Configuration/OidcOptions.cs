@@ -497,7 +497,7 @@ public record OidcOptions
 	/// that profile's ceiling.
 	/// </para>
 	/// </remarks>
-	public TimeSpan ClockSkew { get; set; } = TimeSpan.FromSeconds(5);
+	public TimeSpan ReplicaClockSkew { get; set; } = TimeSpan.FromSeconds(5);
 
 	/// <summary>
 	/// Whether ending a session also revokes the tokens issued within it.

@@ -38,7 +38,7 @@ public sealed class ClockSkewCeilingCheck : ITenantsCheck
         // profile to decide, and what the profile decides is by construction what the profile allows
         var settings = new List<(string Name, TimeSpan Value, string Consequence)>
         {
-            ($"{nameof(OidcOptions)}.{nameof(OidcOptions.ClockSkew)}", options.ClockSkew,
+            ($"{nameof(OidcOptions)}.{nameof(OidcOptions.ReplicaClockSkew)}", options.ReplicaClockSkew,
                 "It is applied as configured, so a token this server issued would be accepted dated further ahead " +
                 "than the profile allows."),
         };

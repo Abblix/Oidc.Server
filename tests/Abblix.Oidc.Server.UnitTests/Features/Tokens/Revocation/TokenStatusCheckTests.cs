@@ -356,7 +356,7 @@ public class TokenStatusCheckTests
     private IRevocationCutoffChecker CutoffChecker(TimeSpan skew) => new RevocationCutoffChecker(
         NullLogger<RevocationCutoffChecker>.Instance,
         _cutoffs.Object,
-        Options.Create(new OidcOptions { ClockSkew = skew }),
+        Options.Create(new OidcOptions { ReplicaClockSkew = skew }),
         _clients.Object,
         SubjectConverter);
 

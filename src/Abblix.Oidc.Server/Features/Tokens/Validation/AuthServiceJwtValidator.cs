@@ -27,7 +27,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="serviceKeysProvider">The provider used to retrieve the cryptographic keys for signing and
 /// decrypting tokens.</param>
 /// <param name="statusCheck">Refuses a token revoked, rotated or cut off at the tenant it is validated for.</param>
-/// <param name="oidcOptions">Supplies <see cref="OidcOptions.ClockSkew"/>, the drift between this server's
+/// <param name="oidcOptions">Supplies <see cref="OidcOptions.ReplicaClockSkew"/>, the drift between this server's
 /// instances.</param>
 public class AuthServiceJwtValidator(
 	IJsonWebTokenValidator validator,
@@ -68,7 +68,7 @@ public class AuthServiceJwtValidator(
 				// the issuing one, so a token dated a little ahead is still this server's own. Only that direction
 				// is tolerated: the expiry the issuing instance set is a deadline no instance moves. A value above
 				// a tenant's profile ceiling gets that tenant refused by ClockSkewCeilingCheck
-				ClockSkew = new ClockSkew { Past = TimeSpan.Zero, Future = oidcOptions.Value.ClockSkew },
+				ClockSkew = new ClockSkew { Past = TimeSpan.Zero, Future = oidcOptions.Value.ReplicaClockSkew },
 			});
 
 		if (!result.TryGetSuccess(out var token))

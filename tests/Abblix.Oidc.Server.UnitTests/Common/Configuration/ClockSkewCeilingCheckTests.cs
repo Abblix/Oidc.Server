@@ -298,7 +298,7 @@ public class ClockSkewCeilingCheckTests
     private static List<TenantRefusal> CheckDrift(TimeSpan drift, ClientSecurityProfile profile = ClientSecurityProfile.Fapi2)
         => new ClockSkewCeilingCheck().Check(
             [new TenantDefinition { Id = "acme", Issuer = new Uri("https://auth.example.com"), DefaultSecurityProfile = profile }],
-            new OidcOptions { ClockSkew = drift }).ToList();
+            new OidcOptions { ReplicaClockSkew = drift }).ToList();
 
     /// <summary>
     /// The drift between this server's own instances lets a token it issued be dated that far ahead, which FAPI 2.0
@@ -311,7 +311,7 @@ public class ClockSkewCeilingCheckTests
         var refusal = Assert.Single(CheckDrift(TimeSpan.FromSeconds(61)));
 
         Assert.Equal("acme", Assert.Single(refusal.TenantIds));
-        Assert.Contains($"{nameof(OidcOptions)}.{nameof(OidcOptions.ClockSkew)}", refusal.Message);
+        Assert.Contains($"{nameof(OidcOptions)}.{nameof(OidcOptions.ReplicaClockSkew)}", refusal.Message);
         Assert.DoesNotContain(nameof(OidcOptions.JwtBearer), refusal.Message);
     }
 
