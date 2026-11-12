@@ -245,6 +245,26 @@ public class CoalescingLoaderTests
     }
 
     /// <summary>
+    /// A stream of keys nobody asks for twice does not pile up: once their hold has passed, the entries are swept as
+    /// later keys arrive, so the map holds about the keys still within their hold rather than every key ever seen.
+    /// </summary>
+    [Fact]
+    public async Task KeysPastTheirHold_AreSweptAsNewKeysArrive()
+    {
+        const int keysPerWave = 1000;
+        var time = new FakeTimeProvider();
+        var loader = new CoalescingLoader<string, string>(time);
+
+        for (var index = 0; index < keysPerWave; index++)
+            await loader.LoadAsync($"first-{index}", Task.FromResult, Hold, TestContext.Current.CancellationToken);
+        time.Advance(Hold);
+        for (var index = 0; index < keysPerWave; index++)
+            await loader.LoadAsync($"second-{index}", Task.FromResult, Hold, TestContext.Current.CancellationToken);
+
+        Assert.InRange(loader.Count, keysPerWave, keysPerWave + keysPerWave / 2);
+    }
+
+    /// <summary>
     /// Loads of different keys do not wait for or serve each other.
     /// </summary>
     [Fact]

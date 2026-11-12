@@ -28,7 +28,8 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// host changing it at runtime is honored.</param>
 /// <param name="fetches">Shares one fetch of a URI among the callers asking for it at once, and serves a finished
 /// fetch, succeeded or failed, for the hold that follows it. Instances of this decorator are created per resolution,
-/// so the loader is the container's single one, and every consumer asking for the same URI shares its fetches.</param>
+/// so the loader is the container's single one, and consumers asking for the same URI share its fetches whenever
+/// they hold it for the same time.</param>
 public class CachingSecureHttpFetcherDecorator(
 	ISecureHttpFetcher inner,
 	IMemoryCache cache,

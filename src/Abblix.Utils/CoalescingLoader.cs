@@ -20,9 +20,10 @@ namespace Abblix.Utils;
 /// that is failing is asked again by every request until it recovers, so its load grows exactly while it is down.
 /// </para>
 /// <para>
-/// The hold is counted from the moment the load completes, so a slow load does not use it up, and the hold of an
-/// entry is the one passed by the caller that started its load. An entry past its hold is no longer served, and it is
-/// removed when a later load is added, so keys a caller chose and never asks for again do not accumulate.
+/// The hold is counted from the moment the load completes, on the monotonic clock, so neither a slow load nor a
+/// correction of the wall clock changes it, and the hold of an entry is the one passed by the caller that started its
+/// load. An entry past its hold is no longer served, and such entries are removed as loads are added, so keys a
+/// caller chose and never asks for again do not accumulate.
 /// </para>
 /// <para>
 /// The load runs under no caller's cancellation: it is shared, so one caller giving up must not fail the others.
@@ -36,19 +37,35 @@ namespace Abblix.Utils;
 public sealed class CoalescingLoader<TKey, TValue>(TimeProvider clock, IEqualityComparer<TKey>? comparer = null)
     where TKey : notnull
 {
-    private sealed class Entry
+    private sealed class Entry(TimeSpan hold)
     {
-        // Ticks of the instant the entry stops being served; the largest value while its load still runs
-        private long _servedUntil = long.MaxValue;
+        private const long Running = long.MinValue;
+
+        // The monotonic timestamp at which the load completed, Running until then
+        private long _completedAt = Running;
 
         public Lazy<Task<TValue>> Load { get; set; } = null!;
 
-        public void Complete(DateTimeOffset servedUntil) => Volatile.Write(ref _servedUntil, servedUntil.UtcTicks);
+        public void Complete(long timestamp) => Volatile.Write(ref _completedAt, timestamp);
 
-        public bool IsServedAt(DateTimeOffset now) => now.UtcTicks < Volatile.Read(ref _servedUntil);
+        public bool IsServed(TimeProvider clock)
+        {
+            var completedAt = Volatile.Read(ref _completedAt);
+            return completedAt == Running || clock.GetElapsedTime(completedAt) < hold;
+        }
     }
 
+    // The fewest additions between two sweeps, so a map holding few entries is not swept on every addition
+    private const int MinimumAdditionsBetweenSweeps = 64;
+
     private readonly ConcurrentDictionary<TKey, Entry> _entries = new(comparer);
+    private int _additionsSinceSweep;
+    private int _additionsBeforeSweep = MinimumAdditionsBetweenSweeps;
+
+    /// <summary>
+    /// The entries held, past their hold included until the next sweep.
+    /// </summary>
+    internal int Count => _entries.Count;
 
     /// <summary>
     /// Returns the load in flight or held for <paramref name="key"/>, or starts <paramref name="load"/> when there
@@ -69,10 +86,9 @@ public sealed class CoalescingLoader<TKey, TValue>(TimeProvider clock, IEquality
 
         while (true)
         {
-            var now = clock.GetUtcNow();
             if (_entries.TryGetValue(key, out var held))
             {
-                if (held.IsServedAt(now))
+                if (held.IsServed(clock))
                     return held.Load.Value.WaitAsync(cancellationToken);
 
                 // Replaces this entry only: a caller that replaced it first has started the next load, which is served
@@ -85,7 +101,7 @@ public sealed class CoalescingLoader<TKey, TValue>(TimeProvider clock, IEquality
                 var added = CreateEntry(key, load, hold);
                 if (_entries.TryAdd(key, added))
                 {
-                    RemoveExpired(now);
+                    SweepWhenDue();
                     return added.Load.Value.WaitAsync(cancellationToken);
                 }
             }
@@ -95,12 +111,12 @@ public sealed class CoalescingLoader<TKey, TValue>(TimeProvider clock, IEquality
     private Entry CreateEntry(TKey key, Func<TKey, Task<TValue>> load, TimeSpan hold)
     {
         // An entry that loses the race to be stored is dropped before its load is ever asked for
-        var entry = new Entry();
-        entry.Load = new Lazy<Task<TValue>>(() => Observed(RunAsync(key, entry, load, hold)));
+        var entry = new Entry(hold);
+        entry.Load = new Lazy<Task<TValue>>(() => Observed(RunAsync(key, entry, load)));
         return entry;
     }
 
-    private async Task<TValue> RunAsync(TKey key, Entry entry, Func<TKey, Task<TValue>> load, TimeSpan hold)
+    private async Task<TValue> RunAsync(TKey key, Entry entry, Func<TKey, Task<TValue>> load)
     {
         try
         {
@@ -108,12 +124,7 @@ public sealed class CoalescingLoader<TKey, TValue>(TimeProvider clock, IEquality
         }
         finally
         {
-            // Compared before adding, so no hold, however long or negative, makes the instant overflow
-            var now = clock.GetUtcNow();
-            if (hold <= TimeSpan.Zero)
-                entry.Complete(now);
-            else
-                entry.Complete(hold < DateTimeOffset.MaxValue - now ? now + hold : DateTimeOffset.MaxValue);
+            entry.Complete(clock.GetTimestamp());
         }
     }
 
@@ -129,12 +140,26 @@ public sealed class CoalescingLoader<TKey, TValue>(TimeProvider clock, IEquality
         return task;
     }
 
-    private void RemoveExpired(DateTimeOffset now)
+    /// <summary>
+    /// Removes the entries past their hold once as many entries have been added as the last sweep kept, so a sweep
+    /// costs, spread over the additions it follows, a constant amount per addition however many keys arrive, and the
+    /// map holds at most about twice the entries still within their hold.
+    /// </summary>
+    private void SweepWhenDue()
     {
+        if (Interlocked.Increment(ref _additionsSinceSweep) < Volatile.Read(ref _additionsBeforeSweep))
+            return;
+
+        Interlocked.Exchange(ref _additionsSinceSweep, 0);
+        var kept = 0;
         foreach (var (key, entry) in _entries)
         {
-            if (!entry.IsServedAt(now))
+            if (entry.IsServed(clock))
+                kept++;
+            else
                 _entries.TryRemove(new KeyValuePair<TKey, Entry>(key, entry));
         }
+
+        Volatile.Write(ref _additionsBeforeSweep, Math.Max(MinimumAdditionsBetweenSweeps, kept));
     }
 }
