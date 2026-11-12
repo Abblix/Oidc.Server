@@ -52,7 +52,8 @@ public class AuthServiceJwtValidatorTests
             _jwtValidator.Object,
             SingleIssuer.LicensedCatalog,
             _serviceKeysProvider.Object,
-            NothingRecorded.StatusCheck);
+            NothingRecorded.StatusCheck,
+            TestOidcOptions.Monitor());
     }
 
     /// <summary>
@@ -700,7 +701,8 @@ public class AuthServiceJwtValidatorTests
             _jwtValidator.Object,
             SingleIssuer.HostCatalog,
             _serviceKeysProvider.Object,
-            NothingRecorded.StatusCheck);
+            NothingRecorded.StatusCheck,
+            TestOidcOptions.Monitor());
 
         var token = CreateValidToken();
         token.Header.Type = type;
@@ -730,7 +732,8 @@ public class AuthServiceJwtValidatorTests
             new TokenStatusCheck(
                 registry.Object,
                 new Mock<IRevocationCutoffChecker>(MockBehavior.Strict).Object,
-                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>())));
+                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>())),
+            TestOidcOptions.Monitor());
 
         var token = CreateValidToken();
         token.Header.Type = JwtTypes.RefreshToken;

@@ -21,10 +21,22 @@ public sealed class ClockSkewValidator : IValidateOptions<OidcOptions>
 {
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
-        => options.JwtBearer.ClockSkew is { } skew && skew < TimeSpan.Zero
-            ? ValidateOptionsResult.Fail(
+    {
+        if (options.JwtBearer.ClockSkew is { } skew && skew < TimeSpan.Zero)
+        {
+            return ValidateOptionsResult.Fail(
                 $"{nameof(OidcOptions.JwtBearer)}.{nameof(JwtBearerOptions.ClockSkew)} is {skew}, " +
                 "which refuses an assertion valid at the instant its request arrives instead of " +
-                "allowing for clock offset. Set a value of zero or more.")
-            : ValidateOptionsResult.Success;
+                "allowing for clock offset. Set a value of zero or more.");
+        }
+
+        if (options.IssuedTokenClockSkew < TimeSpan.Zero)
+        {
+            return ValidateOptionsResult.Fail(
+                $"{nameof(OidcOptions.IssuedTokenClockSkew)} is {options.IssuedTokenClockSkew}, which refuses a " +
+                "token this server issued even on the node that issued it. Set a value of zero or more.");
+        }
+
+        return ValidateOptionsResult.Success;
+    }
 }

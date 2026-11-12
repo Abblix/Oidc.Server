@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -139,7 +140,8 @@ public class RevocationFollowsTheValidatedTenantTests
             new TokenStatusCheck(
                 registry.Object,
                 cutoffs.Object,
-                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>())));
+                new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>())),
+            TestOidcOptions.Monitor());
 
         // The request served at a tenant, as tenant resolution leaves it, around the validation
         using var request = TenantScope.Enter(servedAt);

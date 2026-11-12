@@ -7,12 +7,14 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Utils;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
@@ -25,11 +27,14 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="serviceKeysProvider">The provider used to retrieve the cryptographic keys for signing and
 /// decrypting tokens.</param>
 /// <param name="statusCheck">Refuses a token revoked, rotated or cut off at the tenant it is validated for.</param>
+/// <param name="oidcOptions">Supplies <see cref="OidcOptions.IssuedTokenClockSkew"/>, read on each validation so a host
+/// changing it at runtime is honored.</param>
 public class AuthServiceJwtValidator(
 	IJsonWebTokenValidator validator,
 	ITenantCatalog catalog,
 	IAuthServiceKeysProvider serviceKeysProvider,
-	TokenStatusCheck statusCheck) : IAuthServiceJwtValidator
+	TokenStatusCheck statusCheck,
+	IOptionsMonitor<OidcOptions> oidcOptions) : IAuthServiceJwtValidator
 {
 
 	/// <summary>
@@ -59,11 +64,11 @@ public class AuthServiceJwtValidator(
 				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(tenant),
 				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
 
-				// No profile tolerance here, and the absence is a decision. These are tokens this
-				// server issued and reads back, so the freshness a profile bounds is not the
-				// question: a tolerance tight enough for a third party would turn one node running
-				// ahead of another into a refusal of this server's own refresh token, which is an
-				// operational hazard rather than the requirement.
+				// These are tokens this server issued and reads back, often on another node whose clock lags the
+				// issuing one, so a token dated a little ahead is still this server's own. Only that direction is
+				// tolerated: the expiry the issuing node set is a deadline no node moves. A profile's bound on a
+				// third party's freshness is not the question here.
+				ClockSkew = new ClockSkew { Past = TimeSpan.Zero, Future = oidcOptions.CurrentValue.IssuedTokenClockSkew },
 			});
 
 		if (!result.TryGetSuccess(out var token))

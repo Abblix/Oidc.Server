@@ -130,6 +130,18 @@ public record OidcOptions
 	public TimeSpan KeyRolloverPropagation { get; set; } = TimeSpan.FromHours(1);
 
 	/// <summary>
+	/// How far ahead of this node's clock the <c>nbf</c> or <c>iat</c> of a token this server issued may be when it
+	/// is read back, as an access or refresh token is at the next request. Defaults to five seconds.
+	/// </summary>
+	/// <remarks>
+	/// The node reading a token is often not the one that issued it, and its clock may lag by a little, so a token
+	/// presented within the second it was issued would otherwise be refused as not yet valid. The tolerance applies
+	/// only to a token dated ahead: it never keeps a token alive past the <c>exp</c> it carries. Zero refuses any
+	/// token dated ahead of this node's clock; a negative value is refused at startup.
+	/// </remarks>
+	public TimeSpan IssuedTokenClockSkew { get; set; } = TimeSpan.FromSeconds(5);
+
+	/// <summary>
 	/// The default content encryption algorithm used for encrypting JWT tokens.
 	/// Per RFC 7518 Section 5, specifies how the JWT payload is encrypted using the Content Encryption Key (CEK).
 	/// Common values: A256CBC-HS512, A128CBC-HS256, A256GCM, A128GCM.

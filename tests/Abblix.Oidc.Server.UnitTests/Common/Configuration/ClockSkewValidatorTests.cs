@@ -25,6 +25,9 @@ public class ClockSkewValidatorTests
             null,
             new OidcOptions { JwtBearer = new JwtBearerOptions { ClockSkew = skew } });
 
+    private static ValidateOptionsResult ValidateIssued(TimeSpan skew)
+        => new ClockSkewValidator().Validate(null, new OidcOptions { IssuedTokenClockSkew = skew });
+
     [Fact]
     public void Negative_Fails()
     {
@@ -49,5 +52,31 @@ public class ClockSkewValidatorTests
     public void NothingSet_Succeeds()
     {
         Assert.False(Validate(null).Failed);
+    }
+
+    /// <summary>
+    /// A negative tolerance for the server's own tokens refuses one even on the node that issued it, so it is refused
+    /// at startup, naming the setting.
+    /// </summary>
+    [Fact]
+    public void ANegativeToleranceForIssuedTokens_Fails_NamingTheSetting()
+    {
+        var result = ValidateIssued(TimeSpan.FromSeconds(-1));
+
+        Assert.True(result.Failed);
+        Assert.Contains(nameof(OidcOptions.IssuedTokenClockSkew), result.FailureMessage);
+    }
+
+    /// <summary>
+    /// Zero and positive tolerances for the server's own tokens pass, so the refusal above cannot be satisfied by a
+    /// guard that refuses everything.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(5)]
+    [InlineData(60)]
+    public void AToleranceForIssuedTokensOfZeroOrMore_Succeeds(int seconds)
+    {
+        Assert.False(ValidateIssued(TimeSpan.FromSeconds(seconds)).Failed);
     }
 }
