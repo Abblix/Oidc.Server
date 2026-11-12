@@ -37,12 +37,14 @@ public class CachingSecureHttpFetcherDecoratorTests
         TimeProvider? time = null)
     {
         var inner = new Mock<ISecureHttpFetcher>(MockBehavior.Strict);
-        var cache = new MemoryCache(new MemoryCacheOptions { Clock = new StoreClock(time ?? new FakeTimeProvider()) });
+        time ??= new FakeTimeProvider();
+        var cache = new MemoryCache(new MemoryCacheOptions { Clock = new StoreClock(time) });
         var options = new Mock<IOptionsMonitor<SecureHttpFetchOptions>>();
         options
             .Setup(monitor => monitor.CurrentValue)
             .Returns(new SecureHttpFetchOptions { RefetchInterval = refetchInterval ?? TimeSpan.FromMinutes(1) });
-        return (new CachingSecureHttpFetcherDecorator(inner.Object, cache, cacheDuration, options.Object), inner);
+        var fetches = new CoalescingLoader<string, object>(time);
+        return (new CachingSecureHttpFetcherDecorator(inner.Object, cache, cacheDuration, options.Object, fetches), inner);
     }
 
     /// <summary>
@@ -83,19 +85,72 @@ public class CachingSecureHttpFetcherDecoratorTests
     }
 
     /// <summary>
-    /// A failed fetch is not cached, so a transient failure does not lock the consumer out for the whole
-    /// lifetime: the next call tries again.
+    /// A failed fetch answers the fetches after it for the refetch interval, so a URI that is down is not reached
+    /// by every request meanwhile, and is not held for the document's lifetime: once the interval has passed, the
+    /// next fetch tries again.
     /// </summary>
     [Fact]
-    public async Task FailedFetch_IsNotCached()
+    public async Task FailedFetch_IsHeldForTheRefetchInterval_AndTriedAgainAfterIt()
     {
-        var (decorator, inner) = Create(TimeSpan.FromHours(1));
+        var time = new FakeTimeProvider();
+        var (decorator, inner) = Create(TimeSpan.FromHours(1), refetchInterval: TimeSpan.FromMinutes(1), time: time);
         inner
             .Setup(f => f.FetchAsync<string>(KeySetUri))
             .ReturnsAsync(new OidcError(ErrorCodes.ServerError, "unreachable"));
 
         await decorator.FetchAsync<string>(KeySetUri);
+        var held = await decorator.FetchAsync<string>(KeySetUri);
+        Assert.True(held.TryGetFailure(out _));
+        inner.Verify(f => f.FetchAsync<string>(KeySetUri), Times.Once);
+
+        time.Advance(TimeSpan.FromMinutes(1));
         await decorator.FetchAsync<string>(KeySetUri);
+        inner.Verify(f => f.FetchAsync<string>(KeySetUri), Times.Exactly(2));
+    }
+
+    /// <summary>
+    /// Requests arriving together for a document that is not held share one fetch, so the URI is reached once
+    /// however many of them a sender fires at the same moment.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentFetches_OfADocumentNotHeld_AwaitTheSameFetch()
+    {
+        var (decorator, inner) = Create(TimeSpan.FromHours(1));
+        var pending = new TaskCompletionSource<Result<string, OidcError>>();
+        inner.Setup(f => f.FetchAsync<string>(KeySetUri)).Returns(pending.Task);
+
+        // Every request has asked before the URI answers, so neither the cache nor the hold can answer for the sharing
+        var fetches = Enumerable.Range(0, 32)
+            .Select(_ => decorator.FetchAsync<string>(KeySetUri))
+            .ToArray();
+        pending.SetResult("key-set");
+
+        foreach (var fetch in await Task.WhenAll(fetches))
+            Assert.Equal("key-set", fetch.GetSuccess());
+        inner.Verify(f => f.FetchAsync<string>(KeySetUri), Times.Once);
+    }
+
+    /// <summary>
+    /// The loader is shared by every consumer, and a consumer caching for less, or not at all, is not answered with a
+    /// failure another consumer holds for its own interval: it reaches the URI itself.
+    /// </summary>
+    [Fact]
+    public async Task AFailureHeldForOneConsumer_DoesNotAnswerAConsumerThatHoldsNothing()
+    {
+        var time = new FakeTimeProvider();
+        var inner = new Mock<ISecureHttpFetcher>(MockBehavior.Strict);
+        inner
+            .Setup(f => f.FetchAsync<string>(KeySetUri))
+            .ReturnsAsync(new OidcError(ErrorCodes.ServerError, "unreachable"));
+        var cache = new MemoryCache(new MemoryCacheOptions { Clock = new StoreClock(time) });
+        var options = new Mock<IOptionsMonitor<SecureHttpFetchOptions>>();
+        options.Setup(monitor => monitor.CurrentValue).Returns(new SecureHttpFetchOptions());
+        var fetches = new CoalescingLoader<string, object>(time);
+        var caching = new CachingSecureHttpFetcherDecorator(inner.Object, cache, TimeSpan.FromHours(1), options.Object, fetches);
+        var uncached = new CachingSecureHttpFetcherDecorator(inner.Object, cache, TimeSpan.Zero, options.Object, fetches);
+
+        await caching.FetchAsync<string>(KeySetUri);
+        await uncached.FetchAsync<string>(KeySetUri);
 
         inner.Verify(f => f.FetchAsync<string>(KeySetUri), Times.Exactly(2));
     }

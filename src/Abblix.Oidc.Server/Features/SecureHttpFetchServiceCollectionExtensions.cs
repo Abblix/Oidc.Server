@@ -9,6 +9,7 @@
 using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -21,6 +22,10 @@ namespace Abblix.Oidc.Server.Features;
 /// </summary>
 public static class SecureHttpFetchServiceCollectionExtensions
 {
+    // Keyed so that only the cached fetchers below receive this loader: one the container hands out by its type alone
+    // would be whatever a host registered under that type for its own purposes
+    private const string FetchesKey = nameof(SecureHttpFetchServiceCollectionExtensions);
+
     /// <summary>
     /// Registers secure HTTP fetching services with SSRF (Server-Side Request Forgery) protection.
     /// This method configures the HTTP client for fetching external content (such as sector identifier URIs
@@ -57,6 +62,16 @@ public static class SecureHttpFetchServiceCollectionExtensions
             optionsBuilder.Configure(configure);
         }
 
+        // A host calling this again to configure the options gets only that: decorating the fetchers a second time
+        // would wrap each in another cached fetcher sharing the loader under the same key, and the inner one would ask
+        // the loader for the very load it is running
+        if (services.Any(descriptor =>
+                descriptor is { IsKeyedService: true, ServiceKey: FetchesKey, ServiceType: var serviceType }
+                && serviceType == typeof(CoalescingLoader<string, object>)))
+        {
+            return services;
+        }
+
         // The framework resolves every registered validator, so this joins the set rather than replacing
         // whatever a host registered for the same options.
         services.TryAddEnumerable(
@@ -76,6 +91,13 @@ public static class SecureHttpFetchServiceCollectionExtensions
             var options = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value;
             client.Timeout = options.RequestTimeout;
         });
+
+        // The cached fetchers are created per resolution, so the fetches they share live in one loader of the
+        // container's, and every consumer asking for the same URI at once shares a single fetch
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddKeyedSingleton(
+            FetchesKey,
+            (serviceProvider, _) => new CoalescingLoader<string, object>(serviceProvider.GetRequiredService<TimeProvider>()));
 
         // One cached fetcher per consumer, each keyed by who asks and carrying its own lifetime. Caching used
         // to hang off a single service key that only the JWT bearer grant read, so client, software-statement
@@ -101,7 +123,8 @@ public static class SecureHttpFetchServiceCollectionExtensions
             KeySetOwners.Issuer,
             Dependency.Override(serviceProvider => serviceProvider
                 .GetRequiredService<IOptionsMonitor<OidcOptions>>()
-                .CurrentValue.JwtBearer.JwksCacheDuration));
+                .CurrentValue.JwtBearer.JwksCacheDuration),
+            SharedFetches());
 
         return services;
     }
@@ -121,5 +144,10 @@ public static class SecureHttpFetchServiceCollectionExtensions
         => services.DecorateKeyed<ISecureHttpFetcher, CachingSecureHttpFetcherDecorator>(
             consumer,
             Dependency.Override(serviceProvider => duration(
-                serviceProvider.GetRequiredService<IOptionsMonitor<SecureHttpFetchOptions>>().CurrentValue)));
+                serviceProvider.GetRequiredService<IOptionsMonitor<SecureHttpFetchOptions>>().CurrentValue)),
+            SharedFetches());
+
+    private static Dependency SharedFetches()
+        => Dependency.Override(serviceProvider =>
+            serviceProvider.GetRequiredKeyedService<CoalescingLoader<string, object>>(FetchesKey));
 }

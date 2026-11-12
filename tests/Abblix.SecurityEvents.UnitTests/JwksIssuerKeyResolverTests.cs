@@ -369,6 +369,136 @@ public class JwksIssuerKeyResolverTests
         Assert.Equal(2, handler.Requests.Count);
     }
 
+    /// <summary>
+    /// Holds every request until released, counting them: resolutions arriving while the first
+    /// fetch is in flight are what the count is about.
+    /// </summary>
+    private sealed class GatedJwksHandler(JsonWebKeySet keySet) : HttpMessageHandler
+    {
+        private int _requests;
+
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int Requests => Volatile.Read(ref _requests);
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _requests);
+            await Release.Task;
+
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(keySet) };
+        }
+    }
+
+    /// <summary>
+    /// Answers every request with a server error, counting them, as an issuer that is down does.
+    /// </summary>
+    private sealed class FailingHandler : HttpMessageHandler
+    {
+        public int Requests { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Requests++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        }
+    }
+
+    /// <summary>
+    /// Tokens arriving together with a "kid" nobody published share one fetch: the issuer is asked
+    /// once, however many of them a sender fires at the same moment.
+    /// </summary>
+    [Fact]
+    public async Task ResolutionsArrivingTogether_FetchTheDocumentOnce()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new GatedJwksHandler(new JsonWebKeySet([key]));
+        var resolver = Resolver(handler, new FakeTimeProvider(Now));
+
+        // Every resolution has asked before the issuer answers
+        var resolutions = Enumerable.Range(0, 16)
+            .Select(_ => Resolve(resolver, "kid-that-exists-nowhere"))
+            .ToArray();
+        handler.Release.SetResult();
+
+        Assert.All(await Task.WhenAll(resolutions), keys => Assert.Equal(key.KeyId, Assert.Single(keys).KeyId));
+        Assert.Equal(1, handler.Requests);
+    }
+
+    /// <summary>
+    /// A resolution giving up ends its own wait only: the fetch it started goes on for the
+    /// resolutions waiting beside it, and the issuer is not asked again for them.
+    /// </summary>
+    [Fact]
+    public async Task AResolutionGivingUp_DoesNotFailTheFetchForTheOthers()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new GatedJwksHandler(new JsonWebKeySet([key]));
+        var resolver = Resolver(handler, new FakeTimeProvider(Now));
+        using var givingUp = new CancellationTokenSource();
+
+        var abandoned = resolver.ResolveSigningKeysAsync(Issuer, null, givingUp.Token)
+            .GetAsyncEnumerator(givingUp.Token).MoveNextAsync().AsTask();
+        var waiting = Resolve(resolver);
+        await givingUp.CancelAsync();
+        handler.Release.SetResult();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => abandoned);
+        Assert.Equal(key.KeyId, Assert.Single(await waiting).KeyId);
+        Assert.Equal(1, handler.Requests);
+    }
+
+    /// <summary>
+    /// A copy whose lifetime is shorter than the cooldown is fetched anew once it expires, so a key
+    /// the issuer removed stops verifying when the host said it would, not when the cooldown ends.
+    /// </summary>
+    [Fact]
+    public async Task ACacheLifetimeShorterThanTheCooldown_StillRefetchesOnExpiry()
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var handler = new CountingJwksHandler(() => new JsonWebKeySet([key]));
+        var clock = new FakeTimeProvider(Now);
+        var resolver = Resolver(handler, clock, new JwksKeyResolutionOptions
+        {
+            CacheLifetime = TimeSpan.FromSeconds(5),
+            RolloverRefetchCooldown = TimeSpan.FromSeconds(30),
+        });
+
+        await Resolve(resolver);
+        clock.Advance(TimeSpan.FromSeconds(6));
+        await Resolve(resolver);
+
+        Assert.Equal(2, handler.Requests.Count);
+    }
+
+    /// <summary>
+    /// A fetch that failed answers the resolutions after it with its failure until the cooldown has
+    /// passed, so an issuer that is down is not asked again by every token; after the cooldown the
+    /// next resolution asks again.
+    /// </summary>
+    [Fact]
+    public async Task AFailedFetch_IsNotRepeatedWithinTheCooldown()
+    {
+        var handler = new FailingHandler();
+        var clock = new FakeTimeProvider(Now);
+        var resolver = Resolver(handler, clock, new JwksKeyResolutionOptions
+        {
+            RolloverRefetchCooldown = TimeSpan.FromSeconds(30),
+        });
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => Resolve(resolver));
+        await Assert.ThrowsAsync<HttpRequestException>(() => Resolve(resolver));
+        Assert.Equal(1, handler.Requests);
+
+        clock.Advance(TimeSpan.FromSeconds(30));
+        await Assert.ThrowsAsync<HttpRequestException>(() => Resolve(resolver));
+        Assert.Equal(2, handler.Requests);
+    }
+
     [Fact]
     public async Task KnownKeyIdentifier_NeverRefetches()
     {
