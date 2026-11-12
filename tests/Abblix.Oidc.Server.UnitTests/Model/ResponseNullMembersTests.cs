@@ -55,4 +55,24 @@ public class ResponseNullMembersTests
 
         Assert.DoesNotContain(written, member => member.Value is null);
     }
+
+    /// <summary>
+    /// The tokens a push-mode CIBA client is sent carry the same optional members (CIBA Core section 10.3.1), and are
+    /// written with the serializer's defaults rather than any options of the host, so the member itself has to say it.
+    /// </summary>
+    [Fact]
+    public void ACibaPushNotificationWithOnlyItsRequiredMembersWritesNoNull()
+    {
+        var notification = new BackChannelPushNotificationRequest
+        {
+            AuthenticationRequestId = "auth-req-id",
+            AccessToken = "access-token",
+            TokenType = "Bearer",
+            ExpiresIn = TimeSpan.FromMinutes(5),
+        };
+
+        var written = JsonNode.Parse(JsonSerializer.Serialize(notification, new JsonSerializerOptions()))!.AsObject();
+
+        Assert.DoesNotContain(written, member => member.Value is null);
+    }
 }

@@ -46,12 +46,14 @@ public sealed record BackChannelPushNotificationRequest : IBackChannelNotificati
     /// The ID token, if requested.
     /// </summary>
     [JsonPropertyName(Parameters.IdToken)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? IdToken { get; init; }
 
     /// <summary>
     /// The refresh token, if issued.
     /// </summary>
     [JsonPropertyName(Parameters.RefreshToken)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? RefreshToken { get; init; }
 
     /// <summary>
