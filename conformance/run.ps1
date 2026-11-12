@@ -264,6 +264,22 @@ if (-not (Get-Command docker -CommandType Application -ErrorAction SilentlyConti
     throw 'docker was not found on PATH: the suite and the host both run in containers'
 }
 
+function Get-RunContainers {
+    # The containers a run starts are found by their fixed names and by the compose project, so another run on this
+    # machine, or one left running with -KeepRunning, is seen before this one touches anything of it
+    $named = @(docker ps -a --format '{{.Names}}' --filter "name=^${HostContainer}$" --filter "name=^${BrowserContainer}$")
+    Assert-LastExit 'docker ps'
+    $composed = @(docker ps -a --format '{{.Names}}' --filter "label=com.docker.compose.project=$ProjectName")
+    Assert-LastExit 'docker ps'
+    @($named + $composed | Where-Object { $_ } | Sort-Object -Unique)
+}
+
+$running = Get-RunContainers
+if ($running) {
+    throw "Another conformance run is going on this machine, or one left its containers: $($running -join ', '). " +
+        "Wait for it to finish, or remove them with: docker rm -f $HostContainer $BrowserContainer; docker compose -p $ProjectName down"
+}
+
 if ($ResultsPath) {
     # Two runs' evidence in one place cannot be told apart afterwards
     if ((Test-Path -LiteralPath $ResultsPath) -and (-not (Test-Path -LiteralPath $ResultsPath -PathType Container) -or
