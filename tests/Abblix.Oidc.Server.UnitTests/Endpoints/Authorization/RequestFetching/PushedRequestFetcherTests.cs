@@ -135,7 +135,7 @@ public class PushedRequestFetcherTests
         var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class PushedRequestFetcherTests
         var result = await CreateFetcher(serverWideRequirement: true).FetchAsync(SingleIssuer.Tenant, CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
         _clientInfoProvider.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
@@ -183,7 +183,7 @@ public class PushedRequestFetcherTests
         var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     /// <summary>
@@ -201,7 +201,7 @@ public class PushedRequestFetcherTests
             .FetchAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), CreateRequest());
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     /// <summary>
@@ -223,6 +223,6 @@ public class PushedRequestFetcherTests
         var result = await CreateFetcher().FetchAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), request);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 }

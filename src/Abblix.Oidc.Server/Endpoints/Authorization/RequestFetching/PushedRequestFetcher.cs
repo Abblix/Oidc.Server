@@ -63,15 +63,17 @@ public class PushedRequestFetcher(
             return await FetchPushedAsync(tenant, requestUrn, request.ClientId);
         }
 
-        // If PAR is required by server configuration, return an error if no pushed authorization request is provided
+        // RFC 9126 section 4: where PAR is the only way in, the server "will refuse, using the "invalid_request" error
+        // code, to process any request to the authorization endpoint that does not have a "request_uri" parameter
+        // with a value obtained from the PAR endpoint"
         if (options.Value.RequirePushedAuthorizationRequests)
         {
-            return ErrorFactory.InvalidRequestObject("The Pushed Authorization Request (PAR) is required");
+            return ErrorFactory.InvalidRequest("The Pushed Authorization Request (PAR) is required");
         }
 
         if (await ClientRequiresPushedRequestsAsync(tenant, request.ClientId))
         {
-            return ErrorFactory.InvalidRequestObject(
+            return ErrorFactory.InvalidRequest(
                 "The client is required to use Pushed Authorization Requests (PAR)");
         }
 
