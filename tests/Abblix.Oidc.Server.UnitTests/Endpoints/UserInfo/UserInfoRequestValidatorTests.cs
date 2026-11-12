@@ -109,21 +109,29 @@ public class UserInfoRequestValidatorTests
             requestedClaims: null);
     }
 
+    public static TheoryData<string> SupportedSchemesInAnyCase() =>
+    [
+        TokenTypes.Bearer,
+        TokenTypes.Bearer.ToLowerInvariant(),
+        TokenTypes.DPoP,
+        TokenTypes.DPoP.ToLowerInvariant(),
+        TokenTypes.DPoP.ToUpperInvariant(),
+    ];
+
     /// <summary>
     /// Verifies successful validation with valid token in Authorization header.
     /// Per OIDC Core, access token should be passed via Bearer scheme.
     /// </summary>
     /// <remarks>
-    /// RFC 9110 section 11.1 identifies the scheme by a case-insensitive token, so the scheme in any case is accepted.
+    /// RFC 9110 section 11.1 identifies the scheme by a case-insensitive token, so either supported scheme in any case
+    /// is accepted; the DPoP binding itself is the DPoP validator's to judge.
     /// </remarks>
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ValidateAsync_WithValidTokenInHeader_ShouldReturnValidRequest(bool schemeInLowerCase)
+    [MemberData(nameof(SupportedSchemesInAnyCase))]
+    public async Task ValidateAsync_WithValidTokenInHeader_ShouldReturnValidRequest(string scheme)
     {
         // Arrange
         var userInfoRequest = CreateUserInfoRequest();
-        var scheme = schemeInLowerCase ? TokenTypes.Bearer.ToLowerInvariant() : TokenTypes.Bearer;
         var authHeader = new AuthenticationHeaderValue(scheme, "valid_token_123");
         var clientRequest = CreateClientRequest(authHeader: authHeader);
 
