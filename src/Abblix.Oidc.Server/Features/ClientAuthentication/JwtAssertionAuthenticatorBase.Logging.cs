@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -88,13 +89,15 @@ partial class JwtAssertionAuthenticatorBase
     private partial void LogTimestampsOutsideTheClientsProfile(string ClientId, string Refusal);
 
     [LoggerMessage(
-        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotTheIssuerAlone,
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotOneTheClientMayName,
         Level = LogLevel.Warning,
-        Message = "The client assertion for {ClientId} carries the audience {Audience} where only the issuer "
-                  + "identifier {IssuerIdentifier}, alone and in the form the client's profile accepts, is its audience")]
-    private partial void LogAudienceIsNotTheIssuerAlone(
+        Message = "The client assertion for {ClientId} carries the audience {Audience}, which its assertion "
+                  + "audiences {Audiences}, as its profile narrows them, do not admit; the issuer identifier is "
+                  + "{IssuerIdentifier}")]
+    private partial void LogAudienceIsNotOneTheClientMayName(
         string ClientId,
         Sanitized Audience,
+        ClientAssertionAudiences Audiences,
         string IssuerIdentifier);
 
     [LoggerMessage(
@@ -107,6 +110,6 @@ partial class JwtAssertionAuthenticatorBase
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.TokenEndpointAudienceAccepted,
         Level = LogLevel.Debug,
         Message = "The client assertion for {ClientId} names the token endpoint URL as its audience, accepted because "
-                  + "the client is allowed it in place of the issuer identifier")]
+                  + "the client's assertion audiences include it")]
     private partial void LogTokenEndpointAudienceAccepted(string ClientId);
 }

@@ -156,9 +156,10 @@ public sealed record SecurityProfileRequirements
     public bool RequireKeyBasedClientAuthentication { get; init; }
 
     /// <summary>
-    /// The profile accepts the issuer identifier in the audience of a client authentication assertion only as a
-    /// string, never as the one member of an array, which RFC 10070 section 4 otherwise admits. Enforced by
-    /// <c>Features.ClientAuthentication.JwtAssertionAuthenticatorBase</c>.
+    /// The profile accepts in the audience of a client authentication assertion only the issuer identifier, as a
+    /// string, whatever <see cref="ClientInfo.ClientAssertionAudiences"/> the host allows the client: neither the
+    /// token endpoint URL nor an array. Enforced by <c>Features.ClientAuthentication.JwtAssertionAuthenticatorBase</c>,
+    /// and refused in the client's configuration by <see cref="SecurityProfileConsistency"/>.
     /// </summary>
     public bool RequireStringAudienceInClientAssertion { get; init; }
 

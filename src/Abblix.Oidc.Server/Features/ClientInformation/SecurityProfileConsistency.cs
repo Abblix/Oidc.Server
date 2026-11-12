@@ -30,9 +30,9 @@ public static class SecurityProfileConsistency
     /// </summary>
     /// <param name="allowedResponseTypes">The response-type combinations the client is registered for.</param>
     /// <param name="tokenEndpointAuthMethod">How the client authenticates at the token endpoint.</param>
-    /// <param name="acceptsTokenEndpointAudience">Whether the client may name the token endpoint URL as the audience of
-    /// its authentication assertions (<see cref="ClientInfo.AcceptTokenEndpointAsClientAssertionAudience"/>); always
-    /// false for a registration, which cannot ask for it.</param>
+    /// <param name="assertionAudiences">What the client's authentication assertions may name as their audience
+    /// (<see cref="ClientInfo.ClientAssertionAudiences"/>); always <see cref="ClientAssertionAudiences.Issuer"/> for a
+    /// registration, which cannot ask for more.</param>
     /// <param name="requirements">The control bundle the client is held to, floor included.</param>
     /// <remarks>
     /// The BUNDLE rather than a profile name, because a client is held to the deployment's profile
@@ -45,10 +45,10 @@ public static class SecurityProfileConsistency
     public static IReadOnlyList<string> FindViolations(
         IReadOnlyList<string[]> allowedResponseTypes,
         string tokenEndpointAuthMethod,
-        bool acceptsTokenEndpointAudience,
+        ClientAssertionAudiences assertionAudiences,
         SecurityProfileRequirements requirements)
     {
-        var violations = new List<string>(TokenEndpointAudienceViolations(acceptsTokenEndpointAudience, requirements));
+        var violations = new List<string>(AssertionAudienceViolations(assertionAudiences, requirements));
 
         // RFC 6749 draws the line at whether the client can hold a credential at all, and the
         // registered authentication method is where that shows: a client authenticating with
@@ -97,16 +97,18 @@ public static class SecurityProfileConsistency
 
     /// <summary>
     /// FAPI 2.0 section 5.3.2.1: the server "shall only accept its issuer identifier value ... as a string in the aud
-    /// claim received in client authentication assertions", which leaves no room for the token endpoint URL.
+    /// claim received in client authentication assertions", which leaves no room for the token endpoint URL or an
+    /// array.
     /// </summary>
-    private static IEnumerable<string> TokenEndpointAudienceViolations(
-        bool acceptsTokenEndpointAudience,
+    private static IEnumerable<string> AssertionAudienceViolations(
+        ClientAssertionAudiences assertionAudiences,
         SecurityProfileRequirements requirements)
     {
-        if (requirements.RequireStringAudienceInClientAssertion && acceptsTokenEndpointAudience)
+        if (requirements.RequireStringAudienceInClientAssertion &&
+            assertionAudiences != ClientAssertionAudiences.Issuer)
         {
-            yield return "the FAPI 2.0 Security Profile accepts only the issuer identifier as the audience of a " +
-                         "client assertion, but the client is allowed the token endpoint URL";
+            yield return "the FAPI 2.0 Security Profile accepts only the issuer identifier, as a string, as the " +
+                         $"audience of a client assertion, but the client is allowed {assertionAudiences}";
         }
     }
 

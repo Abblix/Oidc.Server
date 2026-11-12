@@ -55,7 +55,7 @@ public sealed class SecurityProfileCheck : ITenantsCheck
                 from violation in SecurityProfileConsistency.FindViolations(
                     client.EffectiveResponseTypes,
                     client.TokenEndpointAuthMethod,
-                    client.AcceptTokenEndpointAsClientAssertionAudience,
+                    client.ClientAssertionAudiences,
                     SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile))
                 select $"Client '{client.ClientId}': {violation}.");
         }

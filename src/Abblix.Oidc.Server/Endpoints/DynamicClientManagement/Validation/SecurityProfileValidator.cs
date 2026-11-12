@@ -35,7 +35,7 @@ public class SecurityProfileValidator : SyncClientRegistrationContextValidator
         var violations = SecurityProfileConsistency.FindViolations(
             context.Request.ResponseTypes,
             context.Request.TokenEndpointAuthMethod,
-            acceptsTokenEndpointAudience: false,
+            assertionAudiences: ClientAssertionAudiences.Issuer,
             SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile));
 
         return violations.Count == 0

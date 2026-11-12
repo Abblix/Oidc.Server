@@ -131,8 +131,10 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     }
 
     /// <summary>
-    /// Answers whether the assertion names this tenant's issuer identifier as its sole audience, or, for a client
-    /// granted <see cref="ClientInfo.AcceptTokenEndpointAsClientAssertionAudience"/>, the token endpoint URL alone.
+    /// Answers whether the assertion names an audience of <see cref="ClientInfo.ClientAssertionAudiences"/> in a form
+    /// the set admits: this tenant's issuer identifier, or, for a client granted
+    /// <see cref="ClientAssertionAudiences.TokenEndpoint"/>, the token endpoint URL, as a string, or in an array of
+    /// strings beside others for a client granted <see cref="ClientAssertionAudiences.AllowArray"/>.
     /// </summary>
     /// <remarks>
     /// RFC 10070 section 4 (case B, client authentication): the authorization server "MUST reject any JWT that
@@ -143,29 +145,33 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// would let an assertion a client minted for another server be presented here. The claim is
     /// read as written rather than through the typed accessor, which skips members that are not strings and
     /// would read the issuer beside one as the sole value. Compared by RFC 3986 section 6.2.1, as section 4
-    /// prescribes. A profile may narrow the form further: FAPI 2.0 section 5.3.2.1 takes the issuer only as a
-    /// string, never as the one member of an array.
+    /// prescribes. A profile may narrow the set: FAPI 2.0 section 5.3.2.1 takes the issuer identifier alone, so
+    /// under such a profile the token endpoint URL and an array are refused whatever the client was granted, and
+    /// the client is refused here before its jti is spent, whatever order the authenticators run in.
     /// </remarks>
     private bool AudienceIsAccepted(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo)
     {
         var issuerIdentifier = tenant.Issuer.OriginalString;
-        var asStringOnly = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile)
+        var issuerOnly = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile)
             .RequireStringAudienceInClientAssertion;
 
-        var audience = token.Payload.Json[JwtClaimTypes.Audience];
-        var isTheIssuerAlone = audience switch
-        {
-            JsonValue value => IsTheIssuer(value),
-            JsonArray { Count: 1 } array when !asStringOnly => array[0] is JsonValue onlyMember && IsTheIssuer(onlyMember),
-            _ => false,
-        };
+        // What the client may name once its profile has narrowed the set, so the refusal logs what was applied
+        var audiences = issuerOnly
+            ? ClientAssertionAudiences.Issuer
+            : clientInfo.ClientAssertionAudiences;
+        var allowArray = audiences.HasFlag(ClientAssertionAudiences.AllowArray);
 
-        if (isTheIssuerAlone)
+        var audience = token.Payload.Json[JwtClaimTypes.Audience];
+        if (audiences.HasFlag(ClientAssertionAudiences.Issuer) &&
+            Names(audience, allowArray, written => written == issuerIdentifier))
         {
             return true;
         }
 
-        if (!asStringOnly && IsTheTokenEndpointThisClientIsAllowed(tenant, clientInfo, audience))
+        // Resolved only now, since it takes a scope of its own, which a client naming the issuer never needs
+        if (audiences.HasFlag(ClientAssertionAudiences.TokenEndpoint) &&
+            tenant.TokenEndpointSpellings(serviceProvider) is var tokenEndpoint &&
+            Names(audience, allowArray, written => tokenEndpoint.Contains(written, StringComparer.Ordinal)))
         {
             LogTokenEndpointAudienceAccepted(clientInfo.ClientId);
             return true;
@@ -173,26 +179,30 @@ public abstract partial class JwtAssertionAuthenticatorBase(
 
         // Logged from the claim itself: the typed accessor skips members that are not strings, so for the issuer
         // beside such a member it would log the issuer alone next to the refusal
-        LogAudienceIsNotTheIssuerAlone(clientInfo.ClientId, Sanitized.Value(audience?.ToJsonString()), issuerIdentifier);
+        LogAudienceIsNotOneTheClientMayName(
+            clientInfo.ClientId, Sanitized.Value(audience?.ToJsonString()), audiences, issuerIdentifier);
         return false;
-
-        bool IsTheIssuer(JsonValue value)
-            => value.TryGetValue<string>(out var written) && written == issuerIdentifier;
     }
 
     /// <summary>
-    /// Answers whether the audience is the tenant's token endpoint URL alone, as a string, written by a client granted
-    /// <see cref="ClientInfo.AcceptTokenEndpointAsClientAssertionAudience"/>.
+    /// Answers whether the audience claim names a value <paramref name="accepts"/> takes, as a string, or, when
+    /// <paramref name="allowArray"/>, in an array of strings beside others.
     /// </summary>
     /// <remarks>
-    /// Its caller skips it under a profile that takes the issuer only as a string, which FAPI 2.0 section 5.3.2.1
-    /// does, so such a client is refused here before its jti is spent, whatever order the authenticators run in.
+    /// An array is still an array of strings, as RFC 7519 section 4.1.3 has it: a member of another kind refuses the
+    /// claim rather than being stepped over.
     /// </remarks>
-    private bool IsTheTokenEndpointThisClientIsAllowed(TenantDefinition tenant, ClientInfo clientInfo, JsonNode? audience)
-        => clientInfo.AcceptTokenEndpointAsClientAssertionAudience &&
-           audience is JsonValue only &&
-           only.TryGetValue<string>(out var named) &&
-           tenant.TokenEndpointSpellings(serviceProvider).Contains(named, StringComparer.Ordinal);
+    private static bool Names(JsonNode? audience, bool allowArray, Func<string, bool> accepts) => audience switch
+    {
+        JsonValue value => AsString(value) is { } written && accepts(written),
+        JsonArray array when allowArray => array.Select(AsString).ToArray() is var members &&
+                                           members.All(member => member is not null) &&
+                                           members.Any(member => accepts(member!)),
+        _ => false,
+    };
+
+    private static string? AsString(JsonNode? node)
+        => node is JsonValue value && value.TryGetValue<string>(out var written) ? written : null;
 
     /// <summary>
     /// Attempts to authenticate a client using JWT assertion by validating the JWT provided in the client request.

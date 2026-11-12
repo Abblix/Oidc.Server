@@ -582,8 +582,8 @@ public class PrivateKeyJwtAuthenticatorTests
     /// RFC 10070 section 4, case B: the authorization server "MUST reject any JWT that does not contain its
     /// issuer identifier as its sole audience value", and "the token endpoint URL of the authorization server
     /// MUST NOT be used as an audience value". The rule is the specification's own, so it holds whatever
-    /// profile governs the client. An issuer named beside another recipient is refused too, or an assertion
-    /// minted for that recipient could be replayed here.
+    /// profile governs the client. An issuer named beside another recipient is refused too, as an array the client
+    /// is not allowed, or an assertion minted for that recipient could be replayed here.
     /// </summary>
     [Theory]
     [MemberData(nameof(AudiencesOtherThanTheIssuerAlone))]
@@ -629,53 +629,30 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// A member that is not a string still counts as an audience value, so the issuer beside one is not the
-    /// sole value RFC 10070 section 4 requires, whatever the profile.
+    /// The issuer as the one member of an array is the form OpenID Connect Core 1.0 draft 36 section 9 forbids a
+    /// client ("passed as a string, and not a single-element array"), so it is accepted only from a client allowed
+    /// arrays, and never under FAPI 2.0, whose section 5.3.2.1 has a server held to the profile "only accept its
+    /// issuer identifier value (as defined in [RFC8414]) as a string in the aud claim received in client
+    /// authentication assertions". The profile governing the client is the tenant's default tightened by the
+    /// client's own, so a client registered under FAPI 2.0 is held to it at a tenant without a profile, and one
+    /// naming None cannot step below the tenant's.
     /// </summary>
     [Theory]
-    [InlineData(ClientSecurityProfile.None)]
-    [InlineData(ClientSecurityProfile.Fapi2)]
-    public async Task AssertionAudienceWithAMemberThatIsNotAString_ShouldReturnNull(ClientSecurityProfile profile)
-    {
-        var (authenticator, mocks) = CreateAuthenticator();
-        var clientInfo = CreateClientInfo(ClientId);
-        var token = CreateValidJwtTokenWithJtiAndExp(
-            ClientId, ClientId, "audience-with-a-number",
-            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
-        token.Payload.Json[JwtClaimTypes.Audience] = new JsonArray(IssuerIdentifier, 42);
-
-        mocks.ClientJwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
-
-        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest
-        {
-            ClientAssertionType = ClientAssertionTypes.JwtBearer,
-            ClientAssertion = JwtAssertion,
-        });
-
-        Assert.Null(result);
-        AssertRefusedForItsAudience(mocks);
-    }
-
-    /// <summary>
-    /// RFC 10070 section 4 admits the issuer as the one member of an array, while FAPI 2.0 section 5.3.2.1 has a
-    /// server held to the profile "only accept its issuer identifier value (as defined in [RFC8414]) as a string in
-    /// the aud claim received in client authentication assertions". The profile governing the client is the
-    /// tenant's default tightened by the client's own, so a client registered under FAPI 2.0 is held to it at a
-    /// tenant without a profile, and one naming None cannot step below the tenant's.
-    /// </summary>
-    [Theory]
-    [InlineData(ClientSecurityProfile.None, null, true)]
-    [InlineData(ClientSecurityProfile.Fapi2, null, false)]
-    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, false)]
-    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, false)]
-    public async Task AssertionAudienceAsAnArrayOfTheIssuer_IsAcceptedOutsideFapi2Only(
-        ClientSecurityProfile profile, ClientSecurityProfile? clientProfile, bool accepted)
+    [InlineData(ClientSecurityProfile.None, null, ClientAssertionAudiences.Issuer, false)]
+    [InlineData(ClientSecurityProfile.None, null, ClientAssertionAudiences.Issuer | ClientAssertionAudiences.AllowArray, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, null, ClientAssertionAudiences.Issuer | ClientAssertionAudiences.AllowArray, false)]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, ClientAssertionAudiences.Issuer | ClientAssertionAudiences.AllowArray, false)]
+    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, ClientAssertionAudiences.Issuer | ClientAssertionAudiences.AllowArray, false)]
+    public async Task AssertionAudienceAsAnArrayOfTheIssuer_IsAcceptedFromAClientAllowedArraysOutsideFapi2Only(
+        ClientSecurityProfile profile,
+        ClientSecurityProfile? clientProfile,
+        ClientAssertionAudiences audiences,
+        bool accepted)
     {
         var (authenticator, mocks) = CreateAuthenticator();
         var clientInfo = CreateClientInfo(ClientId);
         clientInfo.SecurityProfile = clientProfile;
+        clientInfo.ClientAssertionAudiences = audiences;
         var token = CreateValidJwtTokenWithJtiAndExp(
             ClientId, ClientId, "audience-as-an-array",
             DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
@@ -726,19 +703,20 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// A client the host still lets use the token endpoint URL, as OpenID Connect Core 1.0 section 9 recommended
-    /// before RFC 10070, is accepted with that URL alone and as a string, the form such a client writes. The
-    /// exception reaches no further: the URL in an array or beside the issuer, and the pushed authorization request
-    /// endpoint URL, are still refused, and so is the token endpoint URL for a client without the exception.
+    /// Each value of a client's assertion audiences opens exactly its own form. The token endpoint URL, as OpenID
+    /// Connect Core 1.0 section 9 recommended before RFC 10070, is accepted as a string from a client allowed it, and
+    /// in an array only from one allowed arrays too; an array, as RFC 7523 section 3 has it, holds an allowed value
+    /// beside others and nothing but strings. The pushed authorization request endpoint URL is refused in any form,
+    /// and a set without the issuer refuses the issuer, while an unset one reads as the issuer alone.
     /// </summary>
     [Theory]
-    [MemberData(nameof(AudiencesUnderTheTokenEndpointException))]
-    public async Task TokenEndpointAudience_IsAcceptedOnlyAloneAndOnlyForAClientAllowedIt(
-        bool allowed, JsonNode audience, bool accepted)
+    [MemberData(nameof(AudiencesUnderTheClientsSet))]
+    public async Task AssertionAudience_IsAcceptedOnlyInTheFormsTheClientsSetOpens(
+        ClientAssertionAudiences audiences, JsonNode audience, bool accepted)
     {
         var (authenticator, mocks) = CreateAuthenticator();
         var clientInfo = CreateClientInfo(ClientId);
-        clientInfo.AcceptTokenEndpointAsClientAssertionAudience = allowed;
+        clientInfo.ClientAssertionAudiences = audiences;
         var token = CreateValidJwtTokenWithJtiAndExp(
             ClientId, ClientId, "token-endpoint-audience",
             DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
@@ -759,15 +737,38 @@ public class PrivateKeyJwtAuthenticatorTests
             AssertRefusedForItsAudience(mocks);
     }
 
-    public static TheoryData<bool, JsonNode, bool> AudiencesUnderTheTokenEndpointException() => new()
+    public static TheoryData<ClientAssertionAudiences, JsonNode, bool> AudiencesUnderTheClientsSet()
     {
-        { true, JsonValue.Create(TokenEndpoint), true },
-        { true, JsonValue.Create(IssuerIdentifier), true },
-        { true, new JsonArray(TokenEndpoint), false },
-        { true, new JsonArray(IssuerIdentifier, TokenEndpoint), false },
-        { true, JsonValue.Create(PushedAuthorizationRequestEndpoint), false },
-        { false, JsonValue.Create(TokenEndpoint), false },
-    };
+        const ClientAssertionAudiences issuer = ClientAssertionAudiences.Issuer;
+        const ClientAssertionAudiences withTokenEndpoint = issuer | ClientAssertionAudiences.TokenEndpoint;
+        const ClientAssertionAudiences withArray = issuer | ClientAssertionAudiences.AllowArray;
+        const ClientAssertionAudiences withBoth = withTokenEndpoint | ClientAssertionAudiences.AllowArray;
+        const string another = "https://another.example.com";
+
+        return new TheoryData<ClientAssertionAudiences, JsonNode, bool>
+        {
+            { issuer, JsonValue.Create(TokenEndpoint), false },
+            { issuer, new JsonArray(IssuerIdentifier, another), false },
+            { withTokenEndpoint, JsonValue.Create(TokenEndpoint), true },
+            { withTokenEndpoint, JsonValue.Create(IssuerIdentifier), true },
+            { withTokenEndpoint, new JsonArray(TokenEndpoint), false },
+            { withTokenEndpoint, new JsonArray(IssuerIdentifier, TokenEndpoint), false },
+            { withTokenEndpoint, JsonValue.Create(PushedAuthorizationRequestEndpoint), false },
+            { withArray, new JsonArray(another, IssuerIdentifier), true },
+            { withArray, new JsonArray(another, TokenEndpoint), false },
+            { withArray, new JsonArray(IssuerIdentifier, 42), false },
+            { withArray, new JsonArray(another), false },
+            { withArray, new JsonArray(), false },
+            { withBoth, new JsonArray(TokenEndpoint), true },
+            { withBoth, new JsonArray(another, TokenEndpoint), true },
+            { withBoth, new JsonArray(another, PushedAuthorizationRequestEndpoint), false },
+            { ClientAssertionAudiences.TokenEndpoint, JsonValue.Create(IssuerIdentifier), false },
+            { ClientAssertionAudiences.TokenEndpoint, JsonValue.Create(TokenEndpoint), true },
+            { default, JsonValue.Create(IssuerIdentifier), true },
+            { default, new JsonArray(IssuerIdentifier), false },
+            { default, JsonValue.Create(TokenEndpoint), false },
+        };
+    }
 
     /// <summary>
     /// The URL a flagged client may name is the tenant's token endpoint on the issuer's own host, whatever host the
@@ -803,7 +804,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
-            AcceptTokenEndpointAsClientAssertionAudience = true,
+            ClientAssertionAudiences = ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint,
         };
         var token = CreateValidJwtTokenWithJtiAndExp(
             ClientId, ClientId, "normalized-authority",
@@ -841,7 +842,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
-            AcceptTokenEndpointAsClientAssertionAudience = true,
+            ClientAssertionAudiences = ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint,
         };
         var token = CreateValidJwtTokenWithJtiAndExp(
             ClientId, ClientId, "tenant-under-a-path",
@@ -865,14 +866,24 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// The exception does not reach a client held to FAPI 2.0, whose section 5.3.2.1 accepts the issuer identifier
-    /// alone: the audience link refuses it itself, before its jti is spent, whatever runs after it.
+    /// The exceptions do not reach a client held to FAPI 2.0, whose section 5.3.2.1 accepts the issuer identifier
+    /// alone: the audience link refuses the token endpoint URL, as a string or in an array the client is allowed, itself,
+    /// before its jti is spent, whatever runs after it.
     /// </summary>
-    [Fact]
-    public async Task TokenEndpointAudience_IsRefusedUnderFapi2EvenForAFlaggedClient()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TokenEndpointAudience_IsRefusedUnderFapi2EvenForAFlaggedClient(bool inAnArray)
     {
         var (authenticator, mocks) = CreateAuthenticator();
-        var result = await AuthenticateFlaggedClient(authenticator, mocks, ClientSecurityProfile.Fapi2, TokenEndpoint);
+        var result = inAnArray
+            ? await AuthenticateFlaggedClient(
+                authenticator,
+                mocks,
+                ClientSecurityProfile.Fapi2,
+                new JsonArray(TokenEndpoint),
+                ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint | ClientAssertionAudiences.AllowArray)
+            : await AuthenticateFlaggedClient(authenticator, mocks, ClientSecurityProfile.Fapi2, TokenEndpoint);
 
         Assert.Null(result);
         AssertRefusedForItsAudience(mocks);
@@ -896,16 +907,20 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
-    /// A client allowed the token endpoint URL, authenticating with an assertion whose audience is
-    /// <paramref name="audience"/> at a tenant held to <paramref name="profile"/>.
+    /// A client allowed <paramref name="audiences"/>, the token endpoint URL by default, authenticating with an
+    /// assertion whose audience is <paramref name="audience"/> at a tenant held to <paramref name="profile"/>.
     /// </summary>
     private async Task<ClientInfo?> AuthenticateFlaggedClient(
-        PrivateKeyJwtAuthenticator authenticator, Mocks mocks, ClientSecurityProfile profile, string audience)
+        PrivateKeyJwtAuthenticator authenticator,
+        Mocks mocks,
+        ClientSecurityProfile profile,
+        JsonNode audience,
+        ClientAssertionAudiences audiences = ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint)
     {
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
-            AcceptTokenEndpointAsClientAssertionAudience = true,
+            ClientAssertionAudiences = audiences,
         };
         var token = CreateValidJwtTokenWithJtiAndExp(
             ClientId, ClientId, "flagged-client",
@@ -931,7 +946,7 @@ public class PrivateKeyJwtAuthenticatorTests
         => mocks.Logger.Verify(
             l => l.Log(
                 LogLevel.Warning,
-                It.Is<EventId>(e => e.Id == LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotTheIssuerAlone),
+                It.Is<EventId>(e => e.Id == LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotOneTheClientMayName),
                 It.IsAny<It.IsAnyType>(),
                 It.IsAny<Exception?>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),

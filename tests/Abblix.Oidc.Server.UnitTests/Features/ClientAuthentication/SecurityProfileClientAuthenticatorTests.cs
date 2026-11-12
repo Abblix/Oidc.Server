@@ -239,7 +239,7 @@ public class SecurityProfileClientAuthenticatorTests
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
-            AcceptTokenEndpointAsClientAssertionAudience = true,
+            ClientAssertionAudiences = ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint,
         });
 
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest());

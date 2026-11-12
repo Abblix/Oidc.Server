@@ -74,6 +74,7 @@ internal static class OidcOptionsValidationServiceCollectionExtensions
             ServiceDescriptor.Singleton<ITenantsCheck, ClientSecretsCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ClientIdsCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ClientOfflineAccessCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, ClientAssertionAudiencesCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, RefreshTokenReusePolicyCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, PairwiseClientsCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ResourceDefinitionsCheck>(),

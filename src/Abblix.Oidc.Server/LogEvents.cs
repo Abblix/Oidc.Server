@@ -222,7 +222,7 @@ internal static class LogEvents
             public const int MissingExpiration = Base + 9;
             public const int ReplayDetected = Base + 10;
             public const int OtherKindPresentedAsAssertion = Base + 11;
-            public const int AudienceIsNotTheIssuerAlone = Base + 12;
+            public const int AudienceIsNotOneTheClientMayName = Base + 12;
             public const int TimestampsOutsideTheClientsProfile = Base + 13;
             public const int TimestampUnreadable = Base + 14;
             public const int TokenEndpointAudienceAccepted = Base + 15;

@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
@@ -345,29 +346,35 @@ public record ClientInfo(string ClientId)
     public bool AllowCrossClientIntrospection { get; set; } = false;
 
     /// <summary>
-    /// Lets this client's authentication assertions name the token endpoint URL as their audience, as OpenID Connect
-    /// Core 1.0 section 9 recommends, beside the issuer identifier RFC 10070 section 4 requires.
+    /// What this client's authentication assertions may name as their audience, and in which form: the issuer identifier
+    /// RFC 10070 section 4 requires, as a string, and for a client the host lets keep an older form while it changes,
+    /// the token endpoint URL (<see cref="ClientAssertionAudiences.TokenEndpoint"/>), an array holding either beside
+    /// other values (<see cref="ClientAssertionAudiences.AllowArray"/>), or both.
     /// </summary>
     /// <remarks>
     /// RFC 10070 makes the authorization server "reject any JWT that does not contain its issuer identifier as its sole
     /// audience value", which a client written to Core's "The Audience SHOULD be the URL of the Authorization Server's
-    /// Token Endpoint" does not meet. Section 6 of the same RFC expects such clients to need time to change, and this is
-    /// that time, given to one client at a time while every other client stays held to the rule. The exception is
-    /// narrow: the token endpoint URL alone and as a string - the path the endpoint is served at on the issuer
-    /// identifier's scheme, host and port, written either as the issuer identifier writes them or normalized, never
-    /// the host a request names - and never in an array, beside another value, or as the pushed authorization request
-    /// endpoint URL.
+    /// Token Endpoint", or to RFC 7523's array, does not meet. Section 6 of the same RFC expects such clients to need time
+    /// to change, and the values beyond <see cref="ClientAssertionAudiences.Issuer"/> are that time, given to one client
+    /// at a time while every other client stays held to the rule.
     /// <para>
-    /// A client held to FAPI 2.0 cannot have it: section 5.3.2.1 has the server "only accept its issuer identifier
-    /// value ... as a string in the aud claim received in client authentication assertions", so such a configuration is
-    /// refused at startup and when the client authenticates.
+    /// A value left unset, zero, reads as <see cref="ClientAssertionAudiences.Issuer"/>, so a host that stores its
+    /// clients itself and has no value for this one holds the client to the rule. A configured set without
+    /// <see cref="ClientAssertionAudiences.Issuer"/>, or naming a value the enumeration does not define, is refused at
+    /// startup, and one beyond the issuer alone is refused for a client held to FAPI 2.0, at startup and when the
+    /// client authenticates.
     /// </para>
-    /// This is granted by the host, never through dynamic client registration. Granting it reopens, for this client, the
-    /// audience confusion RFC 10070 closes, so it belongs to a client that cannot yet be changed and is removed when it is.
-    /// An update of a dynamically registered client (RFC 7592) builds the client anew from its metadata, so a host that
-    /// granted the exception grants it again on update.
+    /// <para>
+    /// This is granted by the host, never through dynamic client registration. An update of a dynamically registered
+    /// client (RFC 7592) builds the client anew from its metadata, so a host that granted the exception grants it again
+    /// on update.
+    /// </para>
     /// </remarks>
-    public bool AcceptTokenEndpointAsClientAssertionAudience { get; set; } = false;
+    public ClientAssertionAudiences ClientAssertionAudiences
+    {
+        get => field.ByDefault(ClientAssertionAudiences.Issuer);
+        set => field = value.ByDefault(ClientAssertionAudiences.Issuer);
+    } = ClientAssertionAudiences.Issuer;
 
     /// <summary>
     /// Describes how the client authenticates to the token endpoint per RFC 6749 section 2.3 / OIDC Core section 9.

@@ -103,20 +103,23 @@ public class SecurityProfileTests
 
     /// <summary>
     /// FAPI 2.0 section 5.3.2.1 has the server "only accept its issuer identifier value ... as a string in the aud
-    /// claim received in client authentication assertions", so a client allowed the token endpoint URL there is
-    /// misconfigured; with no profile the same client is consistent, since RFC 10070 leaves room for a transition.
+    /// claim received in client authentication assertions", so a client allowed anything beyond the issuer there -
+    /// the token endpoint URL, an array, or a set lacking the issuer - is misconfigured; with no profile the same
+    /// client is consistent, since RFC 10070 leaves room for a transition.
     /// </summary>
     [Theory]
-    [InlineData(ClientSecurityProfile.Fapi2, true, 1)]
-    [InlineData(ClientSecurityProfile.Fapi2, false, 0)]
-    [InlineData(ClientSecurityProfile.None, true, 0)]
-    public void FindViolations_TokenEndpointAudience_IsAViolationUnderFapi2Only(
-        ClientSecurityProfile profile, bool acceptsTokenEndpointAudience, int expected)
+    [InlineData(ClientSecurityProfile.Fapi2, ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint, 1)]
+    [InlineData(ClientSecurityProfile.Fapi2, ClientAssertionAudiences.Issuer | ClientAssertionAudiences.AllowArray, 1)]
+    [InlineData(ClientSecurityProfile.Fapi2, ClientAssertionAudiences.TokenEndpoint, 1)]
+    [InlineData(ClientSecurityProfile.Fapi2, ClientAssertionAudiences.Issuer, 0)]
+    [InlineData(ClientSecurityProfile.None, ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint | ClientAssertionAudiences.AllowArray, 0)]
+    public void FindViolations_AssertionAudiencesBeyondTheIssuer_AreAViolationUnderFapi2Only(
+        ClientSecurityProfile profile, ClientAssertionAudiences assertionAudiences, int expected)
     {
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             ClientAuthenticationMethods.PrivateKeyJwt,
-            acceptsTokenEndpointAudience,
+            assertionAudiences,
             SecurityProfileRequirements.Resolve(profile));
 
         Assert.Equal(expected, violations.Count);
@@ -128,7 +131,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             ClientAuthenticationMethods.PrivateKeyJwt,
-            acceptsTokenEndpointAudience: false,
+            assertionAudiences: ClientAssertionAudiences.Issuer,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Empty(violations);
@@ -144,7 +147,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [["Code"]],
             ClientAuthenticationMethods.PrivateKeyJwt,
-            acceptsTokenEndpointAudience: false,
+            assertionAudiences: ClientAssertionAudiences.Issuer,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Empty(violations);
@@ -156,7 +159,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.IdToken]],
             ClientAuthenticationMethods.PrivateKeyJwt,
-            acceptsTokenEndpointAudience: false,
+            assertionAudiences: ClientAssertionAudiences.Issuer,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Equal(2, violations.Count);
@@ -168,7 +171,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]],
             ClientAuthenticationMethods.PrivateKeyJwt,
-            acceptsTokenEndpointAudience: false,
+            assertionAudiences: ClientAssertionAudiences.Issuer,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         // code is allowed, so only the implicit/hybrid violation remains.
@@ -181,7 +184,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.IdToken]],
             ClientAuthenticationMethods.PrivateKeyJwt,
-            acceptsTokenEndpointAudience: false,
+            assertionAudiences: ClientAssertionAudiences.Issuer,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.None));
 
         Assert.Empty(violations);
@@ -356,7 +359,7 @@ public class SecurityProfileTests
         var client = new ClientInfo(TestConstants.DefaultClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
-            AcceptTokenEndpointAsClientAssertionAudience = true,
+            ClientAssertionAudiences = ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint,
         };
 
         var refusals = Check(Tenant(profile, client));
@@ -400,7 +403,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             ClientAuthenticationMethods.None,
-            acceptsTokenEndpointAudience: false,
+            assertionAudiences: ClientAssertionAudiences.Issuer,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Contains(violations, violation => violation.Contains("confidential clients only"));
@@ -420,7 +423,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             method,
-            acceptsTokenEndpointAudience: false,
+            assertionAudiences: ClientAssertionAudiences.Issuer,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Contains(violations, violation => violation.Contains("mutual TLS or a private key JWT"));
@@ -440,7 +443,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             method,
-            acceptsTokenEndpointAudience: false,
+            assertionAudiences: ClientAssertionAudiences.Issuer,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2));
 
         Assert.Empty(violations);
@@ -456,7 +459,7 @@ public class SecurityProfileTests
         var violations = SecurityProfileConsistency.FindViolations(
             [[ResponseTypes.Code]],
             ClientAuthenticationMethods.None,
-            acceptsTokenEndpointAudience: false,
+            assertionAudiences: ClientAssertionAudiences.Issuer,
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.None));
 
         Assert.Empty(violations);

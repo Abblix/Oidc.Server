@@ -42,6 +42,8 @@ public class ClientSecretJwtAuthenticatorTests
     private const string ClientId = TestConstants.DefaultClientId;
     private const string ClientSecret = "test_secret_for_hmac_signing";
     private const string IssuerIdentifier = "https://issuer.example.com";
+    private const string TokenEndpoint = IssuerIdentifier + "/connect/token";
+    private const string AnotherRecipient = "https://another.example.com";
 
     private static readonly TenantDefinition Tenant = new TestIssuer { Issuer = new Uri(IssuerIdentifier) }.ToTenant();
 
@@ -203,24 +205,29 @@ public class ClientSecretJwtAuthenticatorTests
     /// <summary>
     /// The exception a host gives a client that still names the token endpoint, as OpenID Connect Core 1.0 section 9
     /// recommends, holds for a client signing with its secret as for one signing with its key: the token endpoint URL
-    /// on the issuer's host is accepted for a flagged client and refused for any other.
+    /// on the issuer's host is accepted for a client allowed it and refused for any other, and the same URL beside
+    /// another recipient is accepted only from a client allowed arrays too.
     /// </summary>
     [Theory]
-    [InlineData(true, true)]
-    [InlineData(false, false)]
-    public async Task TryAuthenticateClientAsync_TokenEndpointAudience_IsAcceptedForAFlaggedClientOnly(
-        bool allowed, bool accepted)
+    [InlineData(ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint, new[] { TokenEndpoint }, true)]
+    [InlineData(ClientAssertionAudiences.Issuer, new[] { TokenEndpoint }, false)]
+    [InlineData(ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint, new[] { AnotherRecipient, TokenEndpoint }, false)]
+    [InlineData(ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint | ClientAssertionAudiences.AllowArray, new[] { AnotherRecipient, TokenEndpoint }, true)]
+    public async Task TryAuthenticateClientAsync_TokenEndpointAudience_IsAcceptedInTheFormsTheClientIsAllowed(
+        ClientAssertionAudiences audiences, string[] audience, bool accepted)
     {
         const string jwt = "valid.jwt.token";
-        const string tokenEndpoint = IssuerIdentifier + "/connect/token";
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
             ClientSecrets = [new ClientSecret { Value = ClientSecret }],
-            AcceptTokenEndpointAsClientAssertionAudience = allowed,
+            ClientAssertionAudiences = audiences,
         };
 
-        var token = CreateMockToken(ClientId, ClientId, [tokenEndpoint], "jti-token-endpoint", _clock.GetUtcNow().AddMinutes(5));
+        var token = CreateMockToken(ClientId, ClientId, audience, "jti-token-endpoint", _clock.GetUtcNow().AddMinutes(5));
+        token.Payload.Json[JwtClaimTypes.Audience] = audience is [var only]
+            ? only
+            : new JsonArray([.. audience.Select(member => (JsonNode?)member)]);
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
@@ -241,7 +248,7 @@ public class ClientSecretJwtAuthenticatorTests
             .ReturnsAsync(true);
 
         var endpointResolver = new Mock<IOidcEndpointResolver>();
-        endpointResolver.Setup(r => r.Resolve(OidcEndpoints.Token)).Returns(new Uri(tokenEndpoint));
+        endpointResolver.Setup(r => r.Resolve(OidcEndpoints.Token)).Returns(new Uri(TokenEndpoint));
         var services = new ServiceCollection();
         services.AddScoped<IOidcEndpointResolver>(_ => endpointResolver.Object);
 
