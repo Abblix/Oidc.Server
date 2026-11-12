@@ -45,7 +45,7 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 
 		// The request goes on with the scope it is served with, so what follows, the host's consent provider
 		// included, reads the default a request naming none was given
-		if (context.ServedScope() is not { } scope)
+		if (context.ServedScope(named) is not { } scope)
 			return context.InvalidScope(ScopeRefusals.NoneNamed);
 
 		// A request coming back from a page already carries the default it was served with, so whether the client
@@ -56,21 +56,10 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 			ClientNamedNoScope = context.Request.ClientNamedNoScope || named.Length == 0,
 		};
 
-		if (context.Request.Scope.Contains(Scopes.OfflineAccess))
-		{
-			// Ignored as if never asked for, so the host's consent provider, reading the request, is not shown it
-			if (!context.OfflineAccessReceived())
-			{
-				context.Request = context.Request with
-				{
-					Scope = [.. context.Request.Scope.Where(value => value != Scopes.OfflineAccess)],
-				};
-			}
-			else if (!context.ClientInfo.OfflineAccess.IsAllowed())
-			{
-				return context.InvalidScope("This client is not allowed to request for offline access");
-			}
-		}
+		// The served scope already leaves out an offline_access the server ignores, so the host's consent provider,
+		// reading the request, is not shown it; one still here is received, and refused for a client not allowed it
+		if (scope.Contains(Scopes.OfflineAccess) && !context.ClientInfo.OfflineAccess.IsAllowed())
+			return context.InvalidScope("This client is not allowed to request for offline access");
 
 		if (!scopeManager.Validate(tenant, 
 			    context.Request.Scope,

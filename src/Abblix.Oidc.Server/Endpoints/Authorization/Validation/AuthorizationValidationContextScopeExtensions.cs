@@ -36,7 +36,25 @@ internal static class AuthorizationValidationContextScopeExtensions
 	/// is required to name one and the request names none.
 	/// </summary>
 	public static string[]? ServedScope(this AuthorizationValidationContext context)
-		=> context.ClientInfo.ScopeServedFor(context.NamedScope());
+		=> context.ServedScope(context.NamedScope());
+
+	/// <summary>
+	/// The scope a request naming <paramref name="named"/> is served with, for a caller that already holds
+	/// <see cref="NamedScope"/>.
+	/// </summary>
+	/// <remarks>
+	/// A default carrying <c>offline_access</c> is served without it where the server ignores it, as a request naming
+	/// it would be, so the resources settled for the request never count a scope the request is not served with.
+	/// </remarks>
+	public static string[]? ServedScope(this AuthorizationValidationContext context, string[] named)
+	{
+		if (context.ClientInfo.ScopeServedFor(named) is not { } served)
+			return null;
+
+		return !served.Contains(Scopes.OfflineAccess) || context.OfflineAccessReceived()
+			? served
+			: [.. served.Where(value => value != Scopes.OfflineAccess)];
+	}
 
 	/// <summary>
 	/// Whether the request is processed with the <c>offline_access</c> it asks for, rather than with that scope

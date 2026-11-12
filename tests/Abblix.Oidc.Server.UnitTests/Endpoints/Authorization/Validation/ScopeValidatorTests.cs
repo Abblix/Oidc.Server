@@ -147,6 +147,26 @@ public class ScopeValidatorTests
     }
 
     /// <summary>
+    /// A default carrying offline_access is served without it where the server ignores it, as a request naming it
+    /// would be, so the resource validator, asking the same answer before the scope validator runs, never settles
+    /// resources for a scope the request is not served with. Received, it stays.
+    /// </summary>
+    [Theory]
+    [InlineData(false, new[] { Scopes.OpenId })]
+    [InlineData(true, new[] { Scopes.OpenId, Scopes.OfflineAccess })]
+    public void ServedScope_OfADefaultCarryingOfflineAccess_LeavesItOutWhereIgnored(
+        bool promptConsent, string[] expected)
+    {
+        var context = CreateContext(
+            [],
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: promptConsent ? [Prompts.Consent] : null);
+        context.ClientInfo.DefaultScope = [Scopes.OpenId, Scopes.OfflineAccess];
+
+        Assert.Equal(expected, context.ServedScope());
+    }
+
+    /// <summary>
     /// An offline_access the server ignores is as if never asked for, so a request naming it alone named no scope:
     /// it is served the client's default on the first pass, marked as not named, and the same request read back from
     /// a page answers the same, rather than nothing by value and the default after a page. Received, it is a scope
