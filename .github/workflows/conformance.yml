@@ -62,8 +62,9 @@ jobs:
         # Inside the job's ceiling with room for the steps around it
         timeout-minutes: 50
 
-      # A step killed at its ceiling runs no finally block, so the containers may still be there holding the logs
-      - name: Collect what a killed run left
+      # A step stopped at its ceiling may not finish its finally block, so the containers may still be there holding
+      # the logs; what the script already saved is kept
+      - name: Collect what a stopped run left
         if: failure()
         shell: pwsh
         env:
@@ -71,21 +72,25 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force $env:RESULTS | Out-Null
           foreach ($container in 'oidc-host', 'oidf-browser') {
-            if (docker ps -aq --filter "name=^$container$") {
-              docker logs $container *> (Join-Path $env:RESULTS "$container.log")
+            $log = Join-Path $env:RESULTS "$container.log"
+            if ((docker ps -aq --filter "name=^$container$") -and -not (Test-Path -LiteralPath $log)) {
+              docker logs $container *> $log
             }
           }
-          if (docker ps -aq --filter 'name=^oidf-browser$') {
-            docker cp 'oidf-browser:/tmp/screenshots' (Join-Path $env:RESULTS 'screenshots')
+          $screenshots = Join-Path $env:RESULTS 'screenshots'
+          if ((docker ps -aq --filter 'name=^oidf-browser$') -and -not (Test-Path -LiteralPath $screenshots)) {
+            docker cp 'oidf-browser:/tmp/screenshots' $screenshots
           }
         timeout-minutes: 3
 
-      - name: Upload the evidence of a failed run
-        if: failure()
+      # Kept for a passing run too, since its review screenshots are what a person looks at; a day is enough, as they
+      # are looked at straight away or not at all
+      - name: Upload the evidence of the run
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: conformance-results
           path: ${{ runner.temp }}/conformance-results
-          retention-days: 3
+          retention-days: 1
           if-no-files-found: warn
         timeout-minutes: 3

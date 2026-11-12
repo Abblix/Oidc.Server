@@ -182,7 +182,7 @@ function Resolve-SuiteRelease {
     if ($repositories.Count -ne $SuiteImages.Count) {
         throw "The suite's registry does not list all of $($SuiteImages -join ', ')"
     }
-    $newest = @(Select-SuiteReleases -Tags (Get-SuiteReleaseTags)) | Select-Object -First 1
+    $newest = @(Select-SuiteReleases -Tags @(Get-SuiteReleaseTags)) | Select-Object -First 1
     if (-not $newest) {
         throw "The suite has no tag shaped like release-vX.Y.Z at $SuiteRepository"
     }
@@ -235,7 +235,17 @@ function Save-Evidence {
 function Remove-Everything {
     docker rm -f $BrowserContainer 2>$null | Out-Null
     docker rm -f $HostContainer 2>$null | Out-Null
-    docker compose -f $ComposeFile -p $ProjectName down 2>$null | Out-Null
+    if ($ComposeFile) {
+        docker compose -f $ComposeFile -p $ProjectName down 2>$null | Out-Null
+    }
+}
+
+function Remove-SuiteClone([string] $Path) {
+    # The suite's database writes its files into the clone as its own user, which the user running this script may not
+    # be allowed to delete on Linux, so a container removes them first
+    docker run --rm -v "${Path}:/suite" $RunnerImage rm -rf /suite/mongo | Out-Null
+    Assert-LastExit 'docker run (removing the database files of the previous suite clone)'
+    Remove-Item -LiteralPath $Path -Recurse -Force
 }
 
 if ($Plan) {
@@ -254,33 +264,39 @@ if (-not (Get-Command docker -CommandType Application -ErrorAction SilentlyConti
     throw 'docker was not found on PATH: the suite and the host both run in containers'
 }
 
+if ($ResultsPath -and (Test-Path -LiteralPath $ResultsPath) -and
+    (Get-ChildItem -LiteralPath $ResultsPath -Force | Select-Object -First 1)) {
+    # Two runs' evidence in one place cannot be told apart afterwards
+    throw "$ResultsPath is not empty: -ResultsPath has to name a new or empty directory"
+}
+
 $imageTagBefore = $env:IMAGE_TAG
-if (-not $SuitePath) {
-    $release = Resolve-SuiteRelease
-    $SuitePath = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-suite'
-    if (Test-Path -LiteralPath $SuitePath) {
-        Remove-Item -LiteralPath $SuitePath -Recurse -Force
-    }
-    git clone --quiet --depth 1 --branch $release $SuiteRepository $SuitePath
-    Assert-LastExit "git clone (conformance suite $release)"
-    # Read by the suite's compose file, which names both of its images by it
-    $env:IMAGE_TAG = $release
-}
-
-$SuitePath = (Resolve-Path -LiteralPath $SuitePath).Path
-$ComposeFile = Join-Path $SuitePath 'docker-compose-prebuilt.yml'
-$RunnerScript = Join-Path $SuitePath 'scripts/run-test-plan.py'
-foreach ($required in $ComposeFile, $RunnerScript) {
-    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-        throw "$required is missing: -SuitePath has to point at a checkout of the conformance suite"
-    }
-}
-if ($ResultsPath) {
-    $ResultsPath = (New-Item -ItemType Directory -Force $ResultsPath).FullName
-}
-
+$ComposeFile = $null
 $exitCode = 1
 try {
+    if (-not $SuitePath) {
+        $release = Resolve-SuiteRelease
+        $SuitePath = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-suite'
+        if (Test-Path -LiteralPath $SuitePath) {
+            Remove-SuiteClone $SuitePath
+        }
+        git clone --quiet --depth 1 --branch $release $SuiteRepository $SuitePath
+        Assert-LastExit "git clone (conformance suite $release)"
+        # Read by the suite's compose file, which names both of its images by it
+        $env:IMAGE_TAG = $release
+    }
+
+    $SuitePath = (Resolve-Path -LiteralPath $SuitePath).Path
+    foreach ($required in 'docker-compose-prebuilt.yml', 'scripts/run-test-plan.py') {
+        if (-not (Test-Path -LiteralPath (Join-Path $SuitePath $required) -PathType Leaf)) {
+            throw "$required is missing from $SuitePath`: -SuitePath has to point at a checkout of the conformance suite"
+        }
+    }
+    $ComposeFile = Join-Path $SuitePath 'docker-compose-prebuilt.yml'
+    if ($ResultsPath) {
+        $ResultsPath = (New-Item -ItemType Directory -Force $ResultsPath).FullName
+    }
+
     Write-Step "Starting the conformance suite, images $($env:IMAGE_TAG ?? 'latest'), scripts from $SuitePath"
     docker compose -f $ComposeFile -p $ProjectName up -d
     Assert-LastExit 'docker compose up'
