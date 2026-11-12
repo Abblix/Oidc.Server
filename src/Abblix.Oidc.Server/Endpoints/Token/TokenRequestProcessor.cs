@@ -65,13 +65,13 @@ public class TokenRequestProcessor(
 	{
 		var clientInfo = request.ClientInfo;
 
-		var requested = tokenContextEvaluator.EvaluateAuthorizationContext(request);
+		var requestedContext = tokenContextEvaluator.EvaluateAuthorizationContext(request);
 
-		var authContext = OfflineAccessIgnoredUnlessAllowed(clientInfo, requested);
+		var grantedContext = OfflineAccessIgnoredUnlessAllowed(clientInfo, requestedContext);
 
 		// Read before the token service is handed the context: whether a refresh token and an ID token are issued
 		// follows what was granted, while the access token may carry less, narrowed to the resources it names.
-		string[] grantedScope = [..authContext.Scope];
+		string[] grantedScope = [..grantedContext.Scope];
 
 		var mayIssueDerivedTokens = MayIssueDerivedTokens(request.Model.GrantType);
 		var issuesRefreshToken = mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OfflineAccess);
@@ -85,7 +85,7 @@ public class TokenRequestProcessor(
 		var accessToken = await accessTokenService.CreateAccessTokenAsync(
 			tenant,
 			request.AuthorizedGrant.AuthSession,
-			authContext,
+			grantedContext,
 			clientInfo,
 			grantId,
 			request.AuthorizedGrant.ExpiresNoLaterThan);
@@ -104,20 +104,20 @@ public class TokenRequestProcessor(
 		// Scopes were asked for and every one was dropped on the way, by the offline access policy or by narrowing to
 		// the token's resources. RFC 6749 section 5.1 lets an absent scope mean "as requested" and section 3.3 allows
 		// no empty value, so no answer carrying a token can say so; section 5.2 refuses it as invalid_scope
-		if (requested.Scope.Length > 0 && !accessToken.Token.Payload.Scope.Any())
+		if (ClientNamedScope(request, requestedContext) && !accessToken.Token.Payload.Scope.Any())
 		{
 			return new OidcError(
 				ErrorCodes.InvalidScope,
 				"None of the requested scopes can be granted to this client for the resources the token is issued for.");
 		}
 
-		var response = CreateResponse(accessToken, lifetime, authContext);
+		var response = CreateResponse(accessToken, lifetime, grantedContext);
 
 		if (issuesRefreshToken)
-			await AddRefreshTokenAsync(tenant, response, request, authContext, presentedRefreshToken, grantId);
+			await AddRefreshTokenAsync(tenant, response, request, grantedContext, presentedRefreshToken, grantId);
 
 		if (mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OpenId))
-			await AddIdentityTokenAsync(tenant, response, request, authContext, accessToken);
+			await AddIdentityTokenAsync(tenant, response, request, grantedContext, accessToken);
 
 		// Spent last, once every token of the response is issued, so a failure to issue one leaves the presented
 		// token unspent; the request losing the race to renew a single-use token hands over nothing it issued.
@@ -126,6 +126,19 @@ public class TokenRequestProcessor(
 
 		return response;
 	}
+
+	/// <summary>
+	/// Whether the client itself named the scopes the request is answered for: in the token request, or at the
+	/// authorization step a code, a device code or a backchannel request comes from.
+	/// </summary>
+	/// <remarks>
+	/// The other grants naming no scope are given one by the server - the subject token's on an exchange, the client's
+	/// default otherwise - and a token left with none of it answers a request that asked for nothing.
+	/// </remarks>
+	private static bool ClientNamedScope(ValidTokenRequest request, AuthorizationContext context)
+		=> request.Model.Scope is { Length: > 0 } ||
+		   context.Scope.Length > 0 &&
+		   request.Model.GrantType is GrantTypes.AuthorizationCode or GrantTypes.DeviceAuthorization or GrantTypes.Ciba;
 
 	/// <summary>
 	/// The context without <c>offline_access</c> for a client not allowed offline access, whichever grant brought it,

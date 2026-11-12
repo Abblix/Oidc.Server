@@ -550,6 +550,36 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
+    /// A grant taking its scope from the token request alone, naming none, carries a scope the server supplied - the
+    /// subject token's on an exchange, the client's default otherwise. When narrowing to the new token's resources
+    /// leaves none of it, the client asked for nothing and is issued a token with no scope, as before.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.TokenExchange)]
+    [InlineData(GrantTypes.ClientCredentials)]
+    public async Task ProcessAsync_ScopeSuppliedByTheServerNarrowedAway_IsIssuedATokenWithNoScope(string grantType)
+    {
+        var request = new ValidTokenRequest(
+            new TokenRequest { GrantType = grantType },
+            CreateAuthorizedGrant([AccessTokenScope]),
+            new ClientInfo(TestConstants.DefaultClientId),
+            [],
+            []);
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(new AuthorizationContext(TestConstants.DefaultClientId, [AccessTokenScope], null));
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(), It.IsAny<AuthorizationContext>(),
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(CreateAccessToken(TimeSpan.FromMinutes(10), scope: []));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
     /// A request naming no scope at all, and given none by default, is issued a token with no scope: the refusal
     /// above is about scopes asked for and dropped, not about a token carrying none.
     /// </summary>
