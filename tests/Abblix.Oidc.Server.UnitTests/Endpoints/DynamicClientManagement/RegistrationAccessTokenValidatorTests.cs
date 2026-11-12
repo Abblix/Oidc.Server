@@ -67,6 +67,22 @@ public class RegistrationAccessTokenValidatorTests
     }
 
     /// <summary>
+    /// RFC 9110 section 11.1 identifies the scheme by a case-insensitive token, so the scheme in another case
+    /// carries the same token.
+    /// </summary>
+    [Fact]
+    public async Task AValidToken_UnderTheSchemeInAnotherCase_AnswersWithItsJti()
+    {
+        var validator = CreateValidator(CreateToken("jti-current"));
+        var header = new AuthenticationHeaderValue(TokenTypes.Bearer.ToLowerInvariant(), "the.jwt.token");
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, header, ClientId);
+
+        Assert.True(result.TryGetSuccess(out var tokenId));
+        Assert.Equal("jti-current", tokenId);
+    }
+
+    /// <summary>
     /// A token without a jti binds to no registration, so it manages none.
     /// </summary>
     [Fact]

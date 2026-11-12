@@ -113,12 +113,18 @@ public class UserInfoRequestValidatorTests
     /// Verifies successful validation with valid token in Authorization header.
     /// Per OIDC Core, access token should be passed via Bearer scheme.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithValidTokenInHeader_ShouldReturnValidRequest()
+    /// <remarks>
+    /// RFC 9110 section 11.1 identifies the scheme by a case-insensitive token, so the scheme in any case is accepted.
+    /// </remarks>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ValidateAsync_WithValidTokenInHeader_ShouldReturnValidRequest(bool schemeInLowerCase)
     {
         // Arrange
         var userInfoRequest = CreateUserInfoRequest();
-        var authHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "valid_token_123");
+        var scheme = schemeInLowerCase ? TokenTypes.Bearer.ToLowerInvariant() : TokenTypes.Bearer;
+        var authHeader = new AuthenticationHeaderValue(scheme, "valid_token_123");
         var clientRequest = CreateClientRequest(authHeader: authHeader);
 
         var accessToken = CreateValidAccessToken();
