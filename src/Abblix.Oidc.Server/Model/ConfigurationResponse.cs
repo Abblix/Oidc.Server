@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 /// <remarks>
 /// Each member that can be <c>null</c> is omitted from the serialized JSON when it is, rather than emitted as
-/// <c>"field": null</c>, by an attribute on the member itself, so the omission holds whatever JSON options the host
+/// <c>"field": null</c>, by an attribute on this type, so the omission holds whatever JSON options the host
 /// configured.
 /// RFC 8414 section 2 requires that optional metadata fields be absent when not applicable - some OIDC client libraries
 /// (including <c>Microsoft.IdentityModel</c>) reject a discovery document that contains <c>null</c> values for
@@ -254,8 +254,8 @@ public record ConfigurationResponse
     /// REQUIRED by OpenID Connect Discovery 1.0 section 3. Every member here mirrors that section's
     /// REQUIRED/RECOMMENDED/OPTIONAL marker in its C# nullability, matching
     /// <see cref="Endpoints.Configuration.Interfaces.ConfigurationResponse"/>, which this record is mapped from.
-    /// A nullable member means the field is legitimately absent, and its attribute then omits it from the document
-    /// rather than writing a null.
+    /// A nullable member means the field is legitimately absent, and the type's attribute then omits it from the
+    /// document rather than writing a null.
     /// </remarks>
     [JsonPropertyName(Parameters.Issuer)]
     public required string Issuer { init; get; }
