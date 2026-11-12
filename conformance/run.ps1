@@ -51,6 +51,7 @@ $HostContainer = 'oidc-host'
 $SuiteUrl = 'https://localhost.emobix.co.uk:8443/'
 $SuiteMtlsUrl = 'https://localhost.emobix.co.uk:8444/'
 $DiscoveryUrl = 'https://oidc-host:9443/.well-known/openid-configuration'
+$RotateUrl = 'https://oidc-host:9443/conformance/rotate-keys'
 
 $RuntimeImage = 'mcr.microsoft.com/dotnet/aspnet:11.0'
 $ProbeImage = 'curlimages/curl:8.10.1'
@@ -60,6 +61,8 @@ $RepositoryRoot = Split-Path -Parent $PSScriptRoot
 $HostProject = Join-Path $RepositoryRoot 'tests/Abblix.Oidc.Server.MinimalApi.Conformance.TestHost'
 $HostAssembly = 'Abblix.Oidc.Server.MinimalApi.Conformance.TestHost.dll'
 $PublishDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-host'
+$BrowserContainer = 'oidf-browser'
+$BrowserImage = 'abblix-oidf-browser'
 
 function Write-Step([string] $Message) {
     Write-Host "==> $Message" -ForegroundColor Cyan
@@ -106,7 +109,27 @@ function Test-HostReady {
     return ($status -join '') -eq '200'
 }
 
+function Select-ExpectedFailures {
+    # The entries that apply to the plans of this run: one naming no plans applies to every run, one naming plans
+    # only when a plan of this run is among them, and the plan list itself is not something the runner reads
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $Entries,
+        [Parameter(Mandatory)] [string[]] $Plan
+    )
+    $planNames = @($Plan | ForEach-Object { ($_ -split '[\[:]', 2)[0].Trim() })
+    $selected = foreach ($entry in $Entries) {
+        $plansProperty = $entry.PSObject.Properties['plans']
+        $named = if ($plansProperty) { @($plansProperty.Value) } else { @() }
+        if ($named.Count -eq 0 -or @($named | Where-Object { $planNames -contains $_ }).Count -gt 0) {
+            $entry | Select-Object -Property * -ExcludeProperty plans
+        }
+    }
+    return , @($selected)
+}
+
 function Remove-Everything {
+    docker rm -f $BrowserContainer 2>$null | Out-Null
     docker rm -f $HostContainer 2>$null | Out-Null
     docker compose -f $ComposeFile -p $ProjectName down 2>$null | Out-Null
 }
@@ -159,6 +182,32 @@ try {
         throw
     }
 
+    # A real browser plays the end user for every page the suite publishes, in place of the suite's own headless
+    # one, which can neither take the screenshots review modules wait for nor run the session check's hashing
+    Write-Step 'Starting the browser driver'
+    docker build -q -t $BrowserImage (Join-Path $PSScriptRoot 'browser') | Out-Null
+    Assert-LastExit 'docker build (browser driver)'
+    $hostSettings = (Get-Content -Raw (Join-Path $HostProject 'appsettings.json') | ConvertFrom-Json).Conformance
+    docker rm -f $BrowserContainer 2>$null | Out-Null
+    docker run -d --name $BrowserContainer --network $Network --shm-size 1g `
+        -e "CONFORMANCE_SERVER=$SuiteUrl" `
+        -e "HOST_ORIGIN=$($hostSettings.Issuer)" `
+        -e "LOGIN_EMAIL=$($hostSettings.UserEmail)" `
+        -e "LOGIN_PASSWORD=$($hostSettings.UserPassword)" `
+        -e 'DRIVER_DEADLINE_SECONDS=14400' `
+        $BrowserImage | Out-Null
+    Assert-LastExit 'docker run (browser driver)'
+
+    # The runner fails a run in which an expected failure does not occur, so an entry naming its plans reaches the
+    # runner only when one of them is run here
+    $expectedDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-expected'
+    New-Item -ItemType Directory -Force $expectedDirectory | Out-Null
+    $expectedFailures = Select-ExpectedFailures `
+        -Entries (Get-Content -Raw (Join-Path $PSScriptRoot 'expected-failures.json') | ConvertFrom-Json) `
+        -Plan $Plan
+    ConvertTo-Json -InputObject $expectedFailures -Depth 5 |
+        Set-Content -Encoding utf8NoBOM (Join-Path $expectedDirectory 'expected-failures.json')
+
     Write-Step "Running $($Plan.Count) test plan(s)"
     # The runner's dependencies are installed in a throwaway container rather than on this machine, and the plan
     # specifications reach it as separate arguments, so their brackets and spaces are never re-parsed by a shell
@@ -166,6 +215,7 @@ try {
         'run', '--rm', '--network', $Network,
         '-v', "${SuitePath}:/suite:ro",
         '-v', "${PSScriptRoot}:/config:ro",
+        '-v', "${expectedDirectory}:/expected:ro",
         '-w', '/suite/scripts',
         '-e', "CONFORMANCE_SERVER=$SuiteUrl",
         '-e', "CONFORMANCE_SERVER_MTLS=$SuiteMtlsUrl",
@@ -177,13 +227,43 @@ try {
         $RunnerImage,
         'sh', '-c', 'pip install -q --root-user-action=ignore -r requirements.txt && exec python run-test-plan.py "$@"', 'sh',
         # Failures this setup cannot avoid, each with its reason, so they neither fail the run nor hide a new one
-        '--expected-failures-file', '/config/expected-failures.json'
+        '--expected-failures-file', '/expected/expected-failures.json'
     )
     foreach ($spec in $Plan) {
         $runner += $spec, '/config/oidcc.json'
     }
     docker @runner
     $exitCode = $LASTEXITCODE
+
+    # The plan runner starts the key rotation module the moment it is configured, so inside a plan it fails by
+    # construction; here it runs once more with the host rotating its keys between the module's two reads, as the
+    # operator does at certification
+    Write-Step 'Running the server key rotation module with the host rotating its keys'
+    $rotation = @(
+        'run', '--rm', '--network', $Network,
+        '-v', "${SuitePath}:/suite:ro",
+        '-v', "${PSScriptRoot}:/config:ro",
+        '-w', '/suite/scripts',
+        '-e', "CONFORMANCE_SERVER=$SuiteUrl",
+        '-e', "HOST_ROTATE_URL=$RotateUrl",
+        '-e', 'PYTHONPATH=/suite/scripts',
+        $RunnerImage,
+        'sh', '-c', 'pip install -q --root-user-action=ignore -r requirements.txt && exec python /config/rotate-keys.py "$@"', 'sh',
+        'oidcc-dynamic-certification-test-plan', '{"response_type":"code"}', '/config/oidcc.json'
+    )
+    docker @rotation
+    if ($LASTEXITCODE -ne 0 -and $exitCode -eq 0) {
+        $exitCode = $LASTEXITCODE
+    }
+
+    # The driver reports each module it could not drive once it is told to stop
+    Write-Step 'Stopping the browser driver'
+    docker stop -t 30 $BrowserContainer | Out-Null
+    $driverExit = [int](docker wait $BrowserContainer)
+    docker logs $BrowserContainer 2>&1 | Select-Object -Last 40
+    if ($driverExit -ne 0 -and $exitCode -eq 0) {
+        $exitCode = $driverExit
+    }
 }
 finally {
     if ($KeepRunning) {

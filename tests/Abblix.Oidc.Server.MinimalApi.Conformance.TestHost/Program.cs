@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.ImplicitFlow;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.Storages;
@@ -66,6 +67,9 @@ var tenant = new TenantDefinition
     Issuer = issuer,
     LoginUri = new Uri("/login", UriKind.Relative),
     SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+
+    // The suite's sector identifier modules run only against a server advertising pairwise subjects
+    PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) },
 };
 
 builder.Services.AddOidcServices(options =>
@@ -86,6 +90,7 @@ builder.Services.AddOidcServices(options =>
 });
 builder.Services.Decorate<IClientInfoManager, PkceOptionalForRegisteredClients>();
 builder.Services.Decorate<IEndSessionResponseFormatter, EndSessionPages>();
+builder.Services.Decorate<IAuthServiceKeysProvider, RotatingSigningKeys>();
 
 // Every client the suite registers keeps its key set, request objects and logout endpoints on the suite's host,
 // which sits at a private address on this network: name that one destination instead of lifting the refusal
@@ -107,6 +112,14 @@ app.UseAuthorization();
 app.MapOidcEndpoints();
 
 app.MapGet("/login", (string request_uri) => Results.Content(LoginPage(request_uri, error: null), "text/html"));
+
+// The operator's part of the suite's key rotation module, called by the run script between the module's two reads
+// of the published key set; this host is reachable only on the suite's network
+app.MapPost("/conformance/rotate-keys", () =>
+{
+    RotatingSigningKeys.Rotate();
+    return Results.NoContent();
+});
 
 app.MapPost("/login", async (
         [FromForm] string email,
