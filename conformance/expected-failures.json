@@ -1,0 +1,20 @@
+[
+    {
+        "test-name": "oidcc-session-management-rp-initiated-logout",
+        "variant": "*",
+        "configuration-filename": "*",
+        "current-block": "",
+        "condition": "WebRunner",
+        "expected-result": "failure",
+        "comment": "The suite's headless browser has no crypto.subtle.digest, which the check_session_iframe hashes the session with, so the session check never answers; this module is run in a real browser at certification"
+    },
+    {
+        "test-name": "oidcc-session-management-rp-initiated-logout",
+        "variant": "*",
+        "configuration-filename": "*",
+        "current-block": "",
+        "condition": "oidcc-session-management-rp-initiated-logout",
+        "expected-result": "failure",
+        "comment": "The same browser limitation, reported once more by the module as the reason it stopped"
+    }
+]

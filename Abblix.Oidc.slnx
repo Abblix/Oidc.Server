@@ -50,6 +50,7 @@
     <Project Path="tests/Abblix.Oidc.Server.UnitTests/Abblix.Oidc.Server.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.AspNetCore.UnitTests/Abblix.Oidc.Server.AspNetCore.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.Mvc.UnitTests/Abblix.Oidc.Server.Mvc.UnitTests.csproj" />
+    <Project Path="tests/Abblix.Oidc.Server.MinimalApi.Conformance.TestHost/Abblix.Oidc.Server.MinimalApi.Conformance.TestHost.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.E2E.TestHost/Abblix.Oidc.Server.E2E.TestHost.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.E2E.Tests/Abblix.Oidc.Server.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.MinimalApi.E2E.TestHost/Abblix.Oidc.Server.MinimalApi.E2E.TestHost.csproj" />

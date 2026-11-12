@@ -79,6 +79,7 @@
     <ProjectReference Include="..\Abblix.Oidc.Server.AspNetCore.UnitTests\Abblix.Oidc.Server.AspNetCore.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Oidc.Server.E2E.TestHost\Abblix.Oidc.Server.E2E.TestHost.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Oidc.Server.E2E.Tests\Abblix.Oidc.Server.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.Conformance.TestHost\Abblix.Oidc.Server.MinimalApi.Conformance.TestHost.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.E2E.TestHost\Abblix.Oidc.Server.MinimalApi.E2E.TestHost.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.E2E.Tests\Abblix.Oidc.Server.MinimalApi.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Abblix.Oidc.Server.MultiTenancy.E2E.Tests\Abblix.Oidc.Server.MultiTenancy.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />

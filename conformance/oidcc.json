@@ -1,0 +1,963 @@
+{
+  "description": "Abblix OIDC Server conformance host",
+  "server": {
+    "discoveryUrl": "https://oidc-host:9443/.well-known/openid-configuration"
+  },
+  "client": {
+    "client_name": "first-openid-client"
+  },
+  "client2": {
+    "client_name": "second-openid-client"
+  },
+  "browser": [
+    {
+      "match": "https://oidc-host:9443/connect/authorize*",
+      "tasks": [
+        {
+          "task": "Sign in",
+          "optional": true,
+          "match": "https://oidc-host:9443/login*",
+          "commands": [
+            [
+              "text",
+              "name",
+              "email",
+              "conformance@example.com"
+            ],
+            [
+              "text",
+              "name",
+              "password",
+              "conformance"
+            ],
+            [
+              "click",
+              "id",
+              "sign-in"
+            ]
+          ]
+        },
+        {
+          "task": "Verify Complete",
+          "match": "*/test/*/callback*",
+          "commands": [
+            [
+              "wait",
+              "id",
+              "submission_complete",
+              10
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "logout asks the end user nothing: the browser goes on to the client's post-logout address",
+      "match": "https://oidc-host:9443/connect/endsession*",
+      "tasks": [
+        {
+          "task": "Wait for the way back",
+          "optional": true,
+          "match": "https://oidc-host:9443/connect/endsession*",
+          "commands": [
+            [
+              "wait",
+              "contains",
+              "/post",
+              10
+            ]
+          ]
+        },
+        {
+          "task": "Verify Complete",
+          "match": "*/test/*/post*"
+        }
+      ]
+    },
+    {
+      "comment": "the suite's own page reads the session through the provider's check_session_iframe and reports the result",
+      "match": "*/test/*session_verify*",
+      "tasks": [
+        {
+          "task": "Wait for the session check",
+          "match": "*/test/*session_verify*",
+          "commands": [
+            [
+              "wait",
+              "contains",
+              "session_result",
+              20
+            ]
+          ]
+        },
+        {
+          "task": "Verify Complete",
+          "match": "*session_result*"
+        }
+      ]
+    }
+  ],
+  "override": {
+    "oidcc-prompt-login": {
+      "browser": [
+        {
+          "comment": "the second authorization shows the sign-in page again, which the test wants a picture of",
+          "match": "https://oidc-host:9443/connect/authorize*",
+          "tasks": [
+            {
+              "task": "Sign in",
+              "optional": true,
+              "match": "https://oidc-host:9443/login*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Sign in",
+                  "update-image-placeholder-optional"
+                ],
+                [
+                  "text",
+                  "name",
+                  "email",
+                  "conformance@example.com"
+                ],
+                [
+                  "text",
+                  "name",
+                  "password",
+                  "conformance"
+                ],
+                [
+                  "click",
+                  "id",
+                  "sign-in"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-max-age-1": {
+      "browser": [
+        {
+          "comment": "the second authorization shows the sign-in page again, which the test wants a picture of",
+          "match": "https://oidc-host:9443/connect/authorize*",
+          "tasks": [
+            {
+              "task": "Sign in",
+              "optional": true,
+              "match": "https://oidc-host:9443/login*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Sign in",
+                  "update-image-placeholder-optional"
+                ],
+                [
+                  "text",
+                  "name",
+                  "email",
+                  "conformance@example.com"
+                ],
+                [
+                  "text",
+                  "name",
+                  "password",
+                  "conformance"
+                ],
+                [
+                  "click",
+                  "id",
+                  "sign-in"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-ensure-registered-redirect-uri": {
+      "browser": [
+        {
+          "comment": "an unregistered redirect_uri is answered in place, never redirected to",
+          "match": "https://oidc-host:9443/connect/authorize*",
+          "tasks": [
+            {
+              "task": "Expect the redirect URI error",
+              "match": "https://oidc-host:9443/connect/authorize*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "redirect URI is not valid",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-bad-post-logout-redirect-uri": {
+      "browser": [
+        {
+          "match": "https://oidc-host:9443/connect/authorize*",
+          "tasks": [
+            {
+              "task": "Sign in",
+              "optional": true,
+              "match": "https://oidc-host:9443/login*",
+              "commands": [
+                [
+                  "text",
+                  "name",
+                  "email",
+                  "conformance@example.com"
+                ],
+                [
+                  "text",
+                  "name",
+                  "password",
+                  "conformance"
+                ],
+                [
+                  "click",
+                  "id",
+                  "sign-in"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "the server answers in place, and the test wants a picture of it",
+          "match": "https://oidc-host:9443/connect/endsession*",
+          "tasks": [
+            {
+              "task": "Expect the answer page",
+              "match": "https://oidc-host:9443/connect/endsession*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "post-logout redirect URI is not valid",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "the suite's own page reads the session through the provider's check_session_iframe and reports the result",
+          "match": "*/test/*session_verify*",
+          "tasks": [
+            {
+              "task": "Wait for the session check",
+              "match": "*/test/*session_verify*",
+              "commands": [
+                [
+                  "wait",
+                  "contains",
+                  "session_result",
+                  20
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*session_result*"
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-query-added-to-post-logout-redirect-uri": {
+      "browser": [
+        {
+          "match": "https://oidc-host:9443/connect/authorize*",
+          "tasks": [
+            {
+              "task": "Sign in",
+              "optional": true,
+              "match": "https://oidc-host:9443/login*",
+              "commands": [
+                [
+                  "text",
+                  "name",
+                  "email",
+                  "conformance@example.com"
+                ],
+                [
+                  "text",
+                  "name",
+                  "password",
+                  "conformance"
+                ],
+                [
+                  "click",
+                  "id",
+                  "sign-in"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "the server answers in place, and the test wants a picture of it",
+          "match": "https://oidc-host:9443/connect/endsession*",
+          "tasks": [
+            {
+              "task": "Expect the answer page",
+              "match": "https://oidc-host:9443/connect/endsession*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "post-logout redirect URI is not valid",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "the suite's own page reads the session through the provider's check_session_iframe and reports the result",
+          "match": "*/test/*session_verify*",
+          "tasks": [
+            {
+              "task": "Wait for the session check",
+              "match": "*/test/*session_verify*",
+              "commands": [
+                [
+                  "wait",
+                  "contains",
+                  "session_result",
+                  20
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*session_result*"
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-modified-id-token-hint": {
+      "browser": [
+        {
+          "match": "https://oidc-host:9443/connect/authorize*",
+          "tasks": [
+            {
+              "task": "Sign in",
+              "optional": true,
+              "match": "https://oidc-host:9443/login*",
+              "commands": [
+                [
+                  "text",
+                  "name",
+                  "email",
+                  "conformance@example.com"
+                ],
+                [
+                  "text",
+                  "name",
+                  "password",
+                  "conformance"
+                ],
+                [
+                  "click",
+                  "id",
+                  "sign-in"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "the server answers in place, and the test wants a picture of it",
+          "match": "https://oidc-host:9443/connect/endsession*",
+          "tasks": [
+            {
+              "task": "Expect the answer page",
+              "match": "https://oidc-host:9443/connect/endsession*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "invalid_request",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "the suite's own page reads the session through the provider's check_session_iframe and reports the result",
+          "match": "*/test/*session_verify*",
+          "tasks": [
+            {
+              "task": "Wait for the session check",
+              "match": "*/test/*session_verify*",
+              "commands": [
+                [
+                  "wait",
+                  "contains",
+                  "session_result",
+                  20
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*session_result*"
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-bad-id-token-hint": {
+      "browser": [
+        {
+          "match": "https://oidc-host:9443/connect/authorize*",
+          "tasks": [
+            {
+              "task": "Sign in",
+              "optional": true,
+              "match": "https://oidc-host:9443/login*",
+              "commands": [
+                [
+                  "text",
+                  "name",
+                  "email",
+                  "conformance@example.com"
+                ],
+                [
+                  "text",
+                  "name",
+                  "password",
+                  "conformance"
+                ],
+                [
+                  "click",
+                  "id",
+                  "sign-in"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "the server answers in place, and the test wants a picture of it",
+          "match": "https://oidc-host:9443/connect/endsession*",
+          "tasks": [
+            {
+              "task": "Expect the answer page",
+              "match": "https://oidc-host:9443/connect/endsession*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "invalid_request",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "the suite's own page reads the session through the provider's check_session_iframe and reports the result",
+          "match": "*/test/*session_verify*",
+          "tasks": [
+            {
+              "task": "Wait for the session check",
+              "match": "*/test/*session_verify*",
+              "commands": [
+                [
+                  "wait",
+                  "contains",
+                  "session_result",
+                  20
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*session_result*"
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-no-params": {
+      "browser": [
+        {
+          "match": "https://oidc-host:9443/connect/authorize*",
+          "tasks": [
+            {
+              "task": "Sign in",
+              "optional": true,
+              "match": "https://oidc-host:9443/login*",
+              "commands": [
+                [
+                  "text",
+                  "name",
+                  "email",
+                  "conformance@example.com"
+                ],
+                [
+                  "text",
+                  "name",
+                  "password",
+                  "conformance"
+                ],
+                [
+                  "click",
+                  "id",
+                  "sign-in"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "no client vouched for the logout, so the end user confirms it and is told they are signed out",
+          "match": "https://oidc-host:9443/connect/endsession*",
+          "tasks": [
+            {
+              "task": "Confirm the logout",
+              "match": "https://oidc-host:9443/connect/endsession*",
+              "commands": [
+                [
+                  "click",
+                  "id",
+                  "sign-out"
+                ]
+              ]
+            },
+            {
+              "task": "Expect the signed-out page",
+              "match": "https://oidc-host:9443/connect/endsession*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "You are signed out",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "the suite's own page reads the session through the provider's check_session_iframe and reports the result",
+          "match": "*/test/*session_verify*",
+          "tasks": [
+            {
+              "task": "Wait for the session check",
+              "match": "*/test/*session_verify*",
+              "commands": [
+                [
+                  "wait",
+                  "contains",
+                  "session_result",
+                  20
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*session_result*"
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-no-post-logout-redirect-uri": {
+      "browser": [
+        {
+          "match": "https://oidc-host:9443/connect/authorize*",
+          "tasks": [
+            {
+              "task": "Sign in",
+              "optional": true,
+              "match": "https://oidc-host:9443/login*",
+              "commands": [
+                [
+                  "text",
+                  "name",
+                  "email",
+                  "conformance@example.com"
+                ],
+                [
+                  "text",
+                  "name",
+                  "password",
+                  "conformance"
+                ],
+                [
+                  "click",
+                  "id",
+                  "sign-in"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "the server answers in place, and the test wants a picture of it",
+          "match": "https://oidc-host:9443/connect/endsession*",
+          "tasks": [
+            {
+              "task": "Expect the answer page",
+              "match": "https://oidc-host:9443/connect/endsession*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "You are signed out",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "the suite's own page reads the session through the provider's check_session_iframe and reports the result",
+          "match": "*/test/*session_verify*",
+          "tasks": [
+            {
+              "task": "Wait for the session check",
+              "match": "*/test/*session_verify*",
+              "commands": [
+                [
+                  "wait",
+                  "contains",
+                  "session_result",
+                  20
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*session_result*"
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-only-state": {
+      "browser": [
+        {
+          "match": "https://oidc-host:9443/connect/authorize*",
+          "tasks": [
+            {
+              "task": "Sign in",
+              "optional": true,
+              "match": "https://oidc-host:9443/login*",
+              "commands": [
+                [
+                  "text",
+                  "name",
+                  "email",
+                  "conformance@example.com"
+                ],
+                [
+                  "text",
+                  "name",
+                  "password",
+                  "conformance"
+                ],
+                [
+                  "click",
+                  "id",
+                  "sign-in"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "no client vouched for the logout, so the end user confirms it and is told they are signed out",
+          "match": "https://oidc-host:9443/connect/endsession*",
+          "tasks": [
+            {
+              "task": "Confirm the logout",
+              "match": "https://oidc-host:9443/connect/endsession*",
+              "commands": [
+                [
+                  "click",
+                  "id",
+                  "sign-out"
+                ]
+              ]
+            },
+            {
+              "task": "Expect the signed-out page",
+              "match": "https://oidc-host:9443/connect/endsession*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "You are signed out",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "the suite's own page reads the session through the provider's check_session_iframe and reports the result",
+          "match": "*/test/*session_verify*",
+          "tasks": [
+            {
+              "task": "Wait for the session check",
+              "match": "*/test/*session_verify*",
+              "commands": [
+                [
+                  "wait",
+                  "contains",
+                  "session_result",
+                  20
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*session_result*"
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-no-id-token-hint": {
+      "browser": [
+        {
+          "match": "https://oidc-host:9443/connect/authorize*",
+          "tasks": [
+            {
+              "task": "Sign in",
+              "optional": true,
+              "match": "https://oidc-host:9443/login*",
+              "commands": [
+                [
+                  "text",
+                  "name",
+                  "email",
+                  "conformance@example.com"
+                ],
+                [
+                  "text",
+                  "name",
+                  "password",
+                  "conformance"
+                ],
+                [
+                  "click",
+                  "id",
+                  "sign-in"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "no client vouched for the logout, so the end user confirms it and is told they are signed out",
+          "match": "https://oidc-host:9443/connect/endsession*",
+          "tasks": [
+            {
+              "task": "Confirm the logout",
+              "match": "https://oidc-host:9443/connect/endsession*",
+              "commands": [
+                [
+                  "click",
+                  "id",
+                  "sign-out"
+                ]
+              ]
+            },
+            {
+              "task": "Expect the signed-out page",
+              "match": "https://oidc-host:9443/connect/endsession*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "You are signed out",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "the suite's own page reads the session through the provider's check_session_iframe and reports the result",
+          "match": "*/test/*session_verify*",
+          "tasks": [
+            {
+              "task": "Wait for the session check",
+              "match": "*/test/*session_verify*",
+              "commands": [
+                [
+                  "wait",
+                  "contains",
+                  "session_result",
+                  20
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*session_result*"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
