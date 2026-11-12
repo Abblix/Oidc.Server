@@ -29,9 +29,10 @@ jobs:
     # the host and the browser as containers on one network, which needs a Docker daemon, and the shared runners carry
     # none by design. The job holds no secret, and a pull request from a fork runs on a runner thrown away afterwards
     runs-on: ubuntu-latest
-    # The 43 plans take about 15 minutes on a workstation; there are no CI durations yet, so the ceiling is wide and
-    # is set again from five healthy runs
-    timeout-minutes: 60
+    # The 43 plans take about 15 minutes on a workstation; there are no CI durations yet, so the ceilings are wide and
+    # are set again from five healthy runs. The job's is the sum of its steps', so a run stopped at the plans' own
+    # ceiling still collects and uploads its evidence
+    timeout-minutes: 65
     permissions:
       contents: read
     steps:

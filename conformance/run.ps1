@@ -264,10 +264,14 @@ if (-not (Get-Command docker -CommandType Application -ErrorAction SilentlyConti
     throw 'docker was not found on PATH: the suite and the host both run in containers'
 }
 
-if ($ResultsPath -and (Test-Path -LiteralPath $ResultsPath) -and
-    (Get-ChildItem -LiteralPath $ResultsPath -Force | Select-Object -First 1)) {
+if ($ResultsPath) {
     # Two runs' evidence in one place cannot be told apart afterwards
-    throw "$ResultsPath is not empty: -ResultsPath has to name a new or empty directory"
+    if ((Test-Path -LiteralPath $ResultsPath) -and (-not (Test-Path -LiteralPath $ResultsPath -PathType Container) -or
+            (Get-ChildItem -LiteralPath $ResultsPath -Force | Select-Object -First 1))) {
+        throw "$ResultsPath is not an empty directory: -ResultsPath has to name a new or empty directory"
+    }
+    # Created before anything else changes, since the finally block writes the evidence into it
+    $ResultsPath = (New-Item -ItemType Directory -Force $ResultsPath).FullName
 }
 
 $imageTagBefore = $env:IMAGE_TAG
@@ -293,9 +297,6 @@ try {
         }
     }
     $ComposeFile = Join-Path $SuitePath 'docker-compose-prebuilt.yml'
-    if ($ResultsPath) {
-        $ResultsPath = (New-Item -ItemType Directory -Force $ResultsPath).FullName
-    }
 
     Write-Step "Starting the conformance suite, images $($env:IMAGE_TAG ?? 'latest'), scripts from $SuitePath"
     docker compose -f $ComposeFile -p $ProjectName up -d
@@ -417,11 +418,18 @@ try {
     }
 }
 finally {
-    Save-Evidence
     $env:IMAGE_TAG = $imageTagBefore
+    # Collecting the evidence must neither hide why the run failed nor stop the cleanup after it
+    try {
+        Save-Evidence
+    }
+    catch {
+        Write-Warning "The evidence of the run was not saved in full: $($_.Exception.Message)"
+    }
     if ($KeepRunning) {
         Write-Step "Left running: the suite at $SuiteUrl and the host as $HostContainer; stop them with"
-        Write-Host "  docker rm -f $HostContainer; docker compose -f `"$ComposeFile`" -p $ProjectName down"
+        $stopSuite = if ($ComposeFile) { "; docker compose -f `"$ComposeFile`" -p $ProjectName down" } else { '' }
+        Write-Host "  docker rm -f $HostContainer$stopSuite"
     }
     else {
         Write-Step 'Removing the host and the suite'
