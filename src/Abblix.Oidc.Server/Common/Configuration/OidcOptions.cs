@@ -447,15 +447,30 @@ public record OidcOptions
 	public TimeSpan SessionClientsRetention { get; set; } = TimeSpan.FromDays(31);
 
 	/// <summary>
-	/// How far a token may appear to have been issued after a revocation cutoff and still be refused by it.
+	/// The worst difference between the clocks of this server's own instances: how far a token this server issued
+	/// may appear to be dated ahead and still be accepted, and how far it may appear to have been issued after a
+	/// revocation cutoff and still be refused by it. Defaults to five seconds.
 	/// </summary>
 	/// <remarks>
-	/// The cutoff compares an instant one instance recorded against an <c>iat</c> another instance stamped, so
+	/// <para>
+	/// Not the tolerance for assertions other parties sign, which is <see cref="JwtBearerOptions.ClockSkew"/>: this
+	/// one prices the drift between the instances of this deployment, and one number holds it, since two settings
+	/// for one fact would be set apart and the larger one would let a token through the smaller one's gap.
+	/// </para>
+	/// <para>
+	/// A token this server issued is read back by whichever instance the next request reaches, and that instance's
+	/// clock may lag the one that issued it, so a token presented within the second it was issued would read as not
+	/// yet valid. Its <c>nbf</c> and <c>iat</c> may therefore be up to this far ahead; its <c>exp</c> is never
+	/// extended, since the expiry the issuing instance set is a deadline no instance moves.
+	/// </para>
+	/// <para>
+	/// A revocation cutoff compares an instant one instance recorded against an <c>iat</c> another instance stamped, so
 	/// the two come from different clocks. The error is not symmetric in consequence. A token that reads as
 	/// older than it is gets refused once and the client asks again; a token that reads as newer escapes the
 	/// revocation entirely, and because a refresh rotation carries the original <c>iat</c> forward it keeps
 	/// escaping on every use. A drift of seconds therefore becomes access that never ends, and nothing
 	/// reports it.
+	/// </para>
 	/// <para>
 	/// The value is added to the cutoff, so it widens what a revocation catches, and the cost is that it
 	/// catches more than the revocation named. A token minted after a legitimate sign-in, but inside this
@@ -478,10 +493,11 @@ public record OidcOptions
 	/// </para>
 	/// <para>
 	/// Zero is allowed and means the tokens are trusted to carry comparable instants, which is true of a
-	/// single-instance deployment and of nothing else.
+	/// single-instance deployment and of nothing else. A tenant held to FAPI 2.0 is refused while the value is above
+	/// that profile's ceiling.
 	/// </para>
 	/// </remarks>
-	public TimeSpan RevocationCutoffSkew { get; set; } = TimeSpan.FromSeconds(5);
+	public TimeSpan ReplicaClockSkew { get; set; } = TimeSpan.FromSeconds(5);
 
 	/// <summary>
 	/// Whether ending a session also revokes the tokens issued within it.
