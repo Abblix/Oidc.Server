@@ -11,6 +11,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
+using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.SecurityEvents.Infrastructure;
@@ -22,10 +23,14 @@ namespace Abblix.SecurityEvents.Infrastructure;
 /// <remarks>
 /// <para>
 /// A key rollover is noticed two ways: the cache lifetime expires, or a token names a "kid" the
-/// cached set lacks - the earliest possible signal - which forces one refetch, rate-limited so a
-/// flood of bogus identifiers cannot turn it into hammering the issuer. Concurrent resolutions
-/// may fetch the same document twice; the copies are identical and the last write wins, which is
-/// cheaper than a lock on every validation.
+/// cached set lacks - the earliest possible signal - which forces one refetch.
+/// </para>
+/// <para>
+/// Both signals are in the sender's hands, so fetches go through one <see cref="CoalescingLoader{TKey,TValue}"/>
+/// per issuer: resolutions arriving while a fetch runs wait for it, and a finished fetch, succeeded or failed,
+/// answers every resolution for <see cref="JwksKeyResolutionOptions.RolloverRefetchCooldown"/> after it. A flood of
+/// bogus identifiers therefore reaches the issuer at most once per cooldown, and so does every token while the
+/// issuer is failing.
 /// </para>
 /// <para>
 /// A fetch failure propagates as its exception rather than as an empty key set: empty means "this
@@ -48,6 +53,8 @@ public sealed class JwksIssuerKeyResolver(
 
     private readonly ConcurrentDictionary<string, CachedKeySet> _cache = new(StringComparer.Ordinal);
 
+    private readonly CoalescingLoader<string, CachedKeySet> _fetches = new(clock, StringComparer.Ordinal);
+
     /// <inheritdoc />
     public async IAsyncEnumerable<JsonWebKey> ResolveSigningKeysAsync(
         string issuer,
@@ -61,7 +68,11 @@ public sealed class JwksIssuerKeyResolver(
 
         if (ShouldFetch(entry, keyId, now))
         {
-            entry = new CachedKeySet(await FetchKeysAsync(issuer, cancellationToken), now);
+            entry = await _fetches.LoadAsync(
+                issuer,
+                async key => new CachedKeySet(await FetchKeysAsync(key, CancellationToken.None), clock.GetUtcNow()),
+                options.Value.RolloverRefetchCooldown,
+                cancellationToken);
             _cache[issuer] = entry;
         }
 
@@ -79,11 +90,8 @@ public sealed class JwksIssuerKeyResolver(
         }
 
         // The rollover signal: the token names a key the cache has never seen. One refetch may
-        // heal it; repeating the refetch for every such token would let anyone with a bogus
-        // "kid" drive traffic to the issuer, hence the cooldown.
-        return keyId is not null
-            && now - entry.FetchedAt >= options.Value.RolloverRefetchCooldown
-            && entry.Keys.All(key => key.KeyId != keyId);
+        // heal it; the loader keeps such refetches to one per cooldown, however many tokens ask.
+        return keyId is not null && entry.Keys.All(key => key.KeyId != keyId);
     }
 
     private async Task<IReadOnlyList<JsonWebKey>> FetchKeysAsync(string issuer, CancellationToken cancellationToken)

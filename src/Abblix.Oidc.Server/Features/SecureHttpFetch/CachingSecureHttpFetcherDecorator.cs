@@ -24,17 +24,24 @@ namespace Abblix.Oidc.Server.Features.SecureHttpFetch;
 /// registration rather than read from a shared setting, so each one states the staleness it can live with:
 /// a key set backing token issuance and one backing an occasional signature check do not want the same
 /// lifetime, and the transport contract stays free of the caller's policy.</param>
-/// <param name="options">Supplies <see cref="SecureHttpFetchOptions.RefetchInterval"/>, read on each refetch so a
+/// <param name="options">Supplies <see cref="SecureHttpFetchOptions.RefetchInterval"/>, read on each fetch so a
 /// host changing it at runtime is honored.</param>
+/// <param name="fetches">Shares one fetch of a URI among the callers asking for it at once, and serves a finished
+/// fetch, succeeded or failed, for the hold that follows it. Instances of this decorator are created per resolution,
+/// so the loader is the container's single one, and every consumer asking for the same URI shares its fetches.</param>
 public class CachingSecureHttpFetcherDecorator(
 	ISecureHttpFetcher inner,
 	IMemoryCache cache,
 	TimeSpan cacheDuration,
-	IOptionsMonitor<SecureHttpFetchOptions> options) : ISecureHttpFetcher
+	IOptionsMonitor<SecureHttpFetchOptions> options,
+	CoalescingLoader<string, object> fetches) : ISecureHttpFetcher
 {
-	private static readonly Lock RefetchGate = new();
-
 	/// <inheritdoc />
+	/// <remarks>
+	/// The URI is decided by whoever registered it and the number of fetches by whoever sends requests, so a document
+	/// that is not held is fetched once for all the requests arriving together, and a fetch that failed answers the
+	/// requests after it for the hold rather than sending each of them to a server that is down.
+	/// </remarks>
 	public async Task<Result<T, OidcError>> FetchAsync<T>(Uri uri, bool refetch = false)
 	{
 		if (refetch)
@@ -45,40 +52,38 @@ public class CachingSecureHttpFetcherDecorator(
 		if (cache.TryGetValue<T>(cacheKey, out var cached) && !ReferenceEquals(cached, null))
 			return cached;
 
-		var result = await inner.FetchAsync<T>(uri);
-		Store(cacheKey, result);
-		return result;
+		return (Result<T, OidcError>)await fetches.LoadAsync(
+			FetchKey<T>(uri),
+			async _ =>
+			{
+				var result = await inner.FetchAsync<T>(uri);
+				Store(cacheKey, result);
+				return result;
+			},
+			HoldFor());
 	}
 
 	/// <summary>
 	/// Fetches the URI past the copy held, at most once per <see cref="SecureHttpFetchOptions.RefetchInterval"/>.
 	/// </summary>
-	private Task<Result<T, OidcError>> RefetchAsync<T>(Uri uri)
-	{
-		var hold = HoldFor();
-		if (hold <= TimeSpan.Zero)
-			return FetchAnewAsync<T>(uri);
-
-		// The fetch itself is what is held, so every caller inside the interval awaits the same one: requests
-		// arriving together after a key rotation all see the new set. The cache does not create an entry atomically,
-		// and instances are per scope, so one gate shared by all of them is what keeps a parallel burst to one fetch
-		lock (RefetchGate)
-		{
-			return cache.GetOrCreate(RefetchKey<T>(uri), entry =>
-			{
-				entry.AbsoluteExpirationRelativeToNow = hold;
-				return FetchAnewAsync<T>(uri);
-			})!;
-		}
-	}
+	/// <remarks>
+	/// The fetch itself is what is held, so every caller inside the interval awaits the same one: requests arriving
+	/// together after a key rotation all see the new set. It is held apart from an ordinary fetch, so a fetch that just
+	/// read the old set does not answer the refetch a rotated key asks for.
+	/// </remarks>
+	private async Task<Result<T, OidcError>> RefetchAsync<T>(Uri uri)
+		=> (Result<T, OidcError>)await fetches.LoadAsync(
+			RefetchKey<T>(uri),
+			async _ => await FetchAnewAsync<T>(uri),
+			HoldFor());
 
 	/// <summary>
-	/// How long one refetch answers the next: the refetch interval, but never longer than the copy itself is held.
+	/// How long one fetch answers the next: the refetch interval, but never longer than the copy itself is held.
 	/// </summary>
 	/// <remarks>
 	/// A refetch held past the copy's own lifetime would serve a key set older than the copy, so a key its signer
 	/// removed, and that a fresh copy no longer carries, would verify again for whoever names an unknown key. With
-	/// caching off every fetch is already fresh, and nothing is held.
+	/// caching off every fetch is already fresh, and nothing is held past the callers sharing it.
 	/// </remarks>
 	private TimeSpan HoldFor()
 	{
@@ -122,7 +127,9 @@ public class CachingSecureHttpFetcherDecorator(
 	private static string CacheKey(Uri uri)
 		=> $"{nameof(Abblix)}.{nameof(Oidc)}.{nameof(Server)}.{nameof(Features)}.{nameof(SecureHttpFetch)}:{uri}";
 
-	// Apart from the document itself, so the throttle lasts its interval whatever the document's lifetime, and typed,
+	// Apart from the document itself, so a held fetch lasts its interval whatever the document's lifetime, and typed,
 	// since one URI read as two types is two fetches
+	private static string FetchKey<T>(Uri uri) => $"{CacheKey(uri)}:fetch:{typeof(T).FullName}";
+
 	private static string RefetchKey<T>(Uri uri) => $"{CacheKey(uri)}:refetch:{typeof(T).FullName}";
 }
