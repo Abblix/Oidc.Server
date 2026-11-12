@@ -65,9 +65,9 @@ public class TokenRequestProcessor(
 	{
 		var clientInfo = request.ClientInfo;
 
-		var authContext = tokenContextEvaluator.EvaluateAuthorizationContext(request);
+		var requested = tokenContextEvaluator.EvaluateAuthorizationContext(request);
 
-		authContext = OfflineAccessIgnoredUnlessAllowed(clientInfo, authContext);
+		var authContext = OfflineAccessIgnoredUnlessAllowed(clientInfo, requested);
 
 		// Read before the token service is handed the context: whether a refresh token and an ID token are issued
 		// follows what was granted, while the access token may carry less, narrowed to the resources it names.
@@ -99,6 +99,16 @@ public class TokenRequestProcessor(
 			return new OidcError(
 				ErrorCodes.InvalidGrant,
 				"The grant expired before a token could be issued under it.");
+		}
+
+		// Scopes were asked for and every one was dropped on the way, by the offline access policy or by narrowing to
+		// the token's resources. RFC 6749 section 5.1 lets an absent scope mean "as requested" and section 3.3 allows
+		// no empty value, so no answer carrying a token can say so; section 5.2 refuses it as invalid_scope
+		if (requested.Scope.Length > 0 && !accessToken.Token.Payload.Scope.Any())
+		{
+			return new OidcError(
+				ErrorCodes.InvalidScope,
+				"None of the requested scopes can be granted to this client for the resources the token is issued for.");
 		}
 
 		var response = CreateResponse(accessToken, lifetime, authContext);

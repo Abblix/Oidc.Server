@@ -88,12 +88,19 @@ public class TokenRequestProcessorTests
 
     private static readonly DateTimeOffset AccessTokenIssuedAt = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
 
+    private const string AccessTokenScope = "api.read";
+
     private static EncodedJsonWebToken CreateAccessToken() => CreateAccessToken(TimeSpan.FromMinutes(10));
 
-    private static EncodedJsonWebToken CreateAccessToken(TimeSpan lifetime) => new(
+    private static EncodedJsonWebToken CreateAccessToken(TimeSpan lifetime, string[]? scope = null) => new(
         new Jwt.JsonWebToken
         {
-            Payload = { IssuedAt = AccessTokenIssuedAt, ExpiresAt = AccessTokenIssuedAt + lifetime },
+            Payload =
+            {
+                IssuedAt = AccessTokenIssuedAt,
+                ExpiresAt = AccessTokenIssuedAt + lifetime,
+                Scope = scope ?? [AccessTokenScope],
+            },
         },
         "access_token_jwt");
 
@@ -507,6 +514,61 @@ public class TokenRequestProcessorTests
         Assert.NotNull(issuedUnder);
         Assert.Equal([ApiScope], issuedUnder.Scope);
         _refreshTokenService.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// A request naming scopes none of which survives - offline_access from a client not allowed it, a scope its
+    /// resource narrowed away - is refused with invalid_scope (RFC 6749 section 5.2) rather than answered with a token
+    /// of no scope, which section 5.1 would let the client read as granted as requested. Nothing else is issued.
+    /// </summary>
+    [Theory]
+    [InlineData(Scopes.OfflineAccess)]
+    [InlineData(AccessTokenScope)]
+    public async Task ProcessAsync_RequestedScopesAllDropped_IsRefusedWithInvalidScope(string requested)
+    {
+        var request = new ValidTokenRequest(
+            CreateTokenRequest(),
+            CreateAuthorizedGrant([requested]),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.Disabled },
+            [],
+            []);
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(new AuthorizationContext(TestConstants.DefaultClientId, [requested], null));
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(), It.IsAny<AuthorizationContext>(),
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(CreateAccessToken(TimeSpan.FromMinutes(10), scope: []));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidScope, error.Error);
+        _refreshTokenService.VerifyNoOtherCalls();
+        _identityTokenService.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// A request naming no scope at all, and given none by default, is issued a token with no scope: the refusal
+    /// above is about scopes asked for and dropped, not about a token carrying none.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_NoScopeRequested_IsIssuedATokenWithNoScope()
+    {
+        var request = CreateValidTokenRequest([]);
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(new AuthorizationContext(TestConstants.DefaultClientId, [], null));
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(), It.IsAny<AuthorizationContext>(),
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(CreateAccessToken(TimeSpan.FromMinutes(10), scope: []));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>
