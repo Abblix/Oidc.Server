@@ -186,6 +186,15 @@ public record AuthorizationContext
     public JsonObject? Actor { get; init; }
 
     /// <summary>
+    /// Whether the client named no scope at the authorization step this grant comes from - the authorization, device
+    /// authorization or backchannel authentication request - so <see cref="Scope"/> began as the default the server
+    /// served it with (RFC 6749 section 3.3). The token endpoint refuses a request whose named scopes narrowing to
+    /// the token's resources leaves none of, and a default the client never named is not among them. A grant stored
+    /// before this member existed reads false, as a scope the client named.
+    /// </summary>
+    public bool ClientNamedNoScope { get; init; }
+
+    /// <summary>
     /// RFC 8693 section 2.1 <c>audience</c> request parameter passed through to the issued token. Logical
     /// names of the relying party for which the requested token is intended. Distinct from
     /// <see cref="Resources"/> (RFC 8707 absolute URIs); audience values are opaque strings. JWT

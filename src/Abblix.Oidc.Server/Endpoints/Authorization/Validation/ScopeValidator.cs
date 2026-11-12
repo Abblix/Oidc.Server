@@ -43,7 +43,13 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 		if (context.ClientInfo.ScopeServedFor(context.Request.Scope) is not { } scope)
 			return context.InvalidScope(ScopeRefusals.NoneNamed);
 
-		context.Request = context.Request with { Scope = scope };
+		// A request coming back from a page already carries the default it was served with, so whether the client
+		// named a scope is kept from the first pass rather than read again from a scope that is no longer empty
+		context.Request = context.Request with
+		{
+			Scope = scope,
+			ClientNamedNoScope = context.Request.ClientNamedNoScope || context.Request.Scope.Length == 0,
+		};
 
 		if (context.Request.Scope.Contains(Scopes.OfflineAccess))
 		{

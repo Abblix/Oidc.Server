@@ -132,12 +132,15 @@ public class TokenRequestProcessor(
 	/// authorization step a code, a device code or a backchannel request comes from.
 	/// </summary>
 	/// <remarks>
-	/// The other grants naming no scope are given one by the server - the subject token's on an exchange, the client's
-	/// default otherwise - and a token left with none of it answers a request that asked for nothing.
+	/// At that step a client naming no scope is served its default, which the grant marks, so a default the client
+	/// never named does not count. The other grants naming no scope in the token request are given one by the server
+	/// - the subject token's on an exchange, the client's default otherwise, whatever a host's own grant supplies - and
+	/// a token left with none of it answers a request that asked for nothing. A refresh token is minted only with
+	/// offline_access, which no resource declares, so a refreshed token naming no scope never ends with none.
 	/// </remarks>
 	private static bool ClientNamedScope(ValidTokenRequest request, AuthorizationContext context)
 		=> request.Model.Scope is { Length: > 0 } ||
-		   context.Scope.Length > 0 &&
+		   context is { Scope.Length: > 0, ClientNamedNoScope: false } &&
 		   request.Model.GrantType is GrantTypes.AuthorizationCode or GrantTypes.DeviceAuthorization or GrantTypes.Ciba;
 
 	/// <summary>

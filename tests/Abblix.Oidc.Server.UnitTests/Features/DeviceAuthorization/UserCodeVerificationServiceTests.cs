@@ -294,6 +294,40 @@ public class UserCodeVerificationServiceTests
     }
 
     /// <summary>
+    /// Whether the client named a scope is a fact about the device request, not something the host's verification
+    /// page knows, so the approved grant carries the request's answer whatever context the host built.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ApproveAsync_CarriesWhetherTheClientNamedAScope_OntoTheHostsGrant(bool clientNamedNoScope)
+    {
+        var record = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
+        {
+            ExpiresAt = Now.AddMinutes(5),
+            ClientNamedNoScope = clientNamedNoScope,
+        };
+        var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
+        storage
+            .Setup(store => store.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((Reference, record));
+        storage
+            .Setup(store => store.TryGetAsync(TestTenant.Matched, It.IsAny<DeviceAuthorizationReference>()))
+            .ReturnsAsync(record);
+        var service = new UserCodeVerificationService(
+            new CapturingLogger<UserCodeVerificationService>(),
+            storage.Object,
+            Mock.Of<IUserCodeRateLimiter>(),
+            new UserCodeNormalizer(Options.Create(DeviceOptions())),
+            Mock.Of<IRequestInfoProvider>(),
+            new FakeTimeProvider(Now));
+
+        Assert.True(await service.ApproveAsync(SingleIssuer.Tenant, CanonicalUserCode, GrantWith(null)));
+
+        Assert.Equal(clientNamedNoScope, record.AuthorizedGrant?.Context.ClientNamedNoScope);
+    }
+
+    /// <summary>
     /// A record past its lifetime is refused, and the refusal counts as a failed attempt.
     /// </summary>
     /// <remarks>

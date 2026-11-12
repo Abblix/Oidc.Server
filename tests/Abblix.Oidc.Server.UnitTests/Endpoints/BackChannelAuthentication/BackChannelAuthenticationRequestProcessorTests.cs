@@ -76,7 +76,7 @@ public class BackChannelAuthenticationRequestProcessorTests
     }
 
     private ValidBackChannelAuthenticationRequest Request(
-        string? hintedSubject, string? claimsJson = null, JsonArray? authorizationDetails = null)
+        string? hintedSubject, string? claimsJson = null, JsonArray? authorizationDetails = null, bool namesScope = true)
     {
         var hint = hintedSubject is null
             ? null
@@ -89,7 +89,7 @@ public class BackChannelAuthenticationRequestProcessorTests
             new BackChannelAuthenticationValidationContext(
                 new WireRequest
                 {
-                    Scope = [Scopes.OpenId],
+                    Scope = namesScope ? [Scopes.OpenId] : [],
                     Claims = claimsJson is null
                         ? null
                         : JsonSerializer.Deserialize<RequestedClaims>(claimsJson),
@@ -278,6 +278,28 @@ public class BackChannelAuthenticationRequestProcessorTests
         var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(Approved));
 
         Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// The scope validator serves a request naming no scope with the client's default without rewriting the
+    /// request, so the stored grant reads whether the client named one from the request as it was sent.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task TheStoredGrant_SaysWhetherTheClientNamedAScope(bool namesScope, bool expected)
+    {
+        HostAuthenticates(Approved);
+        StoredRequest? stored = null;
+        _storage
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((TenantDefinition _, StoredRequest request, TimeSpan _) => stored = request)
+            .ReturnsAsync("auth-req-id");
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, namesScope: namesScope));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(expected, stored?.AuthorizedGrant.Context.ClientNamedNoScope);
     }
 
     /// <summary>

@@ -60,6 +60,7 @@ internal static class AuthorizationContextMapper
         if (source.Actor is not null)
             proto.ActorJson = source.Actor.ToJsonString();
 
+        proto.ClientNamedNoScope = source.ClientNamedNoScope;
         return proto;
     }
 
@@ -86,6 +87,7 @@ internal static class AuthorizationContextMapper
             Actor = source.HasActorJson
                 ? JsonNode.Parse(source.ActorJson) as JsonObject
                 : null,
+            ClientNamedNoScope = source.ClientNamedNoScope,
         };
     }
 }

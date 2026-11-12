@@ -135,6 +135,10 @@ public static class TestConstants
     /// <summary>Confidential authorization code client whose access tokens each name one resource.</summary>
     public const string SingleResourceClientId = "e2e-single-resource";
 
+    /// <summary>Confidential authorization code client whose default scope is one only <see cref="ApiResource"/>
+    /// declares.</summary>
+    public const string DefaultScopeCodeClientId = "e2e-default-scope-code";
+
     /// <summary>The single canonical redirect_uri.</summary>
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri shared by every pre-seeded client; not a deployment URL.")]
