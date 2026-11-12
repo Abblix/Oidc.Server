@@ -28,9 +28,8 @@ namespace Abblix.Oidc.Server.Features.ImplicitFlow;
 /// This builder is order-dependent: it reads <see cref="SuccessfullyAuthenticated.Code"/>
 /// and <see cref="SuccessfullyAuthenticated.AccessToken"/> populated by earlier builders to
 /// compute the <c>c_hash</c> and <c>at_hash</c> claims when those response components are
-/// present. The orchestrator iterates response-type parts in canonical order (<c>code</c> →
-/// <c>token</c> → <c>id_token</c>) so this dependency holds without explicit sequencing on
-/// the builder side.
+/// present. The authorization request processor runs the <c>id_token</c> builder after every other one,
+/// whatever order they were registered in, so this dependency holds without sequencing on the builder side.
 /// </remarks>
 public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
     : IAuthorizationResponseBuilder

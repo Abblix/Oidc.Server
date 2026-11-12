@@ -49,6 +49,14 @@ public class AuthorizationRequestProcessor(
 	// here from the constructor's arguments so the processor's public constructor stays as hosts call it.
 	private readonly UserConsentsReader _consentsReader = new(consentsProvider, clock);
 
+	// The ID token hashes the code and the access token issued beside it (OpenID Connect Core 1.0 sections 3.3.2.11
+	// and 3.2.2.10), so its builder runs after the others. Ordered here rather than left to registration order, which
+	// puts it ahead of the code builder for a host that enables the Implicit Flow before the core registration.
+	private readonly IAuthorizationResponseBuilder[] _responseBuilders =
+	[
+		..responseProcessors.OrderBy(builder => builder.ResponseType == ResponseTypes.IdToken),
+	];
+
 	private readonly UserInteractionStep _interactionStep = new(interactionRequirement);
 
 	private readonly AuthorizationContextBuilder _contextBuilder = new(consentConstraintEnforcer);
@@ -205,20 +213,15 @@ public class AuthorizationRequestProcessor(
 
 		var authorizedGrant = new AuthorizedGrant(authSession, authContext) { AuthorizedAt = clock.GetUtcNow() };
 
-		// Dispatch each requested response-type part to its registered builder. The DI
-		// registration order - AuthorizationCodeBuilder in the core registration, then
-		// TokenResponseBuilder and IdTokenResponseBuilder added by EnableImplicitFlow -
-		// preserves the dependency IdTokenResponseBuilder has on the code and access-token
-		// fields populated by earlier builders (used to compute c_hash / at_hash). Parts
-		// whose builders are not registered (e.g. token / id_token when Implicit Flow is not
-		// enabled) cannot reach this point: FlowTypeValidator rejects the request earlier
-		// with unsupported_response_type.
-		foreach (var processor in responseProcessors)
+		// Dispatch each requested response-type part to its registered builder. Parts whose builders are not
+		// registered (e.g. token / id_token when Implicit Flow is not enabled) cannot reach this point:
+		// FlowTypeValidator rejects the request earlier with unsupported_response_type.
+		foreach (var builder in _responseBuilders)
 		{
-			if (!responseType.HasFlag(processor.ResponseType))
+			if (!responseType.HasFlag(builder.ResponseType))
 				continue;
 
-			await processor.BuildResponseAsync(tenant, request, authorizedGrant, result);
+			await builder.BuildResponseAsync(tenant, request, authorizedGrant, result);
 		}
 
 		// Return the final authorization result containing codes and tokens as needed.
