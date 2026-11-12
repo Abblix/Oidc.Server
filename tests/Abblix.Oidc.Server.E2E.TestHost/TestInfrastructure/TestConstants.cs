@@ -136,7 +136,7 @@ public static class TestConstants
     public const string SingleResourceClientId = "e2e-single-resource";
 
     /// <summary>Confidential authorization code client whose default scope is one only <see cref="ApiResource"/>
-    /// declares.</summary>
+    /// declares, and which receives offline access only when the request asks for consent.</summary>
     public const string DefaultScopeCodeClientId = "e2e-default-scope-code";
 
     /// <summary>The single canonical redirect_uri.</summary>

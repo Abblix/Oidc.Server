@@ -124,6 +124,7 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
         Mint(TestConstants.DefaultScopeCodeClientId, secret, redirect, allowlist: null, idTokenRar: false) with
         {
             DefaultScope = [TestConstants.ApiScope],
+            OfflineAccess = OfflineAccess.ConsentRequired,
         },
 
         // RFC 6749 section 4.4 client_credentials client, used to verify that an RFC 8707 resource
