@@ -80,8 +80,8 @@ public class PushedRequestFetcher(
     }
 
     /// <summary>
-    /// Fetches the request stored under the URN, refusing a page of a flow that already ended and a request another
-    /// client names itself in.
+    /// Fetches the request stored under the URN, refusing a page of a flow that already ended and a request that
+    /// names a client other than the one that pushed it.
     /// </summary>
     /// <remarks>
     /// RFC 9126 section 4 validates a request arising from a pushed one as any other, and RFC 9101 section 6.3
@@ -117,7 +117,7 @@ public class PushedRequestFetcher(
 
             _ when namedClientId != null && requestObject.ClientId != namedClientId
                 => ErrorFactory.InvalidRequestUri(
-                    $"The request by {requestUrn} was pushed by another client than the one this request names"),
+                    $"The request by {requestUrn} was pushed by a different client than the one this request names"),
 
             // Carry the URN forward on a dedicated, non-wire field - not RequestUri, whose https
             // validation a urn: value would fail in the next fetcher - so the validator can surface it
