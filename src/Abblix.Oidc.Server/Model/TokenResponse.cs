@@ -17,6 +17,7 @@ namespace Abblix.Oidc.Server.Model;
 /// transport adapters (MVC, Minimal API) serialize; serialization is identical across frameworks, so a single core
 /// type serves both.
 /// </summary>
+[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 public record TokenResponse
 {
     /// <summary>

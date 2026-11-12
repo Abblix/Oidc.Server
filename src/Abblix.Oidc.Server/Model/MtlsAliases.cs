@@ -18,6 +18,7 @@ namespace Abblix.Oidc.Server.Model;
 /// <see cref="ConfigurationResponse"/>.
 /// Properties are omitted from the serialized JSON when null.
 /// </summary>
+[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 public record MtlsAliases
 {
     /// <summary>
@@ -25,7 +26,6 @@ public record MtlsAliases
     /// with <c>tls_client_auth</c> or <c>self_signed_tls_client_auth</c>.
     /// </summary>
     [JsonPropertyName(ConfigurationResponse.Parameters.TokenEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? TokenEndpoint { get; init; }
 
     /// <summary>
@@ -33,14 +33,12 @@ public record MtlsAliases
     /// reachable on the mTLS host so that revocation calls reuse the same client certificate.
     /// </summary>
     [JsonPropertyName(ConfigurationResponse.Parameters.RevocationEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? RevocationEndpoint { get; init; }
 
     /// <summary>
     /// The mTLS-bound introspection endpoint URL (<c>introspection_endpoint</c>) per RFC 7662.
     /// </summary>
     [JsonPropertyName(ConfigurationResponse.Parameters.IntrospectionEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? IntrospectionEndpoint { get; init; }
 
     /// <summary>
@@ -48,7 +46,6 @@ public record MtlsAliases
     /// are certificate-bound and must be presented over the same client certificate context.
     /// </summary>
     [JsonPropertyName(ConfigurationResponse.Parameters.UserInfoEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? UserInfoEndpoint { get; init; }
 
     /// <summary>
@@ -56,7 +53,6 @@ public record MtlsAliases
     /// RFC 9126, where a client authenticating with its certificate pushes its request.
     /// </summary>
     [JsonPropertyName(ConfigurationResponse.Parameters.PushedAuthorizationRequestEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? PushedAuthorizationRequestEndpoint { get; init; }
 
     /// <summary>
@@ -64,7 +60,6 @@ public record MtlsAliases
     /// OpenID Connect CIBA, where a client authenticating with its certificate starts an authentication.
     /// </summary>
     [JsonPropertyName(ConfigurationResponse.Parameters.BackchannelAuthenticationEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? BackChannelAuthenticationEndpoint { get; init; }
 
     /// <summary>
@@ -72,6 +67,5 @@ public record MtlsAliases
     /// client authenticating with its certificate starts a device authorization.
     /// </summary>
     [JsonPropertyName(ConfigurationResponse.Parameters.DeviceAuthorizationEndpoint)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? DeviceAuthorizationEndpoint { get; init; }
 }

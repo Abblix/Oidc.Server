@@ -40,7 +40,7 @@ public class TokenResponseFormatter(ITenantAccessor tenantAccessor) : ITokenResp
             ExpiresIn = success.ExpiresIn,
 
             RefreshToken = success.RefreshToken?.EncodedJwt,
-            Scope = success.Scope.ToArray(),
+            Scope = success.Scope.ToArray() is { Length: > 0 } scope ? scope : null,
             IdToken = success.IdToken?.EncodedJwt,
             AuthorizationDetails = success.AuthorizationDetails,
         };
