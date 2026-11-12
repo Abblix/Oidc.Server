@@ -80,11 +80,20 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 	/// ignored. OpenID Connect Core 1.0 has the server ignore it unless the response returns an authorization code
 	/// (section 11), when the response carries an access token through the user agent (section 17.4), and unless
 	/// the request asks for consent with <c>prompt=consent</c> or the client is configured to receive offline
-	/// access without it (section 11).
+	/// access without it (section 11). The second condition is lifted for a client the host lets keep receiving
+	/// offline access beside such a token (<see cref="ClientInfo.AllowOfflineAccessWithUserAgentAccessToken"/>).
 	/// </summary>
 	private static bool OfflineAccessReceived(AuthorizationValidationContext context)
 		=> context.FlowType.HasFlag(FlowTypes.AuthorizationCode)
-		   && !context.Request.ResponseType.HasFlag(ResponseTypes.Token)
+		   && AccessTokenAdmitsOfflineAccess(context)
 		   && (context.Request.Prompt?.Contains(Prompts.Consent, StringComparer.Ordinal) is true
 		       || context.ClientInfo.OfflineAccess.IsAllowedWithoutConsentPrompt());
+
+	/// <summary>
+	/// Whether the access token the response carries, if any, may sit beside offline access: one returned through the
+	/// user agent may not (OpenID Connect Core 1.0 section 17.4), unless the host lets this client have it anyway.
+	/// </summary>
+	private static bool AccessTokenAdmitsOfflineAccess(AuthorizationValidationContext context)
+		=> !context.Request.ResponseType.HasFlag(ResponseTypes.Token)
+		   || context.ClientInfo.AllowOfflineAccessWithUserAgentAccessToken;
 }

@@ -152,13 +152,9 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     private bool AudienceIsAccepted(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo)
     {
         var issuerIdentifier = tenant.Issuer.OriginalString;
-        var issuerOnly = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile)
-            .RequireStringAudienceInClientAssertion;
-
         // What the client may name once its profile has narrowed the set, so the refusal logs what was applied
-        var audiences = issuerOnly
-            ? ClientAssertionAudiences.Issuer
-            : clientInfo.ClientAssertionAudiences;
+        var audiences = clientInfo.ClientAssertionAudiences.AdmittedBy(
+            SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile));
         var allowArray = audiences.HasFlag(ClientAssertionAudiences.AllowArray);
 
         var audience = token.Payload.Json[JwtClaimTypes.Audience];

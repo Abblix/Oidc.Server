@@ -28,6 +28,8 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     private string[]? _defaultScope;
     private Uri[]? _defaultAllowedResources;
     private string[]? _defaultTokenExchangeAudiences;
+    private ClientAssertionAudiences _assertionAudiences = ClientAssertionAudiences.Issuer;
+    private bool _offlineAccessWithUserAgentAccessToken;
 
     /// <summary>
     /// Sets the scope values the client may request when its metadata names none.
@@ -53,6 +55,26 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     public ClientInfoBuilder WithDefaultTokenExchangeAudiences(string[]? tokenExchangeAudiences)
     {
         _defaultTokenExchangeAudiences = tokenExchangeAudiences;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets what the client's authentication assertions may name as their audience, which registration metadata
+    /// carries no member for, so it is always the host's.
+    /// </summary>
+    public ClientInfoBuilder WithClientAssertionAudiences(ClientAssertionAudiences audiences)
+    {
+        _assertionAudiences = audiences;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets whether the client receives offline access beside an access token carried through the user agent, which
+    /// registration metadata carries no member for, so it is always the host's.
+    /// </summary>
+    public ClientInfoBuilder WithOfflineAccessWithUserAgentAccessToken(bool allowed)
+    {
+        _offlineAccessWithUserAgentAccessToken = allowed;
         return this;
     }
 
@@ -116,6 +138,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
         // Metadata naming none takes the host's default set, RFC 7591 section 2.
         clientInfo.AllowedScopes = model.Scope ?? _defaultScope;
         clientInfo.OfflineAccess = model.OfflineAccess;
+        clientInfo.AllowOfflineAccessWithUserAgentAccessToken = _offlineAccessWithUserAgentAccessToken;
         clientInfo.ApplicationType = model.ApplicationType;
         clientInfo.SubjectType = model.SubjectType;
         clientInfo.DefaultMaxAge = model.DefaultMaxAge;
@@ -140,6 +163,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
 
     private void ApplySecurityRequirements(ClientInfo clientInfo)
     {
+        clientInfo.ClientAssertionAudiences = _assertionAudiences;
         clientInfo.Jwks = model.Jwks;
         clientInfo.JwksUri = model.JwksUri;
         clientInfo.PkceRequired = model.PkceRequired;

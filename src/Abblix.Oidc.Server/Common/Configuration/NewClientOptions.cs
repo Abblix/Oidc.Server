@@ -6,6 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Utils;
+
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
@@ -55,4 +58,34 @@ public record NewClientOptions
     /// Applied on registration and on every RFC 7592 update, since an update replaces the metadata whole.
     /// </remarks>
     public string[]? TokenExchangeAudiences { get; init; }
+
+    /// <summary>
+    /// What a dynamically registered client's authentication assertions may name as their audience, and in which
+    /// form: <see cref="ClientAssertionAudiences.Issuer"/> by default, the issuer identifier RFC 10070
+    /// section 4 requires, as a string. A value left at zero reads as that default.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7591 metadata has no member for it, so it is the host's to grant, never the client's to ask for. A host
+    /// widens it while the clients that register with it still write an older form, the token endpoint URL OpenID
+    /// Connect Core 1.0 section 9 recommends among them, as RFC 10070 section 6 expects such clients to need time to
+    /// change. A tenant held to FAPI 2.0 gives its clients the issuer alone whatever is set here. Applied on
+    /// registration and on every RFC 7592 update, since an update builds the client anew. A set without the issuer,
+    /// or naming a value the enumeration does not define, is refused at startup.
+    /// </remarks>
+    public ClientAssertionAudiences ClientAssertionAudiences
+    {
+        get => field.ByDefault(ClientAssertionAudiences.Issuer);
+        init => field = value.ByDefault(ClientAssertionAudiences.Issuer);
+    } = ClientAssertionAudiences.Issuer;
+
+    /// <summary>
+    /// Lets a dynamically registered client receive the offline access it is allowed beside an access token carried
+    /// through the user agent (<see cref="ClientInfo.AllowOfflineAccessWithUserAgentAccessToken"/>). Off by default,
+    /// as OpenID Connect Core 1.0 section 17.4 mandates.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7591 metadata has no member for it, so it is the host's to grant. Applied on registration and on every
+    /// RFC 7592 update, since an update builds the client anew.
+    /// </remarks>
+    public bool AllowOfflineAccessWithUserAgentAccessToken { get; init; }
 }

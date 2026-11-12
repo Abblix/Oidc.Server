@@ -61,7 +61,7 @@ public partial class RegisterClientRequestProcessor(
 
         var issuedAt = clock.GetUtcNow();
         var credentials = credentialFactory.Create(model.TokenEndpointAuthMethod, model.ClientId);
-        var clientInfo = ToClientInfo(model, credentials, request.SectorIdentifier);
+        var clientInfo = ToClientInfo(tenant, model, credentials, request.SectorIdentifier);
 
         // The registration holds the jti of its registration access token, so the management endpoint
         // accepts that token for this registration alone (RFC 7592 section 5).
@@ -106,6 +106,7 @@ public partial class RegisterClientRequestProcessor(
     /// Converts the registration request and credentials into a ClientInfo entity for storage.
     /// </summary>
     private ClientInfo ToClientInfo(
+        TenantDefinition tenant,
         ClientRegistrationRequest model,
         ClientCredentials credentials,
         string? sectorIdentifier)
@@ -114,6 +115,9 @@ public partial class RegisterClientRequestProcessor(
             .WithDefaultScope(newClientOptions.Scope)
             .WithDefaultAllowedResources(newClientOptions.AllowedResources)
             .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
+            .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
+            .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
+                SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
             .WithClientSecrets(ToClientSecrets(model.TokenEndpointAuthMethod, credentials))
             .Build();
 

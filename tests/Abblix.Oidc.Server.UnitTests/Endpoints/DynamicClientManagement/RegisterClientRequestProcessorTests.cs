@@ -117,6 +117,52 @@ public class RegisterClientRequestProcessorTests
         Assert.Equal((string[])[allowed], response.Metadata.Scope);
     }
 
+    /// <summary>
+    /// A registered client takes the assertion audiences the host grants new clients, since registration metadata has
+    /// no member for them, and a tenant held to FAPI 2.0 gives it the issuer alone whatever the host grants.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None, ClientAssertionAudiences.Issuer, ClientAssertionAudiences.Issuer)]
+    [InlineData(ClientSecurityProfile.None, ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint, ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint)]
+    [InlineData(ClientSecurityProfile.Fapi2, ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint | ClientAssertionAudiences.AllowArray, ClientAssertionAudiences.Issuer)]
+    public async Task ARegisteredClient_TakesTheAssertionAudiencesTheHostGrantsNewClients(
+        ClientSecurityProfile profile, ClientAssertionAudiences granted, ClientAssertionAudiences taken)
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+
+        var result = await Processor(_clients.Object, new NewClientOptions { ClientAssertionAudiences = granted })
+            .ProcessAsync(tenant, Request());
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(taken, stored!.ClientInfo.ClientAssertionAudiences);
+    }
+
+    /// <summary>
+    /// A registered client takes the host's grant of offline access beside an access token carried through the user
+    /// agent, which registration metadata has no member for.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ARegisteredClient_TakesTheHostsGrantOfOfflineAccessBesideAUserAgentAccessToken(bool granted)
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+
+        await Processor(_clients.Object, new NewClientOptions { AllowOfflineAccessWithUserAgentAccessToken = granted })
+            .ProcessAsync(SingleIssuer.Tenant, Request());
+
+        Assert.Equal(granted, stored!.ClientInfo.AllowOfflineAccessWithUserAgentAccessToken);
+    }
+
     [Fact]
     public async Task ARegistrationTheStoreDoesNotKeep_IsRefused()
     {

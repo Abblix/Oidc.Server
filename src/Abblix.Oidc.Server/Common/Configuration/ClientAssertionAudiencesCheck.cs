@@ -37,7 +37,11 @@ public sealed class ClientAssertionAudiencesCheck : ITenantsCheck
                 $"{nameof(ClientAssertionAudiences.Issuer)} and may add " +
                 $"{nameof(ClientAssertionAudiences.TokenEndpoint)} and {nameof(ClientAssertionAudiences.AllowArray)}.");
 
-    private static bool IsAccepted(ClientAssertionAudiences audiences)
+    /// <summary>
+    /// Whether <paramref name="audiences"/> is a set the server applies: the issuer identifier, alone or with the
+    /// values that widen it, and nothing the enumeration does not define.
+    /// </summary>
+    internal static bool IsAccepted(ClientAssertionAudiences audiences)
     {
         switch (audiences)
         {

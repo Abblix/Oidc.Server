@@ -103,6 +103,56 @@ public class UpdateClientRequestProcessorTests
     }
 
     /// <summary>
+    /// An update builds the client anew, so it takes the assertion audiences the host grants new clients again, the
+    /// issuer alone at a tenant held to FAPI 2.0.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None, ClientAssertionAudiences.Issuer | ClientAssertionAudiences.AllowArray)]
+    [InlineData(ClientSecurityProfile.Fapi2, ClientAssertionAudiences.Issuer)]
+    public async Task AnUpdate_TakesTheAssertionAudiencesTheHostGrantsNewClients(
+        ClientSecurityProfile profile, ClientAssertionAudiences taken)
+    {
+        ClientInfo? saved = null;
+        var (processor, _, _, idGenerator) = CreateProcessor(
+            c => saved = c.ClientInfo,
+            newClients: new NewClientOptions
+            {
+                ClientAssertionAudiences = ClientAssertionAudiences.Issuer | ClientAssertionAudiences.AllowArray,
+            });
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+        var model = new ClientRegistrationRequest { RedirectUris = [new Uri("https://client.example.com/cb")] };
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
+
+        await processor.ProcessAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), request);
+
+        Assert.Equal(taken, saved!.ClientAssertionAudiences);
+    }
+
+    /// <summary>
+    /// An update builds the client anew, so it takes the host's grant of offline access beside an access token
+    /// carried through the user agent from the settings for new clients, whatever the stored client held.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AnUpdate_TakesTheHostsGrantOfOfflineAccessBesideAUserAgentAccessToken(bool granted)
+    {
+        ClientInfo? saved = null;
+        var (processor, _, _, idGenerator) = CreateProcessor(
+            c => saved = c.ClientInfo,
+            newClients: new NewClientOptions { AllowOfflineAccessWithUserAgentAccessToken = granted });
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+        var model = new ClientRegistrationRequest { RedirectUris = [new Uri("https://client.example.com/cb")] };
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
+
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.Equal(granted, saved!.AllowOfflineAccessWithUserAgentAccessToken);
+    }
+
+    /// <summary>
     /// #27 regression: the update (a full replacement) must map the signed/encrypted response algorithms
     /// the register path maps, otherwise a resubmitted metadata set is silently reset to ClientInfo defaults
     /// (id_token → RS256, userinfo/introspection → none). A client registered with a non-default signing

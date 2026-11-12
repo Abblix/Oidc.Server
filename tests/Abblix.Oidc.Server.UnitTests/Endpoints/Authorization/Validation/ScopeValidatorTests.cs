@@ -180,6 +180,33 @@ public class ScopeValidatorTests
     }
 
     /// <summary>
+    /// A client the host lets keep offline access beside an access token carried through the user agent receives it
+    /// with such a response, past OpenID Connect Core 1.0 section 17.4, and only that rule is lifted: the response
+    /// still has to return an authorization code, and the consent conditions of section 11 still hold.
+    /// </summary>
+    [Theory]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.Token}", true, true)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.IdToken} {ResponseTypes.Token}", true, true)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.Token}", false, false)]
+    [InlineData(FlowTypes.Implicit, $"{ResponseTypes.IdToken} {ResponseTypes.Token}", true, false)]
+    public async Task ValidateAsync_OfflineAccessBesideAUserAgentAccessToken_IsReceivedOnlyWhereTheHostAllowsIt(
+        FlowTypes flowType, string responseType, bool promptConsent, bool received)
+    {
+        var context = CreateContext(
+            [Scopes.OpenId, Scopes.OfflineAccess],
+            flowType,
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: promptConsent ? [Prompts.Consent] : null,
+            responseType: responseType.Split(' '));
+        context.ClientInfo.AllowOfflineAccessWithUserAgentAccessToken = true;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal(received, Array.Exists(context.Scope, scope => scope.Scope == Scopes.OfflineAccess));
+    }
+
+    /// <summary>
     /// OpenID Connect Core 1.0, section 11: a response returning no authorization code has offline_access ignored,
     /// however the request asks, rather than refused.
     /// </summary>

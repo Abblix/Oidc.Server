@@ -65,6 +65,8 @@ internal static class OidcOptionsValidationServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ClockSkewValidator>());
         services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, NewClientAssertionAudiencesValidator>());
+        services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, FingerprintKeyValidator>());
 
         // Refuse a tenant whose clients, resources or keys the server could not serve, wherever it enters the

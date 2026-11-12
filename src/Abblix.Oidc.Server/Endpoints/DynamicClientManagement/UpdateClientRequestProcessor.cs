@@ -59,6 +59,9 @@ public class UpdateClientRequestProcessor(
             .WithDefaultScope(newClientOptions.Scope)
             .WithDefaultAllowedResources(newClientOptions.AllowedResources)
             .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
+            .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
+            .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
+                SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
             .WithClientSecrets(existingClient.ClientSecrets)
             .Build();
 

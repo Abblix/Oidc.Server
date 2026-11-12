@@ -188,6 +188,23 @@ public record ClientInfo(string ClientId)
     public OfflineAccess OfflineAccess { get; set; }
 
     /// <summary>
+    /// Lets this client receive the offline access it is allowed from an authorization request whose response carries
+    /// an access token through the user agent, as with the <c>code token</c> and <c>code id_token token</c> response
+    /// types. Off by default.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Core 1.0 section 17.4: "this specification mandates ignoring the offline access request when the
+    /// Access Token is transmitted through the User Agent", since an access token exposed there could be used to
+    /// reach the UserInfo endpoint and should not be one that enables offline access. A client built on servers that
+    /// issued the refresh token anyway keeps working while it moves to a response type returning the access token from
+    /// the token endpoint alone. Granted by the host, never through dynamic client registration, and no wider than
+    /// <see cref="OfflineAccess"/> allows. An update of a dynamically registered client (RFC 7592) builds the client
+    /// anew, so it takes <see cref="Common.Configuration.NewClientOptions.AllowOfflineAccessWithUserAgentAccessToken"/>
+    /// again, replacing whatever the host set on that one client.
+    /// </remarks>
+    public bool AllowOfflineAccessWithUserAgentAccessToken { get; set; } = false;
+
+    /// <summary>
     /// The set of JSON Web Keys used by the client, typically for signing request objects and decrypting
     /// identity tokens or encrypted user information.
     /// </summary>
@@ -366,8 +383,9 @@ public record ClientInfo(string ClientId)
     /// </para>
     /// <para>
     /// This is granted by the host, never through dynamic client registration. An update of a dynamically registered
-    /// client (RFC 7592) builds the client anew from its metadata, so a host that granted the exception grants it again
-    /// on update.
+    /// client (RFC 7592) builds the client anew, so it takes
+    /// <see cref="Common.Configuration.NewClientOptions.ClientAssertionAudiences"/> again, replacing whatever the host
+    /// set on that one client.
     /// </para>
     /// </remarks>
     public ClientAssertionAudiences ClientAssertionAudiences
