@@ -86,6 +86,24 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         return new ClientRequest();
     }
 
+    /// <summary>
+    /// Credentials that are not base64 are the client's malformed request, not a fault of the server: the client is
+    /// simply not authenticated by this method, so the caller answers invalid_client (RFC 6749 section 5.2).
+    /// </summary>
+    [Fact]
+    public async Task CredentialsThatAreNotBase64_AreNotAuthenticated()
+    {
+        var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        var request = new ClientRequest
+        {
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, "not*base64!"),
+        };
+
+        var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+
+        Assert.Null(result);
+    }
+
     protected override ClientRequest PrepareWrongFormatRequest()
     {
         var credentials = $"{ClientId}:{ClientSecret}";

@@ -62,7 +62,13 @@ public class ClientSecretBasicAuthenticator(
 		if (request.AuthorizationHeader is not { Parameter: { } parameter } header || !header.HasScheme(TokenTypes.Basic))
 			return null;
 
-		var value = Encoding.UTF8.GetString(Convert.FromBase64String(parameter));
+		// Credentials that are not base64 leave the client unauthenticated here, so the caller answers invalid_client
+		// (RFC 6749 section 5.2)
+		var decoded = new byte[parameter.Length];
+		if (!Convert.TryFromBase64String(parameter, decoded, out var length))
+			return null;
+
+		var value = Encoding.UTF8.GetString(decoded, 0, length);
 
 		// According to RFC 7617: https://www.rfc-editor.org/rfc/rfc7617#section-2.1
 		// the first colon in a user-pass string separates user-id and password from one another,
