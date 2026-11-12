@@ -222,6 +222,19 @@ function Split-KeyRotation {
     return [pscustomobject]@{ Runner = "$($parts[0]):$($others -join ',')"; KeyRotation = $true }
 }
 
+function Get-SuiteTime {
+    # The suite's clock, read from the Date header of one of its answers; whole seconds, which is how the plan
+    # listing compares a start time
+    [CmdletBinding()]
+    param()
+    $response = Invoke-WebRequest -Uri "${SuiteUrl}api/runner/available" -SkipCertificateCheck -TimeoutSec 30
+    $date = @($response.Headers['Date']) | Select-Object -First 1
+    if (-not $date) {
+        throw "The suite answered without a Date header, so the start of this run cannot be read off its clock"
+    }
+    [DateTimeOffset]::ParseExact($date, 'r', [Globalization.CultureInfo]::InvariantCulture)
+}
+
 function Get-UnfinishedModules {
     # Every module of the plans started since $Since that ran and did not end FINISHED with PASSED or REVIEW. The suite's
     # runner counts a module the suite INTERRUPTED as complete and passes it when its log holds no FAILURE entry, so
@@ -233,7 +246,9 @@ function Get-UnfinishedModules {
         [Parameter(Mandatory)] [int] $ExpectedPlans
     )
     $pageSize = 1000
-    $from = [Uri]::EscapeDataString($Since.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))
+    # Formatted by the invariant culture, since a culture's own time separator or calendar makes the suite refuse it
+    $stamp = $Since.UtcDateTime.ToString("yyyy-MM-dd'T'HH':'mm':'ss'Z'", [Globalization.CultureInfo]::InvariantCulture)
+    $from = [Uri]::EscapeDataString($stamp)
     $plans = @()
     for ($start = 0; ; $start += $pageSize) {
         $page = Invoke-RestMethod -Uri "${SuiteUrl}api/plan?from=$from&start=$start&length=$pageSize" -SkipCertificateCheck
@@ -412,8 +427,9 @@ try {
     # Line feeds alone: the shell's read keeps a carriage return as part of the argument
     [IO.File]::WriteAllText((Join-Path $argumentsDirectory 'runner.txt'), (($runnerArguments -join "`n") + "`n"))
 
-    # The plans of this run are found by when they started; the suite's clock may run a little behind this machine's
-    $plansSince = [DateTimeOffset]::UtcNow.AddMinutes(-1)
+    # The plans of this run are found by when they started, on the suite's own clock, which in a container may differ
+    # from this machine's
+    $plansSince = Get-SuiteTime
     Write-Step "Running $($Plan.Count) test plan(s)"
     # The runner's dependencies are installed in a throwaway container rather than on this machine, and each plan
     # specification is one line of the arguments file, so its brackets and spaces are never re-parsed by a shell
@@ -460,6 +476,15 @@ try {
         }
     }
 
+    # The driver reports each module it could not drive once it is told to stop
+    Write-Step 'Stopping the browser driver'
+    docker stop -t 30 $BrowserContainer | Out-Null
+    $driverExit = [int](docker wait $BrowserContainer)
+    docker logs $BrowserContainer 2>&1 | Select-Object -Last 40
+    if ($driverExit -ne 0 -and $exitCode -eq 0) {
+        $exitCode = $driverExit
+    }
+
     Write-Step 'Reading the outcome of every module from the suite'
     $unfinished = @(Get-UnfinishedModules -Since $plansSince -ExpectedPlans ($Plan.Count + $keyRotationPlans.Count))
     if ($unfinished) {
@@ -468,15 +493,6 @@ try {
         if ($exitCode -eq 0) {
             $exitCode = 1
         }
-    }
-
-    # The driver reports each module it could not drive once it is told to stop
-    Write-Step 'Stopping the browser driver'
-    docker stop -t 30 $BrowserContainer | Out-Null
-    $driverExit = [int](docker wait $BrowserContainer)
-    docker logs $BrowserContainer 2>&1 | Select-Object -Last 40
-    if ($driverExit -ne 0 -and $exitCode -eq 0) {
-        $exitCode = $driverExit
     }
 }
 finally {
