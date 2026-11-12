@@ -30,7 +30,12 @@ namespace Abblix.Utils;
 /// <typeparam name="TValue">The value held under it.</typeparam>
 /// <param name="clock">Counts the lifetimes.</param>
 /// <param name="comparer">Decides which keys are the same; the default equality when omitted.</param>
-public sealed class ExpiringDictionary<TKey, TValue>(TimeProvider clock, IEqualityComparer<TKey>? comparer = null)
+/// <param name="valueComparer">Decides whether the value a renewal names is the one held;
+/// <see cref="EqualityComparer{T}.Default"/> when omitted.</param>
+public sealed class ExpiringDictionary<TKey, TValue>(
+    TimeProvider clock,
+    IEqualityComparer<TKey>? comparer = null,
+    IEqualityComparer<TValue>? valueComparer = null)
     where TKey : notnull
 {
     // Immutable, so a reader never sees a value with another entry's lifetime, and compared by reference, so replacing
@@ -48,6 +53,7 @@ public sealed class ExpiringDictionary<TKey, TValue>(TimeProvider clock, IEquali
     private const int MinimumAdditionsBetweenSweeps = 64;
 
     private readonly ConcurrentDictionary<TKey, Entry> _entries = new(comparer);
+    private readonly IEqualityComparer<TValue> _valueComparer = valueComparer ?? EqualityComparer<TValue>.Default;
     private int _additionsSinceSweep;
     private int _additionsBeforeSweep = MinimumAdditionsBetweenSweeps;
 
@@ -104,12 +110,19 @@ public sealed class ExpiringDictionary<TKey, TValue>(TimeProvider clock, IEquali
 
     /// <summary>
     /// Starts the lifetime of the value under <paramref name="key"/> again from now, with
-    /// <paramref name="lifetime"/>, provided the value held there is still <paramref name="value"/>.
+    /// <paramref name="lifetime"/>, provided the value held there is still <paramref name="value"/> and has not
+    /// expired.
     /// </summary>
-    /// <returns>Whether the value was found and renewed; false when the key holds another value or none.</returns>
+    /// <remarks>
+    /// The value held is compared with <paramref name="value"/> by the value comparer the dictionary was created
+    /// with. An expired entry is not renewed, whether or not a sweep has removed it yet, so a renewal on every use
+    /// never brings back an entry that has already lapsed.
+    /// </remarks>
+    /// <returns>Whether the value was found alive and renewed; false when the key holds another value, an expired
+    /// one, or none.</returns>
     public bool TryRenew(TKey key, TValue value, TimeSpan lifetime)
     {
-        while (_entries.TryGetValue(key, out var held) && EqualityComparer<TValue>.Default.Equals(held.Value, value))
+        while (_entries.TryGetValue(key, out var held) && IsAlive(held) && _valueComparer.Equals(held.Value, value))
         {
             if (_entries.TryUpdate(key, new Entry(held.Value, clock.GetTimestamp(), lifetime), held))
                 return true;

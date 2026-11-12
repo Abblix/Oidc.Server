@@ -71,6 +71,40 @@ public class ExpiringDictionaryTests
         Assert.True(dictionary.TryGetValue(Key, out _));
     }
 
+    /// <summary>
+    /// An entry that has expired stays expired: renewing it fails and it is still not found, whether or not a sweep
+    /// has removed it yet, so a sliding expiry never brings back what has already lapsed.
+    /// </summary>
+    [Fact]
+    public void Renewing_AnExpiredEntry_DoesNotBringItBack()
+    {
+        var time = new FakeTimeProvider();
+        var dictionary = new ExpiringDictionary<string, string>(time);
+        dictionary.TryAdd(Key, "key-set", Lifetime);
+
+        time.Advance(Lifetime);
+
+        Assert.False(dictionary.TryRenew(Key, "key-set", Lifetime));
+        Assert.False(dictionary.TryGetValue(Key, out _));
+    }
+
+    /// <summary>
+    /// A renewal compares the value it names with the one held by the comparer the dictionary was given, and by the
+    /// default equality when it was given none.
+    /// </summary>
+    [Fact]
+    public void Renewing_ComparesValuesByTheComparerGiven()
+    {
+        var time = new FakeTimeProvider();
+        var ignoringCase = new ExpiringDictionary<string, string>(time, valueComparer: StringComparer.OrdinalIgnoreCase);
+        var byDefault = new ExpiringDictionary<string, string>(time);
+        ignoringCase.TryAdd(Key, "key-set", Lifetime);
+        byDefault.TryAdd(Key, "key-set", Lifetime);
+
+        Assert.True(ignoringCase.TryRenew(Key, "KEY-SET", Lifetime));
+        Assert.False(byDefault.TryRenew(Key, "KEY-SET", Lifetime));
+    }
+
     [Fact]
     public void AnInfiniteLifetime_NeverExpires()
     {
