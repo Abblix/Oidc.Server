@@ -91,8 +91,8 @@ partial class JwtAssertionAuthenticatorBase
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotOneTheClientMayName,
         Level = LogLevel.Warning,
-        Message = "The client assertion for {ClientId} carries the audience {Audience}, which its assertion "
-                  + "audiences {Audiences}, as its profile narrows them, do not admit; the issuer identifier is "
+        Message = "The client assertion for {ClientId} carries the audience {Audience}, which the assertion "
+                  + "audiences admitted to it, {Audiences}, do not include; the issuer identifier is "
                   + "{IssuerIdentifier}")]
     private partial void LogAudienceIsNotOneTheClientMayName(
         string ClientId,
@@ -112,4 +112,11 @@ partial class JwtAssertionAuthenticatorBase
         Message = "The client assertion for {ClientId} names the token endpoint URL as its audience, accepted because "
                   + "the client's assertion audiences include it")]
     private partial void LogTokenEndpointAudienceAccepted(string ClientId);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.BackChannelAuthenticationEndpointAudienceAccepted,
+        Level = LogLevel.Debug,
+        Message = "The client assertion for {ClientId} names the backchannel authentication endpoint URL as its "
+                  + "audience, accepted because the client's assertion audiences include it")]
+    private partial void LogBackChannelAuthenticationEndpointAudienceAccepted(string ClientId);
 }

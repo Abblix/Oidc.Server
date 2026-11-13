@@ -110,6 +110,56 @@ public class RequestObjectFetchAdapterTests
     }
 
     /// <summary>
+    /// Strict request object processing (RFC 9101 section 6.3) rebuilds the request from the object alone, so the
+    /// fetcher returns it without the <c>request</c> parameter that carried the object. The result still names the
+    /// object it came from, or a client required to sign its request objects is refused for sending one.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_RequestRebuiltFromObjectAlone_KeepsTheRequestObject()
+    {
+        SetupFetcher(CreateRequest() with { Request = null });
+
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest());
+
+        Assert.True(result.TryGetSuccess(out var fetched));
+        Assert.Equal(RequestJwt, fetched.Request);
+    }
+
+    /// <summary>
+    /// The object carried on is the one the fetcher validated, never a <c>request</c> member inside its payload.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_RequestMemberInsideObject_KeepsTheValidatedObject()
+    {
+        SetupFetcher(CreateRequest() with { Request = "other.payload.signature" });
+
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest());
+
+        Assert.True(result.TryGetSuccess(out var fetched));
+        Assert.Equal(RequestJwt, fetched.Request);
+    }
+
+    /// <summary>
+    /// A request read back from storage had its object applied before it was stored, and carries what the server set
+    /// since, such as the DPoP key its code is bound to. It passes as stored, the object not applied again.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_RequestReadBackFromStorage_PassesAsStored()
+    {
+        var stored = CreateRequest() with
+        {
+            PushedRequestUri = new Uri("urn:ietf:params:oauth:request_uri:stored"),
+            ProofKeyThumbprint = "stored-thumbprint",
+        };
+
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, stored);
+
+        Assert.True(result.TryGetSuccess(out var fetched));
+        Assert.Same(stored, fetched);
+        _requestObjectFetcher.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
     /// A request object both rebinding the response type and carrying an unsupported prompt is refused for the
     /// rebinding, the graver of the two faults.
     /// </summary>

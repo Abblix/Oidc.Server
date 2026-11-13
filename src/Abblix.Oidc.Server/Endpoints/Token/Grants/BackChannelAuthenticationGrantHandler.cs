@@ -359,12 +359,13 @@ public class BackChannelAuthenticationGrantHandler(
     }
 
     /// <summary>
-    /// The refusal for a client whose backchannel token delivery mode is missing or unsupported, worded as
-    /// its sibling on the backchannel authentication endpoint words it.
+    /// The refusal for a client whose backchannel token delivery mode is missing or unsupported, coded and worded
+    /// as its sibling on the backchannel authentication endpoint: the client has authenticated, so this is
+    /// unauthorized_client, and invalid_client would be a 401 challenging credentials that worked.
     /// </summary>
     private static OidcError NotConfiguredForDelivery()
         => new(
-            ErrorCodes.InvalidClient,
+            ErrorCodes.UnauthorizedClient,
             "The client is not properly configured for backchannel authentication. " +
             "A token delivery mode (poll, ping, or push) must be specified.");
 }

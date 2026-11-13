@@ -47,6 +47,7 @@ public class SecurityProfileTests
         Assert.False(requirements.RequireSenderConstrainedTokens);
         Assert.False(requirements.RequireCodeResponseTypeOnly);
         Assert.False(requirements.RequireStrictRequestObjectProcessing);
+        Assert.Null(requirements.MaxRequestObjectLifetime);
     }
 
     [Fact]
@@ -60,6 +61,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireSenderConstrainedTokens);
         Assert.True(requirements.RequireCodeResponseTypeOnly);
         Assert.True(requirements.RequireStrictRequestObjectProcessing);
+        Assert.Equal(TimeSpan.FromMinutes(60), requirements.MaxRequestObjectLifetime);
     }
 
     /// <summary>

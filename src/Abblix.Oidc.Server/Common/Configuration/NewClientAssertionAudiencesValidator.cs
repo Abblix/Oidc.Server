@@ -31,6 +31,8 @@ public sealed class NewClientAssertionAudiencesValidator : IValidateOptions<Oidc
                 $"{nameof(OidcOptions.NewClientOptions)}.{nameof(NewClientOptions.ClientAssertionAudiences)} is " +
                 $"'{audiences}', which is not a set this server accepts: it holds " +
                 $"{nameof(ClientAssertionAudiences.Issuer)} and may add " +
-                $"{nameof(ClientAssertionAudiences.TokenEndpoint)} and {nameof(ClientAssertionAudiences.AllowArray)}.");
+                $"{nameof(ClientAssertionAudiences.TokenEndpoint)}, " +
+                $"{nameof(ClientAssertionAudiences.BackChannelAuthenticationEndpoint)} and " +
+                $"{nameof(ClientAssertionAudiences.AllowArray)}.");
     }
 }

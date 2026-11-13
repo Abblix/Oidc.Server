@@ -330,6 +330,9 @@ public class TokenRequestProcessor(
 			false,
 			null,
 			accessToken.EncodedJwt,
+			// FAPI 1.0 Part 2 section 5.2.2.1 lets s_hash be omitted here once the authorization response
+			// carried it, and the token request holds no state to hash anyway.
+			null,
 			pushBindings);
 	}
 }

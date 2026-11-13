@@ -57,6 +57,7 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 	/// <param name="authorizationCode">Authorization code to generate `c_hash`, validating the code's integrity.
 	/// </param>
 	/// <param name="accessToken">Access token to generate `at_hash`, ensuring the token's integrity.</param>
+	/// <param name="state">The state the authorization response echoes, to generate `s_hash`.</param>
 	/// <param name="pushBindings">The CIBA push notification this token travels in, or <c>null</c> when it
 	/// does not. Non-null adds the two bindings Section 10.3.1 requires in push mode: the request
 	/// identifier verbatim, and the refresh token's hash when one is sent.</param>
@@ -75,6 +76,7 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 		bool includeUserClaims,
 		string? authorizationCode,
 		string? accessToken,
+		string? state,
 		PushDeliveryBindings? pushBindings = null)
 	{
 		// OpenID Connect Core 1.0 section 5.5.1.1: a request requiring specific authentication levels of the
@@ -166,6 +168,7 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 			clientInfo.IdentityTokenSignedResponseAlgorithm,
 			authorizationCode,
 			accessToken,
+			state,
 			pushBindings);
 
 		var jwt = await jwtFormatter.FormatAsync(
@@ -187,6 +190,7 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 		string signingAlgorithm,
 		string? authorizationCode,
 		string? accessToken,
+		string? state,
 		PushDeliveryBindings? pushBindings)
 	{
 		// OIDC Core 1.0 section 3.3.2.11 (c_hash) and section 3.1.3.6 (at_hash): both are the left-most
@@ -195,6 +199,13 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 		// sides must agree on is not something to write twice.
 		AddHashClaim(identityToken, signingAlgorithm, IanaClaimTypes.CHash, authorizationCode);
 		AddHashClaim(identityToken, signingAlgorithm, IanaClaimTypes.AtHash, accessToken);
+
+		// FAPI 1.0 Part 2 section 5.1.1 defines s_hash by the same recipe, and section 5.2.2.1 requires it in a
+		// code id_token response whenever the client supplied a state: the ID token is the response's detached
+		// signature, and without it the state is the one response parameter swapped unnoticed. It is added for
+		// every front-channel ID token with a state rather than for that response type alone, since a relying
+		// party ignores a claim it does not use and one rule cannot miss a response type.
+		AddHashClaim(identityToken, signingAlgorithm, IanaClaimTypes.SHash, state);
 
 		if (pushBindings is null)
 			return;

@@ -152,7 +152,10 @@ public partial class BackChannelAuthenticationTests(TestFactory factory) : TestB
 
         var body = await ReadJsonAsync(response);
         Assert.False(response.IsSuccessStatusCode, $"an unauthenticated request must not be accepted: {body}");
-        Assert.Equal(ErrorCodes.UnauthorizedClient, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+
+        // CIBA Core 1.0 section 13 lists invalid_client, "Client authentication failed", under HTTP 401.
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClient, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
         Assert.Null(body[CibaResponse.AuthenticationRequestId]);
     }
 

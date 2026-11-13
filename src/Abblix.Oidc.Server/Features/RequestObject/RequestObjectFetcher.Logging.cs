@@ -31,4 +31,10 @@ partial class RequestObjectFetcher
         Level = LogLevel.Warning,
         Message = "Strict request-object processing (RFC 9101) ignored these parameters passed outside the request object: {Parameters}")]
     private partial void LogParametersOutsideRequestObjectIgnored(Sanitized Parameters);
+
+    [LoggerMessage(
+        EventId = LogEvents.Misc.RequestObjectFetcher.LifetimeOutsideProfile,
+        Level = LogLevel.Warning,
+        Message = "The request object for {ClientId} has a lifetime its security profile does not allow: {Reason}")]
+    private partial void LogLifetimeOutsideProfile(string ClientId, Sanitized Reason);
 }

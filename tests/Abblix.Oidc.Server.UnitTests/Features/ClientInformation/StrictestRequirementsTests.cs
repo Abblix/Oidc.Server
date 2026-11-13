@@ -88,6 +88,7 @@ public class StrictestRequirementsTests
         // The tightest bound and the tightest tolerance this type knows of.
         [nameof(SecurityProfileRequirements.MaxClockSkew)] = ClockSkew.Fapi2Ceiling,
         [nameof(SecurityProfileRequirements.DefaultClockSkew)] = ClockSkew.Fapi2,
+        [nameof(SecurityProfileRequirements.MaxRequestObjectLifetime)] = SecurityProfileRequirements.FapiRequestObjectLifetime,
     };
 
     /// <summary>

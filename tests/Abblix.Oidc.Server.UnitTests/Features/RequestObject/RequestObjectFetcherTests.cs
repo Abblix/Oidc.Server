@@ -29,6 +29,7 @@ using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using RequestParameters = Abblix.Oidc.Server.Model.AuthorizationRequest.Parameters;
@@ -50,6 +51,13 @@ public class RequestObjectFetcherTests
     private readonly Mock<IClientJwtValidator> _jwtValidator;
     private readonly Mock<IOptionsSnapshot<OidcOptions>> _options;
     private readonly OidcOptions _oidcOptions;
+
+    /// <summary>
+    /// The instant every request object here is judged at.
+    /// </summary>
+    private static readonly DateTimeOffset Now = new(2026, 11, 13, 9, 0, 0, TimeSpan.Zero);
+
+    private readonly FakeTimeProvider _clock = new(Now);
 
     public RequestObjectFetcherTests()
     {
@@ -88,7 +96,7 @@ public class RequestObjectFetcherTests
 
     private RequestObjectFetcher CreateFetcher()
     {
-        return new RequestObjectFetcher(_logger.Object, _jsonObjectBinder.Object, _serviceProvider.Object, _options.Object);
+        return new RequestObjectFetcher(_logger.Object, _jsonObjectBinder.Object, _serviceProvider.Object, _options.Object, _clock);
     }
 
     private record TestRequest(string ClientId, string RedirectUri, string? State);
@@ -121,7 +129,7 @@ public class RequestObjectFetcherTests
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
-            Payload = new JsonWebTokenPayload(payload),
+            Payload = WithinTheProfileLifetime(payload),
         };
         var fapiClient = new ClientInfo("c1") { SecurityProfile = ClientSecurityProfile.Fapi2 };
 
@@ -166,7 +174,7 @@ public class RequestObjectFetcherTests
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
-            Payload = new JsonWebTokenPayload(payload),
+            Payload = WithinTheProfileLifetime(payload),
         };
 
         _jwtValidator
@@ -330,7 +338,7 @@ public class RequestObjectFetcherTests
     private async Task<Result<AuthorizationRequest, OidcError>> FetchWithUiLocales(JsonNode uiLocales)
     {
         var fetcher = new RequestObjectFetcher(_logger.Object, new JsonSerializationBinder(), _serviceProvider.Object,
-            _options.Object);
+            _options.Object, _clock);
         var originalRequest = new AuthorizationRequest { ClientId = TestConstants.DefaultClientId };
         const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJ1aV9sb2NhbGVzIjoiISJ9.signature";
         var payload = new JsonObject { [RequestParameters.UiLocales] = uiLocales };
@@ -1035,5 +1043,177 @@ public class RequestObjectFetcherTests
         Assert.True(result.TryGetSuccess(out var value));
         Assert.Same(boundRequest, value);
         Assert.Null(value.State);
+    }
+
+    /// <summary>
+    /// The longest lifetime FAPI 2.0 Message Signing section 5.3.1 lets a request object claim, and the furthest its
+    /// nbf may lie in the past.
+    /// </summary>
+    private static readonly TimeSpan ProfileLifetime = TimeSpan.FromMinutes(60);
+
+    /// <summary>
+    /// A lifetime well inside the profile's bound, for a test whose subject is something else.
+    /// </summary>
+    private static readonly TimeSpan OrdinaryLifetime = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// The smallest step a JWT timestamp can take, which is what lies just past a bound.
+    /// </summary>
+    private static readonly TimeSpan OneSecond = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// The payload carrying an nbf of now and an exp a few minutes on, which every profile accepts.
+    /// </summary>
+    private static JsonWebTokenPayload WithinTheProfileLifetime(JsonObject payload)
+        => WithLifetime(payload, Now, Now + OrdinaryLifetime);
+
+    /// <summary>
+    /// The payload carrying the given nbf and exp, either left out where null.
+    /// </summary>
+    private static JsonWebTokenPayload WithLifetime(JsonObject payload, DateTimeOffset? notBefore, DateTimeOffset? expiresAt)
+        => new(payload) { NotBefore = notBefore, ExpiresAt = expiresAt };
+
+    /// <summary>
+    /// Fetches a request object whose payload carries the given lifetime, sent by the given client at the given
+    /// tenant, with the validator passing it as valid - so whatever is refused is refused by the fetcher itself.
+    /// </summary>
+    private async Task<Result<JarTestRequest, OidcError>> FetchWithLifetime(
+        ClientInfo client,
+        TenantDefinition tenant,
+        DateTimeOffset? notBefore,
+        DateTimeOffset? expiresAt)
+    {
+        const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjMSJ9.signature";
+        var request = new JarTestRequest { ClientId = TestConstants.DefaultClientId, Request = jwt };
+        var token = new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(new JsonObject()),
+            Payload = WithLifetime(new JsonObject(), notBefore, expiresAt),
+        };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, client));
+        _jsonObjectBinder
+            .Setup(b => b.BindModelAsync(It.IsAny<JsonObject>(), It.IsAny<JarTestRequest>()))
+            .ReturnsAsync((JsonObject _, JarTestRequest bound) => bound);
+
+        return await CreateFetcher().FetchAsync(tenant, request, jwt);
+    }
+
+    private static ClientInfo Fapi2Client => new("c1") { SecurityProfile = ClientSecurityProfile.Fapi2 };
+
+    private static TenantDefinition Fapi2Tenant
+        => new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant();
+
+    private static void AssertInvalidRequestObject(Result<JarTestRequest, OidcError> result)
+    {
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 Message Signing section 5.3.1 and FAPI 1.0 Part 2 section 5.2.2: the server "shall require the
+    /// request object to contain an nbf claim" and "an exp claim", so a request object missing either is refused
+    /// for a client held to the profile, although RFC 9101 alone asks for neither.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public async Task FetchAsync_Fapi2Client_RequestObjectMissingNbfOrExp_IsInvalid(bool carriesNbf, bool carriesExp)
+    {
+        var result = await FetchWithLifetime(
+            Fapi2Client,
+            SingleIssuer.Tenant,
+            carriesNbf ? Now : null,
+            carriesExp ? Now + OrdinaryLifetime : null);
+
+        AssertInvalidRequestObject(result);
+    }
+
+    /// <summary>
+    /// The exp may lie at most 60 minutes after the nbf: exactly 60 is accepted and one second more is refused.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task FetchAsync_Fapi2Client_ExpAgainstSixtyMinutesAfterNbf(bool oneSecondOver, bool accepted)
+    {
+        var expiresAt = Now + ProfileLifetime + (oneSecondOver ? OneSecond : TimeSpan.Zero);
+
+        var result = await FetchWithLifetime(Fapi2Client, SingleIssuer.Tenant, Now, expiresAt);
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+        if (!accepted)
+            AssertInvalidRequestObject(result);
+    }
+
+    /// <summary>
+    /// The nbf may lie at most 60 minutes in the past: exactly 60 is accepted and one second more is refused. The
+    /// exp stays inside the lifetime bound, so the nbf is the only thing judged - a validator registered by the host
+    /// may have let the exp through with a tolerance of its own.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task FetchAsync_Fapi2Client_NbfAgainstSixtyMinutesInThePast(bool oneSecondOver, bool accepted)
+    {
+        var notBefore = Now - ProfileLifetime - (oneSecondOver ? OneSecond : TimeSpan.Zero);
+
+        var result = await FetchWithLifetime(Fapi2Client, SingleIssuer.Tenant, notBefore, notBefore + OrdinaryLifetime);
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+        if (!accepted)
+            AssertInvalidRequestObject(result);
+    }
+
+    /// <summary>
+    /// A client with no profile of its own at a tenant holding its clients to FAPI 2.0 is held to the same lifetime.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_UnprofiledClientAtFapiTenant_RequestObjectWithoutExp_IsInvalid()
+    {
+        var result = await FetchWithLifetime(new ClientInfo("c1"), Fapi2Tenant, Now, null);
+
+        AssertInvalidRequestObject(result);
+    }
+
+    /// <summary>
+    /// With no profile anywhere, RFC 9101 governs and requires neither claim nor any bound: a request object without
+    /// nbf and exp, and one living for longer than an hour, are both accepted as before.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FetchAsync_UnprofiledClient_LifetimeIsNotBounded(bool carriesALongLifetime)
+    {
+        var result = await FetchWithLifetime(
+            new ClientInfo("c1"),
+            SingleIssuer.Tenant,
+            carriesALongLifetime ? Now - ProfileLifetime - ProfileLifetime : null,
+            carriesALongLifetime ? Now + ProfileLifetime : null);
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// An nbf the payload cannot read as a timestamp is the client's malformed object, refused rather than allowed
+    /// to escape as an exception.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_Fapi2Client_UnreadableNbf_IsInvalid()
+    {
+        const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjMSJ9.signature";
+        var request = new JarTestRequest { ClientId = TestConstants.DefaultClientId, Request = jwt };
+        var payload = WithLifetime(new JsonObject(), null, Now + OrdinaryLifetime);
+        payload.Json[JwtClaimTypes.NotBefore] = "not-a-timestamp";
+        var token = new JsonWebToken { Header = new JsonWebTokenHeader(new JsonObject()), Payload = payload };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, Fapi2Client));
+
+        AssertInvalidRequestObject(await CreateFetcher().FetchAsync(SingleIssuer.Tenant, request, jwt));
     }
 }

@@ -186,6 +186,7 @@ public partial class AuthorizationRequestProcessorTests
                 request.ClientInfo,
                 true,
                 null,
+                null,
                 null))
             .ReturnsAsync(expectedIdToken);
 
@@ -321,6 +322,55 @@ public partial class AuthorizationRequestProcessorTests
     }
 
     /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2.1: the ID token returned as a detached signature over a
+    /// code id_token response includes s_hash when the client supplied a state, so the state the
+    /// response echoes must reach the token service.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithResponseTypeCodeIdTokenAndState_PassesTheStateToTheIdToken()
+    {
+        // Arrange
+        const string state = "VgSUIEnflnDxTe1vAtr54o";
+        var request = CreateRequest(responseType: [ResponseTypes.Code, ResponseTypes.IdToken], state: state);
+        var session = CreateAuthSession();
+        var expectedIdToken = new EncodedJsonWebToken(new JsonWebToken(), "id_token_jwt");
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
+            .ReturnsAsync(CreateConsents());
+
+        _authorizationCodeService
+            .Setup(s => s.GenerateAuthorizationCodeAsync(
+                TestTenant.Matched,
+                It.IsAny<AuthorizedGrant>(),
+                request.ClientInfo.AuthorizationCodeExpiresIn))
+            .ReturnsAsync("auth_code_123");
+
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(
+                TestTenant.Matched,
+                session,
+                It.IsAny<AuthorizationContext>(),
+                request.ClientInfo,
+                false,
+                "auth_code_123",
+                null,
+                state))
+            .ReturnsAsync(expectedIdToken);
+
+        // Act
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        // Assert
+        var success = Assert.IsType<SuccessfullyAuthenticated>(result);
+        Assert.Same(expectedIdToken, success.IdToken);
+    }
+
+    /// <summary>
     /// Verifies hybrid flow with code and id_token.
     /// Per OIDC Hybrid Flow, response_type=code id_token generates both.
     /// </summary>
@@ -358,6 +408,7 @@ public partial class AuthorizationRequestProcessorTests
                 request.ClientInfo,
                 false,
                 expectedCode,
+                null,
                 null))
             .ReturnsAsync(expectedIdToken);
 
@@ -407,7 +458,8 @@ public partial class AuthorizationRequestProcessorTests
                 request.ClientInfo,
                 false,
                 null,
-                expectedToken.EncodedJwt))
+                expectedToken.EncodedJwt,
+                null))
             .ReturnsAsync(expectedIdToken);
 
         // Act
@@ -469,7 +521,8 @@ public partial class AuthorizationRequestProcessorTests
                 request.ClientInfo,
                 false,
                 expectedCode,
-                expectedToken.EncodedJwt))
+                expectedToken.EncodedJwt,
+                null))
             .ReturnsAsync(expectedIdToken);
 
         var result = await processor.ProcessAsync(SingleIssuer.Tenant, request);
@@ -523,7 +576,8 @@ public partial class AuthorizationRequestProcessorTests
                 request.ClientInfo,
                 false,
                 expectedCode,
-                expectedToken.EncodedJwt))
+                expectedToken.EncodedJwt,
+                null))
             .ReturnsAsync(expectedIdToken);
 
         // Act
@@ -642,6 +696,7 @@ public partial class AuthorizationRequestProcessorTests
                 request.ClientInfo,
                 true,
                 null,
+                null,
                 null))
             .ReturnsAsync(expectedIdToken);
 
@@ -656,6 +711,7 @@ public partial class AuthorizationRequestProcessorTests
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
                 true,
+                null,
                 null,
                 null),
             Times.Once);

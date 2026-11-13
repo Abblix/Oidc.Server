@@ -97,7 +97,7 @@ public static class SecurityProfileConsistency
 
     /// <summary>
     /// FAPI 2.0 section 5.3.2.1: the server "shall only accept its issuer identifier value ... as a string in the aud
-    /// claim received in client authentication assertions", which leaves no room for the token endpoint URL or an
+    /// claim received in client authentication assertions", which leaves no room for an endpoint URL or an
     /// array.
     /// </summary>
     private static IEnumerable<string> AssertionAudienceViolations(

@@ -35,25 +35,23 @@ public sealed class ClientAssertionAudiencesCheck : ITenantsCheck
                 $"The client '{client.ClientId}' is configured with {nameof(ClientInfo.ClientAssertionAudiences)} " +
                 $"'{client.ClientAssertionAudiences}', which is not a set this server accepts: it holds " +
                 $"{nameof(ClientAssertionAudiences.Issuer)} and may add " +
-                $"{nameof(ClientAssertionAudiences.TokenEndpoint)} and {nameof(ClientAssertionAudiences.AllowArray)}.");
+                $"{nameof(ClientAssertionAudiences.TokenEndpoint)}, " +
+                $"{nameof(ClientAssertionAudiences.BackChannelAuthenticationEndpoint)} and " +
+                $"{nameof(ClientAssertionAudiences.AllowArray)}.");
 
     /// <summary>
     /// Whether <paramref name="audiences"/> is a set the server applies: the issuer identifier, alone or with the
     /// values that widen it, and nothing the enumeration does not define.
     /// </summary>
     internal static bool IsAccepted(ClientAssertionAudiences audiences)
-    {
-        switch (audiences)
-        {
-            case ClientAssertionAudiences.Issuer:
-            case ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint:
-            case ClientAssertionAudiences.Issuer | ClientAssertionAudiences.AllowArray:
-            case ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint |
-                 ClientAssertionAudiences.AllowArray:
-                return true;
+        => audiences.HasFlag(ClientAssertionAudiences.Issuer) && (audiences & ~Defined) == 0;
 
-            default:
-                return false;
-        }
-    }
+    /// <summary>
+    /// Every value the enumeration defines, so a number configuration binds beyond them is told apart.
+    /// </summary>
+    private const ClientAssertionAudiences Defined =
+        ClientAssertionAudiences.Issuer |
+        ClientAssertionAudiences.TokenEndpoint |
+        ClientAssertionAudiences.BackChannelAuthenticationEndpoint |
+        ClientAssertionAudiences.AllowArray;
 }

@@ -136,8 +136,8 @@ public static class ActionResultExtensions
 
 			// RFC 6749 section 5.2: a 401 is REQUIRED when the client authenticated via the Authorization
 			// header and allowed otherwise, so the uniform 401 satisfies both cases. Basic is the
-			// only Authorization-header scheme the client-authenticating endpoints (token,
-			// introspection, revocation) support, hence the Basic challenge; the error itself stays
+			// only Authorization-header scheme the client-authenticating endpoints support, hence the
+			// Basic challenge; the error itself stays
 			// in the JSON body because RFC 7617 defines no error attributes for the Basic scheme.
 			(ErrorCodes.InvalidClient, _)
 				=> new UnauthorizedObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))

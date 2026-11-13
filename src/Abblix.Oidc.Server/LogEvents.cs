@@ -226,6 +226,7 @@ internal static class LogEvents
             public const int TimestampsOutsideTheClientsProfile = Base + 13;
             public const int TimestampUnreadable = Base + 14;
             public const int TokenEndpointAudienceAccepted = Base + 15;
+            public const int BackChannelAuthenticationEndpointAudienceAccepted = Base + 16;
         }
 
         /// <summary>
@@ -756,6 +757,7 @@ internal static class LogEvents
             public const int InvalidToken = Base + 1;
             public const int SigningAlgorithmMismatch = Base + 2;
             public const int ParametersOutsideRequestObjectIgnored = Base + 3;
+            public const int LifetimeOutsideProfile = Base + 4;
         }
 
         /// <summary>

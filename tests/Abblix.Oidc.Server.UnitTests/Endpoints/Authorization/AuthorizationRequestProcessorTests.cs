@@ -134,7 +134,8 @@ public partial class AuthorizationRequestProcessorTests
         string? idTokenHintSubject = null,
         string? clientId = null,
         DateTimeOffset? promptedAt = null,
-        ResourceDefinition[]? resources = null)
+        ResourceDefinition[]? resources = null,
+        string? state = null)
     {
         clientId ??= TestConstants.DefaultClientId;
 
@@ -143,6 +144,7 @@ public partial class AuthorizationRequestProcessorTests
             ClientId = clientId,
             ResponseType = responseType ?? [ResponseTypes.Code],
             RedirectUri = TestConstants.DefaultRedirectUri,
+            State = state,
             Scope = scope ?? [Scopes.OpenId],
             Prompt = prompt,
             MaxAge = maxAge,

@@ -141,6 +141,26 @@ public sealed record SecurityProfileRequirements
     public bool RequireStrictRequestObjectProcessing { get; init; }
 
     /// <summary>
+    /// The longest a request object may live under this profile, or null where the profile requires no lifetime
+    /// of it. Where set, the request object has to carry both <c>nbf</c> and <c>exp</c>, its <c>exp</c> may lie
+    /// no further than this after its <c>nbf</c>, and its <c>nbf</c> no further than this in the past. Enforced by
+    /// <c>Features.RequestObject.RequestObjectFetcher</c>.
+    /// </summary>
+    /// <remarks>
+    /// One value for the three demands, because FAPI 2.0 Message Signing section 5.3.1 and FAPI 1.0 Part 2 section
+    /// 5.2.2 bound both claims by the same 60 minutes: an nbf "no longer than 60 minutes in the past" and an exp
+    /// "no longer than 60 minutes after the nbf claim". A request object signed long ago, or valid for long, is one
+    /// whoever obtained it can still present. RFC 9101 alone asks for neither claim, so null is what a deployment
+    /// held to no such profile keeps.
+    /// </remarks>
+    public TimeSpan? MaxRequestObjectLifetime { get; init; }
+
+    /// <summary>
+    /// The request object lifetime the FAPI profiles bound a request object to.
+    /// </summary>
+    internal static readonly TimeSpan FapiRequestObjectLifetime = TimeSpan.FromMinutes(60);
+
+    /// <summary>
     /// The profile admits only confidential clients as defined by RFC 6749, so a client that
     /// authenticates with nothing at the token endpoint cannot be held to it. Enforced by
     /// <see cref="SecurityProfileConsistency"/> at registration and at startup.
@@ -186,6 +206,7 @@ public sealed record SecurityProfileRequirements
 
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
+        MaxRequestObjectLifetime = FapiRequestObjectLifetime,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireStringAudienceInClientAssertion = true,
@@ -329,6 +350,7 @@ public sealed record SecurityProfileRequirements
         DefaultClockSkew = ClockSkew.Fapi2,
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
+        MaxRequestObjectLifetime = FapiRequestObjectLifetime,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireStringAudienceInClientAssertion = true,
@@ -399,6 +421,7 @@ public sealed record SecurityProfileRequirements
         RequireCodeResponseTypeOnly = RequireCodeResponseTypeOnly || other.RequireCodeResponseTypeOnly,
         RequireStrictRequestObjectProcessing =
             RequireStrictRequestObjectProcessing || other.RequireStrictRequestObjectProcessing,
+        MaxRequestObjectLifetime = Tighter(MaxRequestObjectLifetime, other.MaxRequestObjectLifetime),
     };
 
     /// <summary>
