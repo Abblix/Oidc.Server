@@ -55,6 +55,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string RequiredAttributeName = "System.ComponentModel.DataAnnotations.RequiredAttribute";
 	private const string BindRequiredAttributeName = "global::Microsoft.AspNetCore.Mvc.ModelBinding.BindRequired";
 	private const string RequestParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.RequestParameterBinder";
+	private const string SplitSourceParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.SplitSourceParameterBinder";
 	private const string CustomParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.CustomParameterBinder";
 	private const string ParameterBinderAttributeName = "global::Abblix.Oidc.Server.Mvc.Binders.ParameterBinder";
 	private const string HeaderBinderAttributeName = "global::Abblix.Oidc.Server.Mvc.Binders.HeaderBinder";
@@ -345,7 +346,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 			var literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(wireName, quote: true);
 			_writer.AppendLine($"\t[global::Microsoft.AspNetCore.Mvc.{sourceAttribute}(Name = {literal})]");
 			_writer.AppendLine($"\t[{DisplayAttributeName}(Name = {literal})]");
-			_writer.AppendLine($"\t[{ParameterBinderAttributeName}(typeof({RequestParameterBinderName}))]");
+			_writer.AppendLine($"\t[{ParameterBinderAttributeName}(typeof({SplitSourceParameterBinderName}))]");
 		}
 
 		private void EmitProperty(IPropertySymbol property)

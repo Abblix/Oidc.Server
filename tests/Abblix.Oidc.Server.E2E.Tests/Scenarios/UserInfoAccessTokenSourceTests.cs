@@ -72,4 +72,24 @@ public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(fact
             ErrorCodes.InvalidRequest,
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
+
+    /// <summary>
+    /// RFC 6749 section 3.1: "Request and response parameters MUST NOT be included more than once." A copy in the
+    /// query counts against the copy in the body even when it is empty, which no member reading one source sees.
+    /// </summary>
+    [Fact]
+    public async Task An_empty_query_copy_beside_a_token_in_the_form_is_refused_as_a_repetition()
+    {
+        var (client, endpoint, accessToken) = await ObtainAccessTokenAsync();
+
+        var response = await client.PostAsync(
+            new Uri($"{endpoint}?{UserInfoRequest.Parameters.AccessToken}="),
+            TokenInForm(accessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(
+            ErrorCodes.InvalidRequest,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
 }

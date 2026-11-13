@@ -24,13 +24,20 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 /// does not count a value twice through the provider that mirrors it.
 /// </remarks>
 /// <param name="inner">The binding the parameter gets when it is sent once.</param>
-internal sealed class SingleValueBinder(IModelBinder inner) : IModelBinder
+/// <param name="acrossSplitSources">Counts the query and the form of the whole request, for a member bound from one
+/// of them alone while its twin is bound from the other: MVC narrows such a member to its own source, and a value
+/// sent once in each would otherwise count once for each member and never twice.</param>
+internal sealed class SingleValueBinder(IModelBinder inner, bool acrossSplitSources = false) : IModelBinder
 {
     /// <inheritdoc />
     public Task BindModelAsync(ModelBindingContext bindingContext)
     {
         var name = bindingContext.ModelName;
-        var sources = (IBindingSourceValueProvider)bindingContext.ValueProvider;
+        // The request's own providers, before MVC narrowed them to the member's source, live on the context MVC
+        // creates for every binding
+        var sources = (IBindingSourceValueProvider)(acrossSplitSources
+            ? ((DefaultModelBindingContext)bindingContext).OriginalValueProvider
+            : bindingContext.ValueProvider);
         if (CountIn(sources, BindingSource.Query, name) + CountIn(sources, BindingSource.Form, name) > 1)
         {
             bindingContext.ModelState.TryAddModelError(name, ErrorFactory.RepeatedParameter(name));
