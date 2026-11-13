@@ -20,8 +20,8 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// 4.1.1 of RFC6749".
 /// </summary>
 /// <remarks>
-/// The scope judged is the one the request is served with, as the nonce rule judges it, so a request naming no scope
-/// and served a default carrying openid is not asked for state. RFC 6749 alone leaves state RECOMMENDED.
+/// The scope judged is the one the client names, as the nonce rule judges it, so a request naming no scope is asked for
+/// state whatever default it is served. RFC 6749 alone leaves state RECOMMENDED.
 /// </remarks>
 public class StateValidator : SyncAuthorizationContextValidatorBase
 {
@@ -30,7 +30,7 @@ public class StateValidator : SyncAuthorizationContextValidatorBase
     {
         if (string.IsNullOrEmpty(context.Request.State) &&
             SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile).RequireStateWithoutOpenIdScope &&
-            context.ServedScope()?.Contains(Scopes.OpenId, StringComparer.Ordinal) is not true)
+            !context.ClientRequestsOpenId())
         {
             return context.InvalidRequest("The security profile requires state when the openid scope is not requested");
         }

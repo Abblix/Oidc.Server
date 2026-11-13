@@ -58,11 +58,11 @@ public class NonceValidator(IAuthorizationValueReuseDetector reuseDetector) : IA
         }
 
         // FAPI 1.0 Part 1 section 5.2.2.2, taken in by Part 2 section 5.2.2: "If the client requests the openid
-        // scope, the authorization server shall require the nonce parameter" - the scope it is served with, which
-        // the scope validator after this one settles from the same request
+        // scope, the authorization server shall require the nonce parameter" - the scope the client names, not a
+        // default it is served
         if (string.IsNullOrEmpty(request.Nonce) &&
             SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile).RequireNonceWithOpenIdScope &&
-            context.ServedScope()?.Contains(Scopes.OpenId, StringComparer.Ordinal) is true)
+            context.ClientRequestsOpenId())
         {
             return context.InvalidRequest("The security profile requires a nonce with the openid scope");
         }

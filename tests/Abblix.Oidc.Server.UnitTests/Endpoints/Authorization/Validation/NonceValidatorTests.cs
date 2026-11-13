@@ -591,4 +591,26 @@ public class NonceValidatorTests
 
         Assert.Equal(expectedError, result?.Error);
     }
+
+    /// <summary>
+    /// The FAPI 1.0 Part 1 section 5.2.2.2 condition is that "the client requests the openid scope": a request naming
+    /// no scope is not asked for a nonce although the default it is served carries openid, on its first pass and on its
+    /// way back from a page, where the request carries the served scope.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ValidateAsync_Fapi1Advanced_ADefaultOpenIdScope_AsksNoNonce(bool comingBack)
+    {
+        var context = CreateContext([ResponseTypes.Code], nonce: null);
+        context.Request = context.Request with
+        {
+            Scope = comingBack ? [Scopes.OpenId] : [],
+            ClientNamedNoScope = comingBack,
+        };
+        context.ClientInfo.SecurityProfile = ClientSecurityProfile.Fapi1Advanced;
+        context.ClientInfo.DefaultScope = [Scopes.OpenId];
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+    }
 }

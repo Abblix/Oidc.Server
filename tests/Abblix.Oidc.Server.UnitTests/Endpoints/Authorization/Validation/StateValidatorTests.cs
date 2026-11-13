@@ -56,4 +56,27 @@ public class StateValidatorTests
 
         Assert.Equal(expectedError, result?.Error);
     }
+
+    /// <summary>
+    /// And the section 5.2.2.3 condition is that the client "does not requests the openid scope": a request naming no
+    /// scope is asked for state although the default it is served carries openid, on its first pass and on its way
+    /// back from a page.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ValidateAsync_Fapi1Advanced_ADefaultOpenIdScope_StillAsksState(bool comingBack)
+    {
+        var context = Context(ClientSecurityProfile.Fapi1Advanced, Scopes.OpenId, state: null);
+        context.Request = context.Request with
+        {
+            Scope = comingBack ? [Scopes.OpenId] : [],
+            ClientNamedNoScope = comingBack,
+        };
+        context.ClientInfo.DefaultScope = [Scopes.OpenId];
+
+        var result = await new StateValidator().ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
+    }
 }

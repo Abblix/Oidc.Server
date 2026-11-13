@@ -223,8 +223,8 @@ public sealed record SecurityProfileRequirements
     public bool RequireIssuerAudienceInRequestObject { get; init; }
 
     /// <summary>
-    /// The profile requires a nonce on every authorization request naming the <c>openid</c> scope, whatever the
-    /// response type. FAPI 1.0 Part 1 section 5.2.2.2, which Part 2 section 5.2.2 takes in: "If the client requests
+    /// The profile requires a nonce on every authorization request naming the <c>openid</c> scope itself, whatever the
+    /// response type and whatever default scope it would be served. FAPI 1.0 Part 1 section 5.2.2.2, which Part 2 section 5.2.2 takes in: "If the client requests
     /// the openid scope, the authorization server shall require the nonce parameter". Enforced by
     /// <c>Endpoints.Authorization.Validation.NonceValidator</c>.
     /// </summary>
