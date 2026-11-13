@@ -73,11 +73,15 @@ public partial class RequestUriFetcher(
                 ErrorCodes.InvalidRequestUri, "The request URI must be an https URI");
         }
 
+        // RFC 9101 section 5: "client_id REQUIRED. OAuth 2.0 [RFC6749] "client_id". The value MUST match the "request"
+        // or "request_uri" Request Object's (Section 2.1) "client_id"", answered as a malformed request, as a request
+        // object passed by value is
         var clientId = request.ClientId;
         if (clientId is null)
         {
             return AuthorizationErrorFactory.ValidationError(
-                ErrorCodes.UnauthorizedClient, "The client id is required");
+                ErrorCodes.InvalidRequest,
+                $"The {Parameters.ClientId} parameter is required beside a request object");
         }
 
         var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
