@@ -119,6 +119,19 @@ public class UserInfoRequestValidator(
 				$"The client '{clientId}' is not found");
 		}
 
+		// FAPI 2.0 Security Profile section 5.3.4: a resource server "shall not accept access tokens in the query
+		// parameters". Which profile holds the client is known only from the validated token, so the refusal comes
+		// here, still before the token opens the user's session. No Authorization header means the token was the
+		// access_token parameter, since extraction admits exactly one source.
+		if (clientRequest.AuthorizationHeader == null &&
+		    SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile).RequireAccessTokenInAuthorizationHeader)
+		{
+			return new OidcError(
+				ErrorCodes.InvalidRequest,
+				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header, " +
+				$"the '{Parameters.AccessToken}' parameter is not accepted under the client's security profile");
+		}
+
 		// A pairwise subject that does not open for this client (a foreign-sector or pre-change token) comes back as
 		// an error rather than faulting, so it surfaces as a normal invalid_token rejection.
 		return (await accessTokenService.AuthenticateByAccessTokenAsync(tenant, token, clientInfo))

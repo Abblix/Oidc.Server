@@ -423,4 +423,80 @@ public class UserInfoRequestValidatorTests
             capturedOptions.Value & ValidationOptions.RequireValidAudience);
     }
 
+    /// <summary>
+    /// Arranges a token that validates and a client that is found, so each test below varies only where the token
+    /// travels and which profile holds the client.
+    /// </summary>
+    private ClientInfo ArrangeValidTokenOfClient(string rawToken, ClientSecurityProfile? clientProfile)
+    {
+        var accessToken = CreateValidAccessToken();
+        var clientInfo = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = clientProfile };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, rawToken, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(accessToken);
+
+        _accessTokenService
+            .Setup(s => s.AuthenticateByAccessTokenAsync(TestTenant.Matched, accessToken, It.IsAny<ClientInfo>()))
+            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(CreateAuthSession(), CreateAuthContext()));
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
+            .ReturnsAsync(clientInfo);
+
+        return clientInfo;
+    }
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.4: a resource server "shall not accept access tokens in the query
+    /// parameters stated in Section 2.3 of OAuth 2.0 Bearer Token Usage". A deployment held to FAPI 2.0 refuses the
+    /// token outside the Authorization header, and refuses it before the token opens the user's session.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenInParameter_UnderFapi2Deployment_IsRefused()
+    {
+        ArrangeValidTokenOfClient("valid_token_123", clientProfile: null);
+        var tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant();
+
+        var result = await _validator.ValidateAsync(tenant, CreateUserInfoRequest("valid_token_123"), CreateClientRequest());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        _accessTokenService.Verify(
+            s => s.AuthenticateByAccessTokenAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// The same refusal for a client that names FAPI 2.0 for itself under a deployment that names no profile: the
+    /// client's own choice tightens what it is held to.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenInParameter_OfFapi2Client_IsRefused()
+    {
+        ArrangeValidTokenOfClient("valid_token_123", ClientSecurityProfile.Fapi2);
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, CreateUserInfoRequest("valid_token_123"), CreateClientRequest());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// The header stays the way in for a FAPI 2.0 client, so the refusal above is about where the token travels and
+    /// not about the client.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenInHeader_OfFapi2Client_IsAccepted()
+    {
+        var clientInfo = ArrangeValidTokenOfClient("valid_token_123", ClientSecurityProfile.Fapi2);
+        var clientRequest = CreateClientRequest(
+            authHeader: new AuthenticationHeaderValue(TokenTypes.Bearer, "valid_token_123"));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateUserInfoRequest(), clientRequest);
+
+        Assert.True(result.TryGetSuccess(out var validRequest));
+        Assert.Same(clientInfo, validRequest.ClientInfo);
+    }
 }

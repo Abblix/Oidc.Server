@@ -88,6 +88,16 @@ public sealed record SecurityProfileRequirements
     public bool RequireCertificateBoundTokens { get; init; }
 
     /// <summary>
+    /// The profile accepts an access token at a protected resource only in the <c>Authorization</c> header
+    /// (RFC 6750 section 2.1, RFC 9449 section 7.1), never in the <c>access_token</c> request parameter. FAPI 2.0
+    /// Security Profile section 5.3.4 forbids the query parameter of RFC 6750 section 2.3; the form-encoded body of
+    /// section 2.2 is refused with it because the bound request model carries one <c>access_token</c> whether it came
+    /// from the query or the body, so refusing only the query would require telling them apart at the transport.
+    /// Enforced by <c>Endpoints.UserInfo.UserInfoRequestValidator</c>.
+    /// </summary>
+    public bool RequireAccessTokenInAuthorizationHeader { get; init; }
+
+    /// <summary>
     /// The furthest either clock window may reach under this profile, or null where the profile
     /// puts no bound on them. Read by every place that builds JWT validation parameters.
     /// </summary>
@@ -382,6 +392,7 @@ public sealed record SecurityProfileRequirements
         RequireS256CodeChallenge = true,
         RequirePushedAuthorizationRequests = true,
         RequireSenderConstrainedTokens = true,
+        RequireAccessTokenInAuthorizationHeader = true,
 
         MaxClockSkew = ClockSkew.Fapi2Ceiling,
 
@@ -442,7 +453,7 @@ public sealed record SecurityProfileRequirements
     /// This exists because a relaxing flag is one edit away from becoming an ordinary permission.
     /// Someone adding a profile, or loosening an existing one, sees a set of booleans with no
     /// direction to them, and nothing in the type distinguishes the flag that removes protection
-    /// from the nine that add it. So the condition that makes the removal sound is stated as code
+    /// from the ones that add it. So the condition that makes the removal sound is stated as code
     /// and run at startup, where it can fail, rather than as a paragraph that can be skipped.
     ///
     /// Refusing refresh token rotation is sound only alongside a confidential client and a
@@ -567,6 +578,7 @@ public sealed record SecurityProfileRequirements
         RequireS256CodeChallenge = true,
         RequirePushedAuthorizationRequests = true,
         RequireSenderConstrainedTokens = true,
+        RequireAccessTokenInAuthorizationHeader = true,
 
         MaxClockSkew = ClockSkew.Fapi2Ceiling,
         DefaultClockSkew = ClockSkew.Fapi2,
@@ -724,6 +736,8 @@ public sealed record SecurityProfileRequirements
             RequireSenderConstrainedTokens =
                 RequireSenderConstrainedTokens || other.RequireSenderConstrainedTokens,
             RequireCertificateBoundTokens = RequireCertificateBoundTokens || other.RequireCertificateBoundTokens,
+            RequireAccessTokenInAuthorizationHeader =
+                RequireAccessTokenInAuthorizationHeader || other.RequireAccessTokenInAuthorizationHeader,
             ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
             RequireFapiSigningAlgorithms = RequireFapiSigningAlgorithms || other.RequireFapiSigningAlgorithms,
             ForbidRsa1_5KeyManagement = ForbidRsa1_5KeyManagement || other.ForbidRsa1_5KeyManagement,
