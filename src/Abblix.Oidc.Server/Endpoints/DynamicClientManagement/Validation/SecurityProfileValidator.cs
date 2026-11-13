@@ -37,6 +37,11 @@ public class SecurityProfileValidator : SyncClientRegistrationContextValidator
         var requirements = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile);
         var request = context.Request;
 
+        // RFC 7591 section 3.2.2 names its own error for a redirect URI the server does not admit
+        var redirectUriViolations = FindRedirectUriViolations(request.RedirectUris ?? [], requirements);
+        if (redirectUriViolations.Count > 0)
+            return new OidcError(ErrorCodes.InvalidRedirectUri, string.Join("; ", redirectUriViolations));
+
         // Only what the registration names: one naming nothing is given an algorithm its profile admits
         IReadOnlyList<string> violations =
         [

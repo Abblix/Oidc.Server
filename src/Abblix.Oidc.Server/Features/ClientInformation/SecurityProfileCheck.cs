@@ -59,6 +59,7 @@ public sealed class SecurityProfileCheck : ITenantsCheck
                         client.ClientAssertionAudiences,
                         requirements)
                     .Concat(SecurityProfileConsistency.FindSigningAlgorithmViolations(client, requirements))
+                    .Concat(SecurityProfileConsistency.FindRedirectUriViolations(client.RedirectUris, requirements))
                 select $"Client '{client.ClientId}': {violation}.");
         }
 

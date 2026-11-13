@@ -541,4 +541,48 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         if (!withChallenge)
             Assert.Equal(ErrorCodes.InvalidRequest, await ErrorOf(response));
     }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 5.2.2: "shall require redirect URIs to use the https scheme". A tenant declaring a FAPI
+    /// 1.0 Advanced client with an http loopback redirect URI does not start; the same client with an https one does.
+    /// </summary>
+    [Theory]
+    [InlineData("http://127.0.0.1:8080/cb", false)]
+    [InlineData("https://client.example.com/cb", true)]
+    public async Task ATenantDeclaringAnHttpRedirectUri_DoesNotStart(string redirectUri, bool starts)
+    {
+        var client = Client();
+        client.RedirectUris = [new Uri(redirectUri)];
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddDistributedMemoryCache();
+        builder.Services.AddMemoryCache();
+        builder.Services.AddAuthentication().AddCookie();
+        builder.Services.AddAuthorization();
+        builder.Services.AddConsentGrantedForEveryClient();
+        builder.Services.AddOidcServices(_ => { });
+        builder.Services.Configure<OidcOptions>(options => options.Tenants.Add(new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = new Uri(Host + Acme),
+            DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced,
+            Clients = [client],
+            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+        }));
+        await using var app = builder.Build();
+
+        var start = await Record.ExceptionAsync(() =>
+        {
+            app.UseMultiTenancy();
+            app.UseCors();
+            app.UseAuthorization();
+            app.MapOidcEndpoints();
+            return app.StartAsync(TestContext.Current.CancellationToken);
+        });
+
+        if (starts)
+            Assert.Null(start);
+        else
+            Assert.IsType<Microsoft.Extensions.Options.OptionsValidationException>(start);
+    }
 }

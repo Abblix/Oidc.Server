@@ -680,4 +680,27 @@ public class RedirectUriValidatorTests
         // Assert
         Assert.Null(result);
     }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 5.2.2, taken in by Part 2 section 5.2.2: the server "shall require the value of
+    /// redirect_uri to exactly match one of the pre-registered redirect URIs" and "shall require redirect URIs to use
+    /// the https scheme". For a client held to FAPI 1.0 Advanced a loopback redirect URI on another port, which RFC 8252
+    /// section 7.3 otherwise admits, is refused, and so is an http one even where registered; the exact https URI
+    /// passes, and a client held to no profile keeps the loopback allowance.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "http://127.0.0.1:8080/cb", "http://127.0.0.1:8080/cb", false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "https://127.0.0.1:8443/cb", "https://127.0.0.1:9443/cb", false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "https://127.0.0.1:8443/cb", "https://127.0.0.1:8443/cb", true)]
+    [InlineData(null, "http://127.0.0.1:8080/cb", "http://127.0.0.1:9090/cb", true)]
+    public async Task ValidateAsync_Fapi1Advanced_RequiresAnExactHttpsRedirectUri(
+        ClientSecurityProfile? profile, string registered, string requested, bool accepted)
+    {
+        var context = CreateContext(new Uri(requested), new Uri(registered));
+        context.ClientInfo.SecurityProfile = profile;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(accepted, result == null);
+    }
 }

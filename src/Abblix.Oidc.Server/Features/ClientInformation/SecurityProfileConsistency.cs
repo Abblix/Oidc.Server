@@ -166,6 +166,25 @@ public static class SecurityProfileConsistency
         ];
 
     /// <summary>
+    /// Names each redirect URI the profile does not admit, or an empty list when it admits every one: FAPI 1.0 Part 1
+    /// section 5.2.2 has the server "require redirect URIs to use the https scheme".
+    /// </summary>
+    /// <param name="redirectUris">The redirect URIs the client registers.</param>
+    /// <param name="requirements">The control bundle the client is held to, floor included.</param>
+    public static IReadOnlyList<string> FindRedirectUriViolations(
+        IEnumerable<Uri> redirectUris,
+        SecurityProfileRequirements requirements)
+        => requirements.RequireExactHttpsRedirectUris
+            ?
+            [
+                ..
+                from redirectUri in redirectUris
+                where redirectUri.Scheme != Uri.UriSchemeHttps
+                select $"the client's security profile admits only https redirect URIs, but {redirectUri} is not one",
+            ]
+            : [];
+
+    /// <summary>
     /// The algorithm of a response that may also go unsigned, or null where it does: for userinfo and introspection
     /// <c>none</c> is a plain JSON response rather than an unsigned JWS.
     /// </summary>

@@ -141,6 +141,16 @@ public sealed record SecurityProfileRequirements
     public bool RequireCodeResponseTypeOnly { get; init; }
 
     /// <summary>
+    /// The profile requires every redirect URI to use the https scheme and the one a request names to match a registered
+    /// one exactly, without the loopback port allowance of RFC 8252 section 7.3. FAPI 1.0 Part 1 section 5.2.2, which
+    /// Part 2 section 5.2.2 takes in: the server "shall require the value of redirect_uri to exactly match one of the
+    /// pre-registered redirect URIs" and "shall require redirect URIs to use the https scheme". Enforced by
+    /// <c>Endpoints.Authorization.Validation.RedirectUriValidator</c> at request time and by
+    /// <see cref="SecurityProfileConsistency"/> at registration and at startup.
+    /// </summary>
+    public bool RequireExactHttpsRedirectUris { get; init; }
+
+    /// <summary>
     /// The profile admits only an authorization response the server signs: the response type <c>code id_token</c>,
     /// whose ID token is the response's detached signature, or the response type <c>code</c> with the response mode
     /// <c>jwt</c> (JARM). FAPI 1.0 Part 2 section 5.2.2 has the server "require the response_type value code
@@ -354,6 +364,7 @@ public sealed record SecurityProfileRequirements
         RequireNonceWithOpenIdScope = true,
         RequireStateWithoutOpenIdScope = true,
         RequirePkceWithPushedRequests = true,
+        RequireExactHttpsRedirectUris = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireFapiSigningAlgorithms = true,
@@ -504,6 +515,7 @@ public sealed record SecurityProfileRequirements
         RequireNonceWithOpenIdScope = true,
         RequireStateWithoutOpenIdScope = true,
         RequirePkceWithPushedRequests = true,
+        RequireExactHttpsRedirectUris = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireStringAudienceInClientAssertion = true,
@@ -580,6 +592,7 @@ public sealed record SecurityProfileRequirements
         RequireNonceWithOpenIdScope = RequireNonceWithOpenIdScope || other.RequireNonceWithOpenIdScope,
         RequireStateWithoutOpenIdScope = RequireStateWithoutOpenIdScope || other.RequireStateWithoutOpenIdScope,
         RequirePkceWithPushedRequests = RequirePkceWithPushedRequests || other.RequirePkceWithPushedRequests,
+        RequireExactHttpsRedirectUris = RequireExactHttpsRedirectUris || other.RequireExactHttpsRedirectUris,
     };
 
     /// <summary>

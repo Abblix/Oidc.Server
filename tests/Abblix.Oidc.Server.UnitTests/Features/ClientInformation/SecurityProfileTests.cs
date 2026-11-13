@@ -93,6 +93,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireNonceWithOpenIdScope);
         Assert.True(requirements.RequireStateWithoutOpenIdScope);
         Assert.True(requirements.RequirePkceWithPushedRequests);
+        Assert.True(requirements.RequireExactHttpsRedirectUris);
         Assert.True(requirements.RequireFapiSigningAlgorithms);
     }
 
@@ -897,5 +898,24 @@ public class SecurityProfileTests
 
         Assert.Equal(3, SecurityProfileConsistency.FindSigningAlgorithmViolations(
             pinned, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced)).Count);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 5.2.2: "shall require redirect URIs to use the https scheme". A FAPI 1.0 Advanced client
+    /// registering an http redirect URI, a loopback one included, is refused at startup; https passes.
+    /// </summary>
+    [Fact]
+    public void Check_Fapi1AdvancedClientWithAnHttpRedirectUri_Refuses()
+    {
+        static ClientInfo Client(string redirectUri) => new(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            RedirectUris = [new Uri(redirectUri)],
+        };
+
+        Assert.NotEmpty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client("http://127.0.0.1:8080/cb"))));
+        Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client("https://client.example.com/cb"))));
     }
 }

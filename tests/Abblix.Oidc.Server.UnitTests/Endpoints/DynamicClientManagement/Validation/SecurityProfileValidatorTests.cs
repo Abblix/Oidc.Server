@@ -155,4 +155,24 @@ public class SecurityProfileValidatorTests
 
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
     }
+
+    /// <summary>
+    /// The same clause at registration: an http redirect URI is refused with the invalid_redirect_uri RFC 7591 section
+    /// 3.2.2 names for it.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi1Advanced_AnHttpRedirectUri_IsRefused()
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [new System.Uri("http://127.0.0.1:8080/cb")],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
+
+        Assert.Equal(ErrorCodes.InvalidRedirectUri, result?.Error);
+    }
 }
