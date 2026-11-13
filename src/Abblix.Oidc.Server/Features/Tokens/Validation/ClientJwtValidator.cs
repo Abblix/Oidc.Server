@@ -137,7 +137,7 @@ public partial class ClientJwtValidator(
 
         var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
 
-        if (AlgorithmOutsideTheProfile(profile, keyManagementAlgorithms, validatedToken) is { } algorithm)
+        if (profile.AlgorithmOutside(validatedToken, keyManagementAlgorithms) is { } algorithm)
         {
             LogAlgorithmOutsideTheClientsProfile(context.ClientInfo.ClientId, Sanitized.Value(algorithm));
             return new JwtValidationError(
@@ -179,26 +179,6 @@ public partial class ClientJwtValidator(
 
         LogValidationSucceeded(context.ClientInfo.ClientId);
         return new ValidJsonWebToken(validatedToken, context.ClientInfo);
-    }
-
-    /// <summary>
-    /// The algorithm of the token the client's profile does not admit, or null when it admits every one. Judged here,
-    /// where the client is first known, for everything a client signs or encrypts for this server.
-    /// </summary>
-    /// <param name="profile">The controls the client is held to.</param>
-    /// <param name="keyManagementAlgorithms">The key management algorithm of each JWE layer the token came in.</param>
-    /// <param name="token">The token as validated, the innermost JWS where it came encrypted.</param>
-    private static string? AlgorithmOutsideTheProfile(
-        SecurityProfileRequirements profile,
-        List<string> keyManagementAlgorithms,
-        JsonWebToken token)
-    {
-        // FAPI 1.0 Part 2 section 8.6: "For JWS, both clients and authorization servers shall use PS256 or ES256
-        // algorithms"
-        if (!profile.PermitsSigningAlgorithm(token.Header.Algorithm))
-            return token.Header.Algorithm ?? SigningAlgorithms.None;
-
-        return keyManagementAlgorithms.Find(algorithm => !profile.PermitsKeyManagementAlgorithm(algorithm));
     }
 
     /// <summary>

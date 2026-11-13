@@ -248,7 +248,8 @@ public class RefreshTokenSubjectTokenResolverTests
                 SingleIssuer.LicensedCatalog,
                 Mock.Of<Abblix.Oidc.Server.Common.Interfaces.IAuthServiceKeysProvider>(),
                 NothingRecorded.StatusCheck,
-                TestOidcOptions.Defaults()),
+                TestOidcOptions.Defaults(),
+            Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>()),
             _refreshTokenService.Object,
             _clientInfoProvider.Object);
 

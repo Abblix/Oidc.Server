@@ -53,7 +53,8 @@ public class AuthServiceJwtValidatorTests
             SingleIssuer.LicensedCatalog,
             _serviceKeysProvider.Object,
             NothingRecorded.StatusCheck,
-            TestOidcOptions.Defaults());
+            TestOidcOptions.Defaults(),
+            _clientInfoProvider.Object);
     }
 
     /// <summary>
@@ -702,7 +703,8 @@ public class AuthServiceJwtValidatorTests
             SingleIssuer.HostCatalog,
             _serviceKeysProvider.Object,
             NothingRecorded.StatusCheck,
-            TestOidcOptions.Defaults());
+            TestOidcOptions.Defaults(),
+            _clientInfoProvider.Object);
 
         var token = CreateValidToken();
         token.Header.Type = type;
@@ -733,7 +735,8 @@ public class AuthServiceJwtValidatorTests
                 registry.Object,
                 new Mock<IRevocationCutoffChecker>(MockBehavior.Strict).Object,
                 new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>())),
-            TestOidcOptions.Defaults());
+            TestOidcOptions.Defaults(),
+            _clientInfoProvider.Object);
 
         var token = CreateValidToken();
         token.Header.Type = JwtTypes.RefreshToken;
@@ -875,5 +878,84 @@ public class AuthServiceJwtValidatorTests
         {
             Assert.Null(parameters!.AllowedSigningAlgorithms);
         }
+    }
+
+    /// <summary>
+    /// A token presented by a client other than the one it was issued to is processed under both clients' profiles,
+    /// the stricter winning (FAPI 1.0 Part 2 section 8.6, FAPI 2.0 section 5.4.1 "when creating or processing JWTs"): a
+    /// token signed RS256 is refused when either client is held to FAPI 1.0 Advanced, and accepted when neither is,
+    /// or when the client it names is unknown and the presenter is held to no profile.
+    /// </summary>
+    [Theory]
+    [InlineData(null, ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.RS256, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, SigningAlgorithms.RS256, false)]
+    [InlineData(null, null, SigningAlgorithms.RS256, true)]
+    [InlineData(null, ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.PS256, true)]
+    public async Task ValidateAsync_ATokenOfAnotherClient_IsHeldToTheStricterProfile(
+        ClientSecurityProfile? presenterProfile, ClientSecurityProfile? ownerProfile, string algorithm, bool accepted)
+    {
+        const string ownerId = "owner";
+        var token = CreateValidToken();
+        token.Header.Algorithm = algorithm;
+        token.Payload.ClientId = ownerId;
+        SetupHonouringValidator(token, keyManagement: null);
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ownerId))
+            .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
+        var presenter = new ClientInfo(ValidClientId) { SecurityProfile = presenterProfile };
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, presenter, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// The same for each JWE layer the token came in: one encrypted with RSA1_5 is refused for an owner held to FAPI
+    /// 1.0 Advanced (Part 2 section 8.6.1), though the presenter is held to no profile.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, false)]
+    [InlineData(null, true)]
+    public async Task ValidateAsync_ATokenOfAnotherClient_HasEachLayerJudgedForItsOwner(
+        ClientSecurityProfile? ownerProfile, bool accepted)
+    {
+        const string ownerId = "owner";
+        var token = CreateValidToken();
+        token.Header.Algorithm = SigningAlgorithms.PS256;
+        token.Payload.ClientId = ownerId;
+        SetupHonouringValidator(token, EncryptionAlgorithms.KeyManagement.Rsa1_5);
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ownerId))
+            .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, new ClientInfo(ValidClientId), ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// A validator judging what it is handed as the real one does: the signature algorithm against the list, and the
+    /// one JWE layer, where the token has one, against the key management judgement.
+    /// </summary>
+    private void SetupHonouringValidator(JsonWebToken token, string? keyManagement)
+    {
+        SetupKeyProviders();
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns((string _, ValidationParameters p) => Task.FromResult(Judged(token, keyManagement, p)));
+    }
+
+    private static Abblix.Utils.Result<JsonWebToken, JwtValidationError> Judged(
+        JsonWebToken token, string? keyManagement, ValidationParameters parameters)
+    {
+        if (parameters.AllowedSigningAlgorithms is { } allowed && !allowed.Contains(token.Header.Algorithm!))
+            return new JwtValidationError(JwtError.InvalidAlgorithm, "outside the list");
+
+        if (keyManagement is not null && parameters.ValidateKeyManagementAlgorithm?.Invoke(keyManagement) == false)
+            return new JwtValidationError(JwtError.InvalidAlgorithm, "layer refused");
+
+        return token;
     }
 }

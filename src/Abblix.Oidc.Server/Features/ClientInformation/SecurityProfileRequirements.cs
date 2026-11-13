@@ -308,6 +308,22 @@ public sealed record SecurityProfileRequirements
         => !RequireFapiSigningAlgorithms || FapiSigningAlgorithms.Contains(algorithm, StringComparer.Ordinal);
 
     /// <summary>
+    /// The algorithm of <paramref name="token"/> this profile does not admit, or null when it admits every one: judged
+    /// after the token is validated, for the party that becomes known only then.
+    /// </summary>
+    /// <param name="token">The token as validated, the innermost JWS where it came encrypted.</param>
+    /// <param name="keyManagementAlgorithms">The key management algorithm of each JWE layer the token came in.</param>
+    internal string? AlgorithmOutside(JsonWebToken token, IEnumerable<string> keyManagementAlgorithms)
+    {
+        // FAPI 1.0 Part 2 section 8.6: "For JWS, both clients and authorization servers shall use PS256 or ES256
+        // algorithms"
+        if (!PermitsSigningAlgorithm(token.Header.Algorithm))
+            return token.Header.Algorithm ?? SigningAlgorithms.None;
+
+        return keyManagementAlgorithms.FirstOrDefault(algorithm => !PermitsKeyManagementAlgorithm(algorithm));
+    }
+
+    /// <summary>
     /// The signature algorithms this profile admits, as the set a validator takes, or null where it admits any.
     /// </summary>
     internal IReadOnlySet<string>? SigningAlgorithmsAdmitted()
