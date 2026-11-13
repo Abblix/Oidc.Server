@@ -92,6 +92,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         {
             options.EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.RegisterClient;
             options.RequireInitialAccessToken = false;
+            SignServiceTokensWithPs256(options);
         });
         builder.Services.Configure<OidcOptions>(options => options.Tenants.Add(Tenant));
 
@@ -482,7 +483,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
         builder.Services.AddConsentGrantedForEveryClient();
-        builder.Services.AddOidcServices(_ => { });
+        builder.Services.AddOidcServices(SignServiceTokensWithPs256);
         builder.Services.Configure<OidcOptions>(options => options.Tenants.Add(new TenantDefinition
         {
             Id = "acme",
@@ -575,7 +576,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
         builder.Services.AddConsentGrantedForEveryClient();
-        builder.Services.AddOidcServices(_ => { });
+        builder.Services.AddOidcServices(SignServiceTokensWithPs256);
         builder.Services.Configure<OidcOptions>(options => options.Tenants.Add(new TenantDefinition
         {
             Id = "acme",
@@ -677,5 +678,17 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         var response = await _http!.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedError, await ErrorOf(response));
+    }
+
+    /// <summary>
+    /// The algorithm the server signs its own tokens with, which FAPI 1.0 Part 2 section 8.6 holds to PS256 or ES256 as
+    /// it holds what the server signs for a client; the RS256 default keeps a FAPI tenant from starting.
+    /// </summary>
+    private static void SignServiceTokensWithPs256(OidcOptions options)
+    {
+        options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+        options.ServiceTokens.RefreshToken.Signing.Algorithm = SigningAlgorithms.PS256;
+        options.ServiceTokens.RegistrationAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+        options.ServiceTokens.InitialAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
     }
 }

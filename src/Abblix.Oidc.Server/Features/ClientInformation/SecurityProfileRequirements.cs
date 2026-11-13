@@ -260,10 +260,10 @@ public sealed record SecurityProfileRequirements
     /// algorithms of its ID tokens, logout tokens and JWT authorization, userinfo and introspection responses. A
     /// registration naming none of the first two is given one a signing key of the tenant produces, by
     /// <c>Endpoints.DynamicClientManagement.Validation.ProfileSigningKeysValidator</c>, and a static client is checked
-    /// against the tenant's keys at startup. A client added to the store with others
-    /// is refused only where it authenticates, so what the authorization endpoint signs for it before then is what it
-    /// was configured with. The tokens this server signs for itself, such as JWT access tokens, take the algorithm
-    /// the deployment configures and no client's.
+    /// against the tenant's keys at startup. A client added to the store afterwards is refused at the authorization
+    /// endpoint and where it authenticates, before anything is signed for it. The tokens this server signs for itself,
+    /// such as JWT access tokens, take the algorithm the deployment configures, which
+    /// <c>Common.Configuration.ProfileServiceTokensCheck</c> holds to the profiles in force at startup.
     /// </para>
     /// </remarks>
     public bool RequireFapiSigningAlgorithms { get; init; }

@@ -70,7 +70,15 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
         builder.Services.AddConsentGrantedForEveryClient();
-        builder.Services.AddOidcServices(_ => { });
+        // FAPI 2.0 section 5.4.1 holds the tokens the server signs for itself to PS256, ES256 or EdDSA too, and the
+        // globex tenant holds its clients to FAPI 2.0
+        builder.Services.AddOidcServices(options =>
+        {
+            options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+            options.ServiceTokens.RefreshToken.Signing.Algorithm = SigningAlgorithms.PS256;
+            options.ServiceTokens.RegistrationAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+            options.ServiceTokens.InitialAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+        });
         builder.Services.Configure<OidcOptions>(options =>
         {
             options.Tenants.Add(new TenantDefinition
