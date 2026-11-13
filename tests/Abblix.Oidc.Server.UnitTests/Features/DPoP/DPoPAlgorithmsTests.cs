@@ -29,28 +29,28 @@ public class DPoPAlgorithmsTests
     [Fact]
     public void ARefusalNamingTheClientsAlgorithms_IsAdvertisedWithThem()
     {
-        var error = new InvalidDPoPProofError("refused") { AlgorithmsAdmitted = [SigningAlgorithms.ES256] };
+        var error = new InvalidDPoPProofError("refused") { DPoPAlgorithmsAdmitted = [SigningAlgorithms.ES256] };
 
         Assert.Equal([SigningAlgorithms.ES256], DPoPAlgorithms.Advertised(error, SingleIssuer.Tenant));
     }
 
     /// <summary>
     /// Any other refusal is advertised with what the tenant's profile admits: only PS256 and ES256 at a tenant held to
-    /// FAPI 1.0 Advanced, every algorithm DPoP admits at one held to none.
+    /// FAPI 2.0, none at one held to FAPI 1.0 Advanced, whose profile refuses DPoP (Part 2 section 8.2), and every
+    /// algorithm DPoP admits at one held to none.
     /// </summary>
     [Theory]
-    [InlineData(ClientSecurityProfile.Fapi1Advanced, true)]
-    [InlineData(ClientSecurityProfile.None, false)]
-    public void AnyOtherRefusal_IsAdvertisedWithTheTenantsAlgorithms(ClientSecurityProfile profile, bool narrowed)
+    [InlineData(ClientSecurityProfile.Fapi2, new[] { SigningAlgorithms.ES256, SigningAlgorithms.PS256 })]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, new string[0])]
+    [InlineData(ClientSecurityProfile.None, null)]
+    public void AnyOtherRefusal_IsAdvertisedWithTheTenantsAlgorithms(ClientSecurityProfile profile, string[]? expected)
     {
         var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
 
         var advertised = DPoPAlgorithms.Advertised(new OidcError(ErrorCodes.InvalidToken, "refused"), tenant);
 
         Assert.Equal(
-            narrowed
-                ? [SigningAlgorithms.ES256, SigningAlgorithms.PS256]
-                : DPoPAlgorithms.Allowed.Order(StringComparer.Ordinal).ToArray(),
+            expected ?? DPoPAlgorithms.Allowed.Order(StringComparer.Ordinal).ToArray(),
             advertised.Order(StringComparer.Ordinal).ToArray());
     }
 }

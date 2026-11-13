@@ -115,7 +115,11 @@ public sealed class ConfigurationHandler(
 			Signing(tenant, jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported),
 		IdTokenSigningAlgValuesSupported = Signing(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
 		UserInfoSigningAlgValuesSupported = SigningOrPlain(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
-		DpopSigningAlgValuesSupported = Signing(tenant, jwtAlgorithms.DpopSigningAlgorithmsSupported),
+		// RFC 9449 section 5.1: the metadata is there "to signal support for DPoP in general", so a tenant whose
+		// profile refuses DPoP (FAPI 1.0 Part 2 section 8.2) does not carry it
+		DpopSigningAlgValuesSupported = SecurityProfileRequirements.For(tenant, client: null).RequireCertificateBoundTokens
+			? null
+			: Signing(tenant, jwtAlgorithms.DpopSigningAlgorithmsSupported),
 
 		BackChannelAuthenticationRequestSigningAlgValuesSupported = cibaCompletionHandler is null
 			? null

@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Net.Http.Headers;
+using System.Linq;
 using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
@@ -43,6 +45,28 @@ public class UserInfoResponseFormatterTests
 
         Result<UserInfoFoundResponse, OidcError> response = new OidcError(errorCode, "the description");
         return await HttpResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), response));
+    }
+
+    /// <summary>
+    /// RFC 9449 section 7.1: the DPoP challenge names in algs the algorithms a new proof may use. An error naming the
+    /// algorithms of the token's client is challenged with exactly those; one naming none - a client whose profile
+    /// refuses DPoP (FAPI 1.0 Part 2 section 8.2) - is challenged with Bearer alone.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { "ES256", "PS256" }, new[] { "DPoP", "Bearer" })]
+    [InlineData(new string[0], new[] { "Bearer" })]
+    public async Task The_challenge_advertises_the_algorithms_the_error_names(string[] admitted, string[] schemes)
+    {
+        var formatter = new UserInfoResponseFormatter(TimeProvider.System, null!, new ServedBy(Served), null!);
+        Result<UserInfoFoundResponse, OidcError> refused =
+            new OidcError(ErrorCodes.InvalidToken, "presented with the Bearer scheme") { DPoPAlgorithmsAdmitted = admitted };
+
+        var response = await HttpResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), refused));
+
+        var challenges = response.Headers[HeaderNames.WWWAuthenticate].Select(ChallengeReader.Parse).ToArray();
+        Assert.Equal(schemes, challenges.Select(challenge => challenge.Scheme));
+        if (admitted.Length > 0)
+            Assert.Equal(admitted, challenges[0].Parameters["algs"].Split(' '));
     }
 
     /// <summary>

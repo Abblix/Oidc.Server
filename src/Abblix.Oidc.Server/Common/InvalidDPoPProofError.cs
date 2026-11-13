@@ -18,11 +18,4 @@ namespace Abblix.Oidc.Server.Common;
 /// challenge, without string-comparing the error code. Mirrors <see cref="UseDPoPNonceError"/>.
 /// </summary>
 public sealed record InvalidDPoPProofError(string ErrorDescription)
-    : OidcError(ErrorCodes.InvalidDPoPProof, ErrorDescription)
-{
-    /// <summary>
-    /// The proof signature algorithms the profile of the client the presented token was issued to admits, which the
-    /// challenge advertises; null where that client is not known, and the tenant's profile is advertised.
-    /// </summary>
-    public IReadOnlyCollection<string>? AlgorithmsAdmitted { get; init; }
-}
+    : OidcError(ErrorCodes.InvalidDPoPProof, ErrorDescription);

@@ -176,30 +176,6 @@ public class DPoPUserInfoValidatorTests
         Assert.Null(error);
     }
 
-    /// <summary>
-    /// RFC 9449 section 7.1 has the challenge name the algorithms the resource accepts (<c>algs</c>): a refusal of the
-    /// proof of a client held to FAPI 1.0 Advanced names only PS256 and ES256 (Part 2 section 8.6), one of a client
-    /// held to no profile every algorithm DPoP admits.
-    /// </summary>
-    [Theory]
-    [InlineData(ClientSecurityProfile.Fapi1Advanced, new[] { SigningAlgorithms.ES256, SigningAlgorithms.PS256 })]
-    [InlineData(null, null)]
-    public async Task ValidateAsync_ARefusedProof_NamesTheAlgorithmsTheClientsProfileAdmits(
-        ClientSecurityProfile? profile, string[]? expected)
-    {
-        SetupProofValidatorFailure(new ProofError("signature_invalid"));
-        var client = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = profile };
-        var token = BuildAccessToken(jwkThumbprint: ProofKeyThumbprint);
-        var clientRequest = BuildClientRequest(scheme: TokenTypes.DPoP, dpopProof: ProofJwt);
-
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, client, clientRequest, token, AccessTokenJwt);
-
-        var admitted = Assert.IsType<InvalidDPoPProofError>(error).AlgorithmsAdmitted;
-        Assert.Equal(
-            expected ?? DPoPAlgorithms.Allowed.Order(StringComparer.Ordinal).ToArray(),
-            admitted!.Order(StringComparer.Ordinal).ToArray());
-    }
-
     [Fact]
     public async Task ValidateAsync_ValidProofKeyMatch_ReturnsNull()
     {

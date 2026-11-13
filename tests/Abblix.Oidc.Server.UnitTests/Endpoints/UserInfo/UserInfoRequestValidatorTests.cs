@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Linq;
 using System;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
@@ -34,6 +35,50 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.UserInfo;
 /// </summary>
 public class UserInfoRequestValidatorTests
 {
+    /// <summary>
+    /// RFC 9449 section 7.1 has the challenge name the algorithms a new proof may use. Once the token names its
+    /// client, every refusal carries that client's: a DPoP-bound token presented with the Bearer scheme, by a client
+    /// held to FAPI 2.0 at a tenant held to none, names only PS256 and ES256; by a client held to FAPI 1.0 Advanced,
+    /// whose profile refuses DPoP, none.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, new[] { SigningAlgorithms.ES256, SigningAlgorithms.PS256 })]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, new string[0])]
+    public async Task ARefusalAfterTheClientIsKnown_NamesItsDPoPAlgorithms(ClientSecurityProfile profile, string[] expected)
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Type = JsonWebTokenTypes.AccessToken },
+            Payload = { ClientId = TestConstants.DefaultClientId },
+        };
+        var jwtValidator = new Mock<IAuthServiceJwtValidator>();
+        jwtValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<TenantDefinition>(), null, "token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(token);
+        var clients = new Mock<IClientInfoProvider>();
+        clients
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), TestConstants.DefaultClientId))
+            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = profile });
+        var dpop = new Mock<IDPoPUserInfoValidator>();
+        dpop
+            .Setup(v => v.ValidateAsync(It.IsAny<TenantDefinition>(), It.IsAny<ClientInfo?>(), It.IsAny<ClientRequest>(), token, "token"))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidToken, "DPoP-bound access token must be presented via the DPoP scheme."));
+        var validator = new UserInfoRequestValidator(
+            jwtValidator.Object,
+            Mock.Of<IAccessTokenService>(),
+            clients.Object,
+            dpop.Object,
+            Mock.Of<IMtlsUserInfoValidator>());
+
+        var result = await validator.ValidateAsync(
+            SingleIssuer.Tenant,
+            new UserInfoRequest(),
+            new ClientRequest { AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "token") });
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(expected, error.DPoPAlgorithmsAdmitted!.Order(StringComparer.Ordinal));
+    }
+
     private readonly Mock<IAuthServiceJwtValidator> _jwtValidator;
     private readonly Mock<IAccessTokenService> _accessTokenService;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
@@ -604,6 +649,6 @@ public class UserInfoRequestValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateUserInfoRequest(), clientRequest);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Same(refusal, error);
+        Assert.Equal(refusal, error with { DPoPAlgorithmsAdmitted = null });
     }
 }

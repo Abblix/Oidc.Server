@@ -116,7 +116,9 @@ public class ConfigurationHandlerTests
         Assert.Equal(narrowed ? admitted : [SigningAlgorithms.None, ..signing], document.IdTokenSigningAlgValuesSupported);
         Assert.Equal(admitted, document.RequestObjectSigningAlgValuesSupported);
         Assert.Equal(admitted, document.TokenEndpointAuthSigningAlgValuesSupported);
-        Assert.Equal(admitted, document.DpopSigningAlgValuesSupported);
+        // RFC 9449 section 5.1: dpop_signing_alg_values_supported signals "support for DPoP in general", which FAPI
+        // 1.0 Advanced refuses (Part 2 section 8.2), so the document carries none
+        Assert.Equal(narrowed ? null : signing, document.DpopSigningAlgValuesSupported);
         Assert.Equal(admitted, document.AuthorizationSigningAlgValuesSupported);
         Assert.Equal([SigningAlgorithms.None, ..admitted], document.UserInfoSigningAlgValuesSupported);
         Assert.Equal(encryption, document.RequestObjectEncryptionAlgValuesSupported);

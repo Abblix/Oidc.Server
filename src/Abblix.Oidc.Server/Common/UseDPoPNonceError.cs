@@ -20,11 +20,4 @@ namespace Abblix.Oidc.Server.Common;
 /// <param name="Nonce">The fresh nonce the client should attach to the next DPoP proof.
 /// </param>
 public sealed record UseDPoPNonceError(string Nonce)
-    : OidcError(ErrorCodes.UseDPoPNonce, "DPoP proof requires a fresh nonce.")
-{
-    /// <summary>
-    /// The proof signature algorithms the profile of the client the presented token was issued to admits, which the
-    /// challenge advertises; null where that client is not known, and the tenant's profile is advertised.
-    /// </summary>
-    public IReadOnlyCollection<string>? AlgorithmsAdmitted { get; init; }
-}
+    : OidcError(ErrorCodes.UseDPoPNonce, "DPoP proof requires a fresh nonce.");

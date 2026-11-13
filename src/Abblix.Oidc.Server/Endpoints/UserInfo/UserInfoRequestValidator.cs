@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -107,6 +108,26 @@ public class UserInfoRequestValidator(
 				ErrorCodes.InvalidToken,
 				$"The client '{clientId}' is not found");
 		}
+
+		// RFC 9449 section 7.1: the challenge answering a refusal names the algorithms a new proof may use, and from here
+		// on they are those of the client the token names, whatever refuses the request
+		var admitted = DPoPAlgorithms.AdmittedBy(SecurityProfileRequirements.For(tenant, clientInfo));
+		var outcome = await ValidateForClientAsync(tenant, userInfoRequest, clientRequest, token, jwtAccessToken, clientInfo);
+		return outcome.MapFailure(error => error with { DPoPAlgorithmsAdmitted = admitted });
+	}
+
+	/// <summary>
+	/// The checks the token answers once the client it names is known: its binding, where it was sent, and what it was
+	/// granted.
+	/// </summary>
+	private async Task<Result<ValidUserInfoRequest, OidcError>> ValidateForClientAsync(
+		TenantDefinition tenant,
+		UserInfoRequest userInfoRequest,
+		ClientRequest clientRequest,
+		JsonWebToken token,
+		string jwtAccessToken,
+		ClientInfo clientInfo)
+	{
 
 		// RFC 9449 section 7.1 RS-side enforcement: when the access token carries cnf.jkt the
 		// request MUST present it via the DPoP scheme together with a valid DPoP proof

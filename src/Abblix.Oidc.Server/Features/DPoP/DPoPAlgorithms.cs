@@ -39,8 +39,11 @@ public static class DPoPAlgorithms
     /// section 5.4.1, "when creating or processing JWTs".
     /// </summary>
     /// <param name="profile">The controls in force for the client presenting the proof.</param>
+    /// <remarks>
+    /// None under a profile issuing certificate-bound tokens only, which refuses DPoP (FAPI 1.0 Part 2 section 8.2).
+    /// </remarks>
     public static IReadOnlyCollection<string> AdmittedBy(SecurityProfileRequirements profile)
-        => Allowed.Where(profile.PermitsSigningAlgorithm).ToArray();
+        => profile.RequireCertificateBoundTokens ? [] : Allowed.Where(profile.PermitsSigningAlgorithm).ToArray();
 
     /// <summary>
     /// The algorithms a <c>WWW-Authenticate: DPoP</c> challenge answering <paramref name="error"/> advertises (RFC 9449
@@ -50,10 +53,5 @@ public static class DPoPAlgorithms
     /// <param name="error">The refusal the challenge answers.</param>
     /// <param name="tenant">The tenant the request is served at.</param>
     public static IReadOnlyCollection<string> Advertised(OidcError error, TenantDefinition tenant)
-        => error switch
-        {
-            InvalidDPoPProofError { AlgorithmsAdmitted: { } admitted } => admitted,
-            UseDPoPNonceError { AlgorithmsAdmitted: { } admitted } => admitted,
-            _ => AdmittedBy(SecurityProfileRequirements.For(tenant, client: null)),
-        };
+        => error.DPoPAlgorithmsAdmitted ?? AdmittedBy(SecurityProfileRequirements.For(tenant, client: null));
 }

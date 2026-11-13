@@ -50,22 +50,10 @@ public partial class DPoPUserInfoValidator(
     {
         var schemeDPoP = clientRequest.AuthorizationHeader.HasScheme(TokenTypes.DPoP);
 
-        var error = accessToken is { Payload.Confirmation.JwkThumbprint: {} committed }
+        return accessToken is { Payload.Confirmation.JwkThumbprint: {} committed }
             ? await ValidateBoundPresentationAsync(tenant, client, clientRequest, schemeDPoP, committed, rawAccessToken)
             : ValidateUnboundPresentation(schemeDPoP);
-
-        // RFC 9449 section 7.1: the challenge names the algorithms a new proof may use, which are those of the profile
-        // of the client the token was issued to
-        return error switch
-        {
-            InvalidDPoPProofError invalid => invalid with { AlgorithmsAdmitted = AdmittedFor(tenant, client) },
-            UseDPoPNonceError nonce => nonce with { AlgorithmsAdmitted = AdmittedFor(tenant, client) },
-            _ => error,
-        };
     }
-
-    private static IReadOnlyCollection<string> AdmittedFor(TenantDefinition tenant, ClientInfo? client)
-        => DPoPAlgorithms.AdmittedBy(SecurityProfileRequirements.For(tenant, client));
 
     private OidcError? ValidateUnboundPresentation(bool schemeDPoP)
     {
