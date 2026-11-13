@@ -67,7 +67,8 @@ public record NewClientOptions
     /// <remarks>
     /// RFC 7591 metadata has no member for it, so it is the host's to grant, never the client's to ask for. A host
     /// widens it while the clients that register with it still write an older form, the token endpoint URL OpenID
-    /// Connect Core 1.0 section 9 recommends among them, as RFC 10070 section 6 expects such clients to need time to
+    /// Connect Core 1.0 section 9 recommends and the backchannel authentication endpoint URL CIBA Core 1.0 section 7.1
+    /// names among them, as RFC 10070 section 6 expects such clients to need time to
     /// change. A tenant held to FAPI 2.0 gives its clients the issuer alone whatever is set here. Applied on
     /// registration and on every RFC 7592 update, since an update builds the client anew. A set without the issuer,
     /// or naming a value the enumeration does not define, is refused at startup.

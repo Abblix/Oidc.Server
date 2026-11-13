@@ -15,7 +15,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
 /// <summary>
-/// The tenant's token endpoint URL in each way a client allowed it as its assertion's audience may write it.
+/// The URL of one of the tenant's endpoints, the token or the backchannel authentication endpoint, in each way a client
+/// allowed it as its assertion's audience may write it.
 /// </summary>
 /// <remarks>
 /// Every spelling is compared as written: the path the transport serves the endpoint at on the issuer identifier's
@@ -25,13 +26,13 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// another server under the same path would name that server's host and match. Both spellings name this server alone.
 /// The same two spellings on the tenant's mutual-TLS address name the endpoint's alias, which discovery publishes in
 /// <c>mtls_endpoint_aliases</c> and a client doing mutual TLS "MUST use ... in preference to the endpoint URL of the
-/// same name at the top level of metadata" (RFC 8705 section 5): to that client the alias is the token endpoint URL.
+/// same name at the top level of metadata" (RFC 8705 section 5): to that client the alias is the endpoint URL.
 /// </remarks>
 internal static class TenantDefinitionExtensions
 {
     /// <summary>
-    /// The spellings for <paramref name="tenant"/>, or none where no transport resolves the path - a host running the
-    /// core alone - or the endpoint is not mapped.
+    /// The spellings of <paramref name="endpoint"/> for <paramref name="tenant"/>, or none where no transport resolves
+    /// the path - a host running the core alone - or the endpoint is not mapped.
     /// </summary>
     /// <remarks>
     /// The resolver is read through a scope of its own, because it is scoped while authenticators are singletons; it
@@ -39,11 +40,15 @@ internal static class TenantDefinitionExtensions
     /// </remarks>
     /// <param name="tenant">The tenant whose issuer identifier and mutual-TLS address the spellings are built on.
     /// </param>
-    /// <param name="serviceProvider">Resolves where the transport serves the token endpoint.</param>
-    public static string[] TokenEndpointSpellings(this TenantDefinition tenant, IServiceProvider serviceProvider)
+    /// <param name="serviceProvider">Resolves where the transport serves the endpoint.</param>
+    /// <param name="endpoint">The endpoint whose URL is spelled.</param>
+    public static string[] EndpointSpellings(
+        this TenantDefinition tenant,
+        IServiceProvider serviceProvider,
+        OidcEndpoints endpoint)
     {
         using var scope = serviceProvider.CreateScope();
-        var resolved = scope.ServiceProvider.GetService<IOidcEndpointResolver>()?.Resolve(OidcEndpoints.Token);
+        var resolved = scope.ServiceProvider.GetService<IOidcEndpointResolver>()?.Resolve(endpoint);
         if (resolved is null)
             return [];
 

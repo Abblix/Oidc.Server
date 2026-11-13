@@ -133,8 +133,9 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// <summary>
     /// Answers whether the assertion names an audience of <see cref="ClientInfo.ClientAssertionAudiences"/> in a form
     /// the set admits: this tenant's issuer identifier, or, for a client granted
-    /// <see cref="ClientAssertionAudiences.TokenEndpoint"/>, the token endpoint URL or its mutual-TLS alias, as a
-    /// string, or in an array of strings beside others for a client granted
+    /// <see cref="ClientAssertionAudiences.TokenEndpoint"/>, the token endpoint URL or its mutual-TLS alias, for one
+    /// granted <see cref="ClientAssertionAudiences.BackChannelAuthenticationEndpoint"/>, the backchannel authentication
+    /// endpoint URL or its alias, each as a string, or in an array of strings beside others for a client granted
     /// <see cref="ClientAssertionAudiences.AllowArray"/>.
     /// </summary>
     /// <remarks>
@@ -147,7 +148,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// read as written rather than through the typed accessor, which skips members that are not strings and
     /// would read the issuer beside one as the sole value. Compared by RFC 3986 section 6.2.1, as section 4
     /// prescribes. A profile may narrow the set: FAPI 2.0 section 5.3.2.1 takes the issuer identifier alone, so
-    /// under such a profile the token endpoint URL and an array are refused whatever the client was granted, and
+    /// under such a profile the endpoint URLs and an array are refused whatever the client was granted, and
     /// the client is refused here before its jti is spent, whatever order the authenticators run in.
     /// </remarks>
     private bool AudienceIsAccepted(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo)
@@ -167,10 +168,18 @@ public abstract partial class JwtAssertionAuthenticatorBase(
 
         // Resolved only now, since it takes a scope of its own, which a client naming the issuer never needs
         if (audiences.HasFlag(ClientAssertionAudiences.TokenEndpoint) &&
-            tenant.TokenEndpointSpellings(serviceProvider) is var tokenEndpoint &&
+            tenant.EndpointSpellings(serviceProvider, OidcEndpoints.Token) is var tokenEndpoint &&
             Names(audience, allowArray, written => tokenEndpoint.Contains(written, StringComparer.Ordinal)))
         {
             LogTokenEndpointAudienceAccepted(clientInfo.ClientId);
+            return true;
+        }
+
+        if (audiences.HasFlag(ClientAssertionAudiences.BackChannelAuthenticationEndpoint) &&
+            tenant.EndpointSpellings(serviceProvider, OidcEndpoints.BackChannelAuthentication) is var backChannel &&
+            Names(audience, allowArray, written => backChannel.Contains(written, StringComparer.Ordinal)))
+        {
+            LogBackChannelAuthenticationEndpointAudienceAccepted(clientInfo.ClientId);
             return true;
         }
 

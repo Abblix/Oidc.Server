@@ -112,4 +112,11 @@ partial class JwtAssertionAuthenticatorBase
         Message = "The client assertion for {ClientId} names the token endpoint URL as its audience, accepted because "
                   + "the client's assertion audiences include it")]
     private partial void LogTokenEndpointAudienceAccepted(string ClientId);
+
+    [LoggerMessage(
+        EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.BackChannelAuthenticationEndpointAudienceAccepted,
+        Level = LogLevel.Debug,
+        Message = "The client assertion for {ClientId} names the backchannel authentication endpoint URL as its "
+                  + "audience, accepted because the client's assertion audiences include it")]
+    private partial void LogBackChannelAuthenticationEndpointAudienceAccepted(string ClientId);
 }

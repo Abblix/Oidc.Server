@@ -23,7 +23,8 @@ public class NewClientAssertionAudiencesValidatorTests
     [InlineData((int)ClientAssertionAudiences.Issuer, true)]
     [InlineData((int)(ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint | ClientAssertionAudiences.AllowArray), true)]
     [InlineData((int)ClientAssertionAudiences.TokenEndpoint, false)]
-    [InlineData((int)(ClientAssertionAudiences.Issuer | (ClientAssertionAudiences)8), false)]
+    [InlineData((int)(ClientAssertionAudiences.Issuer | ClientAssertionAudiences.BackChannelAuthenticationEndpoint), true)]
+    [InlineData((int)(ClientAssertionAudiences.Issuer | (ClientAssertionAudiences)16), false)]
     public void TheAssertionAudiencesForNewClients_StartTheHostOnlyWhenTheServerCanApplyThem(int granted, bool starts)
     {
         var options = new OidcOptions

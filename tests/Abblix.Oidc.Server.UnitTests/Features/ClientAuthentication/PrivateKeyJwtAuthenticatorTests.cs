@@ -53,6 +53,8 @@ public class PrivateKeyJwtAuthenticatorTests
 
     private const string PushedAuthorizationRequestEndpoint = IssuerIdentifier + "/connect/par";
 
+    private const string BackChannelAuthenticationEndpoint = IssuerIdentifier + "/connect/bc-authorize";
+
     /// <summary>
     /// The instant the authenticator reads, before the expiry every assertion here carries, so no assertion is
     /// refused for its age on whatever day the suite runs.
@@ -909,6 +911,81 @@ public class PrivateKeyJwtAuthenticatorTests
             AssertRefusedForItsAudience(mocks);
     }
 
+    /// <summary>
+    /// A CIBA client writing the backchannel authentication endpoint URL as its audience, which CIBA Core 1.0 section
+    /// 7.1 has the server accept, is accepted only where the host granted it that URL: on the issuer's authority either
+    /// way it is written and on the mutual-TLS alias, as a string, or in an array for a client also allowed one. The
+    /// token endpoint grant does not admit it, its grant does not admit the token endpoint, FAPI 2.0 refuses it, and
+    /// where no transport maps the endpoint nothing matches.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(BackChannelAuthenticationEndpointAudiences))]
+    public async Task BackChannelAuthenticationEndpointAudience_IsAcceptedOnlyForAClientGrantedIt(
+        ClientAssertionAudiences audiences, ClientSecurityProfile profile, bool mapped, JsonNode audience, bool accepted)
+    {
+        var (authenticator, mocks) = CreateAuthenticator(
+            new Uri(TokenEndpoint), backChannelAuthenticationMapped: mapped);
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            ClientAssertionAudiences = audiences,
+        };
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "backchannel-authentication-endpoint",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+        token.Payload.Json[JwtClaimTypes.Audience] = audience;
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var tenant = new TestIssuer
+        {
+            Issuer = new Uri(IssuerIdentifier),
+            DefaultSecurityProfile = profile,
+            MtlsBaseUri = new Uri(MtlsBaseUriAsWritten),
+        }.ToTenant();
+        var result = await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+
+        Assert.Equal(accepted, result is not null);
+        if (!accepted)
+            AssertRefusedForItsAudience(mocks);
+    }
+
+    public static TheoryData<ClientAssertionAudiences, ClientSecurityProfile, bool, JsonNode, bool>
+        BackChannelAuthenticationEndpointAudiences()
+    {
+        const ClientAssertionAudiences issuer = ClientAssertionAudiences.Issuer;
+        const ClientAssertionAudiences withTokenEndpoint = issuer | ClientAssertionAudiences.TokenEndpoint;
+        const ClientAssertionAudiences withBackChannel =
+            issuer | ClientAssertionAudiences.BackChannelAuthenticationEndpoint;
+        const ClientAssertionAudiences withBackChannelAndArray = withBackChannel | ClientAssertionAudiences.AllowArray;
+        const ClientSecurityProfile none = ClientSecurityProfile.None;
+        const string another = "https://another.example.com";
+        const string mtlsBackChannel = "https://mtls.example.com/connect/bc-authorize";
+
+        return new()
+        {
+            { withBackChannel, none, true, JsonValue.Create(BackChannelAuthenticationEndpoint), true },
+            { withBackChannel, none, true, JsonValue.Create("https://ISSUER.example.com/connect/bc-authorize"), false },
+            { withBackChannel, none, true, JsonValue.Create(mtlsBackChannel), true },
+            { withBackChannel, none, true, JsonValue.Create(MtlsBaseUriAsWritten + "/connect/bc-authorize"), true },
+            { withBackChannel, none, true, JsonValue.Create("https://other-as.example/connect/bc-authorize"), false },
+            { withBackChannel, none, true, JsonValue.Create(IssuerIdentifier), true },
+            { withBackChannel, none, true, JsonValue.Create(TokenEndpoint), false },
+            { withBackChannel, none, true, new JsonArray(BackChannelAuthenticationEndpoint), false },
+            { withBackChannelAndArray, none, true, new JsonArray(another, BackChannelAuthenticationEndpoint), true },
+            { issuer, none, true, JsonValue.Create(BackChannelAuthenticationEndpoint), false },
+            { withTokenEndpoint, none, true, JsonValue.Create(BackChannelAuthenticationEndpoint), false },
+            { withBackChannel, ClientSecurityProfile.Fapi2, true, JsonValue.Create(BackChannelAuthenticationEndpoint), false },
+            { withBackChannel, none, false, JsonValue.Create(BackChannelAuthenticationEndpoint), false },
+        };
+    }
+
     private const string MtlsBaseUriAsWritten = "https://MTLS.example.com:443";
     private const string MtlsTokenEndpoint = "https://mtls.example.com/connect/token";
 
@@ -1036,7 +1113,7 @@ public class PrivateKeyJwtAuthenticatorTests
     /// endpoint, or over a host with no resolver registered at all.
     /// </summary>
     private (PrivateKeyJwtAuthenticator authenticator, Mocks mocks) CreateAuthenticator(
-        Uri? tokenEndpoint, bool resolverRegistered = true)
+        Uri? tokenEndpoint, bool resolverRegistered = true, bool backChannelAuthenticationMapped = true)
     {
         var logger = new Mock<ILogger<PrivateKeyJwtAuthenticator>>();
         logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
@@ -1053,6 +1130,8 @@ public class PrivateKeyJwtAuthenticatorTests
         endpointResolver.Setup(r => r.Resolve(OidcEndpoints.Token)).Returns(tokenEndpoint);
         endpointResolver.Setup(r => r.Resolve(OidcEndpoints.PushedAuthorizationRequest))
             .Returns(new Uri(PushedAuthorizationRequestEndpoint));
+        endpointResolver.Setup(r => r.Resolve(OidcEndpoints.BackChannelAuthentication))
+            .Returns(backChannelAuthenticationMapped ? new Uri(BackChannelAuthenticationEndpoint) : null);
 
         var services = new ServiceCollection();
         services.AddScoped<IClientJwtValidator>(_ => clientJwtValidator.Object);

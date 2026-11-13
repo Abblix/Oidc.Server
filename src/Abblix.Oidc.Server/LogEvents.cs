@@ -226,6 +226,7 @@ internal static class LogEvents
             public const int TimestampsOutsideTheClientsProfile = Base + 13;
             public const int TimestampUnreadable = Base + 14;
             public const int TokenEndpointAudienceAccepted = Base + 15;
+            public const int BackChannelAuthenticationEndpointAudienceAccepted = Base + 16;
         }
 
         /// <summary>

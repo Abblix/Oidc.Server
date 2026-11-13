@@ -15,9 +15,9 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// <remarks>
 /// RFC 10070 section 4 makes the authorization server "reject any JWT that does not contain its issuer identifier as
 /// its sole audience value", so <see cref="Issuer"/> alone is the value every client is held to: an unset set reads as
-/// it, and a configured set without it is refused at startup. <see cref="TokenEndpoint"/> and
-/// <see cref="AllowArray"/> are the transition section 6 of the same RFC expects, granted by the host to a client that
-/// cannot change yet.
+/// it, and a configured set without it is refused at startup. <see cref="TokenEndpoint"/>,
+/// <see cref="BackChannelAuthenticationEndpoint"/> and <see cref="AllowArray"/> are the transition section 6 of the
+/// same RFC expects, granted by the host to a client that cannot change yet.
 /// </remarks>
 [Flags]
 public enum ClientAssertionAudiences
@@ -55,4 +55,21 @@ public enum ClientAssertionAudiences
     /// have it, for the reason <see cref="TokenEndpoint"/> gives.
     /// </remarks>
     AllowArray = 1 << 2,
+
+    /// <summary>
+    /// The backchannel authentication endpoint URL, as a string, which CIBA Core 1.0 section 7.1 has the server accept:
+    /// "the OP MUST accept its Issuer Identifier, Token Endpoint URL, or Backchannel Authentication Endpoint URL as
+    /// values that identify it as an intended audience". Spelled as <see cref="TokenEndpoint"/> is, on the issuer
+    /// identifier's scheme, host and port and on the tenant's mutual-TLS address, and accepted wherever the client
+    /// authenticates, as the token endpoint URL is.
+    /// </summary>
+    /// <remarks>
+    /// RFC 10070 leaves CIBA unchanged but closes the same ambiguity for every assertion: "the authorization server MUST
+    /// reject any JWT that does not contain its issuer identifier as its sole audience value", since "other endpoint
+    /// values of the metadata cannot be directly validated and, if used as the audience when sent to a different
+    /// endpoint, can open an attack vector". So it is granted by the host to a CIBA client that writes this URL, and
+    /// removed when the client is changed. A client held to FAPI 2.0 cannot have it, for the reason
+    /// <see cref="TokenEndpoint"/> gives.
+    /// </remarks>
+    BackChannelAuthenticationEndpoint = 1 << 3,
 }

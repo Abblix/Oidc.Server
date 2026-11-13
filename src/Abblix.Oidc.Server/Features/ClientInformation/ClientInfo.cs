@@ -365,8 +365,10 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// What this client's authentication assertions may name as their audience, and in which form: the issuer identifier
     /// RFC 10070 section 4 requires, as a string, and for a client the host lets keep an older form while it changes,
-    /// the token endpoint URL (<see cref="ClientAssertionAudiences.TokenEndpoint"/>), an array holding either beside
-    /// other values (<see cref="ClientAssertionAudiences.AllowArray"/>), or both.
+    /// the token endpoint URL (<see cref="ClientAssertionAudiences.TokenEndpoint"/>), the backchannel authentication
+    /// endpoint URL CIBA Core 1.0 section 7.1 names
+    /// (<see cref="ClientAssertionAudiences.BackChannelAuthenticationEndpoint"/>), an array holding any of them beside
+    /// other values (<see cref="ClientAssertionAudiences.AllowArray"/>), or several of these.
     /// </summary>
     /// <remarks>
     /// RFC 10070 makes the authorization server "reject any JWT that does not contain its issuer identifier as its sole

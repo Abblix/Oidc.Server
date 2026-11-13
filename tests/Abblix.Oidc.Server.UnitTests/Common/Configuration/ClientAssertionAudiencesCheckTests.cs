@@ -35,7 +35,11 @@ public class ClientAssertionAudiencesCheckTests
     [InlineData("TokenEndpoint, AllowArray", false)]
     [InlineData("7", true)]
     [InlineData("0", true)]
-    [InlineData("9", false)]
+    [InlineData("Issuer, BackChannelAuthenticationEndpoint", true)]
+    [InlineData("BackChannelAuthenticationEndpoint", false)]
+    [InlineData("9", true)]
+    [InlineData("15", true)]
+    [InlineData("17", false)]
     public void ATenantsClient_StartsOnlyWithAssertionAudiencesHoldingTheIssuer(string? configured, bool starts)
         => Assert.Equal(starts, !Refusals(Bind(configured)).Any());
 

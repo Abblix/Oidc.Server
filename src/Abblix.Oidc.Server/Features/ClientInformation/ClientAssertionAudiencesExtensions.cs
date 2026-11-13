@@ -19,7 +19,7 @@ internal static class ClientAssertionAudiencesExtensions
     /// </summary>
     /// <remarks>
     /// FAPI 2.0 section 5.3.2.1 has the server "only accept its issuer identifier value ... as a string in the aud
-    /// claim received in client authentication assertions", so neither the token endpoint URL nor an array survives
+    /// claim received in client authentication assertions", so neither an endpoint URL nor an array survives
     /// it, whatever the host granted.
     /// </remarks>
     public static ClientAssertionAudiences AdmittedBy(
