@@ -39,8 +39,9 @@ public class IdTokenHintValidator(IIdTokenHintParser hintParser) : IEndSessionCo
             // The audience is checked below rather than by the parser, which leaves it to its callers
             // because they disagree about it. An ID token is the one type that names a client there:
             // OpenID Connect Core 1.0 Section 2 says the aud claim "MUST contain the OAuth 2.0 client_id
-            // of the Relying Party".
-            var result = await hintParser.ParseAsync(tenant, request.IdTokenHint);
+            // of the Relying Party". The client is resolved from that audience after this step, so none is passed:
+            // the hint is held to the profile of the client its audience names, which the client_id below must match
+            var result = await hintParser.ParseAsync(tenant, client: null, request.IdTokenHint);
             if (result.TryGetFailure(out var reason))
                 return new OidcError(ErrorCodes.InvalidRequest, reason);
 

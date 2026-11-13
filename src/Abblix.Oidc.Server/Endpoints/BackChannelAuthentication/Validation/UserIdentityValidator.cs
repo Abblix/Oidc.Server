@@ -143,7 +143,7 @@ public class UserIdentityValidator(
         // part of it: the three endpoints accepting the parameter disagree about who must be in it. Here it
         // is the requesting client, because OpenID Connect Core 1.0 Section 2 says an ID token's aud "MUST
         // contain the OAuth 2.0 client_id of the Relying Party".
-        var result = await hintParser.ParseAsync(tenant, idTokenHint);
+        var result = await hintParser.ParseAsync(tenant, context.ClientInfo, idTokenHint);
         if (result.TryGetFailure(out var reason))
             return new OidcError(ErrorCodes.InvalidRequest, reason);
 

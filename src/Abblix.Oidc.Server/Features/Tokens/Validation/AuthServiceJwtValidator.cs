@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -118,8 +119,10 @@ public class AuthServiceJwtValidator(
 	/// A token one client holds may be presented by another - introspected by a resource server, exchanged on a
 	/// delegation - and both clients' profiles bound how it may be processed, so the stricter wins. The presenter's
 	/// profile was applied while validating; the owner's is known only from the token, so it is applied here. Where no
-	/// presenter is known - a bearer access token at userinfo, an id_token_hint - the owner's profile is the only one
-	/// that bounds the token, and FAPI 2.0 section 5.4.1 holds the server to it "when creating or processing JWTs".
+	/// presenter is known - a bearer access token at userinfo, an id_token_hint at end session - the owner's profile is
+	/// the only one that bounds the token, and FAPI 2.0 section 5.4.1 holds the server to it "when creating or
+	/// processing JWTs". The owner is the client the token names: an access or refresh token's client_id, an ID
+	/// token's azp or sole audience.
 	/// </remarks>
 	private async Task<string?> AlgorithmOutsideTheOwnersProfileAsync(
 		TenantDefinition tenant,
@@ -127,7 +130,7 @@ public class AuthServiceJwtValidator(
 		JsonWebToken token,
 		List<string> keyManagementAlgorithms)
 	{
-		if (token.Payload.ClientId is not { } ownerId || ownerId == presenter?.ClientId)
+		if (token.Payload.NamedClientId() is not { } ownerId || ownerId == presenter?.ClientId)
 			return null;
 
 		if (await clientInfoProvider.TryFindClientAsync(tenant, ownerId) is not { } owner)

@@ -46,6 +46,12 @@ public class AuthServiceJwtValidatorTests
     {
         _jwtValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+
+        // A client the token names is not registered unless a test says so, leaving the token to the presenter's
+        // profile alone
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()))
+            .ReturnsAsync((ClientInfo?)null);
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
         _validator = new AuthServiceJwtValidator(
@@ -264,12 +270,14 @@ public class AuthServiceJwtValidatorTests
         // Act
         await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
+        // The validation itself asks the store for the client the token names; only the audience check is under test
+        _clientInfoProvider.Invocations.Clear();
+
         // Assert
         Assert.NotNull(capturedParams);
         Assert.False(await capturedParams.ValidateAudience!([ValidClientId]));
 
-        // The client store is a strict mock with nothing set up for this identifier, so reaching it at all
-        // would throw. Passing is the evidence that audience validation no longer consults it.
+        // Passing is the evidence that audience validation does not consult the client store
         _clientInfoProvider.VerifyNoOtherCalls();
     }
 
@@ -934,6 +942,32 @@ public class AuthServiceJwtValidatorTests
 
         var result = await _validator.ValidateAsync(
             SingleIssuer.Tenant, client: null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// An ID token names its client only in its audience (OpenID Connect Core 1.0 section 2), and is held to that
+    /// client's profile as an access token is to the one its client_id names: one signed RS256 for a client held to
+    /// FAPI 1.0 Advanced is refused although nobody presents it, and accepted for a client held to none.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, false)]
+    [InlineData(null, true)]
+    public async Task ValidateAsync_AnIdToken_IsHeldToTheProfileOfTheClientItsAudienceNames(
+        ClientSecurityProfile? ownerProfile, bool accepted)
+    {
+        const string ownerId = "owner";
+        var token = CreateValidToken();
+        token.Header.Algorithm = SigningAlgorithms.RS256;
+        token.Payload.Audiences = [ownerId];
+        SetupHonouringValidator(token, keyManagement: null);
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ownerId))
+            .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }

@@ -274,7 +274,7 @@ public class UserIdentityValidatorTests
         };
 
         _idTokenValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         var context = CreateContext(idTokenHint: "id-token");
@@ -308,7 +308,7 @@ public class UserIdentityValidatorTests
         };
 
         _idTokenValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         var context = CreateContext(idTokenHint: "id-token");
@@ -338,7 +338,7 @@ public class UserIdentityValidatorTests
 
         ValidationOptions? capturedOptions = null;
         _idTokenValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .Callback(new Action<TenantDefinition, ClientInfo?, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, options) => capturedOptions = options))
             .ReturnsAsync(token);
 
@@ -363,7 +363,7 @@ public class UserIdentityValidatorTests
     {
         _idTokenValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, null, "access-token-as-hint", TokenTypesArg.Is(JwtTypes.IdTokens), It.IsAny<ValidationOptions>()))
+                TestTenant.Matched, It.IsAny<ClientInfo?>(), "access-token-as-hint", TokenTypesArg.Is(JwtTypes.IdTokens), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
         var context = CreateContext(idTokenHint: "access-token-as-hint");
@@ -388,7 +388,7 @@ public class UserIdentityValidatorTests
         };
 
         _idTokenValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         var context = CreateContext(idTokenHint: "id-token");
@@ -413,7 +413,7 @@ public class UserIdentityValidatorTests
         var validationError = new JwtValidationError(JwtError.TokenAlreadyUsed, "Already used");
 
         _idTokenValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(validationError);
 
         var context = CreateContext(idTokenHint: "invalid-id-token");
@@ -482,7 +482,7 @@ public class UserIdentityValidatorTests
 
         ValidationOptions? capturedOptions = null;
         _idTokenValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .Callback(new Action<TenantDefinition, ClientInfo?, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, options) => capturedOptions = options))
             .ReturnsAsync(token);
 
