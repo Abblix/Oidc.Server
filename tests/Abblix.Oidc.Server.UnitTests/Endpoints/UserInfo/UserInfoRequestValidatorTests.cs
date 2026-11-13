@@ -226,24 +226,23 @@ public class UserInfoRequestValidatorTests
     }
 
     /// <summary>
-    /// Verifies error when token provided in both header and parameter.
-    /// Per specification, token should be in one location only.
+    /// RFC 6750 section 3.1: a request that "uses more than one method for including an access token" is an
+    /// invalid_request, so the token in the Authorization header and again as a parameter, of the body or of the
+    /// query, is refused as one.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithTokenInBothSources_ShouldReturnError()
+    [Theory]
+    [InlineData("token_in_param", null)]
+    [InlineData(null, "token_in_param")]
+    public async Task ValidateAsync_WithTokenInHeaderAndParameter_IsInvalidRequest(string? inForm, string? inQuery)
     {
-        // Arrange
-        var userInfoRequest = CreateUserInfoRequest("token_in_param");
+        var userInfoRequest = CreateUserInfoRequest(inForm, inQuery);
         var authHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "token_in_header");
         var clientRequest = CreateClientRequest(authHeader: authHeader);
 
-        // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
-        // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
-        Assert.Contains("not in both sources", error.ErrorDescription);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     /// <summary>

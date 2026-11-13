@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Net.Http.Headers;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
@@ -86,6 +87,31 @@ public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(fact
             new Uri($"{endpoint}?{UserInfoRequest.Parameters.AccessToken}="),
             TokenInForm(accessToken),
             TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(
+            ErrorCodes.InvalidRequest,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// RFC 6750 section 3.1: the token in the Authorization header and again as a parameter "uses more than one
+    /// method for including an access token", which is an invalid_request answered with 400, whichever part of the
+    /// request carries the parameter.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_token_in_the_header_and_as_a_parameter_is_an_invalid_request(bool parameterInForm)
+    {
+        var (client, endpoint, accessToken) = await ObtainAccessTokenAsync();
+
+        using var request = parameterInForm
+            ? new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = TokenInForm(accessToken) }
+            : new HttpRequestMessage(HttpMethod.Get, WithTokenInQuery(endpoint, accessToken));
+        request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains(

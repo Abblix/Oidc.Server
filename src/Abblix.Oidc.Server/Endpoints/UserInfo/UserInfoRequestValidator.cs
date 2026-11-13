@@ -178,9 +178,11 @@ public class UserInfoRequestValidator(
 				ErrorCodes.InvalidToken,
 				$"The scheme name '{authorizationHeader.Scheme}' is not supported");
 
+		// RFC 6750 section 3.1: the header and a parameter together are "more than one method for including an access
+		// token", an invalid_request like the body and the query together above
 		if (parameter != null)
 			return new OidcError(
-				ErrorCodes.InvalidToken,
+				ErrorCodes.InvalidRequest,
 				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
 				$"or '{Parameters.AccessToken}' parameter, but not in both sources at the same time");
 
