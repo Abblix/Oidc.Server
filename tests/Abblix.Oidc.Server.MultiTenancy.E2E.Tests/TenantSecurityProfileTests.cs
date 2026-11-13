@@ -154,7 +154,8 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
     /// <summary>
     /// FAPI 2.0 Security Profile section 5.3.4: a resource server "shall not accept access tokens in the query
     /// parameters". The tenant holding its clients to FAPI 2.0 answers a token in the userinfo query with
-    /// invalid_request and 400 (RFC 6750 section 3.1), and answers the same token in the Authorization header.
+    /// invalid_request and 400 (RFC 6750 section 3.1), and answers the same token in the Authorization header and in
+    /// the form-encoded body.
     /// </summary>
     [Fact]
     public async Task AStrictProfile_RefusesTheAccessTokenInTheUserInfoQuery()
@@ -182,5 +183,16 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
         var response = await _http.SendAsync(inHeader, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // The clause names the query alone, so the form-encoded body of RFC 6750 section 2.2 stays a way in
+        var inForm = await _http.PostAsync(
+            $"{Globex}/connect/userinfo",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [UserInfoRequest.Parameters.AccessToken] = accessToken.EncodedJwt,
+            }),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, inForm.StatusCode);
     }
 }

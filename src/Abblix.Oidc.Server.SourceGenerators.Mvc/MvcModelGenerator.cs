@@ -46,6 +46,8 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string RequestHeaderMarkerName = "RequestHeaderAttribute";
 	private const string AuthorizationHeaderMarkerName = "AuthorizationHeaderAttribute";
 	private const string ClientCertificateMarkerName = "ClientCertificateAttribute";
+	private const string QueryParameterMarkerName = "QueryParameterAttribute";
+	private const string FormParameterMarkerName = "FormParameterAttribute";
 	private const string SystemTextJsonNamespace = "System.Text.Json.Serialization";
 	private const string JsonIgnoreAttributeName = "JsonIgnoreAttribute";
 	private const string JsonPropertyNameAttributeName = "JsonPropertyNameAttribute";
@@ -313,6 +315,18 @@ public class MvcModelGenerator : IIncrementalGenerator
 						$"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({certificateBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}))]");
 					break;
 
+				// The property's own source overrides the action parameter's query-or-form one, so the parameter is read
+				// from this part of the request alone, and still counted like any other single-valued parameter
+				case QueryParameterMarkerName
+					when sourceMarker.ConstructorArguments is [{ Value: string queryName }]:
+					EmitSingleSourceParameter("FromQuery", queryName);
+					break;
+
+				case FormParameterMarkerName
+					when sourceMarker.ConstructorArguments is [{ Value: string formName }]:
+					EmitSingleSourceParameter("FromForm", formName);
+					break;
+
 				default:
 					_diagnostics.Add(new DiagnosticInfo(
 						MarkerWithoutBinder, stub.Location,
@@ -324,6 +338,14 @@ public class MvcModelGenerator : IIncrementalGenerator
 			_writer.AppendLine($"\tpublic {type} {property.Name} {{ get; init; }}{GetInitializer(property)}");
 
 			_mappedProperties.Add(property);
+		}
+
+		private void EmitSingleSourceParameter(string sourceAttribute, string wireName)
+		{
+			var literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(wireName, quote: true);
+			_writer.AppendLine($"\t[global::Microsoft.AspNetCore.Mvc.{sourceAttribute}(Name = {literal})]");
+			_writer.AppendLine($"\t[{DisplayAttributeName}(Name = {literal})]");
+			_writer.AppendLine($"\t[{ParameterBinderAttributeName}(typeof({RequestParameterBinderName}))]");
 		}
 
 		private void EmitProperty(IPropertySymbol property)
@@ -555,7 +577,8 @@ public class MvcModelGenerator : IIncrementalGenerator
 			=> property.GetAttributes().FirstOrDefault(attribute =>
 				attribute.AttributeClass is
 				{
-					Name: RequestHeaderMarkerName or AuthorizationHeaderMarkerName or ClientCertificateMarkerName,
+					Name: RequestHeaderMarkerName or AuthorizationHeaderMarkerName or ClientCertificateMarkerName
+						or QueryParameterMarkerName or FormParameterMarkerName,
 				} attributeClass &&
 				attributeClass.ContainingNamespace.ToDisplayString() == _declarativeNamespace);
 

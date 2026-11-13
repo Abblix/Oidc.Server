@@ -63,11 +63,12 @@ public class UserInfoRequestValidatorTests
             _mtlsValidator.Object);
     }
 
-    private static UserInfoRequest CreateUserInfoRequest(string? accessToken = null)
+    private static UserInfoRequest CreateUserInfoRequest(string? inForm = null, string? inQuery = null)
     {
         return new UserInfoRequest
         {
-            AccessToken = accessToken,
+            AccessTokenInForm = inForm,
+            AccessTokenInQuery = inQuery,
         };
     }
 
@@ -450,15 +451,16 @@ public class UserInfoRequestValidatorTests
     /// <summary>
     /// FAPI 2.0 Security Profile section 5.3.4: a resource server "shall not accept access tokens in the query
     /// parameters stated in Section 2.3 of OAuth 2.0 Bearer Token Usage". A deployment held to FAPI 2.0 refuses the
-    /// token outside the Authorization header, and refuses it before the token opens the user's session.
+    /// token in the URI query, and refuses it before the token opens the user's session.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_TokenInParameter_UnderFapi2Deployment_IsRefused()
+    public async Task ValidateAsync_TokenInQuery_UnderFapi2Deployment_IsRefused()
     {
         ArrangeValidTokenOfClient("valid_token_123", clientProfile: null);
         var tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant();
 
-        var result = await _validator.ValidateAsync(tenant, CreateUserInfoRequest("valid_token_123"), CreateClientRequest());
+        var result = await _validator.ValidateAsync(
+            tenant, CreateUserInfoRequest(inQuery: "valid_token_123"), CreateClientRequest());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -472,15 +474,32 @@ public class UserInfoRequestValidatorTests
     /// client's own choice tightens what it is held to.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_TokenInParameter_OfFapi2Client_IsRefused()
+    public async Task ValidateAsync_TokenInQuery_OfFapi2Client_IsRefused()
     {
         ArrangeValidTokenOfClient("valid_token_123", ClientSecurityProfile.Fapi2);
 
         var result = await _validator.ValidateAsync(
-            SingleIssuer.Tenant, CreateUserInfoRequest("valid_token_123"), CreateClientRequest());
+            SingleIssuer.Tenant, CreateUserInfoRequest(inQuery: "valid_token_123"), CreateClientRequest());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// The clause forbids the query alone, so a FAPI 2.0 deployment still accepts the token in the form-encoded
+    /// body of RFC 6750 section 2.2.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenInForm_UnderFapi2Deployment_IsAccepted()
+    {
+        var clientInfo = ArrangeValidTokenOfClient("valid_token_123", clientProfile: null);
+        var tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant();
+
+        var result = await _validator.ValidateAsync(
+            tenant, CreateUserInfoRequest(inForm: "valid_token_123"), CreateClientRequest());
+
+        Assert.True(result.TryGetSuccess(out var validRequest));
+        Assert.Same(clientInfo, validRequest.ClientInfo);
     }
 
     /// <summary>
@@ -498,5 +517,36 @@ public class UserInfoRequestValidatorTests
 
         Assert.True(result.TryGetSuccess(out var validRequest));
         Assert.Same(clientInfo, validRequest.ClientInfo);
+    }
+
+    /// <summary>
+    /// A client under no profile keeps RFC 6750 section 2.3: the token in the URI query is accepted.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenInQuery_OfUnprofiledClient_IsAccepted()
+    {
+        var clientInfo = ArrangeValidTokenOfClient("valid_token_123", clientProfile: null);
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, CreateUserInfoRequest(inQuery: "valid_token_123"), CreateClientRequest());
+
+        Assert.True(result.TryGetSuccess(out var validRequest));
+        Assert.Same(clientInfo, validRequest.ClientInfo);
+    }
+
+    /// <summary>
+    /// RFC 6750 section 3.1: a request that "uses more than one method for including an access token" is an
+    /// invalid_request, so the token in both the query and the body is refused before either is read.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenInQueryAndForm_IsRefused()
+    {
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant,
+            CreateUserInfoRequest(inForm: "token_in_form", inQuery: "token_in_query"),
+            CreateClientRequest());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 }

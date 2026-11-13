@@ -41,7 +41,7 @@ public class UserInfoHandlerTests
 
     private static UserInfoRequest CreateUserInfoRequest() => new()
     {
-        AccessToken = "access_token_value",
+        AccessTokenInForm = "access_token_value",
     };
 
     private static ClientRequest CreateClientRequest() => new()

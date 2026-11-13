@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo;
 
 /// <summary>
 /// Validates a UserInfo request: extracts the access token (per RFC 6750, either the
-/// <c>Authorization: Bearer</c> header or the <c>access_token</c> form/query parameter, but not both),
+/// <c>Authorization: Bearer</c> header or the <c>access_token</c> form or query parameter, exactly one of them),
 /// verifies its JWT signature and claims, asserts the <c>typ</c> header equals <c>at+jwt</c>, and
 /// resolves the originating authentication session, authorization context and client.
 /// </summary>
@@ -121,15 +121,15 @@ public class UserInfoRequestValidator(
 
 		// FAPI 2.0 Security Profile section 5.3.4: a resource server "shall not accept access tokens in the query
 		// parameters". Which profile holds the client is known only from the validated token, so the refusal comes
-		// here, still before the token opens the user's session. No Authorization header means the token was the
-		// access_token parameter, since extraction admits exactly one source.
-		if (clientRequest.AuthorizationHeader == null &&
-		    SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile).RequireAccessTokenInAuthorizationHeader)
+		// here, still before the token opens the user's session. Extraction admits exactly one source, so a token in
+		// the query is the token that was validated.
+		if (userInfoRequest.AccessTokenInQuery != null &&
+		    SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile).RequireAccessTokenOutsideQuery)
 		{
 			return new OidcError(
 				ErrorCodes.InvalidRequest,
-				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header, " +
-				$"the '{Parameters.AccessToken}' parameter is not accepted under the client's security profile");
+				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header or the request body, " +
+				$"the '{Parameters.AccessToken}' query parameter is not accepted under the client's security profile");
 		}
 
 		// A pairwise subject that does not open for this client (a foreign-sector or pre-change token) comes back as
@@ -140,7 +140,8 @@ public class UserInfoRequestValidator(
 
 	/// <summary>
 	/// Extracts the access token from exactly one source per RFC 6750 section 2: the <c>Authorization</c> header (Bearer or
-	/// DPoP scheme) or the <c>access_token</c> parameter, but never both. Returns the typed
+	/// DPoP scheme), the <c>access_token</c> parameter in the body, or the same parameter in the query, never two of
+	/// them. Returns the typed
 	/// <see cref="MissingAuthenticationError"/> when neither is present so the challenge builder omits error
 	/// attributes.
 	/// </summary>
@@ -148,11 +149,20 @@ public class UserInfoRequestValidator(
 		UserInfoRequest userInfoRequest,
 		ClientRequest clientRequest)
 	{
+		// RFC 6750 section 3.1 names a request that "uses more than one method for including an access token" an
+		// invalid_request. The query and the body are told apart only so a profile can refuse one of them
+		if (userInfoRequest is { AccessTokenInForm: not null, AccessTokenInQuery: not null })
+			return new OidcError(
+				ErrorCodes.InvalidRequest,
+				$"The '{Parameters.AccessToken}' parameter must be passed in the request body or the query, " +
+				"but not in both at the same time");
+
+		var parameter = userInfoRequest.AccessToken;
 		var authorizationHeader = clientRequest.AuthorizationHeader;
 		if (authorizationHeader == null)
 		{
-			if (userInfoRequest.AccessToken != null)
-				return userInfoRequest.AccessToken;
+			if (parameter != null)
+				return parameter;
 
 			// RFC 6750 section 3.1: a request with no authentication information at all gets a bare WWW-Authenticate
 			// challenge - the typed marker tells the challenge builder to omit the error attributes.
@@ -168,7 +178,7 @@ public class UserInfoRequestValidator(
 				ErrorCodes.InvalidToken,
 				$"The scheme name '{authorizationHeader.Scheme}' is not supported");
 
-		if (userInfoRequest.AccessToken != null)
+		if (parameter != null)
 			return new OidcError(
 				ErrorCodes.InvalidToken,
 				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
