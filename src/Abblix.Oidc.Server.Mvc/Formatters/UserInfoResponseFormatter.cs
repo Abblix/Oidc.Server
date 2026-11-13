@@ -21,6 +21,7 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
@@ -50,7 +51,7 @@ public class UserInfoResponseFormatter(
         Result<UserInfoFoundResponse, OidcError> response)
     {
         return await response.MatchAsync(
-            onSuccess: FormatSuccessAsync,
+            onSuccess: async found => PrivateWhenTokenInQuery(request, await FormatSuccessAsync(found)),
             onFailure: error => Task.FromResult(
                 // RFC 6750 section 3.1: invalid_token and insufficient_scope carry their own status, and what is
                 // left at a protected resource is invalid_request, which SHOULD be a 400
@@ -60,6 +61,16 @@ public class UserInfoResponseFormatter(
                     DPoPAlgorithms.Allowed,
                     advertiseBearer: true)));
     }
+
+    /// <summary>
+    /// RFC 6750 section 2.3: "Server success (2XX status) responses to these requests SHOULD contain a Cache-Control
+    /// header with the "private" option", these being requests carrying the token in the URI query. Appended beside
+    /// the no-store the endpoint sends on every response, which it does not replace.
+    /// </summary>
+    private static ActionResult PrivateWhenTokenInQuery(UserInfoRequest request, ActionResult result)
+        => request.AccessTokenInQuery is null
+            ? result
+            : result.WithAppendHeader(HeaderNames.CacheControl, [CacheControlHeaderValue.PrivateString]);
 
     private async Task<ActionResult> FormatSuccessAsync(UserInfoFoundResponse found)
     {

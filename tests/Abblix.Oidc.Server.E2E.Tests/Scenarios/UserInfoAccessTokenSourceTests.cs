@@ -46,6 +46,22 @@ public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(fact
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    /// <summary>
+    /// RFC 6750 section 2.3: "Server success (2XX status) responses to these requests SHOULD contain a Cache-Control
+    /// header with the "private" option." The no-store every response of the endpoint carries stays beside it.
+    /// </summary>
+    [Fact]
+    public async Task A_success_to_a_token_in_the_query_is_private_to_the_client()
+    {
+        var (client, endpoint, accessToken) = await ObtainAccessTokenAsync();
+
+        var response = await client.GetAsync(WithTokenInQuery(endpoint, accessToken), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.Private);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+    }
+
     [Fact]
     public async Task A_token_in_the_form_alone_is_answered()
     {
