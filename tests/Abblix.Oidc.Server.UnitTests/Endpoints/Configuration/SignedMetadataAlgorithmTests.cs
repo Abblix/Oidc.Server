@@ -26,8 +26,12 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Configuration;
 /// </summary>
 public class SignedMetadataAlgorithmTests
 {
-    private static async Task<string?> SignedWith(ClientSecurityProfile profile, JsonWebKey key)
+    private static Task<string?> SignedWith(ClientSecurityProfile profile, JsonWebKey key)
+        => SignedWith(profile, key, key);
+
+    private static async Task<string?> SignedWith(ClientSecurityProfile profile, JsonWebKey used, params JsonWebKey[] all)
     {
+        var key = used;
         string? algorithm = null;
         var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
         creator
@@ -35,7 +39,7 @@ public class SignedMetadataAlgorithmTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((token, _, _, _, _) => algorithm = token.Header.Algorithm)
             .ReturnsAsync("signed");
         var keys = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
-        keys.Setup(k => k.GetSigningKeys(TestTenant.Matched, true)).Returns(() => new[] { key }.ToAsyncEnumerable());
+        keys.Setup(k => k.GetSigningKeys(TestTenant.Matched, true)).Returns(() => all.ToAsyncEnumerable());
         var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
 
         await new SignedMetadataProvider(creator.Object, keys.Object, TimeProvider.System)
@@ -66,5 +70,21 @@ public class SignedMetadataAlgorithmTests
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => SignedWith(ClientSecurityProfile.Fapi1Advanced, key));
+    }
+
+    /// <summary>
+    /// A key whose algorithm cannot be named - a curve this server has no algorithm for, and no alg declared - is
+    /// passed over at a FAPI tenant rather than ending the walk, so a later key the profile admits signs.
+    /// </summary>
+    [Fact]
+    public async Task AKeyWithoutANameableAlgorithm_IsPassedOverUnderFapi1Advanced()
+    {
+        var rs256 = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var unnamed = new EllipticCurveJsonWebKey { KeyId = "unnamed", Curve = "secp256k1" };
+        var ps256 = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.PS256);
+
+        Assert.Equal(
+            SigningAlgorithms.PS256,
+            await SignedWith(ClientSecurityProfile.Fapi1Advanced, ps256, rs256, unnamed, ps256));
     }
 }

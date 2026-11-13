@@ -48,10 +48,14 @@ public class SignedMetadataProvider(
 
         // FAPI 1.0 Part 2 section 8.6, FAPI 2.0 section 5.4.1: a JWS this server creates uses only the algorithms the
         // profile the tenant holds its clients to admits, so the first key signing with one of them is taken
+        // Without such a profile the first key signs, and a key whose algorithm cannot be named is said so; under one
+        // a key that cannot be named, or names an algorithm the profile does not admit, is passed over for the next
         var profile = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile);
-        var (signingKey, algorithm) = signingKeys
-            .Select(key => (Key: key, Algorithm: SigningAlgorithmFor(key, profile)))
-            .FirstOrDefault(candidate => profile.PermitsSigningAlgorithm(candidate.Algorithm));
+        var (signingKey, algorithm) = profile.RequireFapiSigningAlgorithms
+            ? signingKeys
+                .Select(key => (Key: key, Algorithm: NamedAlgorithmFor(key, profile)))
+                .FirstOrDefault(candidate => candidate.Algorithm is { } named && profile.PermitsSigningAlgorithm(named))
+            : (signingKeys[0], SigningAlgorithmFor(signingKeys[0], profile));
         if (signingKey is null || algorithm is null)
         {
             throw new InvalidOperationException(
@@ -97,6 +101,18 @@ public class SignedMetadataProvider(
     /// <c>EllipticCurveJsonWebKeyExtensions.Apply</c> uses when it imports one.
     /// </remarks>
     private static string SigningAlgorithmFor(JsonWebKey signingKey, SecurityProfileRequirements profile)
+        => NamedAlgorithmFor(signingKey, profile) ?? throw new InvalidOperationException(
+            signingKey is EllipticCurveJsonWebKey { Curve: var curve }
+                ? $"The signing key names the curve '{curve}', which this server has no signing algorithm for. Set " +
+                  "the alg parameter on the key to say how the discovery document is to be signed (RFC 7517 section 4.4)."
+                : $"The signing key is a {signingKey.GetType().Name} and declares no alg parameter, so there is no " +
+                  "algorithm to sign the discovery document with. Set the alg parameter on the key (RFC 7517 section 4.4).");
+
+    /// <summary>
+    /// The algorithm the key signs with: the one it declares, else the one its material implies, or null where neither
+    /// names one.
+    /// </summary>
+    private static string? NamedAlgorithmFor(JsonWebKey signingKey, SecurityProfileRequirements profile)
     {
         if (signingKey.Algorithm is { } declared)
             return declared;
@@ -112,17 +128,10 @@ public class SignedMetadataProvider(
                 EllipticCurveTypes.P256 => SigningAlgorithms.ES256,
                 EllipticCurveTypes.P384 => SigningAlgorithms.ES384,
                 EllipticCurveTypes.P521 => SigningAlgorithms.ES512,
-
-                _ => throw new InvalidOperationException(
-                    $"The signing key names the curve '{curve}', which this server has no signing algorithm "
-                    + "for. Set the alg parameter on the key to say how the discovery document is to be "
-                    + "signed (RFC 7517 section 4.4)."),
+                _ => null,
             },
 
-            _ => throw new InvalidOperationException(
-                $"The signing key is a {signingKey.GetType().Name} and declares no alg parameter, so there "
-                + "is no algorithm to sign the discovery document with. Set the alg parameter on the key "
-                + "(RFC 7517 section 4.4)."),
+            _ => null,
         };
     }
 }
