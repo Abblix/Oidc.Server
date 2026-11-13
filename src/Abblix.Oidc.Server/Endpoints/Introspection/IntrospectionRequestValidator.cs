@@ -104,7 +104,7 @@ public partial class IntrospectionRequestValidator(
 		// identifier does not say which resource is asking. The same section closes the list with "it is up to
 		// the authorization server to determine which of these checks (and any other checks) apply".
 		var result = await jwtValidator.ValidateAsync(
-			tenant, introspectionRequest.Token,
+			tenant, clientInfo, introspectionRequest.Token,
 			JwtTypes.IntrospectableTokens,
 			ServiceTokenValidation.AnyAudience);
 

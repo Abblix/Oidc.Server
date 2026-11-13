@@ -133,7 +133,7 @@ public class RevocationFollowsTheValidatedTenantTests
                     ? new JwtValidationError(JwtError.TokenRevoked, "Cut off")
                     : null);
 
-        var validator = new AuthServiceJwtValidator(
+        IAuthServiceJwtValidator validator = new AuthServiceJwtValidator(
             new ProfiledJwtValidator(inner.Object),
             SingleIssuer.LicensedCatalog,
             Mock.Of<IAuthServiceKeysProvider>(),

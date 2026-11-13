@@ -42,6 +42,7 @@ public class AuthServiceJwtValidator(
 	/// Asynchronously validates a JWT, checking its authenticity, issuer, audience, and cryptographic signatures.
 	/// </summary>
 	/// <param name="tenant">The tenant the token is for.</param>
+	/// <param name="client">The client presenting the token, or null where none is known.</param>
 	/// <param name="jwt">The JWT string to validate.</param>
 	/// <param name="tokenTypes">The token types the caller accepts.</param>
 	/// <param name="options">Validation options to apply. Defaults to <see cref="ValidationOptions.Default"/>.</param>
@@ -50,14 +51,15 @@ public class AuthServiceJwtValidator(
 	/// </returns>
 	public async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
 		TenantDefinition tenant,
+		ClientInfo? client,
 		string jwt,
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options = ValidationOptions.Default)
 	{
-		// Only the tenant's profile is known before the token is read, so a token this server signed or encrypted
-		// otherwise before the profile was in force is refused
+		// The profile of the client presenting the token where it is known, else the tenant's, so a token this server
+		// signed or encrypted otherwise before that profile was in force is refused
 		var result = await validator.ValidateAsync(
-			SecurityProfileRequirements.For(tenant, client: null),
+			SecurityProfileRequirements.For(tenant, client),
 			jwt,
 			new ValidationParameters
 			{

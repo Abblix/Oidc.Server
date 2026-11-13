@@ -32,6 +32,9 @@ namespace Abblix.Oidc.Server.UnitTests.Features.TokenExchange;
 /// </summary>
 public class JwtSubjectTokenResolverPairwiseTests
 {
+    /// <summary>The client requesting the exchange.</summary>
+    private static readonly ClientInfo Requester = new("requester");
+
     private const string TokenWire = "header.payload.signature";
     private const string RealSubject = "real-user-42";
     private const string OriginalClientId = "pairwise-client";
@@ -83,10 +86,10 @@ public class JwtSubjectTokenResolverPairwiseTests
             },
         };
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(RealSubject, ctx.Subject);

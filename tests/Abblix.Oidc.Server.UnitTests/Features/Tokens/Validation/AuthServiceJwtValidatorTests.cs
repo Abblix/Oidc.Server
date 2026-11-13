@@ -40,7 +40,7 @@ public class AuthServiceJwtValidatorTests
     private readonly Mock<IJsonWebTokenValidator> _jwtValidator;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly Mock<IAuthServiceKeysProvider> _serviceKeysProvider;
-    private readonly AuthServiceJwtValidator _validator;
+    private readonly IAuthServiceJwtValidator _validator;
 
     public AuthServiceJwtValidatorTests()
     {
@@ -697,7 +697,7 @@ public class AuthServiceJwtValidatorTests
         bool accepted)
     {
         var served = new TenantDefinition { Id = "acme", Issuer = TestConstants.DefaultIssuer, Generation = "g2" };
-        var validator = new AuthServiceJwtValidator(
+        IAuthServiceJwtValidator validator = new AuthServiceJwtValidator(
             new ProfiledJwtValidator(_jwtValidator.Object),
             SingleIssuer.HostCatalog,
             _serviceKeysProvider.Object,
@@ -725,7 +725,7 @@ public class AuthServiceJwtValidatorTests
     {
         // Strict: any read of the records fails the test
         var registry = new Mock<ITokenRegistry>(MockBehavior.Strict);
-        var validator = new AuthServiceJwtValidator(
+        IAuthServiceJwtValidator validator = new AuthServiceJwtValidator(
             new ProfiledJwtValidator(_jwtValidator.Object),
             SingleIssuer.LicensedCatalog,
             _serviceKeysProvider.Object,
@@ -839,5 +839,41 @@ public class AuthServiceJwtValidatorTests
             Assert.Equal([SigningAlgorithms.ES256, SigningAlgorithms.PS256], parameters!.AllowedSigningAlgorithms!.Order());
         else
             Assert.Null(parameters!.AllowedSigningAlgorithms);
+    }
+
+    /// <summary>
+    /// The same clauses where the client presenting the token is known: a client held to FAPI 1.0 Advanced at a
+    /// tenant held to no profile has a token of this server's accepted only under that profile's algorithms, with
+    /// RSA1_5 refused for each JWE layer, so a token signed or encrypted otherwise before the client's profile was in
+    /// force is turned away; without the client the tenant's own profile alone applies.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ValidateAsync_ThePresentingClientsProfile_BoundsTheAlgorithms(bool clientKnown)
+    {
+        ValidationParameters? parameters = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns((string _, ValidationParameters p) =>
+            {
+                parameters = p;
+                return Task.FromResult<Abblix.Utils.Result<JsonWebToken, JwtValidationError>>(
+                    new JwtValidationError(JwtError.InvalidToken, "not under test"));
+            });
+        var client = new ClientInfo(ValidClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
+
+        await _validator.ValidateAsync(
+            SingleIssuer.Tenant, clientKnown ? client : null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        if (clientKnown)
+        {
+            Assert.Equal([SigningAlgorithms.ES256, SigningAlgorithms.PS256], parameters!.AllowedSigningAlgorithms!.Order());
+            Assert.False(parameters.ValidateKeyManagementAlgorithm!(EncryptionAlgorithms.KeyManagement.Rsa1_5));
+        }
+        else
+        {
+            Assert.Null(parameters!.AllowedSigningAlgorithms);
+        }
     }
 }

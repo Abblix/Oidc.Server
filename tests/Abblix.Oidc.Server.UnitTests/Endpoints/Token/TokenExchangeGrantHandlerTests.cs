@@ -264,7 +264,7 @@ public class TokenExchangeGrantHandlerTests
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
-            .Setup(r => r.ResolveAsync(TestTenant.Matched, actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actor);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
@@ -284,8 +284,8 @@ public class TokenExchangeGrantHandlerTests
         Assert.NotNull(grant.Context.Actor);
         Assert.Equal("svc-worker-7", grant.Context.Actor["sub"]!.GetValue<string>());
         Assert.Null(grant.Context.Actor["act"]);
-        resolverMock.Verify(r => r.ResolveAsync(TestTenant.Matched, SubjectTokenWire, It.IsAny<Uri>(), caller.Token), Times.Once);
-        resolverMock.Verify(r => r.ResolveAsync(TestTenant.Matched, actorWire, It.IsAny<Uri>(), caller.Token), Times.Once);
+        resolverMock.Verify(r => r.ResolveAsync(TestTenant.Matched, clientInfo, SubjectTokenWire, It.IsAny<Uri>(), caller.Token), Times.Once);
+        resolverMock.Verify(r => r.ResolveAsync(TestTenant.Matched, clientInfo, actorWire, It.IsAny<Uri>(), caller.Token), Times.Once);
     }
 
     [Fact]
@@ -299,7 +299,7 @@ public class TokenExchangeGrantHandlerTests
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
-            .Setup(r => r.ResolveAsync(TestTenant.Matched, actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actor);
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken) with
@@ -360,7 +360,7 @@ public class TokenExchangeGrantHandlerTests
         const string actorWire = "actor.jwt";
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.AccessToken, subject);
         resolverMock
-            .Setup(r => r.ResolveAsync(TestTenant.Matched, actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidRequest, "actor expired"));
 
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
@@ -387,7 +387,7 @@ public class TokenExchangeGrantHandlerTests
         // detail).
         var (handler, resolverMock) = CreateHandlerWithResolverMock(TokenExchangeTokenTypes.AccessToken);
         resolverMock
-            .Setup(r => r.ResolveAsync(TestTenant.Matched, SubjectTokenWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), SubjectTokenWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidRequest, "subject expired"));
         var clientInfo = ClientWithAllowlist(TokenExchangeTokenTypes.AccessToken);
         var request = ExchangeRequest(TokenExchangeTokenTypes.AccessToken);
@@ -872,7 +872,7 @@ public class TokenExchangeGrantHandlerTests
         };
         var (handler, resolverMock) = CreateHandlerWith(TokenExchangeTokenTypes.IdToken, subject);
         resolverMock
-            .Setup(r => r.ResolveAsync(TestTenant.Matched, actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), actorWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(actor);
 
         // Client allowlist only id_token (subject); actor_token_type=access_token NOT in allowlist.
@@ -900,7 +900,7 @@ public class TokenExchangeGrantHandlerTests
     {
         var (handler, resolverMock) = CreateHandlerWithResolverMock(tokenType);
         resolverMock
-            .Setup(r => r.ResolveAsync(TestTenant.Matched, SubjectTokenWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.ResolveAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), SubjectTokenWire, It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(resolvedContext);
         return (handler, resolverMock);
     }

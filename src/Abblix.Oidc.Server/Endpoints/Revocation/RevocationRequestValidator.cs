@@ -178,7 +178,7 @@ public partial class RevocationRequestValidator(
 		// the check below. A token minted for a resource indicator names that resource in its audience, and
 		// demanding otherwise would leave the client unable to revoke exactly the tokens most worth revoking.
 		var result = await jwtValidator.ValidateAsync(
-			tenant, revocationRequest.Token,
+			tenant, clientInfo, revocationRequest.Token,
 			JwtTypes.IntrospectableTokens,
 			ServiceTokenValidation.AnyAudience);
 
