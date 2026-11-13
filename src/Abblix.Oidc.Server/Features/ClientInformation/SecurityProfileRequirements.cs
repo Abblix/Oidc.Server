@@ -79,6 +79,14 @@ public sealed record SecurityProfileRequirements
     public bool RequireSenderConstrainedTokens { get; init; }
 
     /// <summary>
+    /// The profile issues certificate-bound access tokens only (RFC 8705 section 3): a token request carrying a DPoP
+    /// proof is refused, and so is one presenting no certificate the token could be bound to. FAPI 1.0 Part 2 section 8.2:
+    /// the protected resources "shall only support sender-constrained access tokens via MTLS". Enforced by
+    /// <c>Endpoints.Token.Validation.DPoPTokenEndpointValidator</c>.
+    /// </summary>
+    public bool RequireCertificateBoundTokens { get; init; }
+
+    /// <summary>
     /// The furthest either clock window may reach under this profile, or null where the profile
     /// puts no bound on them. Read by every place that builds JWT validation parameters.
     /// </summary>
@@ -404,6 +412,7 @@ public sealed record SecurityProfileRequirements
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireMatchingClientIdentifiers = true,
+        RequireCertificateBoundTokens = true,
         RequireFapiSigningAlgorithms = true,
         ForbidRsa1_5KeyManagement = true,
     };
@@ -558,6 +567,7 @@ public sealed record SecurityProfileRequirements
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireMatchingClientIdentifiers = true,
+        RequireCertificateBoundTokens = true,
         RequireStringAudienceInClientAssertion = true,
         RequireFapiSigningAlgorithms = true,
         ForbidRsa1_5KeyManagement = true,
@@ -614,7 +624,8 @@ public sealed record SecurityProfileRequirements
         // steps compose in any order
         => WithRequestControlsTightenedBy(other)
             .WithRequestObjectControlsTightenedBy(other)
-            .WithClientAndTokenControlsTightenedBy(other)
+            .WithClientControlsTightenedBy(other)
+            .WithTokenControlsTightenedBy(other)
             .WithClockTightenedBy(other);
 
     /// <summary>
@@ -651,25 +662,34 @@ public sealed record SecurityProfileRequirements
         };
 
     /// <summary>
-    /// This bundle with the controls on the client's credentials and on the tokens it is issued tightened by
-    /// <paramref name="other"/>.
+    /// This bundle with the controls on the client's credentials tightened by <paramref name="other"/>.
     /// </summary>
-    private SecurityProfileRequirements WithClientAndTokenControlsTightenedBy(SecurityProfileRequirements other)
+    private SecurityProfileRequirements WithClientControlsTightenedBy(SecurityProfileRequirements other)
         => this with
         {
-            RequireSenderConstrainedTokens =
-                RequireSenderConstrainedTokens || other.RequireSenderConstrainedTokens,
             RequireConfidentialClient = RequireConfidentialClient || other.RequireConfidentialClient,
             RequireKeyBasedClientAuthentication =
                 RequireKeyBasedClientAuthentication || other.RequireKeyBasedClientAuthentication,
             RequireStringAudienceInClientAssertion =
                 RequireStringAudienceInClientAssertion || other.RequireStringAudienceInClientAssertion,
-            ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
-            RequireFapiSigningAlgorithms = RequireFapiSigningAlgorithms || other.RequireFapiSigningAlgorithms,
-            ForbidRsa1_5KeyManagement = ForbidRsa1_5KeyManagement || other.ForbidRsa1_5KeyManagement,
             RequireMatchingClientIdentifiers =
                 RequireMatchingClientIdentifiers || other.RequireMatchingClientIdentifiers,
             RequireHttpsJwksUri = RequireHttpsJwksUri || other.RequireHttpsJwksUri,
+        };
+
+    /// <summary>
+    /// This bundle with the controls on the tokens the client is issued, and on the algorithms they and the client's
+    /// own JWTs use, tightened by <paramref name="other"/>.
+    /// </summary>
+    private SecurityProfileRequirements WithTokenControlsTightenedBy(SecurityProfileRequirements other)
+        => this with
+        {
+            RequireSenderConstrainedTokens =
+                RequireSenderConstrainedTokens || other.RequireSenderConstrainedTokens,
+            RequireCertificateBoundTokens = RequireCertificateBoundTokens || other.RequireCertificateBoundTokens,
+            ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
+            RequireFapiSigningAlgorithms = RequireFapiSigningAlgorithms || other.RequireFapiSigningAlgorithms,
+            ForbidRsa1_5KeyManagement = ForbidRsa1_5KeyManagement || other.ForbidRsa1_5KeyManagement,
         };
 
     /// <summary>

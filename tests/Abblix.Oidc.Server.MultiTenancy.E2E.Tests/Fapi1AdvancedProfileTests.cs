@@ -9,6 +9,8 @@
 using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -56,6 +58,25 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
     private static readonly RsaJsonWebKey ClientKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 
     /// <summary>
+    /// The certificate the client presents over mutual TLS, which its access tokens are bound to.
+    /// </summary>
+    private static readonly X509Certificate2 ClientCertificate = CreateCertificate();
+
+    /// <summary>
+    /// The request header that stands in, in this test server, for the client presenting its certificate in the TLS
+    /// handshake.
+    /// </summary>
+    private const string PresentsCertificate = "X-Test-Presents-Certificate";
+
+    private static X509Certificate2 CreateCertificate()
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest("CN=fapi1-client", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var now = TimeProvider.System.GetUtcNow();
+        return request.CreateSelfSigned(now.AddMinutes(-5), now.AddDays(1));
+    }
+
+    /// <summary>
     /// The tenant's key a client encrypts its request objects to.
     /// </summary>
     private static readonly RsaJsonWebKey EncryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
@@ -97,6 +118,12 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         builder.Services.Configure<OidcOptions>(options => options.Tenants.Add(Tenant));
 
         _app = builder.Build();
+        _app.Use((context, next) =>
+        {
+            if (context.Request.Headers.ContainsKey(PresentsCertificate))
+                context.Connection.ClientCertificate = ClientCertificate;
+            return next();
+        });
         _app.UseMultiTenancy();
         _app.UseCors();
         _app.UseAuthorization();
@@ -125,6 +152,8 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         PkceRequired = false,
         IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
         AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        // FAPI 1.0 Part 2 section 8.2: access tokens are sender-constrained via MTLS only
+        TlsClientCertificateBoundAccessTokens = true,
     };
 
     /// <summary>
@@ -365,8 +394,8 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
                 [ClientRequest.Parameters.ClientAssertion] = assertion,
             }),
         };
-        // The profile requires a sender-constrained token, and the proof is checked before the client is
-        request.Headers.Add(DPoPHeader, await DPoPProofAsync(HttpMethod.Post, new Uri(Host + Acme + "/connect/token")));
+        // The profile requires a certificate-bound token, and that is checked before the client is
+        request.Headers.Add(PresentsCertificate, "yes");
 
         var response = await _http!.SendAsync(request, TestContext.Current.CancellationToken);
 
@@ -621,14 +650,16 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FAPI 1.0 Part 2 section 8.6 has the server use PS256 or ES256 for any JWS it processes, a DPoP proof among them:
-    /// at the token endpoint a proof signed RS256 is refused with invalid_dpop_proof, while the same request with an
-    /// ES256 proof goes on to be refused for its code.
+    /// FAPI 1.0 Part 2 section 8.2: protected resources "shall only support sender-constrained access tokens via MTLS",
+    /// so a client held to FAPI 1.0 Advanced is not issued a DPoP-bound token: a token request carrying a DPoP proof is
+    /// refused with invalid_request whatever its algorithm, while the same request with the client's certificate and no
+    /// proof goes on to be refused for its code.
     /// </summary>
     [Theory]
-    [InlineData(SigningAlgorithms.RS256, ErrorCodes.InvalidDPoPProof)]
-    [InlineData(SigningAlgorithms.ES256, ErrorCodes.InvalidGrant)]
-    public async Task TheDPoPProof_IsJudgedByItsAlgorithm(string algorithm, string expectedError)
+    [InlineData(SigningAlgorithms.RS256, ErrorCodes.InvalidRequest)]
+    [InlineData(SigningAlgorithms.ES256, ErrorCodes.InvalidRequest)]
+    [InlineData(null, ErrorCodes.InvalidGrant)]
+    public async Task ADPoPProof_IsRefused(string? algorithm, string expectedError)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, Acme + "/connect/token")
         {
@@ -641,8 +672,12 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
                 [ClientRequest.Parameters.ClientAssertion] = await ClientAssertionAsync(),
             }),
         };
-        request.Headers.Add(
-            DPoPHeader, await DPoPProofAsync(HttpMethod.Post, new Uri(Host + Acme + "/connect/token"), algorithm));
+        request.Headers.Add(PresentsCertificate, "yes");
+        if (algorithm != null)
+        {
+            request.Headers.Add(
+                DPoPHeader, await DPoPProofAsync(HttpMethod.Post, new Uri(Host + Acme + "/connect/token"), algorithm));
+        }
 
         var response = await _http!.SendAsync(request, TestContext.Current.CancellationToken);
 
@@ -673,7 +708,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
                 [ClientRequest.Parameters.ClientAssertion] = await ClientAssertionAsync(),
             }),
         };
-        request.Headers.Add(DPoPHeader, await DPoPProofAsync(HttpMethod.Post, new Uri(Host + Acme + "/connect/token")));
+        request.Headers.Add(PresentsCertificate, "yes");
 
         var response = await _http!.SendAsync(request, TestContext.Current.CancellationToken);
 
