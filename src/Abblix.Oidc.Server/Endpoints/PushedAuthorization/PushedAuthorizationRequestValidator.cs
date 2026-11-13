@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
@@ -82,6 +83,18 @@ public class PushedAuthorizationRequestValidator(
                 return new AuthorizationRequestValidationError(
                     ErrorCodes.InvalidRequest,
                     "The pushed authorization request must be bound to the client that posted it",
+                    redirectUri,
+                    responseMode);
+            }
+
+            // FAPI 1.0 Part 2 section 5.2.2: "shall require PAR requests, if supported, to use PKCE (RFC7636) with S256
+            // as the code challenge method", whether or not PKCE is required of a request sent directly
+            if (SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile).RequirePkceWithPushedRequests &&
+                validRequest.Model is not { CodeChallenge.Length: > 0, CodeChallengeMethod: CodeChallengeMethods.S256 })
+            {
+                return new AuthorizationRequestValidationError(
+                    ErrorCodes.InvalidRequest,
+                    "The security profile requires a pushed request to carry a PKCE code challenge with the S256 method",
                     redirectUri,
                     responseMode);
             }

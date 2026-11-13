@@ -186,4 +186,31 @@ public class PushedAuthorizationRequestValidatorTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidDPoPProof, error.Error);
     }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require PAR requests, if supported, to use PKCE (RFC7636) with
+    /// S256 as the code challenge method". A pushed request from a client held to that profile is refused without a
+    /// code challenge or with the plain method, and passes with S256; a client held to no profile pushes without one.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, null, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "challenge", CodeChallengeMethods.Plain, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "challenge", CodeChallengeMethods.S256, true)]
+    [InlineData(null, null, null, true)]
+    public async Task ValidateAsync_Fapi1Advanced_RequiresPkceWithS256(
+        ClientSecurityProfile? profile, string? challenge, string? method, bool accepted)
+    {
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = profile });
+        var request = BuildRequest() with { CodeChallenge = challenge, CodeChallengeMethod = method };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, BuildClientRequest());
+
+        if (accepted)
+            Assert.True(result.TryGetSuccess(out _));
+        else
+            Assert.Equal(ErrorCodes.InvalidRequest, Assert.IsType<AuthorizationRequestValidationError>(
+                result.TryGetFailure(out var error) ? error : null).Error);
+    }
 }

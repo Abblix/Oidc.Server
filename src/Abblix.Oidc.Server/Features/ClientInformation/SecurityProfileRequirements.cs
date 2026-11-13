@@ -56,6 +56,14 @@ public sealed record SecurityProfileRequirements
     public bool RequireS256CodeChallenge { get; init; }
 
     /// <summary>
+    /// The profile requires a pushed authorization request to carry a PKCE code challenge with the <c>S256</c> method,
+    /// whether or not it requires PKCE of a request sent to the authorization endpoint directly. FAPI 1.0 Part 2
+    /// section 5.2.2: the server "shall require PAR requests, if supported, to use PKCE (RFC7636) with S256 as the code
+    /// challenge method". Enforced by <c>Endpoints.PushedAuthorization.PushedAuthorizationRequestValidator</c>.
+    /// </summary>
+    public bool RequirePkceWithPushedRequests { get; init; }
+
+    /// <summary>
     /// The profile requires the client to start every authorization flow through a Pushed
     /// Authorization Request, independent of the server-wide
     /// <see cref="Common.Configuration.OidcOptions.RequirePushedAuthorizationRequests"/> flag.
@@ -331,8 +339,8 @@ public sealed record SecurityProfileRequirements
     /// <remarks>
     /// Left off on purpose, because each would refuse a client that profile admits: the code-only response type
     /// (the section admits <c>code id_token</c> as well), Pushed Authorization Requests (which
-    /// it "may support"), PKCE (it exempts the Baseline clause and asks PKCE with S256 only of a pushed request,
-    /// which no control here expresses), and the clock window, assertion audience and rotation controls, which
+    /// it "may support"), PKCE of a request sent directly (it exempts the Baseline clause and asks PKCE with S256 only
+    /// of a pushed request, which <see cref="RequirePkceWithPushedRequests"/> holds), and the clock window, assertion audience and rotation controls, which
     /// come from FAPI 2.0 and have no clause in FAPI 1.0.
     /// </remarks>
     private static readonly SecurityProfileRequirements Fapi1AdvancedRequirements = new()
@@ -345,6 +353,7 @@ public sealed record SecurityProfileRequirements
         RequireSignedAuthorizationResponse = true,
         RequireNonceWithOpenIdScope = true,
         RequireStateWithoutOpenIdScope = true,
+        RequirePkceWithPushedRequests = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireFapiSigningAlgorithms = true,
@@ -494,6 +503,7 @@ public sealed record SecurityProfileRequirements
         RequireIssuerAudienceInRequestObject = true,
         RequireNonceWithOpenIdScope = true,
         RequireStateWithoutOpenIdScope = true,
+        RequirePkceWithPushedRequests = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireStringAudienceInClientAssertion = true,
@@ -569,6 +579,7 @@ public sealed record SecurityProfileRequirements
             RequireSignedAuthorizationResponse || other.RequireSignedAuthorizationResponse,
         RequireNonceWithOpenIdScope = RequireNonceWithOpenIdScope || other.RequireNonceWithOpenIdScope,
         RequireStateWithoutOpenIdScope = RequireStateWithoutOpenIdScope || other.RequireStateWithoutOpenIdScope,
+        RequirePkceWithPushedRequests = RequirePkceWithPushedRequests || other.RequirePkceWithPushedRequests,
     };
 
     /// <summary>

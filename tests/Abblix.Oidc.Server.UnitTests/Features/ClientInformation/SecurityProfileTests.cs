@@ -92,6 +92,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireIssuerAudienceInRequestObject);
         Assert.True(requirements.RequireNonceWithOpenIdScope);
         Assert.True(requirements.RequireStateWithoutOpenIdScope);
+        Assert.True(requirements.RequirePkceWithPushedRequests);
         Assert.True(requirements.RequireFapiSigningAlgorithms);
     }
 

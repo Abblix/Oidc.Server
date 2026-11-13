@@ -145,6 +145,27 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         string clientId = ClientId,
         string scope = Scopes.OpenId)
     {
+        var requestObject = await RequestObjectAsync(parameters, algorithm, addressedToTheIssuer, clientId);
+
+        var query = HttpUtility.ParseQueryString(string.Empty);
+        query[AuthorizationRequest.Parameters.ClientId] = clientId;
+        query[AuthorizationRequest.Parameters.ResponseType] =
+            parameters[AuthorizationRequest.Parameters.ResponseType]!.GetValue<string>();
+        query[AuthorizationRequest.Parameters.Scope] = scope;
+        query[AuthorizationRequest.Parameters.Request] = requestObject;
+
+        return await _http!.GetAsync(Acme + "/connect/authorize?" + query, TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// <paramref name="parameters"/> signed into a request object with the client's key, living five minutes.
+    /// </summary>
+    private async Task<string> RequestObjectAsync(
+        JsonObject parameters,
+        string algorithm = SigningAlgorithms.PS256,
+        bool addressedToTheIssuer = true,
+        string clientId = ClientId)
+    {
         var now = TimeProvider.System.GetUtcNow();
         var token = new JsonWebToken
         {
@@ -163,18 +184,47 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         foreach (var (name, value) in parameters)
             token.Payload.Json[name] = value?.DeepClone();
 
-        var requestObject = await _app!.Services.GetRequiredService<IJsonWebTokenCreator>()
-            .IssueAsync(token, ClientKey);
-
-        var query = HttpUtility.ParseQueryString(string.Empty);
-        query[AuthorizationRequest.Parameters.ClientId] = clientId;
-        query[AuthorizationRequest.Parameters.ResponseType] =
-            parameters[AuthorizationRequest.Parameters.ResponseType]!.GetValue<string>();
-        query[AuthorizationRequest.Parameters.Scope] = scope;
-        query[AuthorizationRequest.Parameters.Request] = requestObject;
-
-        return await _http!.GetAsync(Acme + "/connect/authorize?" + query, TestContext.Current.CancellationToken);
+        return await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, ClientKey);
     }
+
+    /// <summary>
+    /// A private_key_jwt client authentication assertion (OpenID Connect Core section 9) addressed to the issuer.
+    /// </summary>
+    private async Task<string> ClientAssertionAsync(string algorithm = SigningAlgorithms.PS256)
+    {
+        var now = TimeProvider.System.GetUtcNow();
+        return await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(
+            new JsonWebToken
+            {
+                Header = { Algorithm = algorithm, KeyId = ClientKey.KeyId },
+                Payload =
+                {
+                    Issuer = ClientId,
+                    Subject = ClientId,
+                    Audiences = [Host + Acme],
+                    JwtId = Guid.NewGuid().ToString("N"),
+                    IssuedAt = now,
+                    ExpiresAt = now.AddMinutes(1),
+                },
+            },
+            ClientKey);
+    }
+
+    /// <summary>
+    /// Pushes <paramref name="parameters"/> as a signed request object to the pushed authorization request endpoint,
+    /// the client authenticating with a PS256 assertion.
+    /// </summary>
+    private async Task<HttpResponseMessage> PushAsync(JsonObject parameters)
+        => await _http!.PostAsync(
+            Acme + "/connect/par",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.ClientId] = ClientId,
+                [ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer,
+                [ClientRequest.Parameters.ClientAssertion] = await ClientAssertionAsync(),
+                [AuthorizationRequest.Parameters.Request] = await RequestObjectAsync(parameters),
+            }),
+            TestContext.Current.CancellationToken);
 
     /// <summary>
     /// The error the response carries, wherever the endpoint put it: in the redirect's query or fragment, inside
@@ -288,22 +338,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
     [InlineData(SigningAlgorithms.PS256, ErrorCodes.InvalidGrant)]
     public async Task TheClientAssertion_IsJudgedByItsAlgorithm(string algorithm, string expectedError)
     {
-        var now = TimeProvider.System.GetUtcNow();
-        var assertion = await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(
-            new JsonWebToken
-            {
-                Header = { Algorithm = algorithm, KeyId = ClientKey.KeyId },
-                Payload =
-                {
-                    Issuer = ClientId,
-                    Subject = ClientId,
-                    Audiences = [Host + Acme],
-                    JwtId = Guid.NewGuid().ToString("N"),
-                    IssuedAt = now,
-                    ExpiresAt = now.AddMinutes(1),
-                },
-            },
-            ClientKey);
+        var assertion = await ClientAssertionAsync(algorithm);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Acme + "/connect/token")
         {
@@ -481,5 +516,29 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
             await AssertSentToLogin(response);
         else
             Assert.Equal(expectedError, await ErrorOf(response));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require PAR requests, if supported, to use PKCE (RFC7636) with
+    /// S256 as the code challenge method". A pushed request without a code challenge is refused; the same request with
+    /// an S256 challenge is accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(false, HttpStatusCode.BadRequest)]
+    [InlineData(true, HttpStatusCode.Created)]
+    public async Task APushedRequest_CarriesAnS256CodeChallenge(bool withChallenge, HttpStatusCode expected)
+    {
+        var request = ConformantRequest();
+        if (withChallenge)
+        {
+            request[AuthorizationRequest.Parameters.CodeChallenge] = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+            request[AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256;
+        }
+
+        var response = await PushAsync(request);
+
+        Assert.Equal(expected, response.StatusCode);
+        if (!withChallenge)
+            Assert.Equal(ErrorCodes.InvalidRequest, await ErrorOf(response));
     }
 }
