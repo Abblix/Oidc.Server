@@ -171,13 +171,15 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 			state,
 			pushBindings);
 
+		// The client's key set was judged against its profile where the client was resolved in this request, so a refusal here
+		// is a key set changed in between
 		var jwt = await jwtFormatter.FormatAsync(
 			tenant,
 			identityToken,
 			clientInfo,
 			ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value));
 
-		return new EncodedJsonWebToken(identityToken, jwt);
+		return new EncodedJsonWebToken(identityToken, jwt.GetSuccess());
 	}
 
 	// The signing algorithm arrives as a parameter rather than being read back off the token's own

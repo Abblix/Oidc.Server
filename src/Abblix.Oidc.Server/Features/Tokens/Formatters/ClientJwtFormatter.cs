@@ -6,6 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -38,7 +41,8 @@ public class ClientJwtFormatter(
     /// <param name="encryption">The encryption policy: which registered client metadata governs encryption, the
     /// content-encryption default, and whether encryption requires a registered key-management algorithm.</param>
     /// <returns>A task that returns a JWT string formatted and ready for use by the client.</returns>
-    public async Task<string> FormatAsync(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption)
+    public async Task<Result<string, OidcError>> FormatAsync(
+        TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption)
     {
         var profile = SecurityProfileRequirements.For(tenant, clientInfo);
         var signingCredentials = await serviceKeysProvider.GetSigningKeys(tenant, true)
@@ -62,9 +66,9 @@ public class ClientJwtFormatter(
         // the clear because the only key it publishes is one its profile forbids
         if (encryptingCredentials == null && clientKeys.Length > 0)
         {
-            throw new InvalidOperationException(
-                $"The client {clientInfo.ClientId} publishes only RSA1_5 encryption keys, which its security profile " +
-                "forbids");
+            return new OidcError(
+                ErrorCodes.InvalidClient,
+                $"The key set of the client {clientInfo.ClientId} holds only encryption keys its security profile forbids");
         }
 
         var keyEncryptionAlgorithm = encryptingCredentials?.Algorithm

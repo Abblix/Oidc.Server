@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
@@ -37,5 +39,6 @@ public interface ILogoutTokenService
     /// <returns>A task that returns a <see cref="JsonWebToken"/>.
     /// This token is specifically formatted to conform to the OpenID Connect back-channel logout specification,
     /// containing claims such as 'sub', 'sid', and 'events' to indicate the logout event to the client.</returns>
-    Task<EncodedJsonWebToken> CreateLogoutTokenAsync(TenantDefinition tenant, ClientInfo clientInfo, LogoutContext logoutContext);
+    Task<Result<EncodedJsonWebToken, OidcError>> CreateLogoutTokenAsync(
+        TenantDefinition tenant, ClientInfo clientInfo, LogoutContext logoutContext);
 }

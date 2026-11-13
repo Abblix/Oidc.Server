@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Mvc.Formatters;
@@ -44,6 +45,37 @@ public class UserInfoResponseFormatterTests
 
         Result<UserInfoFoundResponse, OidcError> response = new OidcError(errorCode, "the description");
         return await ActionResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), response));
+    }
+
+    /// <summary>
+    /// RFC 6750 section 3.1, invalid_token: "The access token provided is expired, revoked, malformed, or invalid for
+    /// other reasons". A response the token's client cannot be sent, its key set holding only keys its profile forbids,
+    /// is answered so with 401 rather than as a server error.
+    /// </summary>
+    [Fact]
+    public async Task A_response_the_clients_key_set_cannot_receive_is_an_invalid_token()
+    {
+        var tenant = new TenantDefinition { Id = "main", Issuer = new Uri("https://auth.example.com") };
+        var tenantAccessor = Mock.Of<ITenantAccessor>(accessor => accessor.Current == new TenantContext { Tenant = tenant });
+        var client = new ClientInfo("client") { UserInfoSignedResponseAlgorithm = "PS256" };
+        var clientJwtFormatter = new Mock<IClientJwtFormatter>();
+        clientJwtFormatter
+            .Setup(f => f.FormatAsync(
+                It.IsAny<TenantDefinition>(), It.IsAny<Abblix.Jwt.JsonWebToken>(), client, It.IsAny<ClientJwtEncryption>()))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidClient, "the client's key set"));
+        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
+        options.Setup(o => o.Value).Returns(new OidcOptions());
+        var formatter = new UserInfoResponseFormatter(
+            TimeProvider.System, clientJwtFormatter.Object, tenantAccessor, options.Object);
+        Result<UserInfoFoundResponse, OidcError> found =
+            new UserInfoFoundResponse(new System.Text.Json.Nodes.JsonObject(), client, tenant.Issuer.OriginalString);
+
+        var response = await ActionResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), found));
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, response.StatusCode);
+        var challenge = Abblix.Oidc.Server.MinimalApi.UnitTests.ChallengeReader.Parse(
+            response.Headers[Microsoft.Net.Http.Headers.HeaderNames.WWWAuthenticate][0]);
+        Assert.Equal(ErrorCodes.InvalidToken, challenge.Parameters["error"]);
     }
 
     /// <summary>

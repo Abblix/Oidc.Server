@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -29,6 +31,8 @@ public interface IClientJwtFormatter
     /// <param name="token">The JWT token to format.</param>
     /// <param name="clientInfo">The client information.</param>
     /// <param name="encryption">The encryption policy governing whether and how the JWT is encrypted.</param>
-    /// <returns>The formatted JWT string.</returns>
-    Task<string> FormatAsync(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption);
+    /// <returns>The formatted JWT string, or a refusal naming the client's key set where the security profile in force
+    /// leaves nothing in it to encrypt to.</returns>
+    Task<Result<string, OidcError>> FormatAsync(
+        TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption);
 }

@@ -43,4 +43,8 @@
 	  </None>
 	</ItemGroup>
 
+	<ItemGroup>
+		<Compile Include="../Abblix.Oidc.Server.MinimalApi.UnitTests/ChallengeReader.cs" Link="Shared/ChallengeReader.cs" />
+	</ItemGroup>
+
 </Project>

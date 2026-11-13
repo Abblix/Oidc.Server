@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -52,7 +53,8 @@ public partial class LogoutTokenService(
     /// <returns>A task that returns a logout token.
     /// The task result is an <see cref="EncodedJsonWebToken"/>, which includes both the raw token object and its
     /// string representation.</returns>
-    public async Task<EncodedJsonWebToken> CreateLogoutTokenAsync(TenantDefinition tenant, ClientInfo clientInfo, LogoutContext logoutContext)
+    public async Task<Result<EncodedJsonWebToken, OidcError>> CreateLogoutTokenAsync(
+        TenantDefinition tenant, ClientInfo clientInfo, LogoutContext logoutContext)
     {
         var logoutOptions = clientInfo.BackChannelLogout.NotNull(nameof(clientInfo.BackChannelLogout));
         if (logoutOptions.RequiresSessionId && string.IsNullOrEmpty(logoutContext.SessionId))
@@ -120,7 +122,7 @@ public partial class LogoutTokenService(
             clientInfo,
             ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value));
 
-        return new EncodedJsonWebToken(logoutToken, jwt);
+        return jwt.MapSuccess(encoded => new EncodedJsonWebToken(logoutToken, encoded));
     }
 
     /// <summary>

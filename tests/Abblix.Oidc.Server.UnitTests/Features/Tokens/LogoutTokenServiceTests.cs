@@ -576,9 +576,9 @@ public class LogoutTokenServiceTests
         var result = await _service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Same(capturedToken, result.Token);
-        Assert.Equal(EncodedJwt, result.EncodedJwt);
+        var issued = result.GetSuccess();
+        Assert.Same(capturedToken, issued.Token);
+        Assert.Equal(EncodedJwt, issued.EncodedJwt);
 
         _jwtFormatter.Verify(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
     }

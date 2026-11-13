@@ -395,7 +395,9 @@ public class ClientJwtFormatterTests
                 new RsaJsonWebKey { KeyId = "pkcs1", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 },
             }.ToAsyncEnumerable());
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _formatter.FormatAsync(SingleIssuer.Tenant, token, client, UserInfoPolicy(client)));
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, client, UserInfoPolicy(client));
+
+        // A refusal the caller answers in its own protocol, not a server error
+        Assert.True(result.TryGetFailure(out _));
     }
 }

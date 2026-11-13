@@ -6,6 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Jwt;
+using System.Text.Json.Nodes;
 using Microsoft.Net.Http.Headers;
 using System.Linq;
 using System;
@@ -38,6 +44,23 @@ public class UserInfoResponseFormatterTests
         public TenantContext Current { get; } = new() { Tenant = tenant };
     }
 
+    /// <summary>Refuses every token, as the formatter does for a key set the profile leaves nothing in.</summary>
+    private sealed class RefusingFormatter : IClientJwtFormatter
+    {
+        public Task<Result<string, OidcError>> FormatAsync(
+            TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption)
+            => Task.FromResult<Result<string, OidcError>>(
+                new OidcError(ErrorCodes.InvalidClient, "the client's key set"));
+    }
+
+    /// <summary>The server's options as configured by default.</summary>
+    private sealed class DefaultOptions : IOptionsSnapshot<OidcOptions>
+    {
+        public OidcOptions Value { get; } = new();
+
+        public OidcOptions Get(string? name) => Value;
+    }
+
     private static async Task<HttpResultRunner.Response> FormatErrorAsync(string errorCode)
     {
         // The JWT formatter and the options serve only a successful response, which no test here formats
@@ -67,6 +90,27 @@ public class UserInfoResponseFormatterTests
         Assert.Equal(schemes, challenges.Select(challenge => challenge.Scheme));
         if (admitted.Length > 0)
             Assert.Equal(admitted, challenges[0].Parameters["algs"].Split(' '));
+    }
+
+    /// <summary>
+    /// RFC 6750 section 3.1, invalid_token: "The access token provided is expired, revoked, malformed, or invalid for
+    /// other reasons". A response the token's client cannot be sent, its key set holding only keys its profile forbids,
+    /// is answered so with 401 rather than as a server error.
+    /// </summary>
+    [Fact]
+    public async Task A_response_the_clients_key_set_cannot_receive_is_an_invalid_token()
+    {
+        var client = new ClientInfo("client") { UserInfoSignedResponseAlgorithm = "PS256" };
+        var formatter = new UserInfoResponseFormatter(
+            TimeProvider.System, new RefusingFormatter(), new ServedBy(Served), new DefaultOptions());
+        Result<UserInfoFoundResponse, OidcError> found =
+            new UserInfoFoundResponse(new JsonObject(), client, Served.Issuer.OriginalString);
+
+        var response = await HttpResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), found));
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, response.StatusCode);
+        var challenge = ChallengeReader.Parse(response.Headers[HeaderNames.WWWAuthenticate][0]);
+        Assert.Equal(ErrorCodes.InvalidToken, challenge.Parameters["error"]);
     }
 
     /// <summary>

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -55,12 +56,19 @@ public class UserInfoResponseFormatter(
             onFailure: error => Task.FromResult(
                 // RFC 6750 section 3.1: invalid_token and insufficient_scope carry their own status, and what is
                 // left at a protected resource is invalid_request, which SHOULD be a 400
-                error.Format(
-                    StatusCodes.Status400BadRequest,
-                    tenantAccessor.CurrentTenant().Issuer.OriginalString,
-                    DPoPAlgorithms.Advertised(error, tenantAccessor.CurrentTenant()),
-                    advertiseBearer: true)));
+                FormatError(error)));
     }
+
+    /// <summary>
+    /// RFC 6750 section 3.1: invalid_token and insufficient_scope carry their own status, and what is left at a
+    /// protected resource is invalid_request, which SHOULD be a 400.
+    /// </summary>
+    private ActionResult FormatError(OidcError error)
+        => error.Format(
+            StatusCodes.Status400BadRequest,
+            tenantAccessor.CurrentTenant().Issuer.OriginalString,
+            DPoPAlgorithms.Advertised(error, tenantAccessor.CurrentTenant()),
+            advertiseBearer: true);
 
     /// <summary>
     /// RFC 6750 section 2.3: "Server success (2XX status) responses to these requests SHOULD contain a Cache-Control
@@ -91,11 +99,26 @@ public class UserInfoResponseFormatter(
         };
 
         // A UserInfo response is encrypted with the client's userinfo_encrypted_response_* metadata.
-        var jwt = await clientJwtFormatter.FormatAsync(
-            tenantAccessor.CurrentTenant(),
+        var tenant = tenantAccessor.CurrentTenant();
+        var formatted = await clientJwtFormatter.FormatAsync(
+            tenant,
             token,
             found.ClientInfo,
             ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value));
+
+        // RFC 6750 section 3.1, invalid_token: "The access token provided is expired, revoked, malformed, or invalid
+        // for other reasons". The token's client has a key set its profile leaves nothing in to encrypt to, so the token
+        // cannot be answered, and a response sent in the clear would be one the profile forbids
+        if (formatted.TryGetFailure(out var refusal))
+        {
+            return FormatError(new OidcError(ErrorCodes.InvalidToken, refusal.ErrorDescription)
+            {
+                DPoPAlgorithmsAdmitted =
+                    DPoPAlgorithms.AdmittedBy(SecurityProfileRequirements.For(tenant, found.ClientInfo)),
+            });
+        }
+
+        var jwt = formatted.GetSuccess();
 
         return new ContentResult
         {

@@ -76,11 +76,13 @@ public class IntrospectionResponseFormatter(
             },
         };
 
-        var jwt = await clientJwtFormatter.FormatAsync(
+        // The client's key set was judged against its profile where the client was resolved in this request, so a refusal here
+        // is a key set changed in between
+        var jwt = (await clientJwtFormatter.FormatAsync(
             tenantAccessor.CurrentTenant(),
             token,
             clientInfo,
-            ClientJwtEncryption.ForIntrospection(clientInfo, options.Value));
+            ClientJwtEncryption.ForIntrospection(clientInfo, options.Value))).GetSuccess();
 
         return Results.Content(jwt, MediaTypes.TokenIntrospectionJwt);
     }
