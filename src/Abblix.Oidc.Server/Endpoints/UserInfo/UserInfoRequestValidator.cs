@@ -90,24 +90,9 @@ public class UserInfoRequestValidator(
 
 		var token = result.GetSuccess();
 
-		// RFC 9449 section 7.1 RS-side enforcement: when the access token carries cnf.jkt the
-		// request MUST present it via the DPoP scheme together with a valid DPoP proof
-		// whose key thumbprint matches cnf.jkt and whose ath claim matches the access
-		// token. Runs before AuthenticateByAccessTokenAsync so a bad-DPoP token never
-		// surfaces auth-session probes downstream.
-		var dpopError = await dpopValidator.ValidateAsync(tenant, clientRequest, token, jwtAccessToken);
-		if (dpopError is not null)
-			return dpopError;
-
-		// RFC 8705 section 3 RS-side enforcement: when the access token carries cnf.x5t#S256 the
-		// certificate presented on the mutual-TLS connection MUST hash to the bound value.
-		// Independent of the DPoP binding above - a token carrying both must satisfy each.
-		var mtlsError = mtlsValidator.Validate(clientRequest, token);
-		if (mtlsError is not null)
-			return mtlsError;
-
-		// Resolve the client before authenticating the token: a pairwise access token's 'sub' is opened back to
-		// the real subject with the client's sector, so AuthenticateByAccessTokenAsync needs the ClientInfo.
+		// The client is named by the token, so it is known only once the token is trusted, and it is resolved here,
+		// before the proof: the lookup only reads, while the proof check spends the proof's jti. A pairwise access
+		// token's 'sub' is also opened back to the real subject with the client's sector further down.
 		var clientId = token.Payload.ClientId;
 		var clientInfo = clientId is not null
 			? await clientInfoProvider.TryFindClientAsync(tenant, clientId)
@@ -119,6 +104,33 @@ public class UserInfoRequestValidator(
 				ErrorCodes.InvalidToken,
 				$"The client '{clientId}' is not found");
 		}
+
+		// FAPI 2.0 Security Profile section 5.4.1 has the server use only the profile's algorithms "when creating or
+		// processing JWTs", its own access tokens included, and the profile is the client's where it names one. The
+		// judgement above could only be the tenant's, so the token is judged again under the client's
+		var clientResult = await jwtValidator.ValidateAsync(
+			tenant, clientInfo, jwtAccessToken,
+			TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken),
+			ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
+
+		if (clientResult.TryGetFailure(out var clientError))
+			return new OidcError(ErrorCodes.InvalidToken, clientError.ToString());
+
+		// RFC 9449 section 7.1 RS-side enforcement: when the access token carries cnf.jkt the
+		// request MUST present it via the DPoP scheme together with a valid DPoP proof
+		// whose key thumbprint matches cnf.jkt and whose ath claim matches the access
+		// token. Runs before AuthenticateByAccessTokenAsync so a bad-DPoP token never
+		// surfaces auth-session probes downstream. The proof is judged under the client's profile, as the token is.
+		var dpopError = await dpopValidator.ValidateAsync(tenant, clientInfo, clientRequest, token, jwtAccessToken);
+		if (dpopError is not null)
+			return dpopError;
+
+		// RFC 8705 section 3 RS-side enforcement: when the access token carries cnf.x5t#S256 the
+		// certificate presented on the mutual-TLS connection MUST hash to the bound value.
+		// Independent of the DPoP binding above - a token carrying both must satisfy each.
+		var mtlsError = mtlsValidator.Validate(clientRequest, token);
+		if (mtlsError is not null)
+			return mtlsError;
 
 		// FAPI 2.0 Security Profile section 5.3.4: a resource server "shall not accept access tokens in the query
 		// parameters". Which profile holds the client is known only from the validated token, so the refusal comes

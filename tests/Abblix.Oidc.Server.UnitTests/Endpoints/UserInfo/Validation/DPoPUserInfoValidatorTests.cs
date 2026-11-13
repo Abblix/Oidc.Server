@@ -17,11 +17,13 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Validation;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.Nonces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 
 using Microsoft.Extensions.Logging;
@@ -56,7 +58,7 @@ public class DPoPUserInfoValidatorTests
     private readonly Mock<INonceService> _nonceService = new(MockBehavior.Strict);
     private readonly Mock<IOptionsMonitor<OidcOptions>> _options = new(MockBehavior.Strict);
     private readonly OidcOptions _opts = new();
-    private readonly DPoPUserInfoValidator _validator;
+    private readonly IDPoPUserInfoValidator _validator;
 
     public DPoPUserInfoValidatorTests()
     {
@@ -146,6 +148,31 @@ public class DPoPUserInfoValidatorTests
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, clientRequest, token, AccessTokenJwt);
 
         Assert.IsType<InvalidDPoPProofError>(error);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.4.1 has the server use only the profile's algorithms "when creating or
+    /// processing JWTs", and a DPoP proof is one it processes. The proof is judged by the bundle of the client the token
+    /// was issued to, so a client naming FAPI 2.0 under a deployment that names no profile still has its proof held to
+    /// the FAPI algorithms.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_JudgesTheProofByTheClientsProfile()
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi2 };
+        var clientBundle = SecurityProfileRequirements.For(SingleIssuer.Tenant, client);
+        Assert.NotEqual(SecurityProfileRequirements.For(SingleIssuer.Tenant, client: null), clientBundle);
+
+        SetupProofValidatorFailure(new ProofError(ProofErrorReasons.InvalidAlgorithm, "judged by another bundle"));
+        _proofValidator
+            .Setup(v => v.ValidateAsync(clientBundle, ProofJwt, AccessTokenJwt, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Result<Proof, ProofError>)BuildProof(thumbprint: ProofKeyThumbprint));
+        var token = BuildAccessToken(jwkThumbprint: ProofKeyThumbprint);
+        var clientRequest = BuildClientRequest(scheme: TokenTypes.DPoP, dpopProof: ProofJwt);
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, client, clientRequest, token, AccessTokenJwt);
+
+        Assert.Null(error);
     }
 
     [Fact]

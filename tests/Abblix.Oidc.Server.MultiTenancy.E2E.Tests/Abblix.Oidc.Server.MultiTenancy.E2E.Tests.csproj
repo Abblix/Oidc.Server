@@ -49,6 +49,7 @@
 		<ProjectReference Include="..\..\src\Abblix.SharedSignals.MinimalApi\Abblix.SharedSignals.MinimalApi.csproj" />
 		<ProjectReference Include="..\..\src\Abblix.SharedSignals.Redis\Abblix.SharedSignals.Redis.csproj" />
 		<Compile Include="../Shared/RedisFixture.cs" Link="Shared/RedisFixture.cs" />
+		<Compile Include="../Abblix.Oidc.Server.E2E.Tests/TestInfrastructure/DPoPProofGenerator.cs" Link="Shared/DPoPProofGenerator.cs" />
 	</ItemGroup>
 
 </Project>

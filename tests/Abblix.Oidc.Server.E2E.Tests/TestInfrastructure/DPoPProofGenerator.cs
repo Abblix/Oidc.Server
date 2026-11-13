@@ -36,15 +36,28 @@ public sealed class DPoPProofGenerator : IDisposable
 {
     private readonly ECDsa _ecdsa;
     private readonly TimeProvider _timeProvider;
+    private readonly string _algorithm;
+    private readonly HashAlgorithmName _hash;
 
-    public DPoPProofGenerator(TimeProvider? timeProvider = null)
+    /// <param name="timeProvider">The clock the proofs are dated by.</param>
+    /// <param name="algorithm">The ECDSA algorithm the proofs are signed with: <c>ES256</c>, or <c>ES384</c> for a
+    /// scenario that needs an algorithm RFC 9449 admits and a FAPI profile does not.</param>
+    public DPoPProofGenerator(TimeProvider? timeProvider = null, string algorithm = SigningAlgorithms.ES256)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
-        _ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        _algorithm = algorithm;
+        (var curve, _hash) = algorithm switch
+        {
+            SigningAlgorithms.ES256 => (ECCurve.NamedCurves.nistP256, HashAlgorithmName.SHA256),
+            SigningAlgorithms.ES384 => (ECCurve.NamedCurves.nistP384, HashAlgorithmName.SHA384),
+            _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, null),
+        };
+
+        _ecdsa = ECDsa.Create(curve);
         var publicParams = _ecdsa.ExportParameters(includePrivateParameters: false);
         PublicJwk = new EllipticCurveJsonWebKey
         {
-            Algorithm = SigningAlgorithms.ES256,
+            Algorithm = algorithm,
             Usage = PublicKeyUsages.Signature,
         }.Apply(publicParams);
     }
@@ -86,7 +99,7 @@ public sealed class DPoPProofGenerator : IDisposable
         var header = new JsonObject
         {
             ["typ"] = JsonWebTokenTypes.DPoPProof,
-            ["alg"] = SigningAlgorithms.ES256,
+            ["alg"] = _algorithm,
             [JwtClaimTypes.JsonWebKeyHeader] = JsonSerializer.SerializeToNode(PublicJwk),
         };
 
@@ -113,7 +126,7 @@ public sealed class DPoPProofGenerator : IDisposable
 
         var signature = _ecdsa.SignData(
             Encoding.UTF8.GetBytes(signingInput),
-            HashAlgorithmName.SHA256,
+            _hash,
             DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
 
         return $"{signingInput}.{Base64Url.EncodeToString(signature)}";

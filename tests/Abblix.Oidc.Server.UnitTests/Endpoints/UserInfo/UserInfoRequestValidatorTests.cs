@@ -44,11 +44,21 @@ public class UserInfoRequestValidatorTests
     public UserInfoRequestValidatorTests()
     {
         _jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
+
+        // The token is judged again once its client is known, under that client's profile. A test about that judgement
+        // sets up its own refusal for the client it names; every other test has it pass
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(
+                TestTenant.Matched, It.IsNotNull<ClientInfo>(), It.IsAny<string>(),
+                It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(CreateValidAccessToken());
         _accessTokenService = new Mock<IAccessTokenService>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _dpopValidator = new Mock<IDPoPUserInfoValidator>(MockBehavior.Strict);
         _dpopValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientRequest>(), It.IsAny<JsonWebToken>(), It.IsAny<string>()))
+            .Setup(v => v.ValidateAsync(
+                TestTenant.Matched, It.IsNotNull<ClientInfo>(), It.IsAny<ClientRequest>(), It.IsAny<JsonWebToken>(),
+                It.IsAny<string>()))
             .ReturnsAsync((OidcError?)null);
         _mtlsValidator = new Mock<IMtlsUserInfoValidator>(MockBehavior.Strict);
         _mtlsValidator
@@ -581,5 +591,49 @@ public class UserInfoRequestValidatorTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InsufficientScope, error.Error);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.4.1 has the server use only the profile's algorithms "when creating or
+    /// processing JWTs", its own access tokens included. The client the token names is known only once the token is
+    /// trusted, so the token is judged again under that client's profile, and refused when it falls short there.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenRefusedUnderTheClientsProfile_IsInvalidToken()
+    {
+        var clientInfo = ArrangeValidTokenOfClient("valid_token_123", ClientSecurityProfile.Fapi2);
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(
+                TestTenant.Matched, clientInfo, "valid_token_123", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "signed with an algorithm the profile refuses"));
+        var clientRequest = CreateClientRequest(
+            authHeader: new AuthenticationHeaderValue(TokenTypes.Bearer, "valid_token_123"));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateUserInfoRequest(), clientRequest);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
+    }
+
+    /// <summary>
+    /// The DPoP proof is a JWT the server processes as well, so it is judged under the profile of the client the token
+    /// names: the validator hands that very client to the proof check.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_HandsTheTokensClientToTheProofCheck()
+    {
+        var clientInfo = ArrangeValidTokenOfClient("valid_token_123", ClientSecurityProfile.Fapi2);
+        var refusal = new InvalidDPoPProofError("judged under the client's profile");
+        _dpopValidator
+            .Setup(v => v.ValidateAsync(
+                TestTenant.Matched, clientInfo, It.IsAny<ClientRequest>(), It.IsAny<JsonWebToken>(), "valid_token_123"))
+            .ReturnsAsync(refusal);
+        var clientRequest = CreateClientRequest(
+            authHeader: new AuthenticationHeaderValue(TokenTypes.DPoP, "valid_token_123"));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateUserInfoRequest(), clientRequest);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Same(refusal, error);
     }
 }

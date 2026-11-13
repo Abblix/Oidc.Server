@@ -28,6 +28,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Microsoft.AspNetCore.Http;
+using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
@@ -60,6 +63,14 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
     };
 
+    private static readonly TenantDefinition AcmeTenant = new()
+    {
+        Id = "acme",
+        Issuer = new Uri(Host + Acme),
+        Clients = [Client()],
+        SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+    };
+
     private WebApplication? _app;
     private HttpClient? _http;
 
@@ -86,13 +97,7 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
         });
         builder.Services.Configure<OidcOptions>(options =>
         {
-            options.Tenants.Add(new TenantDefinition
-            {
-                Id = "acme",
-                Issuer = new Uri(Host + Acme),
-                Clients = [Client()],
-                SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
-            });
+            options.Tenants.Add(AcmeTenant);
             options.Tenants.Add(GlobexTenant);
         });
 
@@ -220,5 +225,60 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
 
         // RFC 6750 section 3.1 gives 403 to insufficient_scope alone, and the response carries no body to read it from
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.4.1 has the server use PS256, ES256 or EdDSA "when creating or processing
+    /// JWTs", and a DPoP proof is one it processes. At a tenant naming no profile, a proof signed ES384, which RFC 9449
+    /// admits, opens userinfo for a client naming none either, and is refused with invalid_dpop_proof for a client
+    /// naming FAPI 2.0 for itself, whose ES256 proof opens it.
+    /// </summary>
+    [Fact]
+    public async Task ADPoPProofIsJudgedAtUserInfoByTheProfileOfTheTokensClient()
+    {
+        const string fapiClientId = "fapi-client-id";
+        Assert.True(await _app!.Services.GetRequiredService<IClientInfoManager>().TryAddClientAsync(
+            AcmeTenant,
+            new RegisteredClient(
+                new ClientInfo(fapiClientId) { SecurityProfile = ClientSecurityProfile.Fapi2 },
+                "fapi-registration-access-token-id")));
+
+        using var es384 = new DPoPProofGenerator(algorithm: SigningAlgorithms.ES384);
+        using var es256 = new DPoPProofGenerator();
+
+        Assert.Equal(HttpStatusCode.OK, await UserInfoWithProofAsync(Client(), es384));
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            await UserInfoWithProofAsync(new ClientInfo(fapiClientId), es384));
+        Assert.Equal(HttpStatusCode.OK, await UserInfoWithProofAsync(new ClientInfo(fapiClientId), es256));
+    }
+
+    /// <summary>
+    /// Calls userinfo at the acme tenant with an access token issued to <paramref name="client"/> and bound to the key
+    /// of <paramref name="proofKey"/>, presented with a proof that key signs.
+    /// </summary>
+    private async Task<HttpStatusCode> UserInfoWithProofAsync(ClientInfo client, DPoPProofGenerator proofKey)
+    {
+        var accessToken = await _app!.Services.GetRequiredService<IAccessTokenService>().CreateAccessTokenAsync(
+            AcmeTenant,
+            new AuthSession(
+                "user-1", "session-1", _app.Services.GetRequiredService<TimeProvider>().GetUtcNow(), "local"),
+            new AuthorizationContext(client.ClientId, [Scopes.OpenId], requestedClaims: null)
+            {
+                ProofKeyThumbprint = proofKey.Thumbprint,
+            },
+            client,
+            grantId: null,
+            expiresNoLaterThan: null);
+
+        var endpoint = new Uri($"{Host}{Acme}/connect/userinfo");
+        using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+        request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.DPoP, accessToken.EncodedJwt);
+        request.Headers.Add(
+            HttpRequestHeaders.DPoP,
+            proofKey.BuildProof(HttpMethods.Get, endpoint, accessToken: accessToken.EncodedJwt));
+
+        var response = await _http!.SendAsync(request, TestContext.Current.CancellationToken);
+        return response.StatusCode;
     }
 }

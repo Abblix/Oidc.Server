@@ -8,6 +8,7 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
@@ -37,8 +38,37 @@ public interface IDPoPUserInfoValidator
     /// (when present) the proof must match.</param>
     /// <param name="rawAccessToken">The original on-the-wire access-token string used
     /// to compute <c>ath = Base64Url(SHA-256(access_token))</c>.</param>
+    /// <remarks>
+    /// The proof is held to the algorithms of the tenant's profile alone; where the client the token was issued to is
+    /// known, the overload taking that client holds it to the client's profile too.
+    /// </remarks>
     Task<OidcError?> ValidateAsync(
         TenantDefinition tenant,
+        ClientRequest clientRequest,
+        JsonWebToken accessToken,
+        string rawAccessToken)
+        => ValidateAsync(tenant, client: null, clientRequest, accessToken, rawAccessToken);
+
+    /// <summary>
+    /// Validates the presentation as <see cref="ValidateAsync(TenantDefinition, ClientRequest, JsonWebToken,
+    /// string)"/> does, with the proof held to the algorithms of the profile <paramref name="client"/> is held to at
+    /// <paramref name="tenant"/>.
+    /// </summary>
+    /// <remarks>
+    /// FAPI 2.0 Security Profile section 5.4.1 has the server use only the profile's algorithms "when creating or
+    /// processing JWTs", and the proof is one it processes.
+    /// </remarks>
+    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="client">The client the access token was issued to, or null where none is known.</param>
+    /// <param name="clientRequest">Carries the <c>Authorization</c> scheme + token plus
+    /// the optional <c>DPoP</c> proof header.</param>
+    /// <param name="accessToken">The parsed access-token JWT whose <c>cnf.jkt</c>
+    /// (when present) the proof must match.</param>
+    /// <param name="rawAccessToken">The original on-the-wire access-token string used
+    /// to compute <c>ath = Base64Url(SHA-256(access_token))</c>.</param>
+    Task<OidcError?> ValidateAsync(
+        TenantDefinition tenant,
+        ClientInfo? client,
         ClientRequest clientRequest,
         JsonWebToken accessToken,
         string rawAccessToken);
