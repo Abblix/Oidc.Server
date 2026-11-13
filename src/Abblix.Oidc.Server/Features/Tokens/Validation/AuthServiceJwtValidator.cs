@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -63,6 +64,11 @@ public class AuthServiceJwtValidator(
 				ValidateAudience = audiences => ValidateAudienceAsync(tenant, audiences),
 				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(tenant),
 				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
+
+				// FAPI 1.0 Part 2 section 8.6.1 forbids the server RSA1_5 for any JWE, and only this server encrypts these
+				// tokens, so the tenant's profile alone decides each layer before it is decrypted
+				ValidateKeyManagementAlgorithm =
+					SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile).PermitsKeyManagementAlgorithm,
 
 				// These are tokens this server issued and reads back, often on another instance whose clock lags
 				// the issuing one, so a token dated a little ahead is still this server's own. Only that direction

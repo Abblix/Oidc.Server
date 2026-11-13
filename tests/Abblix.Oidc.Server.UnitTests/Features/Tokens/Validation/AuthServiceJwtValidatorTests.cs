@@ -781,4 +781,32 @@ public class AuthServiceJwtValidatorTests
             .Setup(p => p.GetEncryptionKeys(TestTenant.Matched, true))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
     }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6.1 forbids the server RSA1_5 for any JWE, one it decrypts included: at a tenant held
+    /// to FAPI 1.0 Advanced a token of this server's that arrives encrypted with RSA1_5 is refused before it is
+    /// decrypted, RSA-OAEP-256 is let through, and a tenant held to no profile names no refusal.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, EncryptionAlgorithms.KeyManagement.Rsa1_5, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, EncryptionAlgorithms.KeyManagement.RsaOaep256, true)]
+    [InlineData(ClientSecurityProfile.None, EncryptionAlgorithms.KeyManagement.Rsa1_5, true)]
+    public async Task ValidateAsync_TheTenantsProfile_JudgesEachLayerBeforeDecryption(
+        ClientSecurityProfile profile, string keyManagement, bool admitted)
+    {
+        ValidationParameters? parameters = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns((string _, ValidationParameters p) =>
+            {
+                parameters = p;
+                return Task.FromResult<Abblix.Utils.Result<JsonWebToken, JwtValidationError>>(
+                    new JwtValidationError(JwtError.InvalidToken, "not under test"));
+            });
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+
+        await _validator.ValidateAsync(tenant, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(admitted, parameters!.ValidateKeyManagementAlgorithm?.Invoke(keyManagement) ?? true);
+    }
 }
