@@ -414,6 +414,10 @@ public sealed record SecurityProfileRequirements
         // FAPI 2.0 section 5.4.2: "any server providing a jwks_uri endpoint shall only serve the jwks_uri endpoint
         // over TLS"
         RequireHttpsJwksUri = true,
+
+        // FAPI 2.0 section 5.4.1: "adhere to [RFC8725]", whose section 3.2 reads "Avoid all RSA-PKCS1 v1.5 encryption
+        // algorithms"
+        ForbidRsa1_5KeyManagement = true,
     };
 
     /// <summary>

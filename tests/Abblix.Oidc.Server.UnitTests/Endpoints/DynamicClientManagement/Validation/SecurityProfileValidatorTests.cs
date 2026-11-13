@@ -271,4 +271,29 @@ public class SecurityProfileValidatorTests
 
         Assert.Equal(accepted ? null : ErrorCodes.InvalidClientMetadata, result?.Error);
     }
+    /// <summary>
+    /// FAPI 2.0 section 5.4.1 has the server "adhere to [RFC8725]" when creating or processing JWTs, and RFC 8725
+    /// section 3.2 says "Avoid all RSA-PKCS1 v1.5 encryption algorithms": a registration under FAPI 2.0 asking for its ID
+    /// tokens encrypted with RSA1_5 is refused with invalid_client_metadata; RSA-OAEP-256 passes.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Rsa1_5, false)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, true)]
+    public async Task ValidateAsync_Fapi2_Rsa1_5Encryption_IsRefused(string keyManagement, bool accepted)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdTokenSignedResponseAlg = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlg = SigningAlgorithms.PS256,
+            IdTokenEncryptedResponseAlg = keyManagement,
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(accepted ? null : ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
 }

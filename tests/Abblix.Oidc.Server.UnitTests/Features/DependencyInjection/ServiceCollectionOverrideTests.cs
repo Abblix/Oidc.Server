@@ -192,7 +192,10 @@ public class ServiceCollectionOverrideTests
 
         services.AddLogging();
         services.AddSingleton(clients.Object);
-        services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.ClientInformation.IClientKeysProvider>().Object);
+        // The profile forbids RSA1_5, so the client's key set is read; it publishes none
+        var keys = new Mock<Abblix.Oidc.Server.Features.ClientInformation.IClientKeysProvider>();
+        keys.Setup(k => k.GetEncryptionKeys(It.IsAny<ClientInfo>())).Returns(AsyncEnumerable.Empty<Abblix.Jwt.JsonWebKey>());
+        services.AddSingleton(keys.Object);
         services.AddSingleton(new Mock<IRequestInfoProvider>().Object);
         services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
         services.AddSingleton<ProfiledJwtValidator>();
