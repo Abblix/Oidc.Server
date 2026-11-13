@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using System.Reflection;
 using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -25,7 +26,10 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// </summary>
 /// <param name="requestObjectFetcher">The request object fetcher responsible for fetching and processing
 /// the JWT request object.</param>
-public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetcher) : IAuthorizationRequestFetcher
+/// <param name="clientInfoProvider">Finds the client the request names outside the object.</param>
+public class RequestObjectFetchAdapter(
+    IRequestObjectFetcher requestObjectFetcher,
+    IClientInfoProvider clientInfoProvider) : IAuthorizationRequestFetcher
 {
     /// <summary>
     /// Fetches and processes the authorization request by delegating to the request object fetcher.
@@ -51,8 +55,14 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
         if (request.PushedRequestUri is not null)
             return request;
 
+        // OpenID Connect Core section 6.1 has the client_id outside the object too, so its client is known before the
+        // object is read
+        var namedClient = request.ClientId is { Length: > 0 } clientId
+            ? await clientInfoProvider.TryFindClientAsync(tenant, clientId)
+            : null;
+
         var fetchResult = await requestObjectFetcher.FetchAsync(tenant,
-            request, request.Request, client => client.RequestObjectSigningAlgorithm);
+            namedClient, request, request.Request, client => client.RequestObjectSigningAlgorithm);
 
         // Strict processing (RFC 9101 section 6.3) rebuilds the request from the object alone, which drops the request
         // parameter carrying that object, so the validated object is carried on: without it a client required to sign

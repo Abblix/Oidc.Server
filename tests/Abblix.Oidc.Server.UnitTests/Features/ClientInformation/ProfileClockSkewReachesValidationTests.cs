@@ -162,7 +162,7 @@ public class ProfileClockSkewReachesValidationTests
             serviceKeys.Object,
             TimeProvider.System);
 
-        await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), "header.payload.signature", TokenTypePolicy.CheckedByCaller);
+        await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), null, "header.payload.signature", TokenTypePolicy.CheckedByCaller);
 
         Assert.Equal(
             SecurityProfileRequirements.Resolve(profile).ClockSkewOrDefault(),

@@ -46,6 +46,7 @@ public partial class RequestObjectFetcher(
     /// </summary>
     /// <typeparam name="T">The type of the request model.</typeparam>
     /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="client">The client the request names outside the object, or null.</param>
     /// <param name="request">The initial request model to bind the JWT payload to.</param>
     /// <param name="requestObject">The JWT contained within the request, if any.</param>
     /// <param name="requiredSigningAlgorithm">An optional selector returning the signing algorithm the
@@ -60,6 +61,7 @@ public partial class RequestObjectFetcher(
     /// </remarks>
     public async Task<Result<T, OidcError>> FetchAsync<T>(
         TenantDefinition tenant,
+        ClientInfo? client,
         T request,
         string? requestObject,
         Func<ClientInfo, string?>? requiredSigningAlgorithm = null)
@@ -68,7 +70,7 @@ public partial class RequestObjectFetcher(
         if (!requestObject.HasValue())
             return request;
 
-        var validationResult = await ValidateAsync(tenant, requestObject, requiredSigningAlgorithm);
+        var validationResult = await ValidateAsync(tenant, client, requestObject, requiredSigningAlgorithm);
         return await validationResult.BindAsync<T>(
             async validated =>
             {
@@ -150,6 +152,7 @@ public partial class RequestObjectFetcher(
     /// and structure, based on the OIDC options.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="namedClient">The client the request names outside the object, or null.</param>
     /// <param name="requestObject">The JWT request object to be validated.</param>
     /// <param name="requiredSigningAlgorithm">An optional selector returning the signing algorithm the
     /// request object must use for a given client, or <c>null</c> to impose no per-client requirement.</param>
@@ -163,6 +166,7 @@ public partial class RequestObjectFetcher(
     /// </remarks>
     private async Task<Result<(JsonObject Payload, ClientInfo Client), OidcError>> ValidateAsync(
         TenantDefinition tenant,
+        ClientInfo? namedClient,
         string requestObject,
         Func<ClientInfo, string?>? requiredSigningAlgorithm)
     {
@@ -183,8 +187,12 @@ public partial class RequestObjectFetcher(
 
         using var scope = serviceProvider.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
+
+        // The client the request names outside the object is known before the object is read, so its profile bounds
+        // every layer of it up front rather than once the object names its client (FAPI 1.0 Part 2 section 8.6.1)
         // The type is judged below, where a refusal speaks the request object's error vocabulary
-        var result = await tokenValidator.ValidateAsync(tenant, requestObject, TokenTypePolicy.CheckedByCaller, validationOptions);
+        var result = await tokenValidator.ValidateAsync(
+            tenant, namedClient, requestObject, TokenTypePolicy.CheckedByCaller, validationOptions);
 
         return result.Match<Result<(JsonObject Payload, ClientInfo Client), OidcError>>(
             validJwt =>

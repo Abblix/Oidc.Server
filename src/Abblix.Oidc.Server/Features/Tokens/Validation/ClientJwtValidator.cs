@@ -55,6 +55,7 @@ public partial class ClientJwtValidator(
     /// and request object validation.
     /// </summary>
     /// <param name="tenant">The tenant the token is for.</param>
+    /// <param name="client">The client the request names outside the token, or null.</param>
     /// <param name="jwt">The JWT to validate.</param>
     /// <param name="tokenTypes">The token types the caller accepts.</param>
     /// <param name="options">Options to customize the validation process.</param>
@@ -64,16 +65,17 @@ public partial class ClientJwtValidator(
     /// </returns>
     public async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateAsync(
         TenantDefinition tenant,
+        ClientInfo? client,
         string jwt,
         TokenTypePolicy tokenTypes,
         ValidationOptions options = ValidationOptions.Default)
     {
         var context = new ValidationContext(clientInfoProvider, clientJwksProvider, tenant);
 
-        // The token is validated under what the deployment demands of every client, the guard holding its signature
-        // and each JWE layer to that profile; each layer is recorded so the client's own profile can judge it once the
-        // token names the client
-        var deployment = SecurityProfileRequirements.For(tenant, client: null);
+        // The token is validated under the profile of the client the request names outside it, or what the
+        // deployment demands of every client where it names none, the guard holding its signature and each JWE layer
+        // to that profile; each layer is recorded so the profile of the client the token names can judge it too
+        var deployment = SecurityProfileRequirements.For(tenant, client);
         var keyManagementAlgorithms = new List<string>();
 
         var result = await tokenValidator.ValidateAsync(

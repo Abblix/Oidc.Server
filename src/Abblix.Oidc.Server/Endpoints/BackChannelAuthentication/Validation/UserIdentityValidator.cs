@@ -76,6 +76,7 @@ public class UserIdentityValidator(
             // 3.11)
             var loginHintTokenResult = await clientJwtValidator.ValidateAsync(
                 tenant,
+                context.ClientInfo,
                 request.LoginHintToken, TokenTypePolicy.CheckedByCaller);
 
             if (loginHintTokenResult.TryGetSuccess(out var validJwt))

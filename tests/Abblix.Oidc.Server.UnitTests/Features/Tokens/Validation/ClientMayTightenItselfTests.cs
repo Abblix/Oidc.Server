@@ -112,7 +112,7 @@ public class ClientMayTightenItselfTests
 
         return await validator.ValidateAsync(
             new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = deploymentProfile }.ToTenant(),
-            "header.payload.signature",
+            null, "header.payload.signature",
             TokenTypePolicy.CheckedByCaller,
             options);
     }
