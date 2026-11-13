@@ -410,6 +410,10 @@ public sealed record SecurityProfileRequirements
 
         // FAPI 2.0 section 5.4.1: "use PS256, ES256, or EdDSA (using the Ed25519 variant) algorithms"
         RequireFapiSigningAlgorithms = true,
+
+        // FAPI 2.0 section 5.4.2: "any server providing a jwks_uri endpoint shall only serve the jwks_uri endpoint
+        // over TLS"
+        RequireHttpsJwksUri = true,
     };
 
     /// <summary>

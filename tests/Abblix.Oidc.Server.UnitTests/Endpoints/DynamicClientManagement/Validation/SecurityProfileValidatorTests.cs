@@ -247,4 +247,28 @@ public class SecurityProfileValidatorTests
 
         Assert.Equal(accepted ? null : ErrorCodes.InvalidClientMetadata, result?.Error);
     }
+    /// <summary>
+    /// FAPI 2.0 section 5.4.2: "any server providing a jwks_uri endpoint shall only serve the jwks_uri endpoint over
+    /// TLS". A registration under FAPI 2.0 naming an http jwks_uri is refused with invalid_client_metadata; https passes.
+    /// </summary>
+    [Theory]
+    [InlineData("http://client.example.com/jwks", false)]
+    [InlineData("https://client.example.com/jwks", true)]
+    public async Task ValidateAsync_Fapi2_AJwksUriNotServedOverTls_IsRefused(string jwksUri, bool accepted)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdTokenSignedResponseAlg = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlg = SigningAlgorithms.PS256,
+            JwksUri = new System.Uri(jwksUri),
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(accepted ? null : ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
 }
