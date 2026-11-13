@@ -46,6 +46,16 @@ public static class DPoPAlgorithms
         => profile.RequireCertificateBoundTokens ? [] : Allowed.Where(profile.PermitsSigningAlgorithm).ToArray();
 
     /// <summary>
+    /// <paramref name="error"/> naming the algorithms the profile of <paramref name="client"/>, the client the refused
+    /// token was issued to, admits: what a challenge answering it advertises once that client is known.
+    /// </summary>
+    /// <param name="error">The refusal.</param>
+    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="client">The client the refused token was issued to.</param>
+    public static OidcError NamingTheAlgorithmsOf(this OidcError error, TenantDefinition tenant, ClientInfo client)
+        => error with { DPoPAlgorithmsAdmitted = AdmittedBy(SecurityProfileRequirements.For(tenant, client)) };
+
+    /// <summary>
     /// The algorithms a <c>WWW-Authenticate: DPoP</c> challenge answering <paramref name="error"/> advertises (RFC 9449
     /// section 7.1, <c>algs</c>): those the profile of the client the presented token was issued to admits where the
     /// error names them, else those the tenant's profile admits.

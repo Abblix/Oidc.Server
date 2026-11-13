@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -51,6 +52,10 @@ public class UserInfoHandler(
     {
         var validationResult = await validator.ValidateAsync(tenant, userInfoRequest, clientRequest);
 
-        return await validationResult.BindAsync(request => processor.ProcessAsync(tenant, request));
+        // RFC 9449 section 7.1: a refusal of the processor's is answered for the client the token names, as the
+        // validator's refusals are once that client is known, which the validator alone sees on a refusal of its own
+        return await validationResult.BindAsync(async request =>
+            (await processor.ProcessAsync(tenant, request))
+            .MapFailure(error => error.NamingTheAlgorithmsOf(tenant, request.ClientInfo)));
     }
 }
