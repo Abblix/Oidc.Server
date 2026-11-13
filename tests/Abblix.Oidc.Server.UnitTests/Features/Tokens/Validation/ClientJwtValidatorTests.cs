@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Constants;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -1006,5 +1007,39 @@ public class ClientJwtValidatorTests
         {
             ClientSecrets = [],
         };
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6 has the server use "PS256 or ES256", so what a client held to FAPI 1.0 Advanced
+    /// signs for it - a request object, an authentication assertion - is refused under any other algorithm once the
+    /// client is known; PS256 and ES256 pass, and a client held to no profile keeps RS256.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.RS256, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.PS256, true)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.ES256, true)]
+    [InlineData(null, SigningAlgorithms.RS256, true)]
+    public async Task ValidateAsync_TheClientsProfile_DecidesTheSignatureAlgorithm(
+        ClientSecurityProfile? profile, string algorithm, bool accepted)
+    {
+        var token = CreateValidToken();
+        token.Header.Algorithm = algorithm;
+        var clientInfo = CreateClientInfo(ValidClientId);
+        clientInfo.SecurityProfile = profile;
+
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns(async (string _, ValidationParameters p) =>
+            {
+                await p.ValidateIssuer!(ValidClientId);
+                return token;
+            });
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .ReturnsAsync(clientInfo);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
 }

@@ -11,6 +11,8 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
+using static Abblix.Oidc.Server.Features.ClientInformation.SecurityProfileConsistency;
+using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -32,11 +34,26 @@ public class SecurityProfileValidator : SyncClientRegistrationContextValidator
     /// </summary>
     protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
-        var violations = SecurityProfileConsistency.FindViolations(
-            context.Request.ResponseTypes,
-            context.Request.TokenEndpointAuthMethod,
-            assertionAudiences: ClientAssertionAudiences.Issuer,
-            SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile));
+        var requirements = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile);
+        var request = context.Request;
+
+        // Only what the registration names: one naming nothing is given an algorithm its profile admits
+        IReadOnlyList<string> violations =
+        [
+            ..SecurityProfileConsistency.FindViolations(
+                request.ResponseTypes,
+                request.TokenEndpointAuthMethod,
+                assertionAudiences: ClientAssertionAudiences.Issuer,
+                requirements),
+            ..SecurityProfileConsistency.FindSigningAlgorithmViolations(
+                [
+                    (Parameters.IdTokenSignedResponseAlg, request.IdTokenSignedResponseAlg),
+                    (Parameters.AuthorizationSignedResponseAlg, request.AuthorizationSignedResponseAlg),
+                    (Parameters.UserInfoSignedResponseAlg, SignedOrNull(request.UserInfoSignedResponseAlg)),
+                    (Parameters.IntrospectionSignedResponseAlg, SignedOrNull(request.IntrospectionSignedResponseAlg)),
+                ],
+                requirements),
+        ];
 
         return violations.Count == 0
             ? null

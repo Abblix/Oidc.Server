@@ -123,6 +123,18 @@ public partial class ClientJwtValidator(
             return new JwtValidationError(JwtError.InvalidToken, "Unable to determine client from JWT");
         }
 
+        var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
+
+        // FAPI 1.0 Part 2 section 8.6: "For JWS, both clients and authorization servers shall use PS256 or ES256
+        // algorithms". Judged here, where the client is first known, for everything a client signs for this server
+        if (!profile.PermitsSigningAlgorithm(validatedToken.Header.Algorithm))
+        {
+            LogAlgorithmOutsideTheClientsProfile(
+                context.ClientInfo.ClientId, Sanitized.Value(validatedToken.Header.Algorithm));
+            return new JwtValidationError(
+                JwtError.InvalidToken, "The token is signed with an algorithm the client's security profile does not admit");
+        }
+
         // The pass above ran under the DEPLOYMENT's window, because the client is identified from the
         // token being validated and is not known until that has finished. A client naming a profile
         // of its own may be held to a tighter one, and this is the first line where there is a client
@@ -145,8 +157,7 @@ public partial class ClientJwtValidator(
                 return new JwtValidationError(JwtError.InvalidToken, whyUnreadable);
             }
 
-            var refusal = SecurityProfileRequirements
-                .For(context.ClientInfo, tenant.DefaultSecurityProfile)
+            var refusal = profile
                 .ClockSkewOrDefault()
                 .WhyRefused(timeProvider.GetUtcNow(), notBefore, expiresAt, issuedAt);
 

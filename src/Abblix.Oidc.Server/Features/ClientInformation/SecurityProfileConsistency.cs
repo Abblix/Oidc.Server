@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 
@@ -111,6 +112,60 @@ public static class SecurityProfileConsistency
                          $"audience of a client assertion, but the client is allowed {assertionAudiences}";
         }
     }
+
+    /// <summary>
+    /// Names each algorithm this server would sign with for the client that its profile does not admit, or an empty
+    /// list when every one is admitted: FAPI 1.0 Part 2 section 8.6 has the server "use PS256 or ES256 algorithms".
+    /// </summary>
+    /// <remarks>
+    /// The client's configuration is what the server signs with, so it is judged here rather than when a token is
+    /// issued, where the only answers left would be a token signed against the profile or a failure the client could
+    /// do nothing about. A userinfo or introspection response configured <c>none</c> is plain JSON and carries no
+    /// JWS, and a logout token without an algorithm of its own takes the ID token's, so neither is named; an ID token
+    /// or authorization response configured <c>none</c> is an unsigned JWS, and is.
+    /// </remarks>
+    /// <param name="client">The client whose configuration is checked.</param>
+    /// <param name="requirements">The control bundle the client is held to, floor included.</param>
+    public static IReadOnlyList<string> FindSigningAlgorithmViolations(
+        ClientInfo client,
+        SecurityProfileRequirements requirements)
+        => FindSigningAlgorithmViolations(
+            [
+                (nameof(ClientInfo.IdentityTokenSignedResponseAlgorithm), client.IdentityTokenSignedResponseAlgorithm),
+                (nameof(ClientInfo.AuthorizationSignedResponseAlgorithm), client.AuthorizationSignedResponseAlgorithm),
+                (nameof(ClientInfo.LogoutTokenSignedResponseAlgorithm), client.LogoutTokenSignedResponseAlgorithm),
+                (nameof(ClientInfo.UserInfoSignedResponseAlgorithm), SignedOrNull(client.UserInfoSignedResponseAlgorithm)),
+                (nameof(ClientInfo.IntrospectionSignedResponseAlgorithm),
+                    SignedOrNull(client.IntrospectionSignedResponseAlgorithm)),
+            ],
+            requirements);
+
+    /// <summary>
+    /// The same over named algorithms the caller lists, which a registration has as metadata rather than as a
+    /// client.
+    /// </summary>
+    /// <param name="algorithms">Each setting's name and the algorithm it names, null where it signs nothing of its
+    /// own.</param>
+    /// <param name="requirements">The control bundle the client is held to, floor included.</param>
+    public static IReadOnlyList<string> FindSigningAlgorithmViolations(
+        IEnumerable<(string Name, string? Algorithm)> algorithms,
+        SecurityProfileRequirements requirements)
+        =>
+        [
+            ..
+            from setting in algorithms
+            where setting.Algorithm is { } algorithm && !requirements.PermitsSigningAlgorithm(algorithm)
+            select $"the client's security profile admits only {string.Join(" and ", SecurityProfileRequirements.FapiSigningAlgorithms)} " +
+                   $"signatures, but {setting.Name} is {setting.Algorithm}",
+        ];
+
+    /// <summary>
+    /// The algorithm of a response that may also go unsigned, or null where it does: for userinfo and introspection
+    /// <c>none</c> is a plain JSON response rather than an unsigned JWS.
+    /// </summary>
+    /// <param name="algorithm">The algorithm the client is configured for.</param>
+    public static string? SignedOrNull(string? algorithm)
+        => algorithm == SigningAlgorithms.None ? null : algorithm;
 
     /// <summary>
     /// The client authentication methods that prove possession of a key rather than of a shared

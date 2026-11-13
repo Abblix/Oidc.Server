@@ -67,6 +67,7 @@ public class SecurityProfileTests
         Assert.False(requirements.RequireSignedAuthorizationResponse);
         Assert.False(requirements.RequireIssuerAudienceInRequestObject);
         Assert.False(requirements.RequireNonceWithOpenIdScope);
+        Assert.False(requirements.RequireFapiSigningAlgorithms);
     }
 
     /// <summary>
@@ -89,6 +90,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireSignedAuthorizationResponse);
         Assert.True(requirements.RequireIssuerAudienceInRequestObject);
         Assert.True(requirements.RequireNonceWithOpenIdScope);
+        Assert.True(requirements.RequireFapiSigningAlgorithms);
     }
 
     /// <summary>
@@ -134,6 +136,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireSignedAuthorizationResponse);
         Assert.True(requirements.RequireIssuerAudienceInRequestObject);
         Assert.True(requirements.RequireNonceWithOpenIdScope);
+        Assert.True(requirements.RequireFapiSigningAlgorithms);
         Assert.True(requirements.RequireStringAudienceInClientAssertion);
         Assert.Equal(ClockSkew.Fapi2Ceiling, requirements.MaxClockSkew);
     }
@@ -799,5 +802,73 @@ public class SecurityProfileTests
 
         Assert.True(requirements.RequirePkce);
         Assert.True(requirements.RequireConfidentialClient);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6: "For JWS, both clients and authorization servers shall use PS256 or ES256
+    /// algorithms". Under that profile those two pass and every other algorithm is refused, none included; with no
+    /// profile every algorithm is left to the checks that ran before.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.PS256, true)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.ES256, true)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.RS256, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.PS384, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.None, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, false)]
+    [InlineData(ClientSecurityProfile.None, SigningAlgorithms.RS256, true)]
+    public void PermitsSigningAlgorithm_AdmitsWhatSection86Names(
+        ClientSecurityProfile profile, string? algorithm, bool permitted)
+    {
+        Assert.Equal(permitted, SecurityProfileRequirements.Resolve(profile).PermitsSigningAlgorithm(algorithm));
+    }
+
+    /// <summary>
+    /// The server signs for a client what the client is configured for, so under FAPI 1.0 Advanced a client
+    /// configured for RS256 is refused: its ID tokens and JWT authorization responses at the RS256 defaults, a logout
+    /// token or a JWT userinfo or introspection response it names RS256 for. An unsigned userinfo or introspection
+    /// response, which is the default, is no JWS and passes.
+    /// </summary>
+    [Fact]
+    public void FindSigningAlgorithmViolations_Fapi1Advanced_NamesEachAlgorithmOutsideTheList()
+    {
+        var defaults = new ClientInfo(TestConstants.DefaultClientId);
+        var everyOneRs256 = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            LogoutTokenSignedResponseAlgorithm = SigningAlgorithms.RS256,
+            UserInfoSignedResponseAlgorithm = SigningAlgorithms.RS256,
+            IntrospectionSignedResponseAlgorithm = SigningAlgorithms.RS256,
+        };
+        var conformant = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.ES256,
+        };
+        var requirements = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced);
+
+        Assert.Equal(2, SecurityProfileConsistency.FindSigningAlgorithmViolations(defaults, requirements).Count);
+        Assert.Equal(5, SecurityProfileConsistency.FindSigningAlgorithmViolations(everyOneRs256, requirements).Count);
+        Assert.Empty(SecurityProfileConsistency.FindSigningAlgorithmViolations(conformant, requirements));
+        Assert.Empty(SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            everyOneRs256, SecurityProfileRequirements.Resolve(ClientSecurityProfile.None)));
+    }
+
+    /// <summary>
+    /// A tenant declaring a FAPI 1.0 Advanced client at the RS256 defaults is refused at startup, and the same client
+    /// configured for PS256 is not.
+    /// </summary>
+    [Fact]
+    public void Check_Fapi1AdvancedClientAtTheRs256Defaults_Refuses()
+    {
+        static ClientInfo Client() => new(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+        };
+        var configured = Client();
+        configured.IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256;
+        configured.AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256;
+
+        Assert.NotEmpty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client())));
+        Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, configured)));
     }
 }

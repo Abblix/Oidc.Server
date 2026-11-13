@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -102,5 +103,32 @@ public class SecurityProfileValidatorTests
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6: a registration under that profile naming RS256 for its ID tokens is refused with
+    /// invalid_client_metadata, while one naming PS256 or naming none - which is given PS256 - passes.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, false)]
+    [InlineData(SigningAlgorithms.PS256, true)]
+    [InlineData(null, true)]
+    public async Task ValidateAsync_Fapi1Advanced_IdTokenSigningAlgorithm(string? algorithm, bool accepted)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdTokenSignedResponseAlg = algorithm,
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
+
+        if (accepted)
+            Assert.Null(result);
+        else
+            Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
     }
 }

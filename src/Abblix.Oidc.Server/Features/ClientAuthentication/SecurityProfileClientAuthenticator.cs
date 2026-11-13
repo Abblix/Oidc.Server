@@ -69,11 +69,16 @@ internal partial class SecurityProfileClientAuthenticator(
             LogProfileIsNotOneThisServerDefines(clientInfo.ClientId, (int)profile);
         }
 
-        var violations = SecurityProfileConsistency.FindViolations(
-            clientInfo.EffectiveResponseTypes,
-            clientInfo.TokenEndpointAuthMethod,
-            clientInfo.ClientAssertionAudiences,
-            SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile));
+        var requirements = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile);
+        IReadOnlyList<string> violations =
+        [
+            ..SecurityProfileConsistency.FindViolations(
+                clientInfo.EffectiveResponseTypes,
+                clientInfo.TokenEndpointAuthMethod,
+                clientInfo.ClientAssertionAudiences,
+                requirements),
+            ..SecurityProfileConsistency.FindSigningAlgorithmViolations(clientInfo, requirements),
+        ];
 
         if (violations.Count == 0)
             return clientInfo;

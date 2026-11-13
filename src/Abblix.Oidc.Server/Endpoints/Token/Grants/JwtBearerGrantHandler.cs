@@ -98,7 +98,7 @@ public partial class JwtBearerGrantHandler(
 			.BindAsync(assertion => ValidateJwtAsync(tenant, assertion, clientInfo))
 			.BindAsync(jwt => ValidateSubjectAsync(tenant, jwt, clientInfo))
 			.Bind(ctx => _assertionPolicy.ValidateExpiration(ctx, clientInfo))
-			.Bind(ctx => _assertionPolicy.ValidateAlgorithm(ctx, clientInfo))
+			.Bind(ctx => _assertionPolicy.ValidateAlgorithm(tenant, ctx, clientInfo))
 			.Bind(ctx => _assertionPolicy.ValidateTokenType(ctx, clientInfo))
 			.Bind(ctx => _assertionPolicy.ValidateJwtAge(tenant, ctx, clientInfo))
 			.BindAsync(ctx => ValidateReplayProtectionAsync(ctx, clientInfo))

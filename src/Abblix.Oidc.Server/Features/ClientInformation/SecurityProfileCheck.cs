@@ -51,12 +51,14 @@ public sealed class SecurityProfileCheck : ITenantsCheck
                 continue;
             }
 
+            var requirements = SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile);
             failures.AddRange(
                 from violation in SecurityProfileConsistency.FindViolations(
-                    client.EffectiveResponseTypes,
-                    client.TokenEndpointAuthMethod,
-                    client.ClientAssertionAudiences,
-                    SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile))
+                        client.EffectiveResponseTypes,
+                        client.TokenEndpointAuthMethod,
+                        client.ClientAssertionAudiences,
+                        requirements)
+                    .Concat(SecurityProfileConsistency.FindSigningAlgorithmViolations(client, requirements))
                 select $"Client '{client.ClientId}': {violation}.");
         }
 

@@ -1358,4 +1358,30 @@ public class JwtBearerGrantHandlerTests
 			.Setup(p => p.IsReplayedAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()))
 			.ReturnsAsync(false);
 	}
+
+	/// <summary>
+	/// FAPI 1.0 Part 2 section 8.6 names the algorithms the server uses for any JWS, so a bearer assertion presented by
+	/// a client held to FAPI 1.0 Advanced is refused under RS256 although its trusted issuer allows it; PS256 passes.
+	/// </summary>
+	[Theory]
+	[InlineData("RS256", false)]
+	[InlineData("PS256", true)]
+	public async Task AlgorithmValidation_UnderFapi1Advanced_AdmitsOnlyItsAlgorithms(string algorithm, bool accepted)
+	{
+		var (handler, mocks) = CreateHandler();
+		var jwt = CreateValidJwt();
+		jwt.Header.Algorithm = algorithm;
+		SetupValidJwtValidation(mocks.JwtValidator, jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer, allowedAlgorithms: ["RS256", "PS256"]);
+		var clientInfo = new ClientInfo(ClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
+		var tokenRequest = new TokenRequest
+		{
+			GrantType = GrantTypes.JwtBearer,
+			Assertion = Assertion
+		};
+
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+		Assert.Equal(accepted, result.TryGetSuccess(out _));
+	}
 }

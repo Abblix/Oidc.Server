@@ -30,6 +30,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     private string[]? _defaultTokenExchangeAudiences;
     private ClientAssertionAudiences _assertionAudiences = ClientAssertionAudiences.Issuer;
     private bool _offlineAccessWithUserAgentAccessToken;
+    private string? _signingAlgorithmForAnUnnamedSetting;
 
     /// <summary>
     /// Sets the scope values the client may request when its metadata names none.
@@ -75,6 +76,16 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     public ClientInfoBuilder WithOfflineAccessWithUserAgentAccessToken(bool allowed)
     {
         _offlineAccessWithUserAgentAccessToken = allowed;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the algorithm the client's ID tokens and JWT authorization responses are signed with where its metadata
+    /// names none, or null to keep the default of OpenID Connect Dynamic Client Registration section 2.
+    /// </summary>
+    public ClientInfoBuilder WithSigningAlgorithmForAnUnnamedSetting(string? algorithm)
+    {
+        _signingAlgorithmForAnUnnamedSetting = algorithm;
         return this;
     }
 
@@ -217,8 +228,8 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     /// </remarks>
     private void ApplySigningAlgorithms(ClientInfo clientInfo)
     {
-        if (model.IdTokenSignedResponseAlg.HasValue())
-            clientInfo.IdentityTokenSignedResponseAlgorithm = model.IdTokenSignedResponseAlg;
+        if ((model.IdTokenSignedResponseAlg ?? _signingAlgorithmForAnUnnamedSetting) is { Length: > 0 } identityToken)
+            clientInfo.IdentityTokenSignedResponseAlgorithm = identityToken;
 
         if (model.UserInfoSignedResponseAlg.HasValue())
             clientInfo.UserInfoSignedResponseAlgorithm = model.UserInfoSignedResponseAlg;
@@ -226,8 +237,8 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
         if (model.IntrospectionSignedResponseAlg.HasValue())
             clientInfo.IntrospectionSignedResponseAlgorithm = model.IntrospectionSignedResponseAlg;
 
-        if (model.AuthorizationSignedResponseAlg.HasValue())
-            clientInfo.AuthorizationSignedResponseAlgorithm = model.AuthorizationSignedResponseAlg;
+        if ((model.AuthorizationSignedResponseAlg ?? _signingAlgorithmForAnUnnamedSetting) is { Length: > 0 } authorization)
+            clientInfo.AuthorizationSignedResponseAlgorithm = authorization;
     }
 
     private void ApplyLogout(ClientInfo clientInfo)

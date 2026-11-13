@@ -97,15 +97,17 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	}
 
 	/// <summary>
-	/// Validates that the JWT signing algorithm is in the allowed list.
+	/// Validates that the JWT signing algorithm is in the allowed list, and one the client's security profile admits:
+	/// FAPI 1.0 Part 2 section 8.6 names the algorithms the server uses for any JWS.
 	/// </summary>
 	public Result<JwtBearerValidationContext, OidcError> ValidateAlgorithm(
-		JwtBearerValidationContext ctx, ClientInfo clientInfo)
+		TenantDefinition tenant, JwtBearerValidationContext ctx, ClientInfo clientInfo)
 	{
 		var allowedAlgorithms = ctx.TrustedIssuer?.AllowedAlgorithms ?? DefaultAllowedAlgorithms;
 		var algorithm = ctx.Jwt.Header.Algorithm;
 
-		if (allowedAlgorithms.Contains(algorithm, StringComparer.OrdinalIgnoreCase))
+		if (allowedAlgorithms.Contains(algorithm, StringComparer.OrdinalIgnoreCase) &&
+		    Profile(tenant, clientInfo).PermitsSigningAlgorithm(algorithm))
 			return ctx;
 
 		LogAlgorithmNotAllowed(algorithm, ctx.Issuer, clientInfo.ClientId);

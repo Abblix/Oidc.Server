@@ -10,6 +10,7 @@ using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Web;
 using Abblix.Jwt;
@@ -78,6 +79,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
 
         _app = builder.Build();
         _app.UseMultiTenancy();
+        _app.UseCors();
         _app.UseAuthorization();
         _app.MapOidcEndpoints();
         await _app.StartAsync(TestContext.Current.CancellationToken);
@@ -250,5 +252,90 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         request.Remove(AuthorizationRequest.Parameters.Nonce);
 
         Assert.Equal(ErrorCodes.InvalidRequest, await ErrorOf(await AuthorizeAsync(request)));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6: "For JWS, both clients and authorization servers shall use PS256 or ES256
+    /// algorithms", so a request object signed RS256 is refused although the client's key verifies it.
+    /// </summary>
+    [Fact]
+    public async Task ARequestObjectSignedRs256_IsRefused()
+    {
+        Assert.Equal(
+            ErrorCodes.InvalidRequestObject,
+            await ErrorOf(await AuthorizeAsync(ConformantRequest(), SigningAlgorithms.RS256)));
+    }
+
+    /// <summary>
+    /// The same holds for the client authentication assertion at the token endpoint: one signed RS256 does not
+    /// authenticate the client, while one signed PS256 does, and the request goes on to be refused for the code it
+    /// carries, which no authorization issued.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, ErrorCodes.InvalidClient)]
+    [InlineData(SigningAlgorithms.PS256, ErrorCodes.InvalidGrant)]
+    public async Task TheClientAssertion_IsJudgedByItsAlgorithm(string algorithm, string expectedError)
+    {
+        var now = TimeProvider.System.GetUtcNow();
+        var assertion = await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(
+            new JsonWebToken
+            {
+                Header = { Algorithm = algorithm, KeyId = ClientKey.KeyId },
+                Payload =
+                {
+                    Issuer = ClientId,
+                    Subject = ClientId,
+                    Audiences = [Host + Acme],
+                    JwtId = Guid.NewGuid().ToString("N"),
+                    IssuedAt = now,
+                    ExpiresAt = now.AddMinutes(1),
+                },
+            },
+            ClientKey);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, Acme + "/connect/token")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+                [TokenRequest.Parameters.Code] = "no-such-code",
+                [TokenRequest.Parameters.RedirectUri] = RedirectUri,
+                [ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer,
+                [ClientRequest.Parameters.ClientAssertion] = assertion,
+            }),
+        };
+        // The profile requires a sender-constrained token, and the proof is checked before the client is
+        request.Headers.Add(DPoPHeader, await DPoPProofAsync(HttpMethod.Post, new Uri(Host + Acme + "/connect/token")));
+
+        var response = await _http!.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedError, await ErrorOf(response));
+    }
+
+    /// <summary>
+    /// The request header RFC 9449 section 4.1 carries a DPoP proof in.
+    /// </summary>
+    private const string DPoPHeader = "DPoP";
+
+    /// <summary>
+    /// A DPoP proof (RFC 9449 section 4.2) for one request, signed ES256 with a fresh key carried in its header.
+    /// </summary>
+    private async Task<string> DPoPProofAsync(HttpMethod method, Uri target)
+    {
+        var key = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
+        var proof = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.ES256, Type = JsonWebTokenTypes.DPoPProof },
+            Payload =
+            {
+                JwtId = Guid.NewGuid().ToString("N"),
+                IssuedAt = TimeProvider.System.GetUtcNow(),
+            },
+        };
+        proof.Header.Json[JwtClaimTypes.JsonWebKeyHeader] = JsonSerializer.SerializeToNode(key.Sanitize(includePrivateKeys: false));
+        proof.Payload.Json[IanaClaimTypes.Htm] = method.Method;
+        proof.Payload.Json[IanaClaimTypes.Htu] = target.AbsoluteUri;
+
+        return await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(proof, key);
     }
 }

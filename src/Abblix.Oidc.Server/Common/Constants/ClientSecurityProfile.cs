@@ -42,13 +42,14 @@ public enum ClientSecurityProfile
     Fapi2,
 
     /// <summary>
-    /// The controls of the FAPI 1.0 Advanced Security Profile (Part 2, section 5.2.2) that the library enforces: a
-    /// signed request object on every authorization request, only the parameters inside it used, its <c>nbf</c> and
-    /// <c>exp</c> bounded to 60 minutes, an authorization response the server signs (<c>code id_token</c>, or
-    /// <c>code</c> with the <c>jwt</c> response mode), sender-constrained access tokens, and confidential clients
-    /// authenticating by mutual TLS or a private key JWT. PKCE and Pushed Authorization Requests are left to the
-    /// client's own settings, since the profile asks PKCE only of a pushed request and lets the server choose
-    /// whether to offer PAR.
+    /// The controls of the FAPI 1.0 Advanced Security Profile (Part 2, sections 5.2.2 and 8.6) that the library
+    /// enforces: a signed request object on every authorization request, only the parameters inside it used, its
+    /// <c>nbf</c> and <c>exp</c> bounded to 60 minutes and its audience the issuer; an authorization response the
+    /// server signs (<c>code id_token</c>, or <c>code</c> with the <c>jwt</c> response mode); a nonce with the
+    /// <c>openid</c> scope; only PS256 and ES256 signatures, in what the client signs for the server and the server
+    /// for the client; sender-constrained access tokens; and confidential clients authenticating by mutual TLS or a
+    /// private key JWT. PKCE and Pushed Authorization Requests are left to the client's own settings, since the
+    /// profile asks PKCE only of a pushed request and lets the server choose whether to offer PAR.
     /// </summary>
     /// <remarks>
     /// Appended after <see cref="Fapi2"/> because a host persists the numeric value: a member inserted before it

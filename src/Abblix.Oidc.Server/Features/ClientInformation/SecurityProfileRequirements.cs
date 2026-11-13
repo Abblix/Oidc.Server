@@ -209,6 +209,49 @@ public sealed record SecurityProfileRequirements
     public bool RequireNonceWithOpenIdScope { get; init; }
 
     /// <summary>
+    /// The profile admits only the PS256 and ES256 signature algorithms, in what the client signs for this server and
+    /// in what this server signs for the client. FAPI 1.0 Part 2 section 8.6: "For JWS, both clients and
+    /// authorization servers shall use PS256 or ES256 algorithms". Read through <see cref="PermitsSigningAlgorithm"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// What the client signs is judged where it is verified: request objects, client authentication assertions and
+    /// CIBA login hint tokens in <c>Features.Tokens.Validation.ClientJwtValidator</c>, and JWT bearer grant
+    /// assertions in <c>Endpoints.Token.Grants.JwtBearerAssertionPolicy</c>. A DPoP proof is not judged by it.
+    /// </para>
+    /// <para>
+    /// What the server signs for the client is judged on the client's configuration, by
+    /// <see cref="SecurityProfileConsistency"/> at startup, at registration and where the client authenticates: the
+    /// algorithms of its ID tokens, logout tokens and JWT authorization, userinfo and introspection responses. A
+    /// registration naming none of the first two is given PS256 for them. A client added to the store with others
+    /// is refused only where it authenticates, so what the authorization endpoint signs for it before then is what it
+    /// was configured with. The tokens this server signs for itself, such as JWT access tokens, take the algorithm
+    /// the deployment configures and no client's.
+    /// </para>
+    /// </remarks>
+    public bool RequireFapiSigningAlgorithms { get; init; }
+
+    /// <summary>
+    /// The signature algorithms <see cref="RequireFapiSigningAlgorithms"/> admits. FAPI 2.0 section 5.4.1 adds EdDSA
+    /// with Ed25519, which this library does not implement, so no client of it can use it.
+    /// </summary>
+    internal static readonly string[] FapiSigningAlgorithms = [SigningAlgorithms.PS256, SigningAlgorithms.ES256];
+
+    /// <summary>
+    /// Whether a JWS signed with <paramref name="algorithm"/> is one this profile admits.
+    /// </summary>
+    /// <param name="algorithm">The <c>alg</c> of the JWS, or null where it names none.</param>
+    public bool PermitsSigningAlgorithm(string? algorithm)
+        => !RequireFapiSigningAlgorithms || FapiSigningAlgorithms.Contains(algorithm, StringComparer.Ordinal);
+
+    /// <summary>
+    /// The algorithm a registration naming none is given for what this server signs for it, or null where the
+    /// registration keeps the default OpenID Connect Dynamic Client Registration section 2 names.
+    /// </summary>
+    internal string? SigningAlgorithmForAnUnnamedSetting()
+        => RequireFapiSigningAlgorithms ? SigningAlgorithms.PS256 : null;
+
+    /// <summary>
     /// The request object lifetime the FAPI profiles bound a request object to.
     /// </summary>
     internal static readonly TimeSpan FapiRequestObjectLifetime = TimeSpan.FromMinutes(60);
@@ -269,7 +312,8 @@ public sealed record SecurityProfileRequirements
     /// <summary>
     /// FAPI 1.0 Part 2 section 5.2.2, the clauses this type has a control for: a signed request object, only its
     /// parameters used, its nbf and exp bounded, its audience the issuer, a signed authorization response, a nonce
-    /// with the openid scope (Part 1 section 5.2.2.2, which section 5.2.2 takes in), sender-constrained access tokens,
+    /// with the openid scope (Part 1 section 5.2.2.2, which section 5.2.2 takes in), the PS256 and ES256 signatures of
+    /// section 8.6, sender-constrained access tokens,
     /// no public clients, and client authentication by mutual TLS or private_key_jwt.
     /// </summary>
     /// <remarks>
@@ -290,6 +334,7 @@ public sealed record SecurityProfileRequirements
         RequireNonceWithOpenIdScope = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
+        RequireFapiSigningAlgorithms = true,
     };
 
     /// <summary>
@@ -438,6 +483,7 @@ public sealed record SecurityProfileRequirements
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireStringAudienceInClientAssertion = true,
+        RequireFapiSigningAlgorithms = true,
     };
 
     /// <summary>
@@ -529,6 +575,7 @@ public sealed record SecurityProfileRequirements
             RequireStringAudienceInClientAssertion =
                 RequireStringAudienceInClientAssertion || other.RequireStringAudienceInClientAssertion,
             ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
+            RequireFapiSigningAlgorithms = RequireFapiSigningAlgorithms || other.RequireFapiSigningAlgorithms,
         };
 
     /// <summary>

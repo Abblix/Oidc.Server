@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -329,6 +330,9 @@ public class SecurityProfileClientAuthenticatorTests
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             SecurityProfile = (ClientSecurityProfile)7,
+            // The strictest bundle admits only the FAPI signature algorithms for what the server signs for the client
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         };
         Authenticates(inner, clientInfo);
 
@@ -477,5 +481,28 @@ public class SecurityProfileClientAuthenticatorTests
                 eventId.Id,
                 formatter(state, exception),
                 state as IReadOnlyList<KeyValuePair<string, object?>> ?? []));
+    }
+
+    /// <summary>
+    /// A stored client at the RS256 defaults, met under a FAPI 1.0 Advanced tenant, is refused where it authenticates:
+    /// the server would sign its ID tokens with an algorithm FAPI 1.0 Part 2 section 8.6 does not name.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, false)]
+    [InlineData(SigningAlgorithms.PS256, true)]
+    public async Task StoredClientSignedForOutsideTheFapiAlgorithms_ShouldReturnNull(string algorithm, bool accepted)
+    {
+        var (authenticator, inner) = CreateAuthenticator();
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdentityTokenSignedResponseAlgorithm = algorithm,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest());
+
+        Assert.Equal(accepted, result != null);
     }
 }
