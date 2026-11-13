@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -62,6 +63,91 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireCodeResponseTypeOnly);
         Assert.True(requirements.RequireStrictRequestObjectProcessing);
         Assert.Equal(TimeSpan.FromMinutes(60), requirements.MaxRequestObjectLifetime);
+        Assert.False(requirements.RequireSignedRequestObject);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require a JWS signed JWT request object", "shall only use the
+    /// parameters included in the signed request object", bounds its exp and nbf by 60 minutes, "shall only issue
+    /// sender-constrained access tokens", authenticates the client by mutual TLS or private_key_jwt and "shall not
+    /// support public clients".
+    /// </summary>
+    [Fact]
+    public void Resolve_Fapi1Advanced_RequiresWhatSection522Requires()
+    {
+        var requirements = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced);
+
+        Assert.True(requirements.RequireSignedRequestObject);
+        Assert.True(requirements.RequireStrictRequestObjectProcessing);
+        Assert.Equal(TimeSpan.FromMinutes(60), requirements.MaxRequestObjectLifetime);
+        Assert.True(requirements.RequireSenderConstrainedTokens);
+        Assert.True(requirements.RequireConfidentialClient);
+        Assert.True(requirements.RequireKeyBasedClientAuthentication);
+    }
+
+    /// <summary>
+    /// And nothing the section does not ask for: it admits <c>code id_token</c>, makes PAR optional, asks PKCE only of
+    /// a pushed request, and names neither the clock window, the assertion audience nor refresh token rotation that
+    /// FAPI 2.0 does. A control demanded here would refuse a client the FAPI 1.0 profile admits.
+    /// </summary>
+    [Fact]
+    public void Resolve_Fapi1Advanced_DemandsNoFapi2OnlyControl()
+    {
+        var requirements = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced);
+
+        Assert.False(requirements.RequireCodeResponseTypeOnly);
+        Assert.False(requirements.RequirePushedAuthorizationRequests);
+        Assert.False(requirements.RequirePkce);
+        Assert.False(requirements.RequireS256CodeChallenge);
+        Assert.False(requirements.RequireStringAudienceInClientAssertion);
+        Assert.False(requirements.ForbidRefreshTokenRotation);
+        Assert.Null(requirements.MaxClockSkew);
+        Assert.Equal(
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.None).DefaultClockSkew,
+            requirements.DefaultClockSkew);
+    }
+
+    /// <summary>
+    /// A client naming one FAPI profile under a tenant holding it to the other is held to the controls of BOTH: the
+    /// signed request object only FAPI 1.0 Advanced demands, and the code-only response type only FAPI 2.0 does.
+    /// Equality against either bundle cannot show this, since the combination is neither.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi1Advanced)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, ClientSecurityProfile.Fapi2)]
+    public void For_TwoFapiProfiles_CarryTheControlsOfEach(
+        ClientSecurityProfile clientProfile,
+        ClientSecurityProfile defaultProfile)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = clientProfile };
+
+        var requirements = SecurityProfileRequirements.For(client, defaultProfile);
+
+        Assert.True(requirements.RequireSignedRequestObject);
+        Assert.True(requirements.RequireCodeResponseTypeOnly);
+        Assert.True(requirements.RequireStringAudienceInClientAssertion);
+        Assert.Equal(ClockSkew.Fapi2Ceiling, requirements.MaxClockSkew);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2 requires "the response_type value code id_token" or code with JARM, so a client
+    /// held to it and registered for <c>code id_token</c> is consistent, while a shared secret and a public client
+    /// are not.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, 0)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, 0)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, 1)]
+    [InlineData(ClientAuthenticationMethods.None, 2)]
+    public void FindViolations_Fapi1Advanced_HybridClient(string method, int expected)
+    {
+        var violations = SecurityProfileConsistency.FindViolations(
+            [[ResponseTypes.Code, ResponseTypes.IdToken]],
+            method,
+            ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint,
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced));
+
+        Assert.Equal(expected, violations.Count);
     }
 
     /// <summary>
@@ -81,6 +167,9 @@ public class SecurityProfileTests
     [InlineData(null, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)] // unset takes the floor
     [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)] // cannot step below it
     [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, ClientSecurityProfile.Fapi2)] // may rise above it
+    [InlineData(null, ClientSecurityProfile.Fapi1Advanced, ClientSecurityProfile.Fapi1Advanced)]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi1Advanced, ClientSecurityProfile.Fapi1Advanced)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, ClientSecurityProfile.None, ClientSecurityProfile.Fapi1Advanced)]
     public void For_TakesTheFloorAndWhateverTheClientAddsToIt(
         ClientSecurityProfile? clientProfile,
         ClientSecurityProfile defaultProfile,
@@ -602,6 +691,7 @@ public class SecurityProfileTests
     [Theory]
     [InlineData(ClientSecurityProfile.None)]
     [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
     public void Check_DefinedProfile_Passes(ClientSecurityProfile profile)
     {
         Assert.Empty(Check(Tenant(profile)));

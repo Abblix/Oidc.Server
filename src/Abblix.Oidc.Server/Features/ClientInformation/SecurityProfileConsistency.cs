@@ -57,7 +57,7 @@ public static class SecurityProfileConsistency
             tokenEndpointAuthMethod == ClientAuthenticationMethods.None)
         {
             violations.Add(
-                "the FAPI 2.0 Security Profile admits confidential clients only, " +
+                "the client's security profile admits confidential clients only, " +
                 "but the client authenticates with none at the token endpoint");
         }
 
@@ -67,7 +67,7 @@ public static class SecurityProfileConsistency
             !KeyBasedAuthenticationMethods.Contains(tokenEndpointAuthMethod))
         {
             violations.Add(
-                "the FAPI 2.0 Security Profile requires client authentication by mutual TLS or a " +
+                "the client's security profile requires client authentication by mutual TLS or a " +
                 $"private key JWT, but the client uses {tokenEndpointAuthMethod}");
         }
 
@@ -81,14 +81,14 @@ public static class SecurityProfileConsistency
         if (!allowsCode)
         {
             violations.Add(
-                "the FAPI 2.0 Security Profile requires the authorization-code response type, " +
+                "the client's security profile requires the authorization-code response type, " +
                 "but the client does not allow it");
         }
 
         if (allowedResponseTypes.Any(responseType => responseType.ReturnsTokenFromAuthorization()))
         {
             violations.Add(
-                "the FAPI 2.0 Security Profile forbids implicit and hybrid response types, " +
+                "the client's security profile forbids implicit and hybrid response types, " +
                 "but the client allows a response type that returns a token from the authorization endpoint");
         }
 
@@ -107,7 +107,7 @@ public static class SecurityProfileConsistency
         if (requirements.RequireStringAudienceInClientAssertion &&
             assertionAudiences != ClientAssertionAudiences.Issuer)
         {
-            yield return "the FAPI 2.0 Security Profile accepts only the issuer identifier, as a string, as the " +
+            yield return "the client's security profile accepts only the issuer identifier, as a string, as the " +
                          $"audience of a client assertion, but the client is allowed {assertionAudiences}";
         }
     }

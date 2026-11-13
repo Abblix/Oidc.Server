@@ -1002,6 +1002,95 @@ public class RequestObjectFetcherTests
     }
 
     /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2 requires "a JWS signed JWT request object" and section 8.6 has the server "not use
+    /// none", so an unsigned object from a client held to that profile is refused, its own flag and the server-wide
+    /// requirement both off.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_UnsignedObjectFromFapi1AdvancedClient_ShouldFail()
+    {
+        var fetcher = CreateFetcher();
+        var request = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
+        var jwt = "eyJhbGciOiJub25lIn0.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.";
+        var token = new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(new JsonObject()) { Algorithm = SigningAlgorithms.None },
+            Payload = WithinTheProfileLifetime(new JsonObject()),
+        };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, Fapi1AdvancedClient));
+
+        var result = await fetcher.FetchAsync(SingleIssuer.Tenant, request, jwt);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2: the server "shall only use the parameters included in the signed request
+    /// object", so a state passed only outside it is gone from the request - for the client naming the profile and
+    /// for one inheriting it from its tenant - while an unprofiled client at an unprofiled tenant keeps the Core
+    /// section 6.1 merge, which is what shows the drop comes from the profile.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, ClientSecurityProfile.None, null)]
+    [InlineData(null, ClientSecurityProfile.Fapi1Advanced, null)]
+    [InlineData(null, ClientSecurityProfile.None, "outside-only")]
+    public async Task FetchAsync_Fapi1Advanced_UsesOnlyTheRequestObject(
+        ClientSecurityProfile? clientProfile,
+        ClientSecurityProfile tenantProfile,
+        string? expectedState)
+    {
+        Assert.False(_oidcOptions.IgnoreParametersOutsideRequestObject);
+        var fetcher = CreateFetcher();
+
+        const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjMSJ9.signature";
+        var request = new JarTestRequest { ClientId = "c1", State = "outside-only", Request = jwt };
+        var payload = new JsonObject { [RequestParameters.ClientId] = "c1" };
+        var token = new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(new JsonObject()) { Algorithm = SigningAlgorithms.PS256 },
+            Payload = WithinTheProfileLifetime(payload),
+        };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("c1") { SecurityProfile = clientProfile }));
+        _jsonObjectBinder
+            .Setup(b => b.BindModelAsync(payload, It.IsAny<JarTestRequest>()))
+            .ReturnsAsync((JsonObject _, JarTestRequest bound) => bound);
+
+        var tenant = new TestIssuer { DefaultSecurityProfile = tenantProfile }.ToTenant();
+        var result = await fetcher.FetchAsync(tenant, request, jwt);
+
+        Assert.True(result.TryGetSuccess(out var value));
+        Assert.Equal(expectedState, value.State);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2 requires the request object "to contain an exp claim" and "an nbf claim", so one
+    /// missing either is refused for a client held to that profile.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task FetchAsync_Fapi1AdvancedClient_RequestObjectMissingNbfOrExp_IsInvalid(bool carriesNbf, bool carriesExp)
+    {
+        var result = await FetchWithLifetime(
+            Fapi1AdvancedClient,
+            SingleIssuer.Tenant,
+            carriesNbf ? Now : null,
+            carriesExp ? Now + OrdinaryLifetime : null);
+
+        AssertInvalidRequestObject(result);
+    }
+
+    private static ClientInfo Fapi1AdvancedClient
+        => new("c1") { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
+
+    /// <summary>
     /// RFC 9101 section 5 strict mode: the payload binds onto a fresh model instead of merging over the
     /// outer request, so parameters passed outside the request object are ignored.
     /// </summary>

@@ -141,6 +141,20 @@ public sealed record SecurityProfileRequirements
     public bool RequireStrictRequestObjectProcessing { get; init; }
 
     /// <summary>
+    /// The profile requires every authorization request to arrive as a signed request object, by value or by
+    /// reference, as <see cref="ClientInfo.RequireSignedRequestObject"/> does for one client: plain parameters and an
+    /// unsigned (<c>none</c>) object are refused. FAPI 1.0 Part 2 section 5.2.2 has the server "require a JWS signed
+    /// JWT request object passed by value with the request parameter or by reference with the request_uri
+    /// parameter". Enforced by <c>Endpoints.Authorization.Validation.SignedRequestObjectRequirementValidator</c> and
+    /// <c>Features.RequestObject.RequestObjectFetcher</c>.
+    /// </summary>
+    /// <remarks>
+    /// Without it strict processing has nothing to apply to: a client sending plain parameters carries no request
+    /// object, and every parameter it names is used as sent.
+    /// </remarks>
+    public bool RequireSignedRequestObject { get; init; }
+
+    /// <summary>
     /// The longest a request object may live under this profile, or null where the profile requires no lifetime
     /// of it. Where set, the request object has to carry both <c>nbf</c> and <c>exp</c>, its <c>exp</c> may lie
     /// no further than this after its <c>nbf</c>, and its <c>nbf</c> no further than this in the past. Enforced by
@@ -211,6 +225,28 @@ public sealed record SecurityProfileRequirements
         RequireKeyBasedClientAuthentication = true,
         RequireStringAudienceInClientAssertion = true,
         ForbidRefreshTokenRotation = true,
+    };
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2, the clauses this type has a control for: a signed request object, only its
+    /// parameters used, its nbf and exp bounded, sender-constrained access tokens, no public clients, and client
+    /// authentication by mutual TLS or private_key_jwt.
+    /// </summary>
+    /// <remarks>
+    /// Left off on purpose, because each would refuse a client that profile admits: the code-only response type
+    /// (the section requires <c>code id_token</c>, or <c>code</c> with JARM), Pushed Authorization Requests (which
+    /// it "may support"), PKCE (it exempts the Baseline clause and asks PKCE with S256 only of a pushed request,
+    /// which no control here expresses), and the clock window, assertion audience and rotation controls, which
+    /// come from FAPI 2.0 and have no clause in FAPI 1.0.
+    /// </remarks>
+    private static readonly SecurityProfileRequirements Fapi1AdvancedRequirements = new()
+    {
+        RequireSenderConstrainedTokens = true,
+        RequireStrictRequestObjectProcessing = true,
+        RequireSignedRequestObject = true,
+        MaxRequestObjectLifetime = FapiRequestObjectLifetime,
+        RequireConfidentialClient = true,
+        RequireKeyBasedClientAuthentication = true,
     };
 
     /// <summary>
@@ -318,6 +354,7 @@ public sealed record SecurityProfileRequirements
     {
         ClientSecurityProfile.None => NoneRequirements,
         ClientSecurityProfile.Fapi2 => Fapi2Requirements,
+        ClientSecurityProfile.Fapi1Advanced => Fapi1AdvancedRequirements,
         _ => null,
     };
 
@@ -350,6 +387,7 @@ public sealed record SecurityProfileRequirements
         DefaultClockSkew = ClockSkew.Fapi2,
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
+        RequireSignedRequestObject = true,
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
@@ -421,6 +459,7 @@ public sealed record SecurityProfileRequirements
         RequireCodeResponseTypeOnly = RequireCodeResponseTypeOnly || other.RequireCodeResponseTypeOnly,
         RequireStrictRequestObjectProcessing =
             RequireStrictRequestObjectProcessing || other.RequireStrictRequestObjectProcessing,
+        RequireSignedRequestObject = RequireSignedRequestObject || other.RequireSignedRequestObject,
         MaxRequestObjectLifetime = Tighter(MaxRequestObjectLifetime, other.MaxRequestObjectLifetime),
     };
 

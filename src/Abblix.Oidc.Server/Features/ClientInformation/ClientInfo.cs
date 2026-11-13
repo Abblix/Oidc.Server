@@ -448,8 +448,9 @@ public record ClientInfo(string ClientId)
     /// A named security profile this client asks to be held to, ON TOP of whatever the deployment
     /// demands of every client. <see cref="ClientSecurityProfile.Fapi2"/> forces the FAPI 2.0
     /// control bundle (PKCE restricted to <c>S256</c>, Pushed Authorization Requests,
-    /// sender-constrained tokens, code-only responses) and prevents the individual toggles above
-    /// from weakening it.
+    /// sender-constrained tokens, code-only responses), <see cref="ClientSecurityProfile.Fapi1Advanced"/> the
+    /// FAPI 1.0 Advanced one (signed request objects and only their parameters, sender-constrained tokens), and
+    /// either prevents the individual toggles above from weakening it.
     ///
     /// It can only tighten. <see cref="ClientSecurityProfile.None"/> names no controls of its
     /// own and therefore changes nothing where the deployment names some: a server-wide profile is

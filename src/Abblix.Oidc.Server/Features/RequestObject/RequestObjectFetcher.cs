@@ -76,7 +76,7 @@ public partial class RequestObjectFetcher(
 
                 // Strict RFC 9101 section 6.3 processing - only the request object's parameters are used and anything
                 // passed outside it is ignored - applies when the host turns it on globally or the client's
-                // security profile (FAPI 2.0) mandates it. Otherwise the OpenID Connect Core section 6.1 merge
+                // security profile (FAPI 2.0, FAPI 1.0 Advanced) mandates it. Otherwise the OpenID Connect Core section 6.1 merge
                 // semantics bind the payload over the outer request. The OAuth-syntax client_id/response_type
                 // duplicates are cross-checked against the result by the authorization-endpoint adapter in both.
                 var strict = options.Value.IgnoreParametersOutsideRequestObject
@@ -206,8 +206,10 @@ public partial class RequestObjectFetcher(
 
                 // RFC 9101 section 10.5: a client registered with require_signed_request_object committed
                 // to SIGNED request objects - an unsigned (alg=none) object satisfies the
-                // structural check but not the commitment.
-                if (validJwt.Client.RequireSignedRequestObject &&
+                // structural check but not the commitment. A profile requiring signed request objects
+                // (FAPI 1.0 Part 2 section 5.2.2) commits the client the same way.
+                var profile = SecurityProfileRequirements.For(validJwt.Client, tenant.DefaultSecurityProfile);
+                if ((validJwt.Client.RequireSignedRequestObject || profile.RequireSignedRequestObject) &&
                     string.Equals(validJwt.Token.Header.Algorithm, SigningAlgorithms.None, StringComparison.Ordinal))
                 {
                     return new OidcError(
@@ -233,7 +235,7 @@ public partial class RequestObjectFetcher(
                 // exp and bound both. Judged here rather than handed to the validator as RequireExpirationTime,
                 // because the profile belongs to the client, known only once the validator has finished.
                 var lifetimeRefusal = RequestObjectLifetime.WhyRefused(
-                    SecurityProfileRequirements.For(validJwt.Client, tenant.DefaultSecurityProfile),
+                    profile,
                     validJwt.Token.Payload,
                     timeProvider.GetUtcNow());
 
