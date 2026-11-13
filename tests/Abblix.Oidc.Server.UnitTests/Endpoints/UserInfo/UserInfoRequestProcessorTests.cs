@@ -8,8 +8,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
@@ -400,5 +402,40 @@ public class UserInfoRequestProcessorTests
                 It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
                 It.IsAny<ClientInfo>()),
             Times.Once);
+    }
+
+    /// <summary>
+    /// OpenID Connect Core 1.0 section 5.3.2: "If a Claim is not returned, that Claim Name SHOULD be omitted from the
+    /// JSON object representing the Claims; it SHOULD NOT be present with a null or empty string value." A claim the
+    /// host's store answers without a value is dropped, and every claim carrying one stays.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ClaimWithoutAValue_IsOmitted()
+    {
+        var validRequest = CreateValidUserInfoRequest();
+        var userClaims = new JsonObject
+        {
+            [IanaClaimTypes.Sub] = "user_123",
+            [IanaClaimTypes.Name] = null,
+            [IanaClaimTypes.Nickname] = string.Empty,
+            [IanaClaimTypes.Email] = "john@example.com",
+            [IanaClaimTypes.EmailVerified] = false,
+        };
+
+        _userClaimsProvider
+            .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
+                validRequest.AuthSession,
+                validRequest.AuthContext.Scope,
+                It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>?>(),
+                validRequest.ClientInfo))
+            .ReturnsAsync(userClaims);
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
+
+        Assert.True(result.TryGetSuccess(out var response));
+        Assert.Equal(
+            [IanaClaimTypes.Sub, IanaClaimTypes.Email, IanaClaimTypes.EmailVerified],
+            response.User.Select(claim => claim.Key));
     }
 }
