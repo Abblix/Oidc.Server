@@ -799,9 +799,10 @@ public class IdentityTokenServiceTests
         var result = await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.NotNull(result.Token);
-        Assert.Equal(EncodedToken, result.EncodedJwt);
+        var issued = result!.Value.GetSuccess();
+        Assert.NotNull(issued);
+        Assert.NotNull(issued.Token);
+        Assert.Equal(EncodedToken, issued.EncodedJwt);
     }
 
     /// <summary>
@@ -1208,9 +1209,10 @@ public class IdentityTokenServiceTests
             .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
-        return await _service.CreateIdentityTokenAsync(
+        var created = await _service.CreateIdentityTokenAsync(
             SingleIssuer.Tenant,
             authSession, authContext, clientInfo, true, null, null, null);
+        return created?.GetSuccess();
     }
 
     private static JsonObject CreateUserClaims() => new()

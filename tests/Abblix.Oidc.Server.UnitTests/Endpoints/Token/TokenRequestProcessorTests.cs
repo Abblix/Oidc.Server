@@ -176,6 +176,34 @@ public partial class TokenRequestProcessorTests
     }
 
     /// <summary>
+    /// A completion of a CIBA request in push mode mints the ID token in a request the client's key set was not judged
+    /// in. Where its profile leaves nothing in that key set to encrypt to, the ID token service refuses, and the refusal
+    /// is answered as the processor's error rather than as a server error.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_AnIdTokenTheClientsKeySetCannotReceive_IsRefused()
+    {
+        var request = CreateValidTokenRequest([Scopes.OpenId]);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId], null);
+        _contextEvaluator.Setup(e => e.EvaluateAuthorizationContext(request)).Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, null,
+                It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(CreateAccessToken());
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, false, null,
+                It.IsAny<string?>(), null, It.IsAny<PushDeliveryBindings?>()))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidClient, "the client's key set"));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
+    }
+
+    /// <summary>
     /// Verifies ID token is created when openid scope present.
     /// Per OIDC Core Section 3.1.3.3, ID token MUST be returned for openid scope.
     /// </summary>

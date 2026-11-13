@@ -129,8 +129,14 @@ public class TokenRequestProcessor(
 		if (issuesRefreshToken)
 			await AddRefreshTokenAsync(tenant, response, request, grantedContext, presentedRefreshToken, grantId);
 
-		if (mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OpenId))
-			await AddIdentityTokenAsync(tenant, response, request, grantedContext, accessToken);
+		// A completion of a CIBA request in push mode mints the ID token in a request the client's key set was not
+		// judged in, so a refusal of that key set is answered here rather than thrown, before anything is spent
+		var issuesIdentityToken = mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OpenId);
+		if (await AddIdentityTokenAsync(tenant, response, request, grantedContext, accessToken, issuesIdentityToken)
+		    is { } refusal)
+		{
+			return refusal;
+		}
 
 		// Spent last, once every token of the response is issued, so a failure to issue one leaves the presented
 		// token unspent; the request losing the race to renew a single-use token hands over nothing it issued.
@@ -318,13 +324,17 @@ public class TokenRequestProcessor(
 			grantId.NotNull(nameof(grantId)));
 	}
 
-	private async Task AddIdentityTokenAsync(
+	private async Task<OidcError?> AddIdentityTokenAsync(
 		TenantDefinition tenant,
 		TokenIssued response,
 		ValidTokenRequest request,
 		AuthorizationContext authContext,
-		EncodedJsonWebToken accessToken)
+		EncodedJsonWebToken accessToken,
+		bool issues)
 	{
+		if (!issues)
+			return null;
+
 		// The bindings exist only when the caller says it IS the push path. The mode could be read
 		// off clientInfo instead, and is not, so that this method does not have to know CIBA's
 		// delivery rules to serve every other grant type - see PushDeliveryBindings.
@@ -336,7 +346,7 @@ public class TokenRequestProcessor(
 			? new PushDeliveryBindings(authenticationRequestId, response.RefreshToken?.EncodedJwt)
 			: null;
 
-		response.IdToken = await identityTokenService.CreateIdentityTokenAsync(
+		var created = await identityTokenService.CreateIdentityTokenAsync(
 			tenant, request.AuthorizedGrant.AuthSession,
 			authContext,
 			request.ClientInfo,
@@ -347,5 +357,11 @@ public class TokenRequestProcessor(
 			// carried it, and the token request holds no state to hash anyway.
 			null,
 			pushBindings);
+
+		if (created is { } issued && issued.TryGetFailure(out var refusal))
+			return refusal;
+
+		response.IdToken = created?.GetSuccess();
+		return null;
 	}
 }

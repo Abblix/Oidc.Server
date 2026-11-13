@@ -68,7 +68,7 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 	/// user identification across services. It explicitly handles `c_hash` and `at_hash` creation, providing additional
 	/// security checks for token integrity.
 	/// </remarks>
-	public async Task<EncodedJsonWebToken?> CreateIdentityTokenAsync(
+	public async Task<Result<EncodedJsonWebToken, OidcError>?> CreateIdentityTokenAsync(
 		TenantDefinition tenant,
 		AuthSession authSession,
 		AuthorizationContext authContext,
@@ -171,15 +171,14 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 			state,
 			pushBindings);
 
-		// The client's key set was judged against its profile where the client was resolved in this request, so a refusal here
-		// is a key set changed in between
+		// A client whose key set its profile leaves nothing in to encrypt to is refused by the caller, in its protocol
 		var jwt = await jwtFormatter.FormatAsync(
 			tenant,
 			identityToken,
 			clientInfo,
 			ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value));
 
-		return new EncodedJsonWebToken(identityToken, jwt.GetSuccess());
+		return jwt.MapSuccess(encoded => new EncodedJsonWebToken(identityToken, encoded));
 	}
 
 	// The signing algorithm arrives as a parameter rather than being read back off the token's own

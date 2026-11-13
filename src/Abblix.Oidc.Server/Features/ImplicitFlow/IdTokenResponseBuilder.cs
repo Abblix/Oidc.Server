@@ -55,7 +55,9 @@ public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
         var responseType = request.Model.ResponseType;
         var standalone = !responseType.HasFlag(ResponseTypes.Code) && !responseType.HasFlag(ResponseTypes.Token);
 
-        result.IdToken = await identityTokenService.CreateIdentityTokenAsync(
+        // The client's key set was judged against its profile by the authorization endpoint's ClientValidator in this
+        // very request, so a refusal here is one changed in between
+        var created = await identityTokenService.CreateIdentityTokenAsync(
             tenant,
             authorizedGrant.AuthSession,
             authorizedGrant.Context,
@@ -64,5 +66,6 @@ public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
             result.Code,
             result.AccessToken?.EncodedJwt,
             result.Model.State);
+        result.IdToken = created?.GetSuccess();
     }
 }
