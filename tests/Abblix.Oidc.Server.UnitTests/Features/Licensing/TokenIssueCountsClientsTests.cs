@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Nodes;
@@ -101,7 +102,8 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     options,
                     SingleIssuer.LicensedCatalog,
                     new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>()),
-                    ScopeClaims.Of());
+                    ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
                 return clientId => access.CreateAccessTokenAsync(SingleIssuer.Tenant, session, Context(clientId), client, grantId: null, null);
 
             case IdentityToken:

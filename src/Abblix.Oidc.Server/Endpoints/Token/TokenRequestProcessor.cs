@@ -82,13 +82,26 @@ public class TokenRequestProcessor(
 
 		var grantId = ResolveGrantId(request, presentedRefreshToken, issuesRefreshToken);
 
-		var accessToken = await accessTokenService.CreateAccessTokenAsync(
-			tenant,
-			request.AuthorizedGrant.AuthSession,
-			grantedContext,
-			clientInfo,
-			grantId,
-			request.AuthorizedGrant.ExpiresNoLaterThan);
+		EncodedJsonWebToken accessToken;
+		try
+		{
+			accessToken = await accessTokenService.CreateAccessTokenAsync(
+				tenant,
+				request.AuthorizedGrant.AuthSession,
+				grantedContext,
+				clientInfo,
+				grantId,
+				request.AuthorizedGrant.ExpiresNoLaterThan);
+		}
+		catch (AudienceKeyRefusedException)
+		{
+			// RFC 8707 section 2: the resource the request named is unusable, since the key it publishes would have
+			// the token encrypted with an algorithm the profile in force forbids. The resource's configuration is at
+			// fault, not this server's, so the request is answered rather than failed
+			return new OidcError(
+				ErrorCodes.InvalidTarget,
+				"The requested resource publishes an encryption key the security profile in force does not admit.");
+		}
 
 		// A token exchanged at the very end of its subject token's life is minted already expired, because the
 		// subject token was valid when it was checked and its expiry caps the new token. Such a token is refused

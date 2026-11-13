@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -70,7 +71,8 @@ public class AccessTokenServiceTests
             Options.Create(new OidcOptions()),
             SingleIssuer.LicensedCatalog,
             new AudienceKeyResolver(NoResources, NoResourceKeys),
-            ScopeClaims.Of());
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
     }
 
     /// <summary>
@@ -128,7 +130,8 @@ public class AccessTokenServiceTests
             Options.Create(new OidcOptions()),
             SingleIssuer.LicensedCatalog,
             new AudienceKeyResolver(NoResources, NoResourceKeys),
-            ScopeClaims.Of());
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
         var tenant = new TestIssuer { Scopes = [new ScopeDefinition(contactScope, IanaClaimTypes.Email)] }.ToTenant();
         var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
         var authContext = byHostScope
@@ -693,7 +696,8 @@ public class AccessTokenServiceTests
             Options.Create(new OidcOptions()),
             SingleIssuer.LicensedCatalog,
             new AudienceKeyResolver(NoResources, NoResourceKeys),
-            ScopeClaims.Of());
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
 
         var presentingClient = new ClientInfo(ClientId)
         {
@@ -804,7 +808,8 @@ public class AccessTokenServiceTests
             Options.Create(new OidcOptions { FilterAuthorizationDetailsByLocation = filterByLocation }),
             SingleIssuer.LicensedCatalog,
             new AudienceKeyResolver(manager.Object, keys.Object),
-            ScopeClaims.Of());
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
     }
 
     private static AuthorizationContext ContextFor(params Uri[] resources) =>
@@ -997,8 +1002,8 @@ public class AccessTokenServiceTests
     /// <summary>
     /// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
     /// algorithm". A resource publishing an encryption key declaring RSA1_5 gets no access token at a tenant held to
-    /// FAPI 1.0 Advanced: nothing reaches the creator, so no such JWE leaves the server. A tenant held to no profile
-    /// encrypts to it as before.
+    /// FAPI 1.0 Advanced: nothing reaches the creator, so no such JWE leaves the server, and the refusal names the
+    /// resource, whose request the token endpoint answers. A tenant held to no profile encrypts to it as before.
     /// </summary>
     [Theory]
     [InlineData(ClientSecurityProfile.Fapi1Advanced, false)]
@@ -1045,7 +1050,8 @@ public class AccessTokenServiceTests
             Options.Create(options),
             SingleIssuer.LicensedCatalog,
             new AudienceKeyResolver(manager.Object, resourceKeys.Object),
-            ScopeClaims.Of());
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
         var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
 
         try
@@ -1053,9 +1059,10 @@ public class AccessTokenServiceTests
             await service.CreateAccessTokenAsync(
                 tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
         }
-        catch (InvalidOperationException) when (!issued)
+        catch (AudienceKeyRefusedException refused) when (!issued)
         {
-            // The refusal: what matters below is that nothing was encrypted
+            Assert.Equal([OrdersApi], refused.Resources);
+            Assert.Equal(EncryptionAlgorithms.KeyManagement.Rsa1_5, refused.Algorithm);
         }
 
         Assert.Equal(issued ? EncryptionAlgorithms.KeyManagement.Rsa1_5 : null, keyManagement);

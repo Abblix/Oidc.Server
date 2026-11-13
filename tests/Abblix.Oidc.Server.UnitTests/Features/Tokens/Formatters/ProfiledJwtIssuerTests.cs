@@ -60,7 +60,7 @@ public class ProfiledJwtIssuerTests
         if (issued)
             Assert.Equal("issued", await issue());
         else
-            await Assert.ThrowsAsync<InvalidOperationException>(issue);
+            await Assert.ThrowsAsync<AlgorithmRefusedByProfileException>(issue);
     }
 
     [Theory]
@@ -76,7 +76,28 @@ public class ProfiledJwtIssuerTests
         if (issued)
             Assert.Equal("issued", await issue());
         else
-            await Assert.ThrowsAsync<InvalidOperationException>(issue);
+            await Assert.ThrowsAsync<AlgorithmRefusedByProfileException>(issue);
+    }
+
+    /// <summary>
+    /// A refusal names what it refused, and for a key management algorithm the key it would have encrypted to, so a
+    /// path that took the algorithm from a key a party published can tell that party's refusal from the server's.
+    /// </summary>
+    [Fact]
+    public async Task ARefusal_NamesTheAlgorithmAndTheKey()
+    {
+        var issuer = Issuer();
+
+        var keyManagement = await Assert.ThrowsAsync<AlgorithmRefusedByProfileException>(() => issuer.IssueAsync(
+            Fapi1, Token(SigningAlgorithms.PS256), _signingKey, _encryptionKey,
+            EncryptionAlgorithms.KeyManagement.Rsa1_5));
+        var signing = await Assert.ThrowsAsync<AlgorithmRefusedByProfileException>(
+            () => issuer.IssueAsync(Fapi1, Token(SigningAlgorithms.RS256), _signingKey));
+
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.Rsa1_5, keyManagement.Algorithm);
+        Assert.Same(_encryptionKey, keyManagement.EncryptionKey);
+        Assert.Equal(SigningAlgorithms.RS256, signing.Algorithm);
+        Assert.Null(signing.EncryptionKey);
     }
 
     /// <summary>
@@ -87,7 +108,7 @@ public class ProfiledJwtIssuerTests
     {
         var issuer = Issuer();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<AlgorithmRefusedByProfileException>(
             () => issuer.IssueAsync(Fapi1, Token(SigningAlgorithms.RS256), _signingKey));
 
         _creator.Verify(

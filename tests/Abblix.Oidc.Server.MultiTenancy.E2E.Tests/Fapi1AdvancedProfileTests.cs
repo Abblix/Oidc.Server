@@ -81,6 +81,26 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
     /// </summary>
     private static readonly RsaJsonWebKey EncryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
 
+    /// <summary>
+    /// A resource publishing an encryption key that declares RSA1_5, which FAPI 1.0 Part 2 section 8.6.1 forbids.
+    /// </summary>
+    private const string Rsa1_5Resource = "https://legacy-api.example.com";
+
+    /// <summary>
+    /// A resource publishing an encryption key that declares RSA-OAEP-256, which the profile admits.
+    /// </summary>
+    private const string OaepResource = "https://api.example.com";
+
+    private static ResourceDefinition PublishingAKeyFor(string resource, string keyManagement)
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
+        key.Algorithm = keyManagement;
+        return new ResourceDefinition(new Uri(resource))
+        {
+            Jwks = new JsonWebKeySet([key.Sanitize(includePrivateKeys: false)]),
+        };
+    }
+
     private static readonly TenantDefinition Tenant = new()
     {
         Id = "acme",
@@ -90,6 +110,11 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         LoginUri = new Uri(LoginPath, UriKind.Relative),
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
         EncryptionKeys = [EncryptionKey],
+        Resources =
+        [
+            PublishingAKeyFor(Rsa1_5Resource, EncryptionAlgorithms.KeyManagement.Rsa1_5),
+            PublishingAKeyFor(OaepResource, EncryptionAlgorithms.KeyManagement.RsaOaep256),
+        ],
     };
 
     private WebApplication? _app;
@@ -145,7 +170,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
     {
         TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
         Jwks = new JsonWebKeySet([ClientKey.Sanitize(includePrivateKeys: false)]),
-        AllowedGrantTypes = [GrantTypes.AuthorizationCode],
+        AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials],
         AllowedResponseTypes = [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]],
         RedirectUris = [new Uri(RedirectUri)],
         // FAPI 1.0 Part 2 asks PKCE only of a pushed request, and these requests go by value
@@ -725,5 +750,34 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         options.ServiceTokens.RefreshToken.Signing.Algorithm = SigningAlgorithms.PS256;
         options.ServiceTokens.RegistrationAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
         options.ServiceTokens.InitialAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+    }
+
+    /// <summary>
+    /// RFC 8707 section 2: invalid_target answers a resource that is "invalid, missing, unknown, or malformed". One
+    /// whose published encryption key would have the access token encrypted with RSA1_5, which FAPI 1.0 Part 2 section
+    /// 8.6.1 forbids, is answered so with HTTP 400; one publishing an RSA-OAEP-256 key is issued its token.
+    /// </summary>
+    [Theory]
+    [InlineData(Rsa1_5Resource, HttpStatusCode.BadRequest, ErrorCodes.InvalidTarget)]
+    [InlineData(OaepResource, HttpStatusCode.OK, null)]
+    public async Task AResourceWhoseKeyTheProfileForbids_IsInvalidTarget(
+        string resource, HttpStatusCode expectedStatus, string? expectedError)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, Acme + "/connect/token")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+                [TokenRequest.Parameters.Resource] = resource,
+                [ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer,
+                [ClientRequest.Parameters.ClientAssertion] = await ClientAssertionAsync(),
+            }),
+        };
+        request.Headers.Add(PresentsCertificate, "yes");
+
+        var response = await _http!.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedStatus, response.StatusCode);
+        Assert.Equal(expectedError, await ErrorOf(response));
     }
 }

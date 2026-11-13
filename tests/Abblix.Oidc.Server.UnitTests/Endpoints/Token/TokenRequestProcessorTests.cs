@@ -150,6 +150,32 @@ public partial class TokenRequestProcessorTests
     }
 
     /// <summary>
+    /// RFC 8707 section 2: invalid_target answers a resource "invalid, missing, unknown, or malformed". One whose
+    /// published encryption key would have the token encrypted with an algorithm the profile forbids is answered so,
+    /// since the refusal is the resource's, not the server's.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_AnAudienceKeyTheProfileRefuses_IsInvalidTarget()
+    {
+        var request = CreateValidTokenRequest([]);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
+        _contextEvaluator.Setup(e => e.EvaluateAuthorizationContext(request)).Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, null,
+                It.IsAny<DateTimeOffset?>()))
+            .ThrowsAsync(new AudienceKeyRefusedException(
+                [new Uri("https://orders.example.com")],
+                new Abblix.Oidc.Server.Features.Tokens.Formatters.AlgorithmRefusedByProfileException(
+                    "refused", "RSA1_5", new Abblix.Jwt.RsaJsonWebKey())));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
+    }
+
+    /// <summary>
     /// Verifies ID token is created when openid scope present.
     /// Per OIDC Core Section 3.1.3.3, ID token MUST be returned for openid scope.
     /// </summary>

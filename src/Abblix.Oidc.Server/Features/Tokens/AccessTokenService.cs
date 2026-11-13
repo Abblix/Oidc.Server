@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -46,6 +47,7 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// token can be encrypted to the resource it is minted for.</param>
 /// <param name="scopeClaims">Names the claims the user-information endpoint asks the host's provider for, which
 /// decides whether the session's email address travels in the token.</param>
+/// <param name="logger">Records an access token not issued for the key its audience publishes.</param>
 [SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
     Justification = "Every dependency is used: the token's clock, identifier, format and subject each come from their own service, the server's options carry the service-token and authorization-details policy, the catalog the license counts the tenant by, the audience keys the encryption target, and the scope claims whether the session's email address travels in the token.")]
 internal class AccessTokenService(
@@ -56,7 +58,8 @@ internal class AccessTokenService(
 	IOptions<OidcOptions> options,
 	ITenantCatalog catalog,
 	IAudienceKeyResolver audienceKeys,
-	IScopeClaimsProvider scopeClaims) : IAccessTokenService
+	IScopeClaimsProvider scopeClaims,
+	ILogger<AccessTokenService> logger) : IAccessTokenService
 {
 	/// <summary>
 	/// Asynchronously generates a new access token incorporating the authentication session and authorization context
@@ -167,7 +170,8 @@ internal class AccessTokenService(
 		var encryption = await ServiceJwtEncryption.ForAccessToken(options.Value)
 			.WithAudienceKeyAsync(tenant, audienceContext, audienceKeys);
 
-		var encoded = await serviceJwtFormatter.FormatAsync(tenant, accessToken, clientInfo, encryption);
+		var encoded = await AudienceKeyRefusal.FormatAsync(
+			serviceJwtFormatter, tenant, accessToken, clientInfo, encryption, audienceContext.Resources ?? [], logger);
 
 		return new EncodedJsonWebToken(accessToken, encoded);
 	}

@@ -1065,6 +1065,23 @@ internal static class LogEvents
     }
 
     /// <summary>
+    /// Range 11100-11199: <c>Features/Tokens</c>, a second window, because 5000-5099 is fully allocated.
+    /// </summary>
+    public static class TokenIssuance
+    {
+        /// <summary>
+        /// <c>Features/Tokens/AccessTokenService.cs</c> - an access token not issued for what its audience
+        /// publishes (sub-range 11100-11109).
+        /// </summary>
+        public static class AccessTokenService
+        {
+            private const int Base = 11100;
+
+            public const int AudienceKeyRefused = Base;
+        }
+    }
+
+    /// <summary>
     /// Range 11000-11099: <c>Endpoints/Authorization</c>, a second window, because 2000-2099 is fully
     /// allocated.
     /// </summary>

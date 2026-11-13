@@ -40,7 +40,7 @@ public sealed class ProfiledJwtIssuer(IJsonWebTokenCreator creator)
     /// <param name="encryptionKey">The key to encrypt to, or null to issue a JWS.</param>
     /// <param name="keyEncryptionAlgorithm">The key management algorithm, where the token is encrypted.</param>
     /// <param name="contentEncryptionAlgorithm">The content encryption algorithm, where the token is encrypted.</param>
-    /// <exception cref="InvalidOperationException">The profile admits one of the algorithms not.</exception>
+    /// <exception cref="AlgorithmRefusedByProfileException">The profile admits one of the algorithms not.</exception>
     public Task<string> IssueAsync(
         SecurityProfileRequirements profile,
         JsonWebToken token,
@@ -51,9 +51,11 @@ public sealed class ProfiledJwtIssuer(IJsonWebTokenCreator creator)
     {
         if (!profile.PermitsSigningAlgorithm(token.Header.Algorithm))
         {
-            throw new InvalidOperationException(
+            throw new AlgorithmRefusedByProfileException(
                 $"The token would be signed with {token.Header.Algorithm}, which the security profile in force does " +
-                "not admit");
+                "not admit",
+                token.Header.Algorithm,
+                encryptionKey: null);
         }
 
         if (encryptionKey is null)
@@ -62,8 +64,10 @@ public sealed class ProfiledJwtIssuer(IJsonWebTokenCreator creator)
         var keyManagement = keyEncryptionAlgorithm ?? EncryptionAlgorithms.KeyManagement.RsaOaep256;
         if (!profile.PermitsKeyManagementAlgorithm(keyManagement))
         {
-            throw new InvalidOperationException(
-                $"The token would be encrypted with {keyManagement}, which the security profile in force forbids");
+            throw new AlgorithmRefusedByProfileException(
+                $"The token would be encrypted with {keyManagement}, which the security profile in force forbids",
+                keyManagement,
+                encryptionKey);
         }
 
         return contentEncryptionAlgorithm is null
