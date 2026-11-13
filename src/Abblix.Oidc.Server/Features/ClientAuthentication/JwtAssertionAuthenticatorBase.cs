@@ -29,8 +29,8 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="logger">logger for recording the authentication process and any issues encountered.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 /// <param name="timeProvider">Judges the assertion's timestamps against the client's own profile.</param>
-/// <param name="serviceProvider">Resolves, per request, where the transport serves the token endpoint, for a client
-/// allowed that URL as its assertion's audience.</param>
+/// <param name="serviceProvider">Resolves, per request, where the transport serves the token and backchannel
+/// authentication endpoints, for a client allowed such a URL as its assertion's audience.</param>
 public abstract partial class JwtAssertionAuthenticatorBase(
     ILogger logger,
     IReplayCache replayCache,
