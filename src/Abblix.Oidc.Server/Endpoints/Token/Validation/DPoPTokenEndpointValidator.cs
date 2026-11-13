@@ -105,6 +105,19 @@ public partial class DPoPTokenEndpointValidator(
 
         var proof = proofResult.GetSuccess();
 
+        // FAPI 2.0 section 5.4.1, FAPI 1.0 Part 2 section 8.6: a JWS the server processes uses only the profile's
+        // algorithms, and a DPoP proof is one; the proof validator is the client's to share, so the client's profile
+        // is asked here, where the client is known
+        if (!SecurityProfileRequirements
+                .For(context.ClientInfo, tenant.DefaultSecurityProfile)
+                .PermitsSigningAlgorithm(proof.Token.Header.Algorithm))
+        {
+            LogProofRejected(ProofErrorReasons.InvalidAlgorithm);
+            return new OidcError(
+                ErrorCodes.InvalidDPoPProof,
+                "The DPoP proof is signed with an algorithm the client's security profile does not admit.");
+        }
+
         if (options.CurrentValue.DPoP.Nonce.RequireAtTokenEndpoint)
         {
             var nonceError = await EnforceNonceAsync(tenant, proof);

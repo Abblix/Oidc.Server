@@ -419,4 +419,27 @@ public class DPoPTokenEndpointValidatorTests
         Assert.Equal(FreshNonce, nonceError.Nonce);
         Assert.Null(context.ProofKeyThumbprint);
     }
+
+    /// <summary>
+    /// FAPI 2.0 section 5.4.1 has the server, "when creating or processing JWTs", "use PS256, ES256, or EdDSA", and
+    /// FAPI 1.0 Part 2 section 8.6 has it use PS256 or ES256 for any JWS: a DPoP proof signed RS256 by a client held to
+    /// either profile is refused at the token endpoint, ES256 passes, and a client held to no profile keeps RS256.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.RS256, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.RS256, false)]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.ES256, true)]
+    [InlineData(null, SigningAlgorithms.RS256, true)]
+    public async Task ValidateAsync_TheClientsProfile_DecidesTheProofAlgorithm(
+        ClientSecurityProfile? profile, string algorithm, bool accepted)
+    {
+        var proof = BuildProof();
+        proof.Token.Header.Algorithm = algorithm;
+        SetupProofValidatorSuccess(proof);
+        var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: false, securityProfile: profile);
+
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(accepted ? null : ErrorCodes.InvalidDPoPProof, error?.Error);
+    }
 }

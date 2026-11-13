@@ -378,14 +378,16 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
     private const string DPoPHeader = "DPoP";
 
     /// <summary>
-    /// A DPoP proof (RFC 9449 section 4.2) for one request, signed ES256 with a fresh key carried in its header.
+    /// A DPoP proof (RFC 9449 section 4.2) for one request, signed with a fresh key carried in its header.
     /// </summary>
-    private async Task<string> DPoPProofAsync(HttpMethod method, Uri target)
+    private async Task<string> DPoPProofAsync(HttpMethod method, Uri target, string algorithm = SigningAlgorithms.ES256)
     {
-        var key = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
+        JsonWebKey key = algorithm == SigningAlgorithms.ES256
+            ? JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256)
+            : JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, algorithm);
         var proof = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.ES256, Type = JsonWebTokenTypes.DPoPProof },
+            Header = { Algorithm = algorithm, Type = JsonWebTokenTypes.DPoPProof },
             Payload =
             {
                 JwtId = Guid.NewGuid().ToString("N"),
@@ -615,5 +617,34 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
             await AssertSentToLogin(response);
         else
             Assert.Equal(expectedError, await ErrorOf(response));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6 has the server use PS256 or ES256 for any JWS it processes, a DPoP proof among them:
+    /// at the token endpoint a proof signed RS256 is refused with invalid_dpop_proof, while the same request with an
+    /// ES256 proof goes on to be refused for its code.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, ErrorCodes.InvalidDPoPProof)]
+    [InlineData(SigningAlgorithms.ES256, ErrorCodes.InvalidGrant)]
+    public async Task TheDPoPProof_IsJudgedByItsAlgorithm(string algorithm, string expectedError)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, Acme + "/connect/token")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+                [TokenRequest.Parameters.Code] = "no-such-code",
+                [TokenRequest.Parameters.RedirectUri] = RedirectUri,
+                [ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer,
+                [ClientRequest.Parameters.ClientAssertion] = await ClientAssertionAsync(),
+            }),
+        };
+        request.Headers.Add(
+            DPoPHeader, await DPoPProofAsync(HttpMethod.Post, new Uri(Host + Acme + "/connect/token"), algorithm));
+
+        var response = await _http!.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedError, await ErrorOf(response));
     }
 }

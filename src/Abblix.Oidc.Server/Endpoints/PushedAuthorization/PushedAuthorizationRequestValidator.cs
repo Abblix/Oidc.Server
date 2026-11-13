@@ -64,7 +64,10 @@ public class PushedAuthorizationRequestValidator(
                 $"{RequestUri} is prohibited to use in pushed authorization request");
         }
 
-        var dpopResult = await ResolveProofKeyThumbprintAsync(clientRequest, authorizationRequest);
+        var dpopResult = await ResolveProofKeyThumbprintAsync(
+            clientRequest,
+            authorizationRequest,
+            SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile));
         if (dpopResult.TryGetFailure(out var dpopError))
             return dpopError;
 
@@ -112,7 +115,7 @@ public class PushedAuthorizationRequestValidator(
     /// back-filled) request on success.
     /// </summary>
     private async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> ResolveProofKeyThumbprintAsync(
-        ClientRequest clientRequest, AuthorizationRequest authorizationRequest)
+        ClientRequest clientRequest, AuthorizationRequest authorizationRequest, SecurityProfileRequirements profile)
     {
         if (clientRequest.DPoPProof is not { } proofJwt)
             return authorizationRequest;
@@ -126,7 +129,17 @@ public class PushedAuthorizationRequestValidator(
                 $"DPoP proof rejected ({proofError.Reason}).");
         }
 
-        var derived = proofResult.GetSuccess().ProofKeyThumbprint;
+        // FAPI 2.0 section 5.4.1, FAPI 1.0 Part 2 section 8.6: a JWS the server processes uses only the profile's
+        // algorithms, and a DPoP proof is one
+        var proof = proofResult.GetSuccess();
+        if (!profile.PermitsSigningAlgorithm(proof.Token.Header.Algorithm))
+        {
+            return ErrorFactory.ValidationError(
+                ErrorCodes.InvalidDPoPProof,
+                "The DPoP proof is signed with an algorithm the client's security profile does not admit.");
+        }
+
+        var derived = proof.ProofKeyThumbprint;
         if (authorizationRequest.ProofKeyThumbprint is { } committed)
         {
             if (committed != derived)

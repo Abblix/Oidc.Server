@@ -243,7 +243,8 @@ public sealed record SecurityProfileRequirements
     /// <para>
     /// What the client signs is judged where it is verified: request objects, client authentication assertions and
     /// CIBA login hint tokens in <c>Features.Tokens.Validation.ClientJwtValidator</c>, and JWT bearer grant
-    /// assertions in <c>Endpoints.Token.Grants.JwtBearerAssertionPolicy</c>. A DPoP proof is not judged by it.
+    /// assertions in <c>Endpoints.Token.Grants.JwtBearerAssertionPolicy</c>, and DPoP proofs where the client is known:
+    /// at the pushed authorization request endpoint and at the token endpoint.
     /// </para>
     /// <para>
     /// What the server signs for the client is judged on the client's configuration, by
