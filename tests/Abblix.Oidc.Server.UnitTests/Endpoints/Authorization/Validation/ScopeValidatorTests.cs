@@ -147,6 +147,60 @@ public class ScopeValidatorTests
     }
 
     /// <summary>
+    /// A default carrying offline_access is served without it where the server ignores it, as a request naming it
+    /// would be, so the resource validator, asking the same answer before the scope validator runs, never settles
+    /// resources for a scope the request is not served with. Received, it stays.
+    /// </summary>
+    [Theory]
+    [InlineData(false, new[] { Scopes.OpenId })]
+    [InlineData(true, new[] { Scopes.OpenId, Scopes.OfflineAccess })]
+    public void ServedScope_OfADefaultCarryingOfflineAccess_LeavesItOutWhereIgnored(
+        bool promptConsent, string[] expected)
+    {
+        var context = CreateContext(
+            [],
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: promptConsent ? [Prompts.Consent] : null);
+        context.ClientInfo.DefaultScope = [Scopes.OpenId, Scopes.OfflineAccess];
+
+        Assert.Equal(expected, context.ServedScope());
+    }
+
+    /// <summary>
+    /// An offline_access the server ignores is as if never asked for, so a request naming it alone named no scope:
+    /// it is served the client's default on the first pass, marked as not named, and the same request read back from
+    /// a page answers the same, rather than nothing by value and the default after a page. Received, it is a scope
+    /// the client named.
+    /// </summary>
+    [Theory]
+    [InlineData(false, new[] { Scopes.OpenId }, true)]
+    [InlineData(true, new[] { Scopes.OfflineAccess }, false)]
+    public async Task ValidateAsync_OfflineAccessAlone_IsServedAlikeOnEveryPass(
+        bool promptConsent, string[] expectedScope, bool expectedNamedNoScope)
+    {
+        var context = CreateContext(
+            [Scopes.OfflineAccess],
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: promptConsent ? [Prompts.Consent] : null);
+        context.ClientInfo.DefaultScope = [Scopes.OpenId];
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+        Assert.Equal(expectedScope, context.Request.Scope);
+        Assert.Equal(expectedNamedNoScope, context.Request.ClientNamedNoScope);
+
+        var readBack = CreateContext(
+            context.Request.Scope,
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: promptConsent ? [Prompts.Consent] : null);
+        readBack.ClientInfo.DefaultScope = [Scopes.OpenId];
+        readBack.Request = readBack.Request with { ClientNamedNoScope = context.Request.ClientNamedNoScope };
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, readBack));
+        Assert.Equal(expectedScope, readBack.Request.Scope);
+        Assert.Equal(expectedNamedNoScope, readBack.Request.ClientNamedNoScope);
+    }
+
+    /// <summary>
     /// OpenID Connect Core 1.0, sections 11 and 17.4: a request returning an authorization code and no access token
     /// through the user agent receives offline_access when it asks for consent with prompt=consent, or when the
     /// client is configured to receive it without, and has it ignored otherwise, the rest of the request going on.

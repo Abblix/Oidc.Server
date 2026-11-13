@@ -38,28 +38,28 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 	/// </returns>
 	protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
 	{
+		// An offline_access the server ignores is set aside before deciding whether the request named a scope at all,
+		// so a request naming it alone is served the default on every route, and the resources the resource validator
+		// settled before this are those of the same served scope
+		var named = context.NamedScope();
+
 		// The request goes on with the scope it is served with, so what follows, the host's consent provider
 		// included, reads the default a request naming none was given
-		if (context.ClientInfo.ScopeServedFor(context.Request.Scope) is not { } scope)
+		if (context.ServedScope(named) is not { } scope)
 			return context.InvalidScope(ScopeRefusals.NoneNamed);
 
-		context.Request = context.Request with { Scope = scope };
-
-		if (context.Request.Scope.Contains(Scopes.OfflineAccess))
+		// A request coming back from a page already carries the default it was served with, so whether the client
+		// named a scope is kept from the first pass rather than read again from a scope that is no longer empty
+		context.Request = context.Request with
 		{
-			// Ignored as if never asked for, so the host's consent provider, reading the request, is not shown it
-			if (!OfflineAccessReceived(context))
-			{
-				context.Request = context.Request with
-				{
-					Scope = [.. context.Request.Scope.Where(value => value != Scopes.OfflineAccess)],
-				};
-			}
-			else if (!context.ClientInfo.OfflineAccess.IsAllowed())
-			{
-				return context.InvalidScope("This client is not allowed to request for offline access");
-			}
-		}
+			Scope = scope,
+			ClientNamedNoScope = context.Request.ClientNamedNoScope || named.Length == 0,
+		};
+
+		// The served scope already leaves out an offline_access the server ignores, so the host's consent provider,
+		// reading the request, is not shown it; one still here is received, and refused for a client not allowed it
+		if (scope.Contains(Scopes.OfflineAccess) && !context.ClientInfo.OfflineAccess.IsAllowed())
+			return context.InvalidScope("This client is not allowed to request for offline access");
 
 		if (!scopeManager.Validate(tenant, 
 			    context.Request.Scope,
@@ -74,26 +74,4 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 	    context.Scope = scopeDefinitions;
         return null;
     }
-
-	/// <summary>
-	/// Whether the request is processed with the <c>offline_access</c> it asks for, rather than with that scope
-	/// ignored. OpenID Connect Core 1.0 has the server ignore it unless the response returns an authorization code
-	/// (section 11), when the response carries an access token through the user agent (section 17.4), and unless
-	/// the request asks for consent with <c>prompt=consent</c> or the client is configured to receive offline
-	/// access without it (section 11). The second condition is lifted for a client the host lets keep receiving
-	/// offline access beside such a token (<see cref="ClientInfo.AllowOfflineAccessWithUserAgentAccessToken"/>).
-	/// </summary>
-	private static bool OfflineAccessReceived(AuthorizationValidationContext context)
-		=> context.FlowType.HasFlag(FlowTypes.AuthorizationCode)
-		   && AccessTokenAdmitsOfflineAccess(context)
-		   && (context.Request.Prompt?.Contains(Prompts.Consent, StringComparer.Ordinal) is true
-		       || context.ClientInfo.OfflineAccess.IsAllowedWithoutConsentPrompt());
-
-	/// <summary>
-	/// Whether the access token the response carries, if any, may sit beside offline access: one returned through the
-	/// user agent may not (OpenID Connect Core 1.0 section 17.4), unless the host lets this client have it anyway.
-	/// </summary>
-	private static bool AccessTokenAdmitsOfflineAccess(AuthorizationValidationContext context)
-		=> !context.Request.ResponseType.HasFlag(ResponseTypes.Token)
-		   || context.ClientInfo.AllowOfflineAccessWithUserAgentAccessToken;
 }

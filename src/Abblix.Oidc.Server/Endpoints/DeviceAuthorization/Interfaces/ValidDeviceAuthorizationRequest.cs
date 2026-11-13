@@ -31,6 +31,7 @@ public record ValidDeviceAuthorizationRequest
         Scope = AuthorizationContext.GetScopeNames(context.Scope, context.Resources);
         Resources = context.Resources.Select(r => r.Resource).ToArray();
         AuthorizationDetails = context.AuthorizationDetails;
+        ClientNamedNoScope = context.Request.Scope is not { Length: > 0 };
     }
 
     /// <summary>
@@ -59,4 +60,9 @@ public record ValidDeviceAuthorizationRequest
     /// user-verification step can carry it onto the eventual <c>AuthorizedGrant</c>.
     /// </summary>
     public JsonArray? AuthorizationDetails { get; }
+
+    /// <summary>
+    /// Whether the client named no scope, so <see cref="Scope"/> is the default the server served it with.
+    /// </summary>
+    public bool ClientNamedNoScope { get; }
 }

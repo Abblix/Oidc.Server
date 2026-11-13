@@ -148,6 +148,10 @@ public class BackChannelAuthenticationRequestProcessor(
 			// grant byte-exact, so the access token issued via the CIBA grant emits the
 			// claim through the same pipeline as the authorization-code flow.
 			AuthorizationDetails = requestedDetails,
+
+			// The request as the client sent it, which the scope validator served with the default without
+			// rewriting
+			ClientNamedNoScope = request.Model.Scope is not { Length: > 0 },
 		};
 
 		var authorizedGrant = new AuthorizedGrant(authSession, authContext);

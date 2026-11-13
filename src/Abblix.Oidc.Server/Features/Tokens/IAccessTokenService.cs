@@ -39,7 +39,8 @@ public interface IAccessTokenService
 	/// <returns>A task that represents the asynchronous create operation.
 	/// The task result contains the newly created <see cref="JsonWebToken"/>, which must carry its issue time and
 	/// its expiry: the token endpoint reports the lifetime between them as <c>expires_in</c>, and fails the request
-	/// when either is missing.</returns>
+	/// when either is missing. It must also carry the scope it was issued with, since the token endpoint answers a
+	/// request whose named scopes left the token none with <c>invalid_scope</c>.</returns>
 	Task<EncodedJsonWebToken> CreateAccessTokenAsync(
 		TenantDefinition tenant,
 		AuthSession authSession,

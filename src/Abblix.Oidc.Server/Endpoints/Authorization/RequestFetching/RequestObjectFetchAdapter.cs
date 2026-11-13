@@ -57,6 +57,7 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
                 PushedRequestUri = request.PushedRequestUri,
                 OriginRequestUri = request.OriginRequestUri,
                 Prompted = request.Prompted,
+                ClientNamedNoScope = request.ClientNamedNoScope,
                 ResponseMode = string.IsNullOrWhiteSpace(merged.ResponseMode) ? null : merged.ResponseMode,
             }))
             .MapFailure(error => ErrorFactory.ValidationError(error.Error, error.ErrorDescription));

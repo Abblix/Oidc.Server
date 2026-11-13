@@ -121,6 +121,11 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
         {
             SingleResourceAccessTokens = true,
         },
+        Mint(TestConstants.DefaultScopeCodeClientId, secret, redirect, allowlist: null, idTokenRar: false) with
+        {
+            DefaultScope = [TestConstants.ApiScope],
+            OfflineAccess = OfflineAccess.ConsentRequired,
+        },
 
         // RFC 6749 section 4.4 client_credentials client, used to verify that an RFC 8707 resource
         // indicator reaches the issued access token's aud. This grant has no user-agent leg, so

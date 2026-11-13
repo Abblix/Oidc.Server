@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 /// Unit tests for <see cref="TokenRequestProcessor"/> verifying token issuance logic
 /// per OAuth 2.0 and OpenID Connect specifications.
 /// </summary>
-public class TokenRequestProcessorTests
+public partial class TokenRequestProcessorTests
 {
     private readonly Mock<IAccessTokenService> _accessTokenService;
     private readonly Mock<IRefreshTokenService> _refreshTokenService;
@@ -88,12 +88,19 @@ public class TokenRequestProcessorTests
 
     private static readonly DateTimeOffset AccessTokenIssuedAt = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
 
+    private const string AccessTokenScope = "api.read";
+
     private static EncodedJsonWebToken CreateAccessToken() => CreateAccessToken(TimeSpan.FromMinutes(10));
 
-    private static EncodedJsonWebToken CreateAccessToken(TimeSpan lifetime) => new(
+    private static EncodedJsonWebToken CreateAccessToken(TimeSpan lifetime, string[]? scope = null) => new(
         new Jwt.JsonWebToken
         {
-            Payload = { IssuedAt = AccessTokenIssuedAt, ExpiresAt = AccessTokenIssuedAt + lifetime },
+            Payload =
+            {
+                IssuedAt = AccessTokenIssuedAt,
+                ExpiresAt = AccessTokenIssuedAt + lifetime,
+                Scope = scope ?? [AccessTokenScope],
+            },
         },
         "access_token_jwt");
 

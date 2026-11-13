@@ -38,4 +38,25 @@ public class ValidDeviceAuthorizationRequestTests
 
         Assert.Equal([Scopes.OpenId, resourceScope], valid.Scope);
     }
+
+    /// <summary>
+    /// The scope served is the client's default when the request names none, so the validated request says which
+    /// it was: the scope it carries cannot tell, being filled either way.
+    /// </summary>
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(new string[0], true)]
+    [InlineData(new[] { Scopes.OpenId }, false)]
+    public void WhetherTheClientNamedAScope_IsReadFromTheRequestAsSent(string[]? named, bool expected)
+    {
+        var context = new DeviceAuthorizationValidationContext(new WireRequest { Scope = named }, new ClientRequest())
+        {
+            ClientInfo = new ClientInfo("device_client"),
+            Scope = [new ScopeDefinition(Scopes.OpenId)],
+        };
+
+        var valid = new ValidDeviceAuthorizationRequest(context);
+
+        Assert.Equal(expected, valid.ClientNamedNoScope);
+    }
 }

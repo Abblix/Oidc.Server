@@ -38,7 +38,9 @@ public class ResourceValidator(IResourceManager resourceManager)
     {
         var request = context.Request;
         var requested = request.Resources;
-        var scope = context.ClientInfo.ScopeServedFor(request.Scope) ?? [];
+        // The scope the scope validator then serves the request with, asked of the same answer, so the resources
+        // settled here belong to it
+        var scope = context.ServedScope() ?? [];
 
         if (requested is not { Length: > 0 })
         {
