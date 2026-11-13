@@ -223,7 +223,9 @@ public sealed record SecurityProfileRequirements
     /// What the server signs for the client is judged on the client's configuration, by
     /// <see cref="SecurityProfileConsistency"/> at startup, at registration and where the client authenticates: the
     /// algorithms of its ID tokens, logout tokens and JWT authorization, userinfo and introspection responses. A
-    /// registration naming none of the first two is given PS256 for them. A client added to the store with others
+    /// registration naming none of the first two is given one a signing key of the tenant produces, by
+    /// <c>Endpoints.DynamicClientManagement.Validation.ProfileSigningKeysValidator</c>, and a static client is checked
+    /// against the tenant's keys at startup. A client added to the store with others
     /// is refused only where it authenticates, so what the authorization endpoint signs for it before then is what it
     /// was configured with. The tokens this server signs for itself, such as JWT access tokens, take the algorithm
     /// the deployment configures and no client's.
@@ -243,13 +245,6 @@ public sealed record SecurityProfileRequirements
     /// <param name="algorithm">The <c>alg</c> of the JWS, or null where it names none.</param>
     public bool PermitsSigningAlgorithm(string? algorithm)
         => !RequireFapiSigningAlgorithms || FapiSigningAlgorithms.Contains(algorithm, StringComparer.Ordinal);
-
-    /// <summary>
-    /// The algorithm a registration naming none is given for what this server signs for it, or null where the
-    /// registration keeps the default OpenID Connect Dynamic Client Registration section 2 names.
-    /// </summary>
-    internal string? SigningAlgorithmForAnUnnamedSetting()
-        => RequireFapiSigningAlgorithms ? SigningAlgorithms.PS256 : null;
 
     /// <summary>
     /// The request object lifetime the FAPI profiles bound a request object to.

@@ -118,8 +118,6 @@ public partial class RegisterClientRequestProcessor(
             .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
                 SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
-            .WithSigningAlgorithmForAnUnnamedSetting(
-                SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile).SigningAlgorithmForAnUnnamedSetting())
             .WithClientSecrets(ToClientSecrets(model.TokenEndpointAuthMethod, credentials))
             .Build();
 

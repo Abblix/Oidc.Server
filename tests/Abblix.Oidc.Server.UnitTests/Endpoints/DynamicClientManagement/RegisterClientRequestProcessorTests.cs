@@ -144,43 +144,6 @@ public class RegisterClientRequestProcessorTests
     }
 
     /// <summary>
-    /// A registration naming no signature algorithm for its ID tokens or JWT authorization responses keeps the RS256
-    /// of OpenID Connect Dynamic Client Registration section 2 where no profile bounds them, and is given PS256 at a
-    /// tenant held to FAPI 1.0 Advanced, whose Part 2 section 8.6 names only PS256 and ES256; the answer states it.
-    /// One naming its own keeps it.
-    /// </summary>
-    [Theory]
-    [InlineData(ClientSecurityProfile.None, null, SigningAlgorithms.RS256)]
-    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, SigningAlgorithms.PS256)]
-    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.ES256, SigningAlgorithms.ES256)]
-    public async Task ARegistrationNamingNoAlgorithm_TakesOneItsProfileAdmits(
-        ClientSecurityProfile profile, string? named, string taken)
-    {
-        RegisteredClient? stored = null;
-        _clients
-            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
-            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
-            .ReturnsAsync(true);
-        var request = new ValidClientRegistrationRequest(
-            new ClientRegistrationRequest
-            {
-                ClientId = "client-1",
-                RedirectUris = [new Uri("https://client.example.com/cb")],
-                IdTokenSignedResponseAlg = named,
-                AuthorizationSignedResponseAlg = named,
-            },
-            SectorIdentifier: null);
-        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
-
-        var result = await Processor().ProcessAsync(tenant, request);
-
-        Assert.True(result.TryGetSuccess(out var response));
-        Assert.Equal(taken, stored!.ClientInfo.IdentityTokenSignedResponseAlgorithm);
-        Assert.Equal(taken, stored.ClientInfo.AuthorizationSignedResponseAlgorithm);
-        Assert.Equal(taken, response.Metadata.IdTokenSignedResponseAlg);
-    }
-
-    /// <summary>
     /// A registered client takes the host's grant of offline access beside an access token carried through the user
     /// agent, which registration metadata has no member for.
     /// </summary>

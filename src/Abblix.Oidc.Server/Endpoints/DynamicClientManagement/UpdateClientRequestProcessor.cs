@@ -62,8 +62,6 @@ public class UpdateClientRequestProcessor(
             .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
                 SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
-            .WithSigningAlgorithmForAnUnnamedSetting(
-                SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile).SigningAlgorithmForAnUnnamedSetting())
             .WithClientSecrets(existingClient.ClientSecrets)
             .Build();
 

@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi;
@@ -29,6 +30,8 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
+
+using RegistrationParameters = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -76,7 +79,12 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
         builder.Services.AddConsentGrantedForEveryClient();
-        builder.Services.AddOidcServices(_ => { });
+        builder.Services.AddDynamicClientRegistration();
+        builder.Services.AddOidcServices(options =>
+        {
+            options.EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.RegisterClient;
+            options.RequireInitialAccessToken = false;
+        });
         builder.Services.Configure<OidcOptions>(options => options.Tenants.Add(Tenant));
 
         _app = builder.Build();
@@ -368,5 +376,84 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         request[AuthorizationRequest.Parameters.ClientId] = storedClientId;
 
         Assert.Equal(ErrorCodes.UnauthorizedClient, await ErrorOf(await AuthorizeAsync(request, clientId: storedClientId)));
+    }
+
+    /// <summary>
+    /// A client registering at this tenant without naming its signature algorithms is given one the tenant's RSA key
+    /// produces and FAPI 1.0 Part 2 section 8.6 admits, and the registration response says which.
+    /// </summary>
+    [Fact]
+    public async Task ARegistrationNamingNoAlgorithm_IsGivenOneTheTenantsKeyProduces()
+    {
+        var response = await _http!.PostAsync(
+            Acme + "/connect/register",
+            new StringContent(
+                new JsonObject
+                {
+                    [RegistrationParameters.RedirectUris] = new JsonArray { RedirectUri },
+                    [RegistrationParameters.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+                    [RegistrationParameters.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+                    [RegistrationParameters.TokenEndpointAuthMethod] = ClientAuthenticationMethods.PrivateKeyJwt,
+                    [RegistrationParameters.Jwks] = JsonSerializer.SerializeToNode(
+                        new JsonWebKeySet([ClientKey.Sanitize(includePrivateKeys: false)])),
+                }.ToJsonString(),
+                Encoding.UTF8,
+                "application/json"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var registered = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(
+            SigningAlgorithms.PS256,
+            registered[RegistrationParameters.IdTokenSignedResponseAlg]!.GetValue<string>());
+        Assert.Equal(
+            SigningAlgorithms.PS256,
+            registered[RegistrationParameters.AuthorizationSignedResponseAlg]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A tenant holding only a P-256 key and declaring a client configured for PS256 does not start: no key of it
+    /// produces the algorithm, and the first ID token would otherwise fail as a server error. The same tenant with the
+    /// client configured for ES256 starts, which is what shows the refusal is about the algorithm.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.PS256, false)]
+    [InlineData(SigningAlgorithms.ES256, true)]
+    public async Task ATenantWhoseKeysCannotSignForItsClient_DoesNotStart(string algorithm, bool starts)
+    {
+        var client = Client();
+        client.IdentityTokenSignedResponseAlgorithm = algorithm;
+        client.AuthorizationSignedResponseAlgorithm = algorithm;
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddDistributedMemoryCache();
+        builder.Services.AddMemoryCache();
+        builder.Services.AddAuthentication().AddCookie();
+        builder.Services.AddAuthorization();
+        builder.Services.AddConsentGrantedForEveryClient();
+        builder.Services.AddOidcServices(_ => { });
+        builder.Services.Configure<OidcOptions>(options => options.Tenants.Add(new TenantDefinition
+        {
+            Id = "acme",
+            Issuer = new Uri(Host + Acme),
+            DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced,
+            Clients = [client],
+            SigningKeys = [JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256)],
+        }));
+        await using var app = builder.Build();
+
+        var start = await Record.ExceptionAsync(() =>
+        {
+            app.UseMultiTenancy();
+            app.UseCors();
+            app.UseAuthorization();
+            app.MapOidcEndpoints();
+            return app.StartAsync(TestContext.Current.CancellationToken);
+        });
+
+        if (starts)
+            Assert.Null(start);
+        else
+            Assert.IsType<Microsoft.Extensions.Options.OptionsValidationException>(start);
     }
 }
