@@ -120,16 +120,18 @@ public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(fact
     /// request carries the parameter.
     /// </summary>
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task A_token_in_the_header_and_as_a_parameter_is_an_invalid_request(bool parameterInForm)
+    [InlineData(TokenTypes.Bearer, true)]
+    [InlineData(TokenTypes.Bearer, false)]
+    [InlineData(TokenTypes.Basic, true)]
+    [InlineData(TokenTypes.Basic, false)]
+    public async Task A_token_in_the_header_and_as_a_parameter_is_an_invalid_request(string scheme, bool parameterInForm)
     {
         var (client, endpoint, accessToken) = await ObtainAccessTokenAsync();
 
         using var request = parameterInForm
             ? new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = TokenInForm(accessToken) }
             : new HttpRequestMessage(HttpMethod.Get, WithTokenInQuery(endpoint, accessToken));
-        request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue(scheme, accessToken);
 
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 

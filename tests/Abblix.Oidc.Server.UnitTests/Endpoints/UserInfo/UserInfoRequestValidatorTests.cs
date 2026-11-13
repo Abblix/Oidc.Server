@@ -228,13 +228,20 @@ public class UserInfoRequestValidatorTests
     /// invalid_request, so the token in the Authorization header and again as a parameter, of the body or of the
     /// query, is refused as one.
     /// </summary>
+    /// <remarks>
+    /// A header of a scheme this endpoint does not speak counts too: the request carries a token, so it does not lack
+    /// authentication information and is not owed the bare challenge section 3.1 keeps for one that does.
+    /// </remarks>
     [Theory]
-    [InlineData("token_in_param", null)]
-    [InlineData(null, "token_in_param")]
-    public async Task ValidateAsync_WithTokenInHeaderAndParameter_IsInvalidRequest(string? inForm, string? inQuery)
+    [InlineData(TokenTypes.Bearer, "token_in_param", null)]
+    [InlineData(TokenTypes.Bearer, null, "token_in_param")]
+    [InlineData(TokenTypes.Basic, "token_in_param", null)]
+    [InlineData(TokenTypes.Basic, null, "token_in_param")]
+    public async Task ValidateAsync_WithTokenInHeaderAndParameter_IsInvalidRequest(
+        string scheme, string? inForm, string? inQuery)
     {
         var userInfoRequest = CreateUserInfoRequest(inForm, inQuery);
-        var authHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "token_in_header");
+        var authHeader = new AuthenticationHeaderValue(scheme, "token_in_header");
         var clientRequest = CreateClientRequest(authHeader: authHeader);
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);

@@ -196,6 +196,15 @@ public class UserInfoRequestValidator(
 				$"or '{Parameters.AccessToken}' parameter, but none of them specified");
 		}
 
+		// RFC 6750 section 3.1: the header and a parameter together are "more than one method for including an access
+		// token", an invalid_request like the body and the query together above. Decided before the scheme, since a
+		// request carrying a token does not lack authentication information whatever its header names
+		if (parameter != null)
+			return new OidcError(
+				ErrorCodes.InvalidRequest,
+				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
+				$"or '{Parameters.AccessToken}' parameter, but not in both sources at the same time");
+
 		// RFC 9449 section 7.1: DPoP-bound access tokens are presented via the DPoP scheme. The actual scheme/binding
 		// compatibility check runs after JWT parse so we can inspect cnf.jkt - here we only reject unknown schemes.
 		// RFC 6750 section 3.1: a request "attempted using an unsupported authentication method" lacks authentication
@@ -203,14 +212,6 @@ public class UserInfoRequestValidator(
 		if (!authorizationHeader.HasScheme(TokenTypes.Bearer) && !authorizationHeader.HasScheme(TokenTypes.DPoP))
 			return new MissingAuthenticationError(
 				$"The scheme name '{authorizationHeader.Scheme}' is not supported");
-
-		// RFC 6750 section 3.1: the header and a parameter together are "more than one method for including an access
-		// token", an invalid_request like the body and the query together above
-		if (parameter != null)
-			return new OidcError(
-				ErrorCodes.InvalidRequest,
-				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
-				$"or '{Parameters.AccessToken}' parameter, but not in both sources at the same time");
 
 		// RFC 6750 section 2.1: the credentials are "Bearer" 1*SP b64token, so the scheme alone is a malformed request,
 		// which section 3.1 names invalid_request, rather than a token found invalid
