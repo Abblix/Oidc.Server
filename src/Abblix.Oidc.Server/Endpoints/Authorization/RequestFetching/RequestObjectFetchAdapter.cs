@@ -49,11 +49,14 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
 
         // The merge rebuilds the request from its wire form, which leaves out what the server set on the request it
         // stored: carried over, or a pushed request_uri is never consumed and a stored request never learns the end
-        // user was sent to log in. A response mode that is empty or whitespace alone is none, as both hosts read
-        // the same value in the query
+        // user was sent to log in. Strict processing (RFC 9101 section 6.3) rebuilds it from the object alone, which
+        // also drops the request parameter carrying that object, so the validated object is carried on too:
+        // without it a client required to sign its request objects is refused for having sent one. A response mode
+        // that is empty or whitespace alone is none, as both hosts read the same value in the query
         return fetchResult
             .Bind(merged => ValidateMergedParameters(request, merged with
             {
+                Request = request.Request,
                 PushedRequestUri = request.PushedRequestUri,
                 OriginRequestUri = request.OriginRequestUri,
                 Prompted = request.Prompted,
