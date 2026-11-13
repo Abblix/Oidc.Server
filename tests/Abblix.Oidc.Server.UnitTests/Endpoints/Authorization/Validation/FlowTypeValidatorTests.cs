@@ -798,4 +798,51 @@ public class FlowTypeValidatorTests
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
     }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require the response_type value code id_token, or the
+    /// response_type value code in conjunction with the response_mode value jwt". Every other combination is
+    /// refused for a client held to that profile, with the unsupported_response_type RFC 6749 section 4.1.2.1 names,
+    /// and only those two pass.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { ResponseTypes.Code }, null, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code }, ResponseModes.Query, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code }, ResponseModes.QueryJwt, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code, ResponseTypes.Token }, null, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code, ResponseTypes.IdToken, ResponseTypes.Token }, null, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.IdToken }, null, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code }, ResponseModes.Jwt, null)]
+    [InlineData(new[] { ResponseTypes.Code, ResponseTypes.IdToken }, null, null)]
+    [InlineData(new[] { ResponseTypes.IdToken, ResponseTypes.Code }, ResponseModes.Fragment, null)]
+    public async Task ValidateAsync_Fapi1Advanced_AdmitsOnlyASignedResponse(
+        string[] responseType, string? responseMode, string? expectedError)
+    {
+        var context = CreateContext(
+            responseType,
+            [responseType],
+            responseMode,
+            securityProfile: ClientSecurityProfile.Fapi1Advanced);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
+    /// Where both FAPI profiles hold the client, code with the JWT response mode is what remains: FAPI 2.0 refuses
+    /// code id_token, FAPI 1.0 Advanced refuses plain code, and neither refuses the other's answer.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_BothFapiProfiles_AdmitCodeWithTheJwtResponseMode()
+    {
+        var context = CreateContext(
+            [ResponseTypes.Code],
+            [[ResponseTypes.Code]],
+            ResponseModes.Jwt,
+            securityProfile: ClientSecurityProfile.Fapi1Advanced);
+        var fapi2Tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant();
+
+        Assert.Null(await _validator.ValidateAsync(fapi2Tenant, context));
+    }
 }

@@ -133,6 +133,20 @@ public sealed record SecurityProfileRequirements
     public bool RequireCodeResponseTypeOnly { get; init; }
 
     /// <summary>
+    /// The profile admits only an authorization response the server signs: the response type <c>code id_token</c>,
+    /// whose ID token is the response's detached signature, or the response type <c>code</c> with the response mode
+    /// <c>jwt</c> (JARM). FAPI 1.0 Part 2 section 5.2.2 has the server "require the response_type value code
+    /// id_token, or the response_type value code in conjunction with the response_mode value jwt". Enforced by
+    /// <c>Endpoints.Authorization.Validation.FlowTypeValidator</c>.
+    /// </summary>
+    /// <remarks>
+    /// The response mode is the one the clause names, <c>jwt</c>, and not the other JARM modes: the clause names one
+    /// value, and the others are what it leaves out. Held together with <see cref="RequireCodeResponseTypeOnly"/>,
+    /// code with the response mode <c>jwt</c> is what both admit.
+    /// </remarks>
+    public bool RequireSignedAuthorizationResponse { get; init; }
+
+    /// <summary>
     /// The profile requires strict RFC 9101 section 6.3 request-object processing: only the parameters inside the
     /// request object are used and any parameter passed outside it is ignored, instead of the OpenID Connect
     /// Core section 6.1 merge behavior. FAPI 2.0 mandates JWT-Secured Authorization Requests with this exclusivity.
@@ -229,12 +243,12 @@ public sealed record SecurityProfileRequirements
 
     /// <summary>
     /// FAPI 1.0 Part 2 section 5.2.2, the clauses this type has a control for: a signed request object, only its
-    /// parameters used, its nbf and exp bounded, sender-constrained access tokens, no public clients, and client
-    /// authentication by mutual TLS or private_key_jwt.
+    /// parameters used, its nbf and exp bounded, a signed authorization response, sender-constrained access tokens,
+    /// no public clients, and client authentication by mutual TLS or private_key_jwt.
     /// </summary>
     /// <remarks>
     /// Left off on purpose, because each would refuse a client that profile admits: the code-only response type
-    /// (the section requires <c>code id_token</c>, or <c>code</c> with JARM), Pushed Authorization Requests (which
+    /// (the section admits <c>code id_token</c> as well), Pushed Authorization Requests (which
     /// it "may support"), PKCE (it exempts the Baseline clause and asks PKCE with S256 only of a pushed request,
     /// which no control here expresses), and the clock window, assertion audience and rotation controls, which
     /// come from FAPI 2.0 and have no clause in FAPI 1.0.
@@ -245,6 +259,7 @@ public sealed record SecurityProfileRequirements
         RequireStrictRequestObjectProcessing = true,
         RequireSignedRequestObject = true,
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
+        RequireSignedAuthorizationResponse = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
     };
@@ -386,6 +401,7 @@ public sealed record SecurityProfileRequirements
         MaxClockSkew = ClockSkew.Fapi2Ceiling,
         DefaultClockSkew = ClockSkew.Fapi2,
         RequireCodeResponseTypeOnly = true,
+        RequireSignedAuthorizationResponse = true,
         RequireStrictRequestObjectProcessing = true,
         RequireSignedRequestObject = true,
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
@@ -457,6 +473,8 @@ public sealed record SecurityProfileRequirements
         RequirePushedAuthorizationRequests =
             RequirePushedAuthorizationRequests || other.RequirePushedAuthorizationRequests,
         RequireCodeResponseTypeOnly = RequireCodeResponseTypeOnly || other.RequireCodeResponseTypeOnly,
+        RequireSignedAuthorizationResponse =
+            RequireSignedAuthorizationResponse || other.RequireSignedAuthorizationResponse,
         RequireStrictRequestObjectProcessing =
             RequireStrictRequestObjectProcessing || other.RequireStrictRequestObjectProcessing,
         RequireSignedRequestObject = RequireSignedRequestObject || other.RequireSignedRequestObject,

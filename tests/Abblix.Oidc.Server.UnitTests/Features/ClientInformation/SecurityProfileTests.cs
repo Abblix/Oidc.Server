@@ -64,6 +64,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireStrictRequestObjectProcessing);
         Assert.Equal(TimeSpan.FromMinutes(60), requirements.MaxRequestObjectLifetime);
         Assert.False(requirements.RequireSignedRequestObject);
+        Assert.False(requirements.RequireSignedAuthorizationResponse);
     }
 
     /// <summary>
@@ -83,6 +84,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireSenderConstrainedTokens);
         Assert.True(requirements.RequireConfidentialClient);
         Assert.True(requirements.RequireKeyBasedClientAuthentication);
+        Assert.True(requirements.RequireSignedAuthorizationResponse);
     }
 
     /// <summary>
@@ -125,6 +127,7 @@ public class SecurityProfileTests
 
         Assert.True(requirements.RequireSignedRequestObject);
         Assert.True(requirements.RequireCodeResponseTypeOnly);
+        Assert.True(requirements.RequireSignedAuthorizationResponse);
         Assert.True(requirements.RequireStringAudienceInClientAssertion);
         Assert.Equal(ClockSkew.Fapi2Ceiling, requirements.MaxClockSkew);
     }

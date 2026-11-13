@@ -44,11 +44,11 @@ public enum ClientSecurityProfile
     /// <summary>
     /// The controls of the FAPI 1.0 Advanced Security Profile (Part 2, section 5.2.2) that the library enforces: a
     /// signed request object on every authorization request, only the parameters inside it used, its <c>nbf</c> and
-    /// <c>exp</c> bounded to 60 minutes, sender-constrained access tokens, and confidential clients authenticating by
-    /// mutual TLS or a private key JWT. PKCE, Pushed Authorization Requests and the response type are left to the
-    /// client's own settings, since the profile asks PKCE only of a pushed request and admits <c>code id_token</c>
-    /// as well as <c>code</c> with JARM. Selecting it does not by itself make a deployment conformant: the
-    /// algorithm and response type requirements of that profile are the host's to configure.
+    /// <c>exp</c> bounded to 60 minutes, an authorization response the server signs (<c>code id_token</c>, or
+    /// <c>code</c> with the <c>jwt</c> response mode), sender-constrained access tokens, and confidential clients
+    /// authenticating by mutual TLS or a private key JWT. PKCE and Pushed Authorization Requests are left to the
+    /// client's own settings, since the profile asks PKCE only of a pushed request and lets the server choose
+    /// whether to offer PAR.
     /// </summary>
     /// <remarks>
     /// Appended after <see cref="Fapi2"/> because a host persists the numeric value: a member inserted before it
