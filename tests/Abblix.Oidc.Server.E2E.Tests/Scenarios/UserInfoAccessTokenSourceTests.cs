@@ -64,6 +64,7 @@ public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(fact
         var cacheControl = CacheControlHeaderValue.Parse(sent);
         Assert.True(cacheControl.Private);
         Assert.True(cacheControl.NoStore);
+        Assert.True(cacheControl.NoCache);
     }
 
     [Fact]
