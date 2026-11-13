@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
@@ -73,6 +74,26 @@ public class RequestObjectFetchAdapterTests
                 TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<AuthorizationRequest>(), RequestJwt,
                 It.IsAny<Func<ClientInfo, string?>?>()))
             .ReturnsAsync(merged);
+
+    /// <summary>
+    /// RFC 9101 section 5: "client_id REQUIRED. OAuth 2.0 [RFC6749] "client_id". The value MUST match the "request" or
+    /// "request_uri" Request Object's (Section 2.1) "client_id"." A request carrying an object but no client_id beside
+    /// it is refused with invalid_request before the object is read, as section 6.3 has a failed client ID check
+    /// answered under RFC 6749.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_ARequestObjectWithoutAnOuterClientId_IsRefusedUnread()
+    {
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest(clientId: null));
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        _requestObjectFetcher.Verify(
+            f => f.FetchAsync(
+                It.IsAny<TenantDefinition>(), It.IsAny<ClientInfo?>(), It.IsAny<AuthorizationRequest>(),
+                It.IsAny<string?>(), It.IsAny<Func<ClientInfo, string?>?>()),
+            Times.Never);
+    }
 
     [Fact]
     public async Task FetchAsync_MatchingParameters_ReturnsMergedRequest()
