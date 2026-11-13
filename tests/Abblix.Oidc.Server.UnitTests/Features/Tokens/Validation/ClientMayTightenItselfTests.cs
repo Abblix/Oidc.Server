@@ -65,7 +65,8 @@ public class ClientMayTightenItselfTests
     {
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
+            // An algorithm every profile admits, since what is under test is the clock window
+            Header = { Algorithm = SigningAlgorithms.PS256 },
             Payload =
             {
                 Issuer = ClientId,

@@ -1108,6 +1108,8 @@ public class JwtBearerGrantHandlerTests
 			maxJwtAge: TimeSpan.FromMinutes(10));
 		var jwt = CreateValidJwt();
 		jwt.Payload.IssuedAt = fixedTime.AddMinutes(-issuedMinutesAgo);
+		// An algorithm every profile admits, since what is under test is the assertion's age
+		jwt.Header.Algorithm = SigningAlgorithms.ES256;
 		SetupValidJwtValidation(mocks.JwtValidator, jwt);
 		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
 		var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();

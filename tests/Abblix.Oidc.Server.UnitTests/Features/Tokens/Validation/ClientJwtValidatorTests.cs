@@ -1018,6 +1018,8 @@ public class ClientJwtValidatorTests
     [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.RS256, false)]
     [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.PS256, true)]
     [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.ES256, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.RS256, false)]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.ES256, true)]
     [InlineData(null, SigningAlgorithms.RS256, true)]
     public async Task ValidateAsync_TheClientsProfile_DecidesTheSignatureAlgorithm(
         ClientSecurityProfile? profile, string algorithm, bool accepted)

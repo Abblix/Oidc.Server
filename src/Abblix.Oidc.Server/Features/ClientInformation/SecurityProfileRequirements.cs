@@ -302,11 +302,20 @@ public sealed record SecurityProfileRequirements
 
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
+
+        // FAPI 2.0 Message Signing section 5.3.1, for a request object where one is sent: "shall require the aud
+        // claim in the request object to be, or to be an array containing, the authorization server's issuer
+        // identifier URL", beside the lifetime the same section bounds
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
+        RequireIssuerAudienceInRequestObject = true,
+
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireStringAudienceInClientAssertion = true,
         ForbidRefreshTokenRotation = true,
+
+        // FAPI 2.0 section 5.4.1: "use PS256, ES256, or EdDSA (using the Ed25519 variant) algorithms"
+        RequireFapiSigningAlgorithms = true,
     };
 
     /// <summary>

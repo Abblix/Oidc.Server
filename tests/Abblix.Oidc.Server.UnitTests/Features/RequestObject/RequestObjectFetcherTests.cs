@@ -132,6 +132,7 @@ public class RequestObjectFetcherTests
             Payload = WithinTheProfileLifetime(payload),
         };
         var fapiClient = new ClientInfo("c1") { SecurityProfile = ClientSecurityProfile.Fapi2 };
+        AddressedTo(SingleIssuer.Tenant, token.Payload);
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -185,6 +186,7 @@ public class RequestObjectFetcherTests
             .ReturnsAsync((JsonObject _, JarTestRequest bound) => bound);
 
         var fapiTenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant();
+        AddressedTo(fapiTenant, token.Payload);
         var result = await fetcher.FetchAsync(fapiTenant, request, jwt);
 
         Assert.True(result.TryGetSuccess(out var value));
@@ -1119,6 +1121,16 @@ public class RequestObjectFetcherTests
             Assert.True(result.TryGetSuccess(out _));
         else
             AssertInvalidRequestObject(result);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 Message Signing section 5.3.1 has the same sentence about the aud claim, so a request object a client
+    /// held to FAPI 2.0 sends without naming the issuer is refused too.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_Fapi2Client_RequestObjectWithoutAudience_IsInvalid()
+    {
+        AssertInvalidRequestObject(await Fetch(Fapi2Client, SingleIssuer.Tenant, WithinTheProfileLifetime(new JsonObject())));
     }
 
     /// <summary>

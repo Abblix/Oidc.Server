@@ -354,6 +354,9 @@ public class SecurityProfileClientAuthenticatorTests
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            // FAPI 2.0 section 5.4.1 admits no RS256 in what the server signs for the client
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         };
         Authenticates(inner, clientInfo);
 

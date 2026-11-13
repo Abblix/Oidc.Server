@@ -65,9 +65,9 @@ public class SecurityProfileTests
         Assert.Equal(TimeSpan.FromMinutes(60), requirements.MaxRequestObjectLifetime);
         Assert.False(requirements.RequireSignedRequestObject);
         Assert.False(requirements.RequireSignedAuthorizationResponse);
-        Assert.False(requirements.RequireIssuerAudienceInRequestObject);
+        Assert.True(requirements.RequireIssuerAudienceInRequestObject);
         Assert.False(requirements.RequireNonceWithOpenIdScope);
-        Assert.False(requirements.RequireFapiSigningAlgorithms);
+        Assert.True(requirements.RequireFapiSigningAlgorithms);
     }
 
     /// <summary>
@@ -303,6 +303,9 @@ public class SecurityProfileTests
                 SecurityProfile = ClientSecurityProfile.Fapi2,
                 AllowedResponseTypes = [[ResponseTypes.Code]],
                 TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+                // FAPI 2.0 section 5.4.1 admits no RS256 in what the server signs for the client
+                IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+                AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
             });
 
         Assert.Empty(Check(tenant));
