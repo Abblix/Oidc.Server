@@ -1044,4 +1044,44 @@ public class ClientJwtValidatorTests
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
+
+    /// <summary>
+    /// What a client encrypts for the server is judged by the same clause: a request object encrypted with RSA1_5 by
+    /// a client held to FAPI 1.0 Advanced is refused once the client is known, the same object encrypted with
+    /// RSA-OAEP-256 passes, and a client held to no profile keeps RSA1_5.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, EncryptionAlgorithms.KeyManagement.Rsa1_5, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, EncryptionAlgorithms.KeyManagement.RsaOaep256, true)]
+    [InlineData(null, EncryptionAlgorithms.KeyManagement.Rsa1_5, true)]
+    public async Task ValidateAsync_TheClientsProfile_DecidesTheKeyManagementAlgorithm(
+        ClientSecurityProfile? profile, string keyManagement, bool accepted)
+    {
+        var header = System.Buffers.Text.Base64Url.EncodeToString(System.Text.Encoding.UTF8.GetBytes(
+            new System.Text.Json.Nodes.JsonObject
+            {
+                [JwtClaimTypes.Algorithm] = keyManagement,
+                [JwtClaimTypes.EncryptionAlgorithm] = EncryptionAlgorithms.ContentEncryption.Aes128Gcm,
+            }.ToJsonString()));
+        var jwe = header + ".key.iv.ciphertext.tag";
+        var token = CreateValidToken();
+        token.Header.Algorithm = SigningAlgorithms.PS256;
+        var clientInfo = CreateClientInfo(ValidClientId);
+        clientInfo.SecurityProfile = profile;
+
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(jwe, It.IsAny<ValidationParameters>()))
+            .Returns(async (string _, ValidationParameters p) =>
+            {
+                await p.ValidateIssuer!(ValidClientId);
+                return token;
+            });
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .ReturnsAsync(clientInfo);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, jwe, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
 }

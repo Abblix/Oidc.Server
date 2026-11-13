@@ -61,7 +61,7 @@ public partial class ClientValidator(
         // and this endpoint signs for the client with what the client is configured for - a front-channel ID token,
         // a JWT authorization response. A client the startup check never saw, added to the store afterwards, is
         // refused here before anything is signed for it
-        var violations = SecurityProfileConsistency.FindSigningAlgorithmViolations(
+        var violations = SecurityProfileConsistency.FindAlgorithmViolations(
             clientInfo,
             SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile));
         if (violations.Count > 0)

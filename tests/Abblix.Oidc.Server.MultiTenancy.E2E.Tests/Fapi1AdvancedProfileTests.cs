@@ -55,6 +55,11 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
 
     private static readonly RsaJsonWebKey ClientKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 
+    /// <summary>
+    /// The tenant's key a client encrypts its request objects to.
+    /// </summary>
+    private static readonly RsaJsonWebKey EncryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
+
     private static readonly TenantDefinition Tenant = new()
     {
         Id = "acme",
@@ -63,6 +68,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         Clients = [Client()],
         LoginUri = new Uri(LoginPath, UriKind.Relative),
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+        EncryptionKeys = [EncryptionKey],
     };
 
     private WebApplication? _app;
@@ -80,6 +86,8 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         builder.Services.AddAuthorization();
         builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddDynamicClientRegistration();
+        // A deployment that opted in to RSA1_5 for its legacy peers, which the profile then forbids its FAPI clients
+        builder.Services.AddRsaPkcs1KeyManagement();
         builder.Services.AddOidcServices(options =>
         {
             options.EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.RegisterClient;
@@ -143,9 +151,10 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         string algorithm = SigningAlgorithms.PS256,
         bool addressedToTheIssuer = true,
         string clientId = ClientId,
-        string scope = Scopes.OpenId)
+        string scope = Scopes.OpenId,
+        string? keyManagement = null)
     {
-        var requestObject = await RequestObjectAsync(parameters, algorithm, addressedToTheIssuer, clientId);
+        var requestObject = await RequestObjectAsync(parameters, algorithm, addressedToTheIssuer, clientId, keyManagement);
 
         var query = HttpUtility.ParseQueryString(string.Empty);
         query[AuthorizationRequest.Parameters.ClientId] = clientId;
@@ -164,7 +173,8 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         JsonObject parameters,
         string algorithm = SigningAlgorithms.PS256,
         bool addressedToTheIssuer = true,
-        string clientId = ClientId)
+        string clientId = ClientId,
+        string? keyManagement = null)
     {
         var now = TimeProvider.System.GetUtcNow();
         var token = new JsonWebToken
@@ -184,7 +194,10 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         foreach (var (name, value) in parameters)
             token.Payload.Json[name] = value?.DeepClone();
 
-        return await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, ClientKey);
+        var creator = _app!.Services.GetRequiredService<IJsonWebTokenCreator>();
+        return keyManagement is null
+            ? await creator.IssueAsync(token, ClientKey)
+            : await creator.IssueAsync(token, ClientKey, EncryptionKey.Sanitize(includePrivateKeys: false), keyManagement);
     }
 
     /// <summary>
@@ -584,5 +597,23 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
             Assert.Null(start);
         else
             Assert.IsType<Microsoft.Extensions.Options.OptionsValidationException>(start);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
+    /// algorithm". A request object encrypted to the tenant with RSA1_5 is refused, the same object encrypted with
+    /// RSA-OAEP-256 is accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Rsa1_5, ErrorCodes.InvalidRequestObject)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, null)]
+    public async Task ARequestObjectEncryptedWithRsa1_5_IsRefused(string keyManagement, string? expectedError)
+    {
+        var response = await AuthorizeAsync(ConformantRequest(), keyManagement: keyManagement);
+
+        if (expectedError == null)
+            await AssertSentToLogin(response);
+        else
+            Assert.Equal(expectedError, await ErrorOf(response));
     }
 }

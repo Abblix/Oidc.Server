@@ -94,6 +94,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireStateWithoutOpenIdScope);
         Assert.True(requirements.RequirePkceWithPushedRequests);
         Assert.True(requirements.RequireExactHttpsRedirectUris);
+        Assert.True(requirements.ForbidRsa1_5KeyManagement);
         Assert.True(requirements.RequireFapiSigningAlgorithms);
     }
 
@@ -917,5 +918,35 @@ public class SecurityProfileTests
 
         Assert.NotEmpty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client("http://127.0.0.1:8080/cb"))));
         Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client("https://client.example.com/cb"))));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
+    /// algorithm". A FAPI 1.0 Advanced client registered to have its ID tokens, userinfo, introspection or authorization
+    /// responses encrypted with RSA1_5, or to encrypt its request objects with it, is named for each; RSA-OAEP-256 is
+    /// not, and no profile names nothing.
+    /// </summary>
+    [Fact]
+    public void FindEncryptionAlgorithmViolations_Fapi1Advanced_NamesEachRsa1_5()
+    {
+        static ClientInfo Client(string algorithm) => new(TestConstants.DefaultClientId)
+        {
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            IdentityTokenEncryptedResponseAlgorithm = algorithm,
+            UserInfoEncryptedResponseAlgorithm = algorithm,
+            IntrospectionEncryptedResponseAlgorithm = algorithm,
+            AuthorizationEncryptedResponseAlgorithm = algorithm,
+            RequestObjectEncryptionAlgorithm = algorithm,
+        };
+        var fapi1 = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced);
+
+        Assert.Equal(5, SecurityProfileConsistency.FindAlgorithmViolations(
+            Client(EncryptionAlgorithms.KeyManagement.Rsa1_5), fapi1).Count);
+        Assert.Empty(SecurityProfileConsistency.FindAlgorithmViolations(
+            Client(EncryptionAlgorithms.KeyManagement.RsaOaep256), fapi1));
+        Assert.Empty(SecurityProfileConsistency.FindAlgorithmViolations(
+            Client(EncryptionAlgorithms.KeyManagement.Rsa1_5),
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.None)));
     }
 }

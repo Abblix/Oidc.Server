@@ -77,7 +77,7 @@ internal partial class SecurityProfileClientAuthenticator(
                 clientInfo.TokenEndpointAuthMethod,
                 clientInfo.ClientAssertionAudiences,
                 requirements),
-            ..SecurityProfileConsistency.FindSigningAlgorithmViolations(clientInfo, requirements),
+            ..SecurityProfileConsistency.FindAlgorithmViolations(clientInfo, requirements),
         ];
 
         if (violations.Count == 0)

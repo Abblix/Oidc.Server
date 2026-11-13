@@ -260,6 +260,14 @@ public sealed record SecurityProfileRequirements
     public bool RequireFapiSigningAlgorithms { get; init; }
 
     /// <summary>
+    /// The profile forbids the RSA1_5 key management algorithm in what the client encrypts for this server and in what
+    /// this server encrypts for the client. FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization
+    /// servers shall not use the RSA1_5 algorithm". Judged by <c>Features.Tokens.Validation.ClientJwtValidator</c> for
+    /// what the client encrypts and by <see cref="SecurityProfileConsistency"/> on the client's configuration.
+    /// </summary>
+    public bool ForbidRsa1_5KeyManagement { get; init; }
+
+    /// <summary>
     /// The signature algorithms <see cref="RequireFapiSigningAlgorithms"/> admits. FAPI 2.0 section 5.4.1 adds EdDSA
     /// with Ed25519, which this library does not implement, so no client of it can use it.
     /// </summary>
@@ -368,6 +376,7 @@ public sealed record SecurityProfileRequirements
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireFapiSigningAlgorithms = true,
+        ForbidRsa1_5KeyManagement = true,
     };
 
     /// <summary>
@@ -520,6 +529,7 @@ public sealed record SecurityProfileRequirements
         RequireKeyBasedClientAuthentication = true,
         RequireStringAudienceInClientAssertion = true,
         RequireFapiSigningAlgorithms = true,
+        ForbidRsa1_5KeyManagement = true,
     };
 
     /// <summary>
@@ -625,6 +635,7 @@ public sealed record SecurityProfileRequirements
                 RequireStringAudienceInClientAssertion || other.RequireStringAudienceInClientAssertion,
             ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
             RequireFapiSigningAlgorithms = RequireFapiSigningAlgorithms || other.RequireFapiSigningAlgorithms,
+            ForbidRsa1_5KeyManagement = ForbidRsa1_5KeyManagement || other.ForbidRsa1_5KeyManagement,
         };
 
     /// <summary>

@@ -175,4 +175,24 @@ public class SecurityProfileValidatorTests
 
         Assert.Equal(ErrorCodes.InvalidRedirectUri, result?.Error);
     }
+
+    /// <summary>
+    /// The same clause at registration: id_token_encrypted_response_alg RSA1_5 is refused with invalid_client_metadata.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi1Advanced_Rsa1_5Encryption_IsRefused()
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdTokenEncryptedResponseAlg = EncryptionAlgorithms.KeyManagement.Rsa1_5,
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
 }

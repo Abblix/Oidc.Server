@@ -166,6 +166,52 @@ public static class SecurityProfileConsistency
         ];
 
     /// <summary>
+    /// Names each algorithm the client's configuration names that its profile does not admit, for signatures and for
+    /// encryption alike.
+    /// </summary>
+    /// <param name="client">The client whose configuration is checked.</param>
+    /// <param name="requirements">The control bundle the client is held to, floor included.</param>
+    public static IReadOnlyList<string> FindAlgorithmViolations(
+        ClientInfo client,
+        SecurityProfileRequirements requirements)
+        =>
+        [
+            ..FindSigningAlgorithmViolations(client, requirements),
+            ..FindEncryptionAlgorithmViolations(
+                [
+                    (nameof(ClientInfo.IdentityTokenEncryptedResponseAlgorithm),
+                        client.IdentityTokenEncryptedResponseAlgorithm),
+                    (nameof(ClientInfo.UserInfoEncryptedResponseAlgorithm), client.UserInfoEncryptedResponseAlgorithm),
+                    (nameof(ClientInfo.IntrospectionEncryptedResponseAlgorithm),
+                        client.IntrospectionEncryptedResponseAlgorithm),
+                    (nameof(ClientInfo.AuthorizationEncryptedResponseAlgorithm),
+                        client.AuthorizationEncryptedResponseAlgorithm),
+                    (nameof(ClientInfo.RequestObjectEncryptionAlgorithm), client.RequestObjectEncryptionAlgorithm),
+                ],
+                requirements),
+        ];
+
+    /// <summary>
+    /// Names each key management algorithm the profile does not admit: FAPI 1.0 Part 2 section 8.6.1, "For JWE, both
+    /// clients and authorization servers shall not use the RSA1_5 algorithm".
+    /// </summary>
+    /// <param name="algorithms">Each setting's name and the key management algorithm it names, null where it names
+    /// none.</param>
+    /// <param name="requirements">The control bundle the client is held to, floor included.</param>
+    public static IReadOnlyList<string> FindEncryptionAlgorithmViolations(
+        IEnumerable<(string Name, string? Algorithm)> algorithms,
+        SecurityProfileRequirements requirements)
+        => requirements.ForbidRsa1_5KeyManagement
+            ?
+            [
+                ..
+                from setting in algorithms
+                where setting.Algorithm == EncryptionAlgorithms.KeyManagement.Rsa1_5
+                select $"the client's security profile forbids RSA1_5 encryption, but {setting.Name} is RSA1_5",
+            ]
+            : [];
+
+    /// <summary>
     /// Names each redirect URI the profile does not admit, or an empty list when it admits every one: FAPI 1.0 Part 1
     /// section 5.2.2 has the server "require redirect URIs to use the https scheme".
     /// </summary>

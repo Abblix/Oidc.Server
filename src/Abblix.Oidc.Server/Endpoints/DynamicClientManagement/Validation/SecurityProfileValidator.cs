@@ -62,6 +62,15 @@ public class SecurityProfileValidator : SyncClientRegistrationContextValidator
                         request.BackChannelAuthenticationRequestSigningAlg),
                 ],
                 requirements),
+            ..FindEncryptionAlgorithmViolations(
+                [
+                    (Parameters.IdTokenEncryptedResponseAlg, request.IdTokenEncryptedResponseAlg),
+                    (Parameters.UserInfoEncryptedResponseAlg, request.UserInfoEncryptedResponseAlg),
+                    (Parameters.IntrospectionEncryptedResponseAlg, request.IntrospectionEncryptedResponseAlg),
+                    (Parameters.AuthorizationEncryptedResponseAlg, request.AuthorizationEncryptedResponseAlg),
+                    (Parameters.RequestObjectEncryptionAlg, request.RequestObjectEncryptionAlg),
+                ],
+                requirements),
         ];
 
         return violations.Count == 0

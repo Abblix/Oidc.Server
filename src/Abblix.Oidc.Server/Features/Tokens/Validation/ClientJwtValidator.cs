@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Buffers.Text;
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -125,14 +127,11 @@ public partial class ClientJwtValidator(
 
         var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
 
-        // FAPI 1.0 Part 2 section 8.6: "For JWS, both clients and authorization servers shall use PS256 or ES256
-        // algorithms". Judged here, where the client is first known, for everything a client signs for this server
-        if (!profile.PermitsSigningAlgorithm(validatedToken.Header.Algorithm))
+        if (AlgorithmOutsideTheProfile(profile, jwt, validatedToken) is { } algorithm)
         {
-            LogAlgorithmOutsideTheClientsProfile(
-                context.ClientInfo.ClientId, Sanitized.Value(validatedToken.Header.Algorithm));
+            LogAlgorithmOutsideTheClientsProfile(context.ClientInfo.ClientId, Sanitized.Value(algorithm));
             return new JwtValidationError(
-                JwtError.InvalidToken, "The token is signed with an algorithm the client's security profile does not admit");
+                JwtError.InvalidToken, "The token uses an algorithm the client's security profile does not admit");
         }
 
         // The pass above ran under the DEPLOYMENT's window, because the client is identified from the
@@ -171,6 +170,52 @@ public partial class ClientJwtValidator(
         LogValidationSucceeded(context.ClientInfo.ClientId);
         return new ValidJsonWebToken(validatedToken, context.ClientInfo);
     }
+
+    /// <summary>
+    /// The algorithm of the token the client's profile does not admit, or null when it admits every one. Judged here,
+    /// where the client is first known, for everything a client signs or encrypts for this server.
+    /// </summary>
+    /// <param name="profile">The controls the client is held to.</param>
+    /// <param name="jwt">The token as the client sent it.</param>
+    /// <param name="token">The token as validated, the inner JWS where it came encrypted.</param>
+    private static string? AlgorithmOutsideTheProfile(SecurityProfileRequirements profile, string jwt, JsonWebToken token)
+    {
+        // FAPI 1.0 Part 2 section 8.6: "For JWS, both clients and authorization servers shall use PS256 or ES256
+        // algorithms"
+        if (!profile.PermitsSigningAlgorithm(token.Header.Algorithm))
+            return token.Header.Algorithm ?? SigningAlgorithms.None;
+
+        // FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
+        // algorithm". The token validated is the inner JWS, so the key management algorithm is read from the outer
+        // header
+        if (profile.ForbidRsa1_5KeyManagement &&
+            KeyManagementAlgorithm(jwt) == EncryptionAlgorithms.KeyManagement.Rsa1_5)
+        {
+            return EncryptionAlgorithms.KeyManagement.Rsa1_5;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The <c>alg</c> of the protected header of a JWE in compact serialization (RFC 7516 section 7.1), or null for a
+    /// JWS, which has three parts rather than five.
+    /// </summary>
+    /// <param name="jwt">The token as the client sent it, already decrypted and verified once.</param>
+    private static string? KeyManagementAlgorithm(string jwt)
+    {
+        var parts = jwt.Split('.');
+        if (parts.Length != JweParts)
+            return null;
+
+        var header = JsonNode.Parse(Base64Url.DecodeFromChars(parts[0]));
+        return header?[JwtClaimTypes.Algorithm]?.GetValue<string>();
+    }
+
+    /// <summary>
+    /// The parts of a JWE in compact serialization: header, encrypted key, initialization vector, ciphertext, tag.
+    /// </summary>
+    private const int JweParts = 5;
 
     /// <summary>
     /// Validates the audience of a JWT the client sent other than a client authentication assertion - a request
