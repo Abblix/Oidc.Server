@@ -940,11 +940,11 @@ internal static class LogEvents
 
         /// <summary>
         /// <c>Features/LogoutNotification/BackChannelLogoutNotifier.cs</c> - a notification not sent
-        /// (sub-range 10310-10319).
+        /// (sub-range 10320-10339).
         /// </summary>
         public static class BackChannelLogoutNotifier
         {
-            private const int Base = 10310;
+            private const int Base = 10320;
 
             public const int LogoutTokenNotIssued = Base;
         }
