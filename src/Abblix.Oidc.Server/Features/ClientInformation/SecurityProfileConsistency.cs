@@ -114,8 +114,10 @@ public static class SecurityProfileConsistency
     }
 
     /// <summary>
-    /// Names each algorithm this server would sign with for the client that its profile does not admit, or an empty
-    /// list when every one is admitted: FAPI 1.0 Part 2 section 8.6 has the server "use PS256 or ES256 algorithms".
+    /// Names each algorithm this server would sign with for the client, or the client is pinned to sign with, that its
+    /// profile does not admit, or an empty list when every one is admitted: FAPI 1.0 Part 2 section 8.6 has "both
+    /// clients and authorization servers" use "PS256 or ES256 algorithms". A client pinned to another algorithm
+    /// for its request objects, assertions or CIBA requests could sign nothing the server accepts.
     /// </summary>
     /// <remarks>
     /// The client's configuration is what the server signs with, so it is judged here rather than when a token is
@@ -137,6 +139,10 @@ public static class SecurityProfileConsistency
                 (nameof(ClientInfo.UserInfoSignedResponseAlgorithm), SignedOrNull(client.UserInfoSignedResponseAlgorithm)),
                 (nameof(ClientInfo.IntrospectionSignedResponseAlgorithm),
                     SignedOrNull(client.IntrospectionSignedResponseAlgorithm)),
+                (nameof(ClientInfo.RequestObjectSigningAlgorithm), client.RequestObjectSigningAlgorithm),
+                (nameof(ClientInfo.TokenEndpointAuthSigningAlgorithm), client.TokenEndpointAuthSigningAlgorithm),
+                (nameof(ClientInfo.BackChannelAuthenticationRequestSigningAlg),
+                    client.BackChannelAuthenticationRequestSigningAlg),
             ],
             requirements);
 

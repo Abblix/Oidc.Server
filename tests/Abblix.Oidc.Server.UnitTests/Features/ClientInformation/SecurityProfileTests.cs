@@ -874,4 +874,25 @@ public class SecurityProfileTests
         Assert.NotEmpty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client())));
         Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, configured)));
     }
+
+    /// <summary>
+    /// What the client is registered to sign with is judged as well: a request object, authentication assertion or
+    /// CIBA request pinned to RS256 would be refused on every use, by the algorithm list or by the pin itself, so a
+    /// client configured that way under FAPI 1.0 Advanced is refused where it is configured.
+    /// </summary>
+    [Fact]
+    public void FindSigningAlgorithmViolations_Fapi1Advanced_NamesWhatTheClientIsPinnedToSign()
+    {
+        var pinned = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            RequestObjectSigningAlgorithm = SigningAlgorithms.RS256,
+            TokenEndpointAuthSigningAlgorithm = SigningAlgorithms.RS256,
+            BackChannelAuthenticationRequestSigningAlg = SigningAlgorithms.RS256,
+        };
+
+        Assert.Equal(3, SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            pinned, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced)).Count);
+    }
 }

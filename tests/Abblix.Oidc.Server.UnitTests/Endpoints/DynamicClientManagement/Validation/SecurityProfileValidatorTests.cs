@@ -131,4 +131,28 @@ public class SecurityProfileValidatorTests
         else
             Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
     }
+
+    /// <summary>
+    /// A registration pinning its request objects or its authentication assertions to RS256 under FAPI 1.0 Advanced
+    /// is refused with invalid_client_metadata rather than registered as a client that can never sign acceptably.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task ValidateAsync_Fapi1Advanced_WhatTheClientSignsWith(bool requestObject, bool assertion)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            RequestObjectSigningAlg = requestObject ? SigningAlgorithms.RS256 : null,
+            TokenEndpointAuthSigningAlg = assertion ? SigningAlgorithms.RS256 : null,
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
 }
