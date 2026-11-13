@@ -52,8 +52,10 @@ public class UserInfoResponseFormatter(
         return await response.MatchAsync(
             onSuccess: FormatSuccessAsync,
             onFailure: error => Task.FromResult(
+                // RFC 6750 section 3.1: invalid_token and insufficient_scope carry their own status, and what is
+                // left at a protected resource is invalid_request, which SHOULD be a 400
                 error.Format(
-                    StatusCodes.Status401Unauthorized,
+                    StatusCodes.Status400BadRequest,
                     tenantAccessor.CurrentTenant().Issuer.OriginalString,
                     DPoPAlgorithms.Allowed,
                     advertiseBearer: true)));
