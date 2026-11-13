@@ -8,6 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -15,7 +16,10 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.MinimalApi;
 using Abblix.Oidc.Server.Model;
@@ -70,6 +74,7 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
         builder.Services.AddConsentGrantedForEveryClient();
+        builder.Services.AddSingleton<IUserInfoProvider, SignedInUserInfo>();
         // FAPI 2.0 section 5.4.1 holds the tokens the server signs for itself to PS256, ES256 or EdDSA too, and the
         // globex tenant holds its clients to FAPI 2.0
         builder.Services.AddOidcServices(options =>
@@ -93,6 +98,7 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
 
         _app = builder.Build();
         _app.UseMultiTenancy();
+        _app.UseCors();
         _app.UseAuthorization();
         _app.MapOidcEndpoints();
         await _app.StartAsync(TestContext.Current.CancellationToken);
@@ -143,5 +149,38 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Created, (await PushAsync(Acme)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await PushAsync(Globex)).StatusCode);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.4: a resource server "shall not accept access tokens in the query
+    /// parameters". The tenant holding its clients to FAPI 2.0 answers a token in the userinfo query with
+    /// invalid_request and 400 (RFC 6750 section 3.1), and answers the same token in the Authorization header.
+    /// </summary>
+    [Fact]
+    public async Task AStrictProfile_RefusesTheAccessTokenInTheUserInfoQuery()
+    {
+        var accessToken = await _app!.Services.GetRequiredService<IAccessTokenService>().CreateAccessTokenAsync(
+            GlobexTenant,
+            new AuthSession(
+                "user-1", "session-1", _app.Services.GetRequiredService<TimeProvider>().GetUtcNow(), "local"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], requestedClaims: null),
+            Client(),
+            grantId: null,
+            expiresNoLaterThan: null);
+
+        var inQuery = await _http!.GetAsync(
+            $"{Globex}/connect/userinfo?{UserInfoRequest.Parameters.AccessToken}={accessToken.EncodedJwt}",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, inQuery.StatusCode);
+        Assert.Contains(
+            ErrorCodes.InvalidRequest,
+            await inQuery.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        using var inHeader = new HttpRequestMessage(HttpMethod.Get, $"{Globex}/connect/userinfo");
+        inHeader.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken.EncodedJwt);
+        var response = await _http.SendAsync(inHeader, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 }
