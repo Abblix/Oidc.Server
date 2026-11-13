@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
@@ -344,5 +345,32 @@ public class ClientValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6 has the server sign only with PS256 or ES256, and the authorization endpoint signs
+    /// for the client - a front-channel ID token, a JWT authorization response - with what the client is configured
+    /// for. A stored client configured for RS256 under that profile is refused here, before anything is signed for
+    /// it, as the same client configured for PS256 is not.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, false)]
+    [InlineData(SigningAlgorithms.PS256, true)]
+    public async Task ValidateAsync_AClientTheServerWouldSignForAgainstItsProfile_IsRefused(
+        string algorithm, bool accepted)
+    {
+        var clientInfo = new ClientInfo(ValidClientId)
+        {
+            SecurityProfile = ClientSecurityProfile.Fapi1Advanced,
+            IdentityTokenSignedResponseAlgorithm = algorithm,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        };
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .ReturnsAsync(clientInfo);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(ValidClientId));
+
+        Assert.Equal(accepted ? null : ErrorCodes.UnauthorizedClient, result?.Error);
     }
 }

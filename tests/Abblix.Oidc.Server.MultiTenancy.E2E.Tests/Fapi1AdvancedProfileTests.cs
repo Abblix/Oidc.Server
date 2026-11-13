@@ -52,6 +52,16 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
 
     private static readonly RsaJsonWebKey ClientKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 
+    private static readonly TenantDefinition Tenant = new()
+    {
+        Id = "acme",
+        Issuer = new Uri(Host + Acme),
+        DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced,
+        Clients = [Client()],
+        LoginUri = new Uri(LoginPath, UriKind.Relative),
+        SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+    };
+
     private WebApplication? _app;
     private HttpClient? _http;
 
@@ -67,15 +77,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         builder.Services.AddAuthorization();
         builder.Services.AddConsentGrantedForEveryClient();
         builder.Services.AddOidcServices(_ => { });
-        builder.Services.Configure<OidcOptions>(options => options.Tenants.Add(new TenantDefinition
-        {
-            Id = "acme",
-            Issuer = new Uri(Host + Acme),
-            DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced,
-            Clients = [Client()],
-            LoginUri = new Uri(LoginPath, UriKind.Relative),
-            SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
-        }));
+        builder.Services.Configure<OidcOptions>(options => options.Tenants.Add(Tenant));
 
         _app = builder.Build();
         _app.UseMultiTenancy();
@@ -131,7 +133,8 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
     private async Task<HttpResponseMessage> AuthorizeAsync(
         JsonObject parameters,
         string algorithm = SigningAlgorithms.PS256,
-        bool addressedToTheIssuer = true)
+        bool addressedToTheIssuer = true,
+        string clientId = ClientId)
     {
         var now = TimeProvider.System.GetUtcNow();
         var token = new JsonWebToken
@@ -139,7 +142,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
             Header = { Algorithm = algorithm, KeyId = ClientKey.KeyId },
             Payload =
             {
-                Issuer = ClientId,
+                Issuer = clientId,
                 IssuedAt = now,
                 NotBefore = now,
                 ExpiresAt = now.AddMinutes(5),
@@ -155,7 +158,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
             .IssueAsync(token, ClientKey);
 
         var query = HttpUtility.ParseQueryString(string.Empty);
-        query[AuthorizationRequest.Parameters.ClientId] = ClientId;
+        query[AuthorizationRequest.Parameters.ClientId] = clientId;
         query[AuthorizationRequest.Parameters.ResponseType] =
             parameters[AuthorizationRequest.Parameters.ResponseType]!.GetValue<string>();
         query[AuthorizationRequest.Parameters.Scope] = Scopes.OpenId;
@@ -337,5 +340,33 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         proof.Payload.Json[IanaClaimTypes.Htu] = target.AbsoluteUri;
 
         return await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(proof, key);
+    }
+
+    /// <summary>
+    /// A client put into the store after startup, at the RS256 defaults no startup check saw, is refused at the
+    /// authorization endpoint before the server signs anything for it: FAPI 1.0 Part 2 section 8.6 names PS256 and
+    /// ES256 for what the server signs.
+    /// </summary>
+    [Fact]
+    public async Task AStoredClientAtTheRs256Defaults_IsRefusedAtTheAuthorizationEndpoint()
+    {
+        const string storedClientId = "stored-at-the-defaults";
+        var stored = Client();
+        Assert.True(await _app!.Services.GetRequiredService<IClientInfoManager>().TryAddClientAsync(
+            Tenant,
+            new RegisteredClient(
+                new ClientInfo(storedClientId)
+                {
+                    TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+                    Jwks = new JsonWebKeySet([ClientKey.Sanitize(includePrivateKeys: false)]),
+                    AllowedResponseTypes = stored.AllowedResponseTypes,
+                    RedirectUris = stored.RedirectUris,
+                    PkceRequired = false,
+                },
+                "registration-access-token-id")));
+        var request = ConformantRequest();
+        request[AuthorizationRequest.Parameters.ClientId] = storedClientId;
+
+        Assert.Equal(ErrorCodes.UnauthorizedClient, await ErrorOf(await AuthorizeAsync(request, clientId: storedClientId)));
     }
 }

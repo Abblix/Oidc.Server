@@ -57,6 +57,20 @@ public partial class ClientValidator(
             return context.Error(ErrorCodes.UnauthorizedClient, "The client is not authorized");
         }
 
+        // FAPI 1.0 Part 2 section 8.6, FAPI 2.0 section 5.4.1: the server signs only with the profile's algorithms,
+        // and this endpoint signs for the client with what the client is configured for - a front-channel ID token,
+        // a JWT authorization response. A client the startup check never saw, added to the store afterwards, is
+        // refused here before anything is signed for it
+        var violations = SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            clientInfo,
+            SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile));
+        if (violations.Count > 0)
+        {
+            LogClientCannotSatisfyProfile(clientId, violations);
+            return context.Error(
+                ErrorCodes.UnauthorizedClient, "The client's configuration does not satisfy its security profile");
+        }
+
         context.ClientInfo = clientInfo;
         return null;
     }

@@ -88,6 +88,7 @@ internal static class LogEvents
             private const int Base = 2040;
 
             public const int ClientNotFound = Base + 1;
+            public const int ClientCannotSatisfyProfile = Base + 2;
         }
 
         /// <summary>
