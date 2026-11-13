@@ -237,4 +237,18 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
             ErrorCodes.InvalidRequestObject,
             await ErrorOf(await AuthorizeAsync(ConformantRequest(), addressedToTheIssuer: false)));
     }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 5.2.2.2, taken in by Part 2 section 5.2.2: "If the client requests the openid scope,
+    /// the authorization server shall require the nonce parameter". Code with the JWT response mode returns no ID
+    /// token from the authorization endpoint, so OpenID Connect Core alone would let this request through.
+    /// </summary>
+    [Fact]
+    public async Task OpenIdScopeWithoutNonce_IsRefused()
+    {
+        var request = ConformantRequest();
+        request.Remove(AuthorizationRequest.Parameters.Nonce);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorOf(await AuthorizeAsync(request)));
+    }
 }

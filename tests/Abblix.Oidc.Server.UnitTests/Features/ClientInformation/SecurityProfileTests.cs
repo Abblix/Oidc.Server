@@ -66,6 +66,7 @@ public class SecurityProfileTests
         Assert.False(requirements.RequireSignedRequestObject);
         Assert.False(requirements.RequireSignedAuthorizationResponse);
         Assert.False(requirements.RequireIssuerAudienceInRequestObject);
+        Assert.False(requirements.RequireNonceWithOpenIdScope);
     }
 
     /// <summary>
@@ -87,6 +88,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireKeyBasedClientAuthentication);
         Assert.True(requirements.RequireSignedAuthorizationResponse);
         Assert.True(requirements.RequireIssuerAudienceInRequestObject);
+        Assert.True(requirements.RequireNonceWithOpenIdScope);
     }
 
     /// <summary>
@@ -131,6 +133,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireCodeResponseTypeOnly);
         Assert.True(requirements.RequireSignedAuthorizationResponse);
         Assert.True(requirements.RequireIssuerAudienceInRequestObject);
+        Assert.True(requirements.RequireNonceWithOpenIdScope);
         Assert.True(requirements.RequireStringAudienceInClientAssertion);
         Assert.Equal(ClockSkew.Fapi2Ceiling, requirements.MaxClockSkew);
     }

@@ -197,6 +197,18 @@ public sealed record SecurityProfileRequirements
     public bool RequireIssuerAudienceInRequestObject { get; init; }
 
     /// <summary>
+    /// The profile requires a nonce on every authorization request naming the <c>openid</c> scope, whatever the
+    /// response type. FAPI 1.0 Part 1 section 5.2.2.2, which Part 2 section 5.2.2 takes in: "If the client requests
+    /// the openid scope, the authorization server shall require the nonce parameter". Enforced by
+    /// <c>Endpoints.Authorization.Validation.NonceValidator</c>.
+    /// </summary>
+    /// <remarks>
+    /// Wider than OpenID Connect Core, which requires the nonce only where the authorization endpoint returns an ID
+    /// token: under this control a code request with the <c>jwt</c> response mode carries one too.
+    /// </remarks>
+    public bool RequireNonceWithOpenIdScope { get; init; }
+
+    /// <summary>
     /// The request object lifetime the FAPI profiles bound a request object to.
     /// </summary>
     internal static readonly TimeSpan FapiRequestObjectLifetime = TimeSpan.FromMinutes(60);
@@ -256,8 +268,8 @@ public sealed record SecurityProfileRequirements
 
     /// <summary>
     /// FAPI 1.0 Part 2 section 5.2.2, the clauses this type has a control for: a signed request object, only its
-    /// parameters used, its nbf and exp bounded, its audience the issuer, a signed authorization response,
-    /// sender-constrained access tokens,
+    /// parameters used, its nbf and exp bounded, its audience the issuer, a signed authorization response, a nonce
+    /// with the openid scope (Part 1 section 5.2.2.2, which section 5.2.2 takes in), sender-constrained access tokens,
     /// no public clients, and client authentication by mutual TLS or private_key_jwt.
     /// </summary>
     /// <remarks>
@@ -275,6 +287,7 @@ public sealed record SecurityProfileRequirements
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
         RequireIssuerAudienceInRequestObject = true,
         RequireSignedAuthorizationResponse = true,
+        RequireNonceWithOpenIdScope = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
     };
@@ -421,6 +434,7 @@ public sealed record SecurityProfileRequirements
         RequireSignedRequestObject = true,
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
         RequireIssuerAudienceInRequestObject = true,
+        RequireNonceWithOpenIdScope = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireStringAudienceInClientAssertion = true,
@@ -497,6 +511,7 @@ public sealed record SecurityProfileRequirements
         MaxRequestObjectLifetime = Tighter(MaxRequestObjectLifetime, other.MaxRequestObjectLifetime),
         RequireIssuerAudienceInRequestObject =
             RequireIssuerAudienceInRequestObject || other.RequireIssuerAudienceInRequestObject,
+        RequireNonceWithOpenIdScope = RequireNonceWithOpenIdScope || other.RequireNonceWithOpenIdScope,
     };
 
     /// <summary>
