@@ -89,7 +89,8 @@ public sealed record SecurityProfileRequirements
 
     /// <summary>
     /// The profile refuses an access token sent to a protected resource in the URI query (RFC 6750 section 2.3), as
-    /// FAPI 2.0 Security Profile section 5.3.4 requires. The <c>Authorization</c> header (RFC 6750 section 2.1,
+    /// FAPI 2.0 Security Profile section 5.3.4 and FAPI 1.0 Part 1 section 6.2.1 require, each in the words "shall not
+    /// accept access tokens in the query parameters". The <c>Authorization</c> header (RFC 6750 section 2.1,
     /// RFC 9449 section 7.1) and the form-encoded body (RFC 6750 section 2.2) stay accepted: the clause names the
     /// query alone. Enforced by <c>Endpoints.UserInfo.UserInfoRequestValidator</c>.
     /// </summary>
@@ -412,8 +413,9 @@ public sealed record SecurityProfileRequirements
     };
 
     /// <summary>
-    /// FAPI 1.0 Part 2 sections 5.2.2, 8.6, 8.6.1 and 8.9, and the Part 1 section 5.2.2 provisions section 5.2.2 takes
-    /// in, the clauses this type has a control for. Each member below names its clause.
+    /// FAPI 1.0 Part 2 sections 5.2.2, 8.6, 8.6.1 and 8.9, the Part 1 section 5.2.2 provisions section 5.2.2 takes
+    /// in, and the Part 1 section 6.2.1 resource server provisions, the clauses this type has a control for. Each member
+    /// below names its clause.
     /// </summary>
     /// <remarks>
     /// Left off on purpose, because each would refuse a client that profile admits: the code-only response type
@@ -439,6 +441,7 @@ public sealed record SecurityProfileRequirements
         RequireKeyBasedClientAuthentication = true,
         RequireMatchingClientIdentifiers = true,
         RequireCertificateBoundTokens = true,
+        RequireAccessTokenOutsideQuery = true,
         RequireFapiSigningAlgorithms = true,
         ForbidRsa1_5KeyManagement = true,
     };

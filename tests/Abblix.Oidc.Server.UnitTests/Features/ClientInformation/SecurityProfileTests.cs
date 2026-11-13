@@ -104,6 +104,15 @@ public class SecurityProfileTests
     }
 
     /// <summary>
+    /// FAPI 1.0 Part 1 section 6.2.1, which Part 2 builds on: the resource server "shall not accept access tokens in the
+    /// query parameters stated in Section 2.3 of OAuth 2.0 Bearer Token Usage RFC6750".
+    /// </summary>
+    [Fact]
+    public void Resolve_Fapi1Advanced_RefusesTheAccessTokenInTheQuery()
+        => Assert.True(
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced).RequireAccessTokenOutsideQuery);
+
+    /// <summary>
     /// And nothing the section does not ask for: it admits <c>code id_token</c>, makes PAR optional, asks PKCE only of
     /// a pushed request, and names neither the clock window, the assertion audience nor refresh token rotation that
     /// FAPI 2.0 does. A control demanded here would refuse a client the FAPI 1.0 profile admits.

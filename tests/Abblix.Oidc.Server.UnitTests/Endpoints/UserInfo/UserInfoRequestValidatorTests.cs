@@ -477,13 +477,16 @@ public class UserInfoRequestValidatorTests
     }
 
     /// <summary>
-    /// The same refusal for a client that names FAPI 2.0 for itself under a deployment that names no profile: the
-    /// client's own choice tightens what it is held to.
+    /// The same refusal for a client that names a FAPI profile for itself under a deployment that names no profile:
+    /// the client's own choice tightens what it is held to. FAPI 1.0 Part 1 section 6.2.1 words it as FAPI 2.0 does:
+    /// "shall not accept access tokens in the query parameters stated in Section 2.3 of OAuth 2.0 Bearer Token Usage".
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_TokenInQuery_OfFapi2Client_IsRefused()
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
+    public async Task ValidateAsync_TokenInQuery_OfFapiClient_IsRefused(ClientSecurityProfile profile)
     {
-        ArrangeValidTokenOfClient("valid_token_123", ClientSecurityProfile.Fapi2);
+        ArrangeValidTokenOfClient("valid_token_123", profile);
 
         var result = await _validator.ValidateAsync(
             SingleIssuer.Tenant, CreateUserInfoRequest(inQuery: "valid_token_123"), CreateClientRequest());
