@@ -366,18 +366,15 @@ public sealed record SecurityProfileRequirements
     };
 
     /// <summary>
-    /// FAPI 1.0 Part 2 section 5.2.2, the clauses this type has a control for: a signed request object, only its
-    /// parameters used, its nbf and exp bounded, its audience the issuer, a signed authorization response, a nonce
-    /// with the openid scope (Part 1 section 5.2.2.2, which section 5.2.2 takes in), the PS256 and ES256 signatures of
-    /// section 8.6, sender-constrained access tokens,
-    /// no public clients, and client authentication by mutual TLS or private_key_jwt.
+    /// FAPI 1.0 Part 2 sections 5.2.2, 8.6, 8.6.1 and 8.9, and the Part 1 section 5.2.2 provisions section 5.2.2 takes
+    /// in, the clauses this type has a control for. Each member below names its clause.
     /// </summary>
     /// <remarks>
     /// Left off on purpose, because each would refuse a client that profile admits: the code-only response type
     /// (the section admits <c>code id_token</c> as well), Pushed Authorization Requests (which
     /// it "may support"), PKCE of a request sent directly (it exempts the Baseline clause and asks PKCE with S256 only
-    /// of a pushed request, which <see cref="RequirePkceWithPushedRequests"/> holds), and the clock window, assertion audience and rotation controls, which
-    /// come from FAPI 2.0 and have no clause in FAPI 1.0.
+    /// of a pushed request, which <see cref="RequirePkceWithPushedRequests"/> holds), and the clock window, assertion
+    /// audience and rotation controls, which come from FAPI 2.0 and have no clause in FAPI 1.0.
     /// </remarks>
     private static readonly SecurityProfileRequirements Fapi1AdvancedRequirements = new()
     {
