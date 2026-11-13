@@ -44,23 +44,24 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
         TenantDefinition tenant,
         AuthorizationRequest request)
     {
-        var fetchResult = await requestObjectFetcher.FetchAsync(tenant, 
+        // A request read back from storage had its object validated and applied before it was stored, and carries what
+        // the server set on it since: the URN it is consumed under, the pages the end user was sent to, the DPoP key the
+        // code is bound to. Applying the object again would rebuild the request without them under strict processing,
+        // and would refuse an end user returning from a slow login once the object expired
+        if (request.PushedRequestUri is not null)
+            return request;
+
+        var fetchResult = await requestObjectFetcher.FetchAsync(tenant,
             request, request.Request, client => client.RequestObjectSigningAlgorithm);
 
-        // The merge rebuilds the request from its wire form, which leaves out what the server set on the request it
-        // stored: carried over, or a pushed request_uri is never consumed and a stored request never learns the end
-        // user was sent to log in. Strict processing (RFC 9101 section 6.3) rebuilds it from the object alone, which
-        // also drops the request parameter carrying that object, so the validated object is carried on too:
-        // without it a client required to sign its request objects is refused for having sent one. A response mode
-        // that is empty or whitespace alone is none, as both hosts read the same value in the query
+        // Strict processing (RFC 9101 section 6.3) rebuilds the request from the object alone, which drops the request
+        // parameter carrying that object, so the validated object is carried on: without it a client required to sign
+        // its request objects is refused for having sent one. A response mode that is empty or whitespace alone is
+        // none, as both hosts read the same value in the query
         return fetchResult
             .Bind(merged => ValidateMergedParameters(request, merged with
             {
                 Request = request.Request,
-                PushedRequestUri = request.PushedRequestUri,
-                OriginRequestUri = request.OriginRequestUri,
-                Prompted = request.Prompted,
-                ClientNamedNoScope = request.ClientNamedNoScope,
                 ResponseMode = string.IsNullOrWhiteSpace(merged.ResponseMode) ? null : merged.ResponseMode,
             }))
             .MapFailure(error => ErrorFactory.ValidationError(error.Error, error.ErrorDescription));

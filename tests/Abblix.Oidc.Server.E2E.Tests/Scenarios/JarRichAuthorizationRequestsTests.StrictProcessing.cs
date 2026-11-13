@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,7 +45,7 @@ public partial class JarRichAuthorizationRequestsTests
         {
             [AuthorizationRequest.Parameters.ClientId] = signing.ClientId,
             [ClientRequest.Parameters.ClientSecret] = signing.ClientSecret,
-            [AuthorizationRequest.Parameters.Request] = await SignRequestObjectAsync(discovery, signing),
+            [AuthorizationRequest.Parameters.Request] = await SignRequestObjectAsync(discovery, signing, GeneratePkcePair().Challenge),
         });
         var requestUri = pushed[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>();
 
@@ -68,10 +69,67 @@ public partial class JarRichAuthorizationRequestsTests
         var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
         {
             [AuthorizationRequest.Parameters.ClientId] = signing.ClientId,
-            [AuthorizationRequest.Parameters.Request] = await SignRequestObjectAsync(discovery, signing),
+            [AuthorizationRequest.Parameters.Request] = await SignRequestObjectAsync(discovery, signing, GeneratePkcePair().Challenge),
         });
 
         Assert.False(string.IsNullOrEmpty(code));
+    }
+
+    /// <summary>
+    /// RFC 9449 section 10.1: a DPoP proof sent with the pushed request binds the code to its key. The request read
+    /// back at the authorization endpoint keeps that binding, so a proof by another key is refused at the token
+    /// endpoint.
+    /// </summary>
+    [Fact]
+    public async Task StrictProcessing_PushedSignedRequestObjectWithDPoP_BindsTheCodeToTheKey()
+    {
+        await using var host = CreateStrictHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var signing = await RegisterSigningClientAsync(client, discovery);
+        var (verifier, challenge) = GeneratePkcePair();
+        using var pushKey = new DPoPProofGenerator();
+        using var otherKey = new DPoPProofGenerator();
+
+        var pushResponse = await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.PushedAuthorizationRequestEndpoint!,
+            new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.ClientId] = signing.ClientId,
+                [ClientRequest.Parameters.ClientSecret] = signing.ClientSecret,
+                [AuthorizationRequest.Parameters.Request] = await SignRequestObjectAsync(discovery, signing, challenge),
+            },
+            pushKey.BuildProof(HttpMethods.Post, discovery.PushedAuthorizationRequestEndpoint!));
+        var pushed = JsonNode.Parse(
+            await pushResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
+        Assert.Equal(HttpStatusCode.Created, pushResponse.StatusCode);
+
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = signing.ClientId,
+            [AuthorizationRequest.Parameters.RequestUri] =
+                pushed[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>(),
+        });
+
+        var tokenResponse = await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.TokenEndpoint,
+            new Dictionary<string, string>
+            {
+                [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+                [TokenRequest.Parameters.Code] = code,
+                [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+                [TokenRequest.Parameters.CodeVerifier] = verifier,
+                [ClientRequest.Parameters.ClientId] = signing.ClientId,
+                [ClientRequest.Parameters.ClientSecret] = signing.ClientSecret,
+            },
+            otherKey.BuildProof(HttpMethods.Post, discovery.TokenEndpoint));
+
+        Assert.Equal(HttpStatusCode.BadRequest, tokenResponse.StatusCode);
+        var body = JsonNode.Parse(
+            await tokenResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
+        Assert.Equal(ErrorCodes.InvalidDPoPProof, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>
@@ -140,9 +198,11 @@ public partial class JarRichAuthorizationRequestsTests
     /// <summary>
     /// A request object carrying a whole code flow request, signed with the client's key.
     /// </summary>
-    private static async Task<string> SignRequestObjectAsync(DiscoveryDocument discovery, SigningClient signing)
+    private static async Task<string> SignRequestObjectAsync(
+        DiscoveryDocument discovery,
+        SigningClient signing,
+        string challenge)
     {
-        var (_, challenge) = GeneratePkcePair();
         var now = TimeProvider.System.GetUtcNow();
         var requestJwt = new JsonWebToken
         {

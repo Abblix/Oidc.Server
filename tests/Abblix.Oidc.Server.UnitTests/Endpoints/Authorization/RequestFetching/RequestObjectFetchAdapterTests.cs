@@ -140,6 +140,26 @@ public class RequestObjectFetchAdapterTests
     }
 
     /// <summary>
+    /// A request read back from storage had its object applied before it was stored, and carries what the server set
+    /// since, such as the DPoP key its code is bound to. It passes as stored, the object not applied again.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_RequestReadBackFromStorage_PassesAsStored()
+    {
+        var stored = CreateRequest() with
+        {
+            PushedRequestUri = new Uri("urn:ietf:params:oauth:request_uri:stored"),
+            ProofKeyThumbprint = "stored-thumbprint",
+        };
+
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, stored);
+
+        Assert.True(result.TryGetSuccess(out var fetched));
+        Assert.Same(stored, fetched);
+        _requestObjectFetcher.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
     /// A request object both rebinding the response type and carrying an unsupported prompt is refused for the
     /// rebinding, the graver of the two faults.
     /// </summary>
