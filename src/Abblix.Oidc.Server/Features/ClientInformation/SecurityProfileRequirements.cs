@@ -201,9 +201,10 @@ public sealed record SecurityProfileRequirements
     /// <c>Features.RequestObject.RequestObjectFetcher</c>.
     /// </summary>
     /// <remarks>
-    /// One value for the three demands, because FAPI 2.0 Message Signing section 5.3.1 and FAPI 1.0 Part 2 section
-    /// 5.2.2 bound both claims by the same 60 minutes: an nbf "no longer than 60 minutes in the past" and an exp
-    /// "no longer than 60 minutes after the nbf claim". A request object signed long ago, or valid for long, is one
+    /// One value for the three demands, because FAPI 1.0 Part 2 section 5.2.2 bounds both claims by the same 60
+    /// minutes: "shall require the request object to contain an nbf claim that is no longer than 60 minutes in the past"
+    /// and "shall require the request object to contain an exp claim that has a lifetime of no longer than 60 minutes
+    /// after the nbf claim"; FAPI 2.0 Message Signing section 5.3.1 says the same for its own profile. A request object signed long ago, or valid for long, is one
     /// whoever obtained it can still present. RFC 9101 alone asks for neither claim, so null is what a deployment
     /// held to no such profile keeps.
     /// </remarks>
@@ -364,11 +365,8 @@ public sealed record SecurityProfileRequirements
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
 
-        // FAPI 2.0 Message Signing section 5.3.1, for a request object where one is sent: "shall require the aud
-        // claim in the request object to be, or to be an array containing, the authorization server's issuer
-        // identifier URL", beside the lifetime the same section bounds
-        MaxRequestObjectLifetime = FapiRequestObjectLifetime,
-        RequireIssuerAudienceInRequestObject = true,
+        // The audience and lifetime of a request object are FAPI 2.0 Message Signing section 5.3.1, a profile of its
+        // own, and not the Security Profile's
 
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,

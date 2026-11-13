@@ -62,10 +62,12 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireSenderConstrainedTokens);
         Assert.True(requirements.RequireCodeResponseTypeOnly);
         Assert.True(requirements.RequireStrictRequestObjectProcessing);
-        Assert.Equal(TimeSpan.FromMinutes(60), requirements.MaxRequestObjectLifetime);
+
+        // The request object rules of FAPI 2.0 Message Signing section 5.3.1 belong to that profile
+        Assert.Null(requirements.MaxRequestObjectLifetime);
         Assert.False(requirements.RequireSignedRequestObject);
         Assert.False(requirements.RequireSignedAuthorizationResponse);
-        Assert.True(requirements.RequireIssuerAudienceInRequestObject);
+        Assert.False(requirements.RequireIssuerAudienceInRequestObject);
         Assert.False(requirements.RequireNonceWithOpenIdScope);
         Assert.False(requirements.RequireStateWithoutOpenIdScope);
         Assert.True(requirements.RequireFapiSigningAlgorithms);

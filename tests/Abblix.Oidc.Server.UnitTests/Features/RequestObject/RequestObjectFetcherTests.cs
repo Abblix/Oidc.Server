@@ -1071,24 +1071,6 @@ public class RequestObjectFetcherTests
         Assert.Equal(expectedState, value.State);
     }
 
-    /// <summary>
-    /// FAPI 1.0 Part 2 section 5.2.2 requires the request object "to contain an exp claim" and "an nbf claim", so one
-    /// missing either is refused for a client held to that profile.
-    /// </summary>
-    [Theory]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    public async Task FetchAsync_Fapi1AdvancedClient_RequestObjectMissingNbfOrExp_IsInvalid(bool carriesNbf, bool carriesExp)
-    {
-        var result = await FetchWithLifetime(
-            Fapi1AdvancedClient,
-            SingleIssuer.Tenant,
-            carriesNbf ? Now : null,
-            carriesExp ? Now + OrdinaryLifetime : null);
-
-        AssertInvalidRequestObject(result);
-    }
-
     private static ClientInfo Fapi1AdvancedClient
         => new("c1") { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
 
@@ -1124,13 +1106,15 @@ public class RequestObjectFetcherTests
     }
 
     /// <summary>
-    /// FAPI 2.0 Message Signing section 5.3.1 has the same sentence about the aud claim, so a request object a client
-    /// held to FAPI 2.0 sends without naming the issuer is refused too.
+    /// The audience and lifetime rules of FAPI 2.0 Message Signing section 5.3.1 belong to that profile, not to the FAPI
+    /// 2.0 Security Profile: a request object a client held to FAPI 2.0 sends naming no audience, and carrying neither nbf
+    /// nor exp, is accepted.
     /// </summary>
     [Fact]
-    public async Task FetchAsync_Fapi2Client_RequestObjectWithoutAudience_IsInvalid()
+    public async Task FetchAsync_Fapi2Client_RequestObjectWithoutAudienceOrLifetime_Passes()
     {
-        AssertInvalidRequestObject(await Fetch(Fapi2Client, SingleIssuer.Tenant, WithinTheProfileLifetime(new JsonObject())));
+        Assert.True((await Fetch(Fapi2Client, SingleIssuer.Tenant, new JsonWebTokenPayload(new JsonObject())))
+            .TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -1267,8 +1251,8 @@ public class RequestObjectFetcherTests
 
     private static ClientInfo Fapi2Client => new("c1") { SecurityProfile = ClientSecurityProfile.Fapi2 };
 
-    private static TenantDefinition Fapi2Tenant
-        => new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant();
+    private static TenantDefinition Fapi1AdvancedTenant
+        => new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced }.ToTenant();
 
     private static void AssertInvalidRequestObject(Result<JarTestRequest, OidcError> result)
     {
@@ -1277,7 +1261,7 @@ public class RequestObjectFetcherTests
     }
 
     /// <summary>
-    /// FAPI 2.0 Message Signing section 5.3.1 and FAPI 1.0 Part 2 section 5.2.2: the server "shall require the
+    /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require the
     /// request object to contain an nbf claim" and "an exp claim", so a request object missing either is refused
     /// for a client held to the profile, although RFC 9101 alone asks for neither.
     /// </summary>
@@ -1285,10 +1269,10 @@ public class RequestObjectFetcherTests
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(false, false)]
-    public async Task FetchAsync_Fapi2Client_RequestObjectMissingNbfOrExp_IsInvalid(bool carriesNbf, bool carriesExp)
+    public async Task FetchAsync_Fapi1AdvancedClient_RequestObjectMissingNbfOrExp_IsInvalid(bool carriesNbf, bool carriesExp)
     {
         var result = await FetchWithLifetime(
-            Fapi2Client,
+            Fapi1AdvancedClient,
             SingleIssuer.Tenant,
             carriesNbf ? Now : null,
             carriesExp ? Now + OrdinaryLifetime : null);
@@ -1302,11 +1286,11 @@ public class RequestObjectFetcherTests
     [Theory]
     [InlineData(false, true)]
     [InlineData(true, false)]
-    public async Task FetchAsync_Fapi2Client_ExpAgainstSixtyMinutesAfterNbf(bool oneSecondOver, bool accepted)
+    public async Task FetchAsync_Fapi1AdvancedClient_ExpAgainstSixtyMinutesAfterNbf(bool oneSecondOver, bool accepted)
     {
         var expiresAt = Now + ProfileLifetime + (oneSecondOver ? OneSecond : TimeSpan.Zero);
 
-        var result = await FetchWithLifetime(Fapi2Client, SingleIssuer.Tenant, Now, expiresAt);
+        var result = await FetchWithLifetime(Fapi1AdvancedClient, SingleIssuer.Tenant, Now, expiresAt);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
@@ -1321,11 +1305,11 @@ public class RequestObjectFetcherTests
     [Theory]
     [InlineData(false, true)]
     [InlineData(true, false)]
-    public async Task FetchAsync_Fapi2Client_NbfAgainstSixtyMinutesInThePast(bool oneSecondOver, bool accepted)
+    public async Task FetchAsync_Fapi1AdvancedClient_NbfAgainstSixtyMinutesInThePast(bool oneSecondOver, bool accepted)
     {
         var notBefore = Now - ProfileLifetime - (oneSecondOver ? OneSecond : TimeSpan.Zero);
 
-        var result = await FetchWithLifetime(Fapi2Client, SingleIssuer.Tenant, notBefore, notBefore + OrdinaryLifetime);
+        var result = await FetchWithLifetime(Fapi1AdvancedClient, SingleIssuer.Tenant, notBefore, notBefore + OrdinaryLifetime);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
@@ -1333,12 +1317,12 @@ public class RequestObjectFetcherTests
     }
 
     /// <summary>
-    /// A client with no profile of its own at a tenant holding its clients to FAPI 2.0 is held to the same lifetime.
+    /// A client with no profile of its own at a tenant holding its clients to FAPI 1.0 Advanced is held to the same lifetime.
     /// </summary>
     [Fact]
     public async Task FetchAsync_UnprofiledClientAtFapiTenant_RequestObjectWithoutExp_IsInvalid()
     {
-        var result = await FetchWithLifetime(new ClientInfo("c1"), Fapi2Tenant, Now, null);
+        var result = await FetchWithLifetime(new ClientInfo("c1"), Fapi1AdvancedTenant, Now, null);
 
         AssertInvalidRequestObject(result);
     }
@@ -1366,7 +1350,7 @@ public class RequestObjectFetcherTests
     /// to escape as an exception.
     /// </summary>
     [Fact]
-    public async Task FetchAsync_Fapi2Client_UnreadableNbf_IsInvalid()
+    public async Task FetchAsync_Fapi1AdvancedClient_UnreadableNbf_IsInvalid()
     {
         const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjMSJ9.signature";
         var request = new JarTestRequest { ClientId = TestConstants.DefaultClientId, Request = jwt };
@@ -1376,7 +1360,7 @@ public class RequestObjectFetcherTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
-            .ReturnsAsync(new ValidJsonWebToken(token, Fapi2Client));
+            .ReturnsAsync(new ValidJsonWebToken(token, Fapi1AdvancedClient));
 
         AssertInvalidRequestObject(await CreateFetcher().FetchAsync(SingleIssuer.Tenant, request, jwt));
     }
