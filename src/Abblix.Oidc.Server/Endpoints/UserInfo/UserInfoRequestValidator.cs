@@ -132,8 +132,8 @@ public class UserInfoRequestValidator(
 		if (mtlsError is not null)
 			return mtlsError;
 
-		// FAPI 2.0 Security Profile section 5.3.4: a resource server "shall not accept access tokens in the query
-		// parameters". Which profile holds the client is known only from the validated token, so the refusal comes
+		// FAPI 2.0 Security Profile section 5.3.4 and FAPI 1.0 Part 1 section 6.2.1: a resource server "shall not accept
+		// access tokens in the query parameters". Which profile holds the client is known only from the validated token, so the refusal comes
 		// here, still before the token opens the user's session. Extraction admits exactly one source, so a token in
 		// the query is the token that was validated.
 		if (userInfoRequest.AccessTokenInQuery != null &&
