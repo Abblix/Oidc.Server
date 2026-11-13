@@ -504,4 +504,29 @@ public class AuthServiceJwtFormatterTests
             async () => await _formatter.FormatAsync(SingleIssuer.Tenant, token, Encrypt(keyId: "missing-kid")));
     }
 
+    /// <summary>
+    /// The same clause where the key is chosen, for keys the startup check cannot see: at a tenant held to FAPI 1.0
+    /// Advanced a service token is never encrypted with RSA1_5, a server key declaring it passed over for another; a
+    /// tenant held to no profile is encrypted with the first key as it always was.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "oaep")]
+    [InlineData(ClientSecurityProfile.None, "pkcs1")]
+    public async Task FormatAsync_AtAFapiTenant_NeverEncryptsWithRsa1_5(ClientSecurityProfile profile, string expectedKeyId)
+    {
+        var pkcs1 = new RsaJsonWebKey { KeyId = "pkcs1", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 };
+        var oaep = new RsaJsonWebKey { KeyId = "oaep", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+        SetupSigningKeys(_signingKeyRS256);
+        SetupEncryptionKeys(pkcs1, oaep);
+        JsonWebKey? used = null;
+        _jwtCreator
+            .Setup(c => c.IssueAsync(It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, key, _, _) => used = key)
+            .ReturnsAsync("issued");
+
+        await _formatter.FormatAsync(tenant, TokenWith(), Unstated);
+
+        Assert.Equal(expectedKeyId, used?.KeyId);
+    }
 }

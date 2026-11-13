@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
 
@@ -57,8 +58,13 @@ public class AuthServiceJwtFormatter(
 		// per RFC 7517 Section 4.4; when the policy pins no algorithm, selection falls back to the first
 		// available encryption key. A pinned key id or a required algorithm that matches nothing fails loudly
 		// inside the selector.
+		// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
+		// algorithm". A server key declaring it is passed over where the tenant's profile forbids it, which the startup
+		// check cannot see for keys a custodian or the host's own provider supplies
+		var profile = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile);
 		var encryptingCredentials = encryption.Key
 			?? await serviceKeysProvider.GetEncryptionKeys(tenant)
+				.Where(key => key.Algorithm is not { } declared || profile.PermitsKeyManagementAlgorithm(declared))
 				.FirstByAlgorithmAsync(encryption.KeyManagementAlgorithm, encryption.KeyId);
 
 		if (encryptingCredentials is null)

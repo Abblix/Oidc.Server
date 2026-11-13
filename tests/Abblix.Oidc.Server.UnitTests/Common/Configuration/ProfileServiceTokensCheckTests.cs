@@ -68,4 +68,39 @@ public class ProfileServiceTokensCheckTests
         Assert.NotEmpty(check.Check([Tenant(ClientSecurityProfile.None, fapiClient)], new OidcOptions()));
         Assert.Empty(check.Check([Tenant(ClientSecurityProfile.None, new ClientInfo("plain"))], new OidcOptions()));
     }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6.1 forbids RSA1_5 for any JWE, and a service token is encrypted unless its Encrypt is
+    /// false: with the algorithm named RSA1_5, or left unnamed where a key of the tenant declares RSA1_5, a FAPI tenant
+    /// is refused; turning encryption off, or naming RSA-OAEP-256, is not.
+    /// </summary>
+    [Theory]
+    [InlineData(null, EncryptionAlgorithms.KeyManagement.Rsa1_5, false, true)]
+    [InlineData(true, EncryptionAlgorithms.KeyManagement.Rsa1_5, false, true)]
+    [InlineData(null, null, true, true)]
+    [InlineData(false, EncryptionAlgorithms.KeyManagement.Rsa1_5, true, false)]
+    [InlineData(null, EncryptionAlgorithms.KeyManagement.RsaOaep256, true, false)]
+    public void AFapiTenant_EncryptingItsOwnTokensRsa1_5_IsRefused(
+        bool? encrypt, string? algorithm, bool tenantKeyDeclaresRsa1_5, bool refused)
+    {
+        var options = OptionsSigningWith(SigningAlgorithms.PS256);
+        foreach (var token in new[]
+                 {
+                     options.ServiceTokens.AccessToken, options.ServiceTokens.RefreshToken,
+                     options.ServiceTokens.RegistrationAccessToken, options.ServiceTokens.InitialAccessToken,
+                 })
+        {
+            token.Encrypt = encrypt;
+            token.Encryption.Algorithm = algorithm;
+        }
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
+        key.Algorithm = tenantKeyDeclaresRsa1_5 ? EncryptionAlgorithms.KeyManagement.Rsa1_5 : null;
+        var tenant = new TestIssuer
+        {
+            DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced,
+            EncryptionKeys = [key],
+        }.ToTenant();
+
+        Assert.Equal(refused, new ProfileServiceTokensCheck().Check([tenant], options).Any());
+    }
 }

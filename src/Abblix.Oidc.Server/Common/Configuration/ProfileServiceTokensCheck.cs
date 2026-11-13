@@ -62,10 +62,19 @@ public sealed class ProfileServiceTokensCheck : ITenantsCheck
                              $"here does not admit; set it to {string.Join(" or ", SecurityProfileRequirements.FapiSigningAlgorithms)}.";
             }
 
-            if (token.Encrypt == true && token.Encryption.Algorithm is { } encryption &&
-                Array.Exists(inForce, requirements => !requirements.PermitsKeyManagementAlgorithm(encryption)))
+            // Encrypted unless turned off, and with the key's declared algorithm where the setting names none
+            if (token.Encrypt == false)
+                continue;
+
+            var encryptions = token.Encryption.Algorithm is { } named
+                ? [named]
+                : tenant.EncryptionKeys.Select(key => key.Algorithm).OfType<string>().ToArray();
+
+            foreach (var encryption in encryptions.Where(
+                         encryption => Array.Exists(
+                             inForce, requirements => !requirements.PermitsKeyManagementAlgorithm(encryption))))
             {
-                yield return $"ServiceTokens.{name}.Encryption.Algorithm is {encryption}, which a security profile in " +
+                yield return $"ServiceTokens.{name} is encrypted with {encryption}, which a security profile in " +
                              "force here forbids.";
             }
         }
