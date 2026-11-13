@@ -68,8 +68,6 @@ public class UserInfoErrorResponseTests(TestFactory factory) : TestBase(factory)
         var response = await GetAsync(client, endpoint, new AuthenticationHeaderValue(TokenTypes.Bearer));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains(
-            ErrorCodes.InvalidRequest,
-            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorResponseReader.ErrorCodeOf(response));
     }
 }

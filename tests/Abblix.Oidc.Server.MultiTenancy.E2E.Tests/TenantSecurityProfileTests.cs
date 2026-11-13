@@ -179,9 +179,7 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, inQuery.StatusCode);
-        Assert.Contains(
-            ErrorCodes.InvalidRequest,
-            await inQuery.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorResponseReader.ErrorCodeOf(inQuery));
 
         using var inHeader = new HttpRequestMessage(HttpMethod.Get, $"{Globex}/connect/userinfo");
         inHeader.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken.EncodedJwt);

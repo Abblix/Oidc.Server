@@ -90,9 +90,7 @@ public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(fact
             WithTokenInQuery(endpoint, accessToken), TokenInForm(accessToken), TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains(
-            ErrorCodes.InvalidRequest,
-            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorResponseReader.ErrorCodeOf(response));
     }
 
     /// <summary>
@@ -110,9 +108,7 @@ public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(fact
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains(
-            ErrorCodes.InvalidRequest,
-            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorResponseReader.ErrorCodeOf(response));
     }
 
     /// <summary>
@@ -137,8 +133,6 @@ public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(fact
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains(
-            ErrorCodes.InvalidRequest,
-            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorResponseReader.ErrorCodeOf(response));
     }
 }
