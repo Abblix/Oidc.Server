@@ -1057,22 +1057,20 @@ public class ClientJwtValidatorTests
     public async Task ValidateAsync_TheClientsProfile_DecidesTheKeyManagementAlgorithm(
         ClientSecurityProfile? profile, string keyManagement, bool accepted)
     {
-        var header = System.Buffers.Text.Base64Url.EncodeToString(System.Text.Encoding.UTF8.GetBytes(
-            new System.Text.Json.Nodes.JsonObject
-            {
-                [JwtClaimTypes.Algorithm] = keyManagement,
-                [JwtClaimTypes.EncryptionAlgorithm] = EncryptionAlgorithms.ContentEncryption.Aes128Gcm,
-            }.ToJsonString()));
-        var jwe = header + ".key.iv.ciphertext.tag";
+        const string jwe = "header.key.iv.ciphertext.tag";
         var token = CreateValidToken();
         token.Header.Algorithm = SigningAlgorithms.PS256;
         var clientInfo = CreateClientInfo(ValidClientId);
         clientInfo.SecurityProfile = profile;
 
+        // The validator reports each JWE layer's key management algorithm before decrypting it, as the real one does
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwe, It.IsAny<ValidationParameters>()))
             .Returns(async (string _, ValidationParameters p) =>
             {
+                if (!p.ValidateKeyManagementAlgorithm!(keyManagement))
+                    return new JwtValidationError(JwtError.InvalidToken, "refused");
+
                 await p.ValidateIssuer!(ValidClientId);
                 return token;
             });
@@ -1083,5 +1081,30 @@ public class ClientJwtValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, jwe, TokenTypePolicy.CheckedByCaller);
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Under a tenant holding every client to FAPI 1.0 Advanced a layer encrypted with RSA1_5 is refused before it is
+    /// decrypted, the client not yet known; RSA-OAEP-256 is let through.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Rsa1_5, false)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, true)]
+    public async Task ValidateAsync_TheTenantsProfile_JudgesEachLayerBeforeDecryption(string keyManagement, bool admitted)
+    {
+        ValidationParameters? parameters = null;
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns((string _, ValidationParameters p) =>
+            {
+                parameters = p;
+                return Task.FromResult<Abblix.Utils.Result<JsonWebToken, JwtValidationError>>(
+                    new JwtValidationError(JwtError.InvalidToken, "not under test"));
+            });
+        var tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced }.ToTenant();
+
+        await _validator.ValidateAsync(tenant, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(admitted, parameters!.ValidateKeyManagementAlgorithm!(keyManagement));
     }
 }

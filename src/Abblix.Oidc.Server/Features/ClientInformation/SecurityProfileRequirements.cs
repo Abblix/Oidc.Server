@@ -277,6 +277,14 @@ public sealed record SecurityProfileRequirements
     public bool ForbidRsa1_5KeyManagement { get; init; }
 
     /// <summary>
+    /// Whether a JWE layer encrypted with the key management algorithm <paramref name="algorithm"/> is one this profile
+    /// admits.
+    /// </summary>
+    /// <param name="algorithm">The <c>alg</c> of the JWE's protected header.</param>
+    public bool PermitsKeyManagementAlgorithm(string algorithm)
+        => !ForbidRsa1_5KeyManagement || algorithm != EncryptionAlgorithms.KeyManagement.Rsa1_5;
+
+    /// <summary>
     /// The signature algorithms <see cref="RequireFapiSigningAlgorithms"/> admits. FAPI 2.0 section 5.4.1 adds EdDSA
     /// with Ed25519, which this library does not implement, so no client of it can use it.
     /// </summary>

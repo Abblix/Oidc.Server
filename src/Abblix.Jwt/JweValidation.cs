@@ -44,6 +44,7 @@ internal sealed class JweValidation(
 				JwtError.InvalidToken,
 				"Received a JWE-encrypted token but no decryption keys are configured for this validation path; this endpoint accepts JWS only.");
 		}
+
 		var decryptionKeys = resolveTokenDecryptionKeys(string.Empty);
 
 		var result = await encryptor.DecryptAsync(jwtParts, decryptionKeys);
