@@ -16,8 +16,8 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
+using Abblix.Oidc.Server.AspNetCore;
 using Microsoft.Extensions.Options;
-using Microsoft.Net.Http.Headers;
 using UserInfoRequest = Abblix.Oidc.Server.Model.UserInfoRequest;
 
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
@@ -53,13 +53,13 @@ public class UserInfoResponseFormatter(
 
     /// <summary>
     /// RFC 6750 section 2.3: "Server success (2XX status) responses to these requests SHOULD contain a Cache-Control
-    /// header with the "private" option", these being requests carrying the token in the URI query. Appended beside
-    /// the no-store the endpoint sends on every response, which it does not replace.
+    /// header with the "private" option", these being requests carrying the token in the URI query. Merged into the
+    /// Cache-Control the endpoint sends on every response, whose no-store it keeps.
     /// </summary>
     private static IResult PrivateWhenTokenInQuery(UserInfoRequest request, IResult result)
         => request.AccessTokenInQuery is null
             ? result
-            : result.WithHeader(HeaderNames.CacheControl, [CacheControlHeaderValue.PrivateString]);
+            : result.WithResponse(response => response.AddPrivateCacheDirective());
 
     private async Task<IResult> FormatSuccessAsync(UserInfoFoundResponse found)
     {

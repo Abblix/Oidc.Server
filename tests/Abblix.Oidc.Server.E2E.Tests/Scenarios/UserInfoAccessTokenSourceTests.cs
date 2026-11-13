@@ -58,8 +58,12 @@ public class UserInfoAccessTokenSourceTests(TestFactory factory) : TestBase(fact
         var response = await client.GetAsync(WithTokenInQuery(endpoint, accessToken), TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.True(response.Headers.CacheControl?.Private);
-        Assert.True(response.Headers.CacheControl?.NoStore);
+
+        // Read as the server sent it, before the client merges repeated lines into one value
+        var sent = Assert.Single(response.Headers.NonValidated[Microsoft.Net.Http.Headers.HeaderNames.CacheControl]);
+        var cacheControl = CacheControlHeaderValue.Parse(sent);
+        Assert.True(cacheControl.Private);
+        Assert.True(cacheControl.NoStore);
     }
 
     [Fact]
