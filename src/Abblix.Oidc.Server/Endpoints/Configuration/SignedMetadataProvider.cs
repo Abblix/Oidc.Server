@@ -9,6 +9,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
@@ -37,12 +38,25 @@ public class SignedMetadataProvider(
     /// <inheritdoc />
     public async Task<string> SignAsync(TenantDefinition tenant, Model.ConfigurationResponse metadata)
     {
-        var signingKey = await serviceKeysProvider.GetSigningKeys(tenant, true).FirstOrDefaultAsync();
-        if (signingKey is null)
+        var signingKeys = await serviceKeysProvider.GetSigningKeys(tenant, true).ToArrayAsync();
+        if (signingKeys.Length == 0)
         {
             throw new InvalidOperationException(
                 $"{nameof(DiscoveryOptions)}.{nameof(DiscoveryOptions.SignedMetadata)} is enabled but no signing keys are configured. " +
                 "Configure signing certificates so the discovery document can be signed (RFC 8414 section 2.1).");
+        }
+
+        // FAPI 1.0 Part 2 section 8.6, FAPI 2.0 section 5.4.1: a JWS this server creates uses only the algorithms the
+        // profile the tenant holds its clients to admits, so the first key signing with one of them is taken
+        var profile = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile);
+        var (signingKey, algorithm) = signingKeys
+            .Select(key => (Key: key, Algorithm: SigningAlgorithmFor(key, profile)))
+            .FirstOrDefault(candidate => profile.PermitsSigningAlgorithm(candidate.Algorithm));
+        if (signingKey is null || algorithm is null)
+        {
+            throw new InvalidOperationException(
+                "No signing key of this tenant signs with an algorithm its security profile admits, so the discovery " +
+                $"document cannot be signed; add a key for {string.Join(" or ", SecurityProfileRequirements.FapiSigningAlgorithms)}.");
         }
 
         var payload = JsonSerializer.SerializeToNode(metadata, SerializerOptions) switch
@@ -57,7 +71,7 @@ public class SignedMetadataProvider(
 
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithmFor(signingKey) },
+            Header = { Algorithm = algorithm },
             Payload = new JsonWebTokenPayload(payload)
             {
                 Issuer = metadata.Issuer,
@@ -82,13 +96,15 @@ public class SignedMetadataProvider(
     /// The fallback for elliptic-curve keys follows the curve, the same pairing
     /// <c>EllipticCurveJsonWebKeyExtensions.Apply</c> uses when it imports one.
     /// </remarks>
-    private static string SigningAlgorithmFor(JsonWebKey signingKey)
+    private static string SigningAlgorithmFor(JsonWebKey signingKey, SecurityProfileRequirements profile)
     {
         if (signingKey.Algorithm is { } declared)
             return declared;
 
         return signingKey switch
         {
+            // RSASSA-PSS where the profile admits no PKCS #1 v1.5 signature, RS256 otherwise
+            RsaJsonWebKey when profile.RequireFapiSigningAlgorithms => SigningAlgorithms.PS256,
             RsaJsonWebKey => SigningAlgorithms.RS256,
 
             EllipticCurveJsonWebKey { Curve: var curve } => curve switch
