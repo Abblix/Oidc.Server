@@ -103,13 +103,13 @@ public class PushedAuthorizationRequestValidatorTests
         var token = new JsonWebToken { Payload = new JsonWebTokenPayload(payloadJson) };
         var proof = new Proof(token, new OctetJsonWebKey(), DerivedThumbprint, "jti-1", ProofIssuedAt);
         _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)proof);
     }
 
     private void SetupProofFailure(string reason = "signature_invalid")
         => _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)new ProofError(reason));
 
     /// <summary>
@@ -215,20 +215,23 @@ public class PushedAuthorizationRequestValidatorTests
     }
 
     /// <summary>
-    /// The same clauses at the pushed authorization request endpoint: a DPoP proof signed RS256 by a client held to
-    /// FAPI 1.0 Advanced is refused with invalid_dpop_proof, one signed ES256 passes.
+    /// The same clauses at the pushed authorization request endpoint: the proof is judged under the profile of the
+    /// client presenting it, which for FAPI 1.0 Advanced refuses a proof signed RS256 and admits one signed ES256.
     /// </summary>
     [Theory]
     [InlineData(SigningAlgorithms.RS256, false)]
     [InlineData(SigningAlgorithms.ES256, true)]
     public async Task ValidateAsync_Fapi1Advanced_JudgesTheProofAlgorithm(string algorithm, bool accepted)
     {
+        SecurityProfileRequirements? judgedUnder = null;
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced });
         var token = new JsonWebToken { Header = { Algorithm = algorithm } };
         _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Callback<SecurityProfileRequirements, string, string?, CancellationToken>(
+                (profile, _, _, _) => judgedUnder = profile)
             .ReturnsAsync((Result<Proof, ProofError>)new Proof(
                 token, new OctetJsonWebKey(), DerivedThumbprint, "jti-1", ProofIssuedAt));
         var request = BuildRequest() with
@@ -237,12 +240,8 @@ public class PushedAuthorizationRequestValidatorTests
             CodeChallengeMethod = CodeChallengeMethods.S256,
         };
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, BuildClientRequest(ProofJwt));
+        await _validator.ValidateAsync(SingleIssuer.Tenant, request, BuildClientRequest(ProofJwt));
 
-        if (accepted)
-            Assert.True(result.TryGetSuccess(out _));
-        else
-            Assert.Equal(ErrorCodes.InvalidDPoPProof, Assert.IsType<AuthorizationRequestValidationError>(
-                result.TryGetFailure(out var error) ? error : null).Error);
+        Assert.Equal(accepted, judgedUnder!.PermitsSigningAlgorithm(algorithm));
     }
 }

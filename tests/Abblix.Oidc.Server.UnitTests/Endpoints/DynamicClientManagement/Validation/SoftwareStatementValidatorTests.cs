@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using System;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -44,7 +45,7 @@ public class SoftwareStatementValidatorTests
 
         _validator = new SoftwareStatementValidator(
             NullLogger<SoftwareStatementValidator>.Instance,
-            _jwtValidator.Object,
+            new ProfiledJwtValidator(_jwtValidator.Object),
             optionsMonitor.Object,
             _secureFetcher.Object,
             SingleIssuer.LicensedCatalog);

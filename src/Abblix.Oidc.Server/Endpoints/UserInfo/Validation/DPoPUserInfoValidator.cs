@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -91,7 +92,8 @@ public partial class DPoPUserInfoValidator(
             return new InvalidDPoPProofError("DPoP proof is required for the DPoP-bound access token.");
         }
 
-        var proofResult = await proofValidator.ValidateAsync(proofJwt, rawAccessToken);
+        var proofResult = await proofValidator.ValidateAsync(
+            SecurityProfileRequirements.For(tenant, client: null), proofJwt, rawAccessToken);
         if (proofResult.TryGetFailure(out var proofError))
         {
             LogProofRejected(proofError.Reason);

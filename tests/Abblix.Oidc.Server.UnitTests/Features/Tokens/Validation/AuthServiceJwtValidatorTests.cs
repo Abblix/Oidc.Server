@@ -49,7 +49,7 @@ public class AuthServiceJwtValidatorTests
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
         _validator = new AuthServiceJwtValidator(
-            _jwtValidator.Object,
+            new ProfiledJwtValidator(_jwtValidator.Object),
             SingleIssuer.LicensedCatalog,
             _serviceKeysProvider.Object,
             NothingRecorded.StatusCheck,
@@ -698,7 +698,7 @@ public class AuthServiceJwtValidatorTests
     {
         var served = new TenantDefinition { Id = "acme", Issuer = TestConstants.DefaultIssuer, Generation = "g2" };
         var validator = new AuthServiceJwtValidator(
-            _jwtValidator.Object,
+            new ProfiledJwtValidator(_jwtValidator.Object),
             SingleIssuer.HostCatalog,
             _serviceKeysProvider.Object,
             NothingRecorded.StatusCheck,
@@ -726,7 +726,7 @@ public class AuthServiceJwtValidatorTests
         // Strict: any read of the records fails the test
         var registry = new Mock<ITokenRegistry>(MockBehavior.Strict);
         var validator = new AuthServiceJwtValidator(
-            _jwtValidator.Object,
+            new ProfiledJwtValidator(_jwtValidator.Object),
             SingleIssuer.LicensedCatalog,
             _serviceKeysProvider.Object,
             new TokenStatusCheck(

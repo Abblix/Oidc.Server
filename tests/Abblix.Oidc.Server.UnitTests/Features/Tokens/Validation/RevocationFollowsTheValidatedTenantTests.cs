@@ -134,7 +134,7 @@ public class RevocationFollowsTheValidatedTenantTests
                     : null);
 
         var validator = new AuthServiceJwtValidator(
-            inner.Object,
+            new ProfiledJwtValidator(inner.Object),
             SingleIssuer.LicensedCatalog,
             Mock.Of<IAuthServiceKeysProvider>(),
             new TokenStatusCheck(

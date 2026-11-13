@@ -43,7 +43,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 public partial class ClientJwtValidator(
     ILogger<ClientJwtValidator> logger,
     IRequestInfoProvider requestInfoProvider,
-    IJsonWebTokenValidator tokenValidator,
+    ProfiledJwtValidator tokenValidator,
     IClientInfoProvider clientInfoProvider,
     IClientKeysProvider clientJwksProvider,
     IAuthServiceKeysProvider serviceKeysProvider,
@@ -70,13 +70,14 @@ public partial class ClientJwtValidator(
     {
         var context = new ValidationContext(clientInfoProvider, clientJwksProvider, tenant);
 
-        // FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
-        // algorithm". Each layer is judged before it is decrypted under what the deployment demands of every client,
-        // and recorded so the client's own profile can judge it once the token names the client
-        var deployment = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile);
+        // The token is validated under what the deployment demands of every client, the guard holding its signature
+        // and each JWE layer to that profile; each layer is recorded so the client's own profile can judge it once the
+        // token names the client
+        var deployment = SecurityProfileRequirements.For(tenant, client: null);
         var keyManagementAlgorithms = new List<string>();
 
         var result = await tokenValidator.ValidateAsync(
+            deployment,
             jwt,
             new ValidationParameters
             {
@@ -97,7 +98,7 @@ public partial class ClientJwtValidator(
                 ValidateKeyManagementAlgorithm = algorithm =>
                 {
                     keyManagementAlgorithms.Add(algorithm);
-                    return deployment.PermitsKeyManagementAlgorithm(algorithm);
+                    return true;
                 },
             });
 

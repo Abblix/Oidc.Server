@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -32,7 +34,7 @@ namespace Abblix.Oidc.Server.Features.DPoP;
 /// claims, and replay protection.
 /// </remarks>
 internal sealed class ProofValidator(
-    IJsonWebTokenValidator jwtValidator,
+    ProfiledJwtValidator jwtValidator,
     IReplayCache replayCache,
     IOptionsMonitor<OidcOptions> options,
     IRequestInfoProvider requestInfoProvider,
@@ -40,6 +42,7 @@ internal sealed class ProofValidator(
 {
     /// <inheritdoc/>
     public async Task<Result<Proof, ProofError>> ValidateAsync(
+        SecurityProfileRequirements profile,
         string proofJwt,
         string? accessToken = null,
         CancellationToken cancellationToken = default)
@@ -59,6 +62,7 @@ internal sealed class ProofValidator(
         }
 
         var jwtResult = await jwtValidator.ValidateAsync(
+            profile,
             proofJwt,
             new ()
             {

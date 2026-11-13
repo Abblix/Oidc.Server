@@ -64,7 +64,7 @@ public class ClientJwtValidatorTests
         _validator = new ClientJwtValidator(
             logger.Object,
             requestInfoProvider.Object,
-            _tokenValidator.Object,
+            new ProfiledJwtValidator(_tokenValidator.Object),
             _clientInfoProvider.Object,
             _clientKeysProvider.Object,
             _serviceKeysProvider.Object,

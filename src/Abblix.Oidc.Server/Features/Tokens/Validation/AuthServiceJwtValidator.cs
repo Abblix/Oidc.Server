@@ -31,7 +31,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="oidcOptions">Supplies <see cref="OidcOptions.ReplicaClockSkew"/>, the drift between this server's
 /// instances.</param>
 public class AuthServiceJwtValidator(
-	IJsonWebTokenValidator validator,
+	ProfiledJwtValidator validator,
 	ITenantCatalog catalog,
 	IAuthServiceKeysProvider serviceKeysProvider,
 	TokenStatusCheck statusCheck,
@@ -54,8 +54,10 @@ public class AuthServiceJwtValidator(
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options = ValidationOptions.Default)
 	{
-		var profile = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile);
+		// Only the tenant's profile is known before the token is read, so a token this server signed or encrypted
+		// otherwise before the profile was in force is refused
 		var result = await validator.ValidateAsync(
+			SecurityProfileRequirements.For(tenant, client: null),
 			jwt,
 			new ValidationParameters
 			{
@@ -65,12 +67,6 @@ public class AuthServiceJwtValidator(
 				ValidateAudience = audiences => ValidateAudienceAsync(tenant, audiences),
 				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(tenant),
 				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
-
-				// FAPI 1.0 Part 2 sections 8.6 and 8.6.1, FAPI 2.0 section 5.4.1 "when creating or processing JWTs": only
-				// the tenant's profile is known before the token is read, and it bounds both the signature and each JWE
-				// layer, so a token this server signed or encrypted otherwise before the profile was in force is refused
-				AllowedSigningAlgorithms = profile.SigningAlgorithmsAdmitted(),
-				ValidateKeyManagementAlgorithm = profile.PermitsKeyManagementAlgorithm,
 
 				// These are tokens this server issued and reads back, often on another instance whose clock lags
 				// the issuing one, so a token dated a little ahead is still this server's own. Only that direction

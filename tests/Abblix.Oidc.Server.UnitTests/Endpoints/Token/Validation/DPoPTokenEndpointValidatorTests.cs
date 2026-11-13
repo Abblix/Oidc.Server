@@ -379,12 +379,12 @@ public class DPoPTokenEndpointValidatorTests
 
     private void SetupProofValidatorSuccess(Proof proof) =>
         _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)proof);
 
     private void SetupProofValidatorFailure(ProofError error) =>
         _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)error);
 
     private void RequireNonceAtTokenEndpoint() => _opts.DPoP.Nonce.RequireAtTokenEndpoint = true;
@@ -421,9 +421,10 @@ public class DPoPTokenEndpointValidatorTests
     }
 
     /// <summary>
-    /// FAPI 2.0 section 5.4.1 has the server, "when creating or processing JWTs", "use PS256, ES256, or EdDSA": a DPoP
-    /// proof signed RS256 by a client held to FAPI 2.0 is refused at the token endpoint, ES256 passes, and a client held
-    /// to no profile keeps RS256. A client held to FAPI 1.0 Advanced sends no proof at all.
+    /// FAPI 2.0 section 5.4.1 has the server, "when creating or processing JWTs", "use PS256, ES256, or EdDSA": the
+    /// proof is judged under the profile of the client presenting it, which for FAPI 2.0 refuses a proof signed RS256
+    /// and admits ES256, while a client held to no profile keeps RS256. A client held to FAPI 1.0 Advanced sends no
+    /// proof at all.
     /// </summary>
     [Theory]
     [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.RS256, false)]
@@ -432,14 +433,17 @@ public class DPoPTokenEndpointValidatorTests
     public async Task ValidateAsync_TheClientsProfile_DecidesTheProofAlgorithm(
         ClientSecurityProfile? profile, string algorithm, bool accepted)
     {
-        var proof = BuildProof();
-        proof.Token.Header.Algorithm = algorithm;
-        SetupProofValidatorSuccess(proof);
+        SecurityProfileRequirements? judgedUnder = null;
+        _proofValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Callback<SecurityProfileRequirements, string, string?, CancellationToken>(
+                (requirements, _, _, _) => judgedUnder = requirements)
+            .ReturnsAsync((Result<Proof, ProofError>)BuildProof());
         var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: false, securityProfile: profile);
 
-        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
 
-        Assert.Equal(accepted ? null : ErrorCodes.InvalidDPoPProof, error?.Error);
+        Assert.Equal(accepted, judgedUnder!.PermitsSigningAlgorithm(algorithm));
     }
 
     /// <summary>

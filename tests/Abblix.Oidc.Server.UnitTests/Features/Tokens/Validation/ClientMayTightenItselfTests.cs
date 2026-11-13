@@ -104,7 +104,7 @@ public class ClientMayTightenItselfTests
         var validator = new ClientJwtValidator(
             NullLogger<ClientJwtValidator>.Instance,
             requestInfoProvider.Object,
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             clientInfoProvider.Object,
             new Mock<IClientKeysProvider>().Object,
             serviceKeys.Object,

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using System;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -760,7 +761,7 @@ public class JwtBearerGrantHandlerTests
 
 		var handler = new JwtBearerGrantHandler(
 			logger.Object,
-			jwtValidator.Object,
+			new ProfiledJwtValidator(jwtValidator.Object),
 			issuerProvider.Object,
 			requestInfoProvider.Object,
 			sessionIdGenerator.Object,
@@ -1364,6 +1365,7 @@ public class JwtBearerGrantHandlerTests
 	/// <summary>
 	/// FAPI 1.0 Part 2 section 8.6 names the algorithms the server uses for any JWS, so a bearer assertion presented by
 	/// a client held to FAPI 1.0 Advanced is refused under RS256 although its trusted issuer allows it; PS256 passes.
+	/// The validator is driven as the real one judges the algorithm list it is handed.
 	/// </summary>
 	[Theory]
 	[InlineData("RS256", false)]
@@ -1373,7 +1375,12 @@ public class JwtBearerGrantHandlerTests
 		var (handler, mocks) = CreateHandler();
 		var jwt = CreateValidJwt();
 		jwt.Header.Algorithm = algorithm;
-		SetupValidJwtValidation(mocks.JwtValidator, jwt);
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.ReturnsAsync((string _, ValidationParameters parameters) =>
+				parameters.AllowedSigningAlgorithms is { } allowed && !allowed.Contains(algorithm)
+					? new JwtValidationError(JwtError.InvalidAlgorithm, "Outside the allowed list")
+					: jwt);
 		SetupTrustedIssuer(mocks.IssuerProvider, Issuer, allowedAlgorithms: ["RS256", "PS256"]);
 		var clientInfo = new ClientInfo(ClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
 		var tokenRequest = new TokenRequest

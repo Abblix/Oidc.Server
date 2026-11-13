@@ -59,7 +59,7 @@ public class ProfileClockSkewReachesValidationTests
 
         var authenticator = new ClientSecretJwtAuthenticator(
             NullLogger<ClientSecretJwtAuthenticator>.Instance,
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             clientInfoProvider.Object,
             TimeProvider.System,
             new Mock<IReplayCache>().Object,
@@ -113,7 +113,7 @@ public class ProfileClockSkewReachesValidationTests
 
         var validator = new SoftwareStatementValidator(
             NullLogger<SoftwareStatementValidator>.Instance,
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             options.Object,
             new Mock<ISecureHttpFetcher>().Object,
             SingleIssuer.LicensedCatalog);
@@ -156,7 +156,7 @@ public class ProfileClockSkewReachesValidationTests
         var validator = new ClientJwtValidator(
             NullLogger<ClientJwtValidator>.Instance,
             requestInfoProvider.Object,
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             new Mock<IClientInfoProvider>().Object,
             new Mock<IClientKeysProvider>().Object,
             serviceKeys.Object,

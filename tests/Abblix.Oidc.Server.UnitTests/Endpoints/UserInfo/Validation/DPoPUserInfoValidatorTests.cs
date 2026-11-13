@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using System;
 using System.Net.Http.Headers;
 using System.Text.Json.Nodes;
@@ -248,12 +249,12 @@ public class DPoPUserInfoValidatorTests
 
     private void SetupProofValidatorSuccess(Proof proof) =>
         _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, AccessTokenJwt, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, AccessTokenJwt, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)proof);
 
     private void SetupProofValidatorFailure(ProofError error) =>
         _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, AccessTokenJwt, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, AccessTokenJwt, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)error);
 
     private void RequireNonceAtUserInfoEndpoint() => _opts.DPoP.Nonce.RequireAtUserInfoEndpoint = true;

@@ -241,7 +241,7 @@ public class RefreshTokenSubjectTokenResolverTests
             .ReturnsAsync(NewRefreshJwt());
         var resolver = new RefreshTokenSubjectTokenResolver(
             new AuthServiceJwtValidator(
-                inner.Object,
+                new ProfiledJwtValidator(inner.Object),
                 SingleIssuer.LicensedCatalog,
                 Mock.Of<Abblix.Oidc.Server.Common.Interfaces.IAuthServiceKeysProvider>(),
                 NothingRecorded.StatusCheck,
