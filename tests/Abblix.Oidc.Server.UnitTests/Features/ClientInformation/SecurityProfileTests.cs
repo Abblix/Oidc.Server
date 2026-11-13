@@ -67,6 +67,7 @@ public class SecurityProfileTests
         Assert.False(requirements.RequireSignedAuthorizationResponse);
         Assert.True(requirements.RequireIssuerAudienceInRequestObject);
         Assert.False(requirements.RequireNonceWithOpenIdScope);
+        Assert.False(requirements.RequireStateWithoutOpenIdScope);
         Assert.True(requirements.RequireFapiSigningAlgorithms);
     }
 
@@ -90,6 +91,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireSignedAuthorizationResponse);
         Assert.True(requirements.RequireIssuerAudienceInRequestObject);
         Assert.True(requirements.RequireNonceWithOpenIdScope);
+        Assert.True(requirements.RequireStateWithoutOpenIdScope);
         Assert.True(requirements.RequireFapiSigningAlgorithms);
     }
 

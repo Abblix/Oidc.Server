@@ -142,7 +142,8 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         JsonObject parameters,
         string algorithm = SigningAlgorithms.PS256,
         bool addressedToTheIssuer = true,
-        string clientId = ClientId)
+        string clientId = ClientId,
+        string scope = Scopes.OpenId)
     {
         var now = TimeProvider.System.GetUtcNow();
         var token = new JsonWebToken
@@ -169,7 +170,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         query[AuthorizationRequest.Parameters.ClientId] = clientId;
         query[AuthorizationRequest.Parameters.ResponseType] =
             parameters[AuthorizationRequest.Parameters.ResponseType]!.GetValue<string>();
-        query[AuthorizationRequest.Parameters.Scope] = Scopes.OpenId;
+        query[AuthorizationRequest.Parameters.Scope] = scope;
         query[AuthorizationRequest.Parameters.Request] = requestObject;
 
         return await _http!.GetAsync(Acme + "/connect/authorize?" + query, TestContext.Current.CancellationToken);
@@ -455,5 +456,30 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
             Assert.Null(start);
         else
             Assert.IsType<Microsoft.Extensions.Options.OptionsValidationException>(start);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 5.2.2.3, taken in by Part 2 section 5.2.2: "If the client does not requests the openid
+    /// scope, the authorization server shall require the state parameter". A request naming no openid scope is
+    /// refused without state and accepted with it.
+    /// </summary>
+    [Theory]
+    [InlineData(null, ErrorCodes.InvalidRequest)]
+    [InlineData("state-1", null)]
+    public async Task WithoutTheOpenIdScope_StateIsRequired(string? state, string? expectedError)
+    {
+        var request = ConformantRequest();
+        request[AuthorizationRequest.Parameters.Scope] = Scopes.Profile;
+        request.Remove(AuthorizationRequest.Parameters.Nonce);
+        request.Remove(AuthorizationRequest.Parameters.State);
+        if (state != null)
+            request[AuthorizationRequest.Parameters.State] = state;
+
+        var response = await AuthorizeAsync(request, scope: Scopes.Profile);
+
+        if (expectedError == null)
+            await AssertSentToLogin(response);
+        else
+            Assert.Equal(expectedError, await ErrorOf(response));
     }
 }

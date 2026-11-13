@@ -209,6 +209,14 @@ public sealed record SecurityProfileRequirements
     public bool RequireNonceWithOpenIdScope { get; init; }
 
     /// <summary>
+    /// The profile requires the <c>state</c> parameter on every authorization request not naming the <c>openid</c>
+    /// scope. FAPI 1.0 Part 1 section 5.2.2.3, which Part 2 section 5.2.2 takes in: "If the client does not requests
+    /// the openid scope, the authorization server shall require the state parameter defined in Section 4.1.1 of
+    /// RFC6749". Enforced by <c>Endpoints.Authorization.Validation.StateValidator</c>.
+    /// </summary>
+    public bool RequireStateWithoutOpenIdScope { get; init; }
+
+    /// <summary>
     /// The profile admits only the PS256 and ES256 signature algorithms, in what the client signs for this server and
     /// in what this server signs for the client. FAPI 1.0 Part 2 section 8.6: "For JWS, both clients and
     /// authorization servers shall use PS256 or ES256 algorithms". Read through <see cref="PermitsSigningAlgorithm"/>.
@@ -336,6 +344,7 @@ public sealed record SecurityProfileRequirements
         RequireIssuerAudienceInRequestObject = true,
         RequireSignedAuthorizationResponse = true,
         RequireNonceWithOpenIdScope = true,
+        RequireStateWithoutOpenIdScope = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireFapiSigningAlgorithms = true,
@@ -484,6 +493,7 @@ public sealed record SecurityProfileRequirements
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
         RequireIssuerAudienceInRequestObject = true,
         RequireNonceWithOpenIdScope = true,
+        RequireStateWithoutOpenIdScope = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireStringAudienceInClientAssertion = true,
@@ -540,11 +550,13 @@ public sealed record SecurityProfileRequirements
         // Builder: each step settles one family of controls and leaves the others as it found them, so the
         // steps compose in any order
         => WithRequestControlsTightenedBy(other)
+            .WithRequestObjectControlsTightenedBy(other)
             .WithClientAndTokenControlsTightenedBy(other)
             .WithClockTightenedBy(other);
 
     /// <summary>
-    /// This bundle with the controls on the authorization request itself tightened by <paramref name="other"/>.
+    /// This bundle with the controls on the shape of the authorization request and its response tightened by
+    /// <paramref name="other"/>.
     /// </summary>
     private SecurityProfileRequirements WithRequestControlsTightenedBy(SecurityProfileRequirements other) => this with
     {
@@ -555,14 +567,23 @@ public sealed record SecurityProfileRequirements
         RequireCodeResponseTypeOnly = RequireCodeResponseTypeOnly || other.RequireCodeResponseTypeOnly,
         RequireSignedAuthorizationResponse =
             RequireSignedAuthorizationResponse || other.RequireSignedAuthorizationResponse,
-        RequireStrictRequestObjectProcessing =
-            RequireStrictRequestObjectProcessing || other.RequireStrictRequestObjectProcessing,
-        RequireSignedRequestObject = RequireSignedRequestObject || other.RequireSignedRequestObject,
-        MaxRequestObjectLifetime = Tighter(MaxRequestObjectLifetime, other.MaxRequestObjectLifetime),
-        RequireIssuerAudienceInRequestObject =
-            RequireIssuerAudienceInRequestObject || other.RequireIssuerAudienceInRequestObject,
         RequireNonceWithOpenIdScope = RequireNonceWithOpenIdScope || other.RequireNonceWithOpenIdScope,
+        RequireStateWithoutOpenIdScope = RequireStateWithoutOpenIdScope || other.RequireStateWithoutOpenIdScope,
     };
+
+    /// <summary>
+    /// This bundle with the controls on the request object tightened by <paramref name="other"/>.
+    /// </summary>
+    private SecurityProfileRequirements WithRequestObjectControlsTightenedBy(SecurityProfileRequirements other)
+        => this with
+        {
+            RequireStrictRequestObjectProcessing =
+                RequireStrictRequestObjectProcessing || other.RequireStrictRequestObjectProcessing,
+            RequireSignedRequestObject = RequireSignedRequestObject || other.RequireSignedRequestObject,
+            MaxRequestObjectLifetime = Tighter(MaxRequestObjectLifetime, other.MaxRequestObjectLifetime),
+            RequireIssuerAudienceInRequestObject =
+                RequireIssuerAudienceInRequestObject || other.RequireIssuerAudienceInRequestObject,
+        };
 
     /// <summary>
     /// This bundle with the controls on the client's credentials and on the tokens it is issued tightened by
