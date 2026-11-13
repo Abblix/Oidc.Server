@@ -72,8 +72,18 @@ public class PushedAuthorizationRequestValidatorTests
 
         _validator = new PushedAuthorizationRequestValidator(
             _innerValidator.Object,
-            _clientAuthenticator.Object,
             _proofValidator.Object);
+    }
+
+    /// <summary>
+    /// Validates as the handler does: for the client the authenticator returns, which each test sets up.
+    /// </summary>
+    private async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(
+        AuthorizationRequest request,
+        ClientRequest clientRequest)
+    {
+        var client = await _clientAuthenticator.Object.TryAuthenticateClientAsync(SingleIssuer.Tenant, clientRequest);
+        return await _validator.ValidateAsync(SingleIssuer.Tenant, client!, request, clientRequest);
     }
 
     private AuthorizationRequest? _capturedRequest;
@@ -123,7 +133,7 @@ public class PushedAuthorizationRequestValidatorTests
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced });
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, BuildRequest(), BuildClientRequest(ProofJwt));
+        var result = await ValidateAsync( BuildRequest(), BuildClientRequest(ProofJwt));
 
         Assert.Equal(ErrorCodes.InvalidRequest, Assert.IsType<AuthorizationRequestValidationError>(
             result.TryGetFailure(out var error) ? error : null).Error);
@@ -143,7 +153,7 @@ public class PushedAuthorizationRequestValidatorTests
     {
         var request = BuildRequest() with { RequestUri = new Uri("https://client.example.com/request.jwt") };
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, BuildClientRequest());
+        var result = await ValidateAsync( request, BuildClientRequest());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -152,7 +162,7 @@ public class PushedAuthorizationRequestValidatorTests
     [Fact]
     public async Task ValidateAsync_NoDPoPHeaderNoParameter_PassesThrough()
     {
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, BuildRequest(), BuildClientRequest());
+        var result = await ValidateAsync( BuildRequest(), BuildClientRequest());
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.NotNull(_capturedRequest);
@@ -164,7 +174,7 @@ public class PushedAuthorizationRequestValidatorTests
     {
         SetupProofSuccess();
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, BuildRequest(), BuildClientRequest(ProofJwt));
+        var result = await ValidateAsync( BuildRequest(), BuildClientRequest(ProofJwt));
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(DerivedThumbprint, _capturedRequest?.ProofKeyThumbprint);
@@ -175,8 +185,7 @@ public class PushedAuthorizationRequestValidatorTests
     {
         SetupProofSuccess();
 
-        var result = await _validator.ValidateAsync(
-            SingleIssuer.Tenant,
+        var result = await ValidateAsync(
             BuildRequest(proofKeyThumbprint: DerivedThumbprint),
             BuildClientRequest(ProofJwt));
 
@@ -189,8 +198,7 @@ public class PushedAuthorizationRequestValidatorTests
     {
         SetupProofSuccess();
 
-        var result = await _validator.ValidateAsync(
-            SingleIssuer.Tenant,
+        var result = await ValidateAsync(
             BuildRequest(proofKeyThumbprint: DifferentThumbprint),
             BuildClientRequest(ProofJwt));
 
@@ -203,7 +211,7 @@ public class PushedAuthorizationRequestValidatorTests
     {
         SetupProofFailure();
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, BuildRequest(), BuildClientRequest(ProofJwt));
+        var result = await ValidateAsync( BuildRequest(), BuildClientRequest(ProofJwt));
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidDPoPProof, error.Error);
@@ -227,7 +235,7 @@ public class PushedAuthorizationRequestValidatorTests
             .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = profile });
         var request = BuildRequest() with { CodeChallenge = challenge, CodeChallengeMethod = method };
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, BuildClientRequest());
+        var result = await ValidateAsync( request, BuildClientRequest());
 
         if (accepted)
             Assert.True(result.TryGetSuccess(out _));
@@ -263,7 +271,7 @@ public class PushedAuthorizationRequestValidatorTests
             CodeChallengeMethod = CodeChallengeMethods.S256,
         };
 
-        await _validator.ValidateAsync(SingleIssuer.Tenant, request, BuildClientRequest(ProofJwt));
+        await ValidateAsync( request, BuildClientRequest(ProofJwt));
 
         Assert.Equal(accepted, judgedUnder!.PermitsSigningAlgorithm(algorithm));
     }

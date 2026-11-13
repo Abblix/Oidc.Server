@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
@@ -17,6 +19,7 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 /// Handles the processing of Pushed Authorization Requests (PAR) by validating the requests and then processing
 /// them if valid. This class acts as an intermediary between the validation and processing stages of the PAR workflow.
 /// </summary>
+/// <param name="clientAuthenticator">Authenticates the client before anything it sent is read.</param>
 /// <param name="fetcher">
 /// An instance of <see cref="IAuthorizationRequestFetcher"/> used to resolve <c>request</c> /
 /// <c>request_uri</c> JAR payloads before validation.</param>
@@ -25,6 +28,7 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 /// <param name="processor">An instance of <see cref="IPushedAuthorizationRequestProcessor"/> used for processing
 /// validated authorization requests.</param>
 public class PushedAuthorizationHandler(
+    IClientAuthenticator clientAuthenticator,
     IAuthorizationRequestFetcher fetcher,
     IPushedAuthorizationRequestValidator validator,
     IPushedAuthorizationRequestProcessor processor) : IPushedAuthorizationHandler
@@ -53,6 +57,21 @@ public class PushedAuthorizationHandler(
         Model.AuthorizationRequest authorizationRequest,
         Model.ClientRequest clientRequest)
     {
+        // RFC 9126 section 2.1: "The authorization server MUST process the request as follows: 1. Authenticate the client
+        // in the same way as at the token endpoint". Done before the request object is read, so the object is held to
+        // the authenticated client's security profile before any layer of it is decrypted
+        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+        if (clientInfo == null)
+            return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidClient("The client is not authorized"));
+
+        // The object is read for the client the request names, which has to be the one that authenticated
+        if (authorizationRequest.ClientId is { } named && named != clientInfo.ClientId)
+        {
+            return new AuthorizationError(
+                authorizationRequest,
+                ErrorFactory.InvalidRequest("The pushed authorization request must be bound to the client that posted it"));
+        }
+
         var fetchResult = await fetcher.FetchAsync(tenant, authorizationRequest);
 
         if (fetchResult.TryGetFailure(out var fetchError))
@@ -63,7 +82,7 @@ public class PushedAuthorizationHandler(
         var fetched = fetchResult.GetSuccess();
         authorizationRequest = fetched with { RequestUri = fetched.RequestUri ?? authorizationRequest.RequestUri };
 
-        var validationResult = await validator.ValidateAsync(tenant, authorizationRequest, clientRequest);
+        var validationResult = await validator.ValidateAsync(tenant, clientInfo, authorizationRequest, clientRequest);
 
         return await validationResult.MatchAsync(
             onSuccess: valid => processor.ProcessAsync(tenant, valid),

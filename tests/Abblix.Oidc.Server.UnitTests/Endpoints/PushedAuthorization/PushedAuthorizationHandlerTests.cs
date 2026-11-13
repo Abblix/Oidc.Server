@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using System;
 using System.Threading.Tasks;
 
@@ -35,6 +37,44 @@ public class PushedAuthorizationHandlerTests
 {
     private static readonly Uri SentRequestUri = new("https://client.example.com/request.jwt");
 
+    private static IClientAuthenticator Authenticating(ClientInfo? client)
+    {
+        var authenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
+        authenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .ReturnsAsync(client);
+        return authenticator.Object;
+    }
+
+    /// <summary>
+    /// RFC 9126 section 2.1: "The authorization server MUST process the request as follows: 1. Authenticate the client
+    /// in the same way as at the token endpoint". The client is authenticated before the request object is read, so
+    /// one that does not authenticate is refused with invalid_client and its object is never read, nor is one sent by
+    /// another client than the one the request names.
+    /// </summary>
+    [Theory]
+    [InlineData(false, TestConstants.DefaultClientId, ErrorCodes.InvalidClient)]
+    [InlineData(true, "another-client", ErrorCodes.InvalidRequest)]
+    public async Task TheClient_IsAuthenticatedBeforeTheRequestObjectIsRead(
+        bool authenticates, string named, string expectedError)
+    {
+        var fetcher = new Mock<IAuthorizationRequestFetcher>(MockBehavior.Strict);
+        var handler = new PushedAuthorizationHandler(
+            Authenticating(authenticates ? new ClientInfo(TestConstants.DefaultClientId) : null),
+            fetcher.Object,
+            new Mock<IPushedAuthorizationRequestValidator>(MockBehavior.Strict).Object,
+            new Mock<IPushedAuthorizationRequestProcessor>(MockBehavior.Strict).Object);
+
+        var response = await handler.HandleAsync(
+            SingleIssuer.Tenant,
+            new AuthorizationRequest { ClientId = named, Request = "eyJ.request.object" },
+            new ClientRequest());
+
+        Assert.Equal(expectedError, Assert.IsType<AuthorizationError>(response).Error);
+        fetcher.Verify(
+            f => f.FetchAsync(It.IsAny<TenantDefinition>(), It.IsAny<AuthorizationRequest>()), Times.Never);
+    }
+
     [Fact]
     public async Task ARequestUriDroppedByStrictProcessing_StillReachesTheValidator()
     {
@@ -58,11 +98,13 @@ public class PushedAuthorizationHandlerTests
         AuthorizationRequest? validated = null;
         var validator = new Mock<IPushedAuthorizationRequestValidator>(MockBehavior.Strict);
         validator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<AuthorizationRequest>(), It.IsAny<ClientRequest>()))
-            .Callback((TenantDefinition _, AuthorizationRequest request, ClientRequest _) => validated = request)
+            .Setup(v => v.ValidateAsync(
+                TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<AuthorizationRequest>(), It.IsAny<ClientRequest>()))
+            .Callback((TenantDefinition _, ClientInfo _, AuthorizationRequest request, ClientRequest _) => validated = request)
             .ReturnsAsync(ErrorFactory.InvalidRequest("refused"));
 
         var handler = new PushedAuthorizationHandler(
+            Authenticating(new ClientInfo(TestConstants.DefaultClientId)),
             fetcher.Object,
             validator.Object,
             new Mock<IPushedAuthorizationRequestProcessor>(MockBehavior.Strict).Object);

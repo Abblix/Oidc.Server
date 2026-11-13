@@ -27,7 +27,6 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 /// </summary>
 public class PushedAuthorizationRequestValidator(
     IAuthorizationRequestValidator authorizationRequestValidator,
-    IClientAuthenticator clientAuthenticator,
     IProofValidator proofValidator) : IPushedAuthorizationRequestValidator
 {
     /// <summary>
@@ -37,6 +36,7 @@ public class PushedAuthorizationRequestValidator(
     /// and ensures that the request is legitimately associated with the authenticated client.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="clientInfo">The client that authenticated the request.</param>
     /// <param name="authorizationRequest">The authorization request to be validated.</param>
     /// <param name="clientRequest">Carrier of the client's authentication credentials (basic, JWT
     /// assertion, mTLS, etc.) used to authenticate the client per RFC 9126 section 2. Also carries an
@@ -46,16 +46,10 @@ public class PushedAuthorizationRequestValidator(
     /// and adheres to the expected protocol constraints.</returns>
     public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(
         TenantDefinition tenant,
+        ClientInfo clientInfo,
         AuthorizationRequest authorizationRequest,
         ClientRequest clientRequest)
     {
-        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
-            tenant, clientRequest);
-        if (clientInfo == null)
-        {
-            return ErrorFactory.InvalidClient("The client is not authorized");
-        }
-
         // RFC 9126 section 2.1: request_uri "MUST NOT be provided" here, and section 2.3 takes its codes from RFC 6749,
         // where a request carrying it is malformed: invalid_request
         if (authorizationRequest.RequestUri is not null)
