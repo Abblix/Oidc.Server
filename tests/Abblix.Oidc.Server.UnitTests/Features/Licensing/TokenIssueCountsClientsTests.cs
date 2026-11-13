@@ -122,7 +122,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     SingleIssuer.LicensedCatalog, clock, clientFormatter.Object, claims.Object, options);
                 return clientId => identity.CreateIdentityTokenAsync(
                     SingleIssuer.Tenant,
-                    session, Context(clientId), client, includeUserClaims: false, authorizationCode: null, accessToken: null);
+                    session, Context(clientId), client, includeUserClaims: false, authorizationCode: null, accessToken: null, state: null);
 
             case RefreshToken:
                 var refresh = new RefreshTokenService(

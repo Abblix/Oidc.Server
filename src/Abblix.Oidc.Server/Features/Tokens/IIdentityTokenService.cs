@@ -16,8 +16,9 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <summary>
 /// Issues OpenID Connect ID Tokens (OIDC Core section 2 and section 3.1.3.6) for authenticated end-users,
 /// embedding the standard claims of OIDC Core section 5.1, the client's nonce, and where applicable
-/// the <c>c_hash</c>/<c>at_hash</c> binding claims (OIDC Core section 3.1.3.6 and section 3.2.2.10) that tie
-/// the ID Token to a co-issued authorization code or access token.
+/// the <c>c_hash</c>/<c>at_hash</c>/<c>s_hash</c> binding claims (OIDC Core section 3.1.3.6 and section 3.2.2.10,
+/// FAPI 1.0 Part 2 section 5.1.1) that tie the ID Token to a co-issued authorization code, access token or
+/// response state.
 /// </summary>
 public interface IIdentityTokenService
 {
@@ -43,6 +44,9 @@ public interface IIdentityTokenService
     /// <param name="accessToken">An optional access token provided to include the `at_hash` claim in the identity token,
     /// which is a hash of the token. This parameter is used when the identity token is issued alongside an access token.
     /// </param>
+    /// <param name="state">The <c>state</c> the authorization response echoes, or <see langword="null"/> when the
+    /// token is not returned there or the request carried none. Non-null adds the <c>s_hash</c> claim
+    /// (Financial-grade API 1.0 Part 2, section 5.1.1), which binds that state to the token.</param>
     /// <param name="pushBindings">The CIBA push notification this token travels in, or
     /// <see langword="null"/> when it does not. Non-null adds the two bindings Section 10.3.1 requires
     /// there and nowhere else - the request identifier verbatim, and the refresh token's hash when one
@@ -61,5 +65,6 @@ public interface IIdentityTokenService
 		bool includeUserClaims,
 		string? authorizationCode,
 		string? accessToken,
+		string? state,
 		PushDeliveryBindings? pushBindings = null);
 }

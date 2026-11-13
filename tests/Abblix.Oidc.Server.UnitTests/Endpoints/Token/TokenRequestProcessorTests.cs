@@ -181,7 +181,8 @@ public partial class TokenRequestProcessorTests
                 request.ClientInfo,
                 false,
                 null,
-                accessToken.EncodedJwt))
+                accessToken.EncodedJwt,
+                null))
             .ReturnsAsync(idToken);
 
         // Act
@@ -197,7 +198,8 @@ public partial class TokenRequestProcessorTests
                 request.ClientInfo,
                 false,
                 null,
-                accessToken.EncodedJwt),
+                accessToken.EncodedJwt,
+                null),
             Times.Once);
     }
 
@@ -308,8 +310,9 @@ public partial class TokenRequestProcessorTests
                 false,
                 null,
                 accessToken.EncodedJwt,
+                null,
                 It.IsAny<PushDeliveryBindings?>()))
-            .Callback((TenantDefinition _, AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _,
+            .Callback((TenantDefinition _, AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _, string? _,
                 PushDeliveryBindings? bindings) => captured = bindings)
             .ReturnsAsync(idToken);
 
@@ -377,8 +380,9 @@ public partial class TokenRequestProcessorTests
                 false,
                 null,
                 accessToken.EncodedJwt,
+                null,
                 It.IsAny<PushDeliveryBindings?>()))
-            .Callback((TenantDefinition _, AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _,
+            .Callback((TenantDefinition _, AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _, string? _,
                 PushDeliveryBindings? bindings) => captured = bindings!)
             .ReturnsAsync(idToken);
 
@@ -431,7 +435,8 @@ public partial class TokenRequestProcessorTests
                 request.ClientInfo,
                 false,
                 null,
-                accessToken.EncodedJwt))
+                accessToken.EncodedJwt,
+                null))
             .ReturnsAsync(idToken);
 
         // Act
@@ -656,7 +661,7 @@ public partial class TokenRequestProcessorTests
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
                 TestTenant.Matched,
-                authSession, narrowedContext, request.ClientInfo, false, null, accessToken.EncodedJwt))
+                authSession, narrowedContext, request.ClientInfo, false, null, accessToken.EncodedJwt, null))
             .ReturnsAsync(CreateIdToken());
 
         var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
@@ -998,7 +1003,7 @@ public partial class TokenRequestProcessorTests
             .ReturnsAsync(CreateRefreshToken());
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, false, null, accessToken.EncodedJwt))
+                TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, false, null, accessToken.EncodedJwt, null))
             .ThrowsAsync(new HttpRequestException("The client key set could not be fetched."));
 
         await Assert.ThrowsAsync<HttpRequestException>(() => _processor.ProcessAsync(SingleIssuer.Tenant, request));
@@ -1077,7 +1082,8 @@ public partial class TokenRequestProcessorTests
                 request.ClientInfo,
                 false,
                 null,
-                accessToken.EncodedJwt))
+                accessToken.EncodedJwt,
+                null))
             .ReturnsAsync(idToken);
 
         // Act
@@ -1091,7 +1097,8 @@ public partial class TokenRequestProcessorTests
                 request.ClientInfo,
                 false,
                 null,
-                accessToken.EncodedJwt),
+                accessToken.EncodedJwt,
+                null),
             Times.Once);
     }
 

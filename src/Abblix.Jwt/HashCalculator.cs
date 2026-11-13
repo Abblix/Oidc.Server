@@ -14,13 +14,13 @@ namespace Abblix.Jwt;
 
 /// <summary>
 /// Computes the detached-signature hashes an ID Token carries for values delivered beside it:
-/// <c>at_hash</c> for an access token and <c>c_hash</c> for an authorization code.
+/// <c>at_hash</c> for an access token, <c>c_hash</c> for an authorization code and <c>s_hash</c> for a state.
 /// </summary>
 /// <remarks>
 /// OpenID Connect Core 1.0 gives one recipe for all of them, in section 3.2.2.9 for <c>at_hash</c> and
 /// section 3.3.2.10 for <c>c_hash</c>: hash the ASCII octets of the value with the algorithm JWA pairs
 /// with the <c>alg</c> of the ID Token's own JOSE header, take the left-most half of the digest, and
-/// base64url-encode it.
+/// base64url-encode it. FAPI 1.0 Part 2 section 5.1.1 defines <c>s_hash</c> by the same recipe.
 /// The point of the construction is to bind the ID Token to the value: an attacker who swaps the code
 /// or the access token for one of their own is caught, because the signed ID Token still carries the
 /// hash of the original. Which is why the issuing and the verifying side must compute it identically -

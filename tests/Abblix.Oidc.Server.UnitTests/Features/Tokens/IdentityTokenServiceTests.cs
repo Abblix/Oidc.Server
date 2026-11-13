@@ -92,7 +92,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -142,7 +142,7 @@ public class IdentityTokenServiceTests
 
         // Act
         await _service.CreateIdentityTokenAsync(
-            SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null,
+            SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null,
             new PushDeliveryBindings(authenticationRequestId, refreshToken));
 
         // Assert
@@ -184,7 +184,7 @@ public class IdentityTokenServiceTests
 
         // Act
         await _service.CreateIdentityTokenAsync(
-            SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null,
+            SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null,
             new PushDeliveryBindings("some-request", RefreshToken: null));
 
         // Assert
@@ -224,7 +224,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -255,7 +255,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -298,7 +298,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -334,7 +334,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -371,7 +371,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -398,7 +398,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync((JsonObject?)null);
 
         // Act
-        var result = await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
+        var result = await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null);
 
         // Assert
         Assert.Null(result);
@@ -436,7 +436,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, false, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, false, null, null, null);
 
         // Assert
         _userClaimsProvider.Verify(
@@ -478,7 +478,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, false, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, false, null, null, null);
 
         // Assert
         _userClaimsProvider.Verify(
@@ -516,7 +516,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, AuthCode, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, AuthCode, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -551,7 +551,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, AccessToken);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, AccessToken, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -585,7 +585,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, AuthCode, AccessToken);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, AuthCode, AccessToken, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -630,7 +630,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, AuthCode, AccessToken);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, AuthCode, AccessToken, null);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -665,12 +665,61 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
         Assert.False(capturedToken.Payload.Json.ContainsKey(IanaClaimTypes.CHash));
         Assert.False(capturedToken.Payload.Json.ContainsKey(IanaClaimTypes.AtHash));
+    }
+
+    /// <summary>
+    /// The worked example of FAPI 1.0 Part 2, Appendix A: a request with state
+    /// <c>VgSUIEnflnDxTe1vAtr54o</c> answered by a PS256-signed ID token carrying s_hash
+    /// <c>9s6CBbOxiKE65d9-Qr0QIQ</c> (section 5.2.2.1 requires the claim whenever the client supplied a state).
+    /// </summary>
+    [Fact]
+    public async Task CreateIdentityToken_WithState_IncludesTheStateHashOfTheFapiExample()
+    {
+        var token = await CreateTokenWithStateAsync("VgSUIEnflnDxTe1vAtr54o");
+
+        Assert.Equal("9s6CBbOxiKE65d9-Qr0QIQ", token.Payload[IanaClaimTypes.SHash]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A request without a state has nothing for s_hash to protect, so the token carries no such claim.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task CreateIdentityToken_WithoutState_OmitsTheStateHash(string? state)
+    {
+        var token = await CreateTokenWithStateAsync(state);
+
+        Assert.False(token.Payload.Json.ContainsKey(IanaClaimTypes.SHash));
+    }
+
+    private async Task<JsonWebToken> CreateTokenWithStateAsync(string? state)
+    {
+        var authSession = CreateAuthSession();
+        var authContext = CreateAuthorizationContext();
+        var clientInfo = CreateClientInfo(signingAlgorithm: SigningAlgorithms.PS256);
+
+        _userClaimsProvider
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
+            .ReturnsAsync(CreateUserClaims());
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateIdentityTokenAsync(
+            SingleIssuer.Tenant, authSession, authContext, clientInfo, true, AuthCode, null, state);
+
+        Assert.NotNull(capturedToken);
+        return capturedToken;
     }
 
     /// <summary>
@@ -710,7 +759,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null);
 
         // Assert
         _userClaimsProvider.Verify(
@@ -747,7 +796,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
+        var result = await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null);
 
         // Assert
         Assert.NotNull(result);
@@ -776,7 +825,7 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, true, null, null, null);
 
         // Assert
         _jwtFormatter.Verify(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
@@ -1161,7 +1210,7 @@ public class IdentityTokenServiceTests
 
         return await _service.CreateIdentityTokenAsync(
             SingleIssuer.Tenant,
-            authSession, authContext, clientInfo, true, null, null);
+            authSession, authContext, clientInfo, true, null, null, null);
     }
 
     private static JsonObject CreateUserClaims() => new()
