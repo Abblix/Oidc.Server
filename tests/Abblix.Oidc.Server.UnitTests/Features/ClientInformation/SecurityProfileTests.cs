@@ -312,6 +312,30 @@ public class SecurityProfileTests
         Assert.Empty(violations);
     }
 
+    /// <summary>
+    /// The same at startup: a FAPI 1.0 Advanced client requiring DPoP, or one no certificate-bound access token can be
+    /// issued to, keeps the server from starting (FAPI 1.0 Part 2 section 8.2).
+    /// </summary>
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    public void Check_Fapi1Advanced_AClientNoCertificateBoundTokenServes_Refuses(
+        bool requireDPoP, bool certificateBound, bool refused)
+    {
+        var client = new ClientInfo("fapi1")
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedResponseTypes = [[ResponseTypes.Code]],
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            RequireDPoP = requireDPoP,
+            TlsClientCertificateBoundAccessTokens = certificateBound,
+        };
+
+        Assert.Equal(refused, Check(Tenant(ClientSecurityProfile.Fapi1Advanced, client)).Count > 0);
+    }
+
     [Fact]
     public void Check_ConsistentFapi2Client_Passes()
     {
@@ -885,6 +909,7 @@ public class SecurityProfileTests
         static ClientInfo Client() => new(TestConstants.DefaultClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            TlsClientCertificateBoundAccessTokens = true,
         };
         var configured = Client();
         configured.IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256;
@@ -925,6 +950,7 @@ public class SecurityProfileTests
         static ClientInfo Client(string redirectUri) => new(TestConstants.DefaultClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            TlsClientCertificateBoundAccessTokens = true,
             IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
             RedirectUris = [new Uri(redirectUri)],
@@ -975,6 +1001,7 @@ public class SecurityProfileTests
         static ClientInfo Client(string jwksUri) => new(TestConstants.DefaultClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            TlsClientCertificateBoundAccessTokens = true,
             IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
             JwksUri = new Uri(jwksUri),

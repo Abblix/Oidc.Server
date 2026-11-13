@@ -500,6 +500,8 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
                     [RegistrationParameters.ResponseTypes] = new JsonArray { ResponseTypes.Code },
                     [RegistrationParameters.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
                     [RegistrationParameters.TokenEndpointAuthMethod] = ClientAuthenticationMethods.PrivateKeyJwt,
+                    // FAPI 1.0 Part 2 section 8.2: access tokens are sender-constrained via MTLS only
+                    [RegistrationParameters.TlsClientCertificateBoundAccessTokens] = true,
                     [RegistrationParameters.Jwks] = JsonSerializer.SerializeToNode(
                         new JsonWebKeySet([ClientKey.Sanitize(includePrivateKeys: false)])),
                 }.ToJsonString(),

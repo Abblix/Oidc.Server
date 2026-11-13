@@ -63,6 +63,11 @@ public class SecurityProfileValidator : SyncClientRegistrationContextValidator
                 ],
                 requirements),
             ..FindJwksUriViolations(request.JwksUri, requirements),
+            ..SecurityProfileConsistency.FindTokenBindingViolations(
+                request.TokenEndpointAuthMethod,
+                request.TlsClientCertificateBoundAccessTokens ?? false,
+                request.DpopBoundAccessTokens ?? false,
+                requirements),
             ..FindEncryptionAlgorithmViolations(
                 [
                     (Parameters.IdTokenEncryptedResponseAlg, request.IdTokenEncryptedResponseAlg),

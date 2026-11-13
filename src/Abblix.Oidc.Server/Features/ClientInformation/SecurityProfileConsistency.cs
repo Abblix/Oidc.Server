@@ -97,6 +97,48 @@ public static class SecurityProfileConsistency
     }
 
     /// <summary>
+    /// Names what keeps a client from being issued the certificate-bound access tokens its profile issues alone, or an
+    /// empty list: FAPI 1.0 Part 2 section 8.2, "shall only support sender-constrained access tokens via MTLS".
+    /// </summary>
+    /// <param name="tokenEndpointAuthMethod">How the client authenticates at the token endpoint.</param>
+    /// <param name="tlsClientCertificateBoundAccessTokens">Whether the client registers certificate-bound access
+    /// tokens (RFC 8705 section 3.4).</param>
+    /// <param name="requireDPoP">Whether the client registers DPoP-bound access tokens (RFC 9449 section 5.2).</param>
+    /// <param name="requirements">The control bundle the client is held to, floor included.</param>
+    public static IReadOnlyList<string> FindTokenBindingViolations(
+        string tokenEndpointAuthMethod,
+        bool tlsClientCertificateBoundAccessTokens,
+        bool requireDPoP,
+        SecurityProfileRequirements requirements)
+    {
+        if (!requirements.RequireCertificateBoundTokens)
+            return [];
+
+        var violations = new List<string>();
+
+        // RFC 9449 section 5.2 has a client registered with dpop_bound_access_tokens always use DPoP at the token
+        // endpoint, which a profile issuing certificate-bound tokens only refuses on every request
+        if (requireDPoP)
+        {
+            violations.Add(
+                "the client's security profile issues certificate-bound access tokens only, " +
+                "but the client requires DPoP-bound access tokens");
+        }
+
+        // RFC 8705 section 3: a token is bound to the certificate of a client that authenticates with mutual TLS or
+        // registers tls_client_certificate_bound_access_tokens; any other client is refused every token
+        if (!tlsClientCertificateBoundAccessTokens && tokenEndpointAuthMethod
+                is not (ClientAuthenticationMethods.TlsClientAuth or ClientAuthenticationMethods.SelfSignedTlsClientAuth))
+        {
+            violations.Add(
+                "the client's security profile issues certificate-bound access tokens only, but the client " +
+                "neither authenticates with mutual TLS nor registers tls_client_certificate_bound_access_tokens");
+        }
+
+        return violations;
+    }
+
+    /// <summary>
     /// FAPI 2.0 section 5.3.2.1: the server "shall only accept its issuer identifier value ... as a string in the aud
     /// claim received in client authentication assertions", which leaves no room for an endpoint URL or an
     /// array.

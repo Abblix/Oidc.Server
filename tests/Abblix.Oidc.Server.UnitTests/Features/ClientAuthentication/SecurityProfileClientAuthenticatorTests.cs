@@ -333,6 +333,7 @@ public class SecurityProfileClientAuthenticatorTests
             // The strictest bundle admits only the FAPI signature algorithms for what the server signs for the client
             IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            TlsClientCertificateBoundAccessTokens = true,
         };
         Authenticates(inner, clientInfo);
 
@@ -363,6 +364,34 @@ public class SecurityProfileClientAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
         Assert.Same(clientInfo, result);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.2 has access tokens sender-constrained via MTLS only, so a stored client requiring
+    /// DPoP (RFC 9449 section 5.2), or one no certificate-bound token can be issued to, does not authenticate.
+    /// </summary>
+    [Theory]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, true)]
+    public async Task UnderFapi1Advanced_AClientNoCertificateBoundTokenServes_DoesNotAuthenticate(
+        bool requireDPoP, bool certificateBound, bool authenticated)
+    {
+        var (authenticator, inner) = CreateAuthenticator();
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            RequireDPoP = requireDPoP,
+            TlsClientCertificateBoundAccessTokens = certificateBound,
+        };
+        Authenticates(inner, clientInfo);
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest());
+
+        Assert.Equal(authenticated, result is not null);
     }
 
     /// <summary>
@@ -501,6 +530,7 @@ public class SecurityProfileClientAuthenticatorTests
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             IdentityTokenSignedResponseAlgorithm = algorithm,
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            TlsClientCertificateBoundAccessTokens = true,
         });
 
         var result = await authenticator.TryAuthenticateClientAsync(
@@ -530,6 +560,7 @@ public class SecurityProfileClientAuthenticatorTests
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            TlsClientCertificateBoundAccessTokens = true,
         });
 
         var result = await authenticator.TryAuthenticateClientAsync(

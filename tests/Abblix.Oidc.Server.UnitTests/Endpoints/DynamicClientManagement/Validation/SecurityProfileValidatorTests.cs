@@ -121,6 +121,7 @@ public class SecurityProfileValidatorTests
             ResponseTypes = [[ResponseTypes.Code]],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             IdTokenSignedResponseAlg = algorithm,
+            TlsClientCertificateBoundAccessTokens = true,
         });
 
         var result = await new SecurityProfileValidator()
@@ -214,5 +215,36 @@ public class SecurityProfileValidatorTests
             .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
 
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.2 has access tokens sender-constrained via MTLS only. A registration asking for DPoP
+    /// (RFC 9449 section 5.2) or one that could be bound to no certificate - neither authenticating with mutual TLS nor
+    /// registering tls_client_certificate_bound_access_tokens (RFC 8705 section 3) - would be refused every token, so
+    /// it is refused here with invalid_client_metadata.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, true, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, false, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, true, true)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, false, true)]
+    public async Task ValidateAsync_Fapi1Advanced_TokensItCannotBeIssued_AreRefused(
+        string method, bool dpop, bool certificateBound, bool accepted)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = method,
+            IdTokenSignedResponseAlg = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlg = SigningAlgorithms.PS256,
+            DpopBoundAccessTokens = dpop,
+            TlsClientCertificateBoundAccessTokens = certificateBound,
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
+
+        Assert.Equal(accepted ? null : ErrorCodes.InvalidClientMetadata, result?.Error);
     }
 }

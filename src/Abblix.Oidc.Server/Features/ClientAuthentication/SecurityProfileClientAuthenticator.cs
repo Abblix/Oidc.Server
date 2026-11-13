@@ -91,6 +91,11 @@ internal partial class SecurityProfileClientAuthenticator(
                 requirements),
             ..SecurityProfileConsistency.FindAlgorithmViolations(clientInfo, requirements),
             ..SecurityProfileConsistency.FindJwksUriViolations(clientInfo.JwksUri, requirements),
+            ..SecurityProfileConsistency.FindTokenBindingViolations(
+                clientInfo.TokenEndpointAuthMethod,
+                clientInfo.TlsClientCertificateBoundAccessTokens,
+                clientInfo.RequireDPoP,
+                requirements),
         ];
 
         if (violations.Count == 0)
