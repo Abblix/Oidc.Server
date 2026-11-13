@@ -181,14 +181,15 @@ public partial class BackChannelAuthenticationGrantHandlerTests
     /// The mode is optional client metadata and nothing ties it to the grant types a client is allowed, so
     /// this state is registrable, and a mode naming no registered processor is the same state reached by a
     /// deployment that does not offer that delivery. Both used to resolve a required keyed service and
-    /// leave the token endpoint with an unhandled exception, while the sibling endpoint answered the
-    /// identical client with invalid_client and a sentence an operator can act on.
+    /// leave the token endpoint with an unhandled exception. The client has authenticated, so the refusal is
+    /// unauthorized_client, as the sibling endpoint answers it: invalid_client would come back as a 401
+    /// challenging credentials that worked (RFC 6749 section 5.2).
     /// </remarks>
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("carrier-pigeon")]
-    public async Task AuthorizeAsync_WithNoUsableDeliveryMode_ReturnsInvalidClient(string? deliveryMode)
+    public async Task AuthorizeAsync_WithNoUsableDeliveryMode_ReturnsUnauthorizedClient(string? deliveryMode)
     {
         // Deliberately no storage stub. The refusal is decided from the client's registered metadata alone, so
         // the lookup must not happen, and the strict mock turns any attempt into a failure by itself. The
@@ -200,7 +201,7 @@ public partial class BackChannelAuthenticationGrantHandlerTests
         var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
         _storage.Verify(s => s.TryGetAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
