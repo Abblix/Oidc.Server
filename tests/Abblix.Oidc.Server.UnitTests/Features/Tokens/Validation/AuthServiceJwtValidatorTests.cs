@@ -911,6 +911,34 @@ public class AuthServiceJwtValidatorTests
     }
 
     /// <summary>
+    /// A token presented by no client the server knows - a bearer access token at userinfo, an id_token_hint - is
+    /// still processed under the profile of the client it was issued to (FAPI 2.0 section 5.4.1 "when creating or
+    /// processing JWTs"): signed RS256, it is refused for an owner held to FAPI 2.0 and accepted for one held to none,
+    /// and one signed PS256 is accepted for either.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.RS256, false)]
+    [InlineData(null, SigningAlgorithms.RS256, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.PS256, true)]
+    public async Task ValidateAsync_ATokenWithNoPresenter_IsHeldToItsOwnersProfile(
+        ClientSecurityProfile? ownerProfile, string algorithm, bool accepted)
+    {
+        const string ownerId = "owner";
+        var token = CreateValidToken();
+        token.Header.Algorithm = algorithm;
+        token.Payload.ClientId = ownerId;
+        SetupHonouringValidator(token, keyManagement: null);
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ownerId))
+            .ReturnsAsync(new ClientInfo(ownerId) { SecurityProfile = ownerProfile });
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, client: null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
     /// The same for each JWE layer the token came in: one encrypted with RSA1_5 is refused for an owner held to FAPI
     /// 1.0 Advanced (Part 2 section 8.6.1), though the presenter is held to no profile.
     /// </summary>

@@ -111,13 +111,15 @@ public class AuthServiceJwtValidator(
 	}
 
 	/// <summary>
-	/// The algorithm of <paramref name="token"/> the profile of the client it was issued to does not admit, where a
-	/// client other than that one presents it; null otherwise.
+	/// The algorithm of <paramref name="token"/> the profile of the client it was issued to does not admit, where that
+	/// client is not the one presenting it, or none is known to present it; null otherwise.
 	/// </summary>
 	/// <remarks>
 	/// A token one client holds may be presented by another - introspected by a resource server, exchanged on a
 	/// delegation - and both clients' profiles bound how it may be processed, so the stricter wins. The presenter's
-	/// profile was applied while validating; the owner's is known only from the token, so it is applied here.
+	/// profile was applied while validating; the owner's is known only from the token, so it is applied here. Where no
+	/// presenter is known - a bearer access token at userinfo, an id_token_hint - the owner's profile is the only one
+	/// that bounds the token, and FAPI 2.0 section 5.4.1 holds the server to it "when creating or processing JWTs".
 	/// </remarks>
 	private async Task<string?> AlgorithmOutsideTheOwnersProfileAsync(
 		TenantDefinition tenant,
@@ -125,7 +127,7 @@ public class AuthServiceJwtValidator(
 		JsonWebToken token,
 		List<string> keyManagementAlgorithms)
 	{
-		if (presenter is null || token.Payload.ClientId is not { } ownerId || ownerId == presenter.ClientId)
+		if (token.Payload.ClientId is not { } ownerId || ownerId == presenter?.ClientId)
 			return null;
 
 		if (await clientInfoProvider.TryFindClientAsync(tenant, ownerId) is not { } owner)

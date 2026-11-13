@@ -80,6 +80,9 @@ public class UserInfoRequestValidator(
 		//
 		// RFC 9068 Section 4: "The resource server MUST verify that the 'typ' header value is 'at+jwt' or
 		// 'application/at+jwt' and reject tokens carrying any other value."
+		//
+		// No client presents a bearer token, so the validator holds it to the profile of the client it names (FAPI 2.0
+		// section 5.4.1, "when creating or processing JWTs"), each JWE layer included.
 		var result = await jwtValidator.ValidateAsync(
 			tenant, jwtAccessToken,
 			TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken),
@@ -104,17 +107,6 @@ public class UserInfoRequestValidator(
 				ErrorCodes.InvalidToken,
 				$"The client '{clientId}' is not found");
 		}
-
-		// FAPI 2.0 Security Profile section 5.4.1 has the server use only the profile's algorithms "when creating or
-		// processing JWTs", its own access tokens included, and the profile is the client's where it names one. The
-		// judgement above could only be the tenant's, so the token is judged again under the client's
-		var clientResult = await jwtValidator.ValidateAsync(
-			tenant, clientInfo, jwtAccessToken,
-			TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken),
-			ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
-
-		if (clientResult.TryGetFailure(out var clientError))
-			return new OidcError(ErrorCodes.InvalidToken, clientError.ToString());
 
 		// RFC 9449 section 7.1 RS-side enforcement: when the access token carries cnf.jkt the
 		// request MUST present it via the DPoP scheme together with a valid DPoP proof
