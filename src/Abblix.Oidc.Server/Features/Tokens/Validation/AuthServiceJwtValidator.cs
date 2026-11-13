@@ -54,6 +54,7 @@ public class AuthServiceJwtValidator(
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options = ValidationOptions.Default)
 	{
+		var profile = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile);
 		var result = await validator.ValidateAsync(
 			jwt,
 			new ValidationParameters
@@ -65,10 +66,11 @@ public class AuthServiceJwtValidator(
 				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(tenant),
 				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
 
-				// FAPI 1.0 Part 2 section 8.6.1 forbids the server RSA1_5 for any JWE, and only this server encrypts these
-				// tokens, so the tenant's profile alone decides each layer before it is decrypted
-				ValidateKeyManagementAlgorithm =
-					SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile).PermitsKeyManagementAlgorithm,
+				// FAPI 1.0 Part 2 sections 8.6 and 8.6.1, FAPI 2.0 section 5.4.1 "when creating or processing JWTs": only
+				// the tenant's profile is known before the token is read, and it bounds both the signature and each JWE
+				// layer, so a token this server signed or encrypted otherwise before the profile was in force is refused
+				AllowedSigningAlgorithms = profile.SigningAlgorithmsAdmitted(),
+				ValidateKeyManagementAlgorithm = profile.PermitsKeyManagementAlgorithm,
 
 				// These are tokens this server issued and reads back, often on another instance whose clock lags
 				// the issuing one, so a token dated a little ahead is still this server's own. Only that direction

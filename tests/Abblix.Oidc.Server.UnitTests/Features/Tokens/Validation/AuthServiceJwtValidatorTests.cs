@@ -809,4 +809,35 @@ public class AuthServiceJwtValidatorTests
 
         Assert.Equal(admitted, parameters!.ValidateKeyManagementAlgorithm?.Invoke(keyManagement) ?? true);
     }
+
+    /// <summary>
+    /// FAPI 2.0 section 5.4.1 has the server use PS256, ES256 or EdDSA "when creating or processing JWTs", and FAPI 1.0
+    /// Part 2 section 8.6 PS256 or ES256 for any JWS: at a tenant held to such a profile a token of this server's is
+    /// accepted only under those algorithms, which turns away one it signed RS256 before the profile was in force; a
+    /// tenant held to no profile names no list.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, true)]
+    [InlineData(ClientSecurityProfile.None, false)]
+    public async Task ValidateAsync_TheTenantsProfile_BoundsTheSignatureAlgorithms(ClientSecurityProfile profile, bool bounded)
+    {
+        ValidationParameters? parameters = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns((string _, ValidationParameters p) =>
+            {
+                parameters = p;
+                return Task.FromResult<Abblix.Utils.Result<JsonWebToken, JwtValidationError>>(
+                    new JwtValidationError(JwtError.InvalidToken, "not under test"));
+            });
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+
+        await _validator.ValidateAsync(tenant, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        if (bounded)
+            Assert.Equal([SigningAlgorithms.ES256, SigningAlgorithms.PS256], parameters!.AllowedSigningAlgorithms!.Order());
+        else
+            Assert.Null(parameters!.AllowedSigningAlgorithms);
+    }
 }
