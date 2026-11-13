@@ -23,6 +23,9 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// them as the issuer identifier writes them, a default port or a host's case included. The issuer's authority rather
 /// than the request's, because a request names its own host: taken from it, a caller presenting an assertion minted for
 /// another server under the same path would name that server's host and match. Both spellings name this server alone.
+/// The same two spellings on the tenant's mutual-TLS address name the endpoint's alias, which discovery publishes in
+/// <c>mtls_endpoint_aliases</c> and a client doing mutual TLS "MUST use ... in preference to the endpoint URL of the
+/// same name at the top level of metadata" (RFC 8705 section 5): to that client the alias is the token endpoint URL.
 /// </remarks>
 internal static class TenantDefinitionExtensions
 {
@@ -34,7 +37,8 @@ internal static class TenantDefinitionExtensions
     /// The resolver is read through a scope of its own, because it is scoped while authenticators are singletons; it
     /// reads the current request through the HTTP context accessor rather than through that scope.
     /// </remarks>
-    /// <param name="tenant">The tenant whose issuer identifier the spellings are built on.</param>
+    /// <param name="tenant">The tenant whose issuer identifier and mutual-TLS address the spellings are built on.
+    /// </param>
     /// <param name="serviceProvider">Resolves where the transport serves the token endpoint.</param>
     public static string[] TokenEndpointSpellings(this TenantDefinition tenant, IServiceProvider serviceProvider)
     {
@@ -43,20 +47,28 @@ internal static class TenantDefinitionExtensions
         if (resolved is null)
             return [];
 
-        return
-        [
-            resolved.OnAuthorityOf(tenant.Issuer).OriginalString,
-            AuthorityAsWritten(tenant.Issuer) + resolved.AbsolutePath,
-        ];
+        return tenant.MtlsBaseUri is { } mtlsBaseUri
+            ? [..Spellings(resolved, tenant.Issuer), ..Spellings(resolved, mtlsBaseUri)]
+            : Spellings(resolved, tenant.Issuer);
     }
 
     /// <summary>
-    /// The scheme, host and port of <paramref name="issuer"/> exactly as its identifier writes them, without its path,
-    /// which the resolved endpoint path already carries for a tenant served under one.
+    /// The path of <paramref name="resolved"/> on the scheme, host and port of <paramref name="authority"/>, both
+    /// normalized and as <paramref name="authority"/> writes them.
     /// </summary>
-    private static string AuthorityAsWritten(Uri issuer)
+    private static string[] Spellings(Uri resolved, Uri authority) =>
+    [
+        resolved.OnAuthorityOf(authority).OriginalString,
+        AuthorityAsWritten(authority) + resolved.AbsolutePath,
+    ];
+
+    /// <summary>
+    /// The scheme, host and port of <paramref name="authority"/> exactly as it writes them, without its path, which
+    /// the resolved endpoint path already carries for a tenant served under one.
+    /// </summary>
+    private static string AuthorityAsWritten(Uri authority)
     {
-        var written = issuer.OriginalString;
+        var written = authority.OriginalString;
         var hostStart = written.IndexOf(Uri.SchemeDelimiter, StringComparison.Ordinal) + Uri.SchemeDelimiter.Length;
         var pathStart = written.IndexOf('/', hostStart);
         return pathStart < 0 ? written : written[..pathStart];

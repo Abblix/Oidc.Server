@@ -91,8 +91,8 @@ partial class JwtAssertionAuthenticatorBase
     [LoggerMessage(
         EventId = LogEvents.ClientAuth.JwtAssertionAuthenticatorBase.AudienceIsNotOneTheClientMayName,
         Level = LogLevel.Warning,
-        Message = "The client assertion for {ClientId} carries the audience {Audience}, which its assertion "
-                  + "audiences {Audiences}, as its profile narrows them, do not admit; the issuer identifier is "
+        Message = "The client assertion for {ClientId} carries the audience {Audience}, which the assertion "
+                  + "audiences admitted to it, {Audiences}, do not include; the issuer identifier is "
                   + "{IssuerIdentifier}")]
     private partial void LogAudienceIsNotOneTheClientMayName(
         string ClientId,

@@ -32,7 +32,9 @@ public enum ClientAssertionAudiences
     /// The token endpoint URL, as a string, as OpenID Connect Core 1.0 section 9 recommends: the path the
     /// endpoint is served at on the issuer identifier's scheme, host and port, written either as the issuer identifier
     /// writes them or normalized, never the host a request names, and never the pushed authorization request endpoint
-    /// URL.
+    /// URL. For a tenant with a mutual-TLS address, the same path on that address, in either spelling, is accepted too:
+    /// it is the endpoint's alias, which RFC 8705 section 5 has a client doing mutual TLS use in preference to the
+    /// ordinary endpoint.
     /// </summary>
     /// <remarks>
     /// Granting it reopens, for this client, the audience confusion RFC 10070 closes, so it belongs to a client that

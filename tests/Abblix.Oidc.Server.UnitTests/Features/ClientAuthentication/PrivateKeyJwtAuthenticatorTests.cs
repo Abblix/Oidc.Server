@@ -866,6 +866,72 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
+    /// A client calling the tenant's token endpoint on its mutual-TLS alias, which RFC 8705 section 5 makes it use
+    /// in preference to the ordinary one, names that alias as the token endpoint URL. It is accepted where the token
+    /// endpoint itself is - for a client granted it, on the mutual-TLS authority as discovery publishes it and as the
+    /// tenant writes it - and nowhere else: not for a client allowed the issuer alone, not under FAPI 2.0, and not on
+    /// a host that is neither the issuer's nor the tenant's mutual-TLS one.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(MtlsAliasAudiences))]
+    public async Task TokenEndpointAudience_OnTheMtlsAlias_IsAcceptedWhereTheTokenEndpointIs(
+        ClientAssertionAudiences audiences, ClientSecurityProfile profile, string audience, bool accepted)
+    {
+        var (authenticator, mocks) = CreateAuthenticator();
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            ClientAssertionAudiences = audiences,
+        };
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "mtls-alias",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+        token.Payload.Json[JwtClaimTypes.Audience] = audience;
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var tenant = new TestIssuer
+        {
+            Issuer = new Uri(IssuerIdentifier),
+            DefaultSecurityProfile = profile,
+            MtlsBaseUri = new Uri(MtlsBaseUriAsWritten),
+        }.ToTenant();
+        var result = await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+
+        Assert.Equal(accepted, result is not null);
+        if (!accepted)
+            AssertRefusedForItsAudience(mocks);
+    }
+
+    private const string MtlsBaseUriAsWritten = "https://MTLS.example.com:443";
+    private const string MtlsTokenEndpoint = "https://mtls.example.com/connect/token";
+
+    public static TheoryData<ClientAssertionAudiences, ClientSecurityProfile, string, bool> MtlsAliasAudiences()
+    {
+        const ClientAssertionAudiences issuer = ClientAssertionAudiences.Issuer;
+        const ClientAssertionAudiences withTokenEndpoint = issuer | ClientAssertionAudiences.TokenEndpoint;
+        const ClientSecurityProfile none = ClientSecurityProfile.None;
+
+        return new()
+        {
+            { withTokenEndpoint, none, MtlsTokenEndpoint, true },
+            { withTokenEndpoint, none, MtlsBaseUriAsWritten + "/connect/token", true },
+            { withTokenEndpoint, none, TokenEndpoint, true },
+            { withTokenEndpoint, none, "https://mtls.example.com:443/connect/token", false },
+            { withTokenEndpoint, none, "https://other-mtls.example/connect/token", false },
+            { withTokenEndpoint, none, MtlsBaseUriAsWritten, false },
+            { issuer, none, MtlsTokenEndpoint, false },
+            { withTokenEndpoint, ClientSecurityProfile.Fapi2, MtlsTokenEndpoint, false },
+        };
+    }
+
+    /// <summary>
     /// The exceptions do not reach a client held to FAPI 2.0, whose section 5.3.2.1 accepts the issuer identifier
     /// alone: the audience link refuses the token endpoint URL, as a string or in an array the client is allowed, itself,
     /// before its jti is spent, whatever runs after it.

@@ -133,8 +133,9 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// <summary>
     /// Answers whether the assertion names an audience of <see cref="ClientInfo.ClientAssertionAudiences"/> in a form
     /// the set admits: this tenant's issuer identifier, or, for a client granted
-    /// <see cref="ClientAssertionAudiences.TokenEndpoint"/>, the token endpoint URL, as a string, or in an array of
-    /// strings beside others for a client granted <see cref="ClientAssertionAudiences.AllowArray"/>.
+    /// <see cref="ClientAssertionAudiences.TokenEndpoint"/>, the token endpoint URL or its mutual-TLS alias, as a
+    /// string, or in an array of strings beside others for a client granted
+    /// <see cref="ClientAssertionAudiences.AllowArray"/>.
     /// </summary>
     /// <remarks>
     /// RFC 10070 section 4 (case B, client authentication): the authorization server "MUST reject any JWT that
