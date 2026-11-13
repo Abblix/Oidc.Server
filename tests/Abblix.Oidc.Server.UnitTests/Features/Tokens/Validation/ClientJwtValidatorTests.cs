@@ -1107,4 +1107,41 @@ public class ClientJwtValidatorTests
 
         Assert.Equal(admitted, parameters!.ValidateKeyManagementAlgorithm!(keyManagement));
     }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.9 "requires that jwks_uri endpoints shall be served over TLS": a client held to FAPI
+    /// 1.0 Advanced whose jwks_uri is http is given no keys to verify with, so nothing it signs is accepted on any path,
+    /// whatever schemes the host lets the fetcher use; an https jwks_uri is read.
+    /// </summary>
+    [Theory]
+    [InlineData("http://client.example.com/jwks", false)]
+    [InlineData("https://client.example.com/jwks", true)]
+    public async Task ResolveIssuerSigningKeys_Fapi1Advanced_ReadsOnlyAnHttpsJwksUri(string jwksUri, bool read)
+    {
+        var clientInfo = CreateClientInfo(ValidClientId);
+        clientInfo.SecurityProfile = ClientSecurityProfile.Fapi1Advanced;
+        clientInfo.JwksUri = new Uri(jwksUri);
+        var key = new RsaJsonWebKey { KeyId = "client-key" };
+        ValidationParameters? parameters = null;
+
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns((string _, ValidationParameters p) =>
+            {
+                parameters = p;
+                return Task.FromResult<Abblix.Utils.Result<JsonWebToken, JwtValidationError>>(
+                    new JwtValidationError(JwtError.InvalidToken, "not under test"));
+            });
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .ReturnsAsync(clientInfo);
+        _clientKeysProvider
+            .Setup(p => p.GetSigningKeys(clientInfo, false))
+            .Returns(new JsonWebKey[] { key }.ToAsyncEnumerable());
+
+        await _validator.ValidateAsync(SingleIssuer.Tenant, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        var keys = await parameters!.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(read ? 1 : 0, keys.Length);
+    }
 }

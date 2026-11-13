@@ -293,6 +293,17 @@ public partial class ClientJwtValidator(
                 yield break;
 
             var clientInfo = ClientInfo.NotNull(nameof(ClientInfo));
+
+            // FAPI 1.0 Part 2 section 8.9 "requires that jwks_uri endpoints shall be served over TLS". Held here, where
+            // the keys are read, so no path verifies with keys fetched in the clear, whatever schemes the host lets
+            // the fetcher use
+            if (SecurityProfileConsistency.FindJwksUriViolations(
+                    clientInfo.JwksUri,
+                    SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile)).Count > 0)
+            {
+                yield break;
+            }
+
             await foreach (var key in clientJwksProvider.GetSigningKeys(clientInfo, refetch))
                 yield return key;
         }
