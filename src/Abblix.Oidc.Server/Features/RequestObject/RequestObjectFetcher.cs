@@ -32,11 +32,14 @@ namespace Abblix.Oidc.Server.Features.RequestObject;
 /// <param name="serviceProvider">The service provider used for resolving dependencies at runtime.</param>
 /// <param name="options">Options that define how request object validation is handled, including whether
 /// request objects must be signed.</param>
+/// <param name="timeProvider">The clock a profile's bound on how far in the past a request object's nbf may lie
+/// is measured against.</param>
 public partial class RequestObjectFetcher(
     ILogger<RequestObjectFetcher> logger,
     IJsonObjectBinder jsonObjectBinder,
     IServiceProvider serviceProvider,
-    IOptionsSnapshot<OidcOptions> options) : IRequestObjectFetcher
+    IOptionsSnapshot<OidcOptions> options,
+    TimeProvider timeProvider) : IRequestObjectFetcher
 {
     /// <summary>
     /// Fetches and processes the request object by validating its JWT and binding the payload to the request model.
@@ -224,6 +227,20 @@ public partial class RequestObjectFetcher(
                     return new OidcError(
                         ErrorCodes.InvalidRequestObject,
                         "The request object signing algorithm does not match the client's registered algorithm");
+                }
+
+                // FAPI 2.0 Message Signing section 5.3.1, FAPI 1.0 Part 2 section 5.2.2: a profile may require nbf and
+                // exp and bound both. Judged here rather than handed to the validator as RequireExpirationTime,
+                // because the profile belongs to the client, known only once the validator has finished.
+                var lifetimeRefusal = RequestObjectLifetime.WhyRefused(
+                    SecurityProfileRequirements.For(validJwt.Client, tenant.DefaultSecurityProfile),
+                    validJwt.Token.Payload,
+                    timeProvider.GetUtcNow());
+
+                if (lifetimeRefusal != null)
+                {
+                    LogLifetimeOutsideProfile(validJwt.Client.ClientId, Sanitized.Value(lifetimeRefusal));
+                    return InvalidRequestObject(lifetimeRefusal);
                 }
 
                 return (validJwt.Token.Payload.Json, validJwt.Client);
