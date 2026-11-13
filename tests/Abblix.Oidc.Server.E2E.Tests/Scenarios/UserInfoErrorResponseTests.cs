@@ -55,4 +55,21 @@ public class UserInfoErrorResponseTests(TestFactory factory) : TestBase(factory)
             withoutCredentials.Headers.WwwAuthenticate.Select(challenge => challenge.ToString()),
             withUnsupportedScheme.Headers.WwwAuthenticate.Select(challenge => challenge.ToString()));
     }
+
+    /// <summary>
+    /// RFC 6750 section 2.1 gives the credentials as <c>"Bearer" 1*SP b64token</c>; a header naming the scheme
+    /// without a token is a malformed request, which section 3.1 names invalid_request and answers with 400.
+    /// </summary>
+    [Fact]
+    public async Task A_bearer_header_without_a_token_is_an_invalid_request()
+    {
+        var (client, endpoint) = await EndpointAsync();
+
+        var response = await GetAsync(client, endpoint, new AuthenticationHeaderValue(TokenTypes.Bearer));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(
+            ErrorCodes.InvalidRequest,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
 }

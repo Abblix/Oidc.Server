@@ -187,9 +187,11 @@ public class UserInfoRequestValidator(
 				$"The access token must be passed via '{HttpRequestHeaders.Authorization}' header " +
 				$"or '{Parameters.AccessToken}' parameter, but not in both sources at the same time");
 
+		// RFC 6750 section 2.1: the credentials are "Bearer" 1*SP b64token, so the scheme alone is a malformed request,
+		// which section 3.1 names invalid_request, rather than a token found invalid
 		if (authorizationHeader.Parameter == null)
 			return new OidcError(
-				ErrorCodes.InvalidToken,
+				ErrorCodes.InvalidRequest,
 				$"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
 
 		return authorizationHeader.Parameter;

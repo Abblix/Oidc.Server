@@ -264,24 +264,23 @@ public class UserInfoRequestValidatorTests
     }
 
     /// <summary>
-    /// Verifies error when Authorization header has no parameter.
-    /// Bearer scheme requires a token parameter.
+    /// RFC 6750 section 2.1 gives the credentials as <c>"Bearer" 1*SP b64token</c>, so a header naming the scheme
+    /// without a token is a malformed request rather than a bad token, and section 3.1 names that invalid_request:
+    /// "The request is missing a required parameter ... or is otherwise malformed."
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithEmptyHeaderParameter_ShouldReturnError()
+    [Theory]
+    [InlineData(TokenTypes.Bearer)]
+    [InlineData(TokenTypes.DPoP)]
+    public async Task ValidateAsync_WithSchemeButNoToken_IsInvalidRequest(string scheme)
     {
-        // Arrange
         var userInfoRequest = CreateUserInfoRequest();
-        var authHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, null);
+        var authHeader = new AuthenticationHeaderValue(scheme, null);
         var clientRequest = CreateClientRequest(authHeader: authHeader);
 
-        // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
-        // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
-        Assert.Contains("must be specified", error.ErrorDescription);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     /// <summary>
