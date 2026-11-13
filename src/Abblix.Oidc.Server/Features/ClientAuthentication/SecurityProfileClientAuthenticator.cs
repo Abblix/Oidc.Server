@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -70,6 +71,17 @@ internal partial class SecurityProfileClientAuthenticator(
         }
 
         var requirements = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile);
+
+        // FAPI 1.0 Part 1 section 5.2.2: invalid_client "when mis-matched client identifiers were provided through the
+        // client authentication methods that permits sending the client identifier in more than one way". The
+        // credential decided which client this is, so a client_id naming another one is refused rather than ignored
+        if (requirements.RequireMatchingClientIdentifiers &&
+            request.ClientId is { Length: > 0 } namedClientId &&
+            !string.Equals(namedClientId, clientInfo.ClientId, StringComparison.Ordinal))
+        {
+            LogClientIdentifiersMismatch(clientInfo.ClientId, Sanitized.Value(namedClientId));
+            return null;
+        }
         IReadOnlyList<string> violations =
         [
             ..SecurityProfileConsistency.FindViolations(

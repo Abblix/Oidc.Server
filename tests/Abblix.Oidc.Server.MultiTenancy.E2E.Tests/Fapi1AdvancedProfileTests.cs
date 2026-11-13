@@ -647,4 +647,35 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
 
         Assert.Equal(expectedError, await ErrorOf(response));
     }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 5.2.2, taken in by Part 2 section 5.2.2: the server "shall return an invalid_client error
+    /// as defined in 5.2 of RFC6749 when mis-matched client identifiers were provided through the client
+    /// authentication methods that permits sending the client identifier in more than one way". A token request naming
+    /// another client_id beside an assertion this client signed is refused with invalid_client; naming its own goes on to
+    /// be refused for its code.
+    /// </summary>
+    [Theory]
+    [InlineData("someone-else", ErrorCodes.InvalidClient)]
+    [InlineData(ClientId, ErrorCodes.InvalidGrant)]
+    public async Task AMismatchedClientId_IsInvalidClient(string clientId, string expectedError)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, Acme + "/connect/token")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+                [TokenRequest.Parameters.Code] = "no-such-code",
+                [TokenRequest.Parameters.RedirectUri] = RedirectUri,
+                [ClientRequest.Parameters.ClientId] = clientId,
+                [ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer,
+                [ClientRequest.Parameters.ClientAssertion] = await ClientAssertionAsync(),
+            }),
+        };
+        request.Headers.Add(DPoPHeader, await DPoPProofAsync(HttpMethod.Post, new Uri(Host + Acme + "/connect/token")));
+
+        var response = await _http!.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedError, await ErrorOf(response));
+    }
 }

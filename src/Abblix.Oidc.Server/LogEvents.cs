@@ -317,6 +317,7 @@ internal static class LogEvents
             /// of a field - and so that this record goes on naming one shape per number.
             /// </summary>
             public const int RegistrationCannotSatisfyDeploymentProfile = Base + 3;
+            public const int ClientIdentifiersMismatch = Base + 4;
         }
     }
 

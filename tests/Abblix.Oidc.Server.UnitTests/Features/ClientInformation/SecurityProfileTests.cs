@@ -95,6 +95,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequirePkceWithPushedRequests);
         Assert.True(requirements.RequireExactHttpsRedirectUris);
         Assert.True(requirements.ForbidRsa1_5KeyManagement);
+        Assert.True(requirements.RequireMatchingClientIdentifiers);
         Assert.True(requirements.RequireFapiSigningAlgorithms);
     }
 
