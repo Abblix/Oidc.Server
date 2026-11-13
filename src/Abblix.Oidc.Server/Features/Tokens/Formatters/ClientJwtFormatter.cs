@@ -48,11 +48,28 @@ public class ClientJwtFormatter(
         if (encryption is { RequireRegisteredAlgorithm: true, KeyManagementAlgorithm: null })
             return await jwtCreator.IssueAsync(token, signingCredentials);
 
-        var encryptingCredentials = await clientKeysProvider.GetEncryptionKeys(clientInfo)
-            .FirstOrDefaultAsync();
+        // FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
+        // algorithm". A key the client publishes for RSA1_5 is passed over; the keys sit at a jwks_uri the client can
+        // change after registration, so this is decided here, where the key is chosen
+        var forbidRsa1_5 = SecurityProfileRequirements
+            .For(clientInfo, tenant.DefaultSecurityProfile)
+            .ForbidRsa1_5KeyManagement;
+        var clientKeys = await clientKeysProvider.GetEncryptionKeys(clientInfo).ToArrayAsync();
+        var encryptingCredentials = Array.Find(
+            clientKeys,
+            key => !forbidRsa1_5 || key.Algorithm != EncryptionAlgorithms.KeyManagement.Rsa1_5);
+
+        // A client that publishes encryption keys expects what is issued to it encrypted, so a token is not sent in
+        // the clear because the only key it publishes is one its profile forbids
+        if (encryptingCredentials == null && clientKeys.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"The client {clientInfo.ClientId} publishes only RSA1_5 encryption keys, which its security profile " +
+                "forbids");
+        }
 
         var keyEncryptionAlgorithm = encryptingCredentials?.Algorithm
-            ?? encryption.KeyManagementAlgorithm
+            ?? NotForbidden(encryption.KeyManagementAlgorithm, forbidRsa1_5)
             ?? EncryptionAlgorithms.KeyManagement.RsaOaep256;
 
         var contentEncryptionAlgorithm = encryption.ContentEncryptionAlgorithm
@@ -65,4 +82,11 @@ public class ClientJwtFormatter(
             keyEncryptionAlgorithm,
             contentEncryptionAlgorithm);
     }
+
+    /// <summary>
+    /// The registered key management algorithm, or null where it is RSA1_5 and the profile forbids it - which the
+    /// client's configuration checks refuse before here, so it is reached only by a client stored with it.
+    /// </summary>
+    private static string? NotForbidden(string? algorithm, bool forbidRsa1_5)
+        => forbidRsa1_5 && algorithm == EncryptionAlgorithms.KeyManagement.Rsa1_5 ? null : algorithm;
 }
