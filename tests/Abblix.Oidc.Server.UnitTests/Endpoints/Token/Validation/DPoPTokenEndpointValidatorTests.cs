@@ -449,13 +449,13 @@ public class DPoPTokenEndpointValidatorTests
     /// <summary>
     /// FAPI 1.0 Part 2 section 8.2: protected resources "shall only support sender-constrained access tokens via MTLS".
     /// A client held to FAPI 1.0 Advanced is issued certificate-bound tokens only: a request carrying a DPoP proof is
-    /// refused, signed ES256 or not, and so is one without a certificate the token could be bound to; a FAPI 2.0 client
-    /// keeps DPoP.
+    /// refused with invalid_request, signed ES256 or not, and one without a certificate the token could be bound to with
+    /// invalid_client, the mutual TLS authentication being what is missing; a FAPI 2.0 client keeps DPoP.
     /// </summary>
     [Theory]
     [InlineData(ClientSecurityProfile.Fapi1Advanced, true, true, ErrorCodes.InvalidRequest)]
     [InlineData(ClientSecurityProfile.Fapi1Advanced, true, false, ErrorCodes.InvalidRequest)]
-    [InlineData(ClientSecurityProfile.Fapi1Advanced, false, false, ErrorCodes.InvalidDPoPProof)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, false, false, ErrorCodes.InvalidClient)]
     [InlineData(ClientSecurityProfile.Fapi1Advanced, false, true, null)]
     [InlineData(ClientSecurityProfile.Fapi2, true, false, null)]
     public async Task ValidateAsync_Fapi1Advanced_IssuesCertificateBoundTokensOnly(

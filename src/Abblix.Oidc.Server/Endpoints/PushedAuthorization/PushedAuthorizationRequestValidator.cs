@@ -120,6 +120,14 @@ public class PushedAuthorizationRequestValidator(
         if (clientRequest.DPoPProof is not { } proofJwt)
             return authorizationRequest;
 
+        // FAPI 1.0 Part 2 section 8.2: "shall only support sender-constrained access tokens via MTLS", so a proof binds
+        // nothing this client will be issued, and is refused before it is read
+        if (profile.RequireCertificateBoundTokens)
+        {
+            return ErrorFactory.InvalidRequest(
+                "The security profile issues certificate-bound access tokens only; DPoP is not accepted.");
+        }
+
         var proofResult = await proofValidator.ValidateAsync(profile, proofJwt);
 
         if (proofResult.TryGetFailure(out var proofError))

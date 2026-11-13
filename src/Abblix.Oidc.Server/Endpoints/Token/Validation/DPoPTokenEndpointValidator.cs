@@ -64,11 +64,13 @@ public partial class DPoPTokenEndpointValidator(
                     "The security profile issues certificate-bound access tokens only; DPoP is not accepted.");
             }
 
+            // RFC 6749 section 5.2, invalid_client: "Client authentication failed", the mutual TLS the token would be
+            // bound through being what is missing
             if (!WillIssueCertificateBoundToken(context))
             {
                 LogProofRequiredButMissing("security profile");
                 return new OidcError(
-                    ErrorCodes.InvalidDPoPProof,
+                    ErrorCodes.InvalidClient,
                     "The security profile requires a certificate-bound token: authenticate with mutual TLS.");
             }
 

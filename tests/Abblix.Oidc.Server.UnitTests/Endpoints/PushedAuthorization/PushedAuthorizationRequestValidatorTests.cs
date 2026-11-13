@@ -113,6 +113,28 @@ public class PushedAuthorizationRequestValidatorTests
             .ReturnsAsync((Result<Proof, ProofError>)new ProofError(reason));
 
     /// <summary>
+    /// FAPI 1.0 Part 2 section 8.2: access tokens are sender-constrained via MTLS only, so a pushed request from a
+    /// client held to FAPI 1.0 Advanced carrying a DPoP proof is refused with invalid_request before the proof is read.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi1Advanced_ADPoPProof_IsRefusedUnread()
+    {
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced });
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, BuildRequest(), BuildClientRequest(ProofJwt));
+
+        Assert.Equal(ErrorCodes.InvalidRequest, Assert.IsType<AuthorizationRequestValidationError>(
+            result.TryGetFailure(out var error) ? error : null).Error);
+        _proofValidator.Verify(
+            v => v.ValidateAsync(
+                It.IsAny<SecurityProfileRequirements>(), It.IsAny<string>(), It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    /// <summary>
     /// RFC 9126 section 2.1: the request_uri parameter "MUST NOT be provided" in a pushed request, and section 2.3
     /// takes its codes from RFC 6749, where a request carrying it is malformed: invalid_request.
     /// </summary>
@@ -216,17 +238,18 @@ public class PushedAuthorizationRequestValidatorTests
 
     /// <summary>
     /// The same clauses at the pushed authorization request endpoint: the proof is judged under the profile of the
-    /// client presenting it, which for FAPI 1.0 Advanced refuses a proof signed RS256 and admits one signed ES256.
+    /// client presenting it, which for FAPI 2.0 (section 5.4.1) refuses a proof signed RS256 and admits one signed
+    /// ES256. A client held to FAPI 1.0 Advanced sends no proof at all.
     /// </summary>
     [Theory]
     [InlineData(SigningAlgorithms.RS256, false)]
     [InlineData(SigningAlgorithms.ES256, true)]
-    public async Task ValidateAsync_Fapi1Advanced_JudgesTheProofAlgorithm(string algorithm, bool accepted)
+    public async Task ValidateAsync_Fapi2_JudgesTheProofAlgorithm(string algorithm, bool accepted)
     {
         SecurityProfileRequirements? judgedUnder = null;
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced });
+            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi2 });
         var token = new JsonWebToken { Header = { Algorithm = algorithm } };
         _proofValidator
             .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))

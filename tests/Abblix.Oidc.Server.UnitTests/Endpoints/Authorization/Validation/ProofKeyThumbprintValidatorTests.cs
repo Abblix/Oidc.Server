@@ -53,6 +53,25 @@ public class ProofKeyThumbprintValidatorTests
         Assert.Null(result);
     }
 
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.2: access tokens are sender-constrained via MTLS only, so a client held to FAPI 1.0
+    /// Advanced committing to a DPoP key with dpop_jkt is refused here with invalid_request rather than at the token
+    /// endpoint; a client held to no profile keeps the commitment.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, false)]
+    [InlineData(null, true)]
+    public async Task ValidateAsync_AThumbprintUnderACertificateBoundProfile_IsRefused(
+        ClientSecurityProfile? profile, bool accepted)
+    {
+        var context = CreateContext(ValidThumbprint);
+        context.ClientInfo.SecurityProfile = profile;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(accepted ? null : ErrorCodes.InvalidRequest, result?.Error);
+    }
+
     [Fact]
     public async Task ValidateAsync_ValidSha256Thumbprint_PassesThrough()
     {
