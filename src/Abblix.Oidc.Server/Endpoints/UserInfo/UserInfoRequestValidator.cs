@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
@@ -135,7 +136,31 @@ public class UserInfoRequestValidator(
 		// A pairwise subject that does not open for this client (a foreign-sector or pre-change token) comes back as
 		// an error rather than faulting, so it surfaces as a normal invalid_token rejection.
 		return (await accessTokenService.AuthenticateByAccessTokenAsync(tenant, token, clientInfo))
-			.MapSuccess(grant => new ValidUserInfoRequest(userInfoRequest, grant.AuthSession, grant.Context, clientInfo));
+			.Bind(grant => Authorize(userInfoRequest, grant, clientInfo));
+	}
+
+	/// <summary>
+	/// Admits the grant the token opened to the UserInfo Endpoint, or says why its authorization falls short.
+	/// </summary>
+	/// <remarks>
+	/// OpenID Connect Core 1.0 section 5.3: the endpoint is called "using an Access Token obtained through OpenID
+	/// Connect Authentication", which carries the openid scope. FAPI 2.0 Security Profile section 5.3.4 has the
+	/// resource server verify the authorization "is sufficient for the requested resource access and otherwise return
+	/// errors as in Section 3.1" of RFC 6750, which names that insufficient_scope.
+	/// </remarks>
+	private static Result<ValidUserInfoRequest, OidcError> Authorize(
+		UserInfoRequest userInfoRequest,
+		AuthorizedGrant grant,
+		ClientInfo clientInfo)
+	{
+		if (!grant.Context.Scope.Contains(Scopes.OpenId, StringComparer.Ordinal))
+		{
+			return new OidcError(
+				ErrorCodes.InsufficientScope,
+				$"The access token was not granted the '{Scopes.OpenId}' scope");
+		}
+
+		return new ValidUserInfoRequest(userInfoRequest, grant.AuthSession, grant.Context, clientInfo);
 	}
 
 	/// <summary>

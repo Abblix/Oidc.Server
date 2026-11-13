@@ -195,4 +195,30 @@ public sealed class TenantSecurityProfileTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, inForm.StatusCode);
     }
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.4: a resource server shall "verify that the authorization represented by
+    /// the access token is sufficient for the requested resource access and otherwise return errors as in Section 3.1
+    /// of [RFC6750]". The UserInfo Endpoint serves a token "obtained through OpenID Connect Authentication" (OpenID
+    /// Connect Core 1.0 section 5.3), so a token without the openid scope is answered insufficient_scope with 403.
+    /// </summary>
+    [Fact]
+    public async Task ATokenWithoutTheOpenIdScope_IsRefusedAtUserInfoForInsufficientScope()
+    {
+        var accessToken = await _app!.Services.GetRequiredService<IAccessTokenService>().CreateAccessTokenAsync(
+            GlobexTenant,
+            new AuthSession(
+                "user-1", "session-1", _app.Services.GetRequiredService<TimeProvider>().GetUtcNow(), "local"),
+            new AuthorizationContext(ClientId, [Scopes.Profile], requestedClaims: null),
+            Client(),
+            grantId: null,
+            expiresNoLaterThan: null);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{Globex}/connect/userinfo");
+        request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken.EncodedJwt);
+        var response = await _http!.SendAsync(request, TestContext.Current.CancellationToken);
+
+        // RFC 6750 section 3.1 gives 403 to insufficient_scope alone, and the response carries no body to read it from
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
 }

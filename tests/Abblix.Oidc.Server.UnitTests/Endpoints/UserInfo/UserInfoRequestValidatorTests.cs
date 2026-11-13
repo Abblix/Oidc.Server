@@ -424,7 +424,10 @@ public class UserInfoRequestValidatorTests
     /// Arranges a token that validates and a client that is found, so each test below varies only where the token
     /// travels and which profile holds the client.
     /// </summary>
-    private ClientInfo ArrangeValidTokenOfClient(string rawToken, ClientSecurityProfile? clientProfile)
+    private ClientInfo ArrangeValidTokenOfClient(
+        string rawToken,
+        ClientSecurityProfile? clientProfile,
+        AuthorizationContext? authContext = null)
     {
         var accessToken = CreateValidAccessToken();
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = clientProfile };
@@ -435,7 +438,8 @@ public class UserInfoRequestValidatorTests
 
         _accessTokenService
             .Setup(s => s.AuthenticateByAccessTokenAsync(TestTenant.Matched, accessToken, It.IsAny<ClientInfo>()))
-            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(CreateAuthSession(), CreateAuthContext()));
+            .ReturnsAsync((Result<AuthorizedGrant, OidcError>)new AuthorizedGrant(
+                CreateAuthSession(), authContext ?? CreateAuthContext()));
 
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
@@ -544,5 +548,28 @@ public class UserInfoRequestValidatorTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// OpenID Connect Core 1.0 section 5.3: the client calls the UserInfo Endpoint "using an Access Token obtained
+    /// through OpenID Connect Authentication", which is a token carrying the openid scope. FAPI 2.0 Security Profile
+    /// section 5.3.4 has the resource server "verify that the authorization represented by the access token is
+    /// sufficient for the requested resource access and otherwise return errors as in Section 3.1", which names that
+    /// insufficient_scope.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_TokenWithoutOpenIdScope_IsInsufficientScope()
+    {
+        ArrangeValidTokenOfClient(
+            "valid_token_123",
+            clientProfile: null,
+            new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.Profile], requestedClaims: null));
+        var clientRequest = CreateClientRequest(
+            authHeader: new AuthenticationHeaderValue(TokenTypes.Bearer, "valid_token_123"));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateUserInfoRequest(), clientRequest);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InsufficientScope, error.Error);
     }
 }
