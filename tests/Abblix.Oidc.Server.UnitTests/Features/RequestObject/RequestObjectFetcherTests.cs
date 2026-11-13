@@ -1045,6 +1045,7 @@ public class RequestObjectFetcherTests
     {
         Assert.False(_oidcOptions.IgnoreParametersOutsideRequestObject);
         var fetcher = CreateFetcher();
+        var tenant = new TestIssuer { DefaultSecurityProfile = tenantProfile }.ToTenant();
 
         const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjMSJ9.signature";
         var request = new JarTestRequest { ClientId = "c1", State = "outside-only", Request = jwt };
@@ -1052,7 +1053,7 @@ public class RequestObjectFetcherTests
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()) { Algorithm = SigningAlgorithms.PS256 },
-            Payload = WithinTheProfileLifetime(payload),
+            Payload = AddressedTo(tenant, WithinTheProfileLifetime(payload)),
         };
 
         _jwtValidator
@@ -1062,7 +1063,6 @@ public class RequestObjectFetcherTests
             .Setup(b => b.BindModelAsync(payload, It.IsAny<JarTestRequest>()))
             .ReturnsAsync((JsonObject _, JarTestRequest bound) => bound);
 
-        var tenant = new TestIssuer { DefaultSecurityProfile = tenantProfile }.ToTenant();
         var result = await fetcher.FetchAsync(tenant, request, jwt);
 
         Assert.True(result.TryGetSuccess(out var value));
@@ -1089,6 +1089,49 @@ public class RequestObjectFetcherTests
 
     private static ClientInfo Fapi1AdvancedClient
         => new("c1") { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require the aud claim in the request object to be, or to be
+    /// an array containing, the OP's Issuer Identifier URL". An object naming no audience, or only the endpoint it
+    /// was sent to, is refused for a client held to that profile; the issuer as a string or inside an array passes.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, true)]
+    public async Task FetchAsync_Fapi1AdvancedClient_RequestObjectAudience(
+        bool namesTheIssuer, bool namesTheEndpoint, bool accepted)
+    {
+        var tenant = SingleIssuer.Tenant;
+        var payload = WithinTheProfileLifetime(new JsonObject());
+        payload.Audiences = new[]
+            {
+                namesTheIssuer ? tenant.Issuer.OriginalString : null,
+                namesTheEndpoint ? new Uri(tenant.Issuer, "connect/authorize").OriginalString : null,
+            }
+            .OfType<string>()
+            .ToArray();
+
+        var result = await Fetch(Fapi1AdvancedClient, tenant, payload);
+
+        if (accepted)
+            Assert.True(result.TryGetSuccess(out _));
+        else
+            AssertInvalidRequestObject(result);
+    }
+
+    /// <summary>
+    /// The same object naming no audience keeps passing for a client held to no profile: RFC 9101 section 4 has
+    /// the aud claim SHOULD name the server, and a SHOULD the server enforces only where a profile makes it a shall.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_UnprofiledClient_RequestObjectWithoutAudience_Passes()
+    {
+        var result = await Fetch(new ClientInfo("c1"), SingleIssuer.Tenant, WithinTheProfileLifetime(new JsonObject()));
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
 
     /// <summary>
     /// RFC 9101 section 5 strict mode: the payload binds onto a fresh model instead of merging over the
@@ -1166,18 +1209,38 @@ public class RequestObjectFetcherTests
     /// Fetches a request object whose payload carries the given lifetime, sent by the given client at the given
     /// tenant, with the validator passing it as valid - so whatever is refused is refused by the fetcher itself.
     /// </summary>
-    private async Task<Result<JarTestRequest, OidcError>> FetchWithLifetime(
+    private Task<Result<JarTestRequest, OidcError>> FetchWithLifetime(
         ClientInfo client,
         TenantDefinition tenant,
         DateTimeOffset? notBefore,
         DateTimeOffset? expiresAt)
+        => Fetch(client, tenant, AddressedTo(tenant, WithLifetime(new JsonObject(), notBefore, expiresAt)));
+
+    /// <summary>
+    /// The payload addressed to the tenant's issuer, which is what every profile accepts as its audience - for a test
+    /// whose subject is something else.
+    /// </summary>
+    private static JsonWebTokenPayload AddressedTo(TenantDefinition tenant, JsonWebTokenPayload payload)
+    {
+        payload.Audiences = [tenant.Issuer.OriginalString];
+        return payload;
+    }
+
+    /// <summary>
+    /// Fetches a request object carrying the given payload, sent by the given client at the given tenant, with the
+    /// validator passing it as valid - so whatever is refused is refused by the fetcher itself.
+    /// </summary>
+    private async Task<Result<JarTestRequest, OidcError>> Fetch(
+        ClientInfo client,
+        TenantDefinition tenant,
+        JsonWebTokenPayload payload)
     {
         const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjMSJ9.signature";
         var request = new JarTestRequest { ClientId = TestConstants.DefaultClientId, Request = jwt };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
-            Payload = WithLifetime(new JsonObject(), notBefore, expiresAt),
+            Payload = payload,
         };
 
         _jwtValidator

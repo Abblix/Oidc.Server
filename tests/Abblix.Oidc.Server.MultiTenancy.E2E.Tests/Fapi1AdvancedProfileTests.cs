@@ -225,4 +225,16 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
 
         Assert.Equal(ErrorCodes.UnsupportedResponseType, await ErrorOf(await AuthorizeAsync(request)));
     }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2 requires "the aud claim in the request object to be, or to be an array
+    /// containing, the OP's Issuer Identifier URL", so an object naming no audience is refused.
+    /// </summary>
+    [Fact]
+    public async Task ARequestObjectWithoutAudience_IsRefused()
+    {
+        Assert.Equal(
+            ErrorCodes.InvalidRequestObject,
+            await ErrorOf(await AuthorizeAsync(ConformantRequest(), addressedToTheIssuer: false)));
+    }
 }

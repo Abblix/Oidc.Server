@@ -184,6 +184,19 @@ public sealed record SecurityProfileRequirements
     public TimeSpan? MaxRequestObjectLifetime { get; init; }
 
     /// <summary>
+    /// The profile requires a request object to name the issuer identifier as its audience, as a string or inside an
+    /// array. FAPI 1.0 Part 2 section 5.2.2 has the server "require the aud claim in the request object to be, or to
+    /// be an array containing, the OP's Issuer Identifier URL". Enforced by
+    /// <c>Features.RequestObject.RequestObjectFetcher</c>.
+    /// </summary>
+    /// <remarks>
+    /// Narrower than what the server accepts without it: an object naming no audience, or only the endpoint it was
+    /// sent to, passes RFC 9101 alone, whose section 4 has the aud claim only SHOULD name the server. The issuer
+    /// identifier is the one value that names this server whichever endpoint the object reaches.
+    /// </remarks>
+    public bool RequireIssuerAudienceInRequestObject { get; init; }
+
+    /// <summary>
     /// The request object lifetime the FAPI profiles bound a request object to.
     /// </summary>
     internal static readonly TimeSpan FapiRequestObjectLifetime = TimeSpan.FromMinutes(60);
@@ -243,7 +256,8 @@ public sealed record SecurityProfileRequirements
 
     /// <summary>
     /// FAPI 1.0 Part 2 section 5.2.2, the clauses this type has a control for: a signed request object, only its
-    /// parameters used, its nbf and exp bounded, a signed authorization response, sender-constrained access tokens,
+    /// parameters used, its nbf and exp bounded, its audience the issuer, a signed authorization response,
+    /// sender-constrained access tokens,
     /// no public clients, and client authentication by mutual TLS or private_key_jwt.
     /// </summary>
     /// <remarks>
@@ -259,6 +273,7 @@ public sealed record SecurityProfileRequirements
         RequireStrictRequestObjectProcessing = true,
         RequireSignedRequestObject = true,
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
+        RequireIssuerAudienceInRequestObject = true,
         RequireSignedAuthorizationResponse = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
@@ -405,6 +420,7 @@ public sealed record SecurityProfileRequirements
         RequireStrictRequestObjectProcessing = true,
         RequireSignedRequestObject = true,
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
+        RequireIssuerAudienceInRequestObject = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireStringAudienceInClientAssertion = true,
@@ -479,6 +495,8 @@ public sealed record SecurityProfileRequirements
             RequireStrictRequestObjectProcessing || other.RequireStrictRequestObjectProcessing,
         RequireSignedRequestObject = RequireSignedRequestObject || other.RequireSignedRequestObject,
         MaxRequestObjectLifetime = Tighter(MaxRequestObjectLifetime, other.MaxRequestObjectLifetime),
+        RequireIssuerAudienceInRequestObject =
+            RequireIssuerAudienceInRequestObject || other.RequireIssuerAudienceInRequestObject,
     };
 
     /// <summary>

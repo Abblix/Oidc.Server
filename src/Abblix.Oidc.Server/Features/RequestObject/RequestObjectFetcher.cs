@@ -231,18 +231,19 @@ public partial class RequestObjectFetcher(
                         "The request object signing algorithm does not match the client's registered algorithm");
                 }
 
-                // FAPI 2.0 Message Signing section 5.3.1, FAPI 1.0 Part 2 section 5.2.2: a profile may require nbf and
-                // exp and bound both. Judged here rather than handed to the validator as RequireExpirationTime,
+                // FAPI 2.0 Message Signing section 5.3.1, FAPI 1.0 Part 2 section 5.2.2: a profile may require nbf, exp
+                // and the issuer as aud, and bound the first two. Judged here rather than handed to the validator,
                 // because the profile belongs to the client, known only once the validator has finished.
-                var lifetimeRefusal = RequestObjectLifetime.WhyRefused(
+                var profileRefusal = RequestObjectProfileRules.WhyRefused(
                     profile,
                     validJwt.Token.Payload,
+                    tenant.Issuer,
                     timeProvider.GetUtcNow());
 
-                if (lifetimeRefusal != null)
+                if (profileRefusal != null)
                 {
-                    LogLifetimeOutsideProfile(validJwt.Client.ClientId, Sanitized.Value(lifetimeRefusal));
-                    return InvalidRequestObject(lifetimeRefusal);
+                    LogRefusedByProfile(validJwt.Client.ClientId, Sanitized.Value(profileRefusal));
+                    return InvalidRequestObject(profileRefusal);
                 }
 
                 return (validJwt.Token.Payload.Json, validJwt.Client);

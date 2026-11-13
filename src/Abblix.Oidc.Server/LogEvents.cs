@@ -757,7 +757,7 @@ internal static class LogEvents
             public const int InvalidToken = Base + 1;
             public const int SigningAlgorithmMismatch = Base + 2;
             public const int ParametersOutsideRequestObjectIgnored = Base + 3;
-            public const int LifetimeOutsideProfile = Base + 4;
+            public const int RefusedByProfile = Base + 4;
         }
 
         /// <summary>
