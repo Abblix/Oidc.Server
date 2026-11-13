@@ -58,7 +58,7 @@ public class UserInfoResponseFormatter(
                 error.Format(
                     StatusCodes.Status400BadRequest,
                     tenantAccessor.CurrentTenant().Issuer.OriginalString,
-                    DPoPAlgorithms.Allowed,
+                    DPoPAlgorithms.Advertised(error, tenantAccessor.CurrentTenant()),
                     advertiseBearer: true)));
     }
 
