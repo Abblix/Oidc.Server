@@ -971,4 +971,18 @@ public class SecurityProfileTests
         Assert.NotEmpty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client("http://client.example.com/jwks"))));
         Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client("https://client.example.com/jwks"))));
     }
+
+    /// <summary>
+    /// A relative jwks_uri or redirect URI, which a configuration binder or a host-written store can hold, is named as
+    /// not served over https rather than failing on its scheme.
+    /// </summary>
+    [Fact]
+    public void RelativeUris_AreNamedAsNotHttps()
+    {
+        var requirements = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced);
+        var relative = new Uri("callback", UriKind.Relative);
+
+        Assert.Single(SecurityProfileConsistency.FindJwksUriViolations(relative, requirements));
+        Assert.Single(SecurityProfileConsistency.FindRedirectUriViolations([relative], requirements));
+    }
 }

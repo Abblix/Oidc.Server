@@ -225,7 +225,7 @@ public static class SecurityProfileConsistency
             [
                 ..
                 from redirectUri in redirectUris
-                where redirectUri.Scheme != Uri.UriSchemeHttps
+                where redirectUri is not { IsAbsoluteUri: true, Scheme: "https" }
                 select $"the client's security profile admits only https redirect URIs, but {redirectUri} is not one",
             ]
             : [];
@@ -237,7 +237,7 @@ public static class SecurityProfileConsistency
     /// <param name="jwksUri">The jwks_uri the client registers, or null where it registers none.</param>
     /// <param name="requirements">The control bundle the client is held to, floor included.</param>
     public static IReadOnlyList<string> FindJwksUriViolations(Uri? jwksUri, SecurityProfileRequirements requirements)
-        => requirements.RequireHttpsJwksUri && jwksUri is { } uri && uri.Scheme != Uri.UriSchemeHttps
+        => requirements.RequireHttpsJwksUri && jwksUri is { } uri && uri is not { IsAbsoluteUri: true, Scheme: "https" }
             ? [$"the client's security profile requires a jwks_uri served over TLS, but {uri} is not"]
             : [];
 

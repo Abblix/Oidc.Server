@@ -49,7 +49,7 @@ public partial class RedirectUriValidator(ILogger<RedirectUriValidator> logger) 
 
         var redirectUri = context.Request.RedirectUri;
         if (redirectUri == null ||
-            (exactHttps && redirectUri.Scheme != Uri.UriSchemeHttps) ||
+            (exactHttps && redirectUri is not { IsAbsoluteUri: true, Scheme: "https" }) ||
             !uriValidator.IsValid(redirectUri))
         {
             LogInvalidRedirectUri(redirectUri, context.ClientInfo.ClientId);

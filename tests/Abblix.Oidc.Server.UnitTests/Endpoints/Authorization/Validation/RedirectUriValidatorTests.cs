@@ -703,4 +703,20 @@ public class RedirectUriValidatorTests
 
         Assert.Equal(accepted, result == null);
     }
+
+    /// <summary>
+    /// A request object binds its redirect_uri without the model validation that keeps a relative one out of a plain
+    /// request, so a relative redirect_uri from a client held to FAPI 1.0 Advanced is refused like any other that
+    /// matches nothing, rather than failing on its scheme.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi1Advanced_ARelativeRedirectUri_IsRefused()
+    {
+        var context = CreateContext(new Uri("callback", UriKind.Relative), new Uri(RegisteredUri));
+        context.ClientInfo.SecurityProfile = ClientSecurityProfile.Fapi1Advanced;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
+    }
 }
