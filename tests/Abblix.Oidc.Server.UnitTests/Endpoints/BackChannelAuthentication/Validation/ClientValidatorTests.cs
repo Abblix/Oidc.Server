@@ -105,11 +105,11 @@ public class ClientValidatorTests
     }
 
     /// <summary>
-    /// Verifies error when client authentication fails.
-    /// Per CIBA specification, unauthenticated clients must be rejected.
+    /// Verifies error when client authentication fails: CIBA Core 1.0 section 13 lists invalid_client,
+    /// "Client authentication failed", under HTTP 401.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithUnauthenticatedClient_ShouldReturnUnauthorizedClient()
+    public async Task ValidateAsync_WithUnauthenticatedClient_ShouldReturnInvalidClient()
     {
         // Arrange
         var context = CreateContext();
@@ -123,8 +123,34 @@ public class ClientValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClient, result.Error);
         Assert.Equal("The client is not authorized", result.ErrorDescription);
+    }
+
+    /// <summary>
+    /// A client that authenticated but has no token delivery mode cannot use the flow: CIBA Core 1.0 section 13,
+    /// unauthorized_client. invalid_client would be answered with a 401 challenging credentials that worked.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithoutDeliveryMode_ShouldReturnUnauthorizedClient()
+    {
+        // Arrange
+        var context = CreateContext();
+        var clientInfo = new ClientInfo("test-client")
+        {
+            AllowedGrantTypes = [GrantTypes.Ciba],
+            BackChannelTokenDeliveryMode = null,
+        };
+
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
+            .ReturnsAsync(clientInfo);
+
+        // Act
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        // Assert
+        Assert.Equal(ErrorCodes.UnauthorizedClient, Assert.IsType<OidcError>(result).Error);
     }
 
     /// <summary>

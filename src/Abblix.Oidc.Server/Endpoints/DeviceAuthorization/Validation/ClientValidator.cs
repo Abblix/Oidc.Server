@@ -27,8 +27,10 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator)
             tenant, context.ClientRequest);
         if (clientInfo == null)
         {
+            // RFC 8628 section 3.2 answers an error the way the token endpoint does, and RFC 6749 section 5.2 names
+            // a failed client authentication invalid_client.
             return new OidcError(
-                ErrorCodes.UnauthorizedClient,
+                ErrorCodes.InvalidClient,
                 "The client is not authorized");
         }
 

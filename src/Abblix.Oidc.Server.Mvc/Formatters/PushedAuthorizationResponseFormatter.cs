@@ -6,9 +6,11 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using CoreModel = Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
@@ -27,7 +29,8 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// For the same reason this formatter does not delegate to the browser-flow redirect delivery in
 /// <see cref="AuthorizationResponseFormatter"/>, which is intended for the authorization endpoint.
 /// </remarks>
-public class PushedAuthorizationResponseFormatter : IPushedAuthorizationResponseFormatter
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class PushedAuthorizationResponseFormatter(ITenantAccessor tenantAccessor) : IPushedAuthorizationResponseFormatter
 {
     /// <summary>
     /// Asynchronously formats the response to a pushed authorization request.
@@ -55,14 +58,12 @@ public class PushedAuthorizationResponseFormatter : IPushedAuthorizationResponse
                 StatusCode = StatusCodes.Status201Created,
             },
 
-            AuthorizationError error => new JsonResult(new CoreModel.ErrorResponse(error.Error, error.ErrorDescription))
-            {
-                StatusCode = error.Error switch
-                {
-                    ErrorCodes.InvalidClient => StatusCodes.Status401Unauthorized,
-                    _ => StatusCodes.Status400BadRequest,
-                },
-            },
+            // RFC 9126 section 2.3: errors take "the same format as is specified for error responses from the token
+            // endpoint in Section 5.2 of [RFC6749]", so through the token endpoint's own policy (invalid_client -> 401
+            // with a challenge).
+            AuthorizationError error => new OidcError(error.Error, error.ErrorDescription).Format(
+                StatusCodes.Status400BadRequest,
+                tenantAccessor.CurrentTenant().Issuer.OriginalString),
 
             _ => throw new UnexpectedTypeException(nameof(response), response.GetType()),
         };

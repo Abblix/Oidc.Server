@@ -141,11 +141,14 @@ public partial class DeviceAuthorizationTests(TestFactory factory) : TestBase(fa
                 [ClientRequest.Parameters.ClientSecret] = device.ClientSecret + "-tampered",
             });
 
-        await AssertRefusedAsync(response, ErrorCodes.UnauthorizedClient);
+        // RFC 8628 section 3.2 answers an error the way the token endpoint does: RFC 6749 section 5.2, invalid_client,
+        // which the token endpoint gives as a 401.
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var body = await ReadJsonAsync(response);
+        Assert.Equal(ErrorCodes.InvalidClient, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
 
         // The refusal must also produce no code pair. A rejected request that still minted a user code would
         // leave a code live on the verification page for a user to approve.
-        var body = await ReadJsonAsync(response);
         Assert.Null(body[DeviceResponse.Parameters.DeviceCode]);
         Assert.Null(body[DeviceResponse.Parameters.UserCode]);
     }

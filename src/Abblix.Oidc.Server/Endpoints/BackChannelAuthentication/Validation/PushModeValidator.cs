@@ -32,10 +32,12 @@ public class PushModeValidator : IBackChannelAuthenticationContextValidator
             return Task.FromResult<OidcError?>(null);
 
         // Push mode requires backchannel_client_notification_endpoint to be registered
+        // The client has authenticated, so its registration rather than its credentials is at fault: CIBA Core 1.0
+        // section 13, unauthorized_client, not invalid_client, whose 401 would challenge credentials that worked.
         if (context.ClientInfo.BackChannelClientNotificationEndpoint == null)
         {
             return Task.FromResult<OidcError?>(new OidcError(
-                ErrorCodes.InvalidClient,
+                ErrorCodes.UnauthorizedClient,
                 "The client is not configured with a backchannel_client_notification_endpoint"));
         }
 
@@ -50,7 +52,7 @@ public class PushModeValidator : IBackChannelAuthenticationContextValidator
             StringComparison.OrdinalIgnoreCase))
         {
             return Task.FromResult<OidcError?>(new OidcError(
-                ErrorCodes.InvalidClient,
+                ErrorCodes.UnauthorizedClient,
                 "The backchannel_client_notification_endpoint must use HTTPS for security"));
         }
 

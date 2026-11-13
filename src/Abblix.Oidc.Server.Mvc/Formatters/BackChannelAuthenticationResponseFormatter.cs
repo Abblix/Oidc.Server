@@ -8,7 +8,6 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -41,8 +40,8 @@ public class BackChannelAuthenticationResponseFormatter(
     /// with the formatted response as an <see cref="ActionResult"/>.</returns>
     /// <remarks>
     /// This method formats successful authentication requests as <c>200 OK</c>,
-    /// client-related errors as <c>401 Unauthorized</c> or <c>403 Forbidden</c>,
-    /// and general errors as <c>400 Bad Request</c>.
+    /// a device handler's refusal as <c>401 Unauthorized</c> or <c>403 Forbidden</c>,
+    /// and every other error as the token endpoint formats it (<c>invalid_client</c> as 401, the rest as 400).
     /// Per RFC 9110 Section 11.6.1, all <c>401</c> responses include a <c>WWW-Authenticate</c> header
     /// matching the client's authentication scheme per RFC 6749 Section 5.2.
     /// </remarks>
@@ -65,10 +64,9 @@ public class BackChannelAuthenticationResponseFormatter(
                         => new ObjectResult(new ErrorResponse(err, description))
                             { StatusCode = StatusCodes.Status403Forbidden },
 
-                    { Error: var err, ErrorDescription: var description }
-                        => new BadRequestObjectResult(new ErrorResponse(err, description)),
-
-                    _ => throw new UnexpectedTypeException(nameof(error), error.GetType()),
+                    // CIBA Core 1.0 section 13: errors are "sent in the same format as Token Error Responses", with
+                    // invalid_client under HTTP 401 and the rest under 400, so through the token endpoint's own policy.
+                    _ => error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().Issuer.OriginalString),
                 };
             }));
     }

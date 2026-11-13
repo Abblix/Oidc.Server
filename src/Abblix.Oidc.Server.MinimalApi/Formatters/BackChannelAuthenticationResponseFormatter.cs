@@ -20,7 +20,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>
 /// Formats CIBA backchannel authentication results as <see cref="IResult"/>: a JSON success response, a 401 with a
-/// <c>WWW-Authenticate</c> challenge matching the client's scheme, a 403, or a 400 with the JSON error envelope.
+/// <c>WWW-Authenticate</c> challenge matching the client's scheme, a 403, or the token endpoint's error response.
 /// </summary>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class BackChannelAuthenticationResponseFormatter(ITenantAccessor tenantAccessor)
@@ -43,11 +43,9 @@ public class BackChannelAuthenticationResponseFormatter(ITenantAccessor tenantAc
                 BackChannelAuthenticationForbidden { Error: var err, ErrorDescription: var description }
                     => Results.Json(new ErrorResponse(err, description), statusCode: StatusCodes.Status403Forbidden),
 
-                // The base-type property pattern matches every non-null OidcError, so it is the exhaustive
-                // catch-all for the failure branch - a discard arm here would be reachable only for a null
-                // error, which the Result failure value never is, and dereferencing it was the defect.
-                { Error: var err, ErrorDescription: var description }
-                    => Results.Json(new ErrorResponse(err, description), statusCode: StatusCodes.Status400BadRequest),
+                // CIBA Core 1.0 section 13: errors are "sent in the same format as Token Error Responses", with
+                // invalid_client under HTTP 401 and the rest under 400, so through the token endpoint's own policy.
+                _ => error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().Issuer.OriginalString),
             }));
 
     /// <summary>

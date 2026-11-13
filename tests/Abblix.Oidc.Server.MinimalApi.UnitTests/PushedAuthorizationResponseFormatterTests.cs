@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi.Formatters;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
@@ -29,7 +30,8 @@ namespace Abblix.Oidc.Server.MinimalApi.UnitTests;
 /// </remarks>
 public class PushedAuthorizationResponseFormatterTests
 {
-    private readonly PushedAuthorizationResponseFormatter _formatter = new();
+    private readonly PushedAuthorizationResponseFormatter _formatter = new(
+        new ServedBy(new TenantDefinition { Id = "main", Issuer = new Uri("https://auth.example.com") }));
 
     private static AuthorizationError Error(string errorCode, Uri? redirectUri = null)
         => new(
@@ -78,6 +80,29 @@ public class PushedAuthorizationResponseFormatterTests
         Assert.Equal(expectedStatusCode, result.StatusCode);
         Assert.Contains(errorCode, result.Body);
         Assert.Contains("the description the client reads", result.Body);
+    }
+
+    /// <summary>
+    /// RFC 9126 section 2.3 answers an error the way the token endpoint does, and RFC 6749 section 5.2 gives a client
+    /// that authenticated through the Authorization header a 401 with a challenge for its scheme.
+    /// </summary>
+    [Fact]
+    public async Task A_failed_client_authentication_carries_a_basic_challenge()
+    {
+        var request = new AuthorizationRequest();
+
+        var result = await HttpResultRunner.RunAsync(
+            await _formatter.FormatResponseAsync(request, Error(ErrorCodes.InvalidClient)));
+
+        Assert.StartsWith(
+            TokenTypes.Basic,
+            result.Headers[Microsoft.Net.Http.Headers.HeaderNames.WWWAuthenticate].ToString());
+    }
+
+    /// <summary>Tells every request it is served by <paramref name="tenant"/>.</summary>
+    private sealed class ServedBy(TenantDefinition tenant) : ITenantAccessor
+    {
+        public TenantContext Current { get; } = new() { Tenant = tenant };
     }
 
     /// <summary>

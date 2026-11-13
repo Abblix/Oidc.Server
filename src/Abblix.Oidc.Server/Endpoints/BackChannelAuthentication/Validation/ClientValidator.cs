@@ -41,8 +41,9 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator)
             tenant, context.ClientRequest);
         if (clientInfo == null)
         {
+            // CIBA Core 1.0 section 13 lists invalid_client under HTTP 401: "Client authentication failed".
             return new OidcError(
-                ErrorCodes.UnauthorizedClient, "The client is not authorized");
+                ErrorCodes.InvalidClient, "The client is not authorized");
         }
 
         // CIBA Core 1.0 section 7.1: "The Client MUST authenticate to the Backchannel Authentication Endpoint". A
@@ -55,8 +56,11 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator)
 
         if (string.IsNullOrEmpty(clientInfo.BackChannelTokenDeliveryMode))
         {
+            // The client has authenticated, so this is not invalid_client (a 401 challenging credentials that
+            // worked): CIBA Core 1.0 section 13, unauthorized_client, "The Client is not authorized to use this
+            // authentication flow".
             return new OidcError(
-                ErrorCodes.InvalidClient,
+                ErrorCodes.UnauthorizedClient,
                 "The client is not properly configured for backchannel authentication. " +
                 "A token delivery mode (poll, ping, or push) must be specified.");
         }
