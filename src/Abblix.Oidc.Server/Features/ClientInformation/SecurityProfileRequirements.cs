@@ -298,6 +298,12 @@ public sealed record SecurityProfileRequirements
         => !RequireFapiSigningAlgorithms || FapiSigningAlgorithms.Contains(algorithm, StringComparer.Ordinal);
 
     /// <summary>
+    /// The signature algorithms this profile admits, as the set a validator takes, or null where it admits any.
+    /// </summary>
+    internal IReadOnlySet<string>? SigningAlgorithmsAdmitted()
+        => RequireFapiSigningAlgorithms ? FapiSigningAlgorithms.ToHashSet(StringComparer.Ordinal) : null;
+
+    /// <summary>
     /// The request object lifetime the FAPI profiles bound a request object to.
     /// </summary>
     internal static readonly TimeSpan FapiRequestObjectLifetime = TimeSpan.FromMinutes(60);

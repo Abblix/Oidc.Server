@@ -72,6 +72,10 @@ public partial class SoftwareStatementValidator(
             // RFC 7591 Section 2.3 gives a software statement no type, so the type is judged below
             TokenTypes = TokenTypePolicy.CheckedByCaller,
 
+            // FAPI 1.0 Part 2 section 8.6, FAPI 2.0 section 5.4.1: a JWS this server processes uses only the profile's
+            // algorithms, a statement its trusted publisher signed among them
+            AllowedSigningAlgorithms = profile.SigningAlgorithmsAdmitted(),
+
             ValidateIssuer = issuer => ValidateIssuer(softwareStatementOptions, issuer),
             ResolveIssuerSigningKeys = issuer => ResolveSigningKeysAsync(softwareStatementOptions, issuer),
             RefetchIssuerSigningKeys = issuer => ResolveSigningKeysAsync(softwareStatementOptions, issuer, refetch: true),
