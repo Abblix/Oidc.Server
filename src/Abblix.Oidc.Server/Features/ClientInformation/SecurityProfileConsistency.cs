@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -94,6 +95,88 @@ public static class SecurityProfileConsistency
         }
 
         return violations;
+    }
+
+    /// <summary>
+    /// The service tokens issued to a client: the access and refresh tokens, which this server signs and encrypts with
+    /// what the deployment configures for each rather than with what the client registers.
+    /// </summary>
+    /// <param name="serviceTokens">The deployment's service token settings.</param>
+    public static (string Name, ServiceTokenOptions Token)[] IssuedToAClient(ServiceTokensOptions serviceTokens)
+        =>
+        [
+            (nameof(serviceTokens.AccessToken), serviceTokens.AccessToken),
+            (nameof(serviceTokens.RefreshToken), serviceTokens.RefreshToken),
+        ];
+
+    /// <summary>
+    /// Names each of <paramref name="tokens"/> this server would sign with an algorithm, or encrypt with one, the
+    /// profile does not admit, or an empty list: FAPI 1.0 Part 2 sections 8.6 and 8.6.1, FAPI 2.0 section 5.4.1 "when
+    /// creating or processing JWTs".
+    /// </summary>
+    /// <param name="tokens">The service token settings, each with the name it is configured under.</param>
+    /// <param name="requirements">The control bundle in force.</param>
+    public static IReadOnlyList<string> FindServiceTokenViolations(
+        IEnumerable<(string Name, ServiceTokenOptions Token)> tokens,
+        SecurityProfileRequirements requirements)
+    {
+        var violations = new List<string>();
+        foreach (var (name, token) in tokens)
+        {
+            var signing = token.Signing.Algorithm;
+            if (!requirements.PermitsSigningAlgorithm(signing))
+            {
+                violations.Add(
+                    $"ServiceTokens.{name}.Signing.Algorithm is {signing}, which a security profile in force here does " +
+                    $"not admit; set it to {string.Join(" or ", SecurityProfileRequirements.FapiSigningAlgorithms)}.");
+            }
+
+            // Encrypted unless turned off. Only an algorithm the setting names is judged here: a key declaring a
+            // forbidden one is passed over where the token is formatted, which is the one answer to that question
+            if (token.Encrypt != false && token.Encryption.Algorithm is { } encryption &&
+                !requirements.PermitsKeyManagementAlgorithm(encryption))
+            {
+                violations.Add(
+                    $"ServiceTokens.{name} is encrypted with {encryption}, which a security profile in force here " +
+                    "forbids.");
+            }
+        }
+
+        return violations;
+    }
+
+    /// <summary>
+    /// Names a client key set the profile leaves nothing to encrypt to, or an empty list: FAPI 1.0 Part 2 section
+    /// 8.6.1, "For JWE, both clients and authorization servers shall not use the RSA1_5 algorithm". A client that
+    /// publishes encryption keys has what is issued to it encrypted, and is not sent it in the clear because every key
+    /// declares an algorithm its profile forbids.
+    /// </summary>
+    /// <param name="clientKeysProvider">Supplies the encryption keys the client publishes.</param>
+    /// <param name="client">The client.</param>
+    /// <param name="requirements">The control bundle the client is held to.</param>
+    public static async Task<IReadOnlyList<string>> FindEncryptionKeyViolationsAsync(
+        IClientKeysProvider clientKeysProvider,
+        ClientInfo client,
+        SecurityProfileRequirements requirements)
+    {
+        // Fetched only where the profile forbids an algorithm a key may declare
+        if (!requirements.ForbidRsa1_5KeyManagement)
+            return [];
+
+        var keys = await clientKeysProvider.GetEncryptionKeys(client).ToArrayAsync();
+
+        // A key declaring no algorithm can be used with any the profile admits
+        if (keys.Length == 0 || keys.Any(key => key.Algorithm is not { } declared ||
+                                               requirements.PermitsKeyManagementAlgorithm(declared)))
+        {
+            return [];
+        }
+
+        return
+        [
+            "the client's key set publishes only encryption keys declaring an algorithm its security profile " +
+            $"forbids ({string.Join(", ", keys.Select(key => key.Algorithm).Distinct())})",
+        ];
     }
 
     /// <summary>

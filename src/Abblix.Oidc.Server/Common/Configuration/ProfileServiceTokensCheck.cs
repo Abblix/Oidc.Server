@@ -53,23 +53,8 @@ public sealed class ProfileServiceTokensCheck : ITenantsCheck
                 select SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile))
             .ToArray();
 
-        foreach (var (name, token) in tokens)
-        {
-            var signing = token.Signing.Algorithm;
-            if (Array.Exists(inForce, requirements => !requirements.PermitsSigningAlgorithm(signing)))
-            {
-                yield return $"ServiceTokens.{name}.Signing.Algorithm is {signing}, which a security profile in force " +
-                             $"here does not admit; set it to {string.Join(" or ", SecurityProfileRequirements.FapiSigningAlgorithms)}.";
-            }
-
-            // Encrypted unless turned off. Only an algorithm the setting names is judged here: a key declaring a
-            // forbidden one is passed over where the token is formatted, which is the one answer to that question
-            if (token.Encrypt != false && token.Encryption.Algorithm is { } encryption &&
-                Array.Exists(inForce, requirements => !requirements.PermitsKeyManagementAlgorithm(encryption)))
-            {
-                yield return $"ServiceTokens.{name} is encrypted with {encryption}, which a security profile in " +
-                             "force here forbids.";
-            }
-        }
+        return inForce
+            .SelectMany(requirements => SecurityProfileConsistency.FindServiceTokenViolations(tokens, requirements))
+            .Distinct(StringComparer.Ordinal);
     }
 }

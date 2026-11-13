@@ -38,7 +38,9 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </remarks>
 internal partial class SecurityProfileClientAuthenticator(
     IClientAuthenticator inner,
-    ILogger<SecurityProfileClientAuthenticator> logger) : IClientAuthenticator
+    ILogger<SecurityProfileClientAuthenticator> logger,
+    IClientKeysProvider clientKeysProvider,
+    IOptions<OidcOptions> options) : IClientAuthenticator
 {
     public IEnumerable<string> ClientAuthenticationMethodsSupported
         => inner.ClientAuthenticationMethodsSupported;
@@ -96,6 +98,10 @@ internal partial class SecurityProfileClientAuthenticator(
                 clientInfo.TlsClientCertificateBoundAccessTokens,
                 clientInfo.RequireDPoP,
                 requirements),
+            ..SecurityProfileConsistency.FindServiceTokenViolations(
+                SecurityProfileConsistency.IssuedToAClient(options.Value.ServiceTokens), requirements),
+            ..await SecurityProfileConsistency.FindEncryptionKeyViolationsAsync(
+                clientKeysProvider, clientInfo, requirements),
         ];
 
         if (violations.Count == 0)

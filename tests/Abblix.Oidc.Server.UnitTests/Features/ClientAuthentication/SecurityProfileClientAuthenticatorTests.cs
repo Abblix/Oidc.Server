@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Linq;
 using Abblix.Jwt;
 using System;
 using System.Collections.Generic;
@@ -46,13 +47,90 @@ public class SecurityProfileClientAuthenticatorTests
 
     private static (SecurityProfileClientAuthenticator Authenticator, Mock<IClientAuthenticator> Inner)
         CreateAuthenticator(ILogger<SecurityProfileClientAuthenticator> logger)
+        => CreateAuthenticator(logger, SigningAlgorithms.PS256, []);
+
+    /// <summary>
+    /// The decorator over a client the inner authenticator returns, with the deployment's service tokens signed with
+    /// <paramref name="serviceTokenAlgorithm"/> and the client publishing <paramref name="encryptionKeys"/>. Service
+    /// tokens default to PS256, which every profile admits, so a refusal elsewhere is the client's own.
+    /// </summary>
+    private static (SecurityProfileClientAuthenticator Authenticator, Mock<IClientAuthenticator> Inner)
+        CreateAuthenticator(
+            ILogger<SecurityProfileClientAuthenticator> logger,
+            string serviceTokenAlgorithm,
+            JsonWebKey[] encryptionKeys)
     {
         var inner = new Mock<IClientAuthenticator>();
+        var options = new OidcOptions();
+        options.ServiceTokens.AccessToken.Signing.Algorithm = serviceTokenAlgorithm;
+        options.ServiceTokens.RefreshToken.Signing.Algorithm = serviceTokenAlgorithm;
+        var keys = new Mock<IClientKeysProvider>();
+        keys.Setup(k => k.GetEncryptionKeys(It.IsAny<ClientInfo>())).Returns(encryptionKeys.ToAsyncEnumerable());
         var authenticator = new SecurityProfileClientAuthenticator(
             inner.Object,
-            logger);
+            logger,
+            keys.Object,
+            Options.Create(options));
 
         return (authenticator, inner);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 section 5.4.1 "when creating or processing JWTs": the access and refresh tokens a client is issued are
+    /// signed with what the deployment configures, so a client held to FAPI 2.0 at a tenant held to none does not
+    /// authenticate while they are signed RS256, before anything is spent for it.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, false)]
+    [InlineData(SigningAlgorithms.PS256, true)]
+    public async Task TheServiceTokensAClientWouldBeIssued_AreJudgedByItsProfile(string algorithm, bool authenticated)
+    {
+        var (authenticator, inner) = CreateAuthenticator(
+            NullLogger<SecurityProfileClientAuthenticator>.Instance, algorithm, []);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            SecurityProfile = ClientSecurityProfile.Fapi2,
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
+
+        Assert.Equal(authenticated, result is not null);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
+    /// algorithm". A client publishing only RSA1_5 encryption keys has nothing left to be encrypted to, and does not
+    /// authenticate; one also publishing an RSA-OAEP-256 key does.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task AKeySetLeavingNothingToEncryptTo_DoesNotAuthenticate(bool withOaep, bool authenticated)
+    {
+        JsonWebKey[] keys = withOaep
+            ?
+            [
+                new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 },
+                new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 },
+            ]
+            : [new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 }];
+        var (authenticator, inner) = CreateAuthenticator(
+            NullLogger<SecurityProfileClientAuthenticator>.Instance, SigningAlgorithms.PS256, keys);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            TlsClientCertificateBoundAccessTokens = true,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest());
+
+        Assert.Equal(authenticated, result is not null);
     }
 
     /// <summary>
