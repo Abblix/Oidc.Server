@@ -146,11 +146,11 @@ public partial class ClientJwtValidator(
                 JwtError.InvalidToken, "The token uses an algorithm the client's security profile does not admit");
         }
 
-        // The pass above ran under the DEPLOYMENT's window, because the client is identified from the
-        // token being validated and is not known until that has finished. A client naming a profile
-        // of its own may be held to a tighter one, and this is the first line where there is a client
-        // to ask. It only narrows: a deployment-wide profile is a floor, so no client's window is
-        // wider than the one already applied.
+        // The pass above ran under the window of the client the request named outside the token, or the
+        // deployment's where it named none, because the client the token itself names is not known until
+        // that pass has finished. That client may be held to a tighter one, and this is the first line
+        // where it can be asked. It only narrows: what the pass applied is a floor, so no client's window
+        // is wider than the one already applied.
         //
         // The same flag the pass above reads, because the caller's options are handed to it
         // unchanged where the validation parameters are built. Not symmetry for its own sake: a
