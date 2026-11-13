@@ -173,9 +173,10 @@ public class UserInfoRequestValidator(
 
 		// RFC 9449 section 7.1: DPoP-bound access tokens are presented via the DPoP scheme. The actual scheme/binding
 		// compatibility check runs after JWT parse so we can inspect cnf.jkt - here we only reject unknown schemes.
+		// RFC 6750 section 3.1: a request "attempted using an unsupported authentication method" lacks authentication
+		// information, and the resource server "SHOULD NOT include an error code or other error information"
 		if (!authorizationHeader.HasScheme(TokenTypes.Bearer) && !authorizationHeader.HasScheme(TokenTypes.DPoP))
-			return new OidcError(
-				ErrorCodes.InvalidToken,
+			return new MissingAuthenticationError(
 				$"The scheme name '{authorizationHeader.Scheme}' is not supported");
 
 		// RFC 6750 section 3.1: the header and a parameter together are "more than one method for including an access

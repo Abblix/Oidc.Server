@@ -205,24 +205,22 @@ public class UserInfoRequestValidatorTests
     }
 
     /// <summary>
-    /// Verifies invalid scheme handling.
-    /// Per OIDC Core, only Bearer scheme is supported for access tokens.
+    /// RFC 6750 section 3.1: "If the request lacks any authentication information (e.g., the client was unaware that
+    /// authentication is necessary or attempted using an unsupported authentication method), the resource server
+    /// SHOULD NOT include an error code or other error information." A scheme this endpoint does not speak is answered
+    /// with the bare challenge a request with no credentials gets.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithInvalidScheme_ShouldReturnError()
+    public async Task ValidateAsync_WithUnsupportedScheme_IsAnsweredAsMissingAuthentication()
     {
-        // Arrange
         var userInfoRequest = CreateUserInfoRequest();
         var authHeader = new AuthenticationHeaderValue(TokenTypes.Basic, "credentials");
         var clientRequest = CreateClientRequest(authHeader: authHeader);
 
-        // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
 
-        // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
-        Assert.Contains("'Basic' is not supported", error.ErrorDescription);
+        Assert.IsType<MissingAuthenticationError>(error);
     }
 
     /// <summary>
