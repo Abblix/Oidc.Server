@@ -38,7 +38,7 @@ public sealed class SecurityProfileCheck : ITenantsCheck
             // The value tested is the EFFECTIVE one, so an undefined default and an undefined client profile are
             // one case rather than two: the consistency walk below resolves whatever this is, and resolving a value
             // the enum does not define throws.
-            var effectiveProfile = client.SecurityProfile ?? tenant.DefaultSecurityProfile;
+            var effectiveProfile = SecurityProfileRequirements.ProfileNamedFor(tenant, client);
             var undefined = UndefinedProfile(
                 effectiveProfile,
                 client.SecurityProfile.HasValue

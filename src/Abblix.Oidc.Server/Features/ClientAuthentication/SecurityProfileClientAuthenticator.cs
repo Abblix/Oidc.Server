@@ -53,7 +53,7 @@ internal partial class SecurityProfileClientAuthenticator(
         // it demands. What the client is held to comes from the combination further down, which
         // takes the tenant's demands as a floor; this read must not, or an undefined value the
         // client set would be hidden behind a defined default of the tenant.
-        var profile = clientInfo.SecurityProfile ?? tenant.DefaultSecurityProfile;
+        var profile = SecurityProfileRequirements.ProfileNamedFor(tenant, clientInfo);
 
         // Said where a client is met after proving who it is. The value cannot be interpreted, so
         // the client is held to every control this server can demand - and without this line the

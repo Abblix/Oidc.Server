@@ -49,7 +49,7 @@ public sealed class ProfileServiceTokensCheck : ITenantsCheck
         var inForce = new[] { SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile) }
             .Concat(
                 from client in tenant.Clients
-                where Enum.IsDefined(client.SecurityProfile ?? tenant.DefaultSecurityProfile)
+                where Enum.IsDefined(SecurityProfileRequirements.ProfileNamedFor(tenant, client))
                 select SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile))
             .ToArray();
 

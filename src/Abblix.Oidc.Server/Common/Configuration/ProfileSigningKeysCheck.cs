@@ -36,7 +36,7 @@ public sealed class ProfileSigningKeysCheck(IKeyCustodian? custodian = null) : I
 
     private static IEnumerable<string> Failures(TenantDefinition tenant)
         => from client in tenant.Clients
-           where Enum.IsDefined(client.SecurityProfile ?? tenant.DefaultSecurityProfile) &&
+           where Enum.IsDefined(SecurityProfileRequirements.ProfileNamedFor(tenant, client)) &&
                  SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile).RequireFapiSigningAlgorithms
            from setting in SignedForTheClient(client)
            where setting.Algorithm is { } algorithm && !tenant.SigningKeys.Any(key => key.CanPerform(algorithm))

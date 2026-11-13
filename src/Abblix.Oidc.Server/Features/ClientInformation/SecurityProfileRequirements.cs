@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
@@ -600,6 +601,26 @@ public sealed record SecurityProfileRequirements
             ? deployment
             : deployment.TightenedBy(Resolve(chosen));
     }
+
+    /// <summary>
+    /// The control bundle in force for <paramref name="client"/> at <paramref name="tenant"/>, or the one the tenant
+    /// demands of every client where no client is known. The one resolver the algorithm guards are handed their bundle
+    /// from, so no guard resolves a profile of its own.
+    /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="client">The client the bundle is for, or null where none is known yet.</param>
+    public static SecurityProfileRequirements For(TenantDefinition tenant, ClientInfo? client)
+        => client is null ? Resolve(tenant.DefaultSecurityProfile) : For(client, tenant.DefaultSecurityProfile);
+
+    /// <summary>
+    /// The profile value <paramref name="client"/> is governed by at <paramref name="tenant"/> before any bundle is
+    /// resolved: the one it names, else the tenant's default. The question the checks ask of a value - whether this
+    /// server defines it - is asked of this.
+    /// </summary>
+    /// <param name="tenant">The tenant the client is declared at or served by.</param>
+    /// <param name="client">The client asked about.</param>
+    internal static ClientSecurityProfile ProfileNamedFor(TenantDefinition tenant, ClientInfo client)
+        => client.SecurityProfile ?? tenant.DefaultSecurityProfile;
 
     /// <summary>
     /// This bundle with every control at whichever of the two values concedes less.

@@ -988,4 +988,20 @@ public class SecurityProfileTests
         Assert.Single(SecurityProfileConsistency.FindJwksUriViolations(relative, requirements));
         Assert.Single(SecurityProfileConsistency.FindRedirectUriViolations([relative], requirements));
     }
+
+    /// <summary>
+    /// The one resolver every guard is handed its bundle from: with no client it is what the tenant demands of every
+    /// client, with one it is the tenant's floor tightened by what that client names.
+    /// </summary>
+    [Fact]
+    public void For_TenantAndClient_IsTheFloorTightenedByTheClient()
+    {
+        var tenant = Tenant(ClientSecurityProfile.Fapi2);
+        var client = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
+
+        Assert.Same(SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2), SecurityProfileRequirements.For(tenant, null));
+        Assert.Equal(
+            SecurityProfileRequirements.For(client, ClientSecurityProfile.Fapi2),
+            SecurityProfileRequirements.For(tenant, client));
+    }
 }
