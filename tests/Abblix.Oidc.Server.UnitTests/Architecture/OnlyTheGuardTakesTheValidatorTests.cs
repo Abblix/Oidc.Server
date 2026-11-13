@@ -12,7 +12,6 @@ using System.Reflection;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Configuration;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
-using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Xunit;
 
@@ -26,16 +25,14 @@ namespace Abblix.Oidc.Server.UnitTests.Architecture;
 public class OnlyTheGuardTakesTheValidatorTests
 {
     /// <summary>
-    /// The types allowed the validator besides the guard: the licence is signed by Abblix and judged by its own rules,
-    /// and the other three read only which algorithms the validator supports.
+    /// The types allowed the validator besides the guard, each reading only which algorithms the validator supports.
     /// </summary>
-    private static readonly string[] Exempt =
+    private static readonly Type[] Exempt =
     [
-        nameof(ProfiledJwtValidator),
-        nameof(LicenseLoader),
-        nameof(JwtAlgorithmsProvider),
-        nameof(BackChannelAuthenticationValidator),
-        nameof(EncryptedResponseAlgorithmsValidator),
+        typeof(ProfiledJwtValidator),
+        typeof(JwtAlgorithmsProvider),
+        typeof(BackChannelAuthenticationValidator),
+        typeof(EncryptedResponseAlgorithmsValidator),
     ];
 
     private static Type[] TypesTakingTheValidator()
@@ -49,17 +46,20 @@ public class OnlyTheGuardTakesTheValidatorTests
     [Fact]
     public void NoTypeButTheGuard_TakesTheValidator()
     {
-        var others = TypesTakingTheValidator().Select(type => type.Name).Except(Exempt).ToArray();
+        var others = TypesTakingTheValidator().Except(Exempt).Select(type => type.FullName).ToArray();
 
         Assert.True(others.Length == 0, $"These take IJsonWebTokenValidator past the guard: {string.Join(", ", others)}");
     }
 
     /// <summary>
-    /// The walk finds what it looks for, so an empty result cannot be what passes the test above.
+    /// Every exemption is a type the walk finds, the guard among them, so an empty result cannot be what passes the
+    /// test above and no exemption stands for a type that no longer takes the validator.
     /// </summary>
     [Fact]
-    public void TheWalk_FindsTheGuard()
+    public void EachExemption_IsATypeTheWalkFinds()
     {
-        Assert.Contains(typeof(ProfiledJwtValidator), TypesTakingTheValidator());
+        var found = TypesTakingTheValidator();
+
+        Assert.All(Exempt, type => Assert.Contains(type, found));
     }
 }

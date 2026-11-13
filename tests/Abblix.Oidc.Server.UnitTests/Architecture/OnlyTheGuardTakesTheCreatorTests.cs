@@ -30,12 +30,12 @@ public class OnlyTheGuardTakesTheCreatorTests
     /// The types allowed the creator besides the guard: two read only which algorithms the creator supports, and the
     /// security event token signer is left to issue #897.
     /// </summary>
-    private static readonly string[] Exempt =
+    private static readonly Type[] Exempt =
     [
-        nameof(ProfiledJwtIssuer),
-        nameof(JwtAlgorithmsProvider),
-        nameof(ServiceTokensAlgorithmsValidator),
-        nameof(TenantSecurityEventTokenSigner),
+        typeof(ProfiledJwtIssuer),
+        typeof(JwtAlgorithmsProvider),
+        typeof(ServiceTokensAlgorithmsValidator),
+        typeof(TenantSecurityEventTokenSigner),
     ];
 
     private static Type[] TypesTaking(Type dependency)
@@ -48,17 +48,20 @@ public class OnlyTheGuardTakesTheCreatorTests
     [Fact]
     public void NoTypeButTheGuard_TakesTheCreator()
     {
-        var others = TypesTaking(typeof(IJsonWebTokenCreator)).Select(type => type.Name).Except(Exempt).ToArray();
+        var others = TypesTaking(typeof(IJsonWebTokenCreator)).Except(Exempt).Select(type => type.FullName).ToArray();
 
         Assert.True(others.Length == 0, $"These take IJsonWebTokenCreator past the guard: {string.Join(", ", others)}");
     }
 
     /// <summary>
-    /// The walk finds what it looks for, so an empty result cannot be what passes the test above.
+    /// Every exemption is a type the walk finds, the guard among them, so an empty result cannot be what passes the
+    /// test above and no exemption stands for a type that no longer takes the creator.
     /// </summary>
     [Fact]
-    public void TheWalk_FindsTheGuard()
+    public void EachExemption_IsATypeTheWalkFinds()
     {
-        Assert.Contains(typeof(ProfiledJwtIssuer), TypesTaking(typeof(IJsonWebTokenCreator)));
+        var found = TypesTaking(typeof(IJsonWebTokenCreator));
+
+        Assert.All(Exempt, type => Assert.Contains(type, found));
     }
 }
