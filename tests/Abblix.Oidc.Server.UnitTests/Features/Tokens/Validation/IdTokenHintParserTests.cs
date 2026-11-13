@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using System;
@@ -44,7 +45,7 @@ public class IdTokenHintParserTests
     {
         Result<JsonWebToken, JwtValidationError> success = token;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(success);
     }
 
@@ -54,7 +55,7 @@ public class IdTokenHintParserTests
             new JwtValidationError(JwtError.InvalidTokenType, "a registration access token");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, Hint, TokenTypesArg.Is(JwtTypes.IdTokens), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, Hint, TokenTypesArg.Is(JwtTypes.IdTokens), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(refusal);
     }
 
@@ -89,7 +90,7 @@ public class IdTokenHintParserTests
             new JwtValidationError(JwtError.InvalidToken, "bad signature");
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(failure);
 
         var result = await _parser.ParseAsync(SingleIssuer.Tenant, Hint);
@@ -185,8 +186,8 @@ public class IdTokenHintParserTests
         Result<JsonWebToken, JwtValidationError> success = IdToken();
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
-            .Callback((TenantDefinition _, string _, TokenTypePolicy _, ValidationOptions options) => asked = options)
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, Hint, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback((TenantDefinition _, ClientInfo? _, string _, TokenTypePolicy _, ValidationOptions options) => asked = options)
             .ReturnsAsync(success);
 
         await _parser.ParseAsync(SingleIssuer.Tenant, Hint);

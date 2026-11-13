@@ -79,7 +79,7 @@ public class IssuedTokenOnALaggingInstanceTests
             .FormatAsync(tenant, token, client: null, ServiceJwtEncryption.ForAccessToken(options));
 
         return await provider.GetRequiredService<IAuthServiceJwtValidator>()
-            .ValidateAsync(tenant, jwt, TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken));
+            .ValidateAsync(tenant, null, jwt, TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken));
     }
 
     [Fact]

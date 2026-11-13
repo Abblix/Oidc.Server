@@ -77,7 +77,7 @@ public class DPoPUserInfoValidatorTests
         var token = BuildAccessToken(jwkThumbprint: null);
         var clientRequest = BuildClientRequest(scheme: TokenTypes.Bearer, dpopProof: null);
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, clientRequest, token, AccessTokenJwt);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, null, clientRequest, token, AccessTokenJwt);
 
         Assert.Null(error);
     }
@@ -95,7 +95,7 @@ public class DPoPUserInfoValidatorTests
         var scheme = schemeInLowerCase ? TokenTypes.DPoP.ToLowerInvariant() : TokenTypes.DPoP;
         var clientRequest = BuildClientRequest(scheme: scheme, dpopProof: ProofJwt);
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, clientRequest, token, AccessTokenJwt);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, null, clientRequest, token, AccessTokenJwt);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);
@@ -107,7 +107,7 @@ public class DPoPUserInfoValidatorTests
         var token = BuildAccessToken(jwkThumbprint: ProofKeyThumbprint);
         var clientRequest = BuildClientRequest(scheme: TokenTypes.Bearer, dpopProof: null);
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, clientRequest, token, AccessTokenJwt);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, null, clientRequest, token, AccessTokenJwt);
 
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.InvalidToken, error.Error);
@@ -119,7 +119,7 @@ public class DPoPUserInfoValidatorTests
         var token = BuildAccessToken(jwkThumbprint: ProofKeyThumbprint);
         var clientRequest = BuildClientRequest(scheme: TokenTypes.DPoP, dpopProof: null);
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, clientRequest, token, AccessTokenJwt);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, null, clientRequest, token, AccessTokenJwt);
 
         Assert.IsType<InvalidDPoPProofError>(error);
     }
@@ -131,7 +131,7 @@ public class DPoPUserInfoValidatorTests
         var token = BuildAccessToken(jwkThumbprint: ProofKeyThumbprint);
         var clientRequest = BuildClientRequest(scheme: TokenTypes.DPoP, dpopProof: ProofJwt);
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, clientRequest, token, AccessTokenJwt);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, null, clientRequest, token, AccessTokenJwt);
 
         Assert.IsType<InvalidDPoPProofError>(error);
     }
@@ -145,7 +145,7 @@ public class DPoPUserInfoValidatorTests
         var token = BuildAccessToken(jwkThumbprint: ProofKeyThumbprint);
         var clientRequest = BuildClientRequest(scheme: TokenTypes.DPoP, dpopProof: ProofJwt);
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, clientRequest, token, AccessTokenJwt);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, null, clientRequest, token, AccessTokenJwt);
 
         Assert.IsType<InvalidDPoPProofError>(error);
     }
@@ -182,7 +182,7 @@ public class DPoPUserInfoValidatorTests
         var token = BuildAccessToken(jwkThumbprint: ProofKeyThumbprint);
         var clientRequest = BuildClientRequest(scheme: TokenTypes.DPoP, dpopProof: ProofJwt);
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, clientRequest, token, AccessTokenJwt);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, null, clientRequest, token, AccessTokenJwt);
 
         Assert.Null(error);
     }
@@ -196,7 +196,7 @@ public class DPoPUserInfoValidatorTests
         var token = BuildAccessToken(jwkThumbprint: ProofKeyThumbprint);
         var clientRequest = BuildClientRequest(scheme: TokenTypes.DPoP, dpopProof: ProofJwt);
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, clientRequest, token, AccessTokenJwt);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, null, clientRequest, token, AccessTokenJwt);
 
         AssertNonceChallenge(error);
     }
@@ -211,7 +211,7 @@ public class DPoPUserInfoValidatorTests
         var token = BuildAccessToken(jwkThumbprint: ProofKeyThumbprint);
         var clientRequest = BuildClientRequest(scheme: TokenTypes.DPoP, dpopProof: ProofJwt);
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, clientRequest, token, AccessTokenJwt);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, null, clientRequest, token, AccessTokenJwt);
 
         AssertNonceChallenge(error);
     }
@@ -225,7 +225,7 @@ public class DPoPUserInfoValidatorTests
         var token = BuildAccessToken(jwkThumbprint: ProofKeyThumbprint);
         var clientRequest = BuildClientRequest(scheme: TokenTypes.DPoP, dpopProof: ProofJwt);
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, clientRequest, token, AccessTokenJwt);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, null, clientRequest, token, AccessTokenJwt);
 
         Assert.Null(error);
     }
@@ -239,7 +239,7 @@ public class DPoPUserInfoValidatorTests
         var token = BuildAccessToken(jwkThumbprint: ProofKeyThumbprint);
         var clientRequest = BuildClientRequest(scheme: TokenTypes.DPoP, dpopProof: ProofJwt);
 
-        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, clientRequest, token, AccessTokenJwt);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, null, clientRequest, token, AccessTokenJwt);
 
         Assert.Null(error);
         _nonceService.VerifyNoOtherCalls();

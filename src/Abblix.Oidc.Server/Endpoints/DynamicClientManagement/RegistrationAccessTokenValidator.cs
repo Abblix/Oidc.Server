@@ -43,6 +43,7 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
         // registration the token is about is a separate question, and the subject answers it - see below.
         var result = await jwtValidator.ValidateAsync(
             tenant,
+            client: null,
             header.Parameter, TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken));
 
         if (result.TryGetFailure(out var error))

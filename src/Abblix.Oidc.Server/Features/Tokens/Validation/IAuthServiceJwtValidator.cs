@@ -21,30 +21,8 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 public interface IAuthServiceJwtValidator
 {
 	/// <summary>
-	/// Asynchronously validates a JSON Web Token (JWT) based on the provided validation options.
-	/// This method ensures that the JWT is correctly formatted, signed, and adheres to the expected claims and audience.
-	/// </summary>
-	/// <param name="tenant">The tenant the request is served at.</param>
-	/// <param name="jwt">The JWT string to be validated.</param>
-	/// <param name="tokenTypes">The token types the caller accepts, so a token this server issued for one purpose is
-	/// refused where another is expected.</param>
-	/// <param name="options">The validation options that control how the JWT is validated, including checks for issuer,
-	/// audience, expiration, and more. Defaults to <see cref="ValidationOptions.Default"/> if not specified.</param>
-	/// <returns>A task representing the asynchronous operation, resulting in a Result containing either a validated JsonWebToken or a JwtValidationError.</returns>
-	/// <remarks>
-	/// The token is held to the algorithms of the tenant's profile alone; where the client presenting it is known,
-	/// the overload taking that client holds it to the client's profile too.
-	/// </remarks>
-	public Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
-		TenantDefinition tenant,
-		string jwt,
-		TokenTypePolicy tokenTypes,
-		ValidationOptions options = ValidationOptions.Default)
-		=> ValidateAsync(tenant, client: null, jwt, tokenTypes, options);
-
-	/// <summary>
-	/// Validates <paramref name="jwt"/> as <see cref="ValidateAsync(TenantDefinition, string, TokenTypePolicy,
-	/// ValidationOptions)"/> does, held to the algorithms of the profile <paramref name="client"/> is held to at
+	/// Validates a JWT this server issued: that it is correctly formatted and signed, and adheres to the expected
+	/// claims and audience, under the algorithms of the profile <paramref name="client"/> is held to at
 	/// <paramref name="tenant"/>.
 	/// </summary>
 	/// <remarks>
@@ -53,10 +31,12 @@ public interface IAuthServiceJwtValidator
 	/// is refused once the client presents it.
 	/// </remarks>
 	/// <param name="tenant">The tenant the request is served at.</param>
-	/// <param name="client">The client presenting the token, or null where none is known.</param>
+	/// <param name="client">The client presenting the token, or null where no client presents it.</param>
 	/// <param name="jwt">The JWT string to be validated.</param>
-	/// <param name="tokenTypes">The token types the caller accepts.</param>
+	/// <param name="tokenTypes">The token types the caller accepts, so a token this server issued for one purpose is
+	/// refused where another is expected.</param>
 	/// <param name="options">The validation options that control how the JWT is validated.</param>
+	/// <returns>The validated token, or why it was refused.</returns>
 	public Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
 		TenantDefinition tenant,
 		ClientInfo? client,

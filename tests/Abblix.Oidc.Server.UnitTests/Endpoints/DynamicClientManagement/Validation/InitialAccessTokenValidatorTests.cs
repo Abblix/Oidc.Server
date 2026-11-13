@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using System;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
@@ -80,7 +81,7 @@ public class InitialAccessTokenValidatorTests
     {
         var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidToken(jwtId: null));
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -140,7 +141,7 @@ public class InitialAccessTokenValidatorTests
         var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "bad-jwt"));
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, "bad-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "bad-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token is expired"));
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -161,7 +162,7 @@ public class InitialAccessTokenValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "jwt-token",
+                TestTenant.Matched, null, "jwt-token",
                 TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.InitialAccessToken)),
                 It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
@@ -181,7 +182,7 @@ public class InitialAccessTokenValidatorTests
         var token = CreateValidToken(subject: subject);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -205,7 +206,7 @@ public class InitialAccessTokenValidatorTests
         var token = CreateValidToken();
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, "valid-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "valid-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -225,8 +226,8 @@ public class InitialAccessTokenValidatorTests
 
         ValidationOptions? capturedOptions = null;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
-            .Callback(new Action<TenantDefinition, string, TokenTypePolicy, ValidationOptions>((_, _, _, opts) => capturedOptions = opts))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback(new Action<TenantDefinition, ClientInfo?, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, opts) => capturedOptions = opts))
             .ReturnsAsync(token);
 
         await _validator.ValidateAsync(SingleIssuer.Tenant, context);

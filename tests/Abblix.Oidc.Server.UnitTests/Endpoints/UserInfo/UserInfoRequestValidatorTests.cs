@@ -145,7 +145,7 @@ public class UserInfoRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "valid_token_123",
+                TestTenant.Matched, null, "valid_token_123",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
             .ReturnsAsync(accessToken);
 
@@ -186,7 +186,7 @@ public class UserInfoRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "valid_token_123",
+                TestTenant.Matched, null, "valid_token_123",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
             .ReturnsAsync(accessToken);
 
@@ -309,7 +309,7 @@ public class UserInfoRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "invalid_token",
+                TestTenant.Matched, null, "invalid_token",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
             .ReturnsAsync(validationError);
 
@@ -335,7 +335,7 @@ public class UserInfoRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "id_token_value",
+                TestTenant.Matched, null, "id_token_value",
                 TokenTypesArg.Is(TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken)),
                 It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an ID token"));
@@ -363,7 +363,7 @@ public class UserInfoRequestValidatorTests
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
-                TestTenant.Matched, "valid_token",
+                TestTenant.Matched, null, "valid_token",
                 It.IsAny<TokenTypePolicy>(), It.Is<ValidationOptions>(o => (o & ~ValidationOptions.ValidateAudience) != 0)))
             .ReturnsAsync(accessToken);
 
@@ -407,8 +407,8 @@ public class UserInfoRequestValidatorTests
 
         ValidationOptions? capturedOptions = null;
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, "token_123", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
-            .Callback(new Action<TenantDefinition, string, TokenTypePolicy, ValidationOptions>((_, _, _, options) => capturedOptions = options))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "token_123", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Callback(new Action<TenantDefinition, ClientInfo?, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, options) => capturedOptions = options))
             .ReturnsAsync(accessToken);
 
         _accessTokenService
@@ -442,7 +442,7 @@ public class UserInfoRequestValidatorTests
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = clientProfile };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TestTenant.Matched, rawToken, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, rawToken, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(accessToken);
 
         _accessTokenService

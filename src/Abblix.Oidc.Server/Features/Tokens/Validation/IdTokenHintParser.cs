@@ -57,7 +57,7 @@ public class IdTokenHintParser(IAuthServiceJwtValidator jwtValidator) : IIdToken
     {
         // Another token this server issued, an access or refresh token whose audience may well match, is refused
         // by its type, which the signature alone would not catch, as RFC 8725 Section 3.12 describes.
-        var result = await jwtValidator.ValidateAsync(tenant, idTokenHint, JwtTypes.IdTokens, HintOptions);
+        var result = await jwtValidator.ValidateAsync(tenant, client: null, idTokenHint, JwtTypes.IdTokens, HintOptions);
         if (result.TryGetFailure(out var validationError))
             return $"The id token hint contains an invalid token: {validationError}";
 
