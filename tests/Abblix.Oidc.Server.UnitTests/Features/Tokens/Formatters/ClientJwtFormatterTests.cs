@@ -59,7 +59,7 @@ public class ClientJwtFormatterTests
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
         _formatter = new ClientJwtFormatter(
-            _jwtCreator.Object,
+            new ProfiledJwtIssuer(_jwtCreator.Object),
             _clientKeysProvider.Object,
             _serviceKeysProvider.Object);
 

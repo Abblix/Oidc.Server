@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -42,7 +43,7 @@ public class SignedMetadataAlgorithmTests
         keys.Setup(k => k.GetSigningKeys(TestTenant.Matched, true)).Returns(() => all.ToAsyncEnumerable());
         var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
 
-        await new SignedMetadataProvider(creator.Object, keys.Object, TimeProvider.System)
+        await new SignedMetadataProvider(new ProfiledJwtIssuer(creator.Object), keys.Object, TimeProvider.System)
             .SignAsync(tenant, new Abblix.Oidc.Server.Model.ConfigurationResponse
             {
                 Issuer = tenant.Issuer.OriginalString,

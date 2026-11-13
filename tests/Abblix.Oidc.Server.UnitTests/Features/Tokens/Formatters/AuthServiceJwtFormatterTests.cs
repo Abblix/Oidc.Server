@@ -50,7 +50,7 @@ public class AuthServiceJwtFormatterTests
         _jwtCreator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
         _keysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
-        _formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object);
+        _formatter = new AuthServiceJwtFormatter(new ProfiledJwtIssuer(_jwtCreator.Object), _keysProvider.Object);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
         _signingKeyRS256Alt = new RsaJsonWebKey { KeyId = "sig-rs256-alt", Algorithm = SigningAlgorithms.RS256 };
@@ -99,7 +99,7 @@ public class AuthServiceJwtFormatterTests
     public async Task FormatAsync_NamesTheTenantAndCreation_InARefreshTokenOnly(string type, string? named)
     {
         var created = new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, Generation = "g2" };
-        var formatter = new AuthServiceJwtFormatter(_jwtCreator.Object, _keysProvider.Object);
+        var formatter = new AuthServiceJwtFormatter(new ProfiledJwtIssuer(_jwtCreator.Object), _keysProvider.Object);
 
         var token = TokenWith();
         token.Header.Type = type;
@@ -108,7 +108,7 @@ public class AuthServiceJwtFormatterTests
             .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), null, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(EncodedJwt);
 
-        await formatter.FormatAsync(created, token, SignedOnly);
+        await formatter.FormatAsync(created, token, client: null, SignedOnly);
 
         Assert.Equal(named, token.Payload.Json.GetProperty<string>(RefreshTokenTenant.ClaimType));
     }
@@ -131,7 +131,7 @@ public class AuthServiceJwtFormatterTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, sig, _, _, _) => capturedSigningKey = sig)
             .ReturnsAsync(EncodedJwt);
 
-        await _formatter.FormatAsync(SingleIssuer.Tenant, token, SignedOnly);
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, SignedOnly);
 
         Assert.Same(_signingKeyRS384, capturedSigningKey);
     }
@@ -152,7 +152,7 @@ public class AuthServiceJwtFormatterTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, sig, _, _, _) => capturedSigningKey = sig)
             .ReturnsAsync(EncodedJwt);
 
-        await _formatter.FormatAsync(SingleIssuer.Tenant, token, SignedOnly);
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, SignedOnly);
 
         Assert.Same(_signingKeyRS256Alt, capturedSigningKey);
     }
@@ -176,7 +176,7 @@ public class AuthServiceJwtFormatterTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
-        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, SignedOnly);
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, SignedOnly);
 
         Assert.Equal(EncodedJwt, result);
         Assert.Null(capturedEncryptionKey);
@@ -206,7 +206,7 @@ public class AuthServiceJwtFormatterTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
-        await _formatter.FormatAsync(SingleIssuer.Tenant, token, disabledButConfigured);
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, disabledButConfigured);
 
         Assert.Null(capturedEncryptionKey);
         _keysProvider.Verify(p => p.GetEncryptionKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()), Times.Never);
@@ -236,7 +236,7 @@ public class AuthServiceJwtFormatterTests
             })
             .ReturnsAsync(EncodedJwt);
 
-        await _formatter.FormatAsync(SingleIssuer.Tenant, token, Encrypt());
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, Encrypt());
 
         Assert.Same(_encryptionKey, capturedEncryptionKey);
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep, capturedAlg);
@@ -260,7 +260,7 @@ public class AuthServiceJwtFormatterTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, _, alg, _) => capturedAlg = alg)
             .ReturnsAsync(EncodedJwt);
 
-        await _formatter.FormatAsync(SingleIssuer.Tenant, token, Encrypt());
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, Encrypt());
 
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capturedAlg);
     }
@@ -290,7 +290,7 @@ public class AuthServiceJwtFormatterTests
             })
             .ReturnsAsync(EncodedJwt);
 
-        await _formatter.FormatAsync(SingleIssuer.Tenant, token, Encrypt(EncryptionAlgorithms.KeyManagement.RsaOaep256));
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, Encrypt(EncryptionAlgorithms.KeyManagement.RsaOaep256));
 
         Assert.Same(agnosticKey, capturedEncryptionKey);
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capturedAlg);
@@ -309,7 +309,7 @@ public class AuthServiceJwtFormatterTests
         SetupEncryptionKeys(_encryptionKey); // declares RSA-OAEP only
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await _formatter.FormatAsync(SingleIssuer.Tenant, token, Encrypt(EncryptionAlgorithms.KeyManagement.RsaOaep256)));
+            async () => await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, Encrypt(EncryptionAlgorithms.KeyManagement.RsaOaep256)));
     }
 
     /// <summary>
@@ -340,7 +340,7 @@ public class AuthServiceJwtFormatterTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
-        await _formatter.FormatAsync(SingleIssuer.Tenant, token, Encrypt(EncryptionAlgorithms.KeyManagement.RsaOaep256));
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, Encrypt(EncryptionAlgorithms.KeyManagement.RsaOaep256));
 
         Assert.Same(rsaOaep256Key, capturedEncryptionKey);
     }
@@ -366,7 +366,7 @@ public class AuthServiceJwtFormatterTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
-        await _formatter.FormatAsync(SingleIssuer.Tenant, token, Encrypt(keyId: "enc-key-2"));
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, Encrypt(keyId: "enc-key-2"));
 
         Assert.Same(otherEncryptionKey, capturedEncryptionKey);
     }
@@ -393,7 +393,7 @@ public class AuthServiceJwtFormatterTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, _, _, enc) => capturedEnc = enc)
             .ReturnsAsync(EncodedJwt);
 
-        await _formatter.FormatAsync(SingleIssuer.Tenant, token, policy);
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, policy);
 
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128Gcm, capturedEnc);
     }
@@ -419,7 +419,7 @@ public class AuthServiceJwtFormatterTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
-        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, policy);
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, policy);
 
         Assert.Equal(EncodedJwt, result);
         Assert.Same(audienceKey, capturedEncryptionKey);
@@ -439,7 +439,7 @@ public class AuthServiceJwtFormatterTests
         SetupEncryptionKeys();
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await _formatter.FormatAsync(SingleIssuer.Tenant, token, Encrypt()));
+            async () => await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, Encrypt()));
     }
 
     /// <summary>
@@ -460,7 +460,7 @@ public class AuthServiceJwtFormatterTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
-        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, Unstated);
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, Unstated);
 
         Assert.Equal(EncodedJwt, result);
         Assert.Null(capturedEncryptionKey);
@@ -483,7 +483,7 @@ public class AuthServiceJwtFormatterTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
 
-        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, Unstated);
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, Unstated);
 
         Assert.Equal(EncodedJwt, result);
         Assert.Same(_encryptionKey, capturedEncryptionKey);
@@ -501,7 +501,7 @@ public class AuthServiceJwtFormatterTests
         SetupEncryptionKeys(_encryptionKey);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await _formatter.FormatAsync(SingleIssuer.Tenant, token, Encrypt(keyId: "missing-kid")));
+            async () => await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, Encrypt(keyId: "missing-kid")));
     }
 
     /// <summary>
@@ -517,7 +517,9 @@ public class AuthServiceJwtFormatterTests
         var pkcs1 = new RsaJsonWebKey { KeyId = "pkcs1", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 };
         var oaep = new RsaJsonWebKey { KeyId = "oaep", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
         var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
-        SetupSigningKeys(_signingKeyRS256);
+        // An algorithm the profile admits, since what is under test is the encryption key
+        var signingKeyPs256 = new RsaJsonWebKey { KeyId = "sig-ps256", Algorithm = SigningAlgorithms.PS256 };
+        SetupSigningKeys(signingKeyPs256);
         SetupEncryptionKeys(pkcs1, oaep);
         JsonWebKey? used = null;
         _jwtCreator
@@ -525,7 +527,7 @@ public class AuthServiceJwtFormatterTests
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, key, _, _) => used = key)
             .ReturnsAsync("issued");
 
-        await _formatter.FormatAsync(tenant, TokenWith(), Unstated);
+        await _formatter.FormatAsync(tenant, TokenWith(SigningAlgorithms.PS256), client: null, Unstated);
 
         Assert.Equal(expectedKeyId, used?.KeyId);
     }

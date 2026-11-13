@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -31,9 +32,13 @@ public interface IAuthServiceJwtFormatter
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="token">The JSON Web Token (JWT) to be formatted and signed, potentially also encrypted.</param>
+    /// <param name="client">The client the token is issued for, whose security profile tightens the tenant's, or null
+    /// where it is issued for none, such as an initial access token.</param>
     /// <param name="encryption">The encryption policy: whether to encrypt, which key-management algorithm and
     /// encryption key to use, and the content-encryption algorithm.</param>
     /// <returns>A task representing the asynchronous operation, which results in the JWT formatted as a string.
     /// </returns>
-    Task<string> FormatAsync(TenantDefinition tenant, JsonWebToken token, ServiceJwtEncryption encryption);
+    /// <exception cref="InvalidOperationException">The security profile in force admits no algorithm the token would be
+    /// signed or encrypted with, so it is not issued.</exception>
+    Task<string> FormatAsync(TenantDefinition tenant, JsonWebToken token, ClientInfo? client, ServiceJwtEncryption encryption);
 }

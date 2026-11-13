@@ -167,7 +167,7 @@ internal class AccessTokenService(
 		var encryption = await ServiceJwtEncryption.ForAccessToken(options.Value)
 			.WithAudienceKeyAsync(tenant, audienceContext, audienceKeys);
 
-		var encoded = await serviceJwtFormatter.FormatAsync(tenant, accessToken, encryption);
+		var encoded = await serviceJwtFormatter.FormatAsync(tenant, accessToken, clientInfo, encryption);
 
 		return new EncodedJsonWebToken(accessToken, encoded);
 	}

@@ -59,8 +59,8 @@ public sealed class IssuerSpellingTests : IDisposable
         var formatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
         JsonWebToken? issued = null;
         formatter
-            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => issued = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => issued = jwt)
             .ReturnsAsync("token");
 
         var service = new AccessTokenService(

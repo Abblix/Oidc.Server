@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
@@ -20,11 +21,11 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration;
 /// <summary>
 /// Signs the discovery document with one of this provider's own signing keys, per RFC 8414 section 2.1.
 /// </summary>
-/// <param name="jwtCreator">Issues the JWS.</param>
+/// <param name="issuer">Issues the JWS once the tenant's profile admits its algorithm.</param>
 /// <param name="serviceKeysProvider">Supplies this provider's signing keys.</param>
 /// <param name="clock">Stamps <c>iat</c>.</param>
 public class SignedMetadataProvider(
-    IJsonWebTokenCreator jwtCreator,
+    ProfiledJwtIssuer issuer,
     IAuthServiceKeysProvider serviceKeysProvider,
     TimeProvider clock) : ISignedMetadataProvider
 {
@@ -50,7 +51,7 @@ public class SignedMetadataProvider(
         // profile the tenant holds its clients to admits, so the first key signing with one of them is taken
         // Without such a profile the first key signs, and a key whose algorithm cannot be named is said so; under one
         // a key that cannot be named, or names an algorithm the profile does not admit, is passed over for the next
-        var profile = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile);
+        var profile = SecurityProfileRequirements.For(tenant, null);
         var (signingKey, algorithm) = profile.RequireFapiSigningAlgorithms
             ? signingKeys
                 .Select(key => (Key: key, Algorithm: NamedAlgorithmFor(key, profile)))
@@ -85,7 +86,7 @@ public class SignedMetadataProvider(
 
         // No encryption key is passed, so the result is always a pure JWS: a deployment that also issues JWE
         // access tokens must not turn this into a JWE, which no client could verify against jwks_uri.
-        return await jwtCreator.IssueAsync(token, signingKey);
+        return await issuer.IssueAsync(profile, token, signingKey);
     }
 
     /// <summary>

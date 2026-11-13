@@ -19,11 +19,11 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// Provides functionality to format JSON Web Tokens (JWTs) issued to clients by the authentication service.
 /// This class handles the signing of JWTs and, if configured, their encryption, based on the needs of each client.
 /// </summary>
-/// <param name="jwtCreator">Creator for issuing JWTs.</param>
+/// <param name="issuer">Issues the JWT once the client's profile admits its algorithms.</param>
 /// <param name="clientKeysProvider">Provider for client encryption keys.</param>
 /// <param name="serviceKeysProvider">Provider for service signing keys.</param>
 public class ClientJwtFormatter(
-    IJsonWebTokenCreator jwtCreator,
+    ProfiledJwtIssuer issuer,
     IClientKeysProvider clientKeysProvider,
     IAuthServiceKeysProvider serviceKeysProvider) : IClientJwtFormatter
 {
@@ -40,20 +40,19 @@ public class ClientJwtFormatter(
     /// <returns>A task that returns a JWT string formatted and ready for use by the client.</returns>
     public async Task<string> FormatAsync(TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption)
     {
+        var profile = SecurityProfileRequirements.For(tenant, clientInfo);
         var signingCredentials = await serviceKeysProvider.GetSigningKeys(tenant, true)
             .FirstByAlgorithmAsync(token.Header.Algorithm);
 
         // JARM section 2.2 / section 3 opt-in: when the policy requires a registered key-management algorithm and the client has
         // not registered one, the response is signed only - the client's encryption keys are not even resolved.
         if (encryption is { RequireRegisteredAlgorithm: true, KeyManagementAlgorithm: null })
-            return await jwtCreator.IssueAsync(token, signingCredentials);
+            return await issuer.IssueAsync(profile, token, signingCredentials);
 
         // FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
         // algorithm". A key the client publishes for RSA1_5 is passed over; the keys sit at a jwks_uri the client can
         // change after registration, so this is decided here, where the key is chosen
-        var forbidRsa1_5 = SecurityProfileRequirements
-            .For(clientInfo, tenant.DefaultSecurityProfile)
-            .ForbidRsa1_5KeyManagement;
+        var forbidRsa1_5 = profile.ForbidRsa1_5KeyManagement;
         var clientKeys = await clientKeysProvider.GetEncryptionKeys(clientInfo).ToArrayAsync();
         var encryptingCredentials = Array.Find(
             clientKeys,
@@ -75,7 +74,8 @@ public class ClientJwtFormatter(
         var contentEncryptionAlgorithm = encryption.ContentEncryptionAlgorithm
             ?? encryption.DefaultContentEncryptionAlgorithm;
 
-        return await jwtCreator.IssueAsync(
+        return await issuer.IssueAsync(
+            profile,
             token,
             signingCredentials,
             encryptingCredentials,

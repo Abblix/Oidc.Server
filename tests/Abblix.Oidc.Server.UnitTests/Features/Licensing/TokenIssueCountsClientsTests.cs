@@ -85,7 +85,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
         var tokenIds = Mock.Of<ITokenIdGenerator>(generator => generator.GenerateTokenId() == "jti");
         var serviceFormatter = new Mock<IAuthServiceJwtFormatter>();
         serviceFormatter
-            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
             .ReturnsAsync("token");
         var session = new AuthSession("subject", "session", clock.GetUtcNow(), "local");
         static AuthorizationContext Context(string clientId) => new(clientId, [Scopes.OpenId], null);

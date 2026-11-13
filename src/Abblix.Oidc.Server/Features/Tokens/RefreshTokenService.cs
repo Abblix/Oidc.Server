@@ -162,7 +162,9 @@ public class RefreshTokenService(
 
 		var encoded = await jwtFormatter.FormatAsync(
 			tenant,
-			newToken, ServiceJwtEncryption.ForRefreshToken(options.Value));
+			newToken,
+			clientInfo,
+			ServiceJwtEncryption.ForRefreshToken(options.Value));
 		return new EncodedJsonWebToken(newToken, encoded);
 	}
 

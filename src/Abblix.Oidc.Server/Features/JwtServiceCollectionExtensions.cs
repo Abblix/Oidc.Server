@@ -67,6 +67,8 @@ public static class JwtServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, KeyRolloverPropagationValidator>());
 
+        // The one door to the creator for what this server signs or encrypts, which judges the algorithms
+        services.TryAddSingleton<ProfiledJwtIssuer>();
         services.TryAddSingleton<IAuthServiceJwtFormatter, AuthServiceJwtFormatter>();
         // The validator refuses a token revoked, rotated or cut off, so what records those comes with it
         services.AddTokenRevocation();

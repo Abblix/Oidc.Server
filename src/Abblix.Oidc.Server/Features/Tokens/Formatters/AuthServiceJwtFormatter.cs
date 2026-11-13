@@ -23,11 +23,11 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// It leverages signing and optional encryption to generate JWTs that authenticate and authorize internal service
 /// operations.
 /// </summary>
-/// <param name="jwtCreator">The service responsible for creating and issuing JWTs.</param>
+/// <param name="issuer">Issues the JWT once the profile in force admits its algorithms.</param>
 /// <param name="serviceKeysProvider">The provider that supplies cryptographic keys used for signing and
 /// encrypting JWTs.</param>
 public class AuthServiceJwtFormatter(
-	IJsonWebTokenCreator jwtCreator,
+	ProfiledJwtIssuer issuer,
 	IAuthServiceKeysProvider serviceKeysProvider) : IAuthServiceJwtFormatter
 {
 	/// <inheritdoc />
@@ -35,8 +35,14 @@ public class AuthServiceJwtFormatter(
 	/// A refresh token is named for the tenant and creation it is signed at, in the payload of
 	/// <paramref name="token"/> itself, since the server accepts a refresh token only at the one it names.
 	/// </remarks>
-	public async Task<string> FormatAsync(TenantDefinition tenant, JsonWebToken token, ServiceJwtEncryption encryption)
+	public async Task<string> FormatAsync(
+		TenantDefinition tenant,
+		JsonWebToken token,
+		ClientInfo? client,
+		ServiceJwtEncryption encryption)
 	{
+		var profile = SecurityProfileRequirements.For(tenant, client);
+
 		if (JwtTypeName.Matches(token.Header.Type, JwtTypes.RefreshToken))
 			RefreshTokenTenant.Name(token.Payload, TenantKey.PartitionOf(tenant));
 
@@ -49,7 +55,7 @@ public class AuthServiceJwtFormatter(
 		// Opt-out: this token type is configured signed only, so the server's encryption keys are not even
 		// resolved, mirroring the client formatter's JARM signed-only branch.
 		if (encryption.Encrypt == false)
-			return await jwtCreator.IssueAsync(token, signingCredentials);
+			return await issuer.IssueAsync(profile, token, signingCredentials);
 
 		// A policy may name the key itself, which is how a token minted for another party is encrypted to that
 		// party rather than to this server. Otherwise select among the server's own keys symmetrically with
@@ -61,7 +67,6 @@ public class AuthServiceJwtFormatter(
 		// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
 		// algorithm". A server key declaring it is passed over where the tenant's profile forbids it, which the startup
 		// check cannot see for keys a custodian or the host's own provider supplies
-		var profile = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile);
 		var encryptingCredentials = encryption.Key
 			?? await serviceKeysProvider.GetEncryptionKeys(tenant)
 				.Where(key => key.Algorithm is not { } declared || profile.PermitsKeyManagementAlgorithm(declared))
@@ -84,7 +89,7 @@ public class AuthServiceJwtFormatter(
 
 			// Nothing was stated, so an absent key means encryption is simply not configured: issue a signed
 			// JWS, which is what the server produced before this policy existed.
-			return await jwtCreator.IssueAsync(token, signingCredentials);
+			return await issuer.IssueAsync(profile, token, signingCredentials);
 		}
 
 		// Derive the key-management alg from the policy, else the key's declared alg (RFC 7517 section 4.4), else the default.
@@ -92,7 +97,8 @@ public class AuthServiceJwtFormatter(
 			?? encryptingCredentials.Algorithm
 			?? EncryptionAlgorithms.KeyManagement.RsaOaep256;
 
-		return await jwtCreator.IssueAsync(
+		return await issuer.IssueAsync(
+			profile,
 			token,
 			signingCredentials,
 			encryptingCredentials,

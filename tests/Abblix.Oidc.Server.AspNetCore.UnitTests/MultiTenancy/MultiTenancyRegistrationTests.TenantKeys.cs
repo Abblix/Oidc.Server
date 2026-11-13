@@ -283,6 +283,7 @@ public partial class MultiTenancyRegistrationTests
                 Header = { Algorithm = SigningAlgorithms.RS256 },
                 Payload = { Subject = "user123", Issuer = acme.Issuer.OriginalString },
             },
+            client: null,
             new ServiceJwtEncryption(
                 Encrypt: true,
                 EncryptionAlgorithms.KeyManagement.RsaOaep256,
