@@ -151,6 +151,14 @@ public sealed record SecurityProfileRequirements
     public bool RequireExactHttpsRedirectUris { get; init; }
 
     /// <summary>
+    /// The profile requires a client publishing its keys at a jwks_uri to serve it over TLS. FAPI 1.0 Part 2 section
+    /// 8.9: "this profile ... requires that jwks_uri endpoints shall be served over TLS". Held by
+    /// <see cref="SecurityProfileConsistency"/> at registration, at startup and where the client authenticates, whatever
+    /// schemes the host lets the outbound fetcher use.
+    /// </summary>
+    public bool RequireHttpsJwksUri { get; init; }
+
+    /// <summary>
     /// The profile admits only an authorization response the server signs: the response type <c>code id_token</c>,
     /// whose ID token is the response's detached signature, or the response type <c>code</c> with the response mode
     /// <c>jwt</c> (JARM). FAPI 1.0 Part 2 section 5.2.2 has the server "require the response_type value code
@@ -383,6 +391,7 @@ public sealed record SecurityProfileRequirements
         RequireStateWithoutOpenIdScope = true,
         RequirePkceWithPushedRequests = true,
         RequireExactHttpsRedirectUris = true,
+        RequireHttpsJwksUri = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireMatchingClientIdentifiers = true,
@@ -536,6 +545,7 @@ public sealed record SecurityProfileRequirements
         RequireStateWithoutOpenIdScope = true,
         RequirePkceWithPushedRequests = true,
         RequireExactHttpsRedirectUris = true,
+        RequireHttpsJwksUri = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
         RequireMatchingClientIdentifiers = true,
@@ -650,6 +660,7 @@ public sealed record SecurityProfileRequirements
             ForbidRsa1_5KeyManagement = ForbidRsa1_5KeyManagement || other.ForbidRsa1_5KeyManagement,
             RequireMatchingClientIdentifiers =
                 RequireMatchingClientIdentifiers || other.RequireMatchingClientIdentifiers,
+            RequireHttpsJwksUri = RequireHttpsJwksUri || other.RequireHttpsJwksUri,
         };
 
     /// <summary>

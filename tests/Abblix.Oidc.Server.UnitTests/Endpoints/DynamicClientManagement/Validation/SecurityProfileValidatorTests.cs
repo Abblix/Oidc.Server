@@ -195,4 +195,24 @@ public class SecurityProfileValidatorTests
 
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
     }
+
+    /// <summary>
+    /// The same clause at registration: an http jwks_uri is refused with invalid_client_metadata.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi1Advanced_AnHttpJwksUri_IsRefused()
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            JwksUri = new System.Uri("http://client.example.com/jwks"),
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
 }

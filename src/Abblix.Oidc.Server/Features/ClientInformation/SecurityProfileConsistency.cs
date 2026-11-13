@@ -231,6 +231,17 @@ public static class SecurityProfileConsistency
             : [];
 
     /// <summary>
+    /// Names a jwks_uri the profile does not admit, or nothing: FAPI 1.0 Part 2 section 8.9 "requires that jwks_uri
+    /// endpoints shall be served over TLS".
+    /// </summary>
+    /// <param name="jwksUri">The jwks_uri the client registers, or null where it registers none.</param>
+    /// <param name="requirements">The control bundle the client is held to, floor included.</param>
+    public static IReadOnlyList<string> FindJwksUriViolations(Uri? jwksUri, SecurityProfileRequirements requirements)
+        => requirements.RequireHttpsJwksUri && jwksUri is { } uri && uri.Scheme != Uri.UriSchemeHttps
+            ? [$"the client's security profile requires a jwks_uri served over TLS, but {uri} is not"]
+            : [];
+
+    /// <summary>
     /// The algorithm of a response that may also go unsigned, or null where it does: for userinfo and introspection
     /// <c>none</c> is a plain JSON response rather than an unsigned JWS.
     /// </summary>

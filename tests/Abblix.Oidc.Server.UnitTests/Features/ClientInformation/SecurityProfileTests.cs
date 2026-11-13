@@ -96,6 +96,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireExactHttpsRedirectUris);
         Assert.True(requirements.ForbidRsa1_5KeyManagement);
         Assert.True(requirements.RequireMatchingClientIdentifiers);
+        Assert.True(requirements.RequireHttpsJwksUri);
         Assert.True(requirements.RequireFapiSigningAlgorithms);
     }
 
@@ -949,5 +950,25 @@ public class SecurityProfileTests
         Assert.Empty(SecurityProfileConsistency.FindAlgorithmViolations(
             Client(EncryptionAlgorithms.KeyManagement.Rsa1_5),
             SecurityProfileRequirements.Resolve(ClientSecurityProfile.None)));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.9: the profile "requires that jwks_uri endpoints shall be served over TLS". A FAPI 1.0
+    /// Advanced client whose keys are published at an http jwks_uri is refused at startup, even where the host lifted
+    /// the https-only default of the fetcher; an https one passes.
+    /// </summary>
+    [Fact]
+    public void Check_Fapi1AdvancedClientWithAnHttpJwksUri_Refuses()
+    {
+        static ClientInfo Client(string jwksUri) => new(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            JwksUri = new Uri(jwksUri),
+        };
+
+        Assert.NotEmpty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client("http://client.example.com/jwks"))));
+        Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client("https://client.example.com/jwks"))));
     }
 }

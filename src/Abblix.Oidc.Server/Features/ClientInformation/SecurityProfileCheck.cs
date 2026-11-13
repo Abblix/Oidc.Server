@@ -60,6 +60,7 @@ public sealed class SecurityProfileCheck : ITenantsCheck
                         requirements)
                     .Concat(SecurityProfileConsistency.FindAlgorithmViolations(client, requirements))
                     .Concat(SecurityProfileConsistency.FindRedirectUriViolations(client.RedirectUris, requirements))
+                    .Concat(SecurityProfileConsistency.FindJwksUriViolations(client.JwksUri, requirements))
                 select $"Client '{client.ClientId}': {violation}.");
         }
 

@@ -62,6 +62,7 @@ public class SecurityProfileValidator : SyncClientRegistrationContextValidator
                         request.BackChannelAuthenticationRequestSigningAlg),
                 ],
                 requirements),
+            ..FindJwksUriViolations(request.JwksUri, requirements),
             ..FindEncryptionAlgorithmViolations(
                 [
                     (Parameters.IdTokenEncryptedResponseAlg, request.IdTokenEncryptedResponseAlg),

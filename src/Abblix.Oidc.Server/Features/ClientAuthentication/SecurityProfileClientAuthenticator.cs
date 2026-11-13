@@ -90,6 +90,7 @@ internal partial class SecurityProfileClientAuthenticator(
                 clientInfo.ClientAssertionAudiences,
                 requirements),
             ..SecurityProfileConsistency.FindAlgorithmViolations(clientInfo, requirements),
+            ..SecurityProfileConsistency.FindJwksUriViolations(clientInfo.JwksUri, requirements),
         ];
 
         if (violations.Count == 0)
