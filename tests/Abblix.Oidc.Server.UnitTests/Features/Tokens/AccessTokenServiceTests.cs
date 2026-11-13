@@ -14,6 +14,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
@@ -991,5 +992,72 @@ public class AccessTokenServiceTests
         var details = Assert.IsType<JsonArray>(token.Payload.Json[IanaClaimTypes.AuthorizationDetails]);
         Assert.Equal(3, details.Count);
         Assert.Equal([OrdersApi.OriginalString], token.Payload.Audiences);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
+    /// algorithm". A resource publishing an encryption key declaring RSA1_5 gets no access token at a tenant held to
+    /// FAPI 1.0 Advanced: nothing reaches the creator, so no such JWE leaves the server. A tenant held to no profile
+    /// encrypts to it as before.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, false)]
+    [InlineData(ClientSecurityProfile.None, true)]
+    public async Task CreateAccessToken_ToAResourceKeyDeclaringRsa1_5_IsIssuedOnlyWithoutAProfile(
+        ClientSecurityProfile profile, bool issued)
+    {
+        var resourceKey = new RsaJsonWebKey
+        {
+            KeyId = "orders-enc",
+            Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5,
+        };
+        var definition = new ResourceDefinition(OrdersApi);
+        var captured = definition;
+        var manager = new Mock<IResourceManager>(MockBehavior.Strict);
+        manager.Setup(m => m.TryGet(TestTenant.Matched, OrdersApi, out captured)).Returns(true);
+        var resourceKeys = new Mock<IResourceKeysProvider>(MockBehavior.Strict);
+        resourceKeys.Setup(k => k.GetEncryptionKeys(definition)).Returns(new JsonWebKey[] { resourceKey }.ToAsyncEnumerable());
+
+        // Signed with an algorithm the profile admits, so what is judged is the encryption alone
+        var serviceKeys = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
+        serviceKeys
+            .Setup(k => k.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }
+                .ToAsyncEnumerable());
+        var options = new OidcOptions();
+        options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+
+        var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
+        string? keyManagement = null;
+        creator
+            .Setup(c => c.IssueAsync(
+                It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey?>(), resourceKey, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey?, JsonWebKey?, string, string>((_, _, _, algorithm, _) => keyManagement = algorithm)
+            .ReturnsAsync(EncodedToken);
+
+        var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
+        tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
+        var service = new AccessTokenService(
+            new FakeTimeProvider(_currentTime),
+            tokenIdGenerator.Object,
+            new AuthServiceJwtFormatter(new ProfiledJwtIssuer(creator.Object), serviceKeys.Object),
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
+            Options.Create(options),
+            SingleIssuer.LicensedCatalog,
+            new AudienceKeyResolver(manager.Object, resourceKeys.Object),
+            ScopeClaims.Of());
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+
+        try
+        {
+            await service.CreateAccessTokenAsync(
+                tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
+        }
+        catch (InvalidOperationException) when (!issued)
+        {
+            // The refusal: what matters below is that nothing was encrypted
+        }
+
+        Assert.Equal(issued ? EncryptionAlgorithms.KeyManagement.Rsa1_5 : null, keyManagement);
     }
 }
