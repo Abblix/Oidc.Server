@@ -59,13 +59,14 @@ public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
         // very request, so a refusal here is one changed in between
         var created = await identityTokenService.CreateIdentityTokenAsync(
             tenant,
-            authorizedGrant.AuthSession,
-            authorizedGrant.Context,
-            request.ClientInfo,
-            standalone,
-            result.Code,
-            result.AccessToken?.EncodedJwt,
-            result.Model.State);
+            new IdentityTokenRequest(
+                authorizedGrant.AuthSession,
+                authorizedGrant.Context,
+                request.ClientInfo,
+                IncludeUserClaims: standalone,
+                result.Code,
+                result.AccessToken?.EncodedJwt,
+                result.Model.State));
         result.IdToken = created?.GetSuccess();
     }
 }

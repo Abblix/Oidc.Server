@@ -335,28 +335,10 @@ public class TokenRequestProcessor(
 		if (!issues)
 			return null;
 
-		// The bindings exist only when the caller says it IS the push path. The mode could be read
-		// off clientInfo instead, and is not, so that this method does not have to know CIBA's
-		// delivery rules to serve every other grant type - see PushDeliveryBindings.
-		//
-		// The refresh token is read from the RESPONSE because it was minted in the step before. That order
-		// is load-bearing: assembling these bindings before the step that mints it silently drops
-		// rt_hash from every push notification that carries one.
-		var pushBindings = request.PushDeliveryOf is { } authenticationRequestId
-			? new PushDeliveryBindings(authenticationRequestId, response.RefreshToken?.EncodedJwt)
-			: null;
-
 		var created = await identityTokenService.CreateIdentityTokenAsync(
-			tenant, request.AuthorizedGrant.AuthSession,
-			authContext,
-			request.ClientInfo,
-			false,
-			null,
-			accessToken.EncodedJwt,
-			// FAPI 1.0 Part 2 section 5.2.2.1 lets s_hash be omitted here once the authorization response
-			// carried it, and the token request holds no state to hash anyway.
-			null,
-			pushBindings);
+			tenant,
+			TokenResponseIdentityToken.For(
+				request, authContext, accessToken.EncodedJwt, response.RefreshToken?.EncodedJwt));
 
 		if (created is { } issued && issued.TryGetFailure(out var refusal))
 			return refusal;

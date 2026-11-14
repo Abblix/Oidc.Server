@@ -30,28 +30,8 @@ public interface IIdentityTokenService
 	/// access token respectively, enhancing the security of token exchange in OAuth 2.0 flows.
 	/// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
-    /// <param name="authSession">The authentication session, which includes details such as the user's unique
-    /// identifier and the session's authentication time.</param>
-    /// <param name="authContext">The authorization context, providing contextual information about the authorization
-    /// request, such as the requested scopes and additional claims to be included in the identity token.</param>
-    /// <param name="clientInfo">Detailed information about the client that is requesting the identity token, including
-    /// its identifier and specific requirements for the token.</param>
-    /// <param name="includeUserClaims">A boolean value indicating whether claims about the user should be included
-    /// in the identity token. When set to <c>true</c>, the token will include claims based on the requested scopes
-    /// and additional specified claims.</param>
-    /// <param name="authorizationCode">An optional authorization code provided to include the `c_hash` claim in the
-    /// identity token, which is a hash of the code. This parameter is typically used in authorization code flow.
-    /// </param>
-    /// <param name="accessToken">An optional access token provided to include the `at_hash` claim in the identity token,
-    /// which is a hash of the token. This parameter is used when the identity token is issued alongside an access token.
-    /// </param>
-    /// <param name="state">The <c>state</c> the authorization response echoes, or <see langword="null"/> when the
-    /// token is not returned there or the request carried none. Non-null adds the <c>s_hash</c> claim
-    /// (Financial-grade API 1.0 Part 2, section 5.1.1), which binds that state to the token.</param>
-    /// <param name="pushBindings">The CIBA push notification this token travels in, or
-    /// <see langword="null"/> when it does not. Non-null adds the two bindings Section 10.3.1 requires
-    /// there and nowhere else - the request identifier verbatim, and the refresh token's hash when one
-    /// is sent.</param>
+    /// <param name="request">What the token is issued from: the session, what was authorized, the client, and the
+    /// values the token binds itself to.</param>
     /// <returns>A task that, upon completion, yields an <see cref="EncodedJsonWebToken"/> that represents the newly
     /// generated identity token, encoded and ready for transmission to the client.</returns>
     /// <remarks>
@@ -60,12 +40,5 @@ public interface IIdentityTokenService
     /// </remarks>
 	Task<Result<EncodedJsonWebToken, OidcError>?> CreateIdentityTokenAsync(
 		TenantDefinition tenant,
-		AuthSession authSession,
-		AuthorizationContext authContext,
-		ClientInfo clientInfo,
-		bool includeUserClaims,
-		string? authorizationCode,
-		string? accessToken,
-		string? state,
-		PushDeliveryBindings? pushBindings = null);
+		IdentityTokenRequest request);
 }

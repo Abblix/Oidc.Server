@@ -50,17 +50,7 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 	/// integrity.
 	/// </summary>
 	/// <param name="tenant">The tenant the request is served at.</param>
-	/// <param name="authSession">Details of the authenticated user's session.</param>
-	/// <param name="authContext">Contextual information about the authorization, including scopes and nonce.</param>
-	/// <param name="clientInfo">Information about the requesting client.</param>
-	/// <param name="includeUserClaims">Indicates whether to include detailed user claims in the token.</param>
-	/// <param name="authorizationCode">Authorization code to generate `c_hash`, validating the code's integrity.
-	/// </param>
-	/// <param name="accessToken">Access token to generate `at_hash`, ensuring the token's integrity.</param>
-	/// <param name="state">The state the authorization response echoes, to generate `s_hash`.</param>
-	/// <param name="pushBindings">The CIBA push notification this token travels in, or <c>null</c> when it
-	/// does not. Non-null adds the two bindings Section 10.3.1 requires in push mode: the request
-	/// identifier verbatim, and the refresh token's hash when one is sent.</param>
+	/// <param name="request">What the token is issued from.</param>
 	/// <returns>A task that resolves to an <see cref="EncodedJsonWebToken"/>, representing the identity token.
 	/// </returns>
 	/// <remarks>
@@ -70,15 +60,11 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 	/// </remarks>
 	public async Task<Result<EncodedJsonWebToken, OidcError>?> CreateIdentityTokenAsync(
 		TenantDefinition tenant,
-		AuthSession authSession,
-		AuthorizationContext authContext,
-		ClientInfo clientInfo,
-		bool includeUserClaims,
-		string? authorizationCode,
-		string? accessToken,
-		string? state,
-		PushDeliveryBindings? pushBindings = null)
+		IdentityTokenRequest request)
 	{
+		var (authSession, authContext, clientInfo, includeUserClaims, authorizationCode, accessToken, state,
+			pushBindings) = request;
+
 		// OpenID Connect Core 1.0 section 5.5.1.1: a request requiring specific authentication levels of the
 		// ID token must be answered with one of them, and an outcome that cannot meet it "MUST" be treated as
 		// a failed authentication attempt. This token states the session's own acr, so a session at another
