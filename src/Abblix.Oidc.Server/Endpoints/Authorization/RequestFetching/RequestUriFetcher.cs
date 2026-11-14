@@ -105,7 +105,8 @@ public partial class RequestUriFetcher(
         return contentResult.Match<Result<AuthorizationRequest, AuthorizationRequestValidationError>>(
             // The fetched object takes the reference's place rather than standing beside it: a request kept for a
             // later page is stored as this model, and on its way back would carry both, which only one may
-            requestObject => request with { RedirectUri = null, Request = requestObject, RequestUri = null },
+            // A request object served as a file may end in a line break that is not part of the token
+            requestObject => request with { RedirectUri = null, Request = requestObject.Trim(), RequestUri = null },
             contentError => AuthorizationErrorFactory.InvalidRequestUri(contentError.ErrorDescription));
     }
 }
