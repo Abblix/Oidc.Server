@@ -74,4 +74,15 @@ public sealed class ProfiledJwtIssuer(IJsonWebTokenCreator creator)
             ? creator.IssueAsync(token, signingKey, encryptionKey, keyManagement)
             : creator.IssueAsync(token, signingKey, encryptionKey, keyManagement, contentEncryptionAlgorithm);
     }
+
+    /// <summary>
+    /// Whether a token can be encrypted to <paramref name="key"/>, a key another party publishes. A key declaring no
+    /// algorithm can be, and one declaring an algorithm only when that is a key management algorithm this server
+    /// performs with a key of its type: RFC 8725 section 3.1 binds the key to what it declares, so a key published for
+    /// signing, or for an algorithm the host did not register, is one nothing can be encrypted to.
+    /// </summary>
+    public bool CanEncryptTo(JsonWebKey key)
+        => key.Algorithm is not { } algorithm
+           || creator.EncryptedResponseAlgorithmsSupported.Contains(algorithm, StringComparer.Ordinal) &&
+           key.SupportsAlgorithm(algorithm);
 }

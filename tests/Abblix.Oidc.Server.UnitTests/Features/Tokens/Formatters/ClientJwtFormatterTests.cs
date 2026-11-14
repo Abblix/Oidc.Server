@@ -55,6 +55,14 @@ public class ClientJwtFormatterTests
     public ClientJwtFormatterTests()
     {
         _jwtCreator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
+        _jwtCreator
+            .Setup(c => c.EncryptedResponseAlgorithmsSupported)
+            .Returns(
+            [
+                EncryptionAlgorithms.KeyManagement.Rsa1_5,
+                EncryptionAlgorithms.KeyManagement.RsaOaep,
+                EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            ]);
         _clientKeysProvider = new Mock<IClientKeysProvider>(MockBehavior.Strict);
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
@@ -369,6 +377,45 @@ public class ClientJwtFormatterTests
 
         Assert.Equal(expectedKeyId, usedKey?.KeyId);
         Assert.Equal(expectedAlgorithm, usedAlgorithm);
+    }
+
+    /// <summary>
+    /// A client set may hold a key declaring a signing algorithm, or a key management algorithm the host did not
+    /// register, ahead of its encryption key: the token is encrypted to the first key it can be encrypted to, under
+    /// that key's algorithm.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.EcdhEs)]
+    [InlineData("A-NAME-NOTHING-REGISTERS")]
+    public async Task FormatAsync_ClientSetLeadsWithAKeyNothingEncryptsTo_EncryptsToTheNextOne(string firstKeyAlgorithm)
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.PS256 },
+            Payload = { Subject = "user123", Audiences = [ClientId] },
+        };
+        var unusable = new RsaJsonWebKey { KeyId = "first", Algorithm = firstKeyAlgorithm };
+        var oaep = new RsaJsonWebKey { KeyId = "oaep", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
+        JsonWebKey? usedKey = null;
+        string? usedAlgorithm = null;
+
+        _serviceKeysProvider
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new[] { new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }.ToAsyncEnumerable());
+        _clientKeysProvider
+            .Setup(p => p.GetEncryptionKeys(_clientInfo))
+            .Returns(new JsonWebKey[] { unusable, oaep }.ToAsyncEnumerable());
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>(
+                (_, _, key, algorithm, _) => (usedKey, usedAlgorithm) = (key, algorithm))
+            .ReturnsAsync(EncodedJwt);
+
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, UserInfoPolicy(_clientInfo));
+
+        Assert.Same(oaep, usedKey);
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, usedAlgorithm);
     }
 
     /// <summary>

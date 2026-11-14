@@ -8,6 +8,8 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 
 namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 
@@ -36,17 +38,21 @@ public interface IAudienceKeyResolver
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// Several of the named resources each publish an encryption key.</exception>
+    /// <exception cref="AudienceKeyRefusedException">A named resource publishes encryption keys, none of which this
+    /// server can encrypt to.</exception>
     Task<JsonWebKey?> FindEncryptionKeyAsync(TenantDefinition tenant, IReadOnlyCollection<Uri> resources);
 }
 
 /// <summary>
-/// Answers from the resource registry, taking the first published key per resource.
+/// Answers from the resource registry, taking per resource the first published key this server can encrypt to.
 /// </summary>
 /// <param name="resourceManager">Resolves a requested resource URI to its registered definition.</param>
 /// <param name="resourceKeysProvider">Supplies that resource's published encryption keys.</param>
+/// <param name="issuer">Says which of them a token can be encrypted to.</param>
 public class AudienceKeyResolver(
     IResourceManager resourceManager,
-    IResourceKeysProvider resourceKeysProvider) : IAudienceKeyResolver
+    IResourceKeysProvider resourceKeysProvider,
+    ProfiledJwtIssuer issuer) : IAudienceKeyResolver
 {
     /// <inheritdoc />
     public async Task<JsonWebKey?> FindEncryptionKeyAsync(TenantDefinition tenant, IReadOnlyCollection<Uri> resources)
@@ -59,9 +65,17 @@ public class AudienceKeyResolver(
             if (!resourceManager.TryGet(tenant, resource, out var definition))
                 continue;
 
-            var key = await resourceKeysProvider.GetEncryptionKeys(definition).FirstOrDefaultAsync();
-            if (key is null)
+            var keys = await resourceKeysProvider.GetEncryptionKeys(definition).ToArrayAsync();
+            if (keys.Length == 0)
                 continue;
+
+            // A set may also hold keys declaring a signing algorithm, or one the host did not register, which no
+            // token can be encrypted to; a resource holding only such keys still asks for encryption, so it is refused
+            var key = Array.Find(keys, issuer.CanEncryptTo)
+                ?? throw new AudienceKeyRefusedException(
+                    [resource],
+                    $"The resource '{resource}' publishes no encryption key this server can encrypt an access " +
+                    "token to");
 
             if (audienceKey is not null)
             {

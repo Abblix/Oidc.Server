@@ -54,21 +54,24 @@ public class ClientJwtFormatter(
             return await issuer.IssueAsync(profile, token, signingCredentials);
 
         // FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
-        // algorithm". A key the client publishes for RSA1_5 is passed over; the keys sit at a jwks_uri the client can
-        // change after registration, so this is decided here, where the key is chosen
+        // algorithm". A key the client publishes for RSA1_5 is passed over, as is one nothing can be encrypted to (a
+        // key declaring a signing algorithm, or one the host did not register); the keys sit at a jwks_uri the client
+        // can change after registration, so this is decided here, where the key is chosen
         var forbidRsa1_5 = profile.ForbidRsa1_5KeyManagement;
         var clientKeys = await clientKeysProvider.GetEncryptionKeys(clientInfo).ToArrayAsync();
         var encryptingCredentials = Array.Find(
             clientKeys,
-            key => !forbidRsa1_5 || key.Algorithm != EncryptionAlgorithms.KeyManagement.Rsa1_5);
+            key => issuer.CanEncryptTo(key) &&
+                   (!forbidRsa1_5 || key.Algorithm != EncryptionAlgorithms.KeyManagement.Rsa1_5));
 
         // A client that publishes encryption keys expects what is issued to it encrypted, so a token is not sent in
-        // the clear because the only key it publishes is one its profile forbids
+        // the clear because no key it publishes is one the server can use under its profile
         if (encryptingCredentials == null && clientKeys.Length > 0)
         {
             return new OidcError(
                 ErrorCodes.InvalidClient,
-                $"The key set of the client {clientInfo.ClientId} holds only encryption keys its security profile forbids");
+                $"The key set of the client {clientInfo.ClientId} holds no encryption key the server can use under " +
+                "its security profile");
         }
 
         var keyEncryptionAlgorithm = encryptingCredentials?.Algorithm
