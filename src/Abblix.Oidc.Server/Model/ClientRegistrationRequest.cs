@@ -68,6 +68,15 @@ public record ClientRegistrationRequest
     public string[][] ResponseTypes { get; init; } = [[Abblix.Oidc.ResponseTypes.Code]];
 
     /// <summary>
+    /// The <c>response_modes</c> the client may use, which FAPI 2.0 Message Signing section 5.3.3 introduces:
+    /// "OPTIONAL. A JSON array of strings containing the list of response modes that the client may use. If omitted,
+    /// the default is that the client may use any of the response modes supported by the authorization server."
+    /// Stored as <see cref="Features.ClientInformation.ClientInfo.AllowedResponseModes"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.ResponseModes)]
+    public string[]? ResponseModes { get; init; }
+
+    /// <summary>
     /// The <c>grant_types</c> the client will request at the token endpoint per RFC 7591 section 2,
     /// for example <c>authorization_code</c>, <c>refresh_token</c>, or <c>urn:openid:params:grant-type:ciba</c>.
     /// </summary>
@@ -714,6 +723,10 @@ public record ClientRegistrationRequest
         /// <summary>The <c>response_types</c> registration parameter declaring the response type values
         /// the client intends to use at the authorization endpoint.</summary>
         public const string ResponseTypes = "response_types";
+
+        /// <summary>The <c>response_modes</c> registration parameter (FAPI 2.0 Message Signing section 5.3.3)
+        /// listing the response modes the client may use.</summary>
+        public const string ResponseModes = "response_modes";
 
         /// <summary>The <c>grant_types</c> registration parameter declaring the grant type values the
         /// client will use at the token endpoint.</summary>

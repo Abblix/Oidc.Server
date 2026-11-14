@@ -66,6 +66,12 @@ public record RegisteredClientMetadata
     [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
     public string[][]? ResponseTypes { get; init; }
 
+    /// <summary>The response modes the client may use (FAPI 2.0 Message Signing section 5.3.3), left out where it may
+    /// use any the server supports.</summary>
+    [JsonPropertyOrder(163)]
+    [JsonPropertyName(Parameters.ResponseModes)]
+    public string[]? ResponseModes { get; init; }
+
     /// <summary>The scope values the client may request, serialized space-separated.</summary>
     [JsonPropertyOrder(107)]
     [JsonPropertyName(Parameters.Scope)]
@@ -370,6 +376,7 @@ public record RegisteredClientMetadata
         PostLogoutRedirectUris = client.PostLogoutRedirectUris,
         GrantTypes = client.EffectiveGrantTypes,
         ResponseTypes = client.EffectiveResponseTypes,
+        ResponseModes = client.AllowedResponseModes is { Length: > 0 } modes ? modes : null,
         Scope = client.AllowedScopes,
         ClientName = client.ClientName,
         ClientUri = client.ClientUri,

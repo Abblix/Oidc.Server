@@ -176,8 +176,8 @@ public record ClientInfo(string ClientId)
     /// <see cref="Abblix.Oidc.ResponseModes.FormPost"/> cannot be driven with <c>fragment</c> or
     /// <c>query</c> on a crafted request, nor by omitting the parameter to inherit the flow default. The
     /// restriction is applied on top of, and after, the flow-compatibility check. When <c>null</c> or empty (the
-    /// default) it imposes no per-client restriction. There is no registered DCR metadata parameter for it, so
-    /// the list is host-side configuration only.
+    /// default) it imposes no per-client restriction. A dynamically registered client sets it with the
+    /// <c>response_modes</c> metadata of FAPI 2.0 Message Signing section 5.3.3.
     /// </summary>
     public string[]? AllowedResponseModes { get; set; }
 

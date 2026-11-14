@@ -10,6 +10,7 @@ using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Web;
 using Abblix.Jwt;
@@ -29,6 +30,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
+using RegistrationParameters = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 
 namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 
@@ -82,9 +84,11 @@ public sealed class Fapi2MessageSigningProfileTests : IAsyncLifetime
         builder.Services.AddAuthentication().AddCookie();
         builder.Services.AddAuthorization();
         builder.Services.AddConsentGrantedForEveryClient();
+        builder.Services.AddDynamicClientRegistration();
         builder.Services.AddOidcServices(options =>
         {
-            options.EnabledEndpoints = OidcEndpoints.Base;
+            options.EnabledEndpoints = OidcEndpoints.Base | OidcEndpoints.RegisterClient;
+            options.RequireInitialAccessToken = false;
             options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
             options.ServiceTokens.RefreshToken.Signing.Algorithm = SigningAlgorithms.PS256;            options.ServiceTokens.RegistrationAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;            options.ServiceTokens.InitialAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
         });
@@ -342,6 +346,46 @@ public sealed class Fapi2MessageSigningProfileTests : IAsyncLifetime
         var response = await PushAsync(await RequestObjectAsync(request));
 
         Assert.Equal(expectedError, await ErrorOf(response));
+    }
+
+    /// <summary>
+    /// Section 5.3.3 introduces the response_modes client metadata, "the list of response modes that the client may
+    /// use". A registration listing only a plain mode could send no request section 5.4.1 admits and is refused; one
+    /// listing a JARM mode is registered and the list is returned as sent.
+    /// </summary>
+    [Theory]
+    [InlineData(ResponseModes.Query, HttpStatusCode.BadRequest)]
+    [InlineData(ResponseModes.QueryJwt, HttpStatusCode.Created)]
+    public async Task ARegistrationsResponseModes_IncludeAJarmMode(string responseMode, HttpStatusCode expected)
+    {
+        var response = await _http!.PostAsync(
+            Acme + "/connect/register",
+            new StringContent(
+                new JsonObject
+                {
+                    [RegistrationParameters.RedirectUris] = new JsonArray { RedirectUri },
+                    [RegistrationParameters.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+                    [RegistrationParameters.ResponseModes] = new JsonArray { responseMode },
+                    [RegistrationParameters.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+                    [RegistrationParameters.TokenEndpointAuthMethod] = ClientAuthenticationMethods.PrivateKeyJwt,
+                    [RegistrationParameters.Jwks] = JsonSerializer.SerializeToNode(
+                        new JsonWebKeySet([ClientKey.Sanitize(includePrivateKeys: false)])),
+                }.ToJsonString(),
+                Encoding.UTF8,
+                "application/json"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, response.StatusCode);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        if (expected == HttpStatusCode.BadRequest)
+        {
+            Assert.Equal(ErrorCodes.InvalidClientMetadata, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+            return;
+        }
+
+        Assert.Equal(
+            [responseMode],
+            body[RegistrationParameters.ResponseModes]!.AsArray().Select(mode => mode!.GetValue<string>()));
     }
 
     /// <summary>

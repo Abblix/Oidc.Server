@@ -93,6 +93,8 @@ internal partial class SecurityProfileClientAuthenticator(
                 requirements),
             ..SecurityProfileConsistency.FindAlgorithmViolations(clientInfo, requirements),
             ..SecurityProfileConsistency.FindJwksUriViolations(clientInfo.JwksUri, requirements),
+            ..SecurityProfileConsistency.FindResponseModeViolations(
+                clientInfo.AllowedResponseModes, clientInfo.EffectiveResponseTypes, requirements),
             ..SecurityProfileConsistency.FindTokenBindingViolations(
                 clientInfo.TokenEndpointAuthMethod,
                 clientInfo.TlsClientCertificateBoundAccessTokens,

@@ -8,7 +8,10 @@
 
 using System;
 using System.Linq;
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
@@ -100,6 +103,55 @@ public class MessageSigningProfileTests
         Assert.True(requirements.RequireIssuerAudienceInRequestObject);
         Assert.Equal(TimeSpan.FromMinutes(60), requirements.MaxRequestObjectLifetime);
         Assert.Same(SecurityProfileRequirements.EveryJwtResponseMode, requirements.SignedAuthorizationResponseModes);
+    }
+
+    /// <summary>
+    /// A client restricted to response modes none of which its profile admits for a signed response can send no
+    /// request the profile accepts, and is refused as misconfigured: under Message Signing a list without a JARM mode,
+    /// under FAPI 1.0 Advanced one without <c>jwt</c> where the client is not registered for <c>code id_token</c>,
+    /// whose ID token signs the response in any mode. No list, or no profile asking for a signed response, is not a
+    /// violation.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, new[] { ResponseModes.Query }, false, 1)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, new[] { ResponseModes.Query, ResponseModes.FormPostJwt }, false, 0)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, new[] { ResponseModes.Fragment }, false, 1)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, null, false, 0)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, new[] { ResponseModes.QueryJwt }, false, 1)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, new[] { ResponseModes.Fragment }, true, 0)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests, new[] { ResponseModes.Query }, false, 0)]
+    [InlineData(ClientSecurityProfile.Fapi2, new[] { ResponseModes.Query }, false, 0)]
+    public void FindResponseModeViolations_AListWithoutAnAdmittedMode(
+        ClientSecurityProfile profile, string[]? responseModes, bool hybrid, int expected)
+    {
+        string[][] responseTypes = hybrid ? [[ResponseTypes.Code, ResponseTypes.IdToken]] : [[ResponseTypes.Code]];
+
+        var violations = SecurityProfileConsistency.FindResponseModeViolations(
+            responseModes, responseTypes, SecurityProfileRequirements.Resolve(profile));
+
+        Assert.Equal(expected, violations.Count);
+    }
+
+    /// <summary>
+    /// The same is refused at startup, for a client a tenant declares.
+    /// </summary>
+    [Theory]
+    [InlineData(ResponseModes.Query, 1)]
+    [InlineData(ResponseModes.QueryJwt, 0)]
+    public void Check_AMessageSigningClientWithoutAJarmMode_Refuses(string responseMode, int expected)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            SecurityProfile = ClientSecurityProfile.Fapi2MessageSigning,
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedResponseTypes = [[ResponseTypes.Code]],
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AllowedResponseModes = [responseMode],
+        };
+        var tenant = new TenantDefinition { Id = "acme", Issuer = TestConstants.DefaultIssuer, Clients = [client] };
+
+        Assert.Equal(expected, new SecurityProfileCheck().Check([tenant], new OidcOptions()).Count());
     }
 
     /// <summary>

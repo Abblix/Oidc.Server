@@ -50,6 +50,30 @@ public class SupportedResponseTypeValidatorTests
     }
 
     /// <summary>
+    /// FAPI 2.0 Message Signing section 5.3.3, response_modes: "If omitted, the default is that the client may use any
+    /// of the response modes supported by the authorization server". Omitted, or listing supported modes, it passes; a
+    /// mode the server does not support, or an empty list admitting none, is refused.
+    /// </summary>
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(new[] { ResponseModes.QueryJwt, ResponseModes.FormPost }, null)]
+    [InlineData(new[] { ResponseModes.Jwt, "web_message" }, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(new string[0], ErrorCodes.InvalidClientMetadata)]
+    public async Task ValidateAsync_ResponseModes_AreThoseTheServerSupports(string[]? responseModes, string? expected)
+    {
+        var validator = new SupportedResponseTypeValidator(CodeOnly);
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseModes = responseModes,
+        });
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(expected, result?.Error);
+    }
+
+    /// <summary>
     /// Default registration (no <c>EnableImplicitFlow()</c>) advertises only the Code Flow.
     /// A client registering exactly that combination must pass.
     /// </summary>
