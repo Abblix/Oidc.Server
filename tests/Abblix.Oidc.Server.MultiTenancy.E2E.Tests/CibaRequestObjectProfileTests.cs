@@ -233,7 +233,7 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
                 return;
 
             token.Payload.Json.Remove(omitted);
-            // An object without iss still names its client, so it is refused for the claim and not for an unknown signer
+            // Named by client_id instead, the signer is still not found, since its keys are looked up by iss
             if (omitted == JwtClaimTypes.Issuer)
                 token.Payload.Json[IanaClaimTypes.ClientId] = PlainClientId;
         });
@@ -267,8 +267,7 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
         var requestObject = await SignedRequestAsync(PlainClientId, token =>
         {
             token.Payload.Json[claim] = value is null ? null : JsonValue.Create(value);
-            // An object with no usable iss still names its client, so it is refused for the claim and not for an
-            // unknown signer
+            // Named by client_id instead, the signer is still not found, since its keys are looked up by iss
             if (claim == JwtClaimTypes.Issuer)
                 token.Payload.Json[IanaClaimTypes.ClientId] = PlainClientId;
         });
