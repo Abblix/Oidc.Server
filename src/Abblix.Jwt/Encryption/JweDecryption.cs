@@ -34,7 +34,8 @@ internal sealed class JweDecryption(
         IAsyncEnumerable<JsonWebKey> decryptionKeys,
         CancellationToken cancellationToken = default)
         => await JweEnvelope.Read(jwtParts)
-            .BindAsync(envelope => DecryptContentAsync(envelope, decryptionKeys, cancellationToken));
+            .BindAsync(async envelope => (await DecryptContentAsync(envelope, decryptionKeys, cancellationToken))
+                .Bind(envelope.Uncompress));
 
     private async Task<Result<byte[], JwtValidationError>> DecryptContentAsync(
         JweEnvelope envelope,

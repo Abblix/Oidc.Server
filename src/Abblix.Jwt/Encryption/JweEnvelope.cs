@@ -32,6 +32,13 @@ internal sealed record JweEnvelope(
     public static Result<JweEnvelope, JwtValidationError> Read(string[] jwtParts)
         => JweCompactSerialization.Decode(jwtParts).Bind(decodedParts => ReadEnvelope(decodedParts, jwtParts[0]));
 
+    /// <summary>
+    /// The plaintext as the sender wrote it, inflated when the header names a compression: the last step of
+    /// RFC 7516 section 5.2, taken only after the plaintext opened under its authentication tag.
+    /// </summary>
+    public Result<byte[], JwtValidationError> Uncompress(byte[] plaintext)
+        => JweCompression.Uncompress(Header, plaintext);
+
     private static Result<JweEnvelope, JwtValidationError> ReadEnvelope(byte[][] decodedParts, string encodedHeader)
     {
         // RFC 7516 section 5.2, steps 3 and 4: the header is a completely valid JSON object, and the recipient
@@ -77,15 +84,13 @@ internal sealed record JweEnvelope(
                 $"Unknown critical header parameter in JWE header: {crit[0]}");
         }
 
-        // RFC 7516 section 4.1.3: "zip" "MUST be understood and processed by implementations", and RFC 8725
-        // section 3.6: "Compression of data SHOULD NOT be done before encryption". This library decompresses
-        // nothing, so a compressed plaintext is refused here, ahead of the keys, as RFC 7516 section 5.2 step 5 has
-        // a parameter the implementation cannot process refused.
-        if (header.Json.ContainsKey(JwtClaimTypes.CompressionAlgorithm))
+        // RFC 7516 section 5.2 step 5 refuses a parameter whose value the implementation cannot process, so a "zip"
+        // other than the one this library inflates is refused here, ahead of the keys
+        if (!JweCompression.IsSupported(header))
         {
             return new JwtValidationError(
                 JwtError.InvalidHeader,
-                "Compression ('zip') in a JWE header is not supported");
+                $"Unsupported 'zip' in JWE header: only '{JweCompression.Deflate}' is supported");
         }
 
         return new JweEnvelope(decodedParts, header, algorithm, encryptionAlgorithm, encodedHeader);
