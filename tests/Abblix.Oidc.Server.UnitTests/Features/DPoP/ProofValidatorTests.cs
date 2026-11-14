@@ -200,8 +200,8 @@ public class ProofValidatorTests
     /// about <c>crit</c> beside it, in one line. The description still names the actual cause, because
     /// the core writes it where the branch is known.
     /// <para>
-    /// <c>invalid_jwk</c> survives for the case this validator establishes ITSELF - private key material
-    /// in the <c>jwk</c> - which is <see cref="ValidateAsync_JwkContainsPrivateKeyMaterial_ReturnsInvalidJwk"/>.
+    /// Private key material in the <c>jwk</c> is refused by the core as well, so it arrives under the same
+    /// category: <see cref="ValidateAsync_JwkContainsPrivateKeyMaterial_ReturnsInvalidHeader"/>.
     /// </para>
     /// </remarks>
     [Fact]
@@ -221,14 +221,14 @@ public class ProofValidatorTests
     }
 
     [Fact]
-    public async Task ValidateAsync_JwkContainsPrivateKeyMaterial_ReturnsInvalidJwk()
+    public async Task ValidateAsync_JwkContainsPrivateKeyMaterial_ReturnsInvalidHeader()
     {
         var proof = new DPoPProofBuilder(_time.GetUtcNow()) { IncludePrivateInJwk = true }.Build();
 
         var result = await _sut.ValidateAsync(Unprofiled, proof, cancellationToken: Ct);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ProofErrorReasons.InvalidJwk, error.Reason);
+        Assert.Equal(ProofErrorReasons.InvalidHeader, error.Reason);
     }
 
     [Fact]
