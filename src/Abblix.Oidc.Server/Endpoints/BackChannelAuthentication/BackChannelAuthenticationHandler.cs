@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -51,7 +52,14 @@ public class BackChannelAuthenticationHandler(
         // Client per the authentication method registered or configured for its client_id", then "If the
         // authentication request is signed, validate the JWT sent with the request parameter". Done before the request
         // object is read, so the object is held to the authenticated client's security profile before any layer of it
-        // is decrypted, and a caller that does not authenticate has nothing of its own decrypted
+        // is decrypted, and a caller that does not authenticate has nothing of its own decrypted.
+        //
+        // CIBA Core 1.0 section 13: invalid_request is a request that "includes a parameter more than once ... or is
+        // otherwise malformed", and RFC 9110 section 5.3 forbids generating the Authorization field twice. Decided
+        // before the authenticator, which has only invalid_client to say and would count a failed attempt
+        if (clientRequest.HasMoreThanOneAuthorizationHeader)
+            return ErrorFactory.MoreThanOneAuthorizationHeader;
+
         var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
         if (clientInfo == null)
         {

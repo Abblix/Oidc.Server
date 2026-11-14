@@ -64,6 +64,28 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
             parameter.Name == HeaderNames.Authorization && parameter.Source == BindingSource.Header);
     }
 
+    /// <summary>
+    /// The Authorization header is one field holding one set of credentials (RFC 9110 section 11.6.2), so it is
+    /// described as a string wherever the library reads it, never as a list a generated client would join with commas.
+    /// </summary>
+    [Theory]
+    [InlineData("POST", "connect/token")]
+    [InlineData("POST", "connect/register")]
+    [InlineData("GET", "connect/register/{clientId}")]
+    [InlineData("PUT", "connect/register/{clientId}")]
+    [InlineData("DELETE", "connect/register/{clientId}")]
+    public void TheAuthorizationHeaderIsDescribedAsOneString(string method, string path)
+    {
+        var operation = Single(Descriptions(Factory.Services), method, path);
+
+        var parameter = Assert.Single(operation.ParameterDescriptions, parameter =>
+            parameter.Name == HeaderNames.Authorization);
+        Assert.Equal(BindingSource.Header, parameter.Source);
+        Assert.Equal(typeof(string), parameter.Type);
+        // Open registration takes no initial access token, so a generated client must be free to omit the header
+        Assert.False(parameter.IsRequired);
+    }
+
     [Fact]
     public void AClientConfigurationRequestIsDescribedWithItsRouteParameter()
     {
