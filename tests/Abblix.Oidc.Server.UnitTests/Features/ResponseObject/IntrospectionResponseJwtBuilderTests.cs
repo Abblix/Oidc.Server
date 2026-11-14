@@ -70,7 +70,9 @@ public class IntrospectionResponseJwtBuilderTests
     [InlineData(SigningAlgorithms.ES384, SigningAlgorithms.ES384)]
     public async Task WithoutAProfile_TheClientsAlgorithmOrRs256(string registered, string expected)
     {
-        await Builder(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature))
+        await Builder(
+                JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature),
+                JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P384, SigningAlgorithms.ES384))
             .BuildAsync(Tenant(ClientSecurityProfile.None), Client(registered), new JsonObject());
 
         Assert.Equal(expected, _signed?.Header.Algorithm);

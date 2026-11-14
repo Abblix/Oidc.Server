@@ -41,7 +41,11 @@ public sealed class IntrospectionDefaultAlgorithmTests
     private const string ClientId = "resource-server";
     private const string ClientSecret = "resource-server-secret";
 
-    private static async Task<WebApplication> StartAsync(JsonWebKey signingKey, string serviceTokenAlgorithm)
+    private static async Task<WebApplication> StartAsync(
+        JsonWebKey signingKey,
+        string serviceTokenAlgorithm,
+        JsonWebKeySet? clientKeys = null,
+        string introspectionAlgorithm = SigningAlgorithms.None)
     {
         await TestLicense.Loaded;
 
@@ -77,6 +81,8 @@ public sealed class IntrospectionDefaultAlgorithmTests
                     TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
                     AllowedGrantTypes = [GrantTypes.ClientCredentials],
                     IdentityTokenSignedResponseAlgorithm = serviceTokenAlgorithm,
+                    IntrospectionSignedResponseAlgorithm = introspectionAlgorithm,
+                    Jwks = clientKeys,
                 },
             ],
         }));
@@ -121,6 +127,46 @@ public sealed class IntrospectionDefaultAlgorithmTests
         var jwt = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var header = JsonNode.Parse(Encoding.UTF8.GetString(Base64Url.DecodeFromChars(jwt.Split('.')[0])))!;
         Assert.Equal(SigningAlgorithms.RS256, header[JwtClaimTypes.Algorithm]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// RFC 9701 section 6, introspection_encrypted_response_alg: "The default, if omitted, is that no encryption is
+    /// performed". A client publishing an RSA key that names no use, and registering no introspection encryption, gets
+    /// a signed JWT of three parts and not a JWE of five.
+    /// </summary>
+    [Fact]
+    public async Task AClientPublishingAKey_WithoutRegisteredEncryption_GetsASignedJwt()
+    {
+        var clientKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
+        clientKey.Usage = null;
+        clientKey.Algorithm = null;
+        await using var app = await StartAsync(
+            JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature),
+            SigningAlgorithms.RS256,
+            new JsonWebKeySet([clientKey.Sanitize(includePrivateKeys: false)]));
+
+        var response = await IntrospectAsync(app);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var jwt = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(3, jwt.Split('.').Length);
+    }
+
+    /// <summary>
+    /// A registered algorithm no key of the tenant produces is a representation the server cannot supply either: ES256
+    /// registered at a tenant holding an RSA key alone is answered 406, not a server error.
+    /// </summary>
+    [Fact]
+    public async Task ARegisteredAlgorithmNoKeyProduces_AnswersNotAcceptable()
+    {
+        await using var app = await StartAsync(
+            JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature),
+            SigningAlgorithms.RS256,
+            introspectionAlgorithm: SigningAlgorithms.ES256);
+
+        var response = await IntrospectAsync(app);
+
+        Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
     }
 
     /// <summary>

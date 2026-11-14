@@ -148,6 +148,25 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         Assert.Equal(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    /// <summary>
+    /// A registered introspection algorithm no signing key of the server produces (ES256 at a server holding an RSA
+    /// key alone) makes the JWT a representation the server cannot supply: RFC 9110 section 15.5.7, 406 Not
+    /// Acceptable, rather than a server error.
+    /// </summary>
+    [Fact]
+    public async Task Introspection_with_a_registered_algorithm_no_key_produces_is_answered_406()
+    {
+        var httpClient = CreateClient();
+        var discovery = await FetchDiscoveryAsync(httpClient);
+        var (clientId, clientSecret, accessToken) = await RegisterClientAndGetAccessTokenAsync(
+            httpClient, discovery, introspectionSignedResponseAlg: SigningAlgorithms.ES256);
+
+        var response = await IntrospectAsync(
+            httpClient, discovery, clientId, clientSecret, accessToken, IntrospectionJwtMediaType);
+
+        Assert.Equal(System.Net.HttpStatusCode.NotAcceptable, response.StatusCode);
+    }
+
     [Fact]
     public async Task Discovery_advertises_introspection_signing_alg_values()
     {

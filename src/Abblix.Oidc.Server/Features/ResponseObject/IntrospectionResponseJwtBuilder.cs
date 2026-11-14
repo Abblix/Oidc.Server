@@ -69,19 +69,18 @@ public class IntrospectionResponseJwtBuilder(
         };
 
         // The client's key set was judged against its profile where the client was resolved in this request, so a
-        // refusal here is a key set changed in between
-        var formatted = await clientJwtFormatter.FormatAsync(
+        // refusal here is a key set changed in between, answered as the formatter refuses it
+        return await clientJwtFormatter.FormatAsync(
             tenant,
             token,
             client,
             ClientJwtEncryption.ForIntrospection(client, options.Value));
-        return formatted.GetSuccess();
     }
 
     /// <summary>
-    /// The algorithm the response is signed with, or null where no signing key of the tenant produces it: the client's
-    /// <c>introspection_signed_response_alg</c>, or where it registered none, RFC 9701 section 6: "The default, if
-    /// omitted, is RS256".
+    /// The algorithm the response is signed with, or null where no signing key of the tenant produces it, the registered
+    /// one included: the client's <c>introspection_signed_response_alg</c>, or where it registered none, RFC 9701
+    /// section 6: "The default, if omitted, is RS256".
     /// </summary>
     /// <remarks>
     /// A security profile not admitting RS256 (FAPI 2.0 section 5.4.1, FAPI 1.0 Part 2 section 8.6) would refuse to
@@ -91,13 +90,14 @@ public class IntrospectionResponseJwtBuilder(
     /// </remarks>
     private async Task<string?> SigningAlgorithmAsync(TenantDefinition tenant, ClientInfo client)
     {
-        if (client.IntrospectionSignedResponseAlgorithm != SigningAlgorithms.None)
-            return client.IntrospectionSignedResponseAlgorithm;
-
         var signingKeys = await serviceKeysProvider.GetSigningKeys(tenant).ToArrayAsync();
+        string? Produced(string algorithm) => Array.Exists(signingKeys, key => key.CanPerform(algorithm)) ? algorithm : null;
+
+        if (client.IntrospectionSignedResponseAlgorithm != SigningAlgorithms.None)
+            return Produced(client.IntrospectionSignedResponseAlgorithm);
 
         if (SecurityProfileRequirements.For(tenant, client).PermitsSigningAlgorithm(SigningAlgorithms.RS256))
-            return Array.Exists(signingKeys, key => key.CanPerform(SigningAlgorithms.RS256)) ? SigningAlgorithms.RS256 : null;
+            return Produced(SigningAlgorithms.RS256);
 
         return SecurityProfileRequirements.FapiSigningAlgorithmProducedBy(signingKeys);
     }
