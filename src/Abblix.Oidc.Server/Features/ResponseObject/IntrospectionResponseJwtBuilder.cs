@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -21,8 +22,8 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 
 /// <summary>
 /// Default <see cref="IIntrospectionResponseJwtBuilder"/>: assembles the RFC 9701 section 5 JWT and hands it to
-/// <see cref="IClientJwtFormatter"/> for signing and, where the resource server published encryption keys,
-/// encryption to them (a Nested JWT).
+/// <see cref="IClientJwtFormatter"/> for signing and, where the resource server registered
+/// <c>introspection_encrypted_response_alg</c>, encryption under it (a Nested JWT).
 /// </summary>
 /// <param name="clientJwtFormatter">Signs and optionally encrypts the assembled JWT.</param>
 /// <param name="timeProvider">Supplies the current time for the <c>iat</c> claim.</param>
@@ -68,13 +69,22 @@ public class IntrospectionResponseJwtBuilder(
             },
         };
 
-        // The client's key set was judged against its profile where the client was resolved in this request, so a
-        // refusal here is a key set changed in between, answered as the formatter refuses it
-        return await clientJwtFormatter.FormatAsync(
+        var formatted = await clientJwtFormatter.FormatAsync(
             tenant,
             token,
             client,
             ClientJwtEncryption.ForIntrospection(client, options.Value));
+
+        // The client registered introspection_encrypted_response_alg and has no key it can be encrypted to under it.
+        // It authenticated, so the formatter's invalid_client would tell it its credential failed (RFC 6749 section
+        // 5.2: "Client authentication failed"); what it is refused is this response, so it is answered
+        // unauthorized_client ("The authenticated client is not authorized to use this authorization grant type", read
+        // for the response it asked for), the answer a client the server cannot encrypt to has at the authorization
+        // endpoint too
+        if (formatted.TryGetFailure(out var refusal))
+            return new OidcError(ErrorCodes.UnauthorizedClient, refusal.ErrorDescription);
+
+        return formatted;
     }
 
     /// <summary>

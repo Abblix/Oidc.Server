@@ -129,20 +129,20 @@ public class IntrospectionResponseJwtBuilderTests
     }
 
     /// <summary>
-    /// A refusal of the client JWT formatter, such as a key set the client changed after it was resolved, is the
-    /// builder's answer as it stands, for the adapter to map, and not an exception.
+    /// A refusal of the client JWT formatter - a client with no key its registered encryption algorithm can encrypt
+    /// to - is the builder's answer, not an exception, as unauthorized_client: the client authenticated, so the
+    /// formatter's invalid_client would tell it its credential failed (RFC 6749 section 5.2).
     /// </summary>
     [Fact]
-    public async Task AFormatterRefusal_IsTheBuildersResult()
+    public async Task AFormatterRefusal_IsUnauthorizedClient()
     {
-        var refusal = new OidcError(ErrorCodes.InvalidClient, "the key set changed");
-        _formatted = refusal;
+        _formatted = new OidcError(ErrorCodes.InvalidClient, "no key to encrypt to");
 
         var result = await Builder(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature))
             .BuildAsync(Tenant(ClientSecurityProfile.None), Client(), new JsonObject());
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Same(refusal, error);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
     }
 
     /// <summary>
