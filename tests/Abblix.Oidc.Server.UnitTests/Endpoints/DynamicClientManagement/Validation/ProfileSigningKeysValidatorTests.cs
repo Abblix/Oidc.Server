@@ -79,6 +79,28 @@ public class ProfileSigningKeysValidatorTests
     }
 
     /// <summary>
+    /// A registration naming its ID token and authorization algorithms but no introspection algorithm is given one for
+    /// introspection too, and a named introspection algorithm is kept as named.
+    /// </summary>
+    [Theory]
+    [InlineData(null, SigningAlgorithms.PS256)]
+    [InlineData(SigningAlgorithms.ES256, SigningAlgorithms.ES256)]
+    public async Task TheIntrospectionAlgorithm_IsGivenWhereUnnamed(string? named, string expected)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            IdTokenSignedResponseAlg = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlg = SigningAlgorithms.PS256,
+            IntrospectionSignedResponseAlg = named,
+        });
+
+        Assert.Null(await Validator(Rsa(), Ec()).ValidateAsync(Tenant(ClientSecurityProfile.Fapi2MessageSigning), context));
+
+        Assert.Equal(expected, context.Request.IntrospectionSignedResponseAlg);
+    }
+
+    /// <summary>
     /// A tenant whose only key declares RS256 can produce neither, so the registration is refused with
     /// invalid_client_metadata instead of accepted and failing with a 500 when the first ID token is signed.
     /// </summary>
