@@ -154,9 +154,9 @@ public class MoreThanOneClientAuthenticationMethodTests(TestFactory factory) : T
 
     private static async Task<HttpRequestMessage> RequestAsync(Uri endpoint, DiscoveryDocument discovery, MethodPair pair)
     {
-        // Every endpoint's own parameters in one form, valid for the client whose secret is in the body, so a server
-        // reading only one of the two credentials serves the request rather than refusing it as invalid_request for
-        // a reason of its own
+        // Every endpoint's own parameters in one form, chosen so that what a server reading only one of the two
+        // credentials answers here is never invalid_request: introspection, revocation and PAR serve it, the others
+        // refuse it as unauthorized_client or invalid_grant. An endpoint or pair added here is checked the same way
         var form = ClientCredentialsGrant();
         form[IntrospectionRequest.Parameters.Token] = "any";
         form[AuthorizationRequest.Parameters.Scope] = Scopes.OpenId;
