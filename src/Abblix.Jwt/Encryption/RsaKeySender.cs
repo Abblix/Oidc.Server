@@ -37,12 +37,6 @@ internal sealed class RsaKeySender(string algorithm, RSAEncryptionPadding paddin
 		}
 
 		using var rsa = rsaKey.ToRsa();
-
-		// RSA encryption output is always the key size in bytes
-		var encryptedKey = new byte[rsa.KeySize / 8];
-		if (!rsa.TryEncrypt(keyToEncrypt, encryptedKey, padding, out var bytesWritten))
-			throw new CryptographicException($"The platform did not encrypt the key using {algorithm}.");
-
-		return bytesWritten < encryptedKey.Length ? encryptedKey[..bytesWritten] : encryptedKey;
+		return rsa.Encrypt(keyToEncrypt, padding);
 	}
 }
