@@ -31,10 +31,10 @@ public class NoneResponseBuilder : IAuthorizationResponseBuilder
     public IEnumerable<string> GrantTypesSupported => [];
 
     /// <inheritdoc />
-    public Task BuildResponseAsync(
+    public Task<AuthorizationError?> BuildResponseAsync(
         TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result)
-        => Task.CompletedTask;
+        => Task.FromResult<AuthorizationError?>(null);
 }

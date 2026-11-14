@@ -46,7 +46,7 @@ public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
     }
 
     /// <inheritdoc />
-    public async Task BuildResponseAsync(
+    public async Task<AuthorizationError?> BuildResponseAsync(
         TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
@@ -68,5 +68,6 @@ public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
                 result.AccessToken?.EncodedJwt,
                 result.Model.State));
         result.IdToken = created?.GetSuccess();
+        return null;
     }
 }

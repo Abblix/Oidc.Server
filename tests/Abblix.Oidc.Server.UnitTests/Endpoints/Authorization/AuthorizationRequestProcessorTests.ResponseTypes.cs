@@ -72,6 +72,34 @@ public partial class AuthorizationRequestProcessorTests
     }
 
     /// <summary>
+    /// RFC 8707 section 2: an access token issued at the authorization endpoint for a resource none of whose keys a
+    /// token can be encrypted to is answered as the token endpoint answers it, with invalid_target on the error
+    /// response, not with a server error.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithResponseTypeToken_ForAResourceWithoutAUsableKey_IsInvalidTarget()
+    {
+        var request = CreateRequest(responseType: [ResponseTypes.Token]);
+        var session = CreateAuthSession();
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
+            .ReturnsAsync(CreateConsents());
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .ThrowsAsync(new AudienceKeyRefusedException([new Uri("https://orders.example.com")], "refused"));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
+        Assert.Equal(request.Model.RedirectUri, error.RedirectUri);
+    }
+
+    /// <summary>
     /// Verifies successful authorization with access token.
     /// Per OAuth 2.0 Implicit Flow, response_type=token generates access token.
     /// </summary>
