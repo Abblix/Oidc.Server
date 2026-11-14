@@ -78,7 +78,8 @@ public class RequestObjectFetchAdapter(
         // refuses an object naming no client as it refuses one naming another
         var mergedOver = request.Request.HasValue() ? request with { ClientId = null } : request;
         var fetchResult = await requestObjectFetcher.FetchAsync(tenant,
-            namedClient, mergedOver, request.Request, client => client.RequestObjectSigningAlgorithm, ForbiddenMembers);
+            namedClient, mergedOver, request.Request, client => client.RequestObjectSigningAlgorithm, ForbiddenMembers,
+            _ => null);
 
         // Strict processing (RFC 9101 section 6.3) rebuilds the request from the object alone, which drops the request
         // parameter carrying that object, so the validated object is carried on: without it a client required to sign

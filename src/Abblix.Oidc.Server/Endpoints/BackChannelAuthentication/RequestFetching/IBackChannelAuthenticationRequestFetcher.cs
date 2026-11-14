@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -25,8 +26,13 @@ public interface IBackChannelAuthenticationRequestFetcher
     /// any external source the implementation knows how to read.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="client">The client that authenticated the request, whose security profile every layer of an
+    /// external source is held to before it is read.</param>
     /// <param name="request">The raw backchannel authentication request as parsed from the wire.</param>
     /// <returns>The resolved request on success, or an <see cref="OidcError"/> describing why fetching
     /// or signature/structure validation of the external source failed.</returns>
-    Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(TenantDefinition tenant, BackChannelAuthenticationRequest request);
+    Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(
+        TenantDefinition tenant,
+        ClientInfo client,
+        BackChannelAuthenticationRequest request);
 }
