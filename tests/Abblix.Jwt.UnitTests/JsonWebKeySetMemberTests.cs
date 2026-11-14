@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Text;
 using System.Text.Json;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,6 +66,31 @@ public class JsonWebKeySetMemberTests
 
 		Assert.Equal(signingKey.KeyId, Assert.Single(set.Keys).KeyId);
 		Assert.True(result.TryGetSuccess(out _));
+	}
+
+	/// <summary>
+	/// A key holding a string that is not Unicode text (octets that are not UTF-8, or an escaped lone surrogate), even
+	/// in a member the library does not read, is not a JWK it understands, and is left out of the set as one.
+	/// </summary>
+	[Theory]
+	[InlineData("""{"kty":"oct","k":"AAAA","zz":"#"}""")]
+	[InlineData("""{"kty":"oct","k":"AAAA","key_ops":["#"]}""")]
+	[InlineData("""{"kty":"oct","k":"AAAA","zz":{"zz":"#"}}""")]
+	[InlineData("""{"kty":"oct","k":"AAAA","zz":"\ud800"}""")]
+	public async Task AKeySetMemberThatIsNotUnicodeText_IsIgnored(string member)
+	{
+		var publicKey = JsonSerializer.Serialize(
+			JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature).Sanitize(includePrivateKeys: false));
+		var octets = Encoding.UTF8.GetBytes($$"""{"keys":[{{member}},{{publicKey}}]}""");
+		var marker = Array.IndexOf(octets, (byte)'#');
+		if (marker >= 0)
+			octets[marker] = 0xFF;
+
+		using var stream = new MemoryStream(octets);
+		var set = await JsonSerializer.DeserializeAsync<JsonWebKeySet>(
+			stream, cancellationToken: TestContext.Current.CancellationToken);
+
+		Assert.IsType<RsaJsonWebKey>(Assert.Single(set!.Keys));
 	}
 
 	/// <summary>

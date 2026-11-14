@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace Abblix.Jwt;
@@ -25,6 +26,11 @@ internal static class JsonWebKeyDocument
         }
 
         var root = JsonElement.ParseValue(ref reader);
+
+        // A member the key types do not read is never decoded, so its text is checked here: octets that are not
+        // UTF-8, and a string escaping half of a surrogate pair, which no reader of the key decoded before
+        if (!JoseJson.IsUnicodeText(JsonMarshal.GetRawUtf8Value(root)))
+            throw new JsonException("The key holds a member that is not Unicode text");
 
         JsonMemberNames.RefuseRepeated(root, "key");
 

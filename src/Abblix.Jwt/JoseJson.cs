@@ -29,18 +29,17 @@ internal static class JoseJson
     };
 
     /// <summary>
-    /// Reads a decoded JOSE header or claims set as a JSON object, refusing anything else: octets that are not UTF-8,
-    /// malformed JSON, a value that is not an object, a repeated member name.
+    /// Reads a decoded JOSE header or claims set as a JSON object, refusing anything else: octets that are not
+    /// Unicode text, malformed JSON, a value that is not an object, a repeated member name.
     /// </summary>
     /// <remarks>
-    /// RFC 7519 section 7.2 steps 4 and 10, and RFC 7515 and RFC 7516 section 5.2 step 3, have the recipient
-    /// "Verify that the resulting octet sequence is a UTF-8-encoded representation of a completely valid JSON
-    /// object". The octets are checked as a whole: the JSON reader validates the encoding of a string value only
-    /// when the value is read, and decoding to a string first would replace an invalid sequence and read on.
+    /// RFC 7519 section 7.2 steps 4 and 10, and RFC 7515 section 5.2 step 3, have the recipient "Verify that the
+    /// resulting octet sequence is a UTF-8-encoded representation of a completely valid JSON object", as RFC 7516
+    /// section 5.2 step 3 does for the protected header of a JWE.
     /// </remarks>
     public static bool TryParseObject(byte[] utf8Json, [NotNullWhen(true)] out JsonObject? jsonObject)
     {
-        if (!Utf8.IsValid(utf8Json))
+        if (!IsUnicodeText(utf8Json))
         {
             jsonObject = null;
             return false;
@@ -55,5 +54,40 @@ internal static class JoseJson
             jsonObject = null;
         }
         return jsonObject is not null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="utf8Json"/> is UTF-8 and every member name and string in it reads as Unicode text.
+    /// </summary>
+    /// <remarks>
+    /// The JSON reader checks the encoding of a string only when the string is read, and an escape naming half of a
+    /// surrogate pair passes every check until then, so a document that parses can still throw from the first value
+    /// a caller reads. Every name and string is read here once, so such a document is refused where it arrives;
+    /// malformed JSON is left for the parser to refuse.
+    /// </remarks>
+    public static bool IsUnicodeText(ReadOnlySpan<byte> utf8Json)
+    {
+        if (!Utf8.IsValid(utf8Json))
+            return false;
+
+        var reader = new Utf8JsonReader(utf8Json);
+        try
+        {
+            while (reader.Read())
+            {
+                if (reader.TokenType is JsonTokenType.PropertyName or JsonTokenType.String)
+                    reader.GetString();
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+        catch (JsonException)
+        {
+            // Malformed JSON, which the parser refuses in its own terms
+        }
+
+        return true;
     }
 }

@@ -64,6 +64,59 @@ public class InvalidUtf8Tests
 		Assert.Equal(JwtError.MalformedToken, error.Error);
 	}
 
+	/// <summary>
+	/// RFC 7516 section 5.2, step 3: the decoded protected header of a JWE is held to the same rule, and is refused
+	/// before any key is tried.
+	/// </summary>
+	[Fact]
+	public async Task AJweHeaderThatIsNotUtf8_IsRefusedBeforeAnyKey()
+	{
+		var encryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
+		var token = new JsonWebToken
+		{
+			Header = { Algorithm = SigningAlgorithms.HS256 },
+			Payload = { Issuer = "test-issuer", Audiences = ["test-audience"] },
+		};
+		var parts = (await ServiceProvider.GetRequiredService<IJsonWebTokenCreator>()
+			.IssueAsync(token, Key, encryptionKey)).Split('.');
+		parts[0] = Base64Url.EncodeToString(NotUtf8("""{"alg":"RSA-OAEP-256","enc":"A256CBC-HS512","x":"#"}"""));
+		var keysRead = 0;
+
+		var result = await ServiceProvider.GetRequiredService<IJsonWebTokenValidator>().ValidateAsync(
+			string.Join('.', parts),
+			new ValidationParameters
+			{
+				TokenTypes = TokenTypePolicy.CheckedByCaller,
+				ResolveIssuerSigningKeys = _ => new JsonWebKey[] { Key }.ToAsyncEnumerable(),
+				ResolveTokenDecryptionKeys = _ => new JsonWebKey[] { encryptionKey }.ToAsyncEnumerable().Select(key =>
+				{
+					keysRead++;
+					return key;
+				}),
+			});
+
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(JwtError.InvalidToken, error.Error);
+		Assert.Equal(0, keysRead);
+	}
+
+	/// <summary>
+	/// A string escaping half of a surrogate pair is no Unicode text either, though its octets are UTF-8, and is
+	/// refused where the token arrives.
+	/// </summary>
+	[Theory]
+	[InlineData("""{"alg":"HS256","typ":"JWT","kid":"\udc00"}""", Payload)]
+	[InlineData(Header, """{"iss":"\ud800","aud":"test-audience","sub":"a"}""")]
+	[InlineData(Header, """{"iss":"test-issuer","aud":"test-audience","sub":"\ud800"}""")]
+	[InlineData(Header, """{"iss":"test-issuer","aud":"test-audience","sub":"a","\ud800":1}""")]
+	public async Task ALoneSurrogateEscape_IsMalformed(string header, string payload)
+	{
+		var result = await ValidateAsync(Signed(Utf8(header, "a"), Utf8(payload, "a")));
+
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(JwtError.MalformedToken, error.Error);
+	}
+
 	private static byte[] Utf8(string json, string value) => Encoding.UTF8.GetBytes(json.Replace("#", value));
 
 	/// <summary>The JSON with a lone 0xFF octet, which no UTF-8 sequence contains, inside a string value.</summary>
