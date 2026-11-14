@@ -32,10 +32,12 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// checker is the one the configuration paths use, rather than a second reading of the same
 /// requirements that could drift from it.
 ///
-/// A refusal is a null result, indistinguishable to the caller from a credential that did not
-/// verify. That is deliberate: which of the two it was tells an unauthenticated caller something
-/// about a client registration, and every endpoint here already answers an unauthenticated client
-/// the same way.
+/// A refusal is the answer the client's own credential would have had had it failed:
+/// <see cref="ClientAuthenticationFailures.NoCredential"/> for a public client, which presented
+/// none, and <see cref="ClientAuthenticationFailures.InvalidCredential"/> for any other, so the
+/// caller cannot tell it from a credential that did not verify. That is deliberate: which of the two
+/// it was tells an unauthenticated caller something about a client registration, and every endpoint
+/// here already answers an unauthenticated client the same way.
 /// </remarks>
 internal partial class SecurityProfileClientAuthenticator(
     IClientAuthenticator inner,
