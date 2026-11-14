@@ -116,8 +116,9 @@ public sealed class ManagementRefusalTests
     }
 
     /// <summary>
-    /// The control. A host whose selector answers gets served, so the challenge above is the refusal
-    /// rather than the endpoint being unreachable in this fixture.
+    /// The control. A host whose selector answers gets served, so the challenge in
+    /// <see cref="AnUnidentifiedCaller_GetsAChallengeRatherThanABare401"/> is the refusal rather than the
+    /// endpoint being unreachable in this fixture.
     /// </summary>
     [Fact]
     public async Task AnIdentifiedCaller_IsServed()
@@ -141,7 +142,8 @@ public sealed class ManagementRefusalTests
     /// parameter, uses more than one method for including an access token, or is otherwise malformed. The
     /// resource server SHOULD respond with the HTTP 400 (Bad Request) status code."
     /// <para>
-    /// The header is a MAY here, not the MUST that governs the unidentified case above. Section 3 makes
+    /// The header is a MAY here, not the MUST that governs the unidentified case,
+    /// <see cref="AnUnidentifiedCaller_GetsAChallengeRatherThanABare401"/>. Section 3 makes
     /// <c>WWW-Authenticate</c> mandatory when the request "does not include authentication credentials or
     /// does not contain an access token that enables access", and adds that a server "MAY include it in
     /// response to other conditions as well". This is one of those others - the receiver was identified
@@ -183,13 +185,14 @@ public sealed class ManagementRefusalTests
 
         // The helper builds three attributes and the two above hold only two of them. Without this the
         // realm can vanish - the issuer resolving to nothing produces a well-formed challenge that simply
-        // omits it - and no row anywhere goes red. The 401 row above asserts the same realm exactly, so
-        // the two refusals agree on who is challenging rather than only on why.
+        // omits it - and no row anywhere goes red. The 401 row, AnUnidentifiedCaller_GetsAChallengeRatherThanABare401,
+        // asserts the same realm exactly, so the two refusals agree on who is challenging rather than only on why.
         Assert.Contains($"realm=\"{Issuer}\"", challenge.Parameter!);
     }
 
     /// <summary>
-    /// The control, and it is what keeps the row above from becoming a rule about the whole surface: the
+    /// The control, and it is what keeps <see cref="AMissingStreamId_IsNamedRatherThanLeftBare"/> from
+    /// becoming a rule about the whole surface: the
     /// LIST route takes the same query parameter and answers every stream when it names none. Refusing an
     /// unnamed <c>stream_id</c> everywhere would break it.
     /// </summary>
@@ -197,7 +200,7 @@ public sealed class ManagementRefusalTests
     /// This row is not the only thing that would notice, and an earlier version of this summary said it
     /// was - true when the only refusal shape here was a bare 400, false once the refusal grew a
     /// challenge header. Measured at head, refusing on this route kills six rows, one of them
-    /// <see cref="AnIdentifiedCaller_IsServed"/> directly above, on its assertion that no challenge
+    /// <see cref="AnIdentifiedCaller_IsServed"/>, on its assertion that no challenge
     /// header comes back. What this row alone holds is the answer's SHAPE: that an unnamed stream here
     /// is a list rather than a refusal.
     /// </remarks>

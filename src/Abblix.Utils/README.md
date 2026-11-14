@@ -35,15 +35,25 @@ The stripping runs in `ToString()`, so it protects the formatted message; a sink
 
 ### Cryptographic encodings and randomness
 
-`CryptoRandom` produces cryptographically strong random material for tokens and identifiers. `Base32` and `HexConverter` cover the encodings certificates and secrets travel in, and `CertificateId` with `ICertificateProvider` abstracts certificate lookup.
+`CryptoRandom` produces cryptographically strong random material for tokens and identifiers. `Base32` and `HexConverter` cover the encodings certificates and secrets travel in.
 
 ### JSON converters for wire formats
 
-Custom `System.Text.Json` converters for the shapes protocol messages actually use: unix-seconds timestamps (`DateTimeOffsetUnixTimeSecondsConverter`), durations as integer seconds (`TimeSpanSecondsConverter`), space-separated lists such as OAuth scopes (`SpaceSeparatedValuesConverter`), values that arrive as either a single item or an array (`SingleOrArrayConverter`), base64url binary (`Base64UrlTextEncoderConverter`), and null-dropping serialization (`JsonIgnoreNullsAttribute`).
+Custom `System.Text.Json` converters for the shapes protocol messages actually use: unix-seconds timestamps (`DateTimeOffsetUnixTimeSecondsConverter`), durations as integer seconds (`TimeSpanSecondsConverter`), space-separated lists such as OAuth scopes (`SpaceSeparatedValuesConverter`), values that arrive as either a single item or an array (`SingleOrArrayConverter`), and base64url binary (`Base64UrlTextEncoderConverter`).
 
 ### Distributed cache helpers
 
 `DistributedCacheExtensions` adds the operation `IDistributedCache` lacks for security bookkeeping: `TryAddAsync`, an add-if-absent that expresses first-sighting checks - replay caches and similar - over any cache backend. It is Get-then-Set, because the interface exposes no compare-and-set, so the guarantee is probabilistic under concurrency; a domain needing strict exactly-once takes a backend-native atomic (`SET NX EX`, `INSERT ... ON CONFLICT DO NOTHING`) instead.
+
+### Outbound addresses a caller did not choose
+
+`PrivateNetworks` states which addresses are internal - loopback, the private and link-local ranges, and the rest a server must not be talked into reaching on somebody else's behalf. `AddressValidatingHttpMessageHandler` is the message-handler half: it follows no redirect, carries no ambient credentials, decompresses nothing, and judges the address on the send itself rather than when the request was scheduled, leaving only the policy to the handler derived from it. `ResolveHostDelegate` names the answer a derived handler needs about a hostname, so one function serves every guard built on this base.
+
+### One load for many callers
+
+`CoalescingLoader<TKey, TValue>` is for documents read from someone else's server when the requests reaching your server decide how often they are read, such as a key set fetched for a token that names an unfamiliar key. Callers that ask while a load runs wait for that load, and the finished load, whether it succeeded or failed, is served for a hold you choose, so a server that is down is asked once per hold rather than once per request. The load runs under no caller's cancellation. The limit holds within one process: each instance of your service loads on its own.
+
+The loads live in an `ExpiringDictionary<TKey, TValue>`, which is usable on its own: a thread-safe dictionary whose entries expire a given time after they were added or renewed, counted on the monotonic clock. An expired entry is invisible at once and gives way to the next addition, and expired entries are swept as new ones arrive, at a constant cost per addition on average, so keys nobody uses again do not pile up.
 
 ### Collections and enums
 

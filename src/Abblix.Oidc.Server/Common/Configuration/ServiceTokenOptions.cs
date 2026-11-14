@@ -34,7 +34,7 @@ public record ServiceTokenOptions
     /// the token rather than falling back to a signed JWS, because a host that asked for confidentiality and
     /// silently did not get it has no way to find out.</item>
     /// <item><c>null</c>, the default, states nothing: the token is encrypted when a server encryption key is
-    /// available and signed only when none is, which is the behaviour of prior versions. A host that never
+    /// available and signed only when none is, which is the behavior of prior versions. A host that never
     /// touched this setting therefore sees no change and no new failure.</item>
     /// </list>
     /// </remarks>

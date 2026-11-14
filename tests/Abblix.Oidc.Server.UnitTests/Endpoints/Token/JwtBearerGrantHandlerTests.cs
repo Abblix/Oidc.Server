@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using System;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -16,7 +17,9 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.JwtBearer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -61,7 +64,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -70,7 +73,6 @@ public class JwtBearerGrantHandlerTests
 		Assert.Equal(Issuer, grant.AuthSession.IdentityProvider);
 		Assert.Equal(ClientId, grant.Context.ClientId);
 		Assert.Equal(tokenRequest.Scope, grant.Context.Scope);
-		Assert.Contains(ClientId, grant.AuthSession.AffectedClientIds);
 	}
 
 	/// <summary>
@@ -90,7 +92,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -114,7 +116,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -138,7 +140,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -164,7 +166,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -191,7 +193,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -218,7 +220,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -243,7 +245,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -269,7 +271,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -287,7 +289,7 @@ public class JwtBearerGrantHandlerTests
 		var jwt = CreateValidJwt();
 		SetupValidJwtValidation(mocks.JwtValidator, jwt);
 		var clientInfo = new ClientInfo(ClientId);
-		var requestedScopes = new[] { TestConstants.DefaultScope, "profile", "email" };
+		var requestedScopes = new[] { TestConstants.DefaultScope, Scopes.Profile, Scopes.Email };
 		var tokenRequest = new TokenRequest
 		{
 			GrantType = GrantTypes.JwtBearer,
@@ -296,7 +298,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -325,7 +327,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -351,7 +353,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -377,8 +379,8 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result1 = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-		var result2 = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result1 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result2 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result1.TryGetSuccess(out var grant1));
@@ -407,7 +409,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -428,7 +430,7 @@ public class JwtBearerGrantHandlerTests
 		mocks.JwtValidator
 			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
 			.Callback(new Action<string, ValidationParameters>((_, p) => capturedParams = p))
-			.ReturnsAsync(Result<JsonWebToken, JwtValidationError>.Success(jwt));
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(jwt));
 		var clientInfo = new ClientInfo(ClientId);
 		var tokenRequest = new TokenRequest
 		{
@@ -437,13 +439,95 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.NotNull(capturedParams);
 		Assert.True(capturedParams.Options.HasFlag(ValidationOptions.ValidateLifetime));
 		Assert.True(capturedParams.Options.HasFlag(ValidationOptions.ValidateIssuer));
 		Assert.True(capturedParams.Options.HasFlag(ValidationOptions.ValidateAudience));
+	}
+
+	/// <summary>
+	/// The trust the assertion's validation asks for, whether its issuer is trusted and which keys verify it, is asked
+	/// at the tenant the grant is requested at.
+	/// </summary>
+	[Fact]
+	public async Task JwtValidation_AsksTheIssuersTrustAtTheServingTenant()
+	{
+		var (handler, mocks) = CreateHandler();
+		var jwt = CreateValidJwt();
+		ValidationParameters? capturedParams = null;
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.Callback(new Action<string, ValidationParameters>((_, p) => capturedParams = p))
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(jwt));
+		mocks.IssuerProvider.Setup(p => p.IsTrustedIssuerAsync(TestTenant.Matched, Issuer)).ReturnsAsync(true);
+		mocks.IssuerProvider
+			.Setup(p => p.GetSigningKeysAsync(TestTenant.Matched, Issuer))
+			.Returns(AsyncEnumerable.Empty<JsonWebKey>());
+		var tokenRequest = new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion };
+
+		await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+		var parameters = capturedParams.NotNull(nameof(capturedParams));
+
+		Assert.True(await parameters.ValidateIssuer.NotNull(nameof(parameters.ValidateIssuer))(Issuer));
+		Assert.Empty(await parameters.ResolveIssuerSigningKeys
+			.NotNull(nameof(parameters.ResolveIssuerSigningKeys))(Issuer)
+			.ToArrayAsync(TestContext.Current.CancellationToken));
+		mocks.IssuerProvider.Verify(p => p.IsTrustedIssuerAsync(TestTenant.Matched, Issuer), Times.Once);
+		mocks.IssuerProvider.Verify(p => p.GetSigningKeysAsync(TestTenant.Matched, Issuer), Times.Once);
+	}
+
+	/// <summary>
+	/// An assertion whose issuer is a tenant this server serves is refused even where the issuer provider trusts it, a
+	/// provider of the host's own included, since nothing this server records about its own tokens is read for an
+	/// assertion and a revoked one would pass.
+	/// </summary>
+	[Fact]
+	public async Task AnIssuerThatIsATenantOfThisServer_IsRefused_EvenWhereTrusted()
+	{
+		var (handler, mocks) = CreateHandler();
+		var jwt = CreateValidJwt();
+		ValidationParameters? capturedParams = null;
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.Callback(new Action<string, ValidationParameters>((_, p) => capturedParams = p))
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(jwt));
+		mocks.IssuerProvider.Setup(p => p.IsTrustedIssuerAsync(It.IsAny<Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition>(), It.IsAny<string>())).ReturnsAsync(true);
+		var tokenRequest = new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion };
+
+		await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+		var validateIssuer = capturedParams.NotNull(nameof(capturedParams)).ValidateIssuer.NotNull(nameof(ValidationParameters.ValidateIssuer));
+
+		Assert.False(await validateIssuer(SingleIssuer.Tenant.Issuer.OriginalString));
+		Assert.True(await validateIssuer(Issuer));
+	}
+
+	/// <summary>
+	/// The tolerance an unprofiled client's assertion is validated with is the one the serving tenant's profile
+	/// supplies, so a FAPI 2.0 tenant does not validate it with the looser default of a tenant without a profile.
+	/// </summary>
+	[Theory]
+	[InlineData(ClientSecurityProfile.Fapi2)]
+	[InlineData(ClientSecurityProfile.None)]
+	public async Task JwtValidation_UsesTheToleranceOfTheServingTenantsProfile(ClientSecurityProfile profile)
+	{
+		var (handler, mocks) = CreateHandler();
+		var jwt = CreateValidJwt();
+		ValidationParameters? capturedParams = null;
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.Callback(new Action<string, ValidationParameters>((_, p) => capturedParams = p))
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(jwt));
+		var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+		var tokenRequest = new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion };
+
+		await handler.AuthorizeAsync(tenant, tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+
+		Assert.Equal(
+			SecurityProfileRequirements.Resolve(profile).ClockSkewOrDefault(),
+			capturedParams.NotNull(nameof(capturedParams)).ClockSkew);
 	}
 
 	/// <summary>
@@ -478,8 +562,8 @@ public class JwtBearerGrantHandlerTests
 
 		mocks.JwtValidator
 			.SetupSequence(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
-			.ReturnsAsync(Result<JsonWebToken, JwtValidationError>.Success(jwt1))
-			.ReturnsAsync(Result<JsonWebToken, JwtValidationError>.Success(jwt2));
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(jwt1))
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(jwt2));
 
 		var clientInfo = new ClientInfo(ClientId);
 		var tokenRequest = new TokenRequest
@@ -489,8 +573,8 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result1 = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-		var result2 = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result1 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result2 = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result1.TryGetSuccess(out var grant1));
@@ -500,108 +584,114 @@ public class JwtBearerGrantHandlerTests
 	}
 
 	/// <summary>
-	/// Verifies that the affected client IDs collection contains the requesting client.
+	/// RFC 10070 section 4, case A: for the authorization grant "an authorization server MAY be identified by either
+	/// its issuer identifier or its token endpoint URL", so an assertion naming either one is addressed here in both
+	/// policies, beside any other audience it names; the application URI is accepted only by the permissive policy.
+	/// Asked of the audience check the handler hands the JWT validator, since a validator double never runs it.
 	/// </summary>
-	[Fact]
-	public async Task AuthSession_ShouldTrackClientInAffectedClientIds()
+	[Theory]
+	[InlineData(true, nameof(TokenEndpointUri), true)]
+	[InlineData(true, nameof(TenantIssuer), true)]
+	[InlineData(true, nameof(ApplicationUri), false)]
+	[InlineData(false, nameof(TokenEndpointUri), true)]
+	[InlineData(false, nameof(TenantIssuer), true)]
+	[InlineData(false, nameof(ApplicationUri), true)]
+	public async Task AnAudienceNamingThisServer_IsAcceptedAsThePolicyAllows(bool strict, string named, bool accepted)
 	{
-		// Arrange
-		var (handler, mocks) = CreateHandler();
-		var jwt = CreateValidJwt();
-		SetupValidJwtValidation(mocks.JwtValidator, jwt);
-		var clientInfo = new ClientInfo(ClientId);
-		var tokenRequest = new TokenRequest
+		var validateAudience = await AudienceCheckAsync(strict);
+
+		var audience = named switch
 		{
-			GrantType = GrantTypes.JwtBearer,
-			Assertion = Assertion
+			nameof(TokenEndpointUri) => TokenEndpointUri,
+			nameof(TenantIssuer) => TenantIssuer,
+			nameof(ApplicationUri) => ApplicationUri,
+			_ => throw new ArgumentOutOfRangeException(nameof(named), named, null),
 		};
 
-		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-
-		// Assert
-		Assert.True(result.TryGetSuccess(out var grant));
-		Assert.Contains(ClientId, grant.AuthSession.AffectedClientIds);
-		Assert.Single(grant.AuthSession.AffectedClientIds);
+		Assert.Equal(accepted, await validateAudience([audience]));
+		Assert.Equal(accepted, await validateAudience(["https://another-server.example.com", audience]));
 	}
 
 	/// <summary>
-	/// Verifies that with StrictAudienceValidation=false, the application base URI is accepted as valid audience.
-	/// Per RFC 7523 Section 3, this is a relaxation of the "SHOULD be token endpoint" recommendation.
+	/// RFC 10070 section 4: "applications MUST compare the audience values using the Simple String Comparison method
+	/// defined in Section 6.2.1 of [RFC3986]", so the server's own addresses spelled otherwise, in another case, with
+	/// a trailing slash or a default port, are not this server.
 	/// </summary>
-	[Fact]
-	public async Task PermissiveAudienceValidation_WithApplicationUri_ShouldSucceed()
+	[Theory]
+	[MemberData(nameof(ThisServerSpelledOtherwise))]
+	public async Task AnAudienceSpellingThisServerOtherwise_IsRefused(string audience)
 	{
-		// Arrange
-		var (handler, mocks) = CreateHandler(strictAudienceValidation: false);
-		var jwt = CreateValidJwt();
-		jwt.Payload.Audiences = ["https://authorization-server.example.com"];
-		SetupValidJwtValidation(mocks.JwtValidator, jwt);
-		var clientInfo = new ClientInfo(ClientId);
-		var tokenRequest = new TokenRequest
+		foreach (var strict in new[] { true, false })
 		{
-			GrantType = GrantTypes.JwtBearer,
-			Assertion = Assertion
-		};
+			var validateAudience = await AudienceCheckAsync(strict);
+			Assert.False(await validateAudience([audience]), $"accepted with strict={strict}");
+		}
+	}
 
-		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+	public static TheoryData<string> ThisServerSpelledOtherwise() =>
+	[
+		"https://AUTHORIZATION-SERVER.example.com/token",
+		TokenEndpointUri + "/",
+		"https://authorization-server.example.com:443/token",
+		ApplicationUri + "/",
+		TenantIssuer + "/",
+	];
 
-		// Assert
-		Assert.True(result.TryGetSuccess(out var grant));
-		Assert.Equal(Subject, grant.AuthSession.Subject);
+	private const string TokenEndpointUri = "https://authorization-server.example.com/token";
+	private const string ApplicationUri = "https://authorization-server.example.com";
+	private static string TenantIssuer => SingleIssuer.Tenant.Issuer.OriginalString;
+
+	/// <summary>
+	/// The audience check the handler hands the JWT validator for an assertion presented at
+	/// <see cref="SingleIssuer.Tenant"/>, under the strict or the permissive policy.
+	/// </summary>
+	private static async Task<ValidationParameters.ValidateAudienceDelegate> AudienceCheckAsync(bool strict)
+	{
+		var (handler, mocks) = CreateHandler(
+			tokenEndpoint: TokenEndpointUri, applicationUri: ApplicationUri, strictAudienceValidation: strict);
+		ValidationParameters? captured = null;
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.Callback(new Action<string, ValidationParameters>((_, p) => captured = p))
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)new JwtValidationError(JwtError.InvalidToken, "not the subject of this test"));
+
+		await handler.AuthorizeAsync(
+			SingleIssuer.Tenant,
+			new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion },
+			new ClientInfo(ClientId),
+			TestContext.Current.CancellationToken);
+
+		return captured!.ValidateAudience!;
 	}
 
 	/// <summary>
-	/// Verifies that with StrictAudienceValidation=true (default), only the token endpoint URL is accepted.
-	/// Application base URI should be rejected per RFC 7523 Section 3 strict interpretation.
+	/// The keys read again on an unfamiliar kid are the trusted issuer's, asked for past the copy held, while the keys
+	/// first returned come from the copy.
 	/// </summary>
 	[Fact]
-	public async Task StrictAudienceValidation_WithApplicationUri_ShouldFail()
+	public async Task TheIssuersKeys_AreReadPastTheCopyOnlyForTheRefetch()
 	{
-		// Arrange
-		var (handler, mocks) = CreateHandler(strictAudienceValidation: true);
-		var jwt = CreateValidJwt();
-		jwt.Payload.Audiences = ["https://authorization-server.example.com"];
-		SetupInvalidJwtValidation(mocks.JwtValidator);
-		var clientInfo = new ClientInfo(ClientId);
-		var tokenRequest = new TokenRequest
-		{
-			GrantType = GrantTypes.JwtBearer,
-			Assertion = Assertion
-		};
+		const string issuer = "https://trusted-issuer.example.com";
+		var (handler, mocks) = CreateHandler(tokenEndpoint: TokenEndpointUri);
+		ValidationParameters? captured = null;
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.Callback(new Action<string, ValidationParameters>((_, p) => captured = p))
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)new JwtValidationError(JwtError.InvalidToken, "not the subject of this test"));
+		mocks.IssuerProvider
+			.Setup(p => p.GetSigningKeysAsync(It.IsAny<TenantDefinition>(), issuer, It.IsAny<bool>()))
+			.Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
-		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		await handler.AuthorizeAsync(
+			SingleIssuer.Tenant,
+			new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion },
+			new ClientInfo(ClientId),
+			TestContext.Current.CancellationToken);
+		await captured!.ResolveIssuerSigningKeys!(issuer).ToArrayAsync(TestContext.Current.CancellationToken);
+		await captured.RefetchIssuerSigningKeys!(issuer).ToArrayAsync(TestContext.Current.CancellationToken);
 
-		// Assert
-		Assert.True(result.TryGetFailure(out var error));
-		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-	}
-
-	/// <summary>
-	/// Verifies that with StrictAudienceValidation=true, the token endpoint URL is still accepted.
-	/// </summary>
-	[Fact]
-	public async Task StrictAudienceValidation_WithTokenEndpoint_ShouldSucceed()
-	{
-		// Arrange
-		var (handler, mocks) = CreateHandler(strictAudienceValidation: true);
-		var jwt = CreateValidJwt();
-		SetupValidJwtValidation(mocks.JwtValidator, jwt);
-		var clientInfo = new ClientInfo(ClientId);
-		var tokenRequest = new TokenRequest
-		{
-			GrantType = GrantTypes.JwtBearer,
-			Assertion = Assertion
-		};
-
-		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-
-		// Assert
-		Assert.True(result.TryGetSuccess(out var grant));
-		Assert.Equal(Subject, grant.AuthSession.Subject);
+		mocks.IssuerProvider.Verify(p => p.GetSigningKeysAsync(It.IsAny<TenantDefinition>(), issuer, false), Times.Once);
+		mocks.IssuerProvider.Verify(p => p.GetSigningKeysAsync(It.IsAny<TenantDefinition>(), issuer, true), Times.Once);
 	}
 
 	private record Mocks(
@@ -652,16 +742,16 @@ public class JwtBearerGrantHandlerTests
 			.Returns(options);
 
 		issuerProvider
-			.Setup(p => p.GetTrustedIssuerAsync(It.IsAny<string>()))
+			.Setup(p => p.GetTrustedIssuerAsync(TestTenant.Matched, It.IsAny<string>()))
 			.ReturnsAsync((TrustedIssuer?)null);
 
 		requestInfoProvider
 			.Setup(r => r.RequestUri)
-			.Returns(tokenEndpoint ?? "https://authorization-server.example.com/token");
+			.Returns(new Uri(tokenEndpoint ?? "https://authorization-server.example.com/token"));
 
 		requestInfoProvider
 			.Setup(r => r.ApplicationUri)
-			.Returns(applicationUri ?? "https://authorization-server.example.com");
+			.Returns(new Uri(applicationUri ?? "https://authorization-server.example.com"));
 
 		requestInfoProvider
 			.Setup(r => r.RemoteIpAddress)
@@ -671,12 +761,12 @@ public class JwtBearerGrantHandlerTests
 
 		var handler = new JwtBearerGrantHandler(
 			logger.Object,
-			jwtValidator.Object,
+			new ProfiledJwtValidator(jwtValidator.Object),
 			issuerProvider.Object,
 			requestInfoProvider.Object,
 			sessionIdGenerator.Object,
 			timeProvider,
-			Options.Create(new OidcOptions()));
+			SingleIssuer.LicensedCatalog);
 
 		return (handler, new Mocks(jwtValidator, issuerProvider, requestInfoProvider, sessionIdGenerator, timeProvider));
 	}
@@ -690,8 +780,8 @@ public class JwtBearerGrantHandlerTests
 			{
 				Subject = Subject,
 				Issuer = Issuer,
-				IssuedAt = DateTimeOffset.UtcNow,
-				ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+				IssuedAt = TimeProvider.System.GetUtcNow(),
+				ExpiresAt = TimeProvider.System.GetUtcNow().AddHours(1),
 				Audiences = ["https://authorization-server.example.com/token"]
 			}
 		};
@@ -701,17 +791,17 @@ public class JwtBearerGrantHandlerTests
 	{
 		validator
 			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
-			.ReturnsAsync(Result<JsonWebToken, JwtValidationError>.Success(jwt));
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(jwt));
 	}
 
 	private static void SetupInvalidJwtValidation(Mock<IJsonWebTokenValidator> validator)
 	{
 		validator
 			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
-			.ReturnsAsync(Result<JsonWebToken, JwtValidationError>.Failure(new JwtValidationError(JwtError.InvalidToken, "Token expired")));
+			.ReturnsAsync((Result<JsonWebToken, JwtValidationError>)(new JwtValidationError(JwtError.InvalidToken, "Token expired")));
 	}
 
-	#region Security Tests - RFC 7523 Compliance
+	// Security Tests - RFC 7523 Compliance
 
 	/// <summary>
 	/// Verifies that JWTs signed with disallowed algorithms are rejected.
@@ -738,7 +828,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -767,7 +857,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -799,7 +889,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -828,7 +918,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -857,7 +947,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -882,7 +972,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -910,7 +1000,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -937,7 +1027,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -960,6 +1050,7 @@ public class JwtBearerGrantHandlerTests
 		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
 
 		var result = await handler.AuthorizeAsync(
+			SingleIssuer.Tenant,
 			new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion },
 			new ClientInfo(ClientId),
 			TestContext.Current.CancellationToken);
@@ -993,9 +1084,46 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+	}
+
+	/// <summary>
+	/// An assertion past MaxJwtAge by less than the unprofiled tolerance is accepted at a tenant without a profile
+	/// and refused at a FAPI 2.0 tenant, whose profile allows an assertion no time in the past, while a fresh one
+	/// passes there too.
+	/// </summary>
+	[Theory]
+	[InlineData(ClientSecurityProfile.Fapi2, 12, false)]
+	[InlineData(ClientSecurityProfile.Fapi2, 5, true)]
+	[InlineData(ClientSecurityProfile.None, 12, true)]
+	public async Task MaxJwtAge_AllowsTheToleranceOfTheServingTenantsProfile(
+		ClientSecurityProfile profile, int issuedMinutesAgo, bool accepted)
+	{
+		var fixedTime = new DateTimeOffset(2024, 11, 20, 15, 30, 0, TimeSpan.Zero);
+		var (handler, mocks) = CreateHandler(
+			fixedTime: fixedTime,
+			maxJwtAge: TimeSpan.FromMinutes(10));
+		var jwt = CreateValidJwt();
+		jwt.Payload.IssuedAt = fixedTime.AddMinutes(-issuedMinutesAgo);
+		// An algorithm every profile admits, since what is under test is the assertion's age
+		jwt.Header.Algorithm = SigningAlgorithms.ES256;
+		SetupValidJwtValidation(mocks.JwtValidator, jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
+		var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+		var tokenRequest = new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = Assertion };
+
+		var result = await handler.AuthorizeAsync(tenant, tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+
+		if (accepted)
+		{
+			Assert.True(result.TryGetSuccess(out _));
+			return;
+		}
+
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
 	}
@@ -1023,7 +1151,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -1054,7 +1182,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -1068,8 +1196,8 @@ public class JwtBearerGrantHandlerTests
 	[Theory]
 	[InlineData(JsonWebTokenTypes.AccessToken)]
 	[InlineData(JwtTypes.RefreshToken)]
-	[InlineData(null)]
-	public async Task TokenTypeValidation_WithDisallowedType_ShouldReject(string? tokenType)
+	[InlineData("text/jwt")]
+	public async Task TokenTypeValidation_WithDisallowedType_ShouldReject(string tokenType)
 	{
 		// Arrange
 		var (handler, mocks) = CreateHandler(allowedTokenTypes: ["JWT"]);
@@ -1085,7 +1213,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetFailure(out var error));
@@ -1093,13 +1221,16 @@ public class JwtBearerGrantHandlerTests
 	}
 
 	/// <summary>
-	/// Verifies that JWTs with allowed token types are accepted (case-insensitive).
+	/// Verifies that JWTs with allowed token types are accepted, in any case and either spelling of the
+	/// application/ prefix, and that an assertion without a type is accepted too, since RFC 7523 defines none.
 	/// </summary>
 	[Theory]
 	[InlineData("JWT")]
 	[InlineData("jwt")]
 	[InlineData("Jwt")]
-	public async Task TokenTypeValidation_WithAllowedType_ShouldSucceed(string tokenType)
+	[InlineData("application/JWT")]
+	[InlineData(null)]
+	public async Task TokenTypeValidation_WithAllowedType_ShouldSucceed(string? tokenType)
 	{
 		// Arrange
 		var (handler, mocks) = CreateHandler(allowedTokenTypes: ["JWT"]);
@@ -1115,7 +1246,7 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
@@ -1123,13 +1254,39 @@ public class JwtBearerGrantHandlerTests
 	}
 
 	/// <summary>
-	/// Verifies that when AllowedTokenTypes is empty, no type restriction is enforced.
+	/// Verifies that a type configured with the application/ prefix matches a token carrying its short form,
+	/// since RFC 7515 Section 4.1.9 makes the two spellings one type.
+	/// </summary>
+	[Fact]
+	public async Task TokenTypeValidation_WithPrefixedConfiguredType_AcceptsTheShortForm()
+	{
+		var (handler, mocks) = CreateHandler(allowedTokenTypes: ["application/JWT"]);
+		var jwt = CreateValidJwt();
+		jwt.Header.Type = JsonWebTokenTypes.Jwt;
+		SetupValidJwtValidation(mocks.JwtValidator, jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
+		var tokenRequest = new TokenRequest
+		{
+			GrantType = GrantTypes.JwtBearer,
+			Assertion = Assertion
+		};
+
+		var result = await handler.AuthorizeAsync(
+			SingleIssuer.Tenant,
+			tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+
+		Assert.True(result.TryGetSuccess(out _));
+	}
+
+	/// <summary>
+	/// Verifies that when AllowedTokenTypes is empty, an assertion without a type, with the generic one or with one
+	/// this server does not know is accepted, since RFC 7523 defines none.
 	/// </summary>
 	[Theory]
-	[InlineData("JWT")]
-	[InlineData("at+jwt")]
+	[InlineData(JsonWebTokenTypes.Jwt)]
+	[InlineData("application/custom-assertion+jwt")]
 	[InlineData(null)]
-	public async Task TokenTypeValidation_WhenNotConfigured_ShouldAcceptAny(string? tokenType)
+	public async Task TokenTypeValidation_WhenNotConfigured_ShouldAcceptAnAssertion(string? tokenType)
 	{
 		// Arrange
 		var (handler, mocks) = CreateHandler(allowedTokenTypes: []);
@@ -1145,14 +1302,42 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		// Act
-		var result = await handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		// Assert
 		Assert.True(result.TryGetSuccess(out var grant));
 		Assert.Equal(Subject, grant.AuthSession.Subject);
 	}
 
-	#endregion
+	/// <summary>
+	/// Verifies that when AllowedTokenTypes is empty, a token typed as another kind of token - an access token or
+	/// a logout token of a trusted issuer whose audience names this server - is refused rather than taken as a
+	/// grant (RFC 8725 Section 3.11).
+	/// </summary>
+	[Theory]
+	[InlineData(JsonWebTokenTypes.AccessToken)]
+	[InlineData(JsonWebTokenTypes.LogoutToken)]
+	[InlineData(JwtTypes.RefreshToken)]
+	public async Task TokenTypeValidation_WhenNotConfigured_ShouldRefuseAnotherKindOfToken(string tokenType)
+	{
+		var (handler, mocks) = CreateHandler(allowedTokenTypes: []);
+		var jwt = CreateValidJwt();
+		jwt.Header.Type = tokenType;
+		SetupValidJwtValidation(mocks.JwtValidator, jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
+		var tokenRequest = new TokenRequest
+		{
+			GrantType = GrantTypes.JwtBearer,
+			Assertion = Assertion
+		};
+
+		var result = await handler.AuthorizeAsync(
+			SingleIssuer.Tenant,
+			tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+	}
 
 	private static void SetupTrustedIssuer(
 		Mock<IJwtBearerIssuerProvider> issuerProvider,
@@ -1169,11 +1354,43 @@ public class JwtBearerGrantHandlerTests
 		};
 
 		issuerProvider
-			.Setup(p => p.GetTrustedIssuerAsync(issuer))
+			.Setup(p => p.GetTrustedIssuerAsync(TestTenant.Matched, issuer))
 			.ReturnsAsync(trustedIssuer);
 
 		issuerProvider
 			.Setup(p => p.IsReplayedAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()))
 			.ReturnsAsync(false);
+	}
+
+	/// <summary>
+	/// FAPI 1.0 Part 2 section 8.6 names the algorithms the server uses for any JWS, so a bearer assertion presented by
+	/// a client held to FAPI 1.0 Advanced is refused under RS256 although its trusted issuer allows it; PS256 passes.
+	/// The validator is driven as the real one judges the algorithm list it is handed.
+	/// </summary>
+	[Theory]
+	[InlineData("RS256", false)]
+	[InlineData("PS256", true)]
+	public async Task AlgorithmValidation_UnderFapi1Advanced_AdmitsOnlyItsAlgorithms(string algorithm, bool accepted)
+	{
+		var (handler, mocks) = CreateHandler();
+		var jwt = CreateValidJwt();
+		jwt.Header.Algorithm = algorithm;
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.ReturnsAsync((string _, ValidationParameters parameters) =>
+				parameters.AllowedSigningAlgorithms is { } allowed && !allowed.Contains(algorithm)
+					? new JwtValidationError(JwtError.InvalidAlgorithm, "Outside the allowed list")
+					: jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer, allowedAlgorithms: ["RS256", "PS256"]);
+		var clientInfo = new ClientInfo(ClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
+		var tokenRequest = new TokenRequest
+		{
+			GrantType = GrantTypes.JwtBearer,
+			Assertion = Assertion
+		};
+
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+		Assert.Equal(accepted, result.TryGetSuccess(out _));
 	}
 }

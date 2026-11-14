@@ -6,7 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Utils;
+
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 
@@ -16,33 +17,61 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 /// lowercase, so this is a mitigation the server chooses rather than one it inherits - and the choice
 /// is what makes the entropy argument in that section hold.
 /// </summary>
+/// <remarks>
+/// The client identifier every method takes is the address the request came from, absent whenever the
+/// server cannot see one. An implementation owes those attempts a count of their own, apart from any real
+/// address: spelled as an address it invents a sender, and left uncounted it lets one such sender spend
+/// whatever budget is shared with everybody else.
+/// </remarks>
 public interface IUserCodeRateLimiter
 {
     /// <summary>
     /// Checks if a verification attempt should be allowed for the given user code and client identifier.
-    /// Implements exponential backoff and per-IP rate limiting to prevent brute force attacks.
+    /// Implements a growing pause per code, a cap per source address and a budget for the whole server, to
+    /// prevent brute force attacks.
     /// </summary>
+    /// <param name="tenant">The tenant the verification belongs to.</param>
     /// <param name="userCode">The user code being verified.</param>
-    /// <param name="clientIdentifier">The client identifier (IP address or other identifier).</param>
+    /// <param name="clientIdentifier">The address the request came from, or null when the server cannot
+    /// see one.</param>
     /// <returns>
-    /// A <see cref="Result{TSuccess, TFailure}"/> containing:
-    /// - Success (<c>true</c>): The verification attempt is allowed to proceed.
-    /// - Failure (<see cref="TimeSpan"/>): The attempt is rate limited; the value indicates the duration
-    ///   the client must wait before retrying (Retry-After).
+    /// Null when the attempt may proceed. Otherwise the refusal, with how long before the attempt may be made again
+    /// and whether it follows from attempts against this very code - which decides whether a caller may be told
+    /// anything at all.
     /// </returns>
-    Task<Result<bool, TimeSpan>> CheckAsync(string userCode, string clientIdentifier);
+    Task<UserCodeRateLimited?> CheckAsync(TenantDefinition tenant, string userCode, string? clientIdentifier);
 
     /// <summary>
     /// Records a failed verification attempt for rate limiting purposes.
     /// </summary>
+    /// <param name="tenant">The tenant the verification belongs to.</param>
     /// <param name="userCode">The user code that failed verification.</param>
-    /// <param name="clientIdentifier">The client identifier (IP address or other identifier).</param>
-    Task RecordFailureAsync(string userCode, string clientIdentifier);
+    /// <param name="clientIdentifier">The address the request came from, or null when the server cannot
+    /// see one.</param>
+    Task RecordFailureAsync(TenantDefinition tenant, string userCode, string? clientIdentifier);
+
+    /// <summary>
+    /// Records a failed attempt at a user code that does not exist.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not charged to the value that was typed. A guesser never submits the same value
+    /// twice, so counting per value bounds nothing - and a count held against a value nobody was issued
+    /// would be spent before a real code could ever carry it, leaving the person who reads that code off
+    /// their screen unable to use it. What this attempt belongs to is the source that made it and the
+    /// server's own budget for the window.
+    /// </remarks>
+    /// <param name="tenant">The tenant the verification belongs to.</param>
+    /// <param name="clientIdentifier">The address the attempt came from, or null when the server cannot
+    /// see one.</param>
+    /// <returns>A task that completes when the attempt has been recorded.</returns>
+    Task RecordUnknownCodeAsync(TenantDefinition tenant, string? clientIdentifier);
 
     /// <summary>
     /// Records a successful verification to reset rate limiting counters.
     /// </summary>
+    /// <param name="tenant">The tenant the verification belongs to.</param>
     /// <param name="userCode">The user code that was successfully verified.</param>
-    /// <param name="clientIdentifier">The client identifier (IP address or other identifier).</param>
-    Task RecordSuccessAsync(string userCode, string clientIdentifier);
+    /// <param name="clientIdentifier">The address the request came from, or null when the server cannot
+    /// see one.</param>
+    Task RecordSuccessAsync(TenantDefinition tenant, string userCode, string? clientIdentifier);
 }

@@ -15,8 +15,8 @@ namespace Abblix.Jwt.Vault;
 /// </summary>
 public sealed class VaultTransitOptions
 {
-    /// <summary>Base URL of the Vault / OpenBao server, e.g. <c>http://127.0.0.1:8200</c>.</summary>
-    public string Address { get; set; } = "http://127.0.0.1:8200";
+    /// <summary>Absolute base address of the Vault / OpenBao server, e.g. <c>http://127.0.0.1:8200</c>.</summary>
+    public Uri Address { get; set; } = new("http://127.0.0.1:8200");
 
     /// <summary>
     /// Auth token presented as the <c>X-Vault-Token</c> header, for a host that already has one and owns its

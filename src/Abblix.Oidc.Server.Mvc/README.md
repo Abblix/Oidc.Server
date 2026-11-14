@@ -1,20 +1,21 @@
 # Abblix OIDC Server MVC
 
-**Abblix.OIDC.Server.MVC** integrates the Abblix OIDC Server with ASP.NET Core MVC, providing controller classes, model binding, and routing for the OpenID Connect endpoints. This is the recommended package for controller-based ASP.NET Core applications; hosts without MVC take [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) instead.
+Abblix.OIDC.Server.MVC integrates the Abblix OIDC Server with ASP.NET Core MVC, providing controller classes, model binding, and routing for the OpenID Connect endpoints. This is the recommended package for controller-based ASP.NET Core applications; hosts without MVC take [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) instead.
 
-## What's New in Version 2.4
+## What's New in Version 3.0
+
+Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://docs.abblix.com/docs/upgrading-to-3-0) before moving a 2.x deployment.
 
 🚀 Features
-- Opt-in registration of the endpoints beyond the core set: dynamic client registration, CIBA, check session, revocation, introspection and device authorization
-- Authorization Server Metadata served at its OAuth 2.0 well-known address ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414))
+- The endpoints are mapped with `MapOidcControllers()`, at the routes `OidcRouteOptions` sets
+- Every tenant of a multi-tenant server is served through the same controllers
 
 ✏️ Improvements
-- A default cross-origin policy for the OIDC endpoints, so a browser client reads discovery, the key set and the token and UserInfo responses without the host configuring anything
-- Referencing both transport adapters is refused at startup with a message naming which package to drop, instead of every OIDC request failing with `AmbiguousMatchException` once the new Minimal API sibling joins the dependency graph
+- The MVC and Minimal API hosts read a request the same way
 
 ## Key Features
 
-- Standard MVC Integration: Uses ASP.NET controller classes, model binding, and attribute routing - no custom middleware required
+- Standard MVC Integration: Uses ASP.NET controller classes and model binding on routes the package maps itself - no custom middleware required
 - OIDC Endpoint Controllers: Authorization, token, userinfo, introspection, revocation, device authorization, and more
 - Session Management: Check session iframe and RP-initiated logout with CSP nonce support
 - Front-Channel & Back-Channel Logout: Complete logout notification via both channels
@@ -28,25 +29,56 @@
 dotnet add package Abblix.OIDC.Server.MVC
 ```
 
-This package includes **Abblix.OIDC.Server**, **Abblix.JWT**, **Abblix.DependencyInjection**, and **Abblix.Utils** as transitive dependencies.
+This package includes Abblix.OIDC.Server, Abblix.OIDC, Abblix.JWT, Abblix.DependencyInjection, and Abblix.Utils as transitive dependencies.
 
 ## Quick Start
 
 ```csharp
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Mvc;
+
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOidcServices(options =>
+// Grants every client everything it asks for, which suits only clients of your own;
+// to ask the end user for consent, register your own IUserConsentsProvider instead
+builder.Services.AddConsentGrantedForEveryClient();
+
+// The server serves tenants; a host serving one issuer declares one
+builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
-    options.Clients = new[] { /* client configurations */ };
-    options.Scopes = new[] { /* scope definitions */ };
-});
+    Id = "main",
+    Issuer = new Uri("https://auth.example.com"),
+    LoginUri = new Uri("/Auth/Login", UriKind.Relative),
+    SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+    Clients = [ /* client configurations */ ],
+    Scopes = [ /* scope definitions */ ],
+}));
 
 var app = builder.Build();
+
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapControllers();
+app.MapOidcControllers();
 app.Run();
 ```
+
+The library's controllers carry no route of their own, so `app.MapControllers()` and a conventional route such as `{controller}/{action}` never reach them. `MapOidcControllers()` maps each enabled endpoint at the path `OidcRouteOptions` gives it, and a disabled endpoint is not mapped at all, so it answers 404. The call returns a convention builder for the endpoints it mapped, so cross-cutting conventions apply to all of them at once and to none of the host's routes, and an optional prefix mounts every endpoint under a sub-path:
+
+```csharp
+using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.Mvc;
+
+builder.Services.Configure<OidcRouteOptions>(routes => routes.Token = "/oauth2/token");
+
+app.MapOidcControllers(prefix: "/auth") // e.g. /auth/oauth2/token, /auth/.well-known/jwks
+    .RequireRateLimiting("oidc");
+```
+
+The mapped endpoints appear in your API description, and so in any OpenAPI document built from it, such as Swashbuckle's or Microsoft.AspNetCore.OpenApi's. Call `.ExcludeFromDescription()` on what `MapOidcControllers()` returns to leave them out, or `.WithGroupName("oidc")` and declare an "oidc" document to give them one of their own.
+
+A configuration section keyed as in version 2.4 (`base`, `token`, `introspect`, `jwks` and the rest, values such as `~/oauth2` or `[route:base]/issue`) still sets the paths, through `services.ConfigureRoutes(configuration.GetSection("Routes"))`. The same call resolves tokens such as `[route:ApiPrefix?v1]` in your own controllers' route templates; a controller carrying one needs the call even with an empty section, since nothing else resolves its fallback.
 
 ## Endpoint URLs
 
@@ -72,14 +104,14 @@ For the complete standards list, see the [Abblix.OIDC.Server](https://www.nuget.
 
 | Package | Description |
 |---------|-------------|
-| **[Abblix.Utils](https://www.nuget.org/packages/Abblix.Utils)** | Utility library with crypto, URI, and JSON helpers |
-| **[Abblix.DependencyInjection](https://www.nuget.org/packages/Abblix.DependencyInjection)** | .NET DI extensions with aliasing, composites, and decorators |
-| **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
-| **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
-| **Abblix.OIDC.Server.MVC** | ASP.NET Core MVC integration *(this package)* |
-| **[Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI)** | ASP.NET Core Minimal API integration |
-| **[Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents)** | Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493): building, validation, and the delivery data types |
-| **[Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals)** | OpenID Shared Signals Framework 1.0 transmitter and receiver |
+| [Abblix.Utils](https://www.nuget.org/packages/Abblix.Utils) | Utility library with crypto, URI, and JSON helpers |
+| [Abblix.DependencyInjection](https://www.nuget.org/packages/Abblix.DependencyInjection) | .NET DI extensions with aliasing, composites, and decorators |
+| [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) | JWT signing, encryption, and validation using .NET crypto primitives |
+| [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) | Core OpenID Connect server implementation |
+| Abblix.OIDC.Server.MVC | ASP.NET Core MVC integration *(this package)* |
+| [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) | ASP.NET Core Minimal API integration |
+| [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents) | Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493): building, validation, and the delivery data types |
+| [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) | OpenID Shared Signals Framework 1.0 transmitter and receiver |
 
 ## Getting Started
 

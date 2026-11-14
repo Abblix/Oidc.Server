@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -33,16 +34,18 @@ public class AuthorizationCodeService(
 	/// </summary>
 	/// <param name="authorizedGrant">An object encapsulating the result of the authorization grant, including
 	/// user authentication session and authorization context details.</param>
+	/// <param name="tenant">The tenant the authorization code belongs to.</param>
 	/// <param name="authorizationCodeExpiresIn"></param>
 	/// <returns>A task that resolves to the generated authorization code as a string.</returns>
 	public async Task<string> GenerateAuthorizationCodeAsync(
+		TenantDefinition tenant,
 		AuthorizedGrant authorizedGrant,
 		TimeSpan authorizationCodeExpiresIn)
 	{
 		var authorizationCode = authorizationCodeGenerator.GenerateAuthorizationCode();
 
 		await storage.SetAsync(
-			keyFactory.AuthorizedGrantKey(authorizationCode),
+			keyFactory.AuthorizedGrantKey(tenant, authorizationCode),
 			authorizedGrant,
 			new () { AbsoluteExpirationRelativeToNow = authorizationCodeExpiresIn });
 
@@ -52,12 +55,13 @@ public class AuthorizationCodeService(
 	/// <summary>
 	/// Validates and processes an authorization code, ensuring it is correct and has not expired or been used previously.
 	/// </summary>
+	/// <param name="tenant">The tenant the authorization code belongs to.</param>
 	/// <param name="authorizationCode">The authorization code to validate and process.</param>
 	/// <returns>A task that resolves to a <see cref="Result{AuthorizedGrant, AuthError}"/>, which indicates the outcome of
 	/// the authorization attempt and contains any tokens issued.</returns>
-	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeByCodeAsync(string authorizationCode)
+	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeByCodeAsync(TenantDefinition tenant, [Credential] string authorizationCode)
 	{
-		var result = await storage.GetAsync<AuthorizedGrant>(keyFactory.AuthorizedGrantKey(authorizationCode), false);
+		var result = await storage.GetAsync<AuthorizedGrant>(keyFactory.AuthorizedGrantKey(tenant, authorizationCode), false);
 		if (result == null)
 		{
 			return new OidcError(ErrorCodes.InvalidGrant, "Authorization code is invalid");
@@ -67,18 +71,21 @@ public class AuthorizationCodeService(
 	}
 
 	/// <inheritdoc />
-	public async Task<Result<AuthorizedGrant, OidcError>> RemoveAuthorizationCodeAsync(string authorizationCode)
+	public async Task<Result<AuthorizedGrant, OidcError>> RemoveAuthorizationCodeAsync(TenantDefinition tenant, [Credential] string authorizationCode)
 	{
-		// removeOnRetrieval: true claims the code, and every caller that finds it gone is rejected.
-		// What the claim does NOT give: a removal can end with nobody holding the grant, when the claim
-		// expires mid-protocol. Two callers both holding it needs a second node, because within one
-		// process the read and the removal are one hold of the per-key gate. The reuse decorator writes
-		// the grant back at the same key WITHOUT that gate, and what keeps it out of the window is
-		// ordering rather than exclusion: it writes only after its own take has returned, so a redeemer
-		// entering afterwards reads either nothing or a grant already carrying issued tokens, and the
-		// second is the arm that revokes and rejects. Issue 435.
+		// removeOnRetrieval: true claims the code, and every caller that finds it gone is rejected. How
+		// far that reaches is the storage's to answer: the interface requires the removal to be
+		// indivisible with the read, and a storage keeping that promise across its own nodes settles the
+		// question for any number of instances. The one built over a distributed cache keeps it within
+		// one process only, so two instances can both be handed the grant.
+		//
+		// The reuse decorator writes the grant back at this same key, and what keeps that write out of
+		// the window is ordering rather than exclusion: it writes only after its own take has returned,
+		// so a redeemer entering afterwards reads either nothing or a grant already carrying issued
+		// tokens, and the second is the arm that revokes and rejects. That write and this read therefore
+		// have to reach the same place, which is why one component owns both.
 		var grant = await storage.GetAsync<AuthorizedGrant>(
-			keyFactory.AuthorizedGrantKey(authorizationCode), removeOnRetrieval: true);
+			keyFactory.AuthorizedGrantKey(tenant, authorizationCode), removeOnRetrieval: true);
 
 		if (grant == null)
 		{
@@ -92,18 +99,20 @@ public class AuthorizationCodeService(
 	/// Updates the authorization grant result based on a specific authorization code and client information.
 	/// This method allows the authorization grant to be updated with new information or tokens as needed.
 	/// </summary>
+	/// <param name="tenant">The tenant the authorization code belongs to.</param>
 	/// <param name="authorizationCode">The authorization code associated with the grant result to update.</param>
 	/// <param name="authorizedGrant">The updated authorization grant result containing the latest
 	/// authentication and authorization details.</param>
 	/// <param name="authorizationCodeExpiresIn"></param>
 	/// <returns>A task representing the asynchronous operation of updating the authorization grant result.</returns>
 	public Task UpdateAuthorizationGrantAsync(
-		string authorizationCode,
+		TenantDefinition tenant,
+		[Credential] string authorizationCode,
 		AuthorizedGrant authorizedGrant,
 		TimeSpan authorizationCodeExpiresIn)
 	{
 		return storage.SetAsync(
-			keyFactory.AuthorizedGrantKey(authorizationCode),
+			keyFactory.AuthorizedGrantKey(tenant, authorizationCode),
 			authorizedGrant,
 			new () { AbsoluteExpirationRelativeToNow = authorizationCodeExpiresIn }
 		);

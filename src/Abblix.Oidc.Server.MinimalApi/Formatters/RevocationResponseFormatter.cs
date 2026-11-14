@@ -8,7 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using RevocationRequest = Abblix.Oidc.Server.Model.RevocationRequest;
@@ -21,8 +21,8 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// Formats token revocation results as <see cref="IResult"/>: an empty 200 on success, or the RFC-compliant OAuth
 /// error on failure.
 /// </summary>
-/// <param name="issuerProvider">Supplies the issuer used as the realm on client-authentication challenges.</param>
-public class RevocationResponseFormatter(IIssuerProvider issuerProvider) : IRevocationResponseFormatter
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class RevocationResponseFormatter(ITenantAccessor tenantAccessor) : IRevocationResponseFormatter
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, OidcError> response)
@@ -31,11 +31,11 @@ public class RevocationResponseFormatter(IIssuerProvider issuerProvider) : IRevo
     private IResult FormatResponse(Result<TokenRevoked, OidcError> response)
     {
         return response.Match(
-            // RFC 7009 §2.2: a successful revocation returns 200 with an empty body.
+            // RFC 7009 section 2.2: a successful revocation returns 200 with an empty body.
             onSuccess: IResult (_) => Results.Ok(),
 
-            // RFC 7009 §2.2.1 defers to RFC 6749 §5.2 for error semantics:
+            // RFC 7009 section 2.2.1 defers to RFC 6749 section 5.2 for error semantics:
             // invalid_client -> 401 with a Basic challenge, other errors -> 400.
-            onFailure: error => error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer()));
+            onFailure: error => error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().Issuer.OriginalString));
     }
 }

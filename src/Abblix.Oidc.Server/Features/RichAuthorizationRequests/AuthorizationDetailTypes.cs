@@ -37,7 +37,7 @@ internal static class AuthorizationDetailTypes
     /// to decide, and the two flows decide it differently on purpose. This answers the same for both,
     /// which is why it can be shared: a caller that treats null as unknown returns before asking.
     ///
-    /// Compared as text, per RFC 9396 §12: "All string comparisons in an authorization_details parameter
+    /// Compared as text, per RFC 9396 section 12: "All string comparisons in an authorization_details parameter
     /// are to be done as defined by [RFC8259]. No additional transformation or normalization is to be
     /// done in evaluating equivalence of string values."
     /// </remarks>

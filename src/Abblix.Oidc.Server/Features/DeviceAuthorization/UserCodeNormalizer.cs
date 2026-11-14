@@ -25,7 +25,7 @@ namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
 public class UserCodeNormalizer(IOptions<OidcOptions> options) : IUserCodeNormalizer
 {
     /// <inheritdoc />
-    public string Normalize(string userCode)
+    public string Normalize([Credential] string userCode)
     {
         var alphabet = options.Value.DeviceAuthorization
             .NotNull(nameof(OidcOptions.DeviceAuthorization))

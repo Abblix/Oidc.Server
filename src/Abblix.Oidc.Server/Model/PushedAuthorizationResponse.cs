@@ -20,9 +20,14 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 public record PushedAuthorizationResponse
 {
-    private static class Parameters
+    /// <summary>
+    /// Wire-level member names of the pushed authorization response.
+    /// </summary>
+    public static class Parameters
     {
+        /// <summary>The <c>request_uri</c> referring to the stored request.</summary>
         public const string RequestUri = "request_uri";
+        /// <summary>The <c>expires_in</c> lifetime of the stored request in seconds.</summary>
         public const string ExpiresIn = "expires_in";
     }
 

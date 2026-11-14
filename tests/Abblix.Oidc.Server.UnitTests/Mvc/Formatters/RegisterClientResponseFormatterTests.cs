@@ -14,10 +14,11 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
-using Abblix.Oidc.Server.Mvc;
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 
 using Moq;
 
@@ -29,7 +30,7 @@ namespace Abblix.Oidc.Server.UnitTests.Mvc.Formatters;
 /// Unit tests for <see cref="RegisterClientResponseFormatter"/>. Locks the bridge from the
 /// internal <see cref="ClientRegistrationSuccessResponse"/> business-shape into the
 /// public-API <see cref="ClientRegistrationResponse"/> wire-shape, with emphasis on the
-/// RFC 7591 §3.2.1 «echo registered metadata» surface and the RFC 9449 §5.2
+/// RFC 7591 section 3.2.1 «echo registered metadata» surface and the RFC 9449 section 5.2
 /// <c>dpop_bound_access_tokens</c> field. Without these tests, fields added on
 /// <see cref="ClientRegistrationSuccessResponse"/> stay unsurfaced on the JSON payload -
 /// the failure mode that prompted writing this suite (slice #108).
@@ -43,16 +44,35 @@ public class RegisterClientResponseFormatterTests
 
     private static readonly DateTimeOffset IssuedAt = new(2026, 5, 10, 12, 0, 0, TimeSpan.Zero);
 
-    private readonly Mock<IUriResolver> _uriResolver = new(MockBehavior.Strict);
-    private readonly RegisterClientResponseFormatter _formatter;
+    private readonly RegisterClientResponseFormatter _formatter = new(
+        new RegistrationClientUriBuilder(
+            new HttpContextAccessor { HttpContext = new DefaultHttpContext() },
+            new FixedLinkGenerator(ConfigurationEndpoint)));
 
-    public RegisterClientResponseFormatterTests()
+    /// <summary>Answers every address with one URL, so the configuration endpoint is known without routing.</summary>
+    private sealed class FixedLinkGenerator(Uri uri) : LinkGenerator
     {
-        _uriResolver
-            .Setup(r => r.Action(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object?>()))
-            .Returns(ConfigurationEndpoint);
+        public override string GetPathByAddress<TAddress>(
+            HttpContext httpContext, TAddress address, RouteValueDictionary values,
+            RouteValueDictionary? ambientValues = null, PathString? pathBase = null,
+            FragmentString fragment = default, LinkOptions? options = null)
+            => uri.AbsolutePath;
 
-        _formatter = new RegisterClientResponseFormatter(_uriResolver.Object);
+        public override string GetPathByAddress<TAddress>(
+            TAddress address, RouteValueDictionary values, PathString pathBase = default,
+            FragmentString fragment = default, LinkOptions? options = null)
+            => uri.AbsolutePath;
+
+        public override string GetUriByAddress<TAddress>(
+            HttpContext httpContext, TAddress address, RouteValueDictionary values,
+            RouteValueDictionary? ambientValues = null, string? scheme = null, HostString? host = null,
+            PathString? pathBase = null, FragmentString fragment = default, LinkOptions? options = null)
+            => uri.AbsoluteUri;
+
+        public override string GetUriByAddress<TAddress>(
+            TAddress address, RouteValueDictionary values, string scheme, HostString host,
+            PathString pathBase = default, FragmentString fragment = default, LinkOptions? options = null)
+            => uri.AbsoluteUri;
     }
 
     [Fact]
@@ -76,16 +96,19 @@ public class RegisterClientResponseFormatterTests
     [Fact]
     public async Task FormatResponseAsync_RfcMetadata_EchoedOnWireShape()
     {
-        // RFC 7591 §3.2.1 echo: registered metadata MUST appear on the wire response.
+        // RFC 7591 section 3.2.1 echo: registered metadata MUST appear on the wire response.
         var success = BuildSuccess(dpopBoundAccessTokens: null) with
         {
-            RedirectUris = [RedirectUri],
-            ApplicationType = "web",
-            ClientName = "Test Client",
-            JwksUri = JwksUri,
-            SectorIdentifierUri = SectorIdentifierUri,
-            SubjectType = "public",
-            Contacts = ["security@client.example.com"],
+            Metadata = new RegisteredClientMetadata
+            {
+                RedirectUris = [RedirectUri],
+                ApplicationType = "web",
+                ClientName = "Test Client",
+                JwksUri = JwksUri,
+                SectorIdentifierUri = SectorIdentifierUri,
+                SubjectType = "public",
+                Contacts = ["security@client.example.com"],
+            },
         };
 
         var result = await FormatAsync(success);
@@ -109,8 +132,11 @@ public class RegisterClientResponseFormatterTests
         // RFC 8705 mTLS metadata also flows through the bridge unchanged.
         var success = BuildSuccess(dpopBoundAccessTokens: null) with
         {
-            TlsClientAuthSubjectDn = "CN=client,O=test",
-            TlsClientAuthSanDns = ["client.example.com"],
+            Metadata = new RegisteredClientMetadata
+            {
+                TlsClientAuthSubjectDn = "CN=client,O=test",
+                TlsClientAuthSanDns = ["client.example.com"],
+            },
         };
 
         var result = await FormatAsync(success);
@@ -122,19 +148,22 @@ public class RegisterClientResponseFormatterTests
     }
 
     /// <summary>
-    /// #29 regression: RFC 9701 §6 introspection response algorithms set by the register processor
+    /// #29 regression: RFC 9701 section 6 introspection response algorithms set by the register processor
     /// must survive the core→wire bridge. Before the wire DTO gained these members (and the formatter
     /// mapped them) a client registering signed/encrypted introspection got a 201 that dropped them,
-    /// violating RFC 7591 §3.2.1's "echo all registered metadata".
+    /// violating RFC 7591 section 3.2.1's "echo all registered metadata".
     /// </summary>
     [Fact]
     public async Task FormatResponseAsync_IntrospectionResponseAlgorithms_EchoedOnWireShape()
     {
         var success = BuildSuccess(dpopBoundAccessTokens: null) with
         {
-            IntrospectionSignedResponseAlg = SigningAlgorithms.RS256,
-            IntrospectionEncryptedResponseAlg = "RSA-OAEP",
-            IntrospectionEncryptedResponseEnc = "A128CBC-HS256",
+            Metadata = new RegisteredClientMetadata
+            {
+                IntrospectionSignedResponseAlg = SigningAlgorithms.RS256,
+                IntrospectionEncryptedResponseAlg = "RSA-OAEP",
+                IntrospectionEncryptedResponseEnc = "A128CBC-HS256",
+            },
         };
 
         var result = await FormatAsync(success);
@@ -174,6 +203,6 @@ public class RegisterClientResponseFormatterTests
             ClientIdIssuedAt: IssuedAt,
             RegistrationAccessToken: "registration-access-token")
         {
-            DpopBoundAccessTokens = dpopBoundAccessTokens,
+            Metadata = new RegisteredClientMetadata { DpopBoundAccessTokens = dpopBoundAccessTokens },
         };
 }

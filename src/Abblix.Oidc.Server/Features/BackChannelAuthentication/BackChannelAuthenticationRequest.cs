@@ -8,6 +8,7 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 
@@ -27,10 +28,10 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant, DateTimeOffset ExpiresAt)
 {
     /// <summary>
-    /// Specifies the next time the client should poll for updates regarding the authentication request.
-    /// This helps manage the timing of polling requests efficiently.
+    /// The authorized grant associated with this authentication request. Settable, as <see cref="Status"/> is, so
+    /// completing the request records when the end user approved it on the grant the request already holds.
     /// </summary>
-    public DateTimeOffset? NextPollAt { get; set; }
+    public AuthorizedGrant AuthorizedGrant { get; set; } = AuthorizedGrant;
 
     /// <summary>
     /// Indicates the current status of the backchannel authentication request.
@@ -48,6 +49,7 @@ public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant, 
     /// The client notification token for ping mode.
     /// Provided by the client in the authentication request for secure notification delivery.
     /// </summary>
+    [Credential]
     public string? ClientNotificationToken { get; set; }
 
     /// <summary>
@@ -86,4 +88,19 @@ public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant, 
     /// </para>
     /// </remarks>
     public JsonArray? RequestedAuthorizationDetails { get; set; }
+
+    /// <summary>
+    /// The authentication levels an essential <c>acr</c> in the request's <c>claims</c> parameter requires
+    /// of the ID token. EMPTY when it requires none; <c>null</c> when its requirement is to be read from the
+    /// grant's <c>claims</c> instead - on a request stored by a build that did not record the levels, whose
+    /// completion then records what it read there, and on one whose qualifiers no level could satisfy, which
+    /// the request validator refuses before anything is stored.
+    /// </summary>
+    /// <remarks>
+    /// Recorded rather than derived, for the reason <see cref="RequestedAuthorizationDetails"/> is: a host
+    /// expressing partial consent replaces the grant's context, and a context it builds afresh carries no
+    /// <c>claims</c> at all, so by the time the level can be judged the grant may no longer say what was
+    /// required.
+    /// </remarks>
+    public string[]? RequiredAuthContextClassRefs { get; set; }
 }

@@ -6,26 +6,29 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Nonces;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Validation;
 
 /// <summary>
-/// Resource-server-side enforcement of RFC 9449 DPoP at the UserInfo endpoint. Mirrors the
-/// shape of <see cref="Endpoints.Token.Validation.DPoPTokenEndpointValidator"/> so the
-/// branching logic stays symmetric across endpoints; differences are limited to the
-/// trigger (<c>cnf.jkt</c> on the inbound access token) and the error envelope (typed
+/// Resource-server-side enforcement of RFC 9449 DPoP at the UserInfo endpoint. What it shares with the token
+/// endpoint is shared code: the proof is judged by <see cref="IProofValidator"/> and the nonce by
+/// <see cref="DPoPNonceValidator"/>. What differs is its own: the trigger (<c>cnf.jkt</c> on the inbound
+/// access token, which is also the key the proof must match) and the error envelope (typed
 /// <see cref="InvalidDPoPProofError"/> / <see cref="UseDPoPNonceError"/> so the response
-/// formatter can emit the §7.1 <c>WWW-Authenticate: DPoP</c> challenge).
+/// formatter can emit the section 7.1 <c>WWW-Authenticate: DPoP</c> challenge).
 /// </summary>
 public partial class DPoPUserInfoValidator(
     ILogger<DPoPUserInfoValidator> logger,
@@ -34,30 +37,49 @@ public partial class DPoPUserInfoValidator(
     IOptionsMonitor<OidcOptions> options) : DPoPNonceValidator(nonceService), IDPoPUserInfoValidator
 {
     /// <inheritdoc/>
+    /// <remarks>
+    /// Whether the access token is bound decides which rules the presentation answers to: an unbound
+    /// token is judged by its scheme alone, a bound one by its scheme, its proof and the proof's nonce.
+    /// </remarks>
     public async Task<OidcError?> ValidateAsync(
+        TenantDefinition tenant,
+        ClientInfo? client,
         ClientRequest clientRequest,
         JsonWebToken accessToken,
-        string rawAccessToken)
+        [Credential] string rawAccessToken)
     {
-        var schemeDPoP = clientRequest is { AuthorizationHeader.Scheme: TokenTypes.DPoP };
+        var schemeDPoP = clientRequest.AuthorizationHeader.HasScheme(TokenTypes.DPoP);
 
-        if (accessToken is not { Payload.Confirmation.JwkThumbprint: {} committed})
+        return accessToken is { Payload.Confirmation.JwkThumbprint: {} committed }
+            ? await ValidateBoundPresentationAsync(tenant, client, clientRequest, schemeDPoP, committed, rawAccessToken)
+            : ValidateUnboundPresentation(schemeDPoP);
+    }
+
+    private OidcError? ValidateUnboundPresentation(bool schemeDPoP)
+    {
+        // Unbound (Bearer) access token. Reject the DPoP scheme to keep presentation
+        // modes unambiguous: a token without cnf.jkt was issued for the Bearer scheme
+        // (RFC 9449 section 7.1) and presenting it via DPoP would bypass logging/policy
+        // gates that key off scheme.
+        if (schemeDPoP)
         {
-            // Unbound (Bearer) access token. Reject the DPoP scheme to keep presentation
-            // modes unambiguous: a token without cnf.jkt was issued for the Bearer scheme
-            // (RFC 9449 §7.1) and presenting it via DPoP would bypass logging/policy
-            // gates that key off scheme.
-            if (schemeDPoP)
-            {
-                LogSchemeBindingMismatch(TokenTypes.DPoP, tokenIsBound: false);
-                return new OidcError(
-                    ErrorCodes.InvalidToken,
-                    "Access token is not DPoP-bound; use the Bearer scheme.");
-            }
-
-            return null;
+            LogSchemeBindingMismatch(TokenTypes.DPoP, tokenIsBound: false);
+            return new OidcError(
+                ErrorCodes.InvalidToken,
+                "Access token is not DPoP-bound; use the Bearer scheme.");
         }
 
+        return null;
+    }
+
+    private async Task<OidcError?> ValidateBoundPresentationAsync(
+        TenantDefinition tenant,
+        ClientInfo? client,
+        ClientRequest clientRequest,
+        bool schemeDPoP,
+        string committed,
+        [Credential] string rawAccessToken)
+    {
         if (!schemeDPoP)
         {
             LogSchemeBindingMismatch(clientRequest.AuthorizationHeader?.Scheme ?? "<missing>", tokenIsBound: true);
@@ -72,7 +94,10 @@ public partial class DPoPUserInfoValidator(
             return new InvalidDPoPProofError("DPoP proof is required for the DPoP-bound access token.");
         }
 
-        var proofResult = await proofValidator.ValidateAsync(proofJwt, rawAccessToken);
+        // FAPI 2.0 section 5.4.1: the algorithms "when creating or processing JWTs" are those of the profile the client
+        // the token was issued to is held to, which may be stricter than the tenant's
+        var proofResult = await proofValidator.ValidateAsync(
+            SecurityProfileRequirements.For(tenant, client), proofJwt, rawAccessToken);
         if (proofResult.TryGetFailure(out var proofError))
         {
             LogProofRejected(proofError.Reason);
@@ -89,7 +114,7 @@ public partial class DPoPUserInfoValidator(
 
         if (options.CurrentValue.DPoP.Nonce.RequireAtUserInfoEndpoint)
         {
-            var nonceError = await EnforceNonceAsync(proof);
+            var nonceError = await EnforceNonceAsync(tenant, proof);
             if (nonceError is not null)
                 return nonceError;
         }

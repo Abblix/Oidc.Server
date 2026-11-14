@@ -6,9 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Buffers.Text;
-using System.Security.Cryptography;
-using System.Text;
+using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -19,7 +18,7 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Features.DPoP;
 
 /// <summary>
-/// Validates a DPoP proof JWT per RFC 9449 §4.2 / §4.3 / §11.1.5 covering structure,
+/// Validates a DPoP proof JWT per RFC 9449 section 4.2 / section 4.3 / section 11.1.5 covering structure,
 /// algorithm whitelist, embedded-JWK shape, signature, the request-binding claim triplet
 /// (<c>htm</c>, <c>htu</c>, optional <c>ath</c>), <c>iat</c> window, <c>jti</c> presence,
 /// and <c>jti</c> replay protection against a shared cache. DPoP-Nonce checks layer on
@@ -35,26 +34,22 @@ namespace Abblix.Oidc.Server.Features.DPoP;
 /// claims, and replay protection.
 /// </remarks>
 internal sealed class ProofValidator(
-    IJsonWebTokenValidator jwtValidator,
+    ProfiledJwtValidator jwtValidator,
     IReplayCache replayCache,
     IOptionsMonitor<OidcOptions> options,
     IRequestInfoProvider requestInfoProvider,
     TimeProvider timeProvider) : IProofValidator
 {
-    private static readonly IReadOnlySet<string> ExpectedTokenTypes = new HashSet<string>(StringComparer.Ordinal)
-    {
-        JsonWebTokenTypes.DPoPProof,
-    };
-
     /// <inheritdoc/>
     public async Task<Result<Proof, ProofError>> ValidateAsync(
+        SecurityProfileRequirements profile,
         string proofJwt,
         string? accessToken = null,
         CancellationToken cancellationToken = default)
     {
-        // RFC 9449 §7.1: a request MUST carry at most one DPoP header. ASP.NET Core's
+        // RFC 9449 section 7.1: a request MUST carry at most one DPoP header. ASP.NET Core's
         // string FromHeader binder joins repeated header values with a comma. The DPoP
-        // proof is JWS compact serialization (RFC 7515 §3.1), whose alphabet is
+        // proof is JWS compact serialization (RFC 7515 section 3.1), whose alphabet is
         // base64url + '.' - no comma is permitted - so a comma in the proof string
         // is unambiguous evidence that the client sent the header twice. Reject before
         // the downstream JWS validator sees a string with 5 dot-separated parts (which
@@ -63,31 +58,32 @@ internal sealed class ProofValidator(
         {
             return new ProofError(
                 ProofErrorReasons.MalformedJwt,
-                "Multiple DPoP header values are not permitted (RFC 9449 §7.1).");
+                "Multiple DPoP header values are not permitted (RFC 9449 section 7.1).");
         }
 
         var jwtResult = await jwtValidator.ValidateAsync(
+            profile,
             proofJwt,
             new ()
             {
                 Options = ValidationOptions.RequireSignedTokens | ValidationOptions.UseEmbeddedVerificationKey,
-                ExpectedTokenTypes = ExpectedTokenTypes,
+                TokenTypes = TokenTypePolicy.Exactly(JsonWebTokenTypes.DPoPProof),
                 AllowedSigningAlgorithms = DPoPAlgorithms.Allowed,
             });
 
         if (jwtResult.TryGetFailure(out var validationError))
-            return MapValidationError(validationError);
+            return new ProofError(ProofErrorReasons.Of(validationError.Error), validationError.ErrorDescription);
 
         var jwt = jwtResult.GetSuccess();
         DateTimeOffset issuedAt = default;
         var jwtId = string.Empty;
 
         var httpMethod = requestInfoProvider.RequestMethod;
-        var requestUri = new Uri(requestInfoProvider.RequestUri);
+        var requestUri = requestInfoProvider.RequestUri;
 
         var error = ValidateJwkShape(jwt.Header, out var jwk) ??
                     ValidateRequestBinding(jwt.Payload, httpMethod, requestUri, out issuedAt) ??
-                    ValidateAccessTokenBinding(jwt.Payload, accessToken) ??
+                    ProofBindingClaims.AccessToken(jwt.Payload, accessToken) ??
                     TryGetJti(jwt.Payload, out jwtId);
 
         if (error != null)
@@ -97,7 +93,7 @@ internal sealed class ProofValidator(
         // iat + tolerance; the replay-cache only needs to remember jti up to that point.
         // TryAddAsync is single-call by contract - atomic-capable backends close the
         // read-then-write race natively; the default IDistributedCache fallback retains
-        // the documented probabilistic guarantee accepted under RFC 9449 §11.1.
+        // the documented probabilistic guarantee accepted under RFC 9449 section 11.1.
         var fresh = await replayCache.TryReserveAsync(
             jwtId,
             issuedAt + options.CurrentValue.DPoP.IssuedAtTolerance,
@@ -114,28 +110,7 @@ internal sealed class ProofValidator(
     }
 
     /// <summary>
-    /// Maps a typed <see cref="JwtValidationError"/> from the JWT validator onto the
-    /// DPoP-specific reason taxonomy. The validator already covered JWS structure, typ
-    /// pinning, alg-whitelist, header shape and signature verification; each
-    /// <see cref="JwtError"/> category maps to the matching
-    /// <see cref="ProofErrorReasons"/> token for log filters and metric labels.
-    /// </summary>
-    private static ProofError MapValidationError(JwtValidationError error)
-    {
-        var reason = error.Error switch
-        {
-            JwtError.MalformedToken => ProofErrorReasons.MalformedJwt,
-            JwtError.InvalidAlgorithm => ProofErrorReasons.InvalidAlgorithm,
-            JwtError.InvalidTokenType => ProofErrorReasons.InvalidTokenType,
-            JwtError.InvalidHeader => ProofErrorReasons.InvalidHeader,
-            JwtError.InvalidSignature => ProofErrorReasons.SignatureInvalid,
-            _ => ProofErrorReasons.SignatureInvalid,
-        };
-        return new ProofError(reason, error.ErrorDescription);
-    }
-
-    /// <summary>
-    /// Enforces the RFC 9449 §4.2 rule that the embedded <c>jwk</c> MUST NOT contain
+    /// Enforces the RFC 9449 section 4.2 rule that the embedded <c>jwk</c> MUST NOT contain
     /// private-key material. The JWT validator already extracted the JWK and used its
     /// public part to verify the signature, so the key is guaranteed non-null on the
     /// success path; this post-check catches accidental private-key disclosure before
@@ -143,7 +118,10 @@ internal sealed class ProofValidator(
     /// </summary>
     private static ProofError? ValidateJwkShape(JsonWebTokenHeader header, out JsonWebKey jwk)
     {
-        jwk = header.VerificationKey.NotNull(nameof(header.VerificationKey));
+        jwk = header.TryReadVerificationKey(out var embedded) && embedded is not null
+            ? embedded
+            : throw new InvalidOperationException(
+                $"The header '{JwtClaimTypes.JsonWebKeyHeader}' was verified, so it holds a valid key.");
         if (jwk.HasPrivateKey)
         {
             return new ProofError(
@@ -155,9 +133,9 @@ internal sealed class ProofValidator(
     }
 
     /// <summary>
-    /// Validates the request-binding claims per RFC 9449 §4.3: <c>htm</c> matches the
-    /// request method byte-exact, <c>htu</c> matches the request URI after RFC 3986 §6.2
-    /// canonicalisation, and <c>iat</c> falls within the configured tolerance window
+    /// Validates the request-binding claims per RFC 9449 section 4.3: <c>htm</c> matches the
+    /// request method byte-exact, <c>htu</c> matches the request URI after RFC 3986 section 6.2
+    /// canonicalization, and <c>iat</c> falls within the configured tolerance window
     /// around the server's current time. Returns the parsed <c>iat</c> on success.
     /// </summary>
     private ProofError? ValidateRequestBinding(
@@ -168,8 +146,8 @@ internal sealed class ProofValidator(
     {
         issuedAt = default;
 
-        var error = ValidateHttpMethod(payload, httpMethod) ??
-                    ValidateHttpUri(payload, requestUri) ??
+        var error = ProofBindingClaims.HttpMethod(payload, httpMethod) ??
+                    ProofBindingClaims.HttpUri(payload, requestUri) ??
                     TryGetIat(payload, out issuedAt);
 
         if (error != null)
@@ -182,54 +160,6 @@ internal sealed class ProofValidator(
             return new ProofError(
                 ProofErrorReasons.IssuedAtOutOfWindow,
                 $"iat is outside the {tolerance.TotalSeconds:0}-second tolerance window.");
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Compares the proof's <c>htm</c> claim against the current request method
-    /// byte-exact (RFC 9449 §4.3).
-    /// </summary>
-    private static ProofError? ValidateHttpMethod(JsonWebTokenPayload payload, string httpMethod)
-    {
-        var actualHttpMethod = payload.DPoPHttpMethod;
-        if (actualHttpMethod != httpMethod)
-        {
-            return new ProofError(
-                ProofErrorReasons.HttpMethodMismatch,
-                $"{JwtClaimTypes.DPoPHttpMethod} '{actualHttpMethod ?? "<missing>"}' does not match request method '{httpMethod}'.");
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Compares the proof's <c>htu</c> claim against the current request URI after
-    /// RFC 3986 §6.2 canonicalisation.
-    /// </summary>
-    private static ProofError? ValidateHttpUri(JsonWebTokenPayload payload, Uri requestUri)
-    {
-        var httpUri = payload.DPoPHttpUri;
-        if (httpUri is null)
-        {
-            return new ProofError(
-                ProofErrorReasons.HttpUriMissing,
-                $"{JwtClaimTypes.DPoPHttpUri} claim is required.");
-        }
-
-        if (!Uri.TryCreate(httpUri, UriKind.Absolute, out var uri))
-        {
-            return new ProofError(
-                ProofErrorReasons.HttpUriInvalid,
-                $"{JwtClaimTypes.DPoPHttpUri} is not a valid absolute URI.");
-        }
-
-        if (uri.Normalize() != requestUri.Normalize())
-        {
-            return new ProofError(
-                ProofErrorReasons.HttpUriMismatch,
-                $"{JwtClaimTypes.DPoPHttpUri} does not match the request URI after canonicalisation.");
         }
 
         return null;
@@ -261,35 +191,7 @@ internal sealed class ProofValidator(
     }
 
     /// <summary>
-    /// When the proof accompanies an access token, verifies the <c>ath</c> claim equals
-    /// <c>Base64Url(SHA-256(access_token))</c> per RFC 9449 §4.2.
-    /// </summary>
-    private static ProofError? ValidateAccessTokenBinding(JsonWebTokenPayload payload, string? accessToken)
-    {
-        if (accessToken is null)
-            return null;
-
-        var accessTokenHash = payload.DPoPAccessTokenHash;
-        if (accessTokenHash is null)
-        {
-            return new ProofError(
-                ProofErrorReasons.AccessTokenHashMissing,
-                $"{JwtClaimTypes.DPoPAccessTokenHash} claim is required when an access token is presented.");
-        }
-
-        var expected = Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(accessToken)));
-        if (accessTokenHash != expected)
-        {
-            return new ProofError(
-                ProofErrorReasons.AccessTokenHashMismatch,
-                $"{JwtClaimTypes.DPoPAccessTokenHash} does not match the access-token hash.");
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// RFC 9449 §4.2 floor on jti entropy: at least 96 bits of pseudorandom data
+    /// RFC 9449 section 4.2 floor on jti entropy: at least 96 bits of pseudorandom data
     /// (or a UUIDv4) so in-window collisions stay negligible. The strictest length
     /// floor that admits every conforming encoding is the byte count of the raw
     /// payload itself; every wider encoding (base64url, hex, UUIDv4) lands above.
@@ -297,7 +199,7 @@ internal sealed class ProofValidator(
     private const int MinJwtIdLengthInBits = 96;
 
     /// <summary>
-    /// Extracts the <c>jti</c> claim, requiring a non-empty string per RFC 7519 §4.1.7
+    /// Extracts the <c>jti</c> claim, requiring a non-empty string per RFC 7519 section 4.1.7
     /// and at least <see cref="MinJwtIdLengthInBits"/> bits of entropy. The downstream
     /// replay-cache uses the value as its key.
     /// </summary>

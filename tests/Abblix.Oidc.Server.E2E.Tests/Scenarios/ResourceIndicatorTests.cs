@@ -22,7 +22,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -43,12 +42,12 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             [TokenRequest.Parameters.Resource] = TestConstants.ApiResource,
         });
 
-        var payload = DecodeJwtPayload(tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
         var audiences = ExtractAudiences(payload);
 
         // The requested resource is the audience; the client id is NOT folded in alongside it.
@@ -65,11 +64,11 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
-        var payload = DecodeJwtPayload(tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
         var audiences = ExtractAudiences(payload);
 
         // No resource indicator: the audience names this server, which is who consumes the token when no
@@ -82,7 +81,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
 
     /// <summary>
     /// Introspection validates the audience of the token it is given, so a token minted for a named resource
-    /// has to be recognised there too - the resource is the consumer, and reporting the token inactive would
+    /// has to be recognized there too - the resource is the consumer, and reporting the token inactive would
     /// tell the caller it was never issued.
     /// </summary>
     [Fact]
@@ -94,17 +93,17 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             [TokenRequest.Parameters.Resource] = TestConstants.ApiResource,
         });
-        var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         Assert.NotNull(discovery.IntrospectionEndpoint);
         using var introspectRequest = new HttpRequestMessage(HttpMethod.Post, discovery.IntrospectionEndpoint);
         introspectRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             [IntrospectionRequest.Parameters.Token] = accessToken,
             [IntrospectionRequest.Parameters.TokenTypeHint] = UserInfoRequest.Parameters.AccessToken,
@@ -133,7 +132,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         var audiences = ExtractAudiences(DecodeJwtPayload(accessToken));
         Assert.Contains(discovery.Issuer.OriginalString, audiences);
@@ -168,6 +167,111 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    /// <summary>
+    /// A refresh token of a grant for a named resource carries that resource as its audience, and redeeming it
+    /// issues an access token for the same resource, as RFC 8707 section 2.2 shows a refresh token being used.
+    /// </summary>
+    [Fact]
+    public async Task A_refresh_token_of_a_grant_for_a_resource_is_redeemed()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var refreshToken = (await ObtainResourceGrantTokensAsync(client, discovery))[TokenResponse.Parameters.RefreshToken]!
+            .GetValue<string>();
+
+        var refreshed = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
+            [TokenRequest.Parameters.RefreshToken] = refreshToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        var payload = DecodeJwtPayload(refreshed[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        Assert.Equal([TestConstants.ApiResource], ExtractAudiences(payload));
+    }
+
+    /// <summary>
+    /// The same refresh token is accepted as the subject token of a token exchange (RFC 8693 section 3).
+    /// </summary>
+    [Fact]
+    public async Task A_refresh_token_of_a_grant_for_a_resource_is_exchanged()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var refreshToken = (await ObtainResourceGrantTokensAsync(client, discovery))[TokenResponse.Parameters.RefreshToken]!
+            .GetValue<string>();
+
+        var exchanged = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
+            [TokenRequest.Parameters.SubjectToken] = refreshToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.RefreshToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        Assert.NotNull(exchanged[TokenResponse.Parameters.AccessToken]);
+    }
+
+    /// <summary>
+    /// An access token of the same grant is still no refresh token: what tells them apart is the token type, which the
+    /// refresh token grant checks whatever the audience says.
+    /// </summary>
+    [Fact]
+    public async Task An_access_token_of_a_grant_for_a_resource_is_refused_as_a_refresh_token()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var accessToken = (await ObtainResourceGrantTokensAsync(client, discovery))[TokenResponse.Parameters.AccessToken]!
+            .GetValue<string>();
+
+        var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
+            [TokenRequest.Parameters.RefreshToken] = accessToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidGrant, body?[ErrorResponse.Parameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A client may get an access token only for a resource on its list: one inside it is the token's audience, one
+    /// outside it is refused with <c>invalid_target</c> (RFC 8707 section 2.2).
+    /// </summary>
+    [Theory]
+    [InlineData(TestConstants.ApiResource, HttpStatusCode.OK)]
+    [InlineData(TestConstants.OtherApiResource, HttpStatusCode.BadRequest)]
+    public async Task A_resource_outside_the_clients_list_is_refused(string resource, HttpStatusCode expected)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        using var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [ClientRequest.Parameters.ClientId] = TestConstants.AllowedResourceClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [TokenRequest.Parameters.Resource] = resource,
+        });
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+
+        Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.OK)
+        {
+            var payload = DecodeJwtPayload(body[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+            Assert.Equal([resource], ExtractAudiences(payload));
+        }
+        else
+        {
+            Assert.Equal(ErrorCodes.InvalidTarget, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
+        }
+    }
+
     private static async Task<HttpResponseMessage> SendUserInfoAsync(
         HttpClient client, DiscoveryDocument discovery, string accessToken)
     {
@@ -196,21 +300,21 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
             [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
             [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
-            [TokenRequest.Parameters.Resource] = TestConstants.ApiResource,
+            [AuthorizationRequest.Parameters.Resource] = TestConstants.ApiResource,
         });
 
         var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             [TokenRequest.Parameters.Resource] = TestConstants.ApiResource,
         });
 
-        return tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        return tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
     }
 
     [Fact]
@@ -222,7 +326,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             [TokenRequest.Parameters.Resource] = "https://unregistered.example.com/api",
         });
@@ -231,7 +335,7 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         Assert.False(response.IsSuccessStatusCode,
             $"Expected invalid_target rejection, but got {(int)response.StatusCode}: {raw}");
         var error = JsonNode.Parse(raw)?.AsObject();
-        Assert.Equal(ErrorCodes.InvalidTarget, error?[ResponseParameters.Error]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidTarget, error?[ErrorResponse.Parameters.Error]?.GetValue<string>());
     }
 
     /// <summary>
@@ -250,11 +354,11 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
-        var payload = DecodeJwtPayload(tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
         var audiences = ExtractAudiences(payload);
 
         Assert.Contains(TestConstants.ApiResource, audiences);
@@ -274,27 +378,77 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             [TokenRequest.Parameters.Resource] = TestConstants.ApiResource,
         });
 
-        var payload = DecodeJwtPayload(tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
 
         Assert.Equal([TestConstants.ApiResource], ExtractAudiences(payload));
     }
 
     /// <summary>
+    /// With inference on, a client asking for a scope only one resource declares gets a token for that resource,
+    /// carrying the scope (RFC 9068 section 3).
+    /// </summary>
+    [Fact]
+    public async Task ClientCredentials_asking_for_a_resources_scope_gets_a_token_for_it_when_inferring()
+    {
+        await using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IPostConfigureOptions<TestTenantSettings>>(_ =>
+                    new PostConfigureOptions<TestTenantSettings>(
+                        Options.DefaultName,
+                        tenant => tenant.InferResourceFromScope = true))));
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [TokenRequest.Parameters.Scope] = TestConstants.ApiScope,
+        });
+
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        Assert.Equal([TestConstants.ApiResource], ExtractAudiences(payload));
+        Assert.Contains(TestConstants.ApiScope, payload[IanaClaimTypes.Scope]!.GetValue<string>().Split(' '));
+    }
+
+    /// <summary>
+    /// With inference off, a scope only a resource declares is refused when the request names no resource.
+    /// </summary>
+    [Fact]
+    public async Task ClientCredentials_asking_for_a_resources_scope_without_it_is_refused_when_not_inferring()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [TokenRequest.Parameters.Scope] = TestConstants.ApiScope,
+        });
+
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(ErrorCodes.InvalidScope, JsonNode.Parse(raw)?[ErrorResponse.Parameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
     /// Builds an isolated host stating a default resource indicator, leaving the shared suite on the
-    /// client-identifier fallback that every existing deployment still gets.
+    /// issuer fallback that every existing deployment still gets.
     /// </summary>
     private WebApplicationFactory<Program> CreateHostWithDefaultResource()
         => Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
-                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
-                    new PostConfigureOptions<OidcOptions>(
+                services.AddSingleton<IPostConfigureOptions<TestTenantSettings>>(_ =>
+                    new PostConfigureOptions<TestTenantSettings>(
                         Options.DefaultName,
-                        options => options.DefaultResourceIndicator = new Uri(TestConstants.ApiResource)))));
+                        tenant => tenant.DefaultResourceIndicator = new Uri(TestConstants.ApiResource)))));
 
     /// <summary>
     /// A resource that publishes an encryption key gets its access token encrypted to that key, so the party
@@ -315,19 +469,19 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
         var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ClientCredentialsClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             [TokenRequest.Parameters.Resource] = TestConstants.ApiResource,
         });
 
-        var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         var segments = accessToken.Split('.');
         Assert.True(segments.Length == 5, $"Expected a JWE (5 segments), got {segments.Length}");
 
         var header = JsonNode.Parse(Base64UrlDecode(segments[0]))?.AsObject();
         Assert.NotNull(header);
-        Assert.Equal(resourceKey.KeyId, header![JwtClaimTypes.KeyId]?.GetValue<string>());
+        Assert.Equal(resourceKey.KeyId, header[JwtClaimTypes.KeyId]?.GetValue<string>());
     }
 
     /// <summary>
@@ -338,19 +492,19 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
     private WebApplicationFactory<Program> CreateHostWithResourceKey(JsonWebKey resourceKey)
         => Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
-                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
-                    new PostConfigureOptions<OidcOptions>(
+                services.AddSingleton<IPostConfigureOptions<TestTenantSettings>>(_ =>
+                    new PostConfigureOptions<TestTenantSettings>(
                         Options.DefaultName,
-                        options =>
+                        tenant =>
                         {
-                            options.EncryptionKeys =
+                            tenant.EncryptionKeys =
                             [
                                 JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with
                                 {
                                     KeyId = "server-enc",
                                 },
                             ];
-                            options.Resources =
+                            tenant.Resources =
                             [
                                 new ResourceDefinition(new Uri(TestConstants.ApiResource))
                                 {
@@ -366,13 +520,4 @@ public class ResourceIndicatorTests(TestFactory factory) : TestBase(factory)
             BaseAddress = TestServerAddress.BaseAddress,
         });
 
-    // RFC 7519 §4.1.3: aud is serialized as a single string when there is one value, or an array
-    // when there are several. Normalize both shapes to a flat list for assertion.
-    private static string[] ExtractAudiences(JsonObject payload) =>
-        payload[JwtClaimTypes.Audience] switch
-        {
-            JsonArray array => array.Select(node => node!.GetValue<string>()).ToArray(),
-            JsonValue value => [value.GetValue<string>()],
-            _ => [],
-        };
 }

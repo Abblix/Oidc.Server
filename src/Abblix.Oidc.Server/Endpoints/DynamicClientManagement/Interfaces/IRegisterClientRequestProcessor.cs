@@ -7,12 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Persists a new client and constructs the RFC 7591 §3.2.1 success response from a request
+/// Persists a new client and constructs the RFC 7591 section 3.2.1 success response from a request
 /// whose metadata has already been validated. Generates credentials and the
 /// <c>registration_access_token</c> bound to the new <c>client_id</c>.
 /// </summary>
@@ -21,6 +22,7 @@ public interface IRegisterClientRequestProcessor
     /// <summary>
     /// Stores the validated client and returns the registration response payload.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The validated registration request.</param>
-    Task<Result<ClientRegistrationSuccessResponse, OidcError>> ProcessAsync(ValidClientRegistrationRequest request);
+    Task<Result<ClientRegistrationSuccessResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidClientRegistrationRequest request);
 }

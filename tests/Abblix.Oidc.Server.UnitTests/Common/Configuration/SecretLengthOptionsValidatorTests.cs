@@ -32,7 +32,7 @@ public class SecretLengthOptionsValidatorTests
     }
 
     /// <summary>
-    /// A client secret below the HS256 HMAC-key floor (RFC 7518 §3.2) must be rejected at startup.
+    /// A client secret below the HS256 HMAC-key floor (RFC 7518 section 3.2) must be rejected at startup.
     /// </summary>
     [Fact]
     public void Validate_ClientSecretBelowFloor_Fails()
@@ -51,7 +51,7 @@ public class SecretLengthOptionsValidatorTests
         var result = _validator.Validate(null, options);
 
         Assert.True(result.Failed);
-        Assert.Contains(result.Failures!, f => f.Contains("ClientSecret"));
+        Assert.Contains(result.Failures, f => f.Contains("ClientSecret"));
     }
 
     /// <summary>
@@ -69,6 +69,6 @@ public class SecretLengthOptionsValidatorTests
         var result = _validator.Validate(null, options);
 
         Assert.True(result.Failed);
-        Assert.Contains(result.Failures!, f => f.Contains(nameof(OidcOptions.AuthorizationCodeLength)));
+        Assert.Contains(result.Failures, f => f.Contains(nameof(OidcOptions.AuthorizationCodeLength)));
     }
 }

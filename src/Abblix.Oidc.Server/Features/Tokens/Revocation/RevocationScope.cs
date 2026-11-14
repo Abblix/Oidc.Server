@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// </summary>
 /// <remarks>
 /// A cutoff is a single write that invalidates every token issued before a moment, so the scope decides how
-/// wide that reaches. The two are stored apart because a subject identifier and a session identifier can
+/// wide that reaches. The scopes are stored apart because a subject identifier and a session identifier can
 /// collide as strings, and a collision would revoke the wrong principal.
 /// </remarks>
 public enum RevocationScope
@@ -29,4 +29,11 @@ public enum RevocationScope
     /// from a single device acts on.
     /// </summary>
     Session,
+
+    /// <summary>
+    /// Every token issued to one end user at one client, leaving their sessions and their other clients alone.
+    /// What withdrawing consent from that client acts on, as OpenID Connect Core 1.0, section 16.18, asks a
+    /// server to let an end user revoke the tokens granted to a client.
+    /// </summary>
+    ClientSubject,
 }

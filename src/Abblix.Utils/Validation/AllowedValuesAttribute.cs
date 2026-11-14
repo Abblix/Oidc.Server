@@ -24,18 +24,18 @@ public class AllowedValuesAttribute(params string[] allowedValues) : ValidationA
         => value switch
         {
             null => ValidationResult.Success,
-            string[][] arrays => IsValid(arrays.SelectMany(array => array)),
-            string[] values => IsValid(values),
-            string single => IsValid(single),
+            string[][] arrays => IsValid(arrays.SelectMany(array => array), validationContext),
+            string[] values => IsValid(values, validationContext),
+            string single => IsValid(single, validationContext),
             _ => throw new InvalidOperationException(
                 $"The type {value.GetType()} is not supported by {nameof(AllowedValuesAttribute)}"),
         };
 
-    private ValidationResult? IsValid(IEnumerable<string> values)
+    private ValidationResult? IsValid(IEnumerable<string> values, ValidationContext validationContext)
     {
         foreach (var value in values)
         {
-            var result = IsValid(value);
+            var result = IsValid(value, validationContext);
             if (result != ValidationResult.Success)
                 return result;
         }
@@ -47,9 +47,10 @@ public class AllowedValuesAttribute(params string[] allowedValues) : ValidationA
     // are case-sensitive: RFC 7636 section 6.2.1 states "This name is case-sensitive" in the registration
     // template for code_challenge_method, whose two values section 4.2 spells "plain" and "S256". Matching
     // case-insensitively accepted "s256" and answered it as if the client had asked for the SHA-256 transform,
-    // which is a value the client never sent.
-    private ValidationResult? IsValid(string value)
+    // which is a value the client never sent. The refusal names the parameter rather than the value, which is whatever
+    // the client sent and may hold characters RFC 6749 keeps out of error_description (sections 4.1.2.1, 4.2.2.1 and 5.2).
+    private ValidationResult? IsValid(string value, ValidationContext validationContext)
         => allowedValues.Contains(value, StringComparer.Ordinal)
             ? ValidationResult.Success
-            : new ValidationResult($"The value '{value}' is invalid");
+            : new ValidationResult($"The parameter '{validationContext.GetWireName()}' has a value that is not allowed");
 }

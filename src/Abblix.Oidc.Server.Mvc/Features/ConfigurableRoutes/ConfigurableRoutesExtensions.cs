@@ -6,96 +6,60 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 
 /// <summary>
-/// Provides extension methods for enabling support for tokenized route templates like
-/// <c>[route:MyToken?Fallback]</c> in ASP.NET Core controllers.
+/// Reads route tokens such as <c>[route:token?Fallback]</c> from a configuration section, as version 2.4 did.
 /// </summary>
 public static class ConfigurableRoutesExtensions
 {
+    /// <summary>The word that opens a token in a version 2.4 route template.</summary>
+    public const string DefaultPrefix = "route";
+
     /// <summary>
-    /// Enables the resolution of route tokens such as <c>[route:MyToken?Fallback]</c> using values from the specified
-    /// configuration section.
+    /// Resolves route tokens from a configuration section keyed as in version 2.4: the paths of the library's
+    /// endpoints, and the tokens in the host's own attribute route templates.
     /// </summary>
-    /// <param name="services">The service collection to register services with.</param>
-    /// <param name="configSection">The configuration section that contains token-to-value mappings.</param>
-    /// <param name="prefix">
-    /// The token prefix used in route templates. Defaults to <c>"route"</c>, which supports templates like
-    /// <c>[route:MyToken?Fallback]</c>.
-    /// </param>
-    /// <returns>The same <see cref="IServiceCollection"/> instance to support method chaining.</returns>
     /// <remarks>
-    /// This method allows route templates in controllers to include tokens that are dynamically resolved
-    /// at application startup using values from configuration. If a token is not found, an optional fallback
-    /// value can be specified using the <c>?</c> delimiter.
-    ///
-    /// Example:
-    /// <code>
-    /// [Route("[route:ApiPrefix?v1]/users")]
-    /// public class UsersController : ControllerBase { ... }
-    /// </code>
-    ///
-    /// With configuration:
-    /// <code>
-    /// "Routes": {
-    ///   "ApiPrefix": "v2"
-    /// }
-    /// </code>
-    /// The resulting route will be <c>v2/users</c>. If "ApiPrefix" is not configured, it falls back to <c>v1</c>.
+    /// <para>
+    /// The section names a library endpoint by its token (<c>token</c>, <c>introspect</c>, <c>revoke</c>,
+    /// <c>par</c>, <c>jwks</c> and the rest), moves every <c>/connect</c> endpoint at once with <c>base</c> and every
+    /// <c>/.well-known</c> one with <c>well_known</c>, and may build a value from other tokens, as in
+    /// <c>[route:base]/issue</c>. A leading <c>~/</c> is read as <c>/</c>; the prefix given to
+    /// <see cref="EndpointRouteBuilderExtensions.MapOidcControllers"/> still comes before every path. An endpoint keeps
+    /// the path it had, one set in code before this call included, unless the section names its token or the base it
+    /// falls under.
+    /// </para>
+    /// <para>
+    /// A host's own controller may carry tokens too, as in <c>[Route("[route:ApiPrefix?v1]/users")]</c> with
+    /// <c>"ApiPrefix": "v2"</c> in the section; the convention resolving them is added to <c>MvcOptions</c> and
+    /// changes no template without a token. A host whose controllers carry tokens calls this method, with an empty
+    /// section if it sets no value, since nothing else resolves their fallbacks. A later call replaces an earlier one.
+    /// </para>
     /// </remarks>
+    /// <param name="services">The service collection the server is registered in.</param>
+    /// <param name="configSection">The configuration section holding the token values.</param>
+    /// <param name="prefix">The word that opens a token, <c>route</c> by default.</param>
+    /// <returns>The same service collection, so calls can be chained.</returns>
     public static IServiceCollection ConfigureRoutes(
         this IServiceCollection services,
         IConfigurationSection configSection,
-        string prefix = Path.RoutePrefix)
+        string prefix = DefaultPrefix)
     {
-        services.Configure<MvcOptions>(
-            options =>
-            {
-                var routeConvention = new ConfigurableRouteConvention(prefix, configSection);
-                for (var i = 0; i < options.Conventions.Count; i++)
-                {
-                    if (options.Conventions[i] is not ConfigurableRouteConvention)
-                        continue;
+        var earlier = services.Where(descriptor => descriptor.ImplementationInstance is RoutesFromConfiguration).ToList();
+        foreach (var descriptor in earlier)
+            services.Remove(descriptor);
 
-                    options.Conventions[i] = routeConvention;
-                    return;
-                }
-
-                options.Conventions.Add(routeConvention);
-            });
-
-        return services;
-    }
-
-    /// <summary>
-    /// Registers a fallback-only route token resolution convention that uses only the fallback values
-    /// specified in templates like <c>[route:MyToken?Fallback]</c>, ignoring configuration.
-    /// </summary>
-    /// <param name="services">The service collection to register services with.</param>
-    /// <param name="prefix">
-    /// The token prefix used in route templates. Defaults to <c>"route"</c>, which supports templates like
-    /// <c>[route:MyToken?Fallback]</c>.
-    /// </param>
-    /// <returns>The same <see cref="IServiceCollection"/> instance to support method chaining.</returns>
-    /// <remarks>
-    /// This method ensures that route tokens are resolved to fallback values even if the consumer
-    /// of the component does not explicitly provide a configuration section.
-    /// </remarks>
-    public static IServiceCollection ConfigureRoutesFallback(
-        this IServiceCollection services,
-        string prefix = Path.RoutePrefix)
-    {
-        services.PostConfigure<MvcOptions>(options =>
-        {
-            if (!options.Conventions.OfType<ConfigurableRouteConvention>().Any())
-                options.Conventions.Add(new ConfigurableRouteConvention(prefix));
-        });
-
+        var routes = new RoutesFromConfiguration(new RouteTemplateResolver(prefix, configSection));
+        services.AddOptions();
+        services.AddSingleton<IConfigureOptions<OidcRouteOptions>>(routes);
+        services.AddSingleton<IConfigureOptions<MvcOptions>>(routes);
         return services;
     }
 }

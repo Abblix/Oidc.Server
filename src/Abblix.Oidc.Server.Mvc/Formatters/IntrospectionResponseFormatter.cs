@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -29,14 +29,14 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// when the client registered <c>introspection_signed_response_alg</c> and requests it via
 /// <c>Accept: application/token-introspection+jwt</c>, a signed/encrypted JWT (RFC 9701).
 /// </summary>
-/// <param name="issuerProvider">Supplies the issuer identifier for error responses and the JWT <c>iss</c> claim.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 /// <param name="clientJwtFormatter">Signs and optionally encrypts the JWT introspection response.</param>
 /// <param name="clock">Supplies the current time for the JWT <c>iat</c> claim.</param>
 /// <param name="options">Supplies the default content-encryption algorithm for JWT introspection responses.</param>
 /// <param name="httpContextAccessor">Provides the current request so the formatter can honor the <c>Accept</c>
-/// header negotiation defined by RFC 9701 §4.</param>
+/// header negotiation defined by RFC 9701 section 4.</param>
 public class IntrospectionResponseFormatter(
-    IIssuerProvider issuerProvider,
+    ITenantAccessor tenantAccessor,
     IClientJwtFormatter clientJwtFormatter,
     TimeProvider clock,
     IOptionsSnapshot<OidcOptions> options,
@@ -55,14 +55,14 @@ public class IntrospectionResponseFormatter(
         return response.MatchAsync(
             onSuccess: FormatSuccessAsync,
             onFailure: error => Task.FromResult(
-                error.Format(StatusCodes.Status401Unauthorized, issuerProvider.GetIssuer())));
+                error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().Issuer.OriginalString)));
     }
 
     private async Task<ActionResult> FormatSuccessAsync(IntrospectionSuccess success)
     {
         var introspectionResponse = success.Claims ?? new JsonObject();
 
-        // RFC 7662 §2.2: active is the only REQUIRED member and its type is a JSON boolean. Serializing it
+        // RFC 7662 section 2.2: active is the only REQUIRED member and its type is a JSON boolean. Serializing it
         // as the strings "true"/"false" (as before) broke strict deserializers and, worse, inverted the
         // semantics for lenient ones: a non-empty string "false" is truthy, so a revoked token could be
         // treated as active by the resource server.
@@ -70,7 +70,7 @@ public class IntrospectionResponseFormatter(
 
         var clientInfo = success.ClientInfo;
 
-        // RFC 9701 §4: a JWT response is returned only when the client registered a signing algorithm AND requested
+        // RFC 9701 section 4: a JWT response is returned only when the client registered a signing algorithm AND requested
         // the JWT media type via Accept; otherwise the plain RFC 7662 JSON document is returned.
         if (clientInfo.IntrospectionSignedResponseAlgorithm == SigningAlgorithms.None || !AcceptsTokenIntrospectionJwt())
         {
@@ -88,19 +88,22 @@ public class IntrospectionResponseFormatter(
             Payload =
             {
                 IssuedAt = now,
-                Issuer = issuerProvider.GetIssuer(),
+                Issuer = tenantAccessor.CurrentTenant().Issuer.OriginalString,
                 Audiences = [clientInfo.ClientId],
 
-                // RFC 9701 §5: the introspection response object is carried as the token_introspection claim. The
+                // RFC 9701 section 5: the introspection response object is carried as the token_introspection claim. The
                 // object is cloned because it is otherwise still parented to the introspected token's payload.
                 [IanaClaimTypes.TokenIntrospection] = introspectionResponse.DeepClone(),
             },
         };
 
-        var jwt = await clientJwtFormatter.FormatAsync(
+        // The client's key set was judged against its profile where the client was resolved in this request, so a refusal here
+        // is a key set changed in between
+        var jwt = (await clientJwtFormatter.FormatAsync(
+            tenantAccessor.CurrentTenant(),
             token,
             clientInfo,
-            ClientJwtEncryption.ForIntrospection(clientInfo, options.Value));
+            ClientJwtEncryption.ForIntrospection(clientInfo, options.Value))).GetSuccess();
 
         return new ContentResult
         {

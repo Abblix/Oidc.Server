@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -26,7 +27,9 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// Delegates to the underlying request-object fetcher, passing <c>request.Request</c> as the JWT to
     /// be validated and merged into the outer model.
     /// </summary>
-    public Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(BackChannelAuthenticationRequest request)
-        => requestObjectFetcher.FetchAsync(
-            request, request.Request, client => client.BackChannelAuthenticationRequestSigningAlg);
+    public Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(TenantDefinition tenant, BackChannelAuthenticationRequest request)
+        // The client authenticates after the request is read, so none is named to it here. RFC 9101 section 4 forbids
+        // request and request_uri inside an authorization request's object; this endpoint forbids no member of its own
+        => requestObjectFetcher.FetchAsync(tenant,
+            client: null, request, request.Request, client => client.BackChannelAuthenticationRequestSigningAlg, []);
 }

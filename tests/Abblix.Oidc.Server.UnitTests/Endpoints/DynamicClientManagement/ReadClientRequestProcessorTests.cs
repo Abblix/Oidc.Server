@@ -8,10 +8,10 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
@@ -19,29 +19,42 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// #30 regression: the RFC 7592 §2.1/§3 read response must carry the full registered metadata surface.
+/// #30 regression: the RFC 7592 section 2.1/section 3 read response must carry the full registered metadata surface.
 /// The processor previously omitted dpop_bound_access_tokens, authorization_details_types and the
 /// token-exchange allowlists, so read diverged from the update response for the identical client.
 /// </summary>
 public class ReadClientRequestProcessorTests
 {
-    private static ReadClientRequestProcessor CreateProcessor()
+    private const string TokenId = "jti-presented";
+
+    private readonly Mock<IRegistrationAccessTokenService> _tokenService = new(MockBehavior.Loose);
+
+    private ReadClientRequestProcessor CreateProcessor()
     {
-        var tokenService = new Mock<IRegistrationAccessTokenService>(MockBehavior.Loose);
-        tokenService
+        _tokenService
             .Setup(s => s.IssueTokenAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), It.IsAny<string>()))
             .ReturnsAsync("registration-access-token");
 
-        var tokenStore = new Mock<IRegistrationAccessTokenStore>(MockBehavior.Loose);
-        tokenStore
-            .Setup(s => s.GetTokenIdAsync(It.IsAny<string>()))
-            .ReturnsAsync("jti-1");
+        return new ReadClientRequestProcessor(_tokenService.Object, TimeProvider.System);
+    }
 
-        var idGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Loose);
+    /// <summary>
+    /// The token issued in reply carries the jti the request was authenticated with, never one read again from the
+    /// store, which a rotation racing the read may have changed.
+    /// </summary>
+    [Fact]
+    public async Task Read_IssuesTheTokenUnderTheJtiTheRequestWasAuthenticatedWith()
+    {
+        var processor = CreateProcessor();
+        var request = new ValidClientRequest(new ClientRequest(), new RegisteredClient(new ClientInfo("client-1"), TokenId));
 
-        return new ReadClientRequestProcessor(
-            tokenService.Object, tokenStore.Object, idGenerator.Object, TimeProvider.System);
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        _tokenService.Verify(s => s.IssueTokenAsync(
+            TestTenant.Matched,
+            "client-1", It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), TokenId), Times.Once);
     }
 
     [Fact]
@@ -54,20 +67,20 @@ public class ReadClientRequestProcessorTests
             RedirectUris = [new Uri("https://client.example.com/cb")],
             RequireDPoP = true,
             AuthorizationDetailsTypes = ["payment_initiation"],
-            TokenExchangeAllowedSubjectTokenTypes = ["urn:ietf:params:oauth:token-type:access_token"],
+            TokenExchangeAllowedSubjectTokenTypes = [new Uri(TokenExchangeTokenTypes.AccessToken)],
             TokenExchangeAllowedAudiences = ["https://api.example.com"],
         };
-        var request = new ValidClientRequest(new ClientRequest(), client);
+        var request = new ValidClientRequest(new ClientRequest(), new RegisteredClient(client, TokenId));
 
         // Act
-        var result = await processor.ProcessAsync(request);
+        var result = await processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
         Assert.True(response.DpopBoundAccessTokens);
         Assert.Equal(["payment_initiation"], response.AuthorizationDetailsTypes!);
         Assert.Equal(
-            ["urn:ietf:params:oauth:token-type:access_token"],
+            [new Uri(TokenExchangeTokenTypes.AccessToken)],
             response.TokenExchangeSubjectTokenTypes!);
         Assert.Equal(["https://api.example.com"], response.TokenExchangeAudiences!);
     }

@@ -50,7 +50,7 @@ public class GrantTypeValidatorTests
             grantTypes: [GrantTypes.AuthorizationCode]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -69,7 +69,7 @@ public class GrantTypeValidatorTests
             grantTypes: [GrantTypes.Implicit]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -88,7 +88,7 @@ public class GrantTypeValidatorTests
             grantTypes: [GrantTypes.Implicit]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -107,7 +107,7 @@ public class GrantTypeValidatorTests
             grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Implicit]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -126,12 +126,12 @@ public class GrantTypeValidatorTests
             grantTypes: [GrantTypes.Implicit]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-        Assert.Contains("authorization_code", result.ErrorDescription);
+        Assert.Contains(GrantTypes.AuthorizationCode, result.ErrorDescription);
     }
 
     /// <summary>
@@ -147,12 +147,12 @@ public class GrantTypeValidatorTests
             grantTypes: [GrantTypes.AuthorizationCode]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-        Assert.Contains("implicit", result.ErrorDescription);
+        Assert.Contains(GrantTypes.Implicit, result.ErrorDescription);
     }
 
     /// <summary>
@@ -168,12 +168,12 @@ public class GrantTypeValidatorTests
             grantTypes: [GrantTypes.AuthorizationCode]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-        Assert.Contains("implicit", result.ErrorDescription);
+        Assert.Contains(GrantTypes.Implicit, result.ErrorDescription);
     }
 
     /// <summary>
@@ -189,12 +189,12 @@ public class GrantTypeValidatorTests
             grantTypes: [GrantTypes.Implicit]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-        Assert.Contains("authorization_code", result.ErrorDescription);
+        Assert.Contains(GrantTypes.AuthorizationCode, result.ErrorDescription);
     }
 
     /// <summary>
@@ -210,12 +210,12 @@ public class GrantTypeValidatorTests
             grantTypes: [GrantTypes.AuthorizationCode]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-        Assert.Contains("implicit", result.ErrorDescription);
+        Assert.Contains(GrantTypes.Implicit, result.ErrorDescription);
     }
 
     /// <summary>
@@ -231,13 +231,13 @@ public class GrantTypeValidatorTests
             grantTypes: []);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
-        Assert.Contains("authorization_code", result.ErrorDescription);
-        Assert.Contains("implicit", result.ErrorDescription);
+        Assert.Contains(GrantTypes.AuthorizationCode, result.ErrorDescription);
+        Assert.Contains(GrantTypes.Implicit, result.ErrorDescription);
     }
 
     /// <summary>
@@ -253,7 +253,7 @@ public class GrantTypeValidatorTests
             grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken, GrantTypes.Ciba]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -277,7 +277,7 @@ public class GrantTypeValidatorTests
             grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Implicit]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -300,12 +300,12 @@ public class GrantTypeValidatorTests
             grantTypes: []);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Contains("authorization_code", result.ErrorDescription);
-        Assert.Contains("implicit", result.ErrorDescription);
+        Assert.Contains(GrantTypes.AuthorizationCode, result.ErrorDescription);
+        Assert.Contains(GrantTypes.Implicit, result.ErrorDescription);
     }
 
     /// <summary>
@@ -321,7 +321,7 @@ public class GrantTypeValidatorTests
             grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.Implicit]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);

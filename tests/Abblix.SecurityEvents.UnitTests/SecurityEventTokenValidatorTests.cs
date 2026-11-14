@@ -47,6 +47,7 @@ public class SecurityEventTokenValidatorTests
     {
         public Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
             string compactToken,
+            TokenTypePolicy tokenTypes,
             string? keyId = null,
             CancellationToken cancellationToken = default)
         {
@@ -57,7 +58,7 @@ public class SecurityEventTokenValidatorTests
                 Payload = new JsonWebTokenPayload(DecodeSegment(segments[1])),
             };
 
-            return Task.FromResult(Result<JsonWebToken, SecurityEventTokenValidationError>.Success(token));
+            return Task.FromResult((Result<JsonWebToken, SecurityEventTokenValidationError>)(token));
         }
 
         private static JsonObject DecodeSegment(string segment)
@@ -72,9 +73,10 @@ public class SecurityEventTokenValidatorTests
     {
         public Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
             string compactToken,
+            TokenTypePolicy tokenTypes,
             string? keyId = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(Result<JsonWebToken, SecurityEventTokenValidationError>.Failure(error));
+            => Task.FromResult((Result<JsonWebToken, SecurityEventTokenValidationError>)(error));
     }
 
     private static string EncodeCompact(SecurityEventToken token)
@@ -113,7 +115,7 @@ public class SecurityEventTokenValidatorTests
         }
 
         // The default profile assembled by hand, in its required order: these tests judge the
-        // steps' behaviour, and the composition machinery has its own suite.
+        // steps' behavior, and the composition machinery has its own suite.
         return new CompositeSecurityEventTokenValidator(
         [
             new ParseStep(),
@@ -440,7 +442,7 @@ public class SecurityEventTokenValidatorTests
         var segments = compact.Split('.');
         var claims = (JsonObject)JsonNode.Parse(
             Encoding.UTF8.GetString(Base64Url.DecodeFromChars(segments[1])))!;
-        claims[JwtClaimTypes.Events] = new JsonObject
+        claims[IanaClaimTypes.Events] = new JsonObject
         {
             [MembershipChanged] = new JsonObject { ["change"] = new JsonObject() },
         };

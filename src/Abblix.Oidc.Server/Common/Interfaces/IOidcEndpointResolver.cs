@@ -19,6 +19,11 @@ namespace Abblix.Oidc.Server.Common.Interfaces;
 /// working when the host swaps one adapter for the other. Each adapter answers from what it actually mapped:
 /// MVC from its controller routes, Minimal API from its named endpoints, so a route override or a group prefix
 /// is reflected without the caller knowing either exists.
+/// <para>
+/// A singleton may resolve it through a scope of its own rather than the request's, as client authentication does, so
+/// an implementation reads the current request through the HTTP context accessor rather than through state the
+/// request's scope would have given its constructor.
+/// </para>
 /// </remarks>
 public interface IOidcEndpointResolver
 {
@@ -28,12 +33,13 @@ public interface IOidcEndpointResolver
     /// <param name="endpoint">
     /// The endpoint to resolve. Exactly one flag, never a combination: <see cref="OidcEndpoints.All"/> and
     /// <see cref="OidcEndpoints.Base"/> name a set rather than an endpoint and resolve to nothing.
+    /// <see cref="OidcEndpoints.RegisterClient"/> resolves to the registration endpoint, since the per-client
+    /// configuration route under it takes a client identifier this contract cannot supply.
     /// </param>
     /// <returns>
-    /// The endpoint's absolute URL, or <c>null</c> when it is not mapped - because the endpoint is disabled in
-    /// <see cref="OidcOptions.EnabledEndpoints"/>, or because its route takes parameters this contract cannot
-    /// supply, which today is the per-client configuration endpoint of
-    /// <see cref="OidcEndpoints.RegisterClient"/>.
+    /// The endpoint's absolute URL, or <c>null</c> when the endpoint is disabled in
+    /// <see cref="OidcOptions.EnabledEndpoints"/> and so not mapped, or when there is no current request to build
+    /// the URL from.
     /// </returns>
     Uri? Resolve(OidcEndpoints endpoint);
 }

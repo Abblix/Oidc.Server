@@ -78,10 +78,16 @@ public record BackChannelAuthenticationValidationContext(
     public TimeSpan ExpiresIn { get; set; }
 
     /// <summary>
-    /// RFC 9396 §3 Rich Authorization Requests array, populated after per-client allowlist
+    /// RFC 9396 section 3 Rich Authorization Requests array, populated after per-client allowlist
     /// and per-type validator dispatch by <see cref="BackChannelAuthorizationDetailsValidator"/>.
     /// The raw <see cref="JsonArray"/> survives forward to the grant unchanged.
     /// <c>null</c> when the request did not include <c>authorization_details</c>.
     /// </summary>
     public JsonArray? AuthorizationDetails { get; set; }
+
+    /// <summary>
+    /// The authentication levels an essential <c>acr</c> requires of the ID token, or null when it requires
+    /// none, set by <see cref="RequiredAuthContextClassRefValidator"/>.
+    /// </summary>
+    public string[]? RequiredAuthContextClassRefs { get; set; }
 }

@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
 
 namespace Abblix.SecurityEvents.Validation.Steps;
@@ -35,8 +36,10 @@ public sealed class SignatureStep(ISecurityEventTokenVerifier verifier) : ISecur
         context.Require(
             SecurityEventTokenValidationStates.Parsed | SecurityEventTokenValidationStates.IssuerAccepted);
 
+        // The profile's type step judges the type, in this package's error vocabulary
         var result = await verifier.VerifyAsync(
             context.CompactToken,
+            TokenTypePolicy.CheckedByCaller,
             context.UnverifiedHeader!.KeyId,
             cancellationToken);
 

@@ -16,15 +16,18 @@
     <File Path="global.json" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Abblix.Analyzers/Abblix.Analyzers.csproj" />
     <Project Path="src/Abblix.Utils/Abblix.Utils.csproj" />
     <Project Path="src/Abblix.DependencyInjection/Abblix.DependencyInjection.csproj" />
     <Project Path="src/Abblix.Jwt/Abblix.Jwt.csproj" />
+    <Project Path="src/Abblix.Oidc/Abblix.Oidc.csproj" />
     <Project Path="src/Abblix.Oidc.Server/Abblix.Oidc.Server.csproj" />
     <Project Path="src/Abblix.Oidc.Server.AspNetCore/Abblix.Oidc.Server.AspNetCore.csproj" />
     <Project Path="src/Abblix.Oidc.Server.Mvc/Abblix.Oidc.Server.Mvc.csproj" />
     <Project Path="src/Abblix.Oidc.Server.SourceGenerators.Mvc/Abblix.Oidc.Server.SourceGenerators.Mvc.csproj" />
     <Project Path="src/Abblix.Oidc.Server.MinimalApi/Abblix.Oidc.Server.MinimalApi.csproj" />
     <Project Path="src/Abblix.Oidc.Server.SourceGenerators.MinimalApi/Abblix.Oidc.Server.SourceGenerators.MinimalApi.csproj" />
+    <Project Path="src/Abblix.Oidc.Server.SourceGenerators.Telemetry/Abblix.Oidc.Server.SourceGenerators.Telemetry.csproj" />
     <Project Path="src/Abblix.Jwt.Vault/Abblix.Jwt.Vault.csproj" />
     <Project Path="src/Abblix.Jwt.Azure/Abblix.Jwt.Azure.csproj" />
     <Project Path="src/Abblix.SecurityEvents/Abblix.SecurityEvents.csproj" />
@@ -34,20 +37,26 @@
     <Project Path="src/Abblix.SharedSignals/Abblix.SharedSignals.csproj" />
     <Project Path="src/Abblix.SharedSignals.MinimalApi/Abblix.SharedSignals.MinimalApi.csproj" />
     <Project Path="src/Abblix.SharedSignals.Redis/Abblix.SharedSignals.Redis.csproj" />
+    <Project Path="src/Abblix.Oidc.Server.SharedSignals/Abblix.Oidc.Server.SharedSignals.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Abblix.Analyzers.UnitTests/Abblix.Analyzers.UnitTests.csproj" />
     <Project Path="tests/Abblix.Utils.UnitTests/Abblix.Utils.UnitTests.csproj" />
     <Project Path="tests/Abblix.DependencyInjection.UnitTests/Abblix.DependencyInjection.UnitTests.csproj" />
     <Project Path="tests/Abblix.DocSamples/Abblix.DocSamples.csproj" />
+    <Project Path="tests/Abblix.DocSamples.WebTemplate/Abblix.DocSamples.WebTemplate.csproj" />
     <Project Path="tests/Abblix.Jwt.UnitTests/Abblix.Jwt.UnitTests.csproj" />
+    <Project Path="tests/Abblix.Oidc.UnitTests/Abblix.Oidc.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.UnitTests/Abblix.Oidc.Server.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.AspNetCore.UnitTests/Abblix.Oidc.Server.AspNetCore.UnitTests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.Mvc.UnitTests/Abblix.Oidc.Server.Mvc.UnitTests.csproj" />
+    <Project Path="tests/Abblix.Oidc.Server.MinimalApi.Conformance.TestHost/Abblix.Oidc.Server.MinimalApi.Conformance.TestHost.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.E2E.TestHost/Abblix.Oidc.Server.E2E.TestHost.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.E2E.Tests/Abblix.Oidc.Server.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.MinimalApi.E2E.TestHost/Abblix.Oidc.Server.MinimalApi.E2E.TestHost.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.MinimalApi.E2E.Tests/Abblix.Oidc.Server.MinimalApi.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.Oidc.Server.MinimalApi.UnitTests/Abblix.Oidc.Server.MinimalApi.UnitTests.csproj" />
+    <Project Path="tests/Abblix.Oidc.Server.MultiTenancy.E2E.Tests/Abblix.Oidc.Server.MultiTenancy.E2E.Tests.csproj" />
     <Project Path="tests/Abblix.Jwt.Vault.UnitTests/Abblix.Jwt.Vault.UnitTests.csproj" />
     <Project Path="tests/Abblix.Jwt.Azure.UnitTests/Abblix.Jwt.Azure.UnitTests.csproj" />
     <Project Path="tests/Abblix.SecurityEvents.UnitTests/Abblix.SecurityEvents.UnitTests.csproj" />

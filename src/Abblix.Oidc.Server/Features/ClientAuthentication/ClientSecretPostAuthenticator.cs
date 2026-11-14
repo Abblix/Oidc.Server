@@ -9,9 +9,11 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Hashing;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -45,17 +47,19 @@ public class ClientSecretPostAuthenticator(
 	/// Asynchronously tries to authenticate a client based on credentials (client_id and client_secret) provided in the request body.
 	/// The method delegates to <see cref="ClientSecretAuthenticator.TryAuthenticateAsync"/> with the extracted client_id and client_secret.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
 	/// <param name="request">The client request containing the client_id and client_secret for authentication.</param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield the authenticated
 	/// <see cref="ClientInfo"/> or null if authentication fails.
 	/// </returns>
-	public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
+	public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
 		if (!request.ClientId.NotNullOrWhiteSpace() || !request.ClientSecret.NotNullOrWhiteSpace())
 			return null;
 
 		return await TryAuthenticateAsync(
+			tenant,
 			request.ClientId,
 			request.ClientSecret,
 			ClientAuthenticationMethods.ClientSecretPost);

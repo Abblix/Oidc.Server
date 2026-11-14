@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -14,7 +15,9 @@ using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -54,16 +57,38 @@ public class BackChannelAuthenticationRequestProcessor(
 	/// This method coordinates between client validation, initiating user-device authentication,
 	/// and persisting the authentication request for further polling.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">
 	/// The validated backchannel authentication request containing details such as client info, scope, and resources.
 	/// </param>
 	/// <returns>A task that represents the result of processing the backchannel authentication request, returning
 	/// a <see cref="Result{BackChannelAuthenticationSuccess, AuthError}"/>.</returns>
-	public async Task<Result<BackChannelAuthenticationSuccess, OidcError>> ProcessAsync(ValidBackChannelAuthenticationRequest request)
+	public async Task<Result<BackChannelAuthenticationSuccess, OidcError>> ProcessAsync(TenantDefinition tenant, ValidBackChannelAuthenticationRequest request)
 	{
-		request.ClientInfo.CheckClientLicense();
 
-		var authResult = await userDeviceAuthenticationHandler.InitiateAuthenticationAsync(request);
+		// Read before the handler sees the request. The handler is a host seam holding this very request,
+		// and both answers below are what the REQUEST said: whom it named, and what it asked for. A handler
+		// that narrows by editing what it was given - the way narrowing is written throughout this
+		// repository - would otherwise erase the record of both, leaving the end-user check with nobody to
+		// enforce and the widening check at completion measuring against an empty set.
+		var namedSubjects = NamedSubjects(request);
+		var requestedDetails = request.AuthorizationDetails is { } asRequested
+			? (JsonArray)asRequested.DeepClone()
+			: null;
+		ScopeDefinition[] requestedScope = [..request.Scope];
+		ResourceDefinition[] requestedResources = [..request.Resources];
+		var requestedClaims = request.Model.Claims is { } claims
+			? JsonSerializer.Deserialize<RequestedClaims>(JsonSerializer.Serialize(claims))
+			: null;
+
+		// Read from the request itself rather than from what a validator left on it, so a host constructing
+		// the request some other way records the same requirement. A qualifier no level could satisfy has
+		// been refused on arrival; were one to arrive here anyway, nothing is recorded and completion reads
+		// the requirement from the grant, where the same qualifier refuses every level.
+		var requiredLevels = request.Model.Claims.RequiredAuthContextClassRefs()
+			.Match<string[]?>(levels => levels, _ => null);
+
+		var authResult = await userDeviceAuthenticationHandler.InitiateAuthenticationAsync(tenant, request);
 		if (authResult.TryGetFailure(out var error))
 		{
 			return error.Error switch
@@ -94,14 +119,13 @@ public class BackChannelAuthenticationRequestProcessor(
 		// Two parameters can name an end user and OpenID Connect Core 1.0 Section 3.1.2.2 puts both under one
 		// requirement, so both bind. Their intersection is what survives, which is the same answer the
 		// authorization endpoint reaches by filtering candidate sessions through one and then the other.
-		var namedSubjects = NamedSubjects(request);
 
 		// Answered now, because the session a handler returns here names the end user it is about to reach,
 		// not one who has already answered - the request is stored Pending either way. A handler intending
 		// to reach somebody else is refused before any notification goes out. The end user who eventually
 		// answers is judged separately, at completion, against what is carried on the stored request.
 		if (namedSubjects is { } accepted &&
-			!subjectTypeConverter.Names(authSession, accepted, request.ClientInfo))
+			!subjectTypeConverter.Names(tenant, authSession, accepted, request.ClientInfo))
 		{
 			// CIBA Core 1.0 Section 13 defines access_denied as "The resource owner or OpenID Provider
 			// denied the request", and it is this server denying it. The note attached there describes the
@@ -116,14 +140,18 @@ public class BackChannelAuthenticationRequestProcessor(
 
 		var authContext = new AuthorizationContext(
 			request.ClientInfo.ClientId,
-			request.Scope,
-			request.Resources,
-			request.Model.Claims)
+			requestedScope,
+			requestedResources,
+			requestedClaims)
 		{
-			// RFC 9396 §3: authorization_details from the CIBA request carries onto the
+			// RFC 9396 section 3: authorization_details from the CIBA request carries onto the
 			// grant byte-exact, so the access token issued via the CIBA grant emits the
 			// claim through the same pipeline as the authorization-code flow.
-			AuthorizationDetails = request.AuthorizationDetails,
+			AuthorizationDetails = requestedDetails,
+
+			// The request as the client sent it, which the scope validator served with the default without
+			// rewriting
+			ClientNamedNoScope = request.Model.Scope is not { Length: > 0 },
 		};
 
 		var authorizedGrant = new AuthorizedGrant(authSession, authContext);
@@ -142,6 +170,10 @@ public class BackChannelAuthenticationRequestProcessor(
 			// on the stored request before completing it, which is the shape the interface documents.
 			RequestedSubjects = namedSubjects,
 
+			// What completion judges the end user's level against. The grant carries the same claims, and the
+			// host replaces the grant's context when the end user approves part of the request.
+			RequiredAuthContextClassRefs = requiredLevels,
+
 			// The post-validation array, beside the copy on the grant. The grant's copy is what will be
 			// issued and the host replaces it when the end user approves part of the request; this one is
 			// what that answer is judged against, and there is no other copy left by then.
@@ -155,23 +187,15 @@ public class BackChannelAuthenticationRequestProcessor(
 			// An EMPTY array when the request carried none, never null: null is what a request written by
 			// a build without this field reads back as, and the two must not be confused. Denying such a
 			// request would refuse, mid-upgrade, every in-flight authentication the user had approved.
-			RequestedAuthorizationDetails = request.AuthorizationDetails is { } requested
+			RequestedAuthorizationDetails = requestedDetails is { } requested
 				? (JsonArray)requested.DeepClone()
 				: [],
-
-			// The client may poll from the moment it holds the request id, so the first allowed poll is
-			// now, matching the device flow. CIBA section 11 adopts RFC 8628's polling rules, and section
-			// 3.2 there defines the interval as the minimum to wait "between polling requests to the token
-			// endpoint" - it has nothing to sit after until a first poll exists. This used to read
-			// now + interval, which answered the first request with slow_down and cost every sign-in one
-			// interval for polling too fast when nothing had been polled.
-			NextPollAt = timeProvider.GetUtcNow(),
 
 			ClientNotificationEndpoint = request.ClientInfo.BackChannelClientNotificationEndpoint,
 			ClientNotificationToken = request.Model.ClientNotificationToken,
 		};
 
-		var authenticationRequestId = await storage.StoreAsync(backChannelRequest, request.ExpiresIn);
+		var authenticationRequestId = await storage.StoreAsync(tenant, backChannelRequest, request.ExpiresIn);
 
 		return new BackChannelAuthenticationSuccess
 		{
@@ -191,10 +215,10 @@ public class BackChannelAuthenticationRequestProcessor(
 	/// what survives is their intersection - possibly nothing, which is the guaranteed mismatch Section 5.5.1
 	/// already prescribes an outcome for.
 	/// <para>
-	/// A malformed <c>claims</c> qualifier cannot be reported from here, because this runs after the request
-	/// was validated; the validator pipeline refuses one before anything reaches this method, so a failure
-	/// arriving here would mean the pipeline had changed underneath it. Treated as naming nobody, which
-	/// refuses rather than admits.
+	/// A <c>claims</c> qualifier that is malformed, or that no end user can satisfy, cannot be reported from
+	/// here, because this runs after the request was validated; the validator pipeline refuses either one
+	/// before anything reaches this method, so a failure arriving here would mean the pipeline had changed
+	/// underneath it. Treated as naming nobody, which refuses rather than admits.
 	/// </para>
 	/// </remarks>
 	private static string[]? NamedSubjects(ValidBackChannelAuthenticationRequest request)
@@ -202,7 +226,9 @@ public class BackChannelAuthenticationRequestProcessor(
 		var hinted = request.IdToken?.Payload.Subject is { Length: > 0 } named ? new[] { named } : null;
 
 		var requested = request.Model.Claims.RequestedSubjects();
-		var accepted = requested.TryGetSuccess(out var subjects) ? subjects : [];
+		var accepted = requested.Match<string[]?>(
+			subjects => subjects.Length > 0 ? subjects : null,
+			_ => []);
 
 		return (hinted, accepted) switch
 		{

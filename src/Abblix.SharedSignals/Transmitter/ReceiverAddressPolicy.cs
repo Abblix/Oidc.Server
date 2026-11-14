@@ -28,20 +28,15 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <param name="options">The deployment's transmitter settings, including the operator's allow-list.</param>
 /// <param name="resolveHost">
 /// Resolves a hostname to its addresses; defaults to <see cref="Dns.GetHostAddressesAsync(string,
-/// CancellationToken)"/>. A test supplies its own so the resolved-address branch, the only part of this policy
-/// that is not a string comparison, can be driven in both directions without a live DNS.</param>
+/// CancellationToken)"/>. It exists so the resolved-address branch, the only part of this policy that is not a
+/// string comparison, can be driven in both directions without a live DNS. What a transmitter resolves a delivery
+/// address through is a security decision, so the library's own registration always passes the default: only a
+/// caller that builds this policy itself decides otherwise.</param>
 public sealed class ReceiverAddressPolicy(
     SharedSignalsTransmitterOptions options,
-    ReceiverAddressPolicy.HostResolver? resolveHost = null)
+    ResolveHostDelegate? resolveHost = null)
 {
-    /// <summary>
-    /// Resolves a hostname to the addresses a connection to it would use.
-    /// </summary>
-    /// <param name="host">The hostname to resolve.</param>
-    /// <param name="cancellationToken">Cancels the resolution.</param>
-    public delegate Task<IPAddress[]> HostResolver(string host, CancellationToken cancellationToken);
-
-    private readonly HostResolver _resolveHost = resolveHost ?? Dns.GetHostAddressesAsync;
+    private readonly ResolveHostDelegate _resolveHost = resolveHost ?? Dns.GetHostAddressesAsync;
 
     /// <summary>
     /// Judges the address of a delivery endpoint.

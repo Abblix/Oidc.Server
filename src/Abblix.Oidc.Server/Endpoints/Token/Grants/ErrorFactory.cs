@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
-/// Builds <see cref="OidcError"/> instances using the error codes RFC 6749 §5.2 defines for
+/// Builds <see cref="OidcError"/> instances using the error codes RFC 6749 section 5.2 defines for
 /// the token endpoint. Mirrors the sibling per-area factories (authorization validation,
 /// dynamic client registration, secure HTTP fetch): each area exposes only the error codes
 /// its specification legitimately uses, so codes from one protocol surface do not leak into
@@ -22,7 +22,7 @@ public static class ErrorFactory
 {
     /// <summary>
     /// Creates an error for a malformed token request - a missing, repeated, or otherwise
-    /// invalid parameter (RFC 6749 §5.2, <c>invalid_request</c>).
+    /// invalid parameter (RFC 6749 section 5.2, <c>invalid_request</c>).
     /// </summary>
     /// <param name="description">The description of the error.</param>
     /// <returns>An error instance with the error code and description.</returns>
@@ -31,7 +31,7 @@ public static class ErrorFactory
 
     /// <summary>
     /// Creates an error for a token request whose required parameter is absent
-    /// (RFC 6749 §5.2, <c>invalid_request</c>).
+    /// (RFC 6749 section 5.2, <c>invalid_request</c>).
     /// </summary>
     /// <param name="parameterName">The wire-level name of the missing parameter.</param>
     /// <returns>An error instance with the error code and description.</returns>

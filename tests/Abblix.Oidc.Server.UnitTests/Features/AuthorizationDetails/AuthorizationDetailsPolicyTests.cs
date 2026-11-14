@@ -18,6 +18,8 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -25,7 +27,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.AuthorizationDetails;
 
 /// <summary>
 /// Unit tests for the composite <see cref="IAuthorizationDetailsPolicy"/> registered via
-/// <c>AddRichAuthorizationRequests()</c>. Covers dispatch by <c>type</c>, RFC 9396 §5 unknown-type
+/// <c>AddRichAuthorizationRequests()</c>. Covers dispatch by <c>type</c>, RFC 9396 section 5 unknown-type
 /// rejection, per-type-validator failure propagation, and the graceful-degradation contract
 /// (server boots cleanly with zero per-type validators registered).
 /// </summary>
@@ -50,7 +52,7 @@ public class AuthorizationDetailsPolicyTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
@@ -63,10 +65,10 @@ public class AuthorizationDetailsPolicyTests
     {
         var sp = BuildProvider();
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
-        // RFC 9396 §2: the 'type' member is required. Entry without it must reject.
+        // RFC 9396 section 2: the 'type' member is required. Entry without it must reject.
         var raw = new JsonArray(new JsonObject());
 
-        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
@@ -92,7 +94,7 @@ public class AuthorizationDetailsPolicyTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var raw = new JsonArray(JsonValue.Create(element));
 
-        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
@@ -120,7 +122,7 @@ public class AuthorizationDetailsPolicyTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var raw = new JsonArray(new JsonObject { ["type"] = JsonValue.Create(value) });
 
-        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
@@ -139,11 +141,11 @@ public class AuthorizationDetailsPolicyTests
             ["actions"] = new JsonArray("initiate"),
         });
 
-        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
-        var entry = Assert.Single(validated!);
+        var entry = Assert.Single(validated);
         Assert.Equal("payment_initiation", entry!["type"]!.GetValue<string>());
     }
 
@@ -158,11 +160,11 @@ public class AuthorizationDetailsPolicyTests
             new JsonObject { ["type"] = "payment_initiation" },
             new JsonObject { ["type"] = "account_information" });
 
-        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
-        Assert.Equal(2, validated!.Count);
+        Assert.Equal(2, validated.Count);
         Assert.Equal("payment_initiation", validated[0]!["type"]!.GetValue<string>());
         Assert.Equal("account_information", validated[1]!["type"]!.GetValue<string>());
     }
@@ -175,7 +177,7 @@ public class AuthorizationDetailsPolicyTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(RejectingValidator.Reason, error.ErrorDescription);
@@ -197,7 +199,7 @@ public class AuthorizationDetailsPolicyTests
             new JsonObject { ["type"] = "payment_initiation" },
             new JsonObject { ["type"] = "account_information" });
 
-        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out _));
         Assert.Equal(0, counter.Count);
@@ -217,28 +219,28 @@ public class AuthorizationDetailsPolicyTests
             new JsonObject { ["type"] = "payment_initiation" },
             new JsonObject { ["type"] = "account_information" });
 
-        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
         Assert.Equal(
             ["consent", "payment_initiation", "account_information"],
-            validated!.Select(node => node!["type"]!.GetValue<string>()).ToArray());
+            validated.Select(node => node!["type"]!.GetValue<string>()).ToArray());
     }
 
     [Fact]
-    public async Task ApplyAsync_returns_null_when_raw_is_null_or_empty()
+    public async Task ApplyAsync_returns_an_empty_set_when_raw_is_null_or_empty()
     {
         var sp = BuildProvider();
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
 
-        var resultNull = await composite.ApplyAsync(null, TestClient, TestContext.Current.CancellationToken);
+        var resultNull = await composite.ApplyAsync(SingleIssuer.Tenant, null, TestClient, TestContext.Current.CancellationToken);
         Assert.True(resultNull.TryGetSuccess(out var validatedNull));
-        Assert.Null(validatedNull);
+        Assert.Empty(validatedNull);
 
-        var resultEmpty = await composite.ApplyAsync(new JsonArray(), TestClient, TestContext.Current.CancellationToken);
+        var resultEmpty = await composite.ApplyAsync(SingleIssuer.Tenant, new JsonArray(), TestClient, TestContext.Current.CancellationToken);
         Assert.True(resultEmpty.TryGetSuccess(out var validatedEmpty));
-        Assert.Null(validatedEmpty);
+        Assert.Empty(validatedEmpty);
     }
 
     [Fact]
@@ -250,7 +252,7 @@ public class AuthorizationDetailsPolicyTests
         var client = new ClientInfo("c") { AuthorizationDetailsTypes = [] };
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ApplyAsync(raw, client, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, client, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
@@ -267,7 +269,7 @@ public class AuthorizationDetailsPolicyTests
         var client = new ClientInfo("c") { AuthorizationDetailsTypes = ["account_information"] };
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ApplyAsync(raw, client, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, client, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
@@ -283,15 +285,15 @@ public class AuthorizationDetailsPolicyTests
         var client = new ClientInfo("c") { AuthorizationDetailsTypes = null };
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ApplyAsync(raw, client, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, client, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
-        Assert.Equal(raw.ToJsonString(), validated!.ToJsonString());
+        Assert.Equal(raw.ToJsonString(), validated.ToJsonString());
     }
 
     // ───────────────────────────────────────────────────────────────────────
-    // RFC 9396 §7.1 validator-side mutation pipeline. Per-type validators see
+    // RFC 9396 section 7.1 validator-side mutation pipeline. Per-type validators see
     // one entry at a time and may narrow or normalise it; mutations propagate
     // through ApplyAsync's rebuild from the validated typed list. Cross-entry
     // policy (drop-entry, total-amount cap across the whole list) is the
@@ -314,11 +316,11 @@ public class AuthorizationDetailsPolicyTests
             """[{"type":"payment_initiation","instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
         var raw = (JsonArray)JsonNode.Parse(inputWire)!;
 
-        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
-        var wire = validated!.ToJsonString();
+        var wire = validated.ToJsonString();
         Assert.Contains("\"amount\":\"200.00\"", wire);
         Assert.DoesNotContain("500.00", wire);
     }
@@ -338,10 +340,10 @@ public class AuthorizationDetailsPolicyTests
             """[{"type":"payment_initiation","instructedAmount":{"currency":"EUR","amount":"5000.00"}}]""";
         var raw = (JsonArray)JsonNode.Parse(inputWire)!;
 
-        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
-        var wire = validated!.ToJsonString();
+        var wire = validated.ToJsonString();
         Assert.Contains("\"amount\":\"1000.00\"", wire);
         Assert.DoesNotContain("5000.00", wire);
     }
@@ -361,10 +363,10 @@ public class AuthorizationDetailsPolicyTests
             """[{"type":"payment_initiation","actions":["initiate","Initiate","INITIATE"]}]""";
         var raw = (JsonArray)JsonNode.Parse(inputWire)!;
 
-        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
-        var wire = validated!.ToJsonString();
+        var wire = validated.ToJsonString();
         // Still an array, though only one action survived deduplication. The single-or-array
         // convention belongs to JWT claims such as aud (RFC 7519 Section 4.1.3); RFC 9396
         // Section 2.2 defines actions as an array of strings and canonicalisation is precisely
@@ -381,11 +383,11 @@ public class AuthorizationDetailsPolicyTests
         const string wire = """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
         var raw = (JsonArray)JsonNode.Parse(wire)!;
 
-        var result = await composite.ApplyAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var validated));
         Assert.NotNull(validated);
-        Assert.Equal(wire, validated!.ToJsonString());
+        Assert.Equal(wire, validated.ToJsonString());
     }
 
     [Fact]
@@ -399,7 +401,7 @@ public class AuthorizationDetailsPolicyTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await composite.ApplyGrantedAsync(raw, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyGrantedAsync(SingleIssuer.Tenant, raw, raw, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Contains(RejectingValidator.Reason, error.ErrorDescription);
@@ -408,7 +410,7 @@ public class AuthorizationDetailsPolicyTests
     [Fact]
     public async Task ApplyGrantedAsync_uses_the_overridden_granted_phase()
     {
-        // RFC 9396 §7.1 enrichment: the same entry that must be refused from a client is the one the
+        // RFC 9396 section 7.1 enrichment: the same entry that must be refused from a client is the one the
         // consent decision produces, so the two phases have to be able to disagree.
         var sp = BuildProvider(registerValidators: services => services
             .AddAuthorizationDetailValidator<EnrichableAccountValidator>("account_information"));
@@ -423,9 +425,11 @@ public class AuthorizationDetailsPolicyTests
         });
 
         var asRequest = await composite.ApplyAsync(
+            SingleIssuer.Tenant,
             (JsonArray)enriched.DeepClone(), TestClient, TestContext.Current.CancellationToken);
         var asGranted = await composite.ApplyGrantedAsync(
-            enriched, TestClient, TestContext.Current.CancellationToken);
+            SingleIssuer.Tenant,
+            enriched, null, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(asRequest.TryGetFailure(out _));
         Assert.True(asGranted.TryGetSuccess(out var validated));
@@ -473,11 +477,41 @@ public class AuthorizationDetailsPolicyTests
             _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, "unhandled shape"),
         };
 
-        var result = await composite.ApplyGrantedAsync(granted, client, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyGrantedAsync(
+            SingleIssuer.Tenant,
+            granted, granted, client, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, error.Error);
         Assert.Contains(expected, error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Each per-type validator is handed the requested entries of its own type, every one of them, so it
+    /// can hold the granted entry to what was asked: RFC 9396 section 6.1 leaves that comparison to the type.
+    /// </summary>
+    [Fact]
+    public async Task ApplyGrantedAsync_hands_each_validator_the_requested_entries_of_its_type()
+    {
+        var sp = BuildProvider(registerValidators: services => services
+            .AddAuthorizationDetailValidator<RecordingValidator>("payment_initiation")
+            .AddAuthorizationDetailValidator<EnrichableAccountValidator>("account_information"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        var recording = (RecordingValidator)sp.GetRequiredKeyedService<IAuthorizationDetailValidator>(
+            "payment_initiation");
+
+        var requested = new JsonArray(
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "200" },
+            new JsonObject { ["type"] = "account_information", ["access"] = new JsonObject() },
+            new JsonObject { ["type"] = "payment_initiation", ["amount"] = "50" });
+        var granted = new JsonArray(new JsonObject { ["type"] = "payment_initiation", ["amount"] = "100" });
+
+        var result = await composite.ApplyGrantedAsync(
+            SingleIssuer.Tenant,
+            granted, requested, TestClient, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(["200", "50"], recording.Requested.Select(entry => entry.Json["amount"]!.GetValue<string>()));
     }
 
     [Fact]
@@ -490,7 +524,9 @@ public class AuthorizationDetailsPolicyTests
 
         var granted = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await policy.ApplyGrantedAsync(granted, TestClient, TestContext.Current.CancellationToken);
+        var result = await policy.ApplyGrantedAsync(
+            SingleIssuer.Tenant,
+            granted, granted, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(RefusingPolicy.Reason, error.ErrorDescription);
@@ -513,10 +549,53 @@ public class AuthorizationDetailsPolicyTests
         var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
         var granted = new JsonArray(new JsonObject { ["type"] = "account_information" });
 
-        var result = await composite.ApplyGrantedAsync(granted, TestClient, TestContext.Current.CancellationToken);
+        var result = await composite.ApplyGrantedAsync(
+            SingleIssuer.Tenant,
+            granted, granted, TestClient, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Contains("access is required", error.ErrorDescription);
+    }
+
+    /// <summary>
+    /// Each validator is asked at the tenant the policy is handed, in the request phase and the granted phase alike.
+    /// </summary>
+    [Fact]
+    public async Task EachValidator_IsAskedAtTheTenantThePolicyIsHanded()
+    {
+        var sp = BuildProvider(registerValidators: services =>
+            services.AddAuthorizationDetailValidator<ServedTenantOnlyValidator>("payment_initiation"));
+        var composite = sp.GetRequiredService<IAuthorizationDetailsPolicy>();
+        static JsonArray Raw() => new(new JsonObject { ["type"] = "payment_initiation" });
+
+        var requested = await composite.ApplyAsync(SingleIssuer.Tenant, Raw(), TestClient, TestContext.Current.CancellationToken);
+        var granted = await composite.ApplyGrantedAsync(
+            SingleIssuer.Tenant, Raw(), Raw(), TestClient, TestContext.Current.CancellationToken);
+
+        Assert.True(requested.TryGetSuccess(out _));
+        Assert.True(granted.TryGetSuccess(out _));
+
+        // And refused when the policy is handed another tenant, which is what makes the cases above mean anything
+        var elsewhere = await composite.ApplyAsync(new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") }, Raw(), TestClient, TestContext.Current.CancellationToken);
+        Assert.True(elsewhere.TryGetFailure(out _));
+    }
+
+    /// <summary>
+    /// The policy stand-in the grant and validator tests share refuses at a tenant the tests do not serve, which is what
+    /// lets those tests notice a caller handing over the wrong tenant.
+    /// </summary>
+    [Fact]
+    public async Task TheSharedPolicyStandIn_RefusesAtATenantTheTestsDoNotServe()
+    {
+        var raw = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+        var stub = StubAuthorizationDetailsPolicy.Accepting;
+
+        Assert.True((await stub.ApplyAsync(SingleIssuer.Tenant, raw, TestClient, TestContext.Current.CancellationToken))
+            .TryGetSuccess(out _));
+        Assert.True((await stub.ApplyAsync(
+                new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") },
+                raw, TestClient, TestContext.Current.CancellationToken))
+            .TryGetFailure(out _));
     }
 
     private static ServiceProvider BuildProvider(Action<IServiceCollection>? registerValidators = null)
@@ -532,6 +611,7 @@ public class AuthorizationDetailsPolicyTests
         public string Type => type ?? "payment_initiation";
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
@@ -541,6 +621,7 @@ public class AuthorizationDetailsPolicyTests
         public string Type => "payment_initiation";
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
@@ -550,6 +631,7 @@ public class AuthorizationDetailsPolicyTests
         public string Type => "account_information";
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
     }
@@ -561,13 +643,14 @@ public class AuthorizationDetailsPolicyTests
         public string Type => "payment_initiation";
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(
                 new OidcError(ErrorCodes.InvalidAuthorizationDetails, Reason));
     }
 
     /// <summary>
-    /// An enrichable type, in the shape of RFC 9396 §7.1 Figures 16 and 17: the client sends empty
+    /// An enrichable type, in the shape of RFC 9396 section 7.1 Figures 16 and 17: the client sends empty
     /// placeholders, and the server writes the identifiers the user picked into them.
     /// </summary>
     private sealed class EnrichableAccountValidator : IAuthorizationDetailValidator
@@ -575,6 +658,7 @@ public class AuthorizationDetailsPolicyTests
         public string Type => "account_information";
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult(
                 detail.Json["access"]?["accounts"] is JsonArray { Count: > 0 }
@@ -584,7 +668,11 @@ public class AuthorizationDetailsPolicyTests
         // Only the enrichable field is exempt here. Everything else the type refuses, it refuses in
         // both phases: a consent decision that crossed the browser is not more trusted than a client.
         public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
-            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
             => Task.FromResult(SharedRules(detail));
 
         private static Result<AuthorizationDetail, OidcError> SharedRules(AuthorizationDetail detail)
@@ -594,6 +682,32 @@ public class AuthorizationDetailsPolicyTests
 
         private static Result<AuthorizationDetail, OidcError> Refuse(string description)
             => new OidcError(ErrorCodes.InvalidAuthorizationDetails, description);
+    }
+
+    /// <summary>
+    /// Accepts every entry and keeps the requested ones the granted phase handed it.
+    /// </summary>
+    private sealed class RecordingValidator : IAuthorizationDetailValidator
+    {
+        public IReadOnlyList<AuthorizationDetail> Requested { get; private set; } = [];
+
+        public string Type => "payment_initiation";
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+        {
+            Requested = requested;
+            return ValidateAsync(tenant, detail, client, token);
+        }
     }
 
     /// <summary>
@@ -608,13 +722,14 @@ public class AuthorizationDetailsPolicyTests
 
         public ClientInfo? LastClient { get; private set; }
 
-        public Task<Result<JsonArray?, OidcError>> ApplyAsync(
+        public Task<Result<JsonArray, OidcError>> ApplyAsync(
+            TenantDefinition tenant,
             JsonArray? raw, ClientInfo client, CancellationToken token)
         {
             LastRaw = raw;
             LastClient = client;
 
-            return Task.FromResult<Result<JsonArray?, OidcError>>(
+            return Task.FromResult<Result<JsonArray, OidcError>>(
                 new OidcError(ErrorCodes.InvalidAuthorizationDetails, Reason));
         }
     }
@@ -631,6 +746,7 @@ public class AuthorizationDetailsPolicyTests
         public string Type => "payment_initiation";
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
         {
             if (detail.Json["instructedAmount"] is JsonObject amount)
@@ -645,6 +761,7 @@ public class AuthorizationDetailsPolicyTests
         public string Type => "payment_initiation";
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
         {
             if (detail.Json["instructedAmount"] is JsonObject amount
@@ -665,6 +782,7 @@ public class AuthorizationDetailsPolicyTests
         public string Type => "payment_initiation";
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
         {
             if (detail.Actions is { } actions)
@@ -683,6 +801,7 @@ public class AuthorizationDetailsPolicyTests
         public string Type => "account_information";
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail,
             ClientInfo client,
             CancellationToken token)
@@ -704,7 +823,7 @@ public class AuthorizationDetailsPolicyTests
         IAuthorizationDetailValidator validator = new StubValidator();
         var detail = new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" };
 
-        var descriptor = await validator.BuildConsentDescriptorAsync(detail, TestClient, TestContext.Current.CancellationToken);
+        var descriptor = await validator.BuildConsentDescriptorAsync(SingleIssuer.Tenant, detail, TestClient, TestContext.Current.CancellationToken);
 
         Assert.Null(descriptor);
     }
@@ -715,13 +834,13 @@ public class AuthorizationDetailsPolicyTests
         IAuthorizationDetailValidator validator = new DescribingValidator();
         var detail = new AuthorizationDetail(new JsonObject()) { Type = "payment_initiation" };
 
-        var descriptor = await validator.BuildConsentDescriptorAsync(detail, TestClient, TestContext.Current.CancellationToken);
+        var descriptor = await validator.BuildConsentDescriptorAsync(SingleIssuer.Tenant, detail, TestClient, TestContext.Current.CancellationToken);
 
         Assert.NotNull(descriptor);
-        Assert.Equal("Payment transfer", descriptor!.Title);
+        Assert.Equal("Payment transfer", descriptor.Title);
         Assert.Equal("Transfer 500 EUR to IBAN DE02 ...", descriptor.Summary);
         Assert.NotNull(descriptor.Details);
-        Assert.Contains(descriptor.Details!,
+        Assert.Contains(descriptor.Details,
             kv => kv.Key == "Amount" && kv.Value == "500.00 EUR");
     }
 
@@ -730,10 +849,12 @@ public class AuthorizationDetailsPolicyTests
         public string Type => "payment_initiation";
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
 
         public Task<AuthorizationDetailDescriptor?> BuildConsentDescriptorAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken cancellationToken)
             => Task.FromResult<AuthorizationDetailDescriptor?>(new AuthorizationDetailDescriptor(
                 Title: "Payment transfer",

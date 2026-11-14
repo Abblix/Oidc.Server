@@ -34,6 +34,10 @@ public sealed class PollDeliveryMethod(Uri? endpointUrl = null) : StreamDelivery
     /// transmitter-issued configuration (SSF 1.0 Section 8.1.1.1), absent from a receiver's own
     /// proposal of poll delivery - the direction the null represents.
     /// </summary>
+    /// <remarks>
+    /// The transmitter answers a poll stream with the address its events are polled at when it answers. The address
+    /// stored with the stream is the one it was written with, under the issuer of that moment.
+    /// </remarks>
     [JsonPropertyName(ParameterNames.EndpointUrl)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? EndpointUrl { get; } = endpointUrl;

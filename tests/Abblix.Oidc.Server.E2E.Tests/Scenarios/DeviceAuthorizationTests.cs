@@ -10,6 +10,7 @@ using System.Net;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
@@ -22,7 +23,6 @@ using DeviceRequest = Abblix.Oidc.Server.Model.DeviceAuthorizationRequest;
 using DeviceResponse = Abblix.Oidc.Server.Model.DeviceAuthorizationResponse;
 using RegistrationRequest = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using RegistrationResponse = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -41,7 +41,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// the pre-seeded clients carry the device grant, so these tests register their own through dynamic client
 /// registration - which also gives each test a client of its own to prove the cross-client boundary.
 /// </remarks>
-public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
+public partial class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
 {
     [Fact]
     public async Task The_device_authorization_endpoint_is_published_in_discovery()
@@ -63,10 +63,10 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
         // tokens, approval would be decorative: anyone who could start a device flow would hold a session
         // for the user, with no human ever having agreed to anything.
         //
-        // Runs on an isolated host with the polling interval collapsed to zero. The shared host seeds the
-        // first permitted poll one interval after issuance, so a poll there is throttled before the pending
-        // check is ever reached - that throttle has its own test below. Removing the wait isolates the
-        // approval gate itself.
+        // Runs on an isolated host with the polling interval collapsed to zero, so no poll here can be
+        // answered by the interval throttle - that throttle is
+        // A_poll_that_arrives_before_the_advertised_interval_is_throttled. With the wait removed, whatever
+        // answers a poll here is the approval gate, never the throttle.
         await using var host = CreateHostWithoutPollingDelay();
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
@@ -82,7 +82,7 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
         // No token of any kind may ride along with the refusal. An error body that also carried an access
         // token would satisfy an error-code check and still hand over the session.
         var body = await ReadJsonAsync(response);
-        Assert.Null(body[ResponseParameters.AccessToken]);
+        Assert.Null(body[TokenResponse.Parameters.AccessToken]);
     }
 
     [Fact]
@@ -96,10 +96,9 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
 
         var response = await PollAsync(client, discovery, device, "a-device-code-this-server-never-issued");
 
-        // expired_token, not invalid_grant: the server cannot tell a code it never minted from one it minted
-        // and evicted on expiry, and answering differently would turn the endpoint into an oracle that
-        // confirms which guessed codes once existed.
-        await AssertRefusedAsync(response, ErrorCodes.ExpiredToken);
+        // invalid_grant, the answer RFC 6749 section 5.2 gives an invalid grant. The answer depends only on
+        // the code sent, so the endpoint confirms nothing about which guessed codes once existed.
+        await AssertRefusedAsync(response, ErrorCodes.InvalidGrant);
     }
 
     [Fact]
@@ -142,13 +141,43 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
                 [ClientRequest.Parameters.ClientSecret] = device.ClientSecret + "-tampered",
             });
 
-        await AssertRefusedAsync(response, ErrorCodes.UnauthorizedClient);
+        // RFC 8628 section 3.2 answers an error the way the token endpoint does: RFC 6749 section 5.2, invalid_client,
+        // which the token endpoint gives as a 401.
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var body = await ReadJsonAsync(response);
+        Assert.Equal(ErrorCodes.InvalidClient, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
 
         // The refusal must also produce no code pair. A rejected request that still minted a user code would
         // leave a code live on the verification page for a user to approve.
-        var body = await ReadJsonAsync(response);
         Assert.Null(body[DeviceResponse.Parameters.DeviceCode]);
         Assert.Null(body[DeviceResponse.Parameters.UserCode]);
+    }
+
+    [Fact]
+    public async Task A_device_request_for_a_scope_the_resource_it_names_declares_is_accepted()
+    {
+        // A scope declared only by a resource is valid only beside that resource, so the resource has to be
+        // read before the scope is judged, as the other endpoints read it.
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var device = await RegisterDeviceClientAsync(client, discovery, "device-resource-scope");
+
+        var response = await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.DeviceAuthorizationEndpoint!,
+            new Dictionary<string, string>
+            {
+                [DeviceRequest.Parameters.Scope] = $"{Scopes.OpenId} {TestConstants.ApiScope}",
+                [DeviceRequest.Parameters.Resource] = TestConstants.ApiResource,
+                [ClientRequest.Parameters.ClientId] = device.ClientId,
+                [ClientRequest.Parameters.ClientSecret] = device.ClientSecret,
+            });
+
+        var body = await ReadJsonAsync(response);
+        Assert.True(
+            response.IsSuccessStatusCode,
+            $"device authorization should succeed, got {(int)response.StatusCode}: {body}");
+        Assert.NotNull(body[DeviceResponse.Parameters.DeviceCode]);
     }
 
     [Fact]
@@ -181,7 +210,7 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
         // Throttling must not become a way through: the early poll is refused without a token, exactly like
         // a well-timed poll of an unapproved code.
         var body = await ReadJsonAsync(response);
-        Assert.Null(body[ResponseParameters.AccessToken]);
+        Assert.Null(body[TokenResponse.Parameters.AccessToken]);
     }
 
     /// <summary>A dynamically registered client allowed to use the device authorization grant.</summary>
@@ -281,6 +310,6 @@ public class DeviceAuthorizationTests(TestFactory factory) : TestBase(factory)
     {
         var body = await ReadJsonAsync(response);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(expectedError, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(expectedError, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 }

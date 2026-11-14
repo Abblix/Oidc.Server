@@ -8,7 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
@@ -20,10 +20,10 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>
 /// Formats CIBA backchannel authentication results as <see cref="IResult"/>: a JSON success response, a 401 with a
-/// <c>WWW-Authenticate</c> challenge matching the client's scheme, a 403, or a 400 with the JSON error envelope.
+/// <c>WWW-Authenticate</c> challenge matching the client's scheme, a 403, or the token endpoint's error response.
 /// </summary>
-/// <param name="issuerProvider">Supplies the issuer used as the realm on client-authentication challenges.</param>
-public class BackChannelAuthenticationResponseFormatter(IIssuerProvider issuerProvider)
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class BackChannelAuthenticationResponseFormatter(ITenantAccessor tenantAccessor)
     : IBackChannelAuthenticationResponseFormatter
 {
     /// <inheritdoc />
@@ -35,7 +35,7 @@ public class BackChannelAuthenticationResponseFormatter(IIssuerProvider issuerPr
             onSuccess: IResult (success) => Results.Json(success),
             onFailure: error => error switch
             {
-                // RFC 9110 §11.6.1: a 401 carries a WWW-Authenticate challenge matching the client's scheme.
+                // RFC 9110 section 11.6.1: a 401 carries a WWW-Authenticate challenge matching the client's scheme.
                 BackChannelAuthenticationUnauthorized { Error: var err, ErrorDescription: var description }
                     => Results.Json(new ErrorResponse(err, description), statusCode: StatusCodes.Status401Unauthorized)
                         .WithHeader(HeaderNames.WWWAuthenticate, FormatClientChallenge(clientRequest)),
@@ -43,15 +43,13 @@ public class BackChannelAuthenticationResponseFormatter(IIssuerProvider issuerPr
                 BackChannelAuthenticationForbidden { Error: var err, ErrorDescription: var description }
                     => Results.Json(new ErrorResponse(err, description), statusCode: StatusCodes.Status403Forbidden),
 
-                // The base-type property pattern matches every non-null OidcError, so it is the exhaustive
-                // catch-all for the failure branch - a discard arm here would be reachable only for a null
-                // error, which the Result failure value never is, and dereferencing it was the defect.
-                { Error: var err, ErrorDescription: var description }
-                    => Results.Json(new ErrorResponse(err, description), statusCode: StatusCodes.Status400BadRequest),
+                // CIBA Core 1.0 section 13: errors are "sent in the same format as Token Error Responses", with
+                // invalid_client under HTTP 401 and the rest under 400, so through the token endpoint's own policy.
+                _ => error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().Issuer.OriginalString),
             }));
 
     /// <summary>
-    /// Builds the <c>WWW-Authenticate</c> challenge matching the client's authentication scheme. Per RFC 6749 §5.2 the
+    /// Builds the <c>WWW-Authenticate</c> challenge matching the client's authentication scheme. Per RFC 6749 section 5.2 the
     /// challenge scheme must match what the client attempted, falling back to <c>Bearer</c> when the client did not use
     /// the <c>Authorization</c> header (e.g. <c>client_secret_post</c> or <c>private_key_jwt</c>).
     /// </summary>
@@ -61,6 +59,6 @@ public class BackChannelAuthenticationResponseFormatter(IIssuerProvider issuerPr
             ? TokenTypes.Basic
             : TokenTypes.Bearer;
 
-        return $"{scheme} realm=\"{issuerProvider.GetIssuer()}\"";
+        return $"{scheme} realm=\"{tenantAccessor.CurrentTenant().Issuer.OriginalString}\"";
     }
 }

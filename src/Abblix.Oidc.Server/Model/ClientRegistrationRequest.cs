@@ -12,7 +12,9 @@ using System.Text.Json.Serialization;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeBinding;
+using Abblix.Utils;
 using Abblix.Utils.Json;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.Model;
 
@@ -22,6 +24,7 @@ namespace Abblix.Oidc.Server.Model;
 /// <remarks>
 /// See the OpenID Connect Registration specification at https://openid.net/specs/openid-connect-registration-1_0.html.
 /// </remarks>
+[ExternalInput]
 public record ClientRegistrationRequest
 {
     /// <summary>
@@ -32,7 +35,7 @@ public record ClientRegistrationRequest
     public AuthenticationHeaderValue? AuthorizationHeader { get; init; }
 
     /// <summary>
-    /// The <c>redirect_uris</c> array (RFC 7591 §2) listing every absolute URI the OP may use to deliver
+    /// The <c>redirect_uris</c> array (RFC 7591 section 2) listing every absolute URI the OP may use to deliver
     /// authorization responses to this client. An authorization request must then specify a redirect URI
     /// that exactly matches one of these values.
     /// </summary>
@@ -50,7 +53,7 @@ public record ClientRegistrationRequest
     public Uri[]? RedirectUris { get; init; }
 
     /// <summary>
-    /// The <c>response_types</c> the client intends to use (RFC 7591 §2). Each entry is itself a
+    /// The <c>response_types</c> the client intends to use (RFC 7591 section 2). Each entry is itself a
     /// space-separated combination of <c>code</c>, <c>token</c>, and/or <c>id_token</c>; the array therefore
     /// represents the full set of response type combinations registered for this client.
     /// </summary>
@@ -62,10 +65,10 @@ public record ClientRegistrationRequest
     /// </remarks>
     [JsonPropertyName(Parameters.ResponseTypes)]
     [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
-    public string[][] ResponseTypes { get; init; } = [[Common.Constants.ResponseTypes.Code]];
+    public string[][] ResponseTypes { get; init; } = [[Abblix.Oidc.ResponseTypes.Code]];
 
     /// <summary>
-    /// The <c>grant_types</c> the client will request at the token endpoint per RFC 7591 §2,
+    /// The <c>grant_types</c> the client will request at the token endpoint per RFC 7591 section 2,
     /// for example <c>authorization_code</c>, <c>refresh_token</c>, or <c>urn:openid:params:grant-type:ciba</c>.
     /// </summary>
     /// <remarks>
@@ -74,10 +77,10 @@ public record ClientRegistrationRequest
     /// union the server actually supports and advertises in its discovery document.
     /// </remarks>
     [JsonPropertyName(Parameters.GrantTypes)]
-    public string[] GrantTypes { get; init; } = [Common.Constants.GrantTypes.AuthorizationCode];
+    public string[] GrantTypes { get; init; } = [Abblix.Oidc.GrantTypes.AuthorizationCode];
 
     /// <summary>
-    /// The <c>application_type</c> declared at registration (OIDC Dynamic Client Registration §2),
+    /// The <c>application_type</c> declared at registration (OIDC Dynamic Client Registration section 2),
     /// typically <c>web</c> or <c>native</c>. Influences allowed redirect URI schemes and other policy.
     /// </summary>
     [JsonPropertyName(Parameters.ApplicationType)]
@@ -85,7 +88,7 @@ public record ClientRegistrationRequest
     public string ApplicationType { get; init; } = ApplicationTypes.Web;
 
     /// <summary>
-    /// The <c>contacts</c> array (RFC 7591 §2): email addresses of people responsible for this client,
+    /// The <c>contacts</c> array (RFC 7591 section 2): email addresses of people responsible for this client,
     /// used for operational notifications by the authorization server.
     /// </summary>
     [JsonPropertyName(Parameters.Contacts)]
@@ -99,7 +102,7 @@ public record ClientRegistrationRequest
     public string? ClientId { get; init; }
 
     /// <summary>
-    /// The <c>client_name</c> (RFC 7591 §2): a human-readable display name for the client, shown to end-users
+    /// The <c>client_name</c> (RFC 7591 section 2): a human-readable display name for the client, shown to end-users
     /// on consent screens.
     /// </summary>
     [JsonPropertyName(Parameters.ClientName)]
@@ -146,13 +149,13 @@ public record ClientRegistrationRequest
 
     /// <summary>
     /// The inline <c>jwks</c> value: the client's JSON Web Key Set provided directly in registration metadata,
-    /// used as an alternative to <see cref="JwksUri"/>. Only one of the two may be provided per RFC 7591 §2.
+    /// used as an alternative to <see cref="JwksUri"/>. Only one of the two may be provided per RFC 7591 section 2.
     /// </summary>
     [JsonPropertyName(Parameters.Jwks)]
     public JsonWebKeySet? Jwks { get; init; }
 
     /// <summary>
-    /// The <c>sector_identifier_uri</c> (OIDC Core §8.1): an absolute HTTPS URL whose host is used to compute
+    /// The <c>sector_identifier_uri</c> (OIDC Core section 8.1): an absolute HTTPS URL whose host is used to compute
     /// pairwise pseudonymous subject identifiers, allowing multiple registered redirect URIs to share the same
     /// pairwise sector.
     /// </summary>
@@ -161,7 +164,7 @@ public record ClientRegistrationRequest
     public Uri? SectorIdentifierUri { get; init; }
 
     /// <summary>
-    /// The <c>subject_type</c> (OIDC Core §8) requested for ID Token <c>sub</c> claim generation:
+    /// The <c>subject_type</c> (OIDC Core section 8) requested for ID Token <c>sub</c> claim generation:
     /// <c>public</c> (same identifier across clients) or <c>pairwise</c> (per-sector pseudonymous).
     /// </summary>
     [JsonPropertyName(Parameters.SubjectType)]
@@ -169,7 +172,7 @@ public record ClientRegistrationRequest
     public string? SubjectType { get; init; } = SubjectTypes.Public;
 
     /// <summary>
-    /// The <c>id_token_signed_response_alg</c> (OIDC Core §2): the JWS <c>alg</c> the OP must use to sign
+    /// The <c>id_token_signed_response_alg</c> (OIDC Core section 2): the JWS <c>alg</c> the OP must use to sign
     /// ID Tokens issued to this client (e.g. <c>RS256</c>, <c>ES256</c>).
     /// </summary>
     /// <remarks>
@@ -277,7 +280,7 @@ public record ClientRegistrationRequest
     public string? IntrospectionEncryptedResponseEnc { get; init; }
 
     /// <summary>
-    /// The <c>authorization_signed_response_alg</c> (JARM §3): the JWS algorithm the OP must use to sign
+    /// The <c>authorization_signed_response_alg</c> (JARM section 3): the JWS algorithm the OP must use to sign
     /// authorization responses packed into a JWT for this client. Defaults to <c>RS256</c>; <c>none</c> is
     /// not permitted.
     /// </summary>
@@ -290,7 +293,7 @@ public record ClientRegistrationRequest
     public string? AuthorizationSignedResponseAlg { get; init; }
 
     /// <summary>
-    /// The <c>authorization_encrypted_response_alg</c> (JARM §3): the JWE key-management algorithm the OP must
+    /// The <c>authorization_encrypted_response_alg</c> (JARM section 3): the JWE key-management algorithm the OP must
     /// use when encrypting authorization responses for this client. When set, the signed response JWT is
     /// additionally encrypted (a Nested JWT).
     /// </summary>
@@ -303,7 +306,7 @@ public record ClientRegistrationRequest
     public string? AuthorizationEncryptedResponseAlg { get; init; }
 
     /// <summary>
-    /// The <c>authorization_encrypted_response_enc</c> (JARM §3): the JWE content-encryption algorithm paired
+    /// The <c>authorization_encrypted_response_enc</c> (JARM section 3): the JWE content-encryption algorithm paired
     /// with <see cref="AuthorizationEncryptedResponseAlg"/> for authorization responses to this client.
     /// Defaults to <c>A128CBC-HS256</c> when the encryption algorithm is set.
     /// </summary>
@@ -317,7 +320,7 @@ public record ClientRegistrationRequest
 
     /// <summary>
     /// The <c>request_object_signing_alg</c>: the JWS algorithm the client uses when signing Request Objects
-    /// (OIDC Core §6) sent to the authorization endpoint. <c>none</c> indicates an unsigned Request Object.
+    /// (OIDC Core section 6) sent to the authorization endpoint. <c>none</c> indicates an unsigned Request Object.
     /// </summary>
     /// <remarks>
     /// Deliberately not constrained by a declarative value list: the permissible algorithms are
@@ -352,7 +355,7 @@ public record ClientRegistrationRequest
     public string? RequestObjectEncryptionEnc { get; init; }
 
     /// <summary>
-    /// The <c>token_endpoint_auth_method</c> (RFC 7591 §2): the client authentication method used at the
+    /// The <c>token_endpoint_auth_method</c> (RFC 7591 section 2): the client authentication method used at the
     /// token endpoint, such as <c>client_secret_basic</c>, <c>client_secret_post</c>, <c>private_key_jwt</c>,
     /// <c>tls_client_auth</c>, or <c>none</c>.
     /// </summary>
@@ -408,11 +411,12 @@ public record ClientRegistrationRequest
     public string[]? TlsClientAuthSanEmail { get; init; }
 
     /// <summary>
-    /// The <c>default_max_age</c> (OIDC Dynamic Client Registration §2): the default maximum elapsed time
+    /// The <c>default_max_age</c> (OIDC Dynamic Client Registration section 2): the default maximum elapsed time
     /// since the user's last authentication that the OP should honor for authorization requests from this
     /// client. Serialized as an integer number of seconds.
     /// </summary>
     [JsonPropertyName(Parameters.DefaultMaxAge)]
+    [JsonConverter(typeof(TimeSpanSecondsConverter))]
     public TimeSpan? DefaultMaxAge { get; init; }
 
     /// <summary>
@@ -438,7 +442,7 @@ public record ClientRegistrationRequest
     public Uri? InitiateLoginUri { get; init; }
 
     /// <summary>
-    /// The <c>request_uris</c> (OIDC Core §6.2): URIs that the OP may pre-fetch and cache for use as
+    /// The <c>request_uris</c> (OIDC Core section 6.2): URIs that the OP may pre-fetch and cache for use as
     /// <c>request_uri</c> values in authorization requests from this client.
     /// </summary>
     [JsonPropertyName(Parameters.RequestUris)]
@@ -459,24 +463,31 @@ public record ClientRegistrationRequest
     public bool? PkceRequired { get; init; }
 
     /// <summary>
-    /// When <c>true</c>, the client is permitted to request the <c>offline_access</c> scope and receive
-    /// refresh tokens. Server extension to RFC 7591 metadata; defaults to <c>true</c>.
+    /// The offline access the client asks for, a server extension to RFC 7591 metadata:
+    /// <see cref="OfflineAccess.Disabled"/>, or <see cref="OfflineAccess.ConsentRequired"/> when the
+    /// request does not state it.
     /// </summary>
-    [JsonPropertyName(Parameters.OfflineAccessAllowed)]
-    public bool? OfflineAccessAllowed { get; init; } = true;
+    /// <remarks>
+    /// <see cref="OfflineAccess.Allowed"/> is refused by
+    /// <see cref="Endpoints.DynamicClientManagement.Validation.OfflineAccessValidator"/>: it waives
+    /// <c>prompt=consent</c> for the client, which OpenID Connect Core 1.0, section 11, leaves to the conditions the
+    /// host states, never to the client itself.
+    /// </remarks>
+    [JsonPropertyName(Parameters.OfflineAccess)]
+    public OfflineAccess OfflineAccess { get; init; } = OfflineAccess.ConsentRequired;
 
     /// <summary>
-    /// The <c>dpop_bound_access_tokens</c> client metadata per RFC 9449 §5.2: when <c>true</c>,
+    /// The <c>dpop_bound_access_tokens</c> client metadata per RFC 9449 section 5.2: when <c>true</c>,
     /// access tokens issued to this client must be sender-constrained via DPoP (the server
     /// will require a valid DPoP proof on every token request and bind <c>cnf.jkt</c> on
     /// the issued token). Maps to <see cref="Features.ClientInformation.ClientInfo.RequireDPoP"/>. When omitted, treated
-    /// as <c>false</c> per RFC 9449 §5.2.
+    /// as <c>false</c> per RFC 9449 section 5.2.
     /// </summary>
     [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
     public bool? DpopBoundAccessTokens { get; init; }
 
     /// <summary>
-    /// The <c>require_pushed_authorization_requests</c> client metadata per RFC 9126 §6: when
+    /// The <c>require_pushed_authorization_requests</c> client metadata per RFC 9126 section 6: when
     /// <c>true</c>, pushed authorization requests are the only way this client may start an
     /// authorization flow. Maps to
     /// <see cref="Features.ClientInformation.ClientInfo.RequirePushedAuthorizationRequests"/>.
@@ -486,7 +497,7 @@ public record ClientRegistrationRequest
     public bool? RequirePushedAuthorizationRequests { get; init; }
 
     /// <summary>
-    /// The <c>require_signed_request_object</c> client metadata per RFC 9101 §10.5: when
+    /// The <c>require_signed_request_object</c> client metadata per RFC 9101 section 10.5: when
     /// <c>true</c>, the client must deliver its authorization request parameters as a signed
     /// request object. Maps to
     /// <see cref="Features.ClientInformation.ClientInfo.RequireSignedRequestObject"/>.
@@ -496,7 +507,7 @@ public record ClientRegistrationRequest
     public bool? RequireSignedRequestObject { get; init; }
 
     /// <summary>
-    /// The <c>tls_client_certificate_bound_access_tokens</c> client metadata per RFC 8705 §3.4:
+    /// The <c>tls_client_certificate_bound_access_tokens</c> client metadata per RFC 8705 section 3.4:
     /// when <c>true</c>, access tokens issued to this client are certificate-bound whenever the
     /// token request arrives over mutual TLS, independently of the authentication method. Maps to
     /// <see cref="Features.ClientInformation.ClientInfo.TlsClientCertificateBoundAccessTokens"/>.
@@ -506,7 +517,7 @@ public record ClientRegistrationRequest
     public bool? TlsClientCertificateBoundAccessTokens { get; init; }
 
     /// <summary>
-    /// The <c>authorization_details_types</c> client metadata per RFC 9396 §10: the per-client
+    /// The <c>authorization_details_types</c> client metadata per RFC 9396 section 10: the per-client
     /// allowlist of authorization-detail <c>type</c> values this client may use in RAR requests.
     /// Maps to <see cref="Features.ClientInformation.ClientInfo.AuthorizationDetailsTypes"/>.
     /// <c>null</c> means no per-client constraint; empty array means this client cannot use RAR.
@@ -524,7 +535,7 @@ public record ClientRegistrationRequest
     /// Token Exchange at all.
     /// </summary>
     [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
-    public string[]? TokenExchangeSubjectTokenTypes { get; init; }
+    public Uri[]? TokenExchangeSubjectTokenTypes { get; init; }
 
     /// <summary>
     /// Non-standard extension: the per-client allowlist of RFC 8693 <c>audience</c> values this
@@ -537,6 +548,15 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.TokenExchangeAudiences)]
     public string[]? TokenExchangeAudiences { get; init; }
+
+    /// <summary>
+    /// Non-standard extension: the resources (RFC 8707) the client asks to get access tokens for. RFC 7591 defines no
+    /// member for this, so it is exposed as <c>allowed_resources</c>. Maps to
+    /// <see cref="Features.ClientInformation.ClientInfo.AllowedResources"/>, held to the server's policy in
+    /// <see cref="Common.Configuration.NewClientOptions.AllowedResources"/>.
+    /// </summary>
+    [JsonPropertyName(Parameters.AllowedResources)]
+    public Uri[]? AllowedResources { get; init; }
 
     /// <summary>
     /// The <c>backchannel_logout_uri</c> (OIDC Back-Channel Logout 1.0): an absolute URL at the client
@@ -711,6 +731,10 @@ public record ClientRegistrationRequest
         /// may accept or ignore.</summary>
         public const string ClientId = "client_id";
 
+        /// <summary>The <c>client_secret</c> a client update request carries when the server issued one
+        /// (RFC 7592 section 2.2); the update keeps the issued secret whatever this member says.</summary>
+        public const string ClientSecret = "client_secret";
+
         /// <summary>The <c>client_name</c> registration parameter providing a human-readable display name
         /// shown to end-users on consent screens.</summary>
         public const string ClientName = "client_name";
@@ -859,29 +883,29 @@ public record ClientRegistrationRequest
         /// as PKCE-only at the authorization endpoint.</summary>
         public const string PkceRequired = "pkce_required";
 
-        /// <summary>The <c>offline_access_allowed</c> registration parameter (server extension) controlling
-        /// whether the client may request the <c>offline_access</c> scope and obtain refresh tokens.
+        /// <summary>The <c>offline_access</c> registration parameter (server extension) stating whether the client
+        /// receives offline access, and whether it has to ask for consent with <c>prompt=consent</c> to receive it.
         /// </summary>
-        public const string OfflineAccessAllowed = "offline_access_allowed";
+        public const string OfflineAccess = "offline_access";
 
-        /// <summary>The <c>dpop_bound_access_tokens</c> registration parameter (RFC 9449 §5.2) requiring
+        /// <summary>The <c>dpop_bound_access_tokens</c> registration parameter (RFC 9449 section 5.2) requiring
         /// DPoP-bound access tokens for this client.</summary>
         public const string DpopBoundAccessTokens = "dpop_bound_access_tokens";
 
-        /// <summary>The <c>require_pushed_authorization_requests</c> registration parameter (RFC 9126 §6)
+        /// <summary>The <c>require_pushed_authorization_requests</c> registration parameter (RFC 9126 section 6)
         /// making PAR the only way this client may start an authorization flow.</summary>
         public const string RequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
 
-        /// <summary>The <c>require_signed_request_object</c> registration parameter (RFC 9101 §10.5)
+        /// <summary>The <c>require_signed_request_object</c> registration parameter (RFC 9101 section 10.5)
         /// committing this client to signed request objects.</summary>
         public const string RequireSignedRequestObject = "require_signed_request_object";
 
         /// <summary>The <c>tls_client_certificate_bound_access_tokens</c> registration parameter
-        /// (RFC 8705 §3.4) requesting certificate-bound access tokens independently of the
+        /// (RFC 8705 section 3.4) requesting certificate-bound access tokens independently of the
         /// authentication method.</summary>
         public const string TlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
 
-        /// <summary>The <c>authorization_details_types</c> registration parameter (RFC 9396 §10):
+        /// <summary>The <c>authorization_details_types</c> registration parameter (RFC 9396 section 10):
         /// per-client allowlist of authorization-detail <c>type</c> values this client may use in
         /// Rich Authorization Requests.</summary>
         public const string AuthorizationDetailsTypes = "authorization_details_types";
@@ -895,6 +919,10 @@ public record ClientRegistrationRequest
         /// (non-standard extension; RFC 8693 does not standardise it): default-deny per-client
         /// allowlist of <c>audience</c> values this client may request when exchanging a token.</summary>
         public const string TokenExchangeAudiences = "token_exchange_audiences";
+
+        /// <summary>The <c>allowed_resources</c> registration parameter (non-standard extension; RFC 7591 does not
+        /// standardise it): the resources the client may get access tokens for.</summary>
+        public const string AllowedResources = "allowed_resources";
 
         /// <summary>The <c>backchannel_logout_uri</c> registration parameter pointing to the client's
         /// back-channel logout endpoint.</summary>
@@ -934,7 +962,7 @@ public record ClientRegistrationRequest
         public const string BackChannelUserCodeParameter = "backchannel_user_code_parameter";
 
         /// <summary>The <c>scope</c> registration parameter listing scope values the client will use
-        /// (space-separated per RFC 7591 §2).</summary>
+        /// (space-separated per RFC 7591 section 2).</summary>
         public const string Scope = "scope";
 
         /// <summary>The <c>software_id</c> registration parameter identifying the client software product.
@@ -946,7 +974,7 @@ public record ClientRegistrationRequest
         public const string SoftwareVersion = "software_version";
 
         /// <summary>The <c>software_statement</c> registration parameter carrying a signed JWT assertion
-        /// of metadata values about the client software (RFC 7591 §2.3).</summary>
+        /// of metadata values about the client software (RFC 7591 section 2.3).</summary>
         public const string SoftwareStatement = "software_statement";
     }
 }

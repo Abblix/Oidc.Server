@@ -6,13 +6,15 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Jwt;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Microsoft.Extensions.Options;
@@ -29,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration;
 	Justification = "Configuration handler legitimately requires multiple specialized metadata providers to assemble comprehensive OIDC discovery document")]
 public sealed class ConfigurationHandler(
 	IOptionsSnapshot<OidcOptions> options,
-	IIssuerProvider issuerProvider,
+	ITenantCatalog catalog,
 	ILogoutNotifier logoutNotifier,
 	IClientAuthenticator clientAuthenticator,
 	IAuthorizationMetadataProvider authorizationMetadata,
@@ -49,19 +51,19 @@ public sealed class ConfigurationHandler(
 	/// Handles the configuration request by building discovery metadata.
 	/// </summary>
 	/// <returns>Configuration response with metadata but without resolved endpoint URLs.</returns>
-	public Task<ConfigurationResponse> HandleAsync() => Task.FromResult(new ConfigurationResponse
+	public Task<ConfigurationResponse> HandleAsync(TenantDefinition tenant) => Task.FromResult(new ConfigurationResponse
 	{
-		Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
+		Issuer = Licensed(tenant),
 
 		FrontChannelLogoutSupported = logoutNotifier.FrontChannelLogoutSupported,
 		FrontChannelLogoutSessionSupported = logoutNotifier.FrontChannelLogoutSessionSupported,
 		BackChannelLogoutSupported = logoutNotifier.BackChannelLogoutSupported,
 		BackChannelLogoutSessionSupported = logoutNotifier.BackChannelLogoutSessionSupported,
 
-		ScopesSupported = scopesAndClaims.ScopesSupported,
-		ClaimsSupported = scopesAndClaims.ClaimsSupported,
+		ScopesSupported = scopesAndClaims.ScopesSupported(tenant),
+		ClaimsSupported = scopesAndClaims.ClaimsSupported(tenant),
 		GrantTypesSupported = scopesAndClaims.GrantTypesSupported,
-		SubjectTypesSupported = scopesAndClaims.SubjectTypesSupported,
+		SubjectTypesSupported = scopesAndClaims.SubjectTypesSupported(tenant),
 
 		ClaimsParameterSupported = authorizationMetadata.ClaimsParameterSupported,
 		ResponseTypesSupported = authorizationMetadata.ResponseTypesSupported,
@@ -71,10 +73,10 @@ public sealed class ConfigurationHandler(
 		CodeChallengeMethodsSupported = authorizationMetadata.CodeChallengeMethodsSupported,
 		RequestParameterSupported = authorizationMetadata.RequestParameterSupported,
 		RequestObjectSigningAlgValuesSupported = authorizationMetadata.RequestParameterSupported
-			? jwtAlgorithms.SigningAlgorithmsSupported
+			? Signing(tenant, jwtAlgorithms.SigningAlgorithmsSupported)
 			: null,
 		RequestObjectEncryptionAlgValuesSupported = authorizationMetadata.RequestParameterSupported
-			? jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported
+			? KeyManagement(tenant, jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported)
 			: null,
 		RequestObjectEncryptionEncValuesSupported = authorizationMetadata.RequestParameterSupported
 			? jwtAlgorithms.RequestObjectEncryptionEncValuesSupported
@@ -82,14 +84,17 @@ public sealed class ConfigurationHandler(
 
 		// JARM (JWT Secured Authorization Response Mode) is always available - a client opts in per request
 		// by selecting a *.jwt response mode - so the supported algorithms are advertised unconditionally.
-		AuthorizationSigningAlgValuesSupported = jwtAlgorithms.AuthorizationSigningAlgValuesSupported,
-		AuthorizationEncryptionAlgValuesSupported = jwtAlgorithms.AuthorizationEncryptionAlgValuesSupported,
+		AuthorizationSigningAlgValuesSupported = Signing(tenant, jwtAlgorithms.AuthorizationSigningAlgValuesSupported),
+		AuthorizationEncryptionAlgValuesSupported =
+			KeyManagement(tenant, jwtAlgorithms.AuthorizationEncryptionAlgValuesSupported),
 		AuthorizationEncryptionEncValuesSupported = jwtAlgorithms.AuthorizationEncryptionEncValuesSupported,
 
 		// RFC 9701 JWT introspection responses are always available - a client opts in per request via Accept and
 		// its registered introspection_signed_response_alg - so the supported algorithms are advertised unconditionally.
-		IntrospectionSigningAlgValuesSupported = jwtAlgorithms.IntrospectionSigningAlgValuesSupported,
-		IntrospectionEncryptionAlgValuesSupported = jwtAlgorithms.IntrospectionEncryptionAlgValuesSupported,
+		IntrospectionSigningAlgValuesSupported =
+			SigningOrPlain(tenant, jwtAlgorithms.IntrospectionSigningAlgValuesSupported),
+		IntrospectionEncryptionAlgValuesSupported =
+			KeyManagement(tenant, jwtAlgorithms.IntrospectionEncryptionAlgValuesSupported),
 		IntrospectionEncryptionEncValuesSupported = jwtAlgorithms.IntrospectionEncryptionEncValuesSupported,
 
 		RequirePushedAuthorizationRequests = options.Value.RequirePushedAuthorizationRequests,
@@ -97,7 +102,7 @@ public sealed class ConfigurationHandler(
 
 		TokenEndpointAuthMethodsSupported = clientAuthenticator.ClientAuthenticationMethodsSupported,
 
-		// RFC 8705 §3.3: advertise certificate-bound access tokens only when a mutual-TLS client
+		// RFC 8705 section 3.3: advertise certificate-bound access tokens only when a mutual-TLS client
 		// authentication method is available - the server then both issues bound tokens and
 		// enforces the binding at its protected resources (MtlsUserInfoValidator).
 		TlsClientCertificateBoundAccessTokens = clientAuthenticator.ClientAuthenticationMethodsSupported.Any(
@@ -106,21 +111,61 @@ public sealed class ConfigurationHandler(
 			? true
 			: null,
 
-		TokenEndpointAuthSigningAlgValuesSupported = jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported,
-		IdTokenSigningAlgValuesSupported = jwtAlgorithms.SignedResponseAlgorithmsSupported,
-		UserInfoSigningAlgValuesSupported = jwtAlgorithms.SignedResponseAlgorithmsSupported,
-		DpopSigningAlgValuesSupported = jwtAlgorithms.DpopSigningAlgorithmsSupported,
+		TokenEndpointAuthSigningAlgValuesSupported =
+			Signing(tenant, jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported),
+		IdTokenSigningAlgValuesSupported = Signing(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
+		UserInfoSigningAlgValuesSupported = SigningOrPlain(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
+		// RFC 9449 section 5.1: the metadata is there "to signal support for DPoP in general", so a tenant whose
+		// profile refuses DPoP (FAPI 1.0 Part 2 section 8.2) does not carry it
+		DpopSigningAlgValuesSupported = SecurityProfileRequirements.For(tenant, client: null).RequireCertificateBoundTokens
+			? null
+			: Signing(tenant, jwtAlgorithms.DpopSigningAlgorithmsSupported),
 
-		BackChannelAuthenticationRequestSigningAlgValuesSupported =
-			cibaCompletionHandler is null ? null : jwtAlgorithms.BackChannelAuthenticationRequestSigningAlgValuesSupported,
+		BackChannelAuthenticationRequestSigningAlgValuesSupported = cibaCompletionHandler is null
+			? null
+			: Signing(tenant, jwtAlgorithms.BackChannelAuthenticationRequestSigningAlgValuesSupported),
 		BackChannelTokenDeliveryModesSupported = cibaCompletionHandler?.TokenDeliveryModesSupported,
 		BackChannelUserCodeParameterSupported =
 			cibaCompletionHandler is null ? null : options.Value.BackChannelAuthentication.UserCodeParameterSupported,
 
-		AcrValuesSupported = acrMetadata.AcrValuesSupported,
+		AcrValuesSupported = acrMetadata.AcrValuesSupported(tenant),
 
 		AuthorizationResponseIssParameterSupported = authorizationMetadata.AuthorizationResponseIssParameterSupported,
 
 		AuthorizationDetailsTypesSupported = authorizationDetailsMetadata.SupportedTypes,
 	});
+
+	/// <summary>
+	/// The signature algorithms of <paramref name="algorithms"/> the tenant's profile admits: FAPI 1.0 Part 2 section
+	/// 8.6, FAPI 2.0 section 5.4.1. A client registering what the document lists is then registered with an algorithm
+	/// it can use.
+	/// </summary>
+	private static IEnumerable<string> Signing(TenantDefinition tenant, IEnumerable<string> algorithms)
+		=> algorithms.Where(SecurityProfileRequirements.For(tenant, client: null).PermitsSigningAlgorithm);
+
+	/// <summary>
+	/// As <see cref="Signing"/>, keeping <c>none</c>, which for a userinfo or introspection response means plain JSON
+	/// rather than an unsigned JWS.
+	/// </summary>
+	private static IEnumerable<string> SigningOrPlain(TenantDefinition tenant, IEnumerable<string> algorithms)
+	{
+		var profile = SecurityProfileRequirements.For(tenant, client: null);
+		return algorithms.Where(algorithm => algorithm == SigningAlgorithms.None || profile.PermitsSigningAlgorithm(algorithm));
+	}
+
+	/// <summary>
+	/// The key management algorithms of <paramref name="algorithms"/> the tenant's profile admits: FAPI 1.0 Part 2
+	/// section 8.6.1, FAPI 2.0 section 5.4.1 by RFC 8725 section 3.2.
+	/// </summary>
+	private static IEnumerable<string> KeyManagement(TenantDefinition tenant, IEnumerable<string> algorithms)
+		=> algorithms.Where(SecurityProfileRequirements.For(tenant, client: null).PermitsKeyManagementAlgorithm);
+
+	/// <summary>
+	/// The issuer of <paramref name="tenant"/>, once the license has counted it as written.
+	/// </summary>
+	private Uri Licensed(TenantDefinition tenant)
+	{
+		LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog);
+		return tenant.Issuer;
+	}
 }

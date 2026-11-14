@@ -5,6 +5,8 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Buffers;
+
 namespace Abblix.SecurityEvents.Subjects;
 
 /// <summary>
@@ -47,6 +49,11 @@ public static class PhoneNumberCanonicalization
     {
         ArgumentNullException.ThrowIfNull(phoneNumber);
 
-        return string.Concat(phoneNumber.Where(character => character is not (' ' or '-' or '(' or ')' or '.')));
+        return string.Concat(phoneNumber.Where(character => !PresentationSeparators.Contains(character)));
     }
+
+    /// <summary>
+    /// The separators E.164 presentation adds for a human reader, and nothing else.
+    /// </summary>
+    private static readonly SearchValues<char> PresentationSeparators = SearchValues.Create(" -().");
 }

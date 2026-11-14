@@ -5,10 +5,12 @@ on:
   # pull request targeting one. A path filter here made them required-but-absent for any PR outside
   # .github/, and a missing check can never be satisfied - the only way to merge was an admin bypass,
   # on every such PR. A required check has to be one CI can actually produce.
+  # A release branch too: a pull request there changing only .github/, outside the workflows that run the suite,
+  # skips the tests, so these lints are its only check.
   pull_request:
-    branches: [master, develop]
+    branches: [master, develop, "release/**"]
   push:
-    branches: [master, develop]
+    branches: [master, develop, "release/**"]
   workflow_dispatch:
 
 permissions:
@@ -16,11 +18,13 @@ permissions:
 
 concurrency:
   group: lint-workflows-${{ github.ref }}
-  cancel-in-progress: true
+  # A pull request's stale run is cancelled by its next push; a run on master or develop never is, since it
+  # is the verdict on that commit and cancelling it would hide a red result behind the next push.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   no-inline-secrets:
-    name: Block inline untrusted-input interpolation
+    name: Block expressions inside run scripts
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -46,29 +50,11 @@ jobs:
             --require-hashes -r .github/workflows/requirements/lint-workflows.txt
 
         timeout-minutes: 3
-      - name: "Block inline untrusted-input interpolation in run: blocks"
-        run: python .github/scripts/lint-no-inline-secrets.py
+      - name: Block expressions inside executed values
+        # pinned commit (internal action, no semver tag) - one copy of the check for every repository;
+        # it tests itself on planted expressions before reading this one
+        uses: Abblix/.github/.github/actions/lint-workflow-expressions@9b0dd9cdb5a4a5b4c9f627c437d9f357146030a5
 
-        timeout-minutes: 3
-    timeout-minutes: 5
-  license-headers:
-    name: Licence headers carry an SPDX identifier
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          persist-credentials: false
-        timeout-minutes: 3
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
-        with:
-          python-version: '3.12'
-        timeout-minutes: 3
-      # The checker uses only the standard library, so there is nothing to install and
-      # no third-party code runs here.
-      - name: Check licence headers
-        run: python .github/scripts/lint-license-headers.py
         timeout-minutes: 3
     timeout-minutes: 5
   actionlint:
@@ -77,11 +63,11 @@ jobs:
     permissions:
       contents: read
     env:
-      ACTIONLINT_VERSION: '1.7.10'
+      ACTIONLINT_VERSION: '1.7.12'
       # The checksum is mandatory: without it the step trusts whatever the network returns
       # and runs it with the job's permissions. When bumping the version, take the sum from
       # actionlint_<version>_checksums.txt of that same release.
-      ACTIONLINT_SHA256: 'f4c76b71db5755a713e6055cbb0857ed07e103e028bda117817660ebadb4386f'
+      ACTIONLINT_SHA256: '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:

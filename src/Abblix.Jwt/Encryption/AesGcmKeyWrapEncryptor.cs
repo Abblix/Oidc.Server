@@ -5,10 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
-using System.Security.Cryptography;
-using Abblix.Utils;
 
 namespace Abblix.Jwt.Encryption;
 
@@ -45,12 +42,6 @@ internal sealed class AesGcmKeyWrapEncryptor(string algorithm) : IKeyManagementA
 		_ => throw new ArgumentException($"Unsupported AES-GCM Key Wrap algorithm: {algorithm}", nameof(algorithm))
 	};
 
-	// Per RFC 7518 Section 4.7.1.1: IV is 96 bits (12 bytes)
-	private const int IvSize = 12;
-
-	// Per RFC 7518 Section 4.7.1.2: Authentication Tag is 128 bits (16 bytes)
-	private const int TagSize = 16;
-
 	/// <inheritdoc />
 	/// <remarks>
 	/// Per RFC 7518 Section 4.7 the 96-bit IV and 128-bit authentication tag travel in the JOSE header
@@ -70,23 +61,7 @@ internal sealed class AesGcmKeyWrapEncryptor(string algorithm) : IKeyManagementA
 				$"Actual size: {keyEncryptionKey.KeyValue.Length} bytes.");
 		}
 
-		// Generate random 96-bit IV per RFC 7518 Section 4.7.1.1
-		var iv = CryptoRandom.GetRandomBytes(IvSize);
-
-		var ciphertext = new byte[keyToEncrypt.Length];
-		var tag = new byte[TagSize];
-
-		// Encrypt using AES-GCM
-		using var aesGcm = new AesGcm(keyEncryptionKey.KeyValue, TagSize);
-		aesGcm.Encrypt(iv, keyToEncrypt, ciphertext, tag);
-
-		// Per RFC 7518 Section 4.7.1.1/4.7.1.2 the IV and tag are carried as JOSE header parameters, not
-		// inside the Encrypted Key, so a conformant JOSE recipient can locate them. The header is encoded
-		// by the caller after this method returns, so these writes are captured in the final token.
-		header.KeyWrapInitializationVector = Base64Url.EncodeToString(iv);
-		header.KeyWrapAuthenticationTag = Base64Url.EncodeToString(tag);
-
-		return ciphertext;
+		return AesGcmKeyWrap.Wrap(header, keyEncryptionKey.KeyValue, keyToEncrypt);
 	}
 
 	/// <inheritdoc />
@@ -96,54 +71,10 @@ internal sealed class AesGcmKeyWrapEncryptor(string algorithm) : IKeyManagementA
 		byte[] encryptedKey,
 		[NotNullWhen(true)] out byte[]? decryptedKey)
 	{
-		try
-		{
-			// Validate KEK
-			if (keyEncryptionKey.KeyValue == null || keyEncryptionKey.KeyValue.Length != _keySize)
-			{
-				decryptedKey = null;
-				return false;
-			}
+		decryptedKey = keyEncryptionKey.KeyValue is { } keyValue && keyValue.Length == _keySize
+			? AesGcmKeyWrap.TryUnwrap(header, keyValue, encryptedKey)
+			: null;
 
-			// Per RFC 7518 Section 4.7 the IV and authentication tag are JOSE header parameters and the
-			// Encrypted Key is the wrapped-CEK ciphertext alone. A producer that omits either header
-			// parameter cannot be processed.
-			var ivBase64Url = header.KeyWrapInitializationVector;
-			var tagBase64Url = header.KeyWrapAuthenticationTag;
-			if (ivBase64Url == null || tagBase64Url == null)
-			{
-				decryptedKey = null;
-				return false;
-			}
-
-			var iv = Base64Url.DecodeFromChars(ivBase64Url);
-			var tag = Base64Url.DecodeFromChars(tagBase64Url);
-			if (iv.Length != IvSize || tag.Length != TagSize)
-			{
-				decryptedKey = null;
-				return false;
-			}
-
-			// Allocate output buffer sized to the wrapped-CEK ciphertext
-			decryptedKey = new byte[encryptedKey.Length];
-
-			// Decrypt using AES-GCM
-			using var aesGcm = new AesGcm(keyEncryptionKey.KeyValue, TagSize);
-			aesGcm.Decrypt(iv, encryptedKey, tag, decryptedKey);
-
-			return true;
-		}
-		catch (CryptographicException)
-		{
-			// Decryption or authentication failed
-			decryptedKey = null;
-			return false;
-		}
-		catch (FormatException)
-		{
-			// Malformed base64url in the 'iv'/'tag' header parameters
-			decryptedKey = null;
-			return false;
-		}
+		return decryptedKey != null;
 	}
 }

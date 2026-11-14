@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -35,7 +36,40 @@ public class SubjectTypeValidatorTests
     {
         _secureHttpFetcher = new Mock<ISecureHttpFetcher>(MockBehavior.Strict);
         _logger = new Mock<ILogger<SubjectTypeValidator>>();
-        _validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object);
+        _validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, new FixedSubjectTypeConverter(PairwiseKeyed));
+    }
+
+    /// <summary>
+    /// A converter holding a pairwise key, so a pairwise registration reaches the sector checks.
+    /// </summary>
+    private static readonly SubjectTypeConverter PairwiseKeyed =
+        new(new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
+
+    /// <summary>
+    /// The pairwise key is the tenant's own: a tenant holding none refuses a pairwise registration, rather than
+    /// register a client every one of whose token requests would fail, and a tenant holding one accepts it.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task APairwiseRegistration_IsAcceptedOnlyAtATenantHoldingAKey(bool tenantHoldsAKey)
+    {
+        var validator = new SubjectTypeValidator(_logger.Object, _secureHttpFetcher.Object, SingleIssuer.SubjectTypes());
+        var tenant = new TestIssuer
+        {
+            PairwiseSubject = tenantHoldsAKey
+                ? new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) }
+                : null,
+        }.ToTenant();
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            SubjectType = SubjectTypes.Pairwise,
+            RedirectUris = [new Uri("https://client.example.com/callback")],
+        });
+
+        var error = await validator.ValidateAsync(tenant, context);
+
+        Assert.Equal(tenantHoldsAKey ? null : ErrorCodes.InvalidClientMetadata, error?.Error);
     }
 
     /// <summary>
@@ -56,7 +90,7 @@ public class SubjectTypeValidatorTests
     {
         var context = CreateContext(nullRatherThanEmpty ? null! : [], SubjectTypes.Pairwise);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
@@ -96,7 +130,7 @@ public class SubjectTypeValidatorTests
             subjectType: SubjectTypes.Public);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -119,7 +153,7 @@ public class SubjectTypeValidatorTests
             subjectType: SubjectTypes.Pairwise);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -143,7 +177,7 @@ public class SubjectTypeValidatorTests
             subjectType: SubjectTypes.Pairwise);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -164,7 +198,7 @@ public class SubjectTypeValidatorTests
             subjectType: SubjectTypes.Pairwise);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -189,7 +223,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success(redirectUris));
+            .ReturnsAsync((Result<Uri[], OidcError>)(redirectUris));
 
         var context = CreateContext(
             redirectUris: redirectUris,
@@ -197,7 +231,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: sectorUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -218,7 +252,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: new Uri("http://example.com/sector.json"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -244,7 +278,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success(sectorContent));
+            .ReturnsAsync((Result<Uri[], OidcError>)(sectorContent));
 
         var context = CreateContext(
             redirectUris: [TestConstants.DefaultRedirectUri],
@@ -252,7 +286,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: sectorUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -278,7 +312,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success(sectorContent));
+            .ReturnsAsync((Result<Uri[], OidcError>)(sectorContent));
 
         var context = CreateContext(
             redirectUris: [TestConstants.DefaultRedirectUri],
@@ -286,7 +320,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: sectorUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -307,7 +341,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success(sectorContent));
+            .ReturnsAsync((Result<Uri[], OidcError>)(sectorContent));
 
         var context = CreateContext(
             redirectUris: [TestConstants.DefaultRedirectUri], // Not listed in the sector document
@@ -315,7 +349,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: sectorUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -335,7 +369,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Failure(fetchError));
+            .ReturnsAsync((Result<Uri[], OidcError>)(fetchError));
 
         var context = CreateContext(
             redirectUris: [TestConstants.DefaultRedirectUri],
@@ -343,7 +377,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: sectorUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -363,7 +397,7 @@ public class SubjectTypeValidatorTests
             subjectType: SubjectTypes.Pairwise);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Equal("app.example.com", context.SectorIdentifier);
@@ -382,7 +416,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success(redirectUris));
+            .ReturnsAsync((Result<Uri[], OidcError>)(redirectUris));
 
         var context = CreateContext(
             redirectUris: redirectUris,
@@ -390,7 +424,7 @@ public class SubjectTypeValidatorTests
             sectorIdentifierUri: sectorUri);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Equal("sector.example.com", context.SectorIdentifier);
@@ -416,7 +450,7 @@ public class SubjectTypeValidatorTests
             redirectUris: [new Uri("/cb", UriKind.Relative)],
             subjectType: SubjectTypes.Pairwise);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Equal(ErrorCodes.InvalidClientMetadata, Assert.IsType<OidcError>(result).Error);
         Assert.Null(context.SectorIdentifier);
@@ -426,7 +460,8 @@ public class SubjectTypeValidatorTests
     /// The control: an absolute https redirect URI still yields its host as the sector.
     /// </summary>
     /// <remarks>
-    /// Without it a validator that refused every redirect URI would pass the row above, and every
+    /// Without it a validator that refused every redirect URI would pass
+    /// <see cref="ValidateAsync_ARelativeRedirectUri_IsRefusedRatherThanFaulting"/>, and every
     /// pairwise web client would stop registering.
     /// </remarks>
     [Fact]
@@ -436,7 +471,7 @@ public class SubjectTypeValidatorTests
             redirectUris: [new Uri("https://app.example.com/cb")],
             subjectType: SubjectTypes.Pairwise);
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
         Assert.Equal("app.example.com", context.SectorIdentifier);
     }
 
@@ -468,8 +503,9 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success(
-                listedInDocument ? [modeUri] : [new Uri("https://client.example.com/something-else")]));
+            .ReturnsAsync((Result<Uri[], OidcError>)(listedInDocument
+                ? new[] { modeUri }
+                : new[] { new Uri("https://client.example.com/something-else") }));
 
         var isPush = deliveryMode == BackchannelTokenDeliveryModes.Push;
         var context = CreateContext(
@@ -481,7 +517,7 @@ public class SubjectTypeValidatorTests
             jwksUri: isPush ? null : modeUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         if (expectError)
@@ -502,7 +538,9 @@ public class SubjectTypeValidatorTests
     /// <remarks>
     /// The requirement is written per mode, so making it unconditional would refuse a plain pairwise
     /// client that happens to publish a jwks_uri - which OIDC Core has never required to be listed.
-    /// This row is what stops the two arms above from widening into every registration.
+    /// This row is what stops the two per-mode arms
+    /// <see cref="ValidateAsync_CibaSectorDocument_MustListTheUriTheModeNames"/> drives from widening into
+    /// every registration.
     /// </remarks>
     [Fact]
     public async Task ValidateAsync_PairwiseWithNoDeliveryMode_DoesNotRequireTheCibaUris()
@@ -513,7 +551,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success([redirectUri]));
+            .ReturnsAsync((Result<Uri[], OidcError>)(new[] { redirectUri }));
 
         var context = CreateContext(
             redirectUris: [redirectUri],
@@ -524,7 +562,7 @@ public class SubjectTypeValidatorTests
             jwksUri: new Uri("https://client.example.com/jwks"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -547,7 +585,7 @@ public class SubjectTypeValidatorTests
 
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success([]));
+            .ReturnsAsync((Result<Uri[], OidcError>)(Array.Empty<Uri>()));
 
         var context = CreateContext(
             redirectUris: [],
@@ -557,7 +595,7 @@ public class SubjectTypeValidatorTests
             notificationEndpoint: notificationEndpoint);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -590,7 +628,7 @@ public class SubjectTypeValidatorTests
             jwksUri: new Uri("https://keys.example.com/jwks"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -627,7 +665,7 @@ public class SubjectTypeValidatorTests
             notificationEndpoint: new Uri("https://notify.example.com/callback"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -655,7 +693,7 @@ public class SubjectTypeValidatorTests
             notificationEndpoint: new Uri("https://notify.example.com/callback"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -684,14 +722,15 @@ public class SubjectTypeValidatorTests
         var registered = new Uri("https://app.example.com/cb");
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success([registered, new Uri("/cb", UriKind.Relative)]));
+            .ReturnsAsync((Result<Uri[], OidcError>)(
+                new[] { registered, new Uri("/cb", UriKind.Relative) }));
 
         var context = CreateContext(
             redirectUris: [registered],
             subjectType: SubjectTypes.Pairwise,
             sectorIdentifierUri: sectorUri);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         var error = Assert.IsType<OidcError>(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
@@ -702,7 +741,9 @@ public class SubjectTypeValidatorTests
     /// The control: a document whose entries are all absolute https URIs still registers.
     /// </summary>
     /// <remarks>
-    /// Without it, an arm refusing every document would pass the row above and no pairwise client with a
+    /// Without it, an arm refusing every document would pass
+    /// <see cref="ValidateAsync_ARelativeUriInTheSectorDocument_IsRefusedRatherThanFaulting"/> and no pairwise
+    /// client with a
     /// sector identifier URI could register at all.
     /// </remarks>
     [Fact]
@@ -712,14 +753,14 @@ public class SubjectTypeValidatorTests
         var registered = new Uri("https://app.example.com/cb");
         _secureHttpFetcher
             .Setup(f => f.FetchAsync<Uri[]>(sectorUri))
-            .ReturnsAsync(Result<Uri[], OidcError>.Success([registered]));
+            .ReturnsAsync((Result<Uri[], OidcError>)(new[] { registered }));
 
         var context = CreateContext(
             redirectUris: [registered],
             subjectType: SubjectTypes.Pairwise,
             sectorIdentifierUri: sectorUri);
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
         Assert.Equal("sector.example.com", context.SectorIdentifier);
     }
 
@@ -750,7 +791,7 @@ public class SubjectTypeValidatorTests
             jwksUri: isPush ? null : overHttp);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -785,7 +826,7 @@ public class SubjectTypeValidatorTests
             jwksUri: isPush ? null : relative);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);

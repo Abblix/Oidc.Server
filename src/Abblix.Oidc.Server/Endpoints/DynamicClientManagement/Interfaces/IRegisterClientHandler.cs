@@ -7,12 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Handles <c>POST</c> requests to the registration endpoint per RFC 7591 §3 and the
+/// Handles <c>POST</c> requests to the registration endpoint per RFC 7591 section 3 and the
 /// OpenID Connect Dynamic Client Registration 1.0 specification, validating supplied
 /// metadata and provisioning a new client.
 /// </summary>
@@ -23,11 +24,12 @@ public interface IRegisterClientHandler
     /// generates credentials, and issues the registration access token used for later
     /// management operations (RFC 7592).
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="clientRegistrationRequest">The client metadata payload as defined in
-    /// RFC 7591 §2 and OIDC Dynamic Client Registration 1.0.</param>
+    /// RFC 7591 section 2 and OIDC Dynamic Client Registration 1.0.</param>
     /// <returns>
-    /// A successful response per RFC 7591 §3.2.1 (containing <c>client_id</c>,
-    /// <c>client_secret</c>, <c>registration_access_token</c>, etc.) or an error per §3.2.2.
+    /// A successful response per RFC 7591 section 3.2.1 (containing <c>client_id</c>,
+    /// <c>client_secret</c>, <c>registration_access_token</c>, etc.) or an error per section 3.2.2.
     /// </returns>
-    Task<Result<ClientRegistrationSuccessResponse, OidcError>> HandleAsync(Model.ClientRegistrationRequest clientRegistrationRequest);
+    Task<Result<ClientRegistrationSuccessResponse, OidcError>> HandleAsync(TenantDefinition tenant, Model.ClientRegistrationRequest clientRegistrationRequest);
 }

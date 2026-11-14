@@ -52,13 +52,56 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Basic", base64Credentials)
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
         };
+    }
+
+    /// <summary>
+    /// RFC 9110 section 11.1 identifies the scheme by a case-insensitive token, so credentials under the Basic scheme
+    /// in another case authenticate the client the same way.
+    /// </summary>
+    [Fact]
+    public async Task ValidAuthentication_UnderTheSchemeInAnotherCase_ShouldAuthenticate()
+    {
+        var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .ReturnsAsync(CreateClientInfo(ClientSecret));
+        var valid = PrepareValidRequest(ClientId, ClientSecret);
+        var request = valid with
+        {
+            AuthorizationHeader = new AuthenticationHeaderValue(
+                TokenTypes.Basic.ToLowerInvariant(),
+                valid.AuthorizationHeader!.Parameter),
+        };
+
+        var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+
+        Assert.NotNull(result);
+        Assert.Equal(ClientId, result.ClientId);
     }
 
     protected override ClientRequest PrepareMissingPrimaryCredentialRequest()
     {
         return new ClientRequest();
+    }
+
+    /// <summary>
+    /// Credentials that are not base64 are the client's malformed request, not a fault of the server: the client is
+    /// simply not authenticated by this method, so the caller answers invalid_client (RFC 6749 section 5.2).
+    /// </summary>
+    [Fact]
+    public async Task CredentialsThatAreNotBase64_AreNotAuthenticated()
+    {
+        var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        var request = new ClientRequest
+        {
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, "not*base64!"),
+        };
+
+        var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+
+        Assert.Null(result);
     }
 
     protected override ClientRequest PrepareWrongFormatRequest()
@@ -68,7 +111,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Bearer", base64Credentials)
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, base64Credentials)
         };
     }
 
@@ -79,7 +122,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Basic", base64Credentials)
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
         };
     }
 
@@ -90,7 +133,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Basic", base64Credentials)
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
         };
     }
 
@@ -101,7 +144,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Basic", base64Credentials)
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
         };
     }
 
@@ -119,11 +162,11 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         var authenticator = CreateAuthenticator(clientInfoProvider);
         var request = new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Basic")
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic)
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -145,11 +188,11 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         var request = new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue("Basic", base64Credentials)
+            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
         };
 
         // Act
-        var result = await authenticator.TryAuthenticateClientAsync(request);
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);

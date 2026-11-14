@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -45,9 +46,19 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string RequestHeaderMarkerName = "RequestHeaderAttribute";
 	private const string AuthorizationHeaderMarkerName = "AuthorizationHeaderAttribute";
 	private const string ClientCertificateMarkerName = "ClientCertificateAttribute";
+	private const string QueryParameterMarkerName = "QueryParameterAttribute";
+	private const string FormParameterMarkerName = "FormParameterAttribute";
 	private const string SystemTextJsonNamespace = "System.Text.Json.Serialization";
 	private const string JsonIgnoreAttributeName = "JsonIgnoreAttribute";
 	private const string JsonPropertyNameAttributeName = "JsonPropertyNameAttribute";
+	private const string DisplayAttributeName = "global::System.ComponentModel.DataAnnotations.Display";
+	private const string RequiredAttributeName = "System.ComponentModel.DataAnnotations.RequiredAttribute";
+	private const string BindRequiredAttributeName = "global::Microsoft.AspNetCore.Mvc.ModelBinding.BindRequired";
+	private const string RequestParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.RequestParameterBinder";
+	private const string SplitSourceParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.SplitSourceParameterBinder";
+	private const string CustomParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.CustomParameterBinder";
+	private const string ParameterBinderAttributeName = "global::Abblix.Oidc.Server.Mvc.Binders.ParameterBinder";
+	private const string HeaderBinderAttributeName = "global::Abblix.Oidc.Server.Mvc.Binders.HeaderBinder";
 
 	private static readonly string CompilerServicesNamespace =
 		typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute).Namespace!;
@@ -209,7 +220,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 	{
 		private readonly StringBuilder _writer = new();
 		private readonly List<DiagnosticInfo> _diagnostics = [];
-		private readonly List<string> _mappedProperties = [];
+		private readonly List<IPropertySymbol> _mappedProperties = [];
 		private readonly Dictionary<string, INamedTypeSymbol> _binderMap = BuildBinderMap(compilation);
 
 		// The namespace the executable validation attributes live in, derived from the anchor type rather than
@@ -251,7 +262,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 				else if (IsExcludedFromWire(property))
 				{
 					// A payload-excluded property carrying a declarative marker the generator does
-					// not recognise would silently fall out of the model - fail the build instead,
+					// not recognize would silently fall out of the model - fail the build instead,
 					// so a renamed or mistyped marker cannot drop a parameter unnoticed.
 					if (HasDeclarativeMarker(property))
 					{
@@ -294,15 +305,27 @@ public class MvcModelGenerator : IIncrementalGenerator
 				case AuthorizationHeaderMarkerName
 					when _binderMap.TryGetValue(markerClass.ToDisplayString(), out var headerBinder):
 					// "Authorization" is the standard HTTP header name implied by the marker's
-					// semantics (RFC 9110 §11.6.2), not binder-specific knowledge.
+					// semantics (RFC 9110 section 11.6.2), not binder-specific knowledge.
 					_writer.AppendLine(
-						$"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({headerBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), Name = \"Authorization\")]");
+						$"\t[{HeaderBinderAttributeName}(typeof({headerBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}), \"Authorization\")]");
 					break;
 
 				case ClientCertificateMarkerName
 					when _binderMap.TryGetValue(markerClass.ToDisplayString(), out var certificateBinder):
 					_writer.AppendLine(
 						$"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({certificateBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}))]");
+					break;
+
+				// The property's own source overrides the action parameter's query-or-form one, so the parameter is read
+				// from this part of the request alone, and still counted like any other single-valued parameter
+				case QueryParameterMarkerName
+					when sourceMarker.ConstructorArguments is [{ Value: string queryName }]:
+					EmitSingleSourceParameter("FromQuery", queryName);
+					break;
+
+				case FormParameterMarkerName
+					when sourceMarker.ConstructorArguments is [{ Value: string formName }]:
+					EmitSingleSourceParameter("FromForm", formName);
 					break;
 
 				default:
@@ -315,7 +338,15 @@ public class MvcModelGenerator : IIncrementalGenerator
 			var type = property.Type.ToDisplayString(FullyQualifiedWithNullability);
 			_writer.AppendLine($"\tpublic {type} {property.Name} {{ get; init; }}{GetInitializer(property)}");
 
-			_mappedProperties.Add(property.Name);
+			_mappedProperties.Add(property);
+		}
+
+		private void EmitSingleSourceParameter(string sourceAttribute, string wireName)
+		{
+			var literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(wireName, quote: true);
+			_writer.AppendLine($"\t[global::Microsoft.AspNetCore.Mvc.{sourceAttribute}(Name = {literal})]");
+			_writer.AppendLine($"\t[{DisplayAttributeName}(Name = {literal})]");
+			_writer.AppendLine($"\t[{ParameterBinderAttributeName}(typeof({SplitSourceParameterBinderName}))]");
 		}
 
 		private void EmitProperty(IPropertySymbol property)
@@ -337,6 +368,17 @@ public class MvcModelGenerator : IIncrementalGenerator
 			_writer.AppendLine(
 				$"\t[global::Microsoft.AspNetCore.Mvc.BindProperty({supportsGet}Name = \"{wireName}\")]");
 
+			// A validation message names the member by its display name, and the client knows it by the wire name
+			_writer.AppendLine($"\t[{DisplayAttributeName}(Name = \"{wireName}\")]");
+
+			// A property names one model binder, so the one that counts the parameter and names an unreadable value
+			// carries the binder a wire-format marker asks for, if any. Set here on the property, it reaches this
+			// model's binding and nothing else in the host
+			var markerBinder = MarkerBinderOf(property);
+			_writer.AppendLine(markerBinder is null
+				? $"\t[{ParameterBinderAttributeName}(typeof({RequestParameterBinderName}))]"
+				: $"\t[{ParameterBinderAttributeName}(typeof({CustomParameterBinderName}<{markerBinder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>))]");
+
 			foreach (var attribute in property.GetAttributes())
 			{
 				EmitPropertyAttribute(attribute, property);
@@ -345,8 +387,17 @@ public class MvcModelGenerator : IIncrementalGenerator
 			var type = property.Type.ToDisplayString(FullyQualifiedWithNullability);
 			_writer.AppendLine($"\tpublic {type} {property.Name} {{ get; init; }}{GetInitializer(property)}");
 
-			_mappedProperties.Add(property.Name);
+			_mappedProperties.Add(property);
 		}
+
+		private INamedTypeSymbol? MarkerBinderOf(IPropertySymbol property)
+			=> property.GetAttributes()
+				.Select(attribute => attribute.AttributeClass)
+				.Where(attributeClass =>
+					attributeClass?.ContainingNamespace.ToDisplayString() == _declarativeNamespace)
+				.Select(attributeClass =>
+					_binderMap.TryGetValue(attributeClass!.ToDisplayString(), out var binder) ? binder : null)
+				.FirstOrDefault(binder => binder != null);
 
 		private void EmitPropertyAttribute(AttributeData attribute, IPropertySymbol property)
 		{
@@ -366,10 +417,9 @@ public class MvcModelGenerator : IIncrementalGenerator
 
 			switch (attributeNamespace)
 			{
+				// Realised by the property's model binder, written with the property
 				case { } when attributeNamespace == _declarativeNamespace
-					&& _binderMap.TryGetValue(attributeClass.ToDisplayString(), out var binder):
-					_writer.AppendLine(
-						$"\t[global::Microsoft.AspNetCore.Mvc.ModelBinder(typeof({binder.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}))]");
+					&& _binderMap.ContainsKey(attributeClass.ToDisplayString()):
 					return;
 
 				case { } when attributeNamespace == _declarativeNamespace:
@@ -394,6 +444,12 @@ public class MvcModelGenerator : IIncrementalGenerator
 
 				default:
 					_writer.AppendLine($"\t{RenderAttribute(attribute, attributeClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))}");
+
+					// A required parameter is also required at binding, so a request without it is refused before
+					// validation runs; the flag is set on the property itself, where only this model's binding reads it
+					if (attributeClass.ToDisplayString() == RequiredAttributeName)
+						_writer.AppendLine($"\t[{BindRequiredAttributeName}]");
+
 					return;
 			}
 		}
@@ -410,9 +466,18 @@ public class MvcModelGenerator : IIncrementalGenerator
 			_writer.AppendLine($"\tpublic {coreTypeName} Map() => new()");
 			_writer.AppendLine("\t{");
 
-			foreach (var name in _mappedProperties)
+			foreach (var property in _mappedProperties)
 			{
-				_writer.AppendLine($"\t\t{name} = {name},");
+				// An entry of a repeated parameter that is empty or whitespace alone binds to null, and the core
+				// models hold no null entries: the Minimal API host drops those entries, so this side does too
+				_writer.AppendLine(property.Type switch
+				{
+					IArrayTypeSymbol { ElementType.IsReferenceType: true, NullableAnnotation: NullableAnnotation.Annotated } =>
+						$"\t\t{property.Name} = global::Abblix.Oidc.Server.Mvc.Binders.BoundValues.WithoutEmptyEntries({property.Name}),",
+					IArrayTypeSymbol { ElementType.IsReferenceType: true } =>
+						$"\t\t{property.Name} = global::Abblix.Oidc.Server.Mvc.Binders.BoundValues.WithoutEmptyEntries({property.Name}) ?? [],",
+					_ => $"\t\t{property.Name} = {property.Name},",
+				});
 			}
 
 			_writer.AppendLine("\t};");
@@ -447,11 +512,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 			// into explicit constructor arguments; rendering them back would couple the output to one
 			// specific overload shape. Trailing arguments equal to their parameter's declared default
 			// are therefore omitted, restoring the attribute as it reads in the core source.
-			while (count > 0 &&
-			       parameters is { } knownParameters &&
-			       count <= knownParameters.Length &&
-			       knownParameters[count - 1] is { HasExplicitDefaultValue: true } parameter &&
-			       Equals(arguments[count - 1].Value, parameter.ExplicitDefaultValue))
+			while (count > 0 && EqualsDeclaredDefault(arguments[count - 1], parameters, count - 1))
 			{
 				count--;
 			}
@@ -461,6 +522,16 @@ public class MvcModelGenerator : IIncrementalGenerator
 				yield return arguments[i];
 			}
 		}
+
+		/// <summary>
+		/// Whether an argument spells out the default its parameter declares, so dropping it reads the same.
+		/// </summary>
+		private static bool EqualsDeclaredDefault(
+			TypedConstant argument, ImmutableArray<IParameterSymbol>? parameters, int index)
+			=> parameters is { } knownParameters &&
+			   index < knownParameters.Length &&
+			   knownParameters[index] is { HasExplicitDefaultValue: true } parameter &&
+			   Equals(argument.Value, parameter.ExplicitDefaultValue);
 
 		private static string RenderConstructorArgument(TypedConstant constant)
 			// A trailing array constructor argument is rendered in expanded form on the assumption
@@ -486,18 +557,29 @@ public class MvcModelGenerator : IIncrementalGenerator
 				{ Kind: TypedConstantKind.Array }
 					=> $"new[] {{ {string.Join(", ", constant.Values.Select(RenderTypedConstant))} }}",
 
-				{ Value: string text } => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(text, quote: true),
-				{ Value: char character } => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(character, quote: true),
-				{ Value: bool flag } => flag ? "true" : "false",
+				_ => RenderPrimitive(constant.Value),
+			};
 
-				_ => Convert.ToString(constant.Value, System.Globalization.CultureInfo.InvariantCulture) ?? "null",
+		/// <summary>
+		/// Renders a primitive constant - the last link of the chain <see cref="RenderTypedConstant"/> starts, reached
+		/// once the constant is neither null, a type, an enum nor an array.
+		/// </summary>
+		private static string RenderPrimitive(object? value)
+			=> value switch
+			{
+				string text => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(text, quote: true),
+				char character => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(character, quote: true),
+				bool flag => flag ? "true" : "false",
+
+				_ => Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "null",
 			};
 
 		private AttributeData? TryGetSourceMarker(IPropertySymbol property)
 			=> property.GetAttributes().FirstOrDefault(attribute =>
 				attribute.AttributeClass is
 				{
-					Name: RequestHeaderMarkerName or AuthorizationHeaderMarkerName or ClientCertificateMarkerName,
+					Name: RequestHeaderMarkerName or AuthorizationHeaderMarkerName or ClientCertificateMarkerName
+						or QueryParameterMarkerName or FormParameterMarkerName,
 				} attributeClass &&
 				attributeClass.ContainingNamespace.ToDisplayString() == _declarativeNamespace);
 

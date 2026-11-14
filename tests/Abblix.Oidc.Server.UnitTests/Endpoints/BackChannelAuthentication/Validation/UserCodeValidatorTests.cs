@@ -82,7 +82,7 @@ public class UserCodeValidatorTests
             clientRequiresUserCode: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -102,7 +102,7 @@ public class UserCodeValidatorTests
             clientRequiresUserCode: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -122,7 +122,7 @@ public class UserCodeValidatorTests
             clientRequiresUserCode: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -142,7 +142,7 @@ public class UserCodeValidatorTests
             clientRequiresUserCode: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -162,7 +162,7 @@ public class UserCodeValidatorTests
             clientRequiresUserCode: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -184,7 +184,7 @@ public class UserCodeValidatorTests
             clientRequiresUserCode: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -205,7 +205,7 @@ public class UserCodeValidatorTests
             clientRequiresUserCode: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -225,7 +225,7 @@ public class UserCodeValidatorTests
             clientRequiresUserCode: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -247,7 +247,7 @@ public class UserCodeValidatorTests
             clientRequiresUserCode: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result); // Should pass because client doesn't require
@@ -269,7 +269,7 @@ public class UserCodeValidatorTests
             clientRequiresUserCode: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result); // Should pass because provider doesn't support

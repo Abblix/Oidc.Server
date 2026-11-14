@@ -13,7 +13,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters;
@@ -40,8 +40,10 @@ public class IntrospectionResponseFormatterTests
 
     private async Task<ActionResult> FormatAsync(IntrospectionSuccess success, string? acceptHeader)
     {
-        var issuerProvider = new Mock<IIssuerProvider>();
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
+        var tenantAccessor = Mock.Of<ITenantAccessor>(accessor => accessor.Current == new TenantContext
+        {
+            Tenant = new TenantDefinition { Id = "main", Issuer = new Uri(Issuer) },
+        });
 
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
         options.Setup(o => o.Value).Returns(new OidcOptions());
@@ -54,7 +56,7 @@ public class IntrospectionResponseFormatterTests
         httpContextAccessor.Setup(a => a.HttpContext).Returns(httpContext);
 
         var formatter = new IntrospectionResponseFormatter(
-            issuerProvider.Object,
+            tenantAccessor,
             _clientJwtFormatter.Object,
             TimeProvider.System,
             options.Object,
@@ -74,13 +76,13 @@ public class IntrospectionResponseFormatterTests
     {
         var result = await FormatAsync(ActiveResponse(SigningAlgorithms.None), MediaTypes.TokenIntrospectionJwt);
 
-        // RFC 7662 §2.2: active is a JSON boolean, not the string "true".
+        // RFC 7662 section 2.2: active is a JSON boolean, not the string "true".
         var json = Assert.IsType<JsonResult>(result);
         var introspection = Assert.IsType<JsonObject>(json.Value);
         Assert.True(introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
 
         _clientJwtFormatter.Verify(
-            f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()),
+            f => f.FormatAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()),
             Times.Never);
     }
 
@@ -109,7 +111,7 @@ public class IntrospectionResponseFormatterTests
 
         Assert.IsType<JsonResult>(result);
         _clientJwtFormatter.Verify(
-            f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()),
+            f => f.FormatAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()),
             Times.Never);
     }
 
@@ -118,8 +120,8 @@ public class IntrospectionResponseFormatterTests
     {
         JsonWebToken? capturedToken = null;
         _clientJwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, _, _) => capturedToken = token)
+            .Setup(f => f.FormatAsync(It.Is<TenantDefinition>(tenant => tenant.Id == "main"), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, token, _, _) => capturedToken = token)
             .ReturnsAsync(EncodedJwt);
 
         var result = await FormatAsync(ActiveResponse(SigningAlgorithms.RS256), MediaTypes.TokenIntrospectionJwt);
@@ -128,10 +130,10 @@ public class IntrospectionResponseFormatterTests
         Assert.Equal(MediaTypes.TokenIntrospectionJwt, content.ContentType);
         Assert.Equal(EncodedJwt, content.Content);
 
-        // RFC 9701 §5: typ header is the introspection JWT type, signed with the client's algorithm, addressed to
+        // RFC 9701 section 5: typ header is the introspection JWT type, signed with the client's algorithm, addressed to
         // the client, and the response carried under the token_introspection claim.
         Assert.NotNull(capturedToken);
-        Assert.Equal(JsonWebTokenTypes.TokenIntrospection, capturedToken!.Header.Type);
+        Assert.Equal(JsonWebTokenTypes.TokenIntrospection, capturedToken.Header.Type);
         Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
         Assert.Contains(ClientId, capturedToken.Payload.Audiences);
 

@@ -46,8 +46,8 @@ public class AddAzureCustodianTests
         var services = new ServiceCollection();
         AddCustodian(services);
 
+        // No clock of the test's own: the registration supplies the one the custodian needs
         services.AddOptions();
-        services.AddSingleton(TimeProvider.System);
 
         Assert.Contains(services, d => d.ServiceType == typeof(IKeyCustodian));
 

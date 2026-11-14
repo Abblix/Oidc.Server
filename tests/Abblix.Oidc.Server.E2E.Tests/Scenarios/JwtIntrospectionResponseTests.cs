@@ -46,14 +46,14 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         var jwt = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var payload = DecodeJwtPayload(jwt);
 
-        // RFC 9701 §5: addressed to the client and issued by the AS.
+        // RFC 9701 section 5: addressed to the client and issued by the AS.
         Assert.Equal(clientId, payload[IanaClaimTypes.Aud]!.GetValue<string>());
         Assert.Equal(
             discovery.Issuer.AbsoluteUri.TrimEnd('/'),
             payload[IanaClaimTypes.Iss]!.GetValue<string>().TrimEnd('/'));
 
         // The RFC 7662 response is carried under the token_introspection claim and reports the token as active.
-        // RFC 7662 §2.2 types active as a JSON boolean, so the assertion reads it as bool.
+        // RFC 7662 section 2.2 types active as a JSON boolean, so the assertion reads it as bool.
         var introspection = payload[IanaClaimTypes.TokenIntrospection]!.AsObject();
         Assert.True(introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
     }
@@ -84,7 +84,7 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         var discovery = await FetchDiscoveryAsync(httpClient);
 
         Assert.NotNull(discovery.IntrospectionSigningAlgValuesSupported);
-        Assert.Contains(SigningAlgorithms.RS256, discovery.IntrospectionSigningAlgValuesSupported!);
+        Assert.Contains(SigningAlgorithms.RS256, discovery.IntrospectionSigningAlgValuesSupported);
     }
 
     private static async Task<(string ClientId, string ClientSecret, string AccessToken)> RegisterClientAndGetAccessTokenAsync(
@@ -97,14 +97,14 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         var dcrBody = new JsonObject
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
-            ["response_types"] = new JsonArray { ResponseTypes.Code },
-            ["token_endpoint_auth_method"] = "client_secret_post",
+            [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
             [ClientRegistrationRequest.Parameters.IntrospectionSignedResponseAlg] = introspectionSignedResponseAlg,
         };
         var registered = await RegisterClientAsync(httpClient, discovery, dcrBody);
-        var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
-        var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>();
 
         var code = await AuthorizeAndExtractCodeAsync(httpClient, discovery, new Dictionary<string, string>
         {
@@ -122,13 +122,13 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
 
-        var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         return (clientId, clientSecret, accessToken);
     }
 
@@ -147,7 +147,7 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 [IntrospectionRequest.Parameters.Token] = token,
-                [AuthorizationRequest.Parameters.ClientId] = clientId,
+                [ClientRequest.Parameters.ClientId] = clientId,
                 [ClientRequest.Parameters.ClientSecret] = clientSecret,
             }),
         };

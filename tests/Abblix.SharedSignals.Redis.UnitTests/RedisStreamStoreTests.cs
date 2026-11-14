@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SharedSignals.Model;
@@ -26,7 +25,7 @@ namespace Abblix.SharedSignals.Redis.UnitTests;
 /// The Redis stream store against a live wire-compatible server: registrations survive whole,
 /// ownership rides in the key, and the conditioned update refuses what nobody created.
 /// </summary>
-public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<GarnetFixture>
+public sealed class RedisStreamStoreTests(RedisFixture redis) : IClassFixture<RedisFixture>
 {
     private static readonly SharedSignalsTransmitterOptions Options = new() { Issuer = "https://transmitter.example.com" };
 
@@ -38,7 +37,7 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
     private static readonly RedisKey HashKey =
         $"Abblix.SharedSignals:RedisStreamStore:{Uri.EscapeDataString(Options.Issuer)}";
 
-    private RedisStreamStore NewStore() => new(garnet.Connection, Options);
+    private RedisStreamStore NewStore() => new(redis.Connection, Options);
 
     /// <summary>A receiver unique per test, so the shared hash never couples test runs.</summary>
     private readonly string _receiver = $"receiver-{Guid.NewGuid():N}";
@@ -128,7 +127,7 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
         var store = NewStore();
         var streamId = Guid.NewGuid().ToString("N");
 
-        await garnet.Connection.GetDatabase().HashSetAsync(
+        await redis.Connection.GetDatabase().HashSetAsync(
             HashKey,
             $"{Uri.EscapeDataString(_receiver)}|{Uri.EscapeDataString(streamId)}",
             WithoutVersion(NewState(streamId)));
@@ -171,6 +170,32 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
 
         document.Remove("version");
         return document.ToJsonString();
+    }
+
+    /// <summary>
+    /// Each partition keeps its streams on a hash of its own, so a partition's listing reads that hash alone: two
+    /// partitions holding a stream each under the same receiver list one stream apiece, and neither stream is on the
+    /// transmitter's own hash.
+    /// </summary>
+    [Fact]
+    public async Task EachPartition_KeepsItsStreamsOnAHashOfItsOwn()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = NewStore();
+        var (first, second) = ($"tenant-{Guid.NewGuid():N}", $"tenant-{Guid.NewGuid():N}");
+        var (firstStream, secondStream) = (Guid.NewGuid().ToString("N"), Guid.NewGuid().ToString("N"));
+
+        Assert.True(await store.Partition(first).TryCreateAsync(NewState(firstStream), ct));
+        Assert.True(await store.Partition(second).TryCreateAsync(NewState(secondStream), ct));
+
+        var database = redis.Connection.GetDatabase();
+        Assert.Equal(firstStream, Assert.Single(await store.Partition(first).ListAllAsync(ct)).StreamId);
+        Assert.Equal(secondStream, Assert.Single(await store.Partition(second).ListAllAsync(ct)).StreamId);
+        Assert.Equal(1, await database.HashLengthAsync($"{HashKey}:{first}"));
+        Assert.Equal(1, await database.HashLengthAsync($"{HashKey}:{second}"));
+        Assert.DoesNotContain(
+            await store.ListAllAsync(ct),
+            stream => stream.StreamId == firstStream || stream.StreamId == secondStream);
     }
 
     /// <summary>
@@ -260,7 +285,7 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
         var streamId = Guid.NewGuid().ToString("N");
         Assert.True(await store.TryCreateAsync(NewState(streamId), ct));
 
-        await using var noisy = await ConnectionMultiplexer.ConnectAsync(garnet.Connection.Configuration);
+        await using var noisy = await ConnectionMultiplexer.ConnectAsync(redis.Connection.Configuration);
         var neighbour = new RedisStreamStore(noisy, Options);
         var neighbourReceiver = $"{_receiver}-neighbour";
         var neighbourStream = Guid.NewGuid().ToString("N");
@@ -322,7 +347,7 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
 
         // Written straight into the hash, the way a version with another shape would have left it.
         var broken = Guid.NewGuid().ToString("N");
-        await garnet.Connection.GetDatabase().HashSetAsync(
+        await redis.Connection.GetDatabase().HashSetAsync(
             HashKey,
             $"{Uri.EscapeDataString(_receiver)}|{Uri.EscapeDataString(broken)}",
             "{not json at all");
@@ -390,7 +415,7 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
         var streamId = Guid.NewGuid().ToString("N");
         Assert.True(await store.TryCreateAsync(NewState(streamId, StreamStatuses.Paused), ct));
 
-        var raw = (await garnet.Connection.GetDatabase().HashGetAsync(
+        var raw = (await redis.Connection.GetDatabase().HashGetAsync(
             HashKey,
             $"{Uri.EscapeDataString(_receiver)}|{Uri.EscapeDataString(streamId)}")).ToString();
 
@@ -413,7 +438,7 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
         var ct = TestContext.Current.CancellationToken;
         var store = NewStore();
         var other = new RedisStreamStore(
-            garnet.Connection,
+            redis.Connection,
             new SharedSignalsTransmitterOptions { Issuer = "https://other-transmitter.example.com" });
 
         var mine = Guid.NewGuid().ToString("N");
@@ -441,7 +466,7 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
     public void TheRegistration_WinsOverTheDefault_InAnyOrder()
     {
         var before = new ServiceCollection();
-        before.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(garnet.Connection);
+        before.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(redis.Connection);
         before.AddSingleton(Options);
         before.AddSharedSignalsRedisStreamStore();
         before.TryAddSingleton<IStreamStore, InMemoryStreamStore>();
@@ -449,7 +474,7 @@ public sealed class RedisStreamStoreTests(GarnetFixture garnet) : IClassFixture<
             before.BuildServiceProvider().GetRequiredService<IStreamStore>());
 
         var after = new ServiceCollection();
-        after.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(garnet.Connection);
+        after.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(redis.Connection);
         after.AddSingleton(Options);
         after.TryAddSingleton<IStreamStore, InMemoryStreamStore>();
         after.AddSharedSignalsRedisStreamStore();

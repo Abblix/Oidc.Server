@@ -22,7 +22,7 @@ namespace Abblix.DocSamples.Samples;
 internal static class AdditionalClaimsSample
 {
     internal static AuthSession Build() => new(
-        "user-1", "session-1", DateTimeOffset.UtcNow, "https://idp.example.com")
+        "user-1", "session-1", TimeProvider.System.GetUtcNow(), "https://idp.example.com")
     {
         // <sample>
         AdditionalClaims = new JsonObject

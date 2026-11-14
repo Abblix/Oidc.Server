@@ -7,11 +7,14 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Hashing;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -44,6 +47,7 @@ public class ClientSecretBasicAuthenticator(
 	/// It adheres to the user-id and password format as outlined in RFC 7617, Section 2.1, where the first colon in the
 	/// credentials string separates the user-id (client ID) and the password (client secret).
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
 	/// <param name="request">
 	/// The client request containing the authentication information in the 'Authorization' header.
 	/// </param>
@@ -53,12 +57,18 @@ public class ClientSecretBasicAuthenticator(
 	/// If the 'Authorization' header is missing, malformed, or does not follow the Basic authentication scheme,
 	/// the method returns null.
 	/// </returns>
-	public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
+	public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
-		if (request.AuthorizationHeader is not { Scheme: "Basic", Parameter: { } parameter })
+		if (request.AuthorizationHeader is not { Parameter: { } parameter } header || !header.HasScheme(TokenTypes.Basic))
 			return null;
 
-		var value = Encoding.UTF8.GetString(Convert.FromBase64String(parameter));
+		// Credentials that are not base64 leave the client unauthenticated here, so the caller answers invalid_client
+		// (RFC 6749 section 5.2)
+		var decoded = new byte[parameter.Length];
+		if (!Convert.TryFromBase64String(parameter, decoded, out var length))
+			return null;
+
+		var value = Encoding.UTF8.GetString(decoded, 0, length);
 
 		// According to RFC 7617: https://www.rfc-editor.org/rfc/rfc7617#section-2.1
 		// the first colon in a user-pass string separates user-id and password from one another,
@@ -69,6 +79,7 @@ public class ClientSecretBasicAuthenticator(
 			return null;
 
 		return await TryAuthenticateAsync(
+			tenant,
 			clientId: value[..colonIndex],
 			secret: value[(colonIndex + 1)..],
 			ClientAuthenticationMethods.ClientSecretBasic);

@@ -14,22 +14,24 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ResponseObject;
 
 /// <summary>
 /// Unit tests for <see cref="ResponseJwtBuilder"/> verifying JARM (JWT Secured Authorization Response
-/// Mode) JWT construction: the mandated <c>iss</c>/<c>aud</c>/<c>exp</c> claims (JARM §2.1), signing with the
-/// client's registered algorithm (default RS256, JARM §3), optional signed-then-encrypted output, and the
-/// resolution of the JARM response mode to its plaintext delivery counterpart (JARM §2.3).
+/// Mode) JWT construction: the mandated <c>iss</c>/<c>aud</c>/<c>exp</c> claims (JARM section 2.1), signing with the
+/// client's registered algorithm (default RS256, JARM section 3), optional signed-then-encrypted output, and the
+/// resolution of the JARM response mode to its plaintext delivery counterpart (JARM section 2.3).
 /// </summary>
 public class ResponseJwtBuilderTests
 {
@@ -41,8 +43,7 @@ public class ResponseJwtBuilderTests
     private readonly Mock<IJsonWebTokenCreator> _jwtCreator = new(MockBehavior.Strict);
     private readonly Mock<IClientKeysProvider> _clientKeys = new(MockBehavior.Strict);
     private readonly Mock<IAuthServiceKeysProvider> _serviceKeys = new(MockBehavior.Strict);
-    private readonly Mock<IIssuerProvider> _issuerProvider = new(MockBehavior.Strict);
-    private readonly Mock<TimeProvider> _timeProvider = new(MockBehavior.Strict);
+    private readonly FakeTimeProvider _timeProvider;
 
     private readonly ResponseJwtBuilder _builder;
     private readonly ClientInfo _client = new(ClientId);
@@ -53,24 +54,21 @@ public class ResponseJwtBuilderTests
 
     public ResponseJwtBuilderTests()
     {
-        _clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(_client);
-        _issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
-        _timeProvider.Setup(t => t.GetUtcNow()).Returns(_now);
-        _serviceKeys.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
+        _clientInfoProvider.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_client);
+        _timeProvider = new FakeTimeProvider(_now);
+        _serviceKeys.Setup(p => p.GetSigningKeys(TestTenant.Matched, true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
 
         // The builder now delegates signing/encryption to a real ClientJwtFormatter built over the same mocks,
         // so the assertions on IJsonWebTokenCreator.IssueAsync continue to exercise the end-to-end JARM behavior.
         var clientJwtFormatter = new ClientJwtFormatter(
-            _jwtCreator.Object,
+            new ProfiledJwtIssuer(_jwtCreator.Object),
             _clientKeys.Object,
-            _serviceKeys.Object,
-            Options.Create(new OidcOptions()));
+            _serviceKeys.Object);
 
         _builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             clientJwtFormatter,
-            _issuerProvider.Object,
-            _timeProvider.Object,
+            _timeProvider,
             Options.Create(new OidcOptions()));
     }
 
@@ -112,20 +110,21 @@ public class ResponseJwtBuilderTests
         var capture = CaptureIssue();
 
         var result = await _builder.BuildAsync(
-            ClientId, [("code", "auth-code"), ("state", "client-state")]);
+            SingleIssuer.Tenant,
+            ClientId, [(ResponseParameters.Code, "auth-code"), (ResponseParameters.State, "client-state")]);
 
         Assert.Equal(EncodedJwt, result);
 
-        // JARM §2.1 mandated claims.
+        // JARM section 2.1 mandated claims.
         Assert.Equal(Issuer, capture.Token.Payload.Issuer);
         Assert.Equal([ClientId], capture.Token.Payload.Audiences);
         Assert.Equal(_now + TimeSpan.FromMinutes(10), capture.Token.Payload.ExpiresAt);
 
         // Response parameters carried as claims.
-        Assert.Equal("auth-code", capture.Token.Payload["code"]!.GetValue<string>());
-        Assert.Equal("client-state", capture.Token.Payload["state"]!.GetValue<string>());
+        Assert.Equal("auth-code", capture.Token.Payload[ResponseParameters.Code]!.GetValue<string>());
+        Assert.Equal("client-state", capture.Token.Payload[ResponseParameters.State]!.GetValue<string>());
 
-        // Signed with the client's algorithm (default RS256, JARM §3).
+        // Signed with the client's algorithm (default RS256, JARM section 3).
         Assert.Equal(SigningAlgorithms.RS256, capture.Token.Header.Algorithm);
     }
 
@@ -134,7 +133,7 @@ public class ResponseJwtBuilderTests
     {
         var capture = CaptureIssue();
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
         // Signed-only: no encryption key is resolved or passed.
         Assert.Null(capture.EncryptionKey);
@@ -152,7 +151,7 @@ public class ResponseJwtBuilderTests
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
         _client.AuthorizationEncryptedResponseEncryption = EncryptionAlgorithms.ContentEncryption.Aes256Gcm;
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.Same(_clientEncryptionKey, capture.EncryptionKey);
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capture.KeyAlgorithm);
@@ -168,9 +167,9 @@ public class ResponseJwtBuilderTests
             .Returns(new[] { _clientEncryptionKey }.ToAsyncEnumerable());
 
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
-        // AuthorizationEncryptedResponseEncryption omitted → JARM §3 default
+        // AuthorizationEncryptedResponseEncryption omitted → JARM section 3 default
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, capture.ContentAlgorithm);
     }
@@ -180,7 +179,8 @@ public class ResponseJwtBuilderTests
     /// raise it.
     /// </summary>
     /// <remarks>
-    /// The case above pins the value the specification names, which a client registering only
+    /// <see cref="BuildAsync_WithEncryptionAlgorithmButNoEnc_DefaultsToA128CbcHs256"/> pins the value the
+    /// specification names, which a client registering only
     /// <c>authorization_encrypted_response_alg</c> is entitled to. This one pins that the value is reachable
     /// at all: without it the setting could be read from nowhere and every test would still pass, because the
     /// default it happens to carry is the same constant the code used to hold.
@@ -203,12 +203,11 @@ public class ResponseJwtBuilderTests
         var builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             new ClientJwtFormatter(
-                _jwtCreator.Object, _clientKeys.Object, _serviceKeys.Object, Options.Create(new OidcOptions())),
-            _issuerProvider.Object,
-            _timeProvider.Object,
+                new ProfiledJwtIssuer(_jwtCreator.Object), _clientKeys.Object, _serviceKeys.Object),
+            _timeProvider,
             options);
 
-        await builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, capture.ContentAlgorithm);
     }
@@ -236,7 +235,7 @@ public class ResponseJwtBuilderTests
         // Registered key-management algorithm differs from the key's own declared algorithm.
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep;
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capture.KeyAlgorithm);
     }
@@ -247,13 +246,13 @@ public class ResponseJwtBuilderTests
         var signingKeyRs384 = new RsaJsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
 
         _serviceKeys
-            .Setup(p => p.GetSigningKeys(true))
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
             .Returns(new[] { _signingKeyRs256, signingKeyRs384 }.ToAsyncEnumerable());
 
         var capture = CaptureIssue();
         _client.AuthorizationSignedResponseAlgorithm = SigningAlgorithms.RS384;
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.Equal(SigningAlgorithms.RS384, capture.Token.Header.Algorithm);
     }
@@ -261,7 +260,7 @@ public class ResponseJwtBuilderTests
     /// <summary>
     /// The JARM response mode is mapped to its plaintext delivery mode by
     /// <see cref="ResponseModeExtensions.ToDeliveryMode"/>: the fixed variants map to their base mode, and the
-    /// <c>jwt</c> shortcut resolves to fragment for token-bearing flows and query otherwise (JARM §2.3.4).
+    /// <c>jwt</c> shortcut resolves to fragment for token-bearing flows and query otherwise (JARM section 2.3.4).
     /// </summary>
     [Theory]
     [InlineData(ResponseModes.QueryJwt, false, ResponseModes.Query)]

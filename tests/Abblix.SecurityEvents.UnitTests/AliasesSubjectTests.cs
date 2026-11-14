@@ -32,7 +32,7 @@ public class AliasesSubjectTests
     public void NestedAliases_IsRejected_FromTheWire()
     {
         // The document is well-formed JSON; only the specification's MUST NOT makes it invalid.
-        // Rejection must therefore come from our own rule, re-labelled as JsonException at the
+        // Rejection must therefore come from our own rule, re-labeled as JsonException at the
         // deserialization boundary, not from the JSON parser.
         var json =
             """

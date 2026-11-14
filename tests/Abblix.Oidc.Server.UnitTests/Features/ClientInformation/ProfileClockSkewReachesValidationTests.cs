@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -14,7 +15,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -23,10 +23,10 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
-using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using System.Linq;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientInformation;
 
@@ -54,20 +54,18 @@ public class ProfileClockSkewReachesValidationTests
 
         var clientInfoProvider = new Mock<IClientInfoProvider>();
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(It.IsAny<string>()))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, It.IsAny<string>()))
             .ReturnsAsync((ClientInfo?)null);
 
         var authenticator = new ClientSecretJwtAuthenticator(
             NullLogger<ClientSecretJwtAuthenticator>.Instance,
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             clientInfoProvider.Object,
-            new Mock<IRequestInfoProvider>().Object,
             TimeProvider.System,
             new Mock<IReplayCache>().Object,
-            new Mock<IIssuerProvider>().Object,
-            Options.Create(new OidcOptions { DefaultSecurityProfile = profile }));
+            new ServiceCollection().BuildServiceProvider());
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        await authenticator.TryAuthenticateClientAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = "header.payload.signature",
@@ -100,7 +98,6 @@ public class ProfileClockSkewReachesValidationTests
             .SetupGet(o => o.CurrentValue)
             .Returns(new OidcOptions
             {
-                DefaultSecurityProfile = profile,
                 SoftwareStatement = new SoftwareStatementOptions
                 {
                     TrustedIssuers =
@@ -116,11 +113,12 @@ public class ProfileClockSkewReachesValidationTests
 
         var validator = new SoftwareStatementValidator(
             NullLogger<SoftwareStatementValidator>.Instance,
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             options.Object,
-            new Mock<ISecureHttpFetcher>().Object);
+            new Mock<ISecureHttpFetcher>().Object,
+            SingleIssuer.LicensedCatalog);
 
-        await validator.ValidateAsync(new ClientRegistrationValidationContext(
+        await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), new ClientRegistrationValidationContext(
             new ClientRegistrationRequest { SoftwareStatement = "header.payload.signature" }));
 
         Assert.Equal(
@@ -148,28 +146,23 @@ public class ProfileClockSkewReachesValidationTests
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "not the subject of this test"));
 
         var requestInfoProvider = new Mock<IRequestInfoProvider>();
-        requestInfoProvider.Setup(p => p.RequestUri).Returns("https://auth.example.com");
-
-        var issuerProvider = new Mock<IIssuerProvider>();
-        issuerProvider.Setup(p => p.GetIssuer()).Returns("https://auth.example.com");
+        requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri("https://auth.example.com"));
 
         var serviceKeys = new Mock<IAuthServiceKeysProvider>();
         serviceKeys
-            .Setup(p => p.GetEncryptionKeys(It.IsAny<bool>()))
+            .Setup(p => p.GetEncryptionKeys(TestTenant.Matched, It.IsAny<bool>()))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         var validator = new ClientJwtValidator(
             NullLogger<ClientJwtValidator>.Instance,
             requestInfoProvider.Object,
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             new Mock<IClientInfoProvider>().Object,
             new Mock<IClientKeysProvider>().Object,
-            issuerProvider.Object,
             serviceKeys.Object,
-            Options.Create(new OidcOptions { DefaultSecurityProfile = profile }),
             TimeProvider.System);
 
-        await validator.ValidateAsync("header.payload.signature");
+        await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), null, "header.payload.signature", TokenTypePolicy.CheckedByCaller);
 
         Assert.Equal(
             SecurityProfileRequirements.Resolve(profile).ClockSkewOrDefault(),
@@ -191,8 +184,9 @@ public class ProfileClockSkewReachesValidationTests
     /// <summary>
     /// And selecting no profile brings ITS answer, not the library's own - which is none, and would
     /// leave a bearer assertion from an issuer whose clock this server does not run refused over a
-    /// second of drift. Without this case the one above would be satisfied by a site that sets no
-    /// tolerance at all, since the profile's pair would then never be asked for.
+    /// second of drift. Without this case
+    /// <see cref="UnderTheProfile_TheProfilesToleranceReachesTheValidator"/> would be satisfied by a
+    /// site that sends the FAPI 2.0 pair whatever profile is selected.
     /// </summary>
     [Fact]
     public async Task WithNoProfile_TheProfilesOwnToleranceReachesTheValidator()

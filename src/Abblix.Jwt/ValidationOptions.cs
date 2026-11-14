@@ -57,10 +57,10 @@ public enum ValidationOptions
 	/// <summary>
 	/// Switches signature validation to the embedded-key trust model: the signing key
 	/// is taken from the JOSE header's <c>jwk</c> parameter
-	/// (<see cref="JsonWebTokenHeader.VerificationKey"/>) and the issuer-resolved-keys
+	/// (<see cref="JsonWebTokenHeader.TryReadVerificationKey"/>) and the issuer-resolved-keys
 	/// delegate is bypassed entirely. Set this flag only on validation paths whose
 	/// protocol design explicitly trusts the proof to carry its own key (DPoP per
-	/// RFC 9449 §4.2 is the canonical example).
+	/// RFC 9449 section 4.2 is the canonical example).
 	/// </summary>
 	/// <remarks>
 	/// Auto-trusting an embedded JWK without an opt-in is a known JWT antipattern: an

@@ -36,10 +36,11 @@ public class ClientKeysProvider(
     /// Retrieves the signing keys associated with a specific client.
     /// </summary>
     /// <param name="clientInfo">Client information containing either JWKS or a JWKS URI.</param>
+    /// <param name="refetch">Whether to read the keys at the JWKS URI again past the copy held.</param>
     /// <returns>A collection of signing keys as an asynchronous enumerable.</returns>
-    public IAsyncEnumerable<JsonWebKey> GetSigningKeys(ClientInfo clientInfo)
+    public IAsyncEnumerable<JsonWebKey> GetSigningKeys(ClientInfo clientInfo, bool refetch = false)
     {
-        return GetKeys(clientInfo).Where(key => key.Usage is null or PublicKeyUsages.Signature);
+        return GetKeys(clientInfo, refetch).Where(key => key.Usage is null or PublicKeyUsages.Signature);
     }
 
     /// <summary>
@@ -47,8 +48,9 @@ public class ClientKeysProvider(
     /// shared SSRF-protected and cached path.
     /// </summary>
     /// <param name="clientInfo">The client information specifying where to find the JWKS.</param>
+    /// <param name="refetch">Whether to read the keys at the JWKS URI again past the copy held.</param>
     /// <returns>An asynchronous enumerable of <see cref="JsonWebKey"/>.</returns>
-    private IAsyncEnumerable<JsonWebKey> GetKeys(ClientInfo clientInfo)
+    private IAsyncEnumerable<JsonWebKey> GetKeys(ClientInfo clientInfo, bool refetch = false)
         => serviceProvider.ResolveKeysAsync(
-            clientInfo.Jwks, clientInfo.JwksUri, logger, clientInfo.ClientId, KeySetOwners.Client);
+            clientInfo.Jwks, clientInfo.JwksUri, logger, clientInfo.ClientId, KeySetOwners.Client, refetch);
 }

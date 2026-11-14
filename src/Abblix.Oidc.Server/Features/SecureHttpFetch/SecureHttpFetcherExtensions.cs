@@ -26,6 +26,8 @@ public static partial class SecureHttpFetcherExtensions
 	/// <param name="logger">Logger for recording fetch operations and errors.</param>
 	/// <param name="entityId">The identifier of the entity (client ID or issuer) for logging.</param>
 	/// <param name="entityType">The type of entity (e.g., "client" or "issuer") for logging.</param>
+	/// <param name="refetch">Whether to read the key set again past the copy held, as when a token names a key the
+	/// copy does not hold (<see cref="ISecureHttpFetcher.FetchAsync{T}"/>).</param>
 	/// <returns>
 	/// An async enumerable of JSON Web Keys from the JWKS endpoint.
 	/// Returns empty if fetching fails or the JWKS is invalid.
@@ -35,11 +37,12 @@ public static partial class SecureHttpFetcherExtensions
 		Uri jwksUri,
 		ILogger logger,
 		string entityId,
-		string entityType)
+		string entityType,
+		bool refetch = false)
 	{
 		LogFetchingJwks(logger, entityType, entityId, jwksUri);
 
-		var result = await secureFetcher.FetchAsync<JsonWebKeySet>(jwksUri);
+		var result = await secureFetcher.FetchAsync<JsonWebKeySet>(jwksUri, refetch);
 
 		var jwksKeys = result.Match(
 			jwks =>
@@ -78,6 +81,8 @@ public static partial class SecureHttpFetcherExtensions
 	/// <param name="entityType">What kind of party it is. Must be a value from <see cref="KeySetOwners"/>:
 	/// besides labelling the log, it is the service key under which this consumer's cached fetcher is
 	/// registered, so the same value selects the cache lifetime that consumer was given.</param>
+	/// <param name="refetch">Whether to read the key set at <paramref name="jwksUri"/> again past the copy held, as
+	/// when a token names a key the copy does not hold (<see cref="ISecureHttpFetcher.FetchAsync{T}"/>).</param>
 	/// <returns>The inline keys followed by the fetched ones. Empty when the party declares neither.</returns>
 	/// <remarks>
 	/// The fetch itself is SSRF-protected and cached by the decorators around <see cref="ISecureHttpFetcher"/>,
@@ -89,7 +94,8 @@ public static partial class SecureHttpFetcherExtensions
 		Uri? jwksUri,
 		ILogger logger,
 		string entityId,
-		string entityType)
+		string entityType,
+		bool refetch = false)
 	{
 		if (jwks != null)
 		{
@@ -103,7 +109,7 @@ public static partial class SecureHttpFetcherExtensions
 		using var scope = serviceProvider.CreateScope();
 		var secureFetcher = scope.ServiceProvider.GetRequiredKeyedService<ISecureHttpFetcher>(entityType);
 
-		await foreach (var key in secureFetcher.FetchKeysAsync(jwksUri, logger, entityId, entityType))
+		await foreach (var key in secureFetcher.FetchKeysAsync(jwksUri, logger, entityId, entityType, refetch))
 		{
 			yield return key;
 		}

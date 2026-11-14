@@ -1,11 +1,16 @@
 # Abblix OIDC Server Minimal API
 
-**Abblix.OIDC.Server.MinimalAPI** integrates the Abblix OIDC Server with ASP.NET Core Minimal APIs, mapping the OpenID Connect and OAuth 2.0 endpoints as route handlers. It offers the same protocol coverage as `Abblix.OIDC.Server.MVC` without taking a dependency on the MVC framework. Both packages sit on top of the framework-neutral core (`Abblix.OIDC.Server`) and differ only in the transport layer.
+Abblix.OIDC.Server.MinimalAPI integrates the Abblix OIDC Server with ASP.NET Core Minimal APIs, mapping the OpenID Connect and OAuth 2.0 endpoints as route handlers. It offers the same protocol coverage as `Abblix.OIDC.Server.MVC` without taking a dependency on the MVC framework. Both packages sit on top of the framework-neutral core (`Abblix.OIDC.Server`) and differ only in the transport layer.
 
-## What's New in Version 2.4
+## What's New in Version 3.0
+
+Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://docs.abblix.com/docs/upgrading-to-3-0) before moving a 2.x deployment.
 
 🚀 Features
-- Minimal API integration: maps every OIDC endpoint as an ASP.NET Core route handler via `AddOidcServices` and `MapOidcEndpoints`, with full feature parity with the MVC integration - JARM authorization responses, JWT-secured token introspection ([RFC 9701](https://datatracker.ietf.org/doc/html/rfc9701)), and request binding for Rich Authorization Requests ([RFC 9396](https://datatracker.ietf.org/doc/html/rfc9396)) and Token Exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693))
+- Every tenant of a multi-tenant server is served through the same endpoints
+
+✏️ Improvements
+- The MVC and Minimal API hosts read a request the same way
 
 ## Key Features
 
@@ -24,17 +29,30 @@
 dotnet add package Abblix.OIDC.Server.MinimalAPI
 ```
 
-This package includes **Abblix.OIDC.Server**, **Abblix.JWT**, **Abblix.DependencyInjection**, and **Abblix.Utils** as transitive dependencies.
+This package includes Abblix.OIDC.Server, Abblix.OIDC, Abblix.JWT, Abblix.DependencyInjection, and Abblix.Utils as transitive dependencies.
 
 ## Quick Start
 
 ```csharp
+using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.MinimalApi;
+
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOidcServices(options =>
+// Grants every client everything it asks for, which suits only clients of your own;
+// to ask the end user for consent, register your own IUserConsentsProvider instead
+builder.Services.AddConsentGrantedForEveryClient();
+
+// The server serves tenants; a host serving one issuer declares one, with its clients, scopes and signing keys
+builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
-    // configure issuer, clients, signing keys, enabled endpoints, ...
-});
+    Id = "main",
+    Issuer = new Uri("https://auth.example.com"),
+    LoginUri = new Uri("/Auth/Login", UriKind.Relative),
+    SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+}));
 
 var app = builder.Build();
 
@@ -63,9 +81,9 @@ Endpoints that allow cross-origin requests (discovery, jwks, checksession, token
 
 ## Migrating from the MVC integration
 
-Remove the `Abblix.OIDC.Server.MVC` package reference. Referencing it is enough for its controllers to be mapped: `AddControllers()` finds controller assemblies in the dependency graph on its own, whether or not `AddOidcServices()` was ever called. With both packages in place the two transports claim the same paths and every OIDC request fails with `AmbiguousMatchException`. `MapOidcEndpoints()` refuses to start an application in that state and says which package to drop.
+Remove the `Abblix.OIDC.Server.MVC` package reference. Both transports map the same paths under the same endpoint names, so `MapOidcEndpoints()` refuses to start an application that still loads the MVC adapter and says which package to drop.
 
-The rest of the swap is small on purpose: `AddOidcServices` is named and shaped exactly as in the MVC integration, and so are the response formatter interfaces, down to the namespace suffix. What changes is `app.MapControllers()`, which becomes `app.MapOidcEndpoints()`, and the return type of any formatter the host replaced or decorated: `IResult` here, `ActionResult` there.
+The rest of the swap is small on purpose: `AddOidcServices` is named and shaped exactly as in the MVC integration, and so are the response formatter interfaces, down to the namespace suffix. What changes is `app.MapOidcControllers()`, which becomes `app.MapOidcEndpoints()` with the same optional prefix and the same `OidcRouteOptions` paths, and the return type of any formatter the host replaced or decorated: `IResult` here, `ActionResult` there.
 
 ## Endpoint URLs
 
@@ -91,14 +109,14 @@ For the complete standards list, see the [Abblix.OIDC.Server](https://www.nuget.
 
 | Package | Description |
 |---------|-------------|
-| **[Abblix.Utils](https://www.nuget.org/packages/Abblix.Utils)** | Utility library with crypto, URI, and JSON helpers |
-| **[Abblix.DependencyInjection](https://www.nuget.org/packages/Abblix.DependencyInjection)** | .NET DI extensions with aliasing, composites, and decorators |
-| **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
-| **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
-| **[Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC)** | ASP.NET Core MVC integration |
-| **Abblix.OIDC.Server.MinimalAPI** | ASP.NET Core Minimal API integration *(this package)* |
-| **[Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents)** | Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493): building, validation, and the delivery data types |
-| **[Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals)** | OpenID Shared Signals Framework 1.0 transmitter and receiver |
+| [Abblix.Utils](https://www.nuget.org/packages/Abblix.Utils) | Utility library with crypto, URI, and JSON helpers |
+| [Abblix.DependencyInjection](https://www.nuget.org/packages/Abblix.DependencyInjection) | .NET DI extensions with aliasing, composites, and decorators |
+| [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) | JWT signing, encryption, and validation using .NET crypto primitives |
+| [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) | Core OpenID Connect server implementation |
+| [Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC) | ASP.NET Core MVC integration |
+| Abblix.OIDC.Server.MinimalAPI | ASP.NET Core Minimal API integration *(this package)* |
+| [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents) | Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493): building, validation, and the delivery data types |
+| [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) | OpenID Shared Signals Framework 1.0 transmitter and receiver |
 
 ## Getting Started
 

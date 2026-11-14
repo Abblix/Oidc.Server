@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.TokenExchange;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -38,11 +39,11 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <see cref="Result{TSuccess,TFailure}"/>, mirroring <see cref="JwtBearerGrantHandler"/>: each
 /// step returns either an enriched <see cref="ValidationContext"/> or an <see cref="OidcError"/>;
 /// the chain short-circuits at the first failure. Subject-token resolution sits in the middle
-/// of the chain, so post-resolve guards (cross-client origin, typ-confusion, forwarded AD
-/// allowlist) read the resolved <see cref="SubjectTokenContext"/> directly from the context.
+/// of the chain, so post-resolve guards (cross-client origin, forwarded AD allowlist) read the
+/// resolved <see cref="SubjectTokenContext"/> directly from the context.
 /// </para>
 /// <para>
-/// Supports both RFC 8693 §4.1 modes: impersonation (no <c>actor_token</c>; the issued token's
+/// Supports both RFC 8693 section 4.1 modes: impersonation (no <c>actor_token</c>; the issued token's
 /// <c>sub</c> equals the subject_token's subject, no <c>act</c> claim) and delegation
 /// (<c>actor_token</c> provided; the issued token's <c>sub</c> still equals the subject's
 /// subject, and the <c>act</c> claim names the actor. When the subject_token itself already
@@ -63,6 +64,7 @@ public class TokenExchangeGrantHandler(
 
     /// <inheritdoc/>
     public Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(
+        TenantDefinition tenant,
         TokenRequest request,
         ClientInfo clientInfo,
         CancellationToken cancellationToken)
@@ -75,11 +77,11 @@ public class TokenExchangeGrantHandler(
             .Bind(ValidateActorTokenPair)
             .Bind(ValidateActorTokenType)
             .Bind(ValidateRequestedTokenType)
-            .BindAsync(ResolveSubjectTokenAsync)
-            .Bind(ValidateSubjectTokenOriginAndType)
+            .BindAsync(ctx => ResolveSubjectTokenAsync(tenant, ctx, cancellationToken))
+            .Bind(ValidateSubjectTokenOrigin)
             .Bind(ValidateForwardedAuthorizationDetails)
-            .BindAsync(ResolveActorTokenAsync)
-            .Bind(ValidateActorTokenOriginAndType)
+            .BindAsync(ctx => ResolveActorTokenAsync(tenant, ctx, cancellationToken))
+            .Bind(ValidateActorTokenOrigin)
             .Bind(ValidateAudiences)
             .MapSuccessAsync(ctx => Task.FromResult(BuildAuthorizedGrant(ctx)));
     }
@@ -96,8 +98,8 @@ public class TokenExchangeGrantHandler(
         SubjectTokenContext? Actor = null);
 
     /// <summary>
-    /// RFC 8693 §2.1: <c>subject_token</c> and <c>subject_token_type</c> are REQUIRED. A missing one
-    /// is the caller's protocol error (<c>invalid_request</c> per RFC 6749 §5.2), not a server
+    /// RFC 8693 section 2.1: <c>subject_token</c> and <c>subject_token_type</c> are REQUIRED. A missing one
+    /// is the caller's protocol error (<c>invalid_request</c> per RFC 6749 section 5.2), not a server
     /// fault - the previous throw-on-access surfaced it as HTTP 500.
     /// </summary>
     private static Result<ValidationContext, OidcError> ValidateRequiredParameters(ValidationContext ctx)
@@ -107,7 +109,7 @@ public class TokenExchangeGrantHandler(
             return ErrorFactory.MissingParameter(TokenRequest.Parameters.SubjectToken);
         }
 
-        if (!ctx.Request.SubjectTokenType.HasValue())
+        if (ctx.Request.SubjectTokenType is null)
         {
             return ErrorFactory.MissingParameter(TokenRequest.Parameters.SubjectTokenType);
         }
@@ -132,13 +134,13 @@ public class TokenExchangeGrantHandler(
     }
 
     /// <summary>
-    /// RFC 8693 §2.1: <c>actor_token</c> and <c>actor_token_type</c> are mutually required when
+    /// RFC 8693 section 2.1: <c>actor_token</c> and <c>actor_token_type</c> are mutually required when
     /// either is present -- a request that supplies one without the other is malformed.
     /// </summary>
     private static Result<ValidationContext, OidcError> ValidateActorTokenPair(ValidationContext ctx)
     {
         var hasToken = !string.IsNullOrEmpty(ctx.Request.ActorToken);
-        var hasType = !string.IsNullOrEmpty(ctx.Request.ActorTokenType);
+        var hasType = ctx.Request.ActorTokenType is not null;
         if (hasToken != hasType)
         {
             return new OidcError(
@@ -193,11 +195,11 @@ public class TokenExchangeGrantHandler(
     ///   non-empty    -> allowlist of accepted token-type URIs
     /// </summary>
     private static OidcError? CheckTokenTypeAllowlist(
-        string? tokenTypeUri,
+        Uri? tokenTypeUri,
         ClientInfo clientInfo,
         string fieldName)
     {
-        if (string.IsNullOrEmpty(tokenTypeUri))
+        if (tokenTypeUri is null)
             return null;
 
         // Tri-state: null = no per-client constraint -- skip membership check entirely so the
@@ -209,7 +211,10 @@ public class TokenExchangeGrantHandler(
                     ErrorCodes.InvalidRequest,
                     "Client is not permitted to use the Token Exchange grant.");
 
-            case { Length: > 0 } allowlist when !allowlist.Contains(tokenTypeUri, StringComparer.Ordinal):
+            // A token type is an identifier compared as written (RFC 8693 section 3), so the URIs are compared by
+            // their spelling rather than as equivalent addresses
+            case { Length: > 0 } allowlist when !allowlist.Any(allowed =>
+                string.Equals(allowed.OriginalString, tokenTypeUri.OriginalString, StringComparison.Ordinal)):
                 return new OidcError(
                     ErrorCodes.InvalidRequest,
                     $"{fieldName} '{tokenTypeUri}' is not in the client's allow list.");
@@ -222,25 +227,26 @@ public class TokenExchangeGrantHandler(
     /// Resolves the <c>subject_token</c> through the keyed-DI resolver matching its declared
     /// type URI and stores the resolved <see cref="SubjectTokenContext"/> on the chain context.
     /// </summary>
-    private async Task<Result<ValidationContext, OidcError>> ResolveSubjectTokenAsync(ValidationContext ctx)
+    private async Task<Result<ValidationContext, OidcError>> ResolveSubjectTokenAsync(
+        TenantDefinition tenant,
+        ValidationContext ctx,
+        CancellationToken cancellationToken)
     {
         var subjectToken = ctx.Request.SubjectToken.NotNull(TokenRequest.Parameters.SubjectToken);
-        var result = await ResolveTokenAsync(ctx.Request.SubjectTokenType, subjectToken, CancellationToken.None);
+        var result = await ResolveTokenAsync(
+            tenant, ctx.ClientInfo, ctx.Request.SubjectTokenType, subjectToken, cancellationToken);
         return result.MapSuccess(subject => ctx with { Subject = subject });
     }
 
     /// <summary>
-    /// S1 + S3 (PR #135 review): the subject_token must have been issued to the requesting client
+    /// The subject_token must have been issued to the requesting client
     /// (confused-deputy guard; opt-out via <see cref="ClientInfo.AllowCrossClientSubjectTokenExchange"/>
-    /// for broker scenarios), and -- for JWT-based URIs -- the JWT typ header must match the URI
-    /// it was presented under (cross-type confusion guard, e.g. id+jwt as access_token).
+    /// for broker scenarios). The typ header is matched against the presented URI earlier, by the
+    /// resolver, which receives that URI and validates the JWT for it.
     /// </summary>
-    private static Result<ValidationContext, OidcError> ValidateSubjectTokenOriginAndType(ValidationContext ctx)
+    private static Result<ValidationContext, OidcError> ValidateSubjectTokenOrigin(ValidationContext ctx)
     {
-        if (CheckTokenOriginAndType(
-                ctx.Subject.NotNull(nameof(ctx.Subject)),
-                ctx.Request.SubjectTokenType,
-                ctx.ClientInfo) is { } error)
+        if (CheckTokenOrigin(ctx.Subject.NotNull(nameof(ctx.Subject)), ctx.ClientInfo) is { } error)
         {
             return error;
         }
@@ -293,34 +299,38 @@ public class TokenExchangeGrantHandler(
     /// has no actor; failures are wrapped with an <c>actor_token:</c> prefix so the wire-level
     /// error pinpoints which token was rejected.
     /// </summary>
-    private async Task<Result<ValidationContext, OidcError>> ResolveActorTokenAsync(ValidationContext ctx)
+    private async Task<Result<ValidationContext, OidcError>> ResolveActorTokenAsync(
+        TenantDefinition tenant,
+        ValidationContext ctx,
+        CancellationToken cancellationToken)
     {
         if (ctx.Request.ActorToken is not { Length: > 0 } actorToken)
             return ctx;
 
-        var result = await ResolveTokenAsync(ctx.Request.ActorTokenType, actorToken, CancellationToken.None);
+        var result = await ResolveTokenAsync(
+            tenant, ctx.ClientInfo, ctx.Request.ActorTokenType, actorToken, cancellationToken);
         return result.Match<Result<ValidationContext, OidcError>>(
             actor => ctx with { Actor = actor },
             failure => new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {failure.ErrorDescription}"));
     }
 
     /// <summary>
-    /// Applies the same origin + typ-header guards to the actor_token (when present) that
-    /// <see cref="ValidateSubjectTokenOriginAndType"/> applies to the subject_token. No-op when
+    /// Applies the same origin guard to the actor_token (when present) that
+    /// <see cref="ValidateSubjectTokenOrigin"/> applies to the subject_token. No-op when
     /// the request had no actor.
     /// </summary>
-    private static Result<ValidationContext, OidcError> ValidateActorTokenOriginAndType(ValidationContext ctx)
+    private static Result<ValidationContext, OidcError> ValidateActorTokenOrigin(ValidationContext ctx)
     {
         if (ctx.Actor is not { } actor)
             return ctx;
 
-        return CheckTokenOriginAndType(actor, ctx.Request.ActorTokenType, ctx.ClientInfo) is { } error
+        return CheckTokenOrigin(actor, ctx.ClientInfo) is { } error
             ? new OidcError(ErrorCodes.InvalidRequest, $"actor_token: {error.ErrorDescription}")
             : ctx;
     }
 
     /// <summary>
-    /// Enforces the per-client <c>audience</c> allowlist (RFC 8693 §2.1). The requested audience is
+    /// Enforces the per-client <c>audience</c> allowlist (RFC 8693 section 2.1). The requested audience is
     /// written into the issued token's <c>aud</c> claim, so it must be constrained - otherwise a
     /// client could mint a token for any target service it names. The allowlist is default-deny: an
     /// <c>audience</c> is accepted only when the client declares a non-empty
@@ -332,7 +342,7 @@ public class TokenExchangeGrantHandler(
     /// default-deny because no other gate exists for logical service names, while <c>resource</c>
     /// stays subject to the global resource registry (<c>ResourceValidator</c> has already checked
     /// it earlier in the token pipeline). A request without either parameter passes through.
-    /// Rejections use <c>invalid_target</c> (RFC 8693 §2.2.1: the AS is unwilling to issue a token
+    /// Rejections use <c>invalid_target</c> (RFC 8693 section 2.2.1: the AS is unwilling to issue a token
     /// for the requested target service).
     /// </summary>
     private static Result<ValidationContext, OidcError> ValidateAudiences(ValidationContext ctx)
@@ -372,11 +382,11 @@ public class TokenExchangeGrantHandler(
     }
 
     /// <summary>
-    /// Shared origin + typ-header guards applied identically to subject and actor tokens.
+    /// The origin guard applied identically to subject and actor tokens; the token's type is judged where it is
+    /// validated, against the type it was presented under.
     /// </summary>
-    private static OidcError? CheckTokenOriginAndType(
+    private static OidcError? CheckTokenOrigin(
         SubjectTokenContext token,
-        string? requestedTypeUri,
         ClientInfo clientInfo)
     {
         // The confused-deputy check needs an origin to compare against, and an absent one is the case
@@ -403,44 +413,25 @@ public class TokenExchangeGrantHandler(
             }
         }
 
-        // typ header expected per URI (JWT-based subject types only):
-        //   access_token  -> at+jwt
-        //   refresh_token -> the refresh class this server issues
-        //   id_token      -> nothing to expect: an ID token carries no type of its own
-        //   jwt           -> any typ acceptable (generic JWT URI)
-        // Resolvers for non-JWT formats leave JwtTokenType null; this check is a no-op for them.
-        var expectedTyp = requestedTypeUri switch
-        {
-            TokenExchangeTokenTypes.AccessToken => JsonWebTokenTypes.AccessToken,
-            TokenExchangeTokenTypes.RefreshToken => JwtTypes.RefreshToken,
-            _ => null,
-        };
-        if (expectedTyp is not null &&
-            token.JwtTokenType is { Length: > 0 } actualTyp &&
-            !string.Equals(actualTyp, expectedTyp, StringComparison.Ordinal))
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                $"subject_token has typ '{actualTyp}' but was presented under '{requestedTypeUri}' (expected typ '{expectedTyp}').");
-        }
-
         return null;
     }
 
     private async Task<Result<SubjectTokenContext, OidcError>> ResolveTokenAsync(
-        string? tokenType,
+        TenantDefinition tenant,
+        ClientInfo clientInfo,
+        Uri? tokenType,
         string tokenValue,
         CancellationToken cancellationToken)
     {
-        var resolver = serviceProvider.GetKeyedService<ISubjectTokenResolver>(tokenType);
-        if (resolver is null)
+        if (tokenType is null ||
+            serviceProvider.GetKeyedService<ISubjectTokenResolver>(tokenType.OriginalString) is not { } resolver)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
                 $"token_type '{tokenType}' is not supported.");
         }
 
-        return await resolver.ResolveAsync(tokenValue, cancellationToken);
+        return await resolver.ResolveAsync(tenant, clientInfo, tokenValue, tokenType, cancellationToken);
     }
 
     private AuthorizedGrant BuildAuthorizedGrant(ValidationContext ctx)
@@ -450,23 +441,24 @@ public class TokenExchangeGrantHandler(
         var request = ctx.Request;
         var clientInfo = ctx.ClientInfo;
 
-        // RFC 8693 §4.1: issued token's subject is always the subject_token's subject (impersonation
+        // RFC 8693 section 4.1: issued token's subject is always the subject_token's subject (impersonation
         // and delegation alike). Scope handling keeps the exchange least-privilege - the issued token
         // never carries more authority than either the presented subject_token or the client's own
         // registration:
         //
         // - Explicit request.Scope (2a): already gated against the client's AllowedScopes by
         //   ScopeValidator in the token pipeline. Additionally bound it to the subject_token's own
-        //   scope WHEN the subject token carries one, so an exchange cannot amplify authority beyond
-        //   the presented token. A subject token without a scope claim (e.g. an id_token) imposes no
-        //   scope upper bound, so the RFC 8693 id_token -> access_token scenario keeps working.
+        //   scope WHEN the subject token carries a scope claim, an empty one included, so an exchange
+        //   cannot amplify authority beyond the presented token. A subject token without a scope claim
+        //   (e.g. an id_token) imposes no scope upper bound, so the RFC 8693 id_token -> access_token
+        //   scenario keeps working.
         // - Fallback to the subject_token's scope (2b): the fallback path does not pass through
         //   ScopeValidator, so it is filtered to the client's AllowedScopes here - otherwise a broker
-        //   client would obtain scopes it was never registered for (RFC 6749 §3.3).
+        //   client would obtain scopes it was never registered for (RFC 6749 section 3.3).
         string[] scope;
         if (request.Scope is { Length: > 0 } requestedScope)
         {
-            scope = subject.Scope is { Length: > 0 } subjectScope
+            scope = subject.Scope is { } subjectScope
                 ? IntersectScopes(requestedScope, subjectScope)
                 : requestedScope;
         }
@@ -475,7 +467,7 @@ public class TokenExchangeGrantHandler(
             scope = FilterToAllowedScopes(subject.Scope, clientInfo.AllowedScopes);
         }
 
-        // Delegation act chain (RFC 8693 §4.1): when an actor_token was supplied, the new actor's
+        // Delegation act chain (RFC 8693 section 4.1): when an actor_token was supplied, the new actor's
         // act object names the actor's subject; any prior act chain inherited from the
         // subject_token becomes the new actor's nested act.act, preserving the full delegation
         // path. Impersonation = no actor_token = no act emission.
@@ -490,7 +482,7 @@ public class TokenExchangeGrantHandler(
         }
 
         // propagate the requested resource(s) (RFC 8707) through the ctor and audience(s)
-        // (RFC 8693 §2.1) through the initializer into the issued token's claims rather than
+        // (RFC 8693 section 2.1) through the initializer into the issued token's claims rather than
         // silently dropping them
         var authContext = new AuthorizationContext(clientInfo.ClientId, scope, null, request.Resources)
         {
@@ -503,19 +495,24 @@ public class TokenExchangeGrantHandler(
             Subject: subject.Subject,
             SessionId: sessionIdGenerator.GenerateSessionId(),
             AuthenticationTime: timeProvider.GetUtcNow(),
-            IdentityProvider: subject.Issuer ?? "self")
-        {
-            AffectedClientIds = { clientInfo.ClientId },
-        };
+            IdentityProvider: subject.Issuer ?? "self");
 
-        return new AuthorizedGrant(authSession, authContext);
+        // The exchanged token carries authority that came from the subject_token, so it joins that token's
+        // refresh token family and a replay revoking the family refuses it too. The subject_token's family and no
+        // other, even where an actor_token was presented as well: a token names one family, and the one the
+        // issued token acts under is the end user's.
+        return new AuthorizedGrant(authSession, authContext)
+        {
+            GrantId = subject.GrantId,
+            ExpiresNoLaterThan = subject.GrantId is not null ? subject.ExpiresAt : null,
+        };
     }
 
     /// <summary>
     /// Restricts a scope set inherited from the subject_token to the requesting client's registered
     /// <see cref="ClientInfo.AllowedScopes"/>. A null or empty allow-list means "no per-client
     /// restriction" (matching <c>ScopeManager.Validate</c> and the JWT bearer grant), so the inherited
-    /// scope passes through unchanged. Comparison is ordinal per RFC 6749 §3.3 scope-token semantics.
+    /// scope passes through unchanged. Comparison is ordinal per RFC 6749 section 3.3 scope-token semantics.
     /// </summary>
     private static string[] FilterToAllowedScopes(string[]? inheritedScope, string[]? allowedScopes)
     {
@@ -530,9 +527,9 @@ public class TokenExchangeGrantHandler(
 
     /// <summary>
     /// Intersects the explicitly requested scope with the subject_token's own scope, keeping only the
-    /// requested values the subject token also holds. Caller applies this only when the subject token
-    /// carries a scope; a scopeless subject token (e.g. an id_token) imposes no upper bound. Comparison
-    /// is ordinal per RFC 6749 §3.3 scope-token semantics.
+    /// requested values the subject token also holds. Caller applies this whenever the subject token
+    /// carries a scope claim, an empty one included; a token without the claim (e.g. an id_token) imposes
+    /// no upper bound. Comparison is ordinal per RFC 6749 section 3.3 scope-token semantics.
     /// </summary>
     private static string[] IntersectScopes(string[] requestedScope, string[] subjectScope)
         => Array.FindAll(requestedScope, scope => Array.IndexOf(subjectScope, scope) >= 0);

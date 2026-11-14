@@ -14,14 +14,17 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Net.Http.Headers;
 using Xunit;
 using EndSessionParameters = Abblix.Oidc.Server.Model.EndSessionRequest.Parameters;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using RegistrationResponseMembers = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -74,7 +77,6 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         {
             [EndSessionParameters.ClientId] = clientId,
             [EndSessionParameters.PostLogoutRedirectUri] = UnregisteredPostLogoutUri,
-            [EndSessionParameters.Confirmed] = bool.TrueString,
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -83,7 +85,29 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         Assert.Null(response.Headers.Location);
 
         var body = await ReadJsonAsync(response);
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A post-logout redirect target that is not a URI is an invalid value, refused rather than dropped, which would
+    /// end the session as if no target had been named.
+    /// </summary>
+    [Fact]
+    public async Task A_post_logout_redirect_uri_that_is_not_a_uri_is_refused()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var clientId = await RegisterLogoutClientAsync(client, discovery);
+
+        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.ClientId] = clientId,
+            [EndSessionParameters.PostLogoutRedirectUri] = "https://[",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await ReadJsonAsync(response);
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     [Fact]
@@ -96,11 +120,10 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
         var clientId = await RegisterLogoutClientAsync(client, discovery);
 
-        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        var response = await EndSessionConfirmedAsync(client, discovery, new Dictionary<string, string>
         {
             [EndSessionParameters.ClientId] = clientId,
             [EndSessionParameters.PostLogoutRedirectUri] = RegisteredPostLogoutUri,
-            [EndSessionParameters.Confirmed] = bool.TrueString,
         });
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
@@ -123,12 +146,11 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         var clientId = await RegisterLogoutClientAsync(client, discovery);
 
         var state = Guid.NewGuid().ToString("N");
-        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        var response = await EndSessionConfirmedAsync(client, discovery, new Dictionary<string, string>
         {
             [EndSessionParameters.ClientId] = clientId,
             [EndSessionParameters.PostLogoutRedirectUri] = RegisteredPostLogoutUri,
             [EndSessionParameters.State] = state,
-            [EndSessionParameters.Confirmed] = bool.TrueString,
         });
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
@@ -136,6 +158,64 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
 
         var echoed = System.Web.HttpUtility.ParseQueryString(location.Query)[EndSessionParameters.State];
         Assert.Equal(state, echoed);
+    }
+
+    [Fact]
+    public async Task A_logout_nobody_confirmed_ends_nothing()
+    {
+        // The whole point of the question. A request carrying no answer and no hint reaches the endpoint with the
+        // browser's cookie on it, which is what any page on any site can cause. The session has to survive it.
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var clientId = await RegisterLogoutClientAsync(client, discovery);
+
+        var form = new Dictionary<string, string>
+        {
+            [EndSessionParameters.ClientId] = clientId,
+            [EndSessionParameters.PostLogoutRedirectUri] = RegisteredPostLogoutUri,
+        };
+
+        await AskedForConfirmationAsync(client, discovery, form);
+
+        // Asked a second time, the server asks again rather than acting: nothing was ended by the first request.
+        var confirmation = await AskedForConfirmationAsync(client, discovery, form);
+
+        // A value this server issued ends the session; the same value a second time does not, so a confirmation
+        // captured from one page cannot be replayed against the session signed in next.
+        var confirmed = await EndSessionAsync(client, discovery, new Dictionary<string, string>(form)
+        {
+            [EndSessionParameters.Confirmation] = confirmation,
+        });
+        Assert.Equal(HttpStatusCode.Redirect, confirmed.StatusCode);
+
+        var replayed = await EndSessionAsync(client, discovery, new Dictionary<string, string>(form)
+        {
+            [EndSessionParameters.Confirmation] = confirmation,
+        });
+        var body = await ReadJsonAsync(replayed);
+        Assert.Equal(HttpStatusCode.BadRequest, replayed.StatusCode);
+        Assert.Equal(ErrorCodes.ConfirmationRequired, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task A_made_up_confirmation_ends_nothing()
+    {
+        // The value has to be one this server issued: a caller that could state its own would be back to ending
+        // any session it names.
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var clientId = await RegisterLogoutClientAsync(client, discovery);
+
+        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.ClientId] = clientId,
+            [EndSessionParameters.PostLogoutRedirectUri] = RegisteredPostLogoutUri,
+            [EndSessionParameters.Confirmation] = "a-value-nobody-issued",
+        });
+
+        var body = await ReadJsonAsync(response);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.ConfirmationRequired, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     [Fact]
@@ -166,41 +246,12 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task A_client_with_a_front_channel_logout_uri_is_signed_out_through_a_framed_page()
     {
-        // On its own host: authorizing adds this client to the session the test host keeps for the whole
-        // process, and that addition never goes away - a shared host would hand every later end-session test a
-        // client to notify through the front channel, turning their redirects into this page.
-        await using var host = Factory.WithWebHostBuilder(_ => { });
-        var client = host.CreateClient(new WebApplicationFactoryClientOptions
-        {
-            AllowAutoRedirect = false,
-            BaseAddress = TestServerAddress.BaseAddress,
-        });
-
-        var discovery = await FetchDiscoveryAsync(client);
-        var clientId = await RegisterFrontChannelLogoutClientAsync(client, discovery);
-
-        // Authorizing is what ties the client to the session; without it the OP has nobody to notify.
-        var (_, challenge) = GeneratePkcePair();
-        await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
-        {
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
-            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
-            [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
-            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
-            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
-        });
-
-        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        var (response, body) = await LogOutAFrontChannelClientAsync(clientId => new Dictionary<string, string>
         {
             [EndSessionParameters.ClientId] = clientId,
             [EndSessionParameters.PostLogoutRedirectUri] = RegisteredPostLogoutUri,
-            [EndSessionParameters.Confirmed] = bool.TrueString,
         });
 
-        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(response.IsSuccessStatusCode, $"/end_session failed: {(int)response.StatusCode} {body}");
         Assert.Equal(MediaTypeNames.Text.Html, response.Content.Headers.ContentType?.MediaType);
         Assert.Contains(FrontChannelLogoutUri.OriginalString, body);
@@ -228,15 +279,80 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
         var clientId = await RegisterLogoutClientAsync(client, discovery);
 
-        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        var response = await EndSessionConfirmedAsync(client, discovery, new Dictionary<string, string>
         {
             [EndSessionParameters.ClientId] = clientId,
-            [EndSessionParameters.Confirmed] = bool.TrueString,
         });
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Null(response.Headers.Location);
         Assert.Empty(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A logout naming a return address but no client, as a client library sends when its caller passes no ID token,
+    /// still ends the session once the end user confirms it, and sends nobody to the address: nothing confirms it,
+    /// and OpenID Connect RP-Initiated Logout 1.0 section 3 says the OP "MUST NOT perform post-logout redirection"
+    /// then.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_naming_no_client_ends_the_session_and_redirects_nowhere()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var response = await EndSessionConfirmedAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.PostLogoutRedirectUri] = UnregisteredPostLogoutUri,
+            [EndSessionParameters.State] = "af0ifjsldkj",
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
+    /// With nobody signed in there is no session to end and nobody to ask, and the address no client confirms is still
+    /// not where the end user is sent: the answer is 204 with no Location.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_naming_no_client_with_no_session_answers_no_content()
+    {
+        await using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => services.Replace(
+                ServiceDescriptor.Singleton<IAuthSessionService>(new MutableAuthSessionService(TimeProvider.System)))));
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
+        {
+            [EndSessionParameters.PostLogoutRedirectUri] = UnregisteredPostLogoutUri,
+            [EndSessionParameters.State] = "af0ifjsldkj",
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
+    /// <summary>
+    /// A client signed in to the session is still told of the logout through the framed page, and the page sends the
+    /// end user nowhere afterwards, since the request named no client to confirm the address it gave.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_naming_no_client_notifies_through_a_page_that_navigates_nowhere()
+    {
+        var (response, body) = await LogOutAFrontChannelClientAsync(_ => new Dictionary<string, string>
+        {
+            [EndSessionParameters.PostLogoutRedirectUri] = RegisteredPostLogoutUri,
+        });
+
+        Assert.True(response.IsSuccessStatusCode, $"/end_session failed: {(int)response.StatusCode} {body}");
+        Assert.Contains(FrontChannelLogoutUri.OriginalString, body);
+        Assert.DoesNotContain(RegisteredPostLogoutUri, body);
     }
 
     /// <summary>
@@ -253,13 +369,12 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var idToken = tokens[IdentityTokenName]!.GetValue<string>();
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
         // No client_id: the endpoint has to take it from the hint's audience.
         var response = await EndSessionAsync(client, discovery, new Dictionary<string, string>
         {
             [EndSessionParameters.IdTokenHint] = idToken,
-            [EndSessionParameters.Confirmed] = bool.TrueString,
         });
 
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -268,7 +383,33 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
             $"/end_session refused a valid id_token_hint: {(int)response.StatusCode} {body}");
     }
 
-    private const string IdentityTokenName = "id_token";
+    /// <summary>
+    /// Signs a client with a front-channel logout address in to the session and logs the session out with the
+    /// parameters given for that client, confirmed; returns the answer and its body.
+    /// </summary>
+    private async Task<(HttpResponseMessage Response, string Body)> LogOutAFrontChannelClientAsync(
+        Func<string, Dictionary<string, string>> logoutParameters)
+    {
+        // On its own host: authorizing adds this client to the session the test host keeps for the whole
+        // process, and that addition never goes away - a shared host would hand every later end-session test a
+        // client to notify through the front channel, turning their redirects into this page.
+        await using var host = Factory.WithWebHostBuilder(_ => { });
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+
+        var discovery = await FetchDiscoveryAsync(client);
+        var clientId = await RegisterFrontChannelLogoutClientAsync(client, discovery);
+
+        // Authorizing is what ties the client to the session; without it the OP has nobody to notify.
+        var (_, challenge) = GeneratePkcePair();
+        await AuthorizeAndExtractCodeAsync(client, discovery, CodeFlowParameters(clientId, challenge));
+
+        var response = await EndSessionConfirmedAsync(client, discovery, logoutParameters(clientId));
+        return (response, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
 
     /// <summary>
     /// Registers a client that additionally asks to be signed out through the front channel.
@@ -307,11 +448,41 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         return registered[RegistrationResponseMembers.ClientId]!.GetValue<string>();
     }
 
+    /// <summary>
+    /// Logs out the way a deployment's own page does: the first request is answered with the question, and the
+    /// second carries the answer the server issued for this session. Returns the answer to the second request.
+    /// </summary>
+    private static async Task<HttpResponseMessage> EndSessionConfirmedAsync(
+        HttpClient client, DiscoveryDocument discovery, Dictionary<string, string> queryParams)
+    {
+        var confirmation = await AskedForConfirmationAsync(client, discovery, queryParams);
+
+        return await EndSessionAsync(client, discovery, new Dictionary<string, string>(queryParams)
+        {
+            [EndSessionParameters.Confirmation] = confirmation,
+        });
+    }
+
+    /// <summary>
+    /// Asserts that the request is answered with the logout question, and returns the value the answer must carry.
+    /// </summary>
+    private static async Task<string> AskedForConfirmationAsync(
+        HttpClient client, DiscoveryDocument discovery, Dictionary<string, string> queryParams)
+    {
+        var asked = await EndSessionAsync(client, discovery, queryParams);
+        var body = await ReadJsonAsync(asked);
+
+        Assert.Equal(HttpStatusCode.BadRequest, asked.StatusCode);
+        Assert.Equal(ErrorCodes.ConfirmationRequired, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+
+        return body[ConfirmationRequiredResponse.Parameters.Confirmation]!.GetValue<string>();
+    }
+
     private static async Task<HttpResponseMessage> EndSessionAsync(
         HttpClient client, DiscoveryDocument discovery, Dictionary<string, string> queryParams)
     {
         Assert.NotNull(discovery.EndSessionEndpoint);
-        var uri = QueryHelpers.BuildUri(discovery.EndSessionEndpoint!, queryParams);
+        var uri = QueryHelpers.BuildUri(discovery.EndSessionEndpoint, queryParams);
         return await client.GetAsync(uri, TestContext.Current.CancellationToken);
     }
 

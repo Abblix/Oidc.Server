@@ -8,6 +8,7 @@
 
 using Abblix.DependencyInjection;
 using Abblix.Jwt.ReplayPrevention;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -30,7 +31,7 @@ public static class ServiceCollectionExtensions
     private const string CacheKeyPrefix = "Abblix.Oidc.Server.Features.ReplayPrevention:";
 
     /// <summary>
-    /// Registers the replay cache and the deprecated contract that still resolves to it.
+    /// Registers the replay cache and decorates it with this server's clock skew and log events.
     /// </summary>
     /// <remarks>
     /// Idempotent and TryAdd throughout, because three unrelated feature registrations call it
@@ -41,42 +42,46 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton(TimeProvider.System);
 
-#pragma warning disable CS0618 // the deprecated contract is what this whole method is about
-        var deprecated = services.FirstOrDefault(
-            descriptor => descriptor.ServiceType == typeof(IJwtReplayCache));
-
         // Three feature registrations call this, and the decoration below is not idempotent by
         // itself - applying it twice would skew the window twice and log every reservation twice.
-        // The shim registered at the end is the record that this already ran, and its
-        // implementation type is what tells it apart from a host's own.
-        if (deprecated is { ImplementationType: var implementation }
-            && implementation == typeof(DistributedJwtReplayCache))
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(AlreadyRegistered)))
         {
             return services;
         }
 
-        // A host that brought its own implementation of the deprecated contract keeps deciding
-        // where replay state lives: bridging to it is what stops the move from quietly sidelining
-        // an override that still looks registered.
-        if (deprecated is not null)
-        {
-            services.TryAddSingleton<IReplayCache, LegacyReplayCacheBridge>();
-        }
-#pragma warning restore CS0618
+        services.AddSingleton(AlreadyRegistered.Instance);
 
-        services.TryAddSingleton<IReplayCache>(provider =>
-            provider.CreateService<DistributedReplayCache>(Dependency.Override(CacheKeyPrefix)));
+        // The store is the one registered under the shared key, which a host substitutes in any order, or one some
+        // other package registered first - a host running both this server and a Security Event Token receiver
+        // shares one replay store - which the forwarding below then leaves in place
+        services.TryAddKeyedSingleton<IReplayCache>(
+            TenantServiceKeys.Shared,
+            (provider, _) => provider.CreateService<DistributedReplayCache>(Dependency.Override(CacheKeyPrefix)));
+        services.TryAddSingleton<IReplayCache>(
+            provider => provider.GetRequiredKeyedService<IReplayCache>(TenantServiceKeys.Shared));
 
-        // Decorated rather than composed in one factory, so this server's policy also reaches a
-        // store some other package registered first - a host running both this server and a
-        // Security Event Token receiver shares one replay store, and which of them registered it
-        // must not decide whether the server's clock skew and log events apply.
+        // Decorated rather than composed in one factory, so this server's policy also reaches a store some other
+        // package registered first, and which of them registered it does not decide whether the server's clock skew
+        // and log events apply. The tenant's form is outermost, so each tenant reserves in a space of its own.
         services.Decorate<IReplayCache, ConfiguredReplayCache>();
-
-#pragma warning disable CS0618 // deliberate registration of the deprecated shim
-        services.TryAddSingleton<IJwtReplayCache, DistributedJwtReplayCache>();
-#pragma warning restore CS0618
+        services.TryAddSingleton<ITenantAccessor, AmbientTenantAccessor>();
+        services.Decorate<IReplayCache, TenantReplayCache>();
 
         return services;
+    }
+
+    /// <summary>
+    /// The record that <see cref="AddReplayPrevention"/> has already run on this collection.
+    /// </summary>
+    /// <remarks>
+    /// A type of its own because the decoration cannot record itself: <c>Decorate</c> registers an
+    /// object-typed factory, and a descriptor cannot be asked what a factory will build, so looking
+    /// for the decorator finds nothing and the cache is wrapped once per caller. Nothing ever
+    /// resolves this; its presence in the collection is the whole signal.
+    /// </remarks>
+    private sealed class AlreadyRegistered
+    {
+        /// <summary>The one that gets registered; the container never has to build it.</summary>
+        public static readonly AlreadyRegistered Instance = new();
     }
 }

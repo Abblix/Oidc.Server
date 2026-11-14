@@ -6,11 +6,8 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 
-using Abblix.DependencyInjection;
-using Abblix.Jwt.Signing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 
 namespace Abblix.Jwt.ExternalKeys;
 
@@ -43,16 +40,7 @@ public static class ExternalKeysServiceCollectionExtensions
     /// for. What the placement calls then do with it belongs to whoever consumes the keys.
     /// </remarks>
     public static IKeyCustodianBuilder RequireKeyPlacement(this IServiceCollection services)
-    {
-        // Turns a missing placement call into a startup failure rather than a first-use one: the host runs its
-        // startup validators before it starts the hosted service that opens the port, so the process never
-        // serves a request in this state.
-        services.AddOptions<KeyPlacementChoice>()
-            .Validate(choice => choice.ChosenPlacement is not null, KeyPlacementChoice.PlacementNotChosenMessage)
-            .ValidateOnStart();
-
-        return new KeyCustodianBuilder(services);
-    }
+        => services.OpenKeyPlacement();
 
     /// <summary>
     /// Registers <typeparamref name="TCustodian"/> as the custodian and opens the placement choice. The custodian is
@@ -91,13 +79,25 @@ public static class ExternalKeysServiceCollectionExtensions
     /// </remarks>
     public static IServiceCollection UseKeysInCustodian(this IKeyCustodianBuilder builder, CustodianHeldKeys keys)
     {
-        var services = ChoosePlacement(builder, KeyPlacement.Custodian, nameof(UseKeysInCustodian));
+        var services = builder.ChooseKeyPlacement(KeyPlacement.Custodian, nameof(UseKeysInCustodian));
 
         // Replace rather than Add: this argument IS the host's key selection, so exactly one selection lives in
         // the collection, ahead of anything the host registered earlier.
         services.Replace(ServiceDescriptor.Singleton(keys));
         return services;
     }
+
+    /// <summary>
+    /// Keeps the private halves out of this process, and leaves naming the custodian's keys to whoever consumes them,
+    /// which names them per issuer: an OpenID Provider serving several tenants names each tenant's own, so no two of
+    /// them sign with one key. A host with one issuer names its keys with
+    /// <see cref="UseKeysInCustodian(IKeyCustodianBuilder,CustodianHeldKeys)"/>; see that overload for what this
+    /// placement means and when to call it.
+    /// </summary>
+    /// <param name="builder">The builder returned by the custodian registration.</param>
+    /// <returns>The service collection, for chaining.</returns>
+    public static IServiceCollection UseKeysInCustodian(this IKeyCustodianBuilder builder)
+        => builder.ChooseKeyPlacement(KeyPlacement.Custodian, nameof(UseKeysInCustodian));
 
     /// <summary>
     /// Keeps the private halves out of this process, reading the key selection from a service instead of a literal.
@@ -117,7 +117,7 @@ public static class ExternalKeysServiceCollectionExtensions
         this IKeyCustodianBuilder builder,
         Func<IServiceProvider, CustodianHeldKeys> keys)
     {
-        var services = ChoosePlacement(builder, KeyPlacement.Custodian, nameof(UseKeysInCustodian));
+        var services = builder.ChooseKeyPlacement(KeyPlacement.Custodian, nameof(UseKeysInCustodian));
 
         // Replace, for the reason the sibling overload gives: this argument IS the host's key selection. Note the
         // registered service type is CustodianHeldKeys, not the delegate - overload resolution prefers the factory
@@ -135,6 +135,8 @@ public static class ExternalKeysServiceCollectionExtensions
     /// <param name="builder">The builder returned by the custodian registration.</param>
     /// <param name="policy">What to mint, how often, and which key seals it.</param>
     /// <returns>The builder whose <c>PersistRingTo...</c> call says where the ring lives.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="MintedKeys.RotateEvery"/> is not positive, or
+    /// <see cref="MintedKeys.KeepRetiredFor"/> is negative.</exception>
     /// <remarks>
     /// This is the weaker posture of the two, which is why it is named rather than defaulted: the private half is
     /// unwrapped into process memory and stays there, so a compromised process yields the key itself, not merely
@@ -150,77 +152,8 @@ public static class ExternalKeysServiceCollectionExtensions
     /// </remarks>
     public static IMintedKeysBuilder UseKeysInProcess(this IKeyCustodianBuilder builder, MintedKeys policy)
     {
-        var services = ChoosePlacement(builder, KeyPlacement.InProcess, nameof(UseKeysInProcess));
-
-        // This placement, unlike the other, needs somewhere to keep the ring, and a builder cannot force the call
-        // that supplies it. Nothing else in the container reveals the omission: the ring simply fails to resolve on
-        // first use, long after startup. Checking here is what the recorded placement is for.
-        services.AddOptions<KeyPlacementChoice>()
-            .Validate<IServiceProvider>(
-                (choice, serviceProvider) =>
-                    choice.ChosenPlacement != KeyPlacement.InProcess ||
-                    serviceProvider.GetService<IKeyRingStore>() is not null,
-                $"{nameof(UseKeysInProcess)} needs an {nameof(IKeyRingStore)} to share the keys it mints, and none "
-                + "is registered. Follow it with a PersistRingTo... call from the custodian's package.");
-
+        var services = builder.ChooseKeyPlacement(KeyPlacement.InProcess, nameof(UseKeysInProcess));
         return services.AddKeyRing(policy);
-    }
-
-    /// <summary>
-    /// The half both placements share: refuse an ordering that would compose nothing, record the choice, and put
-    /// the external backends on the crypto seams.
-    /// </summary>
-    /// <remarks>
-    /// The external backends belong to the PLACEMENT rather than to the custodian, because they route a private
-    /// operation out of process, which is what a placement decides. Both placements need them: the minting one
-    /// signs locally but still opens each sealed key through the custodian, and that unwrap is external.
-    /// </remarks>
-    private static IServiceCollection ChoosePlacement(
-        IKeyCustodianBuilder builder,
-        KeyPlacement placement,
-        string placementCall)
-    {
-        var services = builder.Services;
-
-        // Composition needs the in-process backends to compose WITH, and Compose short-circuits on a one-member
-        // family: running before the JWT registration would build no composite, and the external backend would then
-        // lose the singular resolve to the local one registered after it. Nothing detects that later - the seam
-        // simply reports it cannot sign a key it should have routed here - so fail where the mistake is.
-        //
-        // Only AddJsonWebTokens is named. Whichever registration the host wrote performs it (an OpenID Provider's
-        // does, and so does the security-event one), and naming those here would be a literal for a method in an
-        // assembly this one does not reference: nothing would keep it true through a rename, and it would advise a
-        // host that has no such method to call it.
-        if (services.All(descriptor => descriptor.ServiceType != typeof(IDataSigner)))
-            throw new InvalidOperationException(
-                $"Call {placementCall} after {nameof(ServiceCollectionExtensions.AddJsonWebTokens)}, which every "
-                + "registration that adds JSON Web Token services performs. It composes the external crypto "
-                + "backends with their in-process peers, and none are registered yet.");
-
-        // A placement says where a CUSTODIAN's keys live, so one without a custodian is half a sentence. It
-        // would otherwise pass every guard here and at startup - the placement is recorded, so the choice looks
-        // made - and surface on the first key operation as the container's own "unable to resolve IKeyCustodian",
-        // which names neither this call nor the registration that is missing.
-        var custodian = services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IKeyCustodian))
-            ?? throw new InvalidOperationException(
-                $"{placementCall} says where a key custodian's private keys live, but no {nameof(IKeyCustodian)} "
-                + $"is registered. Register one first - {nameof(AddCustodian)} does it, as does each backend "
-                + "package's own AddVaultCustodian or AddAzureCustodian.");
-
-        // The backends that route a private operation out of process are singletons, so a custodian shorter-lived
-        // than they are is a captive dependency. It would be caught by ValidateScopes in Development and by nothing
-        // at all in Production, where the first resolve pins one scope's custodian for the process lifetime.
-        if (custodian.Lifetime != ServiceLifetime.Singleton)
-            throw new InvalidOperationException(
-                $"{nameof(IKeyCustodian)} is registered as {custodian.Lifetime} and must be a "
-                + $"{ServiceLifetime.Singleton}: the signing and decryption backends that reach it are singletons, "
-                + "so a shorter lifetime would pin one scope's custodian for the life of the process.");
-
-        // Satisfies the startup validation the custodian registration armed: the wiring is now complete.
-        services.Configure<KeyPlacementChoice>(choice => choice.ChosenPlacement = placement);
-
-        services.ComposeExternalKeyBackends();
-        return services;
     }
 
     /// <summary>
@@ -230,38 +163,25 @@ public static class ExternalKeysServiceCollectionExtensions
     /// <param name="services">The service collection to add to.</param>
     /// <param name="policy">What to mint, how often, and which key-encryption key seals it.</param>
     /// <returns>A builder for the call that supplies the store.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="MintedKeys.RotateEvery"/> is not positive, or
+    /// <see cref="MintedKeys.KeepRetiredFor"/> is negative.</exception>
     /// <remarks>
+    /// <para>
     /// This registers the ring and nothing else. What the ring's keys are then USED for is the caller's
     /// concern: an OpenID Provider publishes them at its JWKS endpoint, a client protects stored sessions with
     /// them. Neither of those belongs here, which is why this lives beside the key material rather than beside
     /// either consumer.
+    /// </para>
+    /// <para>
+    /// The keys adopted into the ring are judged while the host announces its start
+    /// (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartingAsync"/>), as the Generic Host and
+    /// <c>WebApplication</c> do, before the ring mints its first key. A host starting its services without that
+    /// announcement, such as the obsolete <c>WebHost</c>, is not supported: its ring could mint before the adoption
+    /// is judged, and a partition holding a minted key takes no adopted one afterwards.
+    /// </para>
     /// </remarks>
     public static IMintedKeysBuilder AddKeyRing(this IServiceCollection services, MintedKeys policy)
-    {
-        services.TryAddSingleton<KeyEnvelope>();
-
-        // Both the ring and the loop that keeps it current read the clock, and this package is consumable without
-        // the registrations that would otherwise have supplied one. TryAdd, so a host's own clock still wins.
-        services.TryAddSingleton(TimeProvider.System);
-
-        var builder = new MintedKeysBuilder(services, policy);
-
-        // CreateService, unlike the plain registrations around it, because the policy is a per-call value the
-        // container knows nothing about: everything else the ring needs is resolved normally. It is read off the
-        // builder rather than captured, so a call chained after this one - AdoptExistingKeys - still reaches the
-        // ring: this factory runs when the container builds, by which time the whole chain has run.
-        services.TryAddSingleton(
-            serviceProvider => serviceProvider.CreateService<KeyRing>(Dependency.Override(builder.Policy)));
-
-        // The concrete type is what is constructed, and the contract is an alias to it. Registering the contract
-        // with its own factory instead would build a SECOND ring: the refresh service would keep one current
-        // while every consumer read the other, which fails as a server publishing keys it never rotates.
-        services.TryAddSingleton<IKeyRing>(serviceProvider => serviceProvider.GetRequiredService<KeyRing>());
-
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, KeyRingRefreshService>());
-
-        return builder;
-    }
+        => services.AddMintedKeyRing(policy);
 
     /// <summary>
     /// Registers a key ring that mints its keys in this process and keeps them there: no custodian, no shared
@@ -270,6 +190,12 @@ public static class ExternalKeysServiceCollectionExtensions
     /// <param name="services">The service collection to add to.</param>
     /// <param name="policy">What to mint, how often, and how long to keep a retired key.</param>
     /// <returns>The same collection, so calls chain.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="LocalKeys.RotateEvery"/> is not positive, or
+    /// <see cref="LocalKeys.KeepRetiredFor"/> is negative.</exception>
+    /// <exception cref="Microsoft.Extensions.Options.OptionsValidationException">
+    /// <see cref="LocalKeys.KeepRetiredFor"/> is shorter than <see cref="KeyRingOptions.KeyRolloverPropagation"/>:
+    /// raised when the host starts, or at the first read of the key ring's settings where no host runs the startup
+    /// validation.</exception>
     /// <remarks>
     /// The answer for a host with no HSM or KMS, which is most of them. It rotates, and it keeps retired keys
     /// long enough that what they produced stays readable - the two things a ring is for.
@@ -285,21 +211,5 @@ public static class ExternalKeysServiceCollectionExtensions
     /// silently ignored it would be the worst of both. Use <see cref="AddKeyRing"/> with a custodian instead.
     /// </remarks>
     public static IServiceCollection AddInMemoryKeyRing(this IServiceCollection services, LocalKeys policy)
-    {
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(IKeyRingStore)))
-            throw new InvalidOperationException(
-                $"{nameof(AddInMemoryKeyRing)} keeps its keys in this process only, but an "
-                + $"{nameof(IKeyRingStore)} is registered, which is how keys are shared between processes. "
-                + $"The store would be ignored. Use {nameof(AddKeyRing)} with a custodian to share keys, or "
-                + "drop the store if a single instance is intended.");
-
-        // The ring reads the clock, and this package is consumable without the registrations that would otherwise
-        // have supplied one.
-        services.TryAddSingleton(TimeProvider.System);
-
-        services.TryAddSingleton<IKeyRing>(
-            serviceProvider => serviceProvider.CreateService<InMemoryKeyRing>(Dependency.Override(policy)));
-
-        return services;
-    }
+        => services.AddLocalKeyRing(policy);
 }

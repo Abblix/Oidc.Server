@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 
@@ -22,13 +23,15 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 /// specific.</param>
 /// <param name="Reason">The validator's own words, for the log.</param>
 /// <remarks>
-/// Two strings because they have two audiences. A granted-phase rejection names a HOST-side defect, so the
-/// validator writes for whoever has to fix it and may name a tenant, a ceiling or a configuration key. That
-/// is not a sentence a client asking for a token should receive, and no other granted-phase refusal in this
-/// library reaches one - the authorization endpoint wraps its own in an exception.
+/// Two strings because they have two audiences. A granted-phase rejection is explained to whoever runs the
+/// host, so the validator writes for whoever has to act on it and may name a tenant, a ceiling or a
+/// configuration key. That is not a sentence a client asking for a token should receive, and no other
+/// granted-phase refusal in this library reaches one - the authorization endpoint answers its own with a
+/// fixed access_denied.
 ///
-/// One caller has no client to answer and uses <c>Reason</c> alone: the CIBA push mode delivers through a
-/// notification endpoint this server sends no error payload to, so there is nowhere for <c>Error</c> to go.
+/// One caller sends neither: the CIBA push mode answers its client with the error payload of CIBA Core 1.0
+/// section 12, which allows only access_denied, expired_token and transaction_failed, so a refused grant is
+/// sent as access_denied and <c>Reason</c> goes to the log.
 /// </remarks>
 internal readonly record struct GrantRefusal(OidcError Error, string Reason);
 
@@ -37,7 +40,7 @@ internal readonly record struct GrantRefusal(OidcError Error, string Reason);
 /// without letting them change it.
 /// </summary>
 /// <remarks>
-/// The comparison the out-of-band flows can make on their own is by type, because RFC 9396 §6.1 defines no
+/// The comparison the out-of-band flows can make on their own is by type, because RFC 9396 section 6.1 defines no
 /// standardized way to compare two arbitrary entries and says the definition of the type owns that
 /// decision. A host that raises an amount inside an entry of a type the request did ask for therefore
 /// passes every type check there is. Only the validator for that type can refuse it.
@@ -63,12 +66,17 @@ internal static class GrantedRevalidation
     /// Why the grant will not be issued, or <c>null</c> when the per-type validators accept it as stored.
     /// </summary>
     /// <param name="policy">The per-type validator dispatch.</param>
+    /// <param name="tenant">The tenant the grant is spent at.</param>
     /// <param name="grant">The grant about to be spent.</param>
+    /// <param name="requested">The <c>authorization_details</c> the request carried, which the validators
+    /// hold each granted entry to.</param>
     /// <param name="client">The client the grant is being issued to.</param>
     /// <param name="cancellationToken">Cancellation token forwarded to the validators.</param>
     public static async Task<GrantRefusal?> RefuseAsync(
         this IAuthorizationDetailsPolicy policy,
+        TenantDefinition tenant,
         AuthorizedGrant grant,
+        JsonArray? requested,
         ClientInfo client,
         CancellationToken cancellationToken)
     {
@@ -82,7 +90,7 @@ internal static class GrantedRevalidation
         var asStored = (JsonArray)granted.DeepClone();
         var probe = (JsonArray)granted.DeepClone();
 
-        var result = await policy.ApplyGrantedAsync(probe, client, cancellationToken);
+        var result = await policy.ApplyGrantedAsync(tenant, probe, requested, client, cancellationToken);
         if (result.TryGetFailure(out var error))
             return Refusal(error.ErrorDescription);
 
@@ -94,8 +102,9 @@ internal static class GrantedRevalidation
         // thing: what is stored is not what may be issued.
         //
         // Both shapes are compared, because the two ways of answering are equally common: an edit IN PLACE
-        // shows on the probe, a rewritten entry shows in what comes back. Null means nothing to change,
-        // which is how every other caller reads it.
+        // shows on the probe, a rewritten entry shows in what comes back. An answer with every entry
+        // removed is a refusal like any other change, and it is the one the probe cannot show: a policy
+        // that deleted everything without touching what it was handed leaves the probe identical.
         //
         // Compared STRUCTURALLY rather than as text. Deserialise, validate, return a fresh entry is the
         // natural way to write a validator in C#, and the interface invites it, so a validator that changed
@@ -108,7 +117,7 @@ internal static class GrantedRevalidation
         // runtimes will disagree about the same validator, which is worth knowing when one does.
         var revalidated = result.GetSuccess();
         var changed = !JsonNode.DeepEquals(probe, asStored) ||
-                      (revalidated is not null && !JsonNode.DeepEquals(revalidated, asStored));
+                      !JsonNode.DeepEquals(revalidated, asStored);
 
         return changed
             ? Refusal(
@@ -121,15 +130,15 @@ internal static class GrantedRevalidation
     /// The refusal, with the code RFC 9396 registers for it.
     /// </summary>
     /// <remarks>
-    /// RFC 9396 §14.6 registers <c>invalid_authorization_details</c> with the token endpoint among its
-    /// usage locations, and points its Reference at §5, which is the requirement being enforced here: the
+    /// RFC 9396 section 14.6 registers <c>invalid_authorization_details</c> with the token endpoint among its
+    /// usage locations, and points its Reference at section 5, which is the requirement being enforced here: the
     /// authorization server MUST refuse authorization details not conforming to the respective type
     /// definition. Applying that requirement again when a stored grant is spent is this library's choice
-    /// about WHEN, not something the specification asks for - §6 covers a different case, the
+    /// about WHEN, not something the specification asks for - section 6 covers a different case, the
     /// <c>authorization_details</c> token request parameter, and nothing is requested on these flows.
     ///
     /// It is also the only available code that is TRUE on the flows that answer a waiting client - CIBA
-    /// Core §11 defines <c>access_denied</c> as "The end-user denied the authorization request", and here
+    /// Core section 11 defines <c>access_denied</c> as "The end-user denied the authorization request", and here
     /// the end user approved while the deployment refused. The push mode answers nobody and discards this
     /// code, which is why keeping poll and ping on the redemption path matters: they are the ones that can
     /// still be told the truth.

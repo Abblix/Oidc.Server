@@ -9,10 +9,8 @@
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Infrastructure;
-using Abblix.SecurityEvents.Validation;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Model;
-using Abblix.SharedSignals.Receiver;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;

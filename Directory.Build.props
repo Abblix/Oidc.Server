@@ -13,6 +13,20 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
+  <!-- Unions are a C# 15 feature, so the version is named rather than left to the SDK. Named rather
+       than "latest" because "latest" moves with the toolchain: the day C# 16 arrives, a construct
+       from it compiles here without anyone deciding that, and the build starts requiring an SDK
+       nobody chose. Below 15 the compiler does not know the keyword and reads the declaration as an
+       identifier, so the failure is a run of CS0106 about modifiers rather than anything naming a
+       language version.
+
+       This deliberately stops short of "preview", which the file carried while the feature was
+       behind it: preview admits every other unfinished feature as well, and one used by accident is
+       one that can change under us before it ships. -->
+  <PropertyGroup>
+    <LangVersion>15.0</LangVersion>
+  </PropertyGroup>
+
   <!-- MinVer derives PackageVersion / AssemblyVersion / FileVersion / InformationalVersion
        from git tags. The latest tag sets the base; commits since it bump the patch and
        append the height and the pre-release suffix.
@@ -22,6 +36,12 @@
        that release, and a consumer floating on its range is waiting for exactly this work. Moved
        early, the range they float on stops being filled by anybody and the fix they are waiting for
        silently never arrives - the restore keeps resolving, to the last build before the move.
+
+       A line ABANDONED rather than cut is the other way it moves, and the reason is the same read
+       backwards: nobody is waiting for a release that will not happen, so leaving the property
+       behind would publish this work under a number it will never ship as. Before moving it that
+       way, look for consumers floating on the abandoned range - a range with none is why the move
+       costs nothing, and a range with some is the case the paragraph above is about.
 
        MinVerDefaultPreReleaseIdentifiers replaces the default "alpha.0" with "dev.0", so the
        range a consumer floats on reads MAJOR.MINOR.0-dev.* and cannot be confused with an alpha. A
@@ -67,7 +87,7 @@
        zero patch, which is right whatever the tags do: NuGet floats only the release label, so a
        range written as MAJOR.MINOR.0-dev.* cannot resolve a MAJOR.MINOR.1 build. -->
   <PropertyGroup>
-    <MinVerMinimumMajorMinor>2.4</MinVerMinimumMajorMinor>
+    <MinVerMinimumMajorMinor>3.0</MinVerMinimumMajorMinor>
     <MinVerDefaultPreReleaseIdentifiers>dev.0</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
   <ItemGroup>
@@ -84,5 +104,18 @@
       <IncludeAssets>analyzers; build; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
+
+  <!-- The house rules the compiler refuses, taken from src/Abblix.Analyzers the way every other Abblix
+       repository takes them from its package: the analyzer assembly, the banned-member list and its
+       severity. The analyzer project is excluded from its own reference. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'Abblix.Analyzers'">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)src/Abblix.Analyzers/Abblix.Analyzers.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>analyzers; build; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildThisFileDirectory)src/Abblix.Analyzers/buildTransitive/Abblix.Analyzers.props" />
 
 </Project>

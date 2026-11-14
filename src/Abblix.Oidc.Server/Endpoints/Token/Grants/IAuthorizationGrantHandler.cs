@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -19,7 +20,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
 /// Strategy contract for resolving the <c>grant_type</c>-specific portion of an OAuth 2.0 token
-/// request (RFC 6749 §4) into an <see cref="AuthorizedGrant"/>: an authentication session plus the
+/// request (RFC 6749 section 4) into an <see cref="AuthorizedGrant"/>: an authentication session plus the
 /// <see cref="AuthorizationContext"/> (subject, scope, resources, claims) that the issued tokens
 /// will inherit. Each implementation advertises the grant types it owns via
 /// <see cref="IGrantTypeInformer.GrantTypesSupported"/>.
@@ -32,29 +33,26 @@ public interface IAuthorizationGrantHandler : IGrantTypeInformer
 	/// <see cref="AuthorizedGrant"/> that will drive token issuance, or an <see cref="OidcError"/>
 	/// such as <c>invalid_grant</c>, <c>authorization_pending</c>, or <c>slow_down</c>.
 	/// </summary>
+	/// <remarks>
+	/// A grant the token request itself authorizes takes its resources from <see cref="TokenRequest.Resources"/>,
+	/// which already holds a resource inferred from the scope: a resource the request names that the grant does not
+	/// hold refuses the request (<see cref="Validation.GrantNarrowingValidator"/>). Which grants the request
+	/// authorizes itself is decided by <see cref="Validation.ResourceValidator"/>.
+	/// </remarks>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The token request (already authenticated against the client).</param>
 	/// <param name="clientInfo">The authenticated client; used to enforce that the grant was
 	/// issued to the same client that is now redeeming it.</param>
-	[Obsolete("Implement and call the overload taking a CancellationToken. This one is kept so an existing " +
-	          "implementation keeps working, and will be removed in the next major version.")]
-	[SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
-		Justification = "Removal is scheduled and tracked: the overload is kept only so a caller written against the pre-2.4 signature keeps working, and it goes in the next major version (#302).")]
-	Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo)
-		=> AuthorizeAsync(request, clientInfo, CancellationToken.None);
-
-	/// <inheritdoc cref="AuthorizeAsync(TokenRequest, ClientInfo)"/>
-	/// <param name="request">The token request (already authenticated against the client).</param>
-	/// <param name="clientInfo">The authenticated client.</param>
 	/// <param name="cancellationToken">
 	/// Abandons the resolution when the caller stops waiting. CIBA holds this call open for the configured
 	/// long-polling timeout, so a handler that never receives the token goes on polling storage for a client
-	/// that disconnected.
+	/// that disconnected. A handler that spends the grant while resolving it - takes a device code or a
+	/// backchannel authentication request from storage - does not pass the token past that point: giving up
+	/// there would spend the grant and issue nothing (see <see cref="ITokenRequestProcessor"/>). For the same
+	/// reason, a refusal that the client is expected to cure by retrying belongs in a validator registered
+	/// before the one that calls this, not after it.
 	/// </param>
-	/// <remarks>
-	/// This is the member an implementation provides. The obsolete overload above defaults to forwarding here,
-	/// so a caller still holding the old signature keeps working, while an implementation that provided only
-	/// the old one fails to compile rather than silently never receiving the token.
-	/// </remarks>
 	Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(
+		TenantDefinition tenant,
 		TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken);
 }

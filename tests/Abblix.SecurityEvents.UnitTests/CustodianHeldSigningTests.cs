@@ -89,7 +89,8 @@ public class CustodianHeldSigningTests
         resolved = host;
 
         // Startup validation is satisfied: the guard the custodian registration armed has an answer.
-        host.GetRequiredService<IStartupValidator>().Validate();
+        await host.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken);
 
         var compact = await new SecurityEventTokenBuilder()
             .WithIssuer(Issuer)
@@ -119,6 +120,8 @@ public class CustodianHeldSigningTests
     /// </summary>
     private sealed class RsaCustodian(RSA rsa, string signingKeyName) : IKeyCustodian
     {
+        public bool ServesKeyManagement(string algorithm) => true;
+
         public int SignatureCount { get; private set; }
 
         public Task<byte[]> SignAsync(
@@ -139,7 +142,7 @@ public class CustodianHeldSigningTests
             CancellationToken cancellationToken)
             => throw new NotSupportedException();
 
-        public Task<byte[]> AgreeKeyAsync(
+        public Task<byte[]?> AgreeKeyAsync(
             string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
             => throw new NotSupportedException();
 

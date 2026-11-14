@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
@@ -44,7 +45,7 @@ public class JwksUriValidator(ISecureUriValidator uriValidator) : SyncClientRegi
     /// Returns an <c>invalid_client_metadata</c> error when <c>jwks_uri</c> is relative or violates the
     /// fetch policy; <c>null</c> when it is absent or compliant.
     /// </summary>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var uri = context.Request.JwksUri;
         if (uri is null)

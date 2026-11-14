@@ -2,7 +2,9 @@
 
 The OpenID RISC Profile 1.0 (Risk Incident Sharing and Coordination) event dictionary for [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents): typed payload models and event type identifiers for the RISC events, registered over the Security Events core in one call. RISC is how providers protect a shared user together - a credential found in a breach or an account hijacked at one provider becomes a signal every other provider holding the same identifier can act on.
 
-[Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) places this vocabulary in the stack, and explains why account-level incidents travel the same envelope and the same streams as session events.
+[A map of the Shared Signals layers and back-channel logout](https://www.abblix.com/en/docs/shared-signals-framework) places this vocabulary in the stack, and explains why account-level incidents travel the same envelope and the same streams as session events.
+
+[A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) walks the same trip end to end, which a dictionary of event types cannot show by itself.
 
 ## Install
 
@@ -54,6 +56,12 @@ services.AddSecurityEvents(options => options.Events.RegisterCaepEvents().Regist
 
 ## Transmitting
 
+Events are sent through the Shared Signals transmitter, which comes with [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals):
+
+```bash
+dotnet add package Abblix.SharedSignals
+```
+
 ```csharp
 await dispatcher.DispatchAsync(new SecurityEventDescriptor
 {
@@ -65,6 +73,8 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
     },
 });
 ```
+
+The call reports which streams the event could not be queued for; the [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) README says how to retry them.
 
 ## Part of the Abblix product family
 

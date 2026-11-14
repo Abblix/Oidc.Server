@@ -53,7 +53,7 @@ public static class RiscEventTypes
     /// (RISC 1.0 Section 2.8.2).</summary>
     public const string OptOutInitiated = BaseUri + "opt-out-initiated";
 
-    /// <summary>The account cancelled a pending opt-out (RISC 1.0 Section 2.8.3).</summary>
+    /// <summary>The account canceled a pending opt-out (RISC 1.0 Section 2.8.3).</summary>
     public const string OptOutCancelled = BaseUri + "opt-out-cancelled";
 
     /// <summary>The opt-out took effect (RISC 1.0 Section 2.8.4).</summary>
@@ -67,7 +67,7 @@ public static class RiscEventTypes
     public const string RecoveryInformationChanged = BaseUri + "recovery-information-changed";
 
     /// <summary>All sessions of the account have been revoked (RISC 1.0 Section 2.11).
-    /// Deprecated by the specification in favour of the CAEP session-revoked event; kept so a
+    /// Deprecated by the specification in favor of the CAEP session-revoked event; kept so a
     /// receiver still understands transmitters that predate the deprecation.</summary>
     public const string SessionsRevoked = BaseUri + "sessions-revoked";
 

@@ -41,6 +41,11 @@ on:
       - '**/*.slnx'
       - '**/*.sln'
       - 'NuGet.config'
+      # The SDK it names decides which framework the packages are compiled against, so a new SDK is a new build.
+      - 'global.json'
+      # The analyzer package carries rule data in files none of the patterns above match - the banned
+      # member list and its severity - and every Abblix repository takes that data from this feed.
+      - 'src/Abblix.Analyzers/**'
       - '.github/workflows/publish-dev-builds.yml'
   # Deleting a package entry to change its published casing leaves every floating
   # reference with nothing to resolve until the next push. A manual run closes that
@@ -61,18 +66,24 @@ jobs:
   pack-and-publish:
     name: Pack and publish dev build
     runs-on: ubuntu-latest
-    # Sized from the worst observation plus 20%, rounded up. Completed runs took 269s and 284s
-    # (build ~105s, test ~130s, the rest under 30s together), and two more were cut off at 306s and
-    # 316s, which are lower bounds on what they would have taken - so 316s is the figure to size
-    # from, not the fastest run. The earlier ceiling of 5 minutes was set from a measurement with no
-    # headroom, and the job silently outgrew it, leaving the feed without those commits' packages.
-    # Worth knowing when it happens again: a job timeout is reported as "cancelled" with the same
-    # wording as a manual stop, so the only thing identifying it is the duration landing exactly on
-    # the ceiling.
-    timeout-minutes: 7
+    # Fourth raise of this ceiling, and the reason each was needed is the same: most of this job is
+    # the test step, so its duration grows with the suite while the number here does not. Sizing from
+    # the runs of the day therefore buys only the months until the suite catches up - 5 minutes was
+    # outgrown, then 7, then 10, then 13, each time leaving the feed without the packages of the commits that
+    # were cut off. Read the step timings of a recent run before changing it again, and size from a run
+    # that was CUT OFF rather than one that finished: a cut-off duration is a lower bound on the work.
+    # Sized from the steps around Test taking about 2.5 minutes and the Test step's own ceiling below.
+    #
+    # Worth knowing when it happens again: a job timeout is reported as "cancelled", the same word a
+    # manual stop gets, so what identifies it is the duration landing on the ceiling. Nothing else
+    # says it happened, and the run that was cut off publishes nothing.
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
+      # The lookup before the Test step reads the pull request of the commit and its check results
+      checks: read
+      pull-requests: read
     steps:
       - name: Harden runner (audit egress)
         uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
@@ -92,29 +103,110 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          dotnet-version: '10.0'
+          # No version here on purpose: with dotnet-version absent the action installs what
+          # global.json names, which is the same file the local build resolves against. Naming a
+          # version in each workflow is an enumeration - one of them is missed by a bump and that
+          # job keeps building on the old SDK, green, until something needs the new one. The
+          # version itself still moves by hand - global.json names an exact build and the action
+          # installs that one - but it moves in one place.
+          global-json-file: global.json
 
+        timeout-minutes: 3
+      # Looked up, never downloaded: the packages this job builds and publishes come from the feed, not from a
+      # cache any job on the branch can write. The lookup only tells whether develop's entry exists already
+      - name: Look up the NuGet packages cache
+        id: nuget-cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json') }}
+          lookup-only: true
         timeout-minutes: 3
       - name: Restore
         run: dotnet restore
 
         timeout-minutes: 3
+      # The one place the NuGet cache is written: develop's entry is visible to every pull request against it,
+      # while an entry saved by a pull request is visible to that pull request alone
+      - name: Save NuGet packages cache
+        if: github.ref == 'refs/heads/develop' && steps.nuget-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
+        timeout-minutes: 3
       - name: Build
         run: dotnet build --no-restore -c Release
 
         timeout-minutes: 3
+      # Whether the pull request that produced this commit already ran the suite on this very tree. Three
+      # things must hold, each asked of the side that decides it. The rule on develop requires the
+      # "Unit tests" check AND that the branch be up to date with develop before merging, so the tree a
+      # squash merge produces is the tree the check ran on. The commit came from a merged pull request,
+      # which an admin's direct push, allowed to bypass that rule, did not. And that pull request's head
+      # has the check green with the solution build behind it, since a pull request outside the suite's reach passes
+      # the check with nothing run. Anything else, including an answer that did not arrive, leaves the suite to
+      # run below: a failed lookup costs minutes, never an untested package. Not asked: an admin merging an
+      # out-of-date branch through the same bypass, which the rule cannot see from here.
+      - name: Look up whether the merged pull request tested this tree
+        id: tested
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          REF: ${{ github.ref }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          covered=false
+          if [ "$EVENT" = "push" ] && [ "$REF" = "refs/heads/develop" ]; then
+            rc=0
+            rule=$(gh api "repos/$REPO/rules/branches/develop" --jq '[.[] | select(.type == "required_status_checks") | .parameters | select(.strict_required_status_checks_policy == true and any(.required_status_checks[]; .context == "Unit tests"))] | length') || rc=$?
+            [ "$rc" -eq 0 ] || rule=0
+
+            rc=0
+            head=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '[.[] | select(.merged_at != null and .base.ref == "develop")][0].head.sha // ""') || rc=$?
+            [ "$rc" -eq 0 ] || head=""
+
+            passed=0
+            built=0
+            if [ -n "$head" ]; then
+              rc=0
+              passed=$(gh api "repos/$REPO/commits/$head/check-runs?check_name=Unit%20tests" --jq '[.check_runs[] | select(.conclusion == "success")] | length') || rc=$?
+              [ "$rc" -eq 0 ] || passed=0
+              # "Unit tests" also passes when the pull request changed nothing the suite reads and skipped it, which
+              # proves nothing about this tree; the solution build runs only when the suite does
+              rc=0
+              built=$(gh api "repos/$REPO/commits/$head/check-runs?check_name=Build%20the%20solution" --jq '[.check_runs[] | select(.conclusion == "success")] | length') || rc=$?
+              [ "$rc" -eq 0 ] || built=0
+            fi
+
+            echo "rule=$rule pull-request-head=${head:-none} unit-tests-green=$passed suite-ran=$built"
+            if [ "$rule" -ge 1 ] && [ "$passed" -ge 1 ] && [ "$built" -ge 1 ]; then
+              covered=true
+            fi
+          fi
+          echo "covered=$covered"
+          echo "covered=$covered" >> "$GITHUB_OUTPUT"
+        timeout-minutes: 3
       - name: Test
+        if: steps.tested.outputs.covered != 'true'
         # The whole suite in one pass over the tree this job just built. Sharding it the way
         # pr-tests does would be slower here, not faster: a shard restores and builds its own
-        # dependency closure, where this reuses the build above. Measured at 202s for the slowest
-        # shard against 123s for this step.
+        # dependency closure, where this reuses the build above.
         #
-        # The suite runs on this path because a squash merge produces a new commit on top of
-        # wherever develop had moved to, so what lands on the branch is a state no pull request
-        # tested, and no other workflow tests develop itself.
+        # The ceiling is sized from the suite, which only grows, and from how much one run differs from
+        # the next: green runs took 4m31s, 4m57s and 8m20s on the same suite, and the runs cut off at
+        # 5 minutes needed more than 5m13s. Raise it from a cut-off run's step timings, together with
+        # the job's ceiling above.
+        #
+        # The suite still runs for a release branch, for a commit with no merged pull request behind it
+        # and whenever the lookup above cannot prove its pull request tested this tree: only a develop
+        # commit that came through the rule is trusted to have been tested.
         run: dotnet test --no-build -c Release --verbosity normal
 
-        timeout-minutes: 5
+        timeout-minutes: 15
       - name: Pack
         # `pack --no-build` on the multi-targeted family csprojs trips NETSDK1085 on the .NET 10.0.301 SDK
         # ("NoBuild set but Build target invoked") - the outer no-build does not propagate to the inner

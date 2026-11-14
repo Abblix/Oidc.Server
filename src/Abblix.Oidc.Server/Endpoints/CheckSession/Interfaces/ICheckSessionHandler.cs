@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 
 /// <summary>
@@ -17,6 +19,7 @@ public interface ICheckSessionHandler
 	/// <summary>
 	/// Asynchronously processes the check session request and generates a response containing the content of the OP check-session frame.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <returns>A task representing the response, which includes the HTML content of the check-session frame.</returns>
-	Task<CheckSessionResponse> HandleAsync();
+	Task<CheckSessionResponse> HandleAsync(TenantDefinition tenant);
 }

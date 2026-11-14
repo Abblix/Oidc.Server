@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<IsPackable>false</IsPackable>
+		<IsTestProject>true</IsTestProject>
+		<OutputType>Exe</OutputType>
+		<TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
+	</ItemGroup>
+
+	<!-- A process of its own: the license is held in process-wide statics, and the other end-to-end suites
+	     run under the single-issuer one, whose limit they exist to exercise. -->
+	<ItemGroup>
+		<EmbeddedResource Include="..\Resources\test-license-multitenant.jwt" Link="Resources\test-license-multitenant.jwt" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+		<PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+		<PackageReference Include="Moq" />
+		<PackageReference Include="Testcontainers.Redis" />
+		<PackageReference Include="xunit.v3.mtp-v2" />
+		<PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+		<PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+		<PackageReference Update="SonarAnalyzer.CSharp">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Using Include="Xunit"/>
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
+		<ProjectReference Include="..\..\src\Abblix.Oidc.Server.MinimalApi\Abblix.Oidc.Server.MinimalApi.csproj" />
+		<ProjectReference Include="..\..\src\Abblix.Oidc.Server.SharedSignals\Abblix.Oidc.Server.SharedSignals.csproj" />
+		<ProjectReference Include="..\..\src\Abblix.SecurityEvents.MinimalApi\Abblix.SecurityEvents.MinimalApi.csproj" />
+		<ProjectReference Include="..\..\src\Abblix.SharedSignals.MinimalApi\Abblix.SharedSignals.MinimalApi.csproj" />
+		<ProjectReference Include="..\..\src\Abblix.SharedSignals.Redis\Abblix.SharedSignals.Redis.csproj" />
+		<Compile Include="../Shared/RedisFixture.cs" Link="Shared/RedisFixture.cs" />
+		<Compile Include="../Abblix.Oidc.Server.E2E.Tests/TestInfrastructure/DPoPProofGenerator.cs" Link="Shared/DPoPProofGenerator.cs" />
+		<Compile Include="../Abblix.Oidc.Server.E2E.Tests/TestInfrastructure/ErrorResponseReader.cs" Link="Shared/ErrorResponseReader.cs" />
+	</ItemGroup>
+
+</Project>

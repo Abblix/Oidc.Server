@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 /// (no Initial Access Token) - are applied here; everything else is
 /// what a real consumer of Abblix.Oidc.Server gets.
 /// </summary>
-public class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
+public class TestFactory : SharedHostFactory<Program>, IAsyncLifetime
 {
     /// <summary>
     /// Eagerly builds the single shared host once, before the parallel test classes touch it.
@@ -32,7 +32,7 @@ public class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// first-access would otherwise build the host more than once - each build mints a fresh
     /// signing key and gets its own isolated in-memory stores, so a token issued through one
     /// build fails signature validation (or grant lookup) against another. Forcing the build here,
-    /// single-threaded, removes that race. This is test-infrastructure correctness, not behaviour.
+    /// single-threaded, removes that race. This is test-infrastructure correctness, not behavior.
     /// </summary>
     public ValueTask InitializeAsync()
     {
@@ -56,7 +56,7 @@ public class TestFactory : WebApplicationFactory<Program>, IAsyncLifetime
     protected override void ConfigureClient(HttpClient client)
     {
         // OIDC MVC controllers carry [RequireHttps]; force the in-memory
-        // TestServer client to https://localhost so Request.IsHttps == true.
+        // TestServer client to https on the tenant's host, so Request.IsHttps == true and the request reaches it.
         client.BaseAddress = TestServerAddress.BaseAddress;
     }
 }

@@ -41,7 +41,7 @@ public enum FlowTypes
 	Hybrid = AuthorizationCode | Implicit,
 
 	/// <summary>
-	/// The <c>none</c> response type flow (OAuth 2.0 Multiple Response Type Encoding Practices §4): the
+	/// The <c>none</c> response type flow (OAuth 2.0 Multiple Response Type Encoding Practices section 4): the
 	/// authorization request runs to completion but the response carries no authorization code and no
 	/// tokens. A distinct non-zero value so it never collides with <c>default(FlowTypes)</c>, which the
 	/// flow detector uses as its "no flow detected" sentinel; it does not combine with the token-part

@@ -7,15 +7,16 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
-/// Builds the RFC 7592 §2.1 read-client response from a request that has already been validated.
+/// Builds the RFC 7592 section 2.1 read-client response from a request that has already been validated.
 /// Reads stored metadata, formats it for the wire, and issues a fresh
-/// <c>registration_access_token</c> as recommended by RFC 7592 §3.
+/// <c>registration_access_token</c> as recommended by RFC 7592 section 3.
 /// </summary>
 public interface IReadClientRequestProcessor
 {
@@ -23,6 +24,7 @@ public interface IReadClientRequestProcessor
     /// Produces the response payload for the addressed client, including its current metadata
     /// and a refreshed registration access token.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">A request whose authentication and target client have been validated.</param>
-    Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidClientRequest request);
+    Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidClientRequest request);
 }

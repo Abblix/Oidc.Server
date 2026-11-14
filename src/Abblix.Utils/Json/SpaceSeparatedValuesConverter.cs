@@ -21,9 +21,10 @@ public class SpaceSeparatedValuesConverter: JsonConverter<string[]>
     /// <param name="reader">The reader to read JSON from.</param>
     /// <param name="typeToConvert">The type of object to convert to. Expected to be an array of strings.</param>
     /// <param name="options">Options for the serializer.</param>
-    /// <returns>An array of strings parsed from the space-separated values in the JSON string.</returns>
+    /// <returns>An array of strings parsed from the space-separated values in the JSON string; a doubled or trailing
+    /// space separates no value, as the form readers of the server's adapters take it.</returns>
     public override string[]? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => reader.GetString()?.Split(' ');
+        => reader.GetString()?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
     /// <summary>
     /// Writes an array of strings to JSON as a single string with values separated by spaces.

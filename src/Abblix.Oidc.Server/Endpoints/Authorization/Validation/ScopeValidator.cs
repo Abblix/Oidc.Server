@@ -6,9 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ScopeManagement;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
@@ -23,26 +26,42 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 {
 	/// <summary>
 	/// Validates the scopes specified in the authorization request. It checks the compatibility of requested scopes
-	/// with the client's allowed scopes and the OAuth flow type. For instance, it validates if offline access is
-	/// requested appropriately and if the client is authorized for such access.
+	/// with the client's allowed scopes and the OAuth flow type. Offline access is ignored where OpenID Connect
+	/// Core 1.0 has the server do so, and refused only when it would otherwise be received by a client not
+	/// allowed it.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="context">The validation context containing client information and request details.</param>
 	/// <returns>
 	/// An <see cref="AuthorizationRequestValidationError" /> if the scope validation fails,
 	/// or null if the scopes in the request are valid.
 	/// </returns>
-	protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+	protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
 	{
-		if (context.Request.Scope.Contains(Scopes.OfflineAccess))
-	    {
-		    if (context.FlowType == FlowTypes.Implicit)
-				    return context.InvalidScope("It is not allowed to request for offline access in implicit flow");
+		// An offline_access the server ignores is set aside before deciding whether the request named a scope at all,
+		// so a request naming it alone is served the default on every route, and the resources the resource validator
+		// settled before this are those of the same served scope
+		var named = context.NamedScope();
 
-		    if (context.ClientInfo.OfflineAccessAllowed != true)
-				    return context.InvalidScope("This client is not allowed to request for offline access");
-	    }
+		// The request goes on with the scope it is served with, so what follows, the host's consent provider
+		// included, reads the default a request naming none was given
+		if (context.ServedScope(named) is not { } scope)
+			return context.InvalidScope(ScopeRefusals.NoneNamed);
 
-		if (!scopeManager.Validate(
+		// A request coming back from a page already carries the default it was served with, so whether the client
+		// named a scope is kept from the first pass rather than read again from a scope that is no longer empty
+		context.Request = context.Request with
+		{
+			Scope = scope,
+			ClientNamedNoScope = context.Request.ClientNamedNoScope || named.Length == 0,
+		};
+
+		// The served scope already leaves out an offline_access the server ignores, so the host's consent provider,
+		// reading the request, is not shown it; one still here is received, and refused for a client not allowed it
+		if (scope.Contains(Scopes.OfflineAccess) && !context.ClientInfo.OfflineAccess.IsAllowed())
+			return context.InvalidScope("This client is not allowed to request for offline access");
+
+		if (!scopeManager.Validate(tenant, 
 			    context.Request.Scope,
 			    context.Resources,
 			    context.ClientInfo.AllowedScopes,

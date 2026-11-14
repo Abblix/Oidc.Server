@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 /// <summary>
@@ -27,6 +29,15 @@ namespace Abblix.Oidc.Server.Features.Tokens.Revocation;
 /// and the expiry, never reaches this server at all and stays usable until it expires - which is what short
 /// access-token lifetimes are for.
 /// </para>
+/// <para>
+/// A cutoff only moves forward. A call naming an earlier moment than one already recorded for the same end
+/// user, session or client changes nothing, whenever it arrives, so a retry of an older revocation cannot let
+/// the tokens issued since that moment be used again.
+/// </para>
+/// <para>
+/// It records each cutoff under the tenant passed first; a caller outside a request passes the definition the tenant
+/// catalog returns.
+/// </para>
 /// </remarks>
 public interface ITokenRevoker
 {
@@ -38,15 +49,17 @@ public interface ITokenRevoker
     /// session authenticated earlier stops being reusable, so the authorization endpoint will not mint a
     /// replacement against one. Signing in again works immediately and leaves nothing to clean up: the new
     /// session is later than the cutoff and passes. Its tokens follow once
-    /// <see cref="Common.Configuration.OidcOptions.RevocationCutoffSkew"/> has elapsed, since inside that
+    /// <see cref="Common.Configuration.OidcOptions.ReplicaClockSkew"/> has elapsed, since inside that
     /// window a freshly minted token cannot be told from one whose clock ran ahead.
     /// </remarks>
+    /// <param name="tenant">The tenant the caller passes, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="subject">The subject identifier the tokens carry.</param>
     /// <param name="before">The moment to cut off at; the current time when omitted. Tokens issued at or
     /// after it are unaffected, so the user signing in again works with nothing to undo.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <returns>A task that completes once the revocation is recorded.</returns>
     Task RevokeSubjectAsync(
+        TenantDefinition tenant,
         string subject, DateTimeOffset? before = null, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -57,10 +70,42 @@ public interface ITokenRevoker
     /// purposes of this server. It does not clear the cookie carrying it - that belongs to whoever holds the
     /// browser, and this call is made by somebody else.
     /// </remarks>
+    /// <param name="tenant">The tenant the revocation is for.</param>
     /// <param name="sessionId">The session identifier the tokens carry.</param>
     /// <param name="before">The moment to revoke up to; the current time when omitted.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <returns>A task that completes once the revocation is recorded.</returns>
     Task RevokeSessionAsync(
+        TenantDefinition tenant,
         string sessionId, DateTimeOffset? before = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cuts one end user off at one client at <paramref name="before"/>, leaving their sessions and their other
+    /// clients alone.
+    /// </summary>
+    /// <remarks>
+    /// What withdrawing consent from a client acts on: every token that client holds for them, its refresh tokens
+    /// included, is refused on its next use, so the client stops reaching their data at once rather than when its
+    /// tokens run out. Their browser sessions stay usable, since they serve the other clients too; the client gets
+    /// new tokens only through a new authorization, which asks for consent again once the host has deleted the
+    /// stored one: a code, a device authorization or a CIBA request the end user approved before the revocation is
+    /// refused at redemption too, or, for a client whose CIBA tokens are pushed to it, when the host completes the
+    /// request. Deleting the stored consent stays with the host, whose consent provider keeps it.
+    /// <para>
+    /// A token another client obtained by exchanging one of this client's tokens before the revocation belongs to
+    /// that other client and is left alone; revoking the end user there takes a call naming that client.
+    /// </para>
+    /// </remarks>
+    /// <param name="tenant">The tenant the revocation is for.</param>
+    /// <param name="subject">The subject identifier the host knows the end user by, not a pairwise pseudonym.</param>
+    /// <param name="clientId">The client whose tokens stop.</param>
+    /// <param name="before">The moment to revoke up to; the current time when omitted.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>A task that completes once the revocation is recorded.</returns>
+    Task RevokeSubjectAtClientAsync(
+        TenantDefinition tenant,
+        string subject,
+        string clientId,
+        DateTimeOffset? before = null,
+        CancellationToken cancellationToken = default);
 }

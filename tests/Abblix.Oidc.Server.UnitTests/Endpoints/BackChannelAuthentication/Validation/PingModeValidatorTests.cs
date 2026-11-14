@@ -8,6 +8,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -30,6 +31,29 @@ public class PingModeValidatorTests
     private readonly PingModeValidator _validator = new();
 
     /// <summary>
+    /// A ping mode client registered with a plain HTTP notification endpoint authenticated, but cannot use the flow:
+    /// unauthorized_client, CIBA Core 1.0 section 13.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_PingModeWithHttpEndpoint_ReturnsUnauthorizedClientError()
+    {
+        var context = new BackChannelAuthenticationValidationContext(
+            new BackChannelAuthenticationRequest { ClientNotificationToken = NotificationToken },
+            new ClientRequest())
+        {
+            ClientInfo = new ClientInfo(ClientId)
+            {
+                BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Ping,
+                BackChannelClientNotificationEndpoint = new Uri("http://client.example.com/ciba/notify"),
+            },
+        };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.UnauthorizedClient, Assert.IsType<OidcError>(result).Error);
+    }
+
+    /// <summary>
     /// Verifies that the validator returns null (success) for poll mode clients,
     /// allowing them to skip ping mode validation requirements.
     /// </summary>
@@ -48,7 +72,7 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -73,7 +97,7 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -102,7 +126,7 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -131,7 +155,7 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -142,10 +166,11 @@ public class PingModeValidatorTests
 
     /// <summary>
     /// Verifies that when a ping mode client does not have a registered notification endpoint,
-    /// the validator returns an InvalidClient error per CIBA spec Section 5.
+    /// the validator returns unauthorized_client: CIBA Core 1.0 section 13, "The Client is not authorized to use
+    /// this authentication flow". The client has authenticated, so invalid_client does not describe it.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_PingModeWithoutEndpoint_ReturnsInvalidClientError()
+    public async Task ValidateAsync_PingModeWithoutEndpoint_ReturnsUnauthorizedClientError()
     {
         // Arrange
         var context = new BackChannelAuthenticationValidationContext(
@@ -163,11 +188,11 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidClient, result.Error);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
         Assert.Contains("backchannel_client_notification_endpoint", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("not configured", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
@@ -195,7 +220,7 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -226,7 +251,7 @@ public class PingModeValidatorTests
         };
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);

@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Utils.Collections;
 using Google.Protobuf.WellKnownTypes;
 
 namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
@@ -32,7 +31,6 @@ internal static class AuthSessionMapper
         if (source.AuthContextClassRef != null)
             proto.AuthContextClassRef = source.AuthContextClassRef;
 
-        proto.AffectedClientIds.AddIfNotNull(source.AffectedClientIds);
         proto.AuthenticationMethodReferences.AddIfNotNull(source.AuthenticationMethodReferences);
 
         if (source.Email != null)
@@ -40,6 +38,9 @@ internal static class AuthSessionMapper
 
         if (source.EmailVerified.HasValue)
             proto.EmailVerified = source.EmailVerified.Value;
+
+        if (source.SignedInAt.HasValue)
+            proto.SignedInAt = source.SignedInAt.Value.ToTimestamp();
 
         proto.AdditionalClaims = source.AdditionalClaims.ToStruct();
 
@@ -58,12 +59,12 @@ internal static class AuthSessionMapper
             source.IdentityProvider)
         {
             AuthContextClassRef = ProtoMapper.GetString(source.AuthContextClassRef, source.HasAuthContextClassRef),
-            AffectedClientIds = new ConcurrentSet<string>(source.AffectedClientIds),
             AuthenticationMethodReferences = source.AuthenticationMethodReferences.Count > 0
                 ? source.AuthenticationMethodReferences.ToList()
                 : null,
             Email = ProtoMapper.GetString(source.Email, source.HasEmail),
             EmailVerified = source.HasEmailVerified ? source.EmailVerified : null,
+            SignedInAt = source.SignedInAt?.ToDateTimeOffset(),
             AdditionalClaims = source.AdditionalClaims.ToJsonObject(),
         };
     }

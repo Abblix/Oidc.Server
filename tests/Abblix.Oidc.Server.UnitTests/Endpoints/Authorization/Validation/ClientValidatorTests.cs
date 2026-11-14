@@ -6,6 +6,10 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Linq;
+using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Jwt;
 using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
@@ -16,6 +20,7 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
 
@@ -31,13 +36,34 @@ public class ClientValidatorTests
     private const string UnknownClientId = "unknown_client";
 
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
+    private readonly Mock<IClientKeysProvider> _clientKeys;
     private readonly ClientValidator _validator;
 
     public ClientValidatorTests()
     {
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        var logger = new Mock<ILogger<ClientValidator>>(MockBehavior.Loose);
-        _validator = new ClientValidator(logger.Object, _clientInfoProvider.Object);
+        _clientKeys = new Mock<IClientKeysProvider>(MockBehavior.Strict);
+        _clientKeys
+            .Setup(k => k.GetEncryptionKeys(It.IsAny<ClientInfo>()))
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
+
+        // Service tokens signed with an algorithm every profile admits, so a refusal below is the client's own
+        _validator = Validator(SignedWith(SigningAlgorithms.PS256));
+    }
+
+    private ClientValidator Validator(OidcOptions options)
+        => new(
+            new Mock<ILogger<ClientValidator>>(MockBehavior.Loose).Object,
+            _clientInfoProvider.Object,
+            _clientKeys.Object,
+            Options.Create(options));
+
+    private static OidcOptions SignedWith(string algorithm)
+    {
+        var options = new OidcOptions();
+        options.ServiceTokens.AccessToken.Signing.Algorithm = algorithm;
+        options.ServiceTokens.RefreshToken.Signing.Algorithm = algorithm;
+        return options;
     }
 
     /// <summary>
@@ -67,18 +93,18 @@ public class ClientValidatorTests
         // Arrange
         var clientInfo = new ClientInfo(ValidClientId);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         var context = CreateContext(ValidClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
         Assert.Same(clientInfo, context.ClientInfo);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(ValidClientId), Times.Once);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId), Times.Once);
     }
 
     /// <summary>
@@ -93,7 +119,7 @@ public class ClientValidatorTests
         var context = CreateContext(null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -111,19 +137,19 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(UnknownClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, UnknownClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(UnknownClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
         Assert.Contains("not authorized", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(UnknownClientId), Times.Once);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, UnknownClientId), Times.Once);
     }
 
     /// <summary>
@@ -136,13 +162,13 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(string.Empty))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, string.Empty))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(string.Empty);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -160,13 +186,13 @@ public class ClientValidatorTests
         // Arrange
         var clientInfo = new ClientInfo(ValidClientId2);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId2))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId2))
             .ReturnsAsync(clientInfo);
 
         var context = CreateContext(ValidClientId2);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -184,18 +210,18 @@ public class ClientValidatorTests
         // Arrange
         const string uppercaseClientId = TestConstants.DefaultClientId;
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(uppercaseClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, uppercaseClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(uppercaseClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(uppercaseClientId), Times.Once);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, uppercaseClientId), Times.Once);
     }
 
     /// <summary>
@@ -213,13 +239,13 @@ public class ClientValidatorTests
             AllowedResponseTypes = [[ResponseTypes.Code]]
         };
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         var context = CreateContext(ValidClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -238,13 +264,13 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(UnknownClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, UnknownClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(UnknownClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -264,7 +290,7 @@ public class ClientValidatorTests
         var context = CreateContext(null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -283,13 +309,13 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(UnknownClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, UnknownClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(UnknownClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -308,17 +334,17 @@ public class ClientValidatorTests
         // Arrange
         var clientInfo = new ClientInfo(ValidClientId);
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         var context = CreateContext(ValidClientId);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         _clientInfoProvider.Verify(
-            p => p.TryFindClientAsync(ValidClientId),
+            p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId),
             Times.Once);
     }
 
@@ -332,16 +358,101 @@ public class ClientValidatorTests
     {
         // Arrange
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync((ClientInfo?)null);
 
         var context = CreateContext(ValidClientId);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6 has the server sign only with PS256 or ES256, and the authorization endpoint signs
+    /// for the client - a front-channel ID token, a JWT authorization response - with what the client is configured
+    /// for. A stored client configured for RS256 under that profile is refused here, before anything is signed for
+    /// it, as the same client configured for PS256 is not.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, false)]
+    [InlineData(SigningAlgorithms.PS256, true)]
+    public async Task ValidateAsync_AClientTheServerWouldSignForAgainstItsProfile_IsRefused(
+        string algorithm, bool accepted)
+    {
+        var clientInfo = new ClientInfo(ValidClientId)
+        {
+            SecurityProfile = ClientSecurityProfile.Fapi1Advanced,
+            IdentityTokenSignedResponseAlgorithm = algorithm,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        };
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .ReturnsAsync(clientInfo);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(ValidClientId));
+
+        Assert.Equal(accepted ? null : ErrorCodes.UnauthorizedClient, result?.Error);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 section 5.4.1 has the server use only the profile's algorithms "when creating or processing JWTs", and
+    /// the access and refresh tokens it would issue the client are signed with what the deployment configures. A client
+    /// held to FAPI 2.0 at a tenant held to none, which the startup check never saw, is refused here while those tokens
+    /// are signed RS256, before anything is spent; signed PS256 it passes.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, false)]
+    [InlineData(SigningAlgorithms.PS256, true)]
+    public async Task ValidateAsync_TheServiceTokensTheClientWouldBeIssued_AreJudgedByItsProfile(
+        string serviceTokenAlgorithm, bool accepted)
+    {
+        var clientInfo = new ClientInfo(ValidClientId)
+        {
+            SecurityProfile = ClientSecurityProfile.Fapi2,
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        };
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .ReturnsAsync(clientInfo);
+        var validator = Validator(SignedWith(serviceTokenAlgorithm));
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(ValidClientId));
+
+        Assert.Equal(accepted ? null : ErrorCodes.UnauthorizedClient, result?.Error);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
+    /// algorithm". A client that publishes encryption keys has what is issued to it encrypted, so one whose key set
+    /// holds only RSA1_5 keys is refused here, naming its key set; a key set with an RSA-OAEP-256 key, or none at all,
+    /// passes.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { EncryptionAlgorithms.KeyManagement.Rsa1_5 }, false)]
+    [InlineData(new[] { EncryptionAlgorithms.KeyManagement.Rsa1_5, EncryptionAlgorithms.KeyManagement.RsaOaep256 }, true)]
+    [InlineData(new string[0], true)]
+    public async Task ValidateAsync_AKeySetLeavingNothingToEncryptTo_IsRefused(string[] declared, bool accepted)
+    {
+        var clientInfo = new ClientInfo(ValidClientId)
+        {
+            SecurityProfile = ClientSecurityProfile.Fapi1Advanced,
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        };
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .ReturnsAsync(clientInfo);
+        _clientKeys
+            .Setup(k => k.GetEncryptionKeys(clientInfo))
+            .Returns(declared.Select(JsonWebKey (alg) => new RsaJsonWebKey { Algorithm = alg }).ToAsyncEnumerable());
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(ValidClientId));
+
+        Assert.Equal(accepted ? null : ErrorCodes.UnauthorizedClient, result?.Error);
     }
 }

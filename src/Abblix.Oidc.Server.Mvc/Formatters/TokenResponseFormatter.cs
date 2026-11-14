@@ -9,7 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
@@ -23,9 +23,8 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <summary>
 /// Formatter for token responses.
 /// </summary>
-/// <param name="issuerProvider">Supplies the issuer identifier used as the realm value on
-/// <c>WWW-Authenticate</c> challenges for client-authentication failures.</param>
-public class TokenResponseFormatter(IIssuerProvider issuerProvider) : ITokenResponseFormatter
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+public class TokenResponseFormatter(ITenantAccessor tenantAccessor) : ITokenResponseFormatter
 {
     /// <summary>
     /// Asynchronously formats the response for a token request.
@@ -50,7 +49,7 @@ public class TokenResponseFormatter(IIssuerProvider issuerProvider) : ITokenResp
                     ExpiresIn = success.ExpiresIn,
 
                     RefreshToken = success.RefreshToken?.EncodedJwt,
-                    Scope = success.Scope.ToArray(),
+                    Scope = success.Scope.ToArray() is { Length: > 0 } scope ? scope : null,
                     IdToken = success.IdToken?.EncodedJwt,
                     AuthorizationDetails = success.AuthorizationDetails,
                 };
@@ -63,12 +62,12 @@ public class TokenResponseFormatter(IIssuerProvider issuerProvider) : ITokenResp
     private ActionResult<TokenResponse> FormatError(OidcError error)
     {
         // The shared formatter owns the status-code policy: invalid_client comes back as a 401
-        // with a Basic challenge (RFC 6749 §5.2), everything else as 400 with the JSON envelope.
-        var result = error.Format(StatusCodes.Status400BadRequest, issuerProvider.GetIssuer());
+        // with a Basic challenge (RFC 6749 section 5.2), everything else as 400 with the JSON envelope.
+        var result = error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().Issuer.OriginalString);
 
-        // Per RFC 9449 §8 a use_dpop_nonce error MUST carry the fresh nonce on a
+        // Per RFC 9449 section 8 a use_dpop_nonce error MUST carry the fresh nonce on a
         // DPoP-Nonce response header alongside the standard error JSON envelope.
-        // §8.2 also asks responses bearing DPoP-Nonce to be uncacheable; the controller's
+        // section 8.2 also asks responses bearing DPoP-Nonce to be uncacheable; the controller's
         // [ResponseCache(NoStore)] covers that for every token-endpoint response.
         if (error is UseDPoPNonceError { Nonce: var nonce })
             result = result.WithHeader(HttpRequestHeaders.DPoPNonce, nonce);

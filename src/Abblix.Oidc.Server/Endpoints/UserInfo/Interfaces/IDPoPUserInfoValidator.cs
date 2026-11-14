@@ -8,12 +8,14 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 
 /// <summary>
-/// Validates the DPoP-binding contract on a UserInfo request per RFC 9449 §7.1: when the
+/// Validates the DPoP-binding contract on a UserInfo request per RFC 9449 section 7.1: when the
 /// inbound access token is DPoP-bound (carries <c>cnf.jkt</c>), the request MUST present
 /// <c>Authorization: DPoP &lt;token&gt;</c> together with a valid <c>DPoP</c> header
 /// proof whose key thumbprint matches the access token's <c>cnf.jkt</c> and whose
@@ -24,11 +26,18 @@ public interface IDPoPUserInfoValidator
 {
     /// <summary>
     /// Returns <c>null</c> on success, an <see cref="OidcError"/> describing the binding
-    /// failure otherwise. The typed subclasses <see cref="InvalidDPoPProofError"/> and
+    /// failure otherwise, with the proof held to the algorithms of the profile <paramref name="client"/> is held to at
+    /// <paramref name="tenant"/>. The typed subclasses <see cref="InvalidDPoPProofError"/> and
     /// <see cref="UseDPoPNonceError"/> let the response formatter pattern-match for the
-    /// RFC 9449 §7.1 <c>WWW-Authenticate: DPoP</c> challenge or the §8 nonce response
+    /// RFC 9449 section 7.1 <c>WWW-Authenticate: DPoP</c> challenge or the section 8 nonce response
     /// header attachment.
     /// </summary>
+    /// <remarks>
+    /// FAPI 2.0 Security Profile section 5.4.1 has the server use only the profile's algorithms "when creating or
+    /// processing JWTs", and the proof is one it processes.
+    /// </remarks>
+    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="client">The client the access token was issued to, or null where none is known.</param>
     /// <param name="clientRequest">Carries the <c>Authorization</c> scheme + token plus
     /// the optional <c>DPoP</c> proof header.</param>
     /// <param name="accessToken">The parsed access-token JWT whose <c>cnf.jkt</c>
@@ -36,6 +45,8 @@ public interface IDPoPUserInfoValidator
     /// <param name="rawAccessToken">The original on-the-wire access-token string used
     /// to compute <c>ath = Base64Url(SHA-256(access_token))</c>.</param>
     Task<OidcError?> ValidateAsync(
+        TenantDefinition tenant,
+        ClientInfo? client,
         ClientRequest clientRequest,
         JsonWebToken accessToken,
         string rawAccessToken);

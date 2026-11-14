@@ -6,10 +6,13 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 
@@ -19,6 +22,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// Supports optional long-polling to reduce polling frequency and improve efficiency.
 /// </summary>
 /// <param name="logger">Logger for tracking notification events.</param>
+/// <param name="fingerprints">Names a CIBA request id in a record by its fingerprint.</param>
 /// <param name="storage">Storage for authentication requests.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
@@ -26,30 +30,36 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// register none, NOT because long-polling is off: the default registration is unconditional, so this is
 /// normally present even where the setting is disabled - the waiting is what the setting decides, and a
 /// notification nobody waits for is a no-op.</param>
+/// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
 public partial class PollModeCompletionHandler(
     ILogger<PollModeCompletionHandler> logger,
+    CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
+    TimeProvider clock,
     IBackChannelLongPollingService? statusNotifier)
-    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter, statusNotifier)
+    : AuthenticationCompletionHandler(
+        logger, fingerprints, storage, subjectTypeConverter, clock, statusNotifier)
 {
     /// <summary>
     /// Handles poll mode token delivery by storing the authenticated request in storage.
     /// The client will periodically poll the token endpoint to retrieve tokens, and one already waiting
     /// on a long poll is woken by the write.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information (not used in poll mode).</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     protected override async Task HandleDeliveryAsync(
-        string authenticationRequestId,
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
         TimeSpan expiresIn)
     {
-        await StoreAsync(authenticationRequestId, request, expiresIn);
+        await StoreAsync(tenant, authenticationRequestId, request, expiresIn);
 
-        LogTokensStored(authenticationRequestId);
+        LogTokensStored(FingerprintOf(authenticationRequestId));
     }
 }

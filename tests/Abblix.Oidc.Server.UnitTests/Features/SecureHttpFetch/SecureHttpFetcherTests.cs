@@ -530,4 +530,36 @@ public class SecureHttpFetcherTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Contains("Unable to fetch content", error.ErrorDescription);
     }
+
+    /// <summary>
+    /// A client's JWK Set fetched from its jwks_uri is read with member names matched exactly, though the fetch
+    /// starts from the web defaults that match them in any case: a key naming its id KID arrives with no id, and a
+    /// set naming its keys KEYS holds none.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"keys":[{"kty":"oct","kid":"a","k":"AQID"}]}""", "a")]
+    [InlineData("""{"keys":[{"kty":"oct","KID":"a","k":"AQID"}]}""", null)]
+    public async Task FetchAsync_AKeySet_MatchesItsMemberNamesExactly(string json, string? keyId)
+    {
+        var fetcher = CreateFetcher();
+        SetupHttpResponse(HttpStatusCode.OK, json);
+
+        var result = await fetcher.FetchAsync<Abblix.Jwt.JsonWebKeySet>(new Uri("https://client.example.com/jwks"));
+
+        Assert.True(result.TryGetSuccess(out var keySet));
+        Assert.Equal(keyId, Assert.Single(keySet.Keys).KeyId);
+    }
+
+    /// <inheritdoc cref="FetchAsync_AKeySet_MatchesItsMemberNamesExactly"/>
+    [Fact]
+    public async Task FetchAsync_AKeySetNamedInAnotherCase_HoldsNoKeys()
+    {
+        var fetcher = CreateFetcher();
+        SetupHttpResponse(HttpStatusCode.OK, """{"KEYS":[{"kty":"oct","kid":"a","k":"AQID"}]}""");
+
+        var result = await fetcher.FetchAsync<Abblix.Jwt.JsonWebKeySet>(new Uri("https://client.example.com/jwks"));
+
+        Assert.True(result.TryGetSuccess(out var keySet));
+        Assert.Empty(keySet.Keys);
+    }
 }

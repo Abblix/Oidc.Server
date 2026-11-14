@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -13,6 +14,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
@@ -20,16 +22,23 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// Processes requests to update existing client configurations per RFC 7592 Section 2.2.
 /// Updates client metadata while preserving credentials and system-managed fields.
 /// </summary>
+/// <param name="clientInfoManager">Stores the updated client.</param>
+/// <param name="registrationAccessTokenService">Issues the rotated registration access token.</param>
+/// <param name="tokenIdGenerator">Generates the rotated registration access token id.</param>
+/// <param name="clock">Provides the issue time.</param>
+/// <param name="newClientOptions">The defaults a client takes when its metadata omits them, its scope among them.
+/// </param>
 public class UpdateClientRequestProcessor(
     IClientInfoManager clientInfoManager,
     IRegistrationAccessTokenService registrationAccessTokenService,
-    IRegistrationAccessTokenStore registrationAccessTokenStore,
     ITokenIdGenerator tokenIdGenerator,
-    TimeProvider clock) : IUpdateClientRequestProcessor
+    TimeProvider clock,
+    NewClientOptions newClientOptions) : IUpdateClientRequestProcessor
 {
     /// <summary>
     /// Processes a valid update client request, updating client metadata and returning updated configuration.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The validated update request containing new client metadata.</param>
     /// <returns>A task that results in updated client configuration or an error response.</returns>
     /// <remarks>
@@ -37,193 +46,58 @@ public class UpdateClientRequestProcessor(
     /// - All client metadata can be updated except client_id, client_secret, and issuance timestamps
     /// - Omitted fields are treated as null/empty
     /// - A new registration_access_token may be issued
-    /// - Client secrets cannot be updated via this endpoint (they're stored as hashes)
+    /// - Client secrets cannot be updated via this endpoint
     /// </remarks>
-    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(ValidUpdateClientRequest request)
+    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> ProcessAsync(TenantDefinition tenant, ValidUpdateClientRequest request)
     {
-        var model = request.RegistrationRequest;
-        var existingClient = request.ClientInfo;
+        var existingClient = request.Client.ClientInfo;
 
-        // Create updated client info, preserving immutable fields
-        var updatedClient = new ClientInfo(existingClient.ClientId)
-        {
-            // Preserve client secrets (cannot be updated per RFC 7592)
-            ClientSecrets = existingClient.ClientSecrets,
+        // RFC 7592 section 2.2 replaces the metadata but not the credentials, so the client's secrets are kept
+        // rather than updated here; the sector identifier the pairwise subjects hang on is kept too.
+        var updatedClient = new ClientInfoBuilder(existingClient.ClientId, request.RegistrationRequest)
+            .WithSectorIdentifier(existingClient.SectorIdentifier)
+            .WithDefaultScope(newClientOptions.Scope)
+            .WithDefaultAllowedResources(newClientOptions.AllowedResources)
+            .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
+            .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
+            .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
+                SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
+            .WithClientSecrets(existingClient.ClientSecrets)
+            .Build();
 
-            // Update metadata from request
-            TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
-            AllowedResponseTypes = model.ResponseTypes,
-            AllowedGrantTypes = model.GrantTypes,
-            // Empty rather than null when the client registers none, matching registration: RFC 7592 §2
-            // replaces the whole metadata set, so a client dropping its redirect URIs must end up with an
-            // empty set rather than an absent one.
-            RedirectUris = model.RedirectUris ?? [],
-            Jwks = model.Jwks,
-            JwksUri = model.JwksUri,
-            PkceRequired = model.PkceRequired,
-            OfflineAccessAllowed = model.OfflineAccessAllowed,
-            // RFC 9449 §5.2: dpop_bound_access_tokens - when omitted, defaults to false.
-            RequireDPoP = model.DpopBoundAccessTokens ?? false,
-            // RFC 9126 §6 / RFC 9101 §10.5 / RFC 8705 §3.4: per-client FAPI-grade enforcement
-            // flags - RFC 7592 update is a full replacement, so omission resets them to false.
-            RequirePushedAuthorizationRequests = model.RequirePushedAuthorizationRequests ?? false,
-            RequireSignedRequestObject = model.RequireSignedRequestObject ?? false,
-            TlsClientCertificateBoundAccessTokens = model.TlsClientCertificateBoundAccessTokens ?? false,
-            // RFC 9396 §10: authorization_details_types per-client allowlist.
-            AuthorizationDetailsTypes = model.AuthorizationDetailsTypes,
-            // Non-standard extension: RFC 8693 Token Exchange per-client subject-token-type allowlist.
-            TokenExchangeAllowedSubjectTokenTypes = model.TokenExchangeSubjectTokenTypes,
-            // Non-standard extension: RFC 8693 Token Exchange per-client audience allowlist (default-deny).
-            TokenExchangeAllowedAudiences = model.TokenExchangeAudiences,
-            LogoUri = model.LogoUri,
-            PolicyUri = model.PolicyUri,
-            TermsOfServiceUri = model.TermsOfServiceUri,
-            InitiateLoginUri = model.InitiateLoginUri,
-            SubjectType = model.SubjectType,
-            SectorIdentifier = existingClient.SectorIdentifier, // Preserve existing sector identifier
-            PostLogoutRedirectUris = model.PostLogoutRedirectUris,
-            BackChannelTokenDeliveryMode = model.BackChannelTokenDeliveryMode,
-            BackChannelClientNotificationEndpoint = model.BackChannelClientNotificationEndpoint,
-            BackChannelAuthenticationRequestSigningAlg = model.BackChannelAuthenticationRequestSigningAlg,
-            BackChannelUserCodeParameter = model.BackChannelUserCodeParameter,
-            ApplicationType = model.ApplicationType,
-            Contacts = model.Contacts,
-            ClientName = model.ClientName,
-            ClientUri = model.ClientUri,
-            DefaultMaxAge = model.DefaultMaxAge,
-            RequireAuthTime = model.RequireAuthTime,
-            DefaultAcrValues = model.DefaultAcrValues,
-            IdentityTokenEncryptedResponseAlgorithm = model.IdTokenEncryptedResponseAlg,
-            IdentityTokenEncryptedResponseEncryption = model.IdTokenEncryptedResponseEnc,
-            UserInfoEncryptedResponseAlgorithm = model.UserInfoEncryptedResponseAlg,
-            UserInfoEncryptedResponseEncryption = model.UserInfoEncryptedResponseEnc,
-            IntrospectionEncryptedResponseAlgorithm = model.IntrospectionEncryptedResponseAlg,
-            IntrospectionEncryptedResponseEncryption = model.IntrospectionEncryptedResponseEnc,
-            AuthorizationEncryptedResponseAlgorithm = model.AuthorizationEncryptedResponseAlg,
-            AuthorizationEncryptedResponseEncryption = model.AuthorizationEncryptedResponseEnc,
-            RequestObjectSigningAlgorithm = model.RequestObjectSigningAlg,
-            RequestObjectEncryptionAlgorithm = model.RequestObjectEncryptionAlg,
-            RequestObjectEncryptionMethod = model.RequestObjectEncryptionEnc,
-            TokenEndpointAuthSigningAlgorithm = model.TokenEndpointAuthSigningAlg,
-            RequestUris = model.RequestUris ?? [],
-            // RFC 7592 update is a full replacement: these must be re-applied or the update silently
-            // drops them. Omitting AllowedScopes in particular reverted the client to "any scope"
-            // (null = unrestricted), defeating the per-client scope enforcement on the update path.
-            AllowedScopes = model.Scope,
-            SoftwareId = model.SoftwareId,
-            SoftwareVersion = model.SoftwareVersion,
-        };
-
-        if (model.AuthorizationSignedResponseAlg.HasValue())
-        {
-            updatedClient.AuthorizationSignedResponseAlgorithm = model.AuthorizationSignedResponseAlg;
-        }
-
-        // Mirror the register path: these have non-null ClientInfo defaults (id_token → RS256,
-        // userinfo/introspection → none), so a full-replacement update that omits them here would silently
-        // reset a client's registered signing algorithm to the default and break its token signatures.
-        if (model.UserInfoSignedResponseAlg.HasValue())
-        {
-            updatedClient.UserInfoSignedResponseAlgorithm = model.UserInfoSignedResponseAlg;
-        }
-
-        if (model.IntrospectionSignedResponseAlg.HasValue())
-        {
-            updatedClient.IntrospectionSignedResponseAlgorithm = model.IntrospectionSignedResponseAlg;
-        }
-
-        if (model.IdTokenSignedResponseAlg.HasValue())
-        {
-            updatedClient.IdentityTokenSignedResponseAlgorithm = model.IdTokenSignedResponseAlg;
-        }
-
-        // Update logout configuration using wrapper objects
-        if (model.BackChannelLogoutUri != null)
-        {
-            updatedClient.BackChannelLogout = new (
-                model.BackChannelLogoutUri,
-                model.BackChannelLogoutSessionRequired ?? false);
-        }
-
-        if (model.FrontChannelLogoutUri != null)
-        {
-            updatedClient.FrontChannelLogout = new (
-                model.FrontChannelLogoutUri,
-                model.FrontChannelLogoutSessionRequired ?? false);
-        }
-
-        // Map tls_client_auth metadata if selected
-        if (model.TokenEndpointAuthMethod == ClientAuthenticationMethods.TlsClientAuth)
-        {
-            updatedClient.TlsClientAuth = new()
-            {
-                SubjectDn = model.TlsClientAuthSubjectDn,
-                SanDns = model.TlsClientAuthSanDns,
-                SanUris = model.TlsClientAuthSanUri,
-                SanIps = model.TlsClientAuthSanIp,
-                SanEmails = model.TlsClientAuthSanEmail,
-            };
-        }
-
-        // Update client in storage
-        await clientInfoManager.UpdateClientAsync(updatedClient);
-
-        // RFC 7592 §5: rotate the registration access token on update. Recording a fresh jti
+        // The response echoes the post-update registered state, so what the store now holds is the
+        // answer - RFC 7592 section 3 asks the client to be able to verify that the full replacement
+        // took effect.
+        // RFC 7592 section 5: rotate the registration access token on update. Recording a fresh jti
         // invalidates every token issued before this update, limiting the exposure window of a
-        // leaked token to the period between rotations.
+        // leaked token to the period between rotations. The replacement takes effect only on the
+        // registration this request was authenticated against: one rotated or removed meanwhile is
+        // left as it is, and the token that decided the change no longer manages anything.
         var registrationAccessTokenId = tokenIdGenerator.GenerateTokenId();
-        await registrationAccessTokenStore.SetTokenIdAsync(updatedClient.ClientId, registrationAccessTokenId);
 
-        // Generate response with new registration_access_token, embedding the freshly rotated jti.
+        // The new registration_access_token, embedding the freshly rotated jti, is issued before the
+        // rotation is stored: issuing stores nothing, so a failure to issue leaves the token the client
+        // holds working rather than rotating it away for one never delivered.
         var issuedAt = clock.GetUtcNow();
         var registrationAccessToken = await registrationAccessTokenService.IssueTokenAsync(
+            tenant,
             updatedClient.ClientId,
             issuedAt,
             null,
             registrationAccessTokenId);
 
-        return new ReadClientSuccessfulResponse
+        if (!await clientInfoManager.TryUpdateClientAsync(tenant, 
+                request.Client, new RegisteredClient(updatedClient, registrationAccessTokenId)))
+        {
+            return new OidcError(ErrorCodes.InvalidToken, "The access token unauthorized");
+        }
+
+        return new ReadClientSuccessfulResponse(RegisteredClientMetadata.Of(updatedClient))
         {
             ClientId = updatedClient.ClientId,
-            ClientSecret = null, // Client secrets are stored as hashes and cannot be retrieved
+            ClientSecret = null, // The update issues no new secret, so there is none to return
             ClientSecretExpiresAt = GetClientSecretExpiresAt(updatedClient),
             RegistrationAccessToken = registrationAccessToken,
-            TokenEndpointAuthMethod = updatedClient.TokenEndpointAuthMethod,
-            ApplicationType = updatedClient.ApplicationType,
-            RedirectUris = updatedClient.RedirectUris,
-            // RFC 7592 §3: echo the post-update registered state so the client can verify the
-            // full replacement took effect (grant/response types and scope included).
-            GrantTypes = updatedClient.EffectiveGrantTypes,
-            ResponseTypes = updatedClient.EffectiveResponseTypes,
-            Scope = updatedClient.AllowedScopes,
-            RequirePushedAuthorizationRequests = updatedClient.RequirePushedAuthorizationRequests,
-            RequireSignedRequestObject = updatedClient.RequireSignedRequestObject,
-            TlsClientCertificateBoundAccessTokens = updatedClient.TlsClientCertificateBoundAccessTokens,
-            ClientName = updatedClient.ClientName,
-            LogoUri = updatedClient.LogoUri,
-            SubjectType = updatedClient.SubjectType,
-            SectorIdentifierUri = Uri.TryCreate(updatedClient.SectorIdentifier, UriKind.Absolute, out var uri) ? uri : null,
-            JwksUri = updatedClient.JwksUri,
-            UserInfoEncryptedResponseAlg = updatedClient.UserInfoEncryptedResponseAlgorithm,
-            UserInfoEncryptedResponseEnc = updatedClient.UserInfoEncryptedResponseEncryption,
-            Contacts = updatedClient.Contacts,
-            RequestUris = updatedClient.RequestUris,
-            InitiateLoginUri = updatedClient.InitiateLoginUri,
-            // tls_client_auth metadata (if configured)
-            TlsClientAuthSubjectDn = updatedClient.TlsClientAuth?.SubjectDn,
-            TlsClientAuthSanDns = updatedClient.TlsClientAuth?.SanDns,
-            TlsClientAuthSanUri = updatedClient.TlsClientAuth?.SanUris,
-            TlsClientAuthSanIp = updatedClient.TlsClientAuth?.SanIps,
-            TlsClientAuthSanEmail = updatedClient.TlsClientAuth?.SanEmails,
-            // RFC 9449 §5.2: echo dpop_bound_access_tokens so the client can confirm the
-            // current binding state.
-            DpopBoundAccessTokens = updatedClient.RequireDPoP,
-            // RFC 9396 §10: echo authorization_details_types so the client confirms its allowlist.
-            AuthorizationDetailsTypes = updatedClient.AuthorizationDetailsTypes,
-            // Non-standard extension: echo token_exchange_subject_token_types.
-            TokenExchangeSubjectTokenTypes = updatedClient.TokenExchangeAllowedSubjectTokenTypes,
-            // Non-standard extension: echo token_exchange_audiences.
-            TokenExchangeAudiences = updatedClient.TokenExchangeAllowedAudiences,
         };
     }
 

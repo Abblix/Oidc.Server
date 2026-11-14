@@ -7,15 +7,11 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Serialization.Metadata;
-using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Oidc.Server.MinimalApi.Features.EndpointResolving;
-using Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
-using Abblix.Oidc.Server.MinimalApi.Formatters;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Abblix.Utils.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -39,12 +35,21 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to add the services to.</param>
     /// <param name="configureOptions">A delegate that configures the <see cref="OidcOptions"/>.</param>
-    /// <returns>The same <see cref="IServiceCollection"/> so calls can be chained.</returns>
+    /// <returns>The builder a feature built on the server, such as Shared Signals, is turned on by.</returns>
     /// <remarks>
     /// Named exactly as the MVC integration names it, so moving a host from one adapter to the other leaves
     /// this line alone: what changes is the package reference and the endpoint mapping, not the registration.
+    /// The server serves the tenants <see cref="OidcOptions.Tenants"/> declares, a host serving one issuer
+    /// declaring one. The pipeline resolves each request to its tenant with <c>app.UseMultiTenancy()</c> before routing
+    /// and authentication; which hosts may leave the call out is said in the remarks of
+    /// <see cref="MultiTenancyExtensions.UseMultiTenancy"/>.
+    /// The server refuses a configuration it cannot serve while the host announces its start
+    /// (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartingAsync"/>), as the Generic Host and
+    /// <c>WebApplication</c> do. A host starting its services without that announcement, such as the obsolete
+    /// <c>WebHost</c>, is not supported: it would start the server without those checks.
+    /// A host that needs <c>app.UseMultiTenancy()</c> and leaves it out of its pipeline is refused only once the host has started (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartedAsync"/>), when both hosting models have built it, so a request arriving before then is answered.
     /// </remarks>
-    public static IServiceCollection AddOidcServices(
+    public static IOidcServerBuilder AddOidcServices(
         this IServiceCollection services, Action<OidcOptions> configureOptions)
         => services.AddOidcServices((options, _) => configureOptions(options));
 
@@ -54,12 +59,12 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to add the services to.</param>
     /// <param name="configureOptions">A delegate that configures the <see cref="OidcOptions"/>.</param>
-    /// <returns>The same <see cref="IServiceCollection"/> so calls can be chained.</returns>
-    public static IServiceCollection AddOidcServices(
+    /// <returns>The builder a feature built on the server, such as Shared Signals, is turned on by.</returns>
+    public static IOidcServerBuilder AddOidcServices(
         this IServiceCollection services, Action<OidcOptions, IServiceProvider> configureOptions)
-        => services
+        => new OidcServerBuilder(services
             .AddOidcCore(configureOptions)
-            .AddOidcMinimalApi();
+            .AddOidcMinimalApi());
 
     /// <summary>
     /// Adds the Minimal API transport services for the OpenID Connect server. Assumes the core services
@@ -72,20 +77,19 @@ public static class ServiceCollectionExtensions
     {
         // Both adapters registered means both will serve the OIDC endpoints, and the host finds out only when
         // a request arrives and routing reports an ambiguity that names neither package. Caught here it names
-        // the call to remove. The counterpart check in MapOidcEndpoints looks for the MVC assembly instead,
-        // because a host can carry the package without ever calling its registration - and that is enough for
-        // AddControllers() to map its controllers.
+        // the call to remove. The counterpart check in MapOidcEndpoints looks for the MVC assembly instead, which
+        // also catches the MVC endpoints mapped without the MVC registration.
         TransportAdapterConflict.ThrowIfRegistered(
             services,
             TransportAdapterConflict.MvcAdapterAssemblyName,
             "Both OIDC transport adapters are registered in this application: the Minimal API adapter was " +
             "added after the MVC adapter's own AddOidcServices()/AddOidcMvc(). Only one of them may serve " +
-            "the OIDC endpoints - with both in place they claim the same paths and every OIDC request fails " +
-            "with AmbiguousMatchException. Keep one: remove either the MVC registration together with the " +
+            "the OIDC endpoints, since both map the same paths. Keep one: remove either the MVC registration " +
+            "together with the " +
             "Abblix.OIDC.Server.MVC package reference, or this one together with the " +
             "Abblix.OIDC.Server.MinimalApi package reference.");
 
-        services.AddHttpContextAccessor();
+        services.AddTenantResolution();
         services.AddOptions<OidcRouteOptions>();
 
         // The core resolves request details (base URL, scheme, client IP) through this contract; the adapter
@@ -104,40 +108,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IParametersProvider, Abblix.Oidc.Server.Common.ParametersProvider>();
 
         // Response formatters turn a core result into an IResult. TryAdd lets a host swap any of them.
-        services.TryAddScoped<IConfigurationResponseFormatter, ConfigurationResponseFormatter>();
-
-        services.TryAddScoped<ICheckSessionResponseFormatter, CheckSessionResponseFormatter>();
-        services.Decorate<ICheckSessionResponseFormatter, CheckSessionResponseCachingDecorator>();
-        services.TryAddSingleton<ICheckSessionResponseCache, CheckSessionResponseCache>();
-
-        services.TryAddScoped<ITokenResponseFormatter, TokenResponseFormatter>();
-        services.TryAddScoped<IRevocationResponseFormatter, RevocationResponseFormatter>();
-        services.TryAddScoped<IIntrospectionResponseFormatter, IntrospectionResponseFormatter>();
-        services.TryAddScoped<IPushedAuthorizationResponseFormatter, PushedAuthorizationResponseFormatter>();
-        services.TryAddScoped<IBackChannelAuthenticationResponseFormatter, BackChannelAuthenticationResponseFormatter>();
-        services.TryAddScoped<IDeviceAuthorizationResponseFormatter, DeviceAuthorizationResponseFormatter>();
-        services.TryAddScoped<IUserInfoResponseFormatter, UserInfoResponseFormatter>();
-
-        services.TryAddScoped<IEndSessionResponseFormatter, EndSessionResponseFormatter>();
-        services.Decorate<IEndSessionResponseFormatter, EndSessionResponseFormatterDecorator>();
-
-        services.TryAddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>();
-
-        services.TryAddScoped<RegistrationClientUriBuilder>();
-        services.TryAddScoped<IRegisterClientResponseFormatter, RegisterClientResponseFormatter>();
-        services.TryAddScoped<IReadClientResponseFormatter, ReadClientResponseFormatter>();
-        services.TryAddScoped<IUpdateClientResponseFormatter, UpdateClientResponseFormatter>();
-        services.TryAddScoped<IRemoveClientResponseFormatter, RemoveClientResponseFormatter>();
-
-        // Results.Json serializes through Http.Json options (not MVC's), so the null-omission modifier the OIDC
-        // wire format relies on is attached there. WithAddedModifier extends the resolver already in place rather
-        // than chaining a new one, which would never be reached because the first resolver handles every type.
-        services.Configure<JsonOptions>(options =>
-        {
-            options.SerializerOptions.TypeInfoResolver =
-                (options.SerializerOptions.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver())
-                .WithAddedModifier(JsonIgnoreNullsModifier.Apply);
-        });
+        services
+            .AddOidcProtocolFormatters()
+            .AddOidcInteractionFormatters();
 
         // Every OIDC endpoint is tagged with RequireCors(OidcConstants.CorsPolicyName). The MVC host inherited
         // CORS services from AddControllersWithViews; AddOidcCors gives the Minimal API host the same reach and

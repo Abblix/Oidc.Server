@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
@@ -43,10 +44,11 @@ public class PingModeGrantProcessor(IBackChannelRequestStorage storage)
     /// an exception instead of a result.
     /// </summary>
     public async Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
-        string authenticationRequestId,
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {
-        var removedRequest = await storage.TryRemoveAsync(authenticationRequestId);
+        var removedRequest = await storage.TryRemoveAsync(tenant, authenticationRequestId);
 
         if (removedRequest == null)
         {

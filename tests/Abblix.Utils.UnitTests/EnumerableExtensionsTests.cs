@@ -111,4 +111,38 @@ public class EnumerableExtensionsTests
 
         Assert.Equal(["only"], queue);
     }
+
+    [Fact]
+    public void FindDuplicates_YieldsEachRepeatInTheOrderItIsReached()
+    {
+        Assert.Equal(["b", "a", "b"], new[] { "a", "b", "b", "a", "c", "b" }.FindDuplicates());
+    }
+
+    [Fact]
+    public void FindDuplicates_ComparesWithTheComparerGiven()
+    {
+        Assert.Equal(["A"], new[] { "a", "A" }.FindDuplicates(StringComparer.OrdinalIgnoreCase));
+        Assert.Empty(new[] { "a", "A" }.FindDuplicates(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// Taking the first repeat stops reading the sequence there, so a caller refusing an input on its first repeat
+    /// reads no further than that repeat.
+    /// </summary>
+    [Fact]
+    public void FindDuplicates_ReadsNoFurtherThanTheRepeatTaken()
+    {
+        var read = new List<int>();
+        IEnumerable<int> Source()
+        {
+            foreach (var item in new[] { 1, 2, 1, 3, 4 })
+            {
+                read.Add(item);
+                yield return item;
+            }
+        }
+
+        Assert.Equal(1, Source().FindDuplicates().First());
+        Assert.Equal([1, 2, 1], read);
+    }
 }

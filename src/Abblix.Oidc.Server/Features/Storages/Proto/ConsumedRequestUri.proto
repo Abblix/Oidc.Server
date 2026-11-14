@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "google/protobuf/timestamp.proto";
+
+// A request URN whose flow ended with a code or token, kept while the pages of that flow can
+// still be presented, so a request stored for one of them is refused rather than led to a
+// second code.
+//
+// A message rather than a bare timestamp because the serializer dispatches on the stored
+// type, and only types with a definition here avoid the JSON fallback and the warning it logs.
+message ConsumedRequestUri {
+  // When the flow the URN began ended. Never read, and still what makes the record exist: a
+  // message with no field set is written as no bytes, which reads back as no record, and an
+  // ended flow would read as one still open.
+  google.protobuf.Timestamp consumed_at = 1;
+}

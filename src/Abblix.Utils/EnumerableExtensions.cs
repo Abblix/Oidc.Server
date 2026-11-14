@@ -12,7 +12,26 @@ namespace Abblix.Utils;
 /// </summary>
 public static class EnumerableExtensions
 {
-	/// <summary>
+    /// <summary>
+    /// Returns every element of the sequence that repeats an element before it, in the order the repeats appear.
+    /// </summary>
+    /// <typeparam name="T">The type of elements in the sequence.</typeparam>
+    /// <param name="source">The sequence to look for repeats in.</param>
+    /// <param name="comparer">Decides when two elements are the same; the default comparer of the type when null.
+    /// </param>
+    /// <returns>Each repeat as it is reached, so taking the first stops reading the sequence there.</returns>
+    public static IEnumerable<T> FindDuplicates<T>(this IEnumerable<T> source, IEqualityComparer<T>? comparer = null)
+    {
+        HashSet<T>? uniqueItems = null;
+        foreach (var item in source)
+        {
+            uniqueItems ??= [with(comparer ?? EqualityComparer<T>.Default)];
+            if (!uniqueItems.Add(item))
+                yield return item;
+        }
+    }
+
+    /// <summary>
 	/// Returns the original sequence, or an empty sequence if the original is null.
 	/// </summary>
 	/// <typeparam name="T">The type of elements in the sequence.</typeparam>

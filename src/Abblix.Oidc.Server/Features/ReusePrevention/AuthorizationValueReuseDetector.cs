@@ -10,6 +10,7 @@ using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Options;
 
@@ -29,30 +30,30 @@ public class AuthorizationValueReuseDetector(
     private const string Marker = "used";
 
     /// <inheritdoc />
-    public async Task<bool> IsReusedAsync(string clientId, string valueKind, string value)
+    public async Task<bool> IsReusedAsync(TenantDefinition tenant, string clientId, string valueKind, string value)
     {
         if (options.Value.PkceAndNonceReuseDetectionInterval is null)
             return false;
 
-        var seen = await storage.GetAsync<string>(KeyOf(clientId, valueKind, value), removeOnRetrieval: false);
+        var seen = await storage.GetAsync<string>(KeyOf(tenant, clientId, valueKind, value), removeOnRetrieval: false);
         return seen is not null;
     }
 
     /// <inheritdoc />
-    public async Task RecordAsync(string clientId, string valueKind, string value)
+    public async Task RecordAsync(TenantDefinition tenant, string clientId, string valueKind, string value)
     {
         if (options.Value.PkceAndNonceReuseDetectionInterval is not { } interval)
             return;
 
         await storage.SetAsync(
-            KeyOf(clientId, valueKind, value),
+            KeyOf(tenant, clientId, valueKind, value),
             Marker,
             new StorageOptions { AbsoluteExpirationRelativeToNow = interval });
     }
 
-    private string KeyOf(string clientId, string valueKind, string value)
+    private string KeyOf(TenantDefinition tenant, string clientId, string valueKind, string value)
     {
         var hash = Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-        return keyFactory.AuthorizationValueReuseKey(clientId, valueKind, hash);
+        return keyFactory.AuthorizationValueReuseKey(tenant, clientId, valueKind, hash);
     }
 }

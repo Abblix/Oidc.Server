@@ -27,12 +27,6 @@ public record DeviceAuthorizationRequest(
     string UserCode)
 {
     /// <summary>
-    /// Specifies the next time the client should poll for updates regarding the authorization request.
-    /// This helps manage the timing of polling requests and enforces rate limiting.
-    /// </summary>
-    public DateTimeOffset? NextPollAt { get; set; }
-
-    /// <summary>
     /// The absolute time when this device authorization request expires (RFC 8628 Section 3.2 fixed lifetime).
     /// Seeded by the storage on <c>StoreAsync</c> and used to cap the refreshed cache TTL at the remaining
     /// lifetime, so regular polling cannot extend the code.
@@ -88,4 +82,12 @@ public record DeviceAuthorizationRequest(
     /// the eventual access token issued via the device-code grant emits the claim byte-exact.
     /// </summary>
     public JsonArray? AuthorizationDetails { get; set; }
+
+    /// <summary>
+    /// Whether the client named no scope, so the scope of this request is the default the server served it with.
+    /// Carried onto the grant the host approves, whatever context the host builds, so the token endpoint does not
+    /// take a default the client never named for a scope it asked for. A record stored before this member existed
+    /// reads false, as a scope the client named.
+    /// </summary>
+    public bool ClientNamedNoScope { get; init; }
 }

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -22,6 +23,7 @@ public interface IIntrospectionHandler
     /// Asynchronously processes an introspection request, validating its authorization and the token in question,
     /// and then returning the token's state and other relevant information.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="introspectionRequest">The introspection request containing the token and possibly other parameters
     /// required for validating the request and introspecting the token.</param>
     /// <param name="clientRequest">Additional information about the client making the request, which may be necessary
@@ -39,6 +41,7 @@ public interface IIntrospectionHandler
     /// intended scopes and lifetimes.
     /// </remarks>
     Task<Result<IntrospectionSuccess, OidcError>> HandleAsync(
+        TenantDefinition tenant,
         IntrospectionRequest introspectionRequest,
         ClientRequest clientRequest);
 }

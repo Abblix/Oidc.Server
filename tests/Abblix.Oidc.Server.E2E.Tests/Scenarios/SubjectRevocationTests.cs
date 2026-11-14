@@ -19,7 +19,6 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -50,7 +49,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
         var subject = SubjectOf(tokens);
 
         // The token works before the revocation. Without this the test would pass against a server that
@@ -59,10 +58,11 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         Assert.True(
             beforeRevocation.IsSuccessStatusCode,
             $"the refresh token should work before the revocation, got {(int)beforeRevocation.StatusCode}");
-        var rotated = (await ReadJsonAsync(beforeRevocation))[TokenRequest.Parameters.RefreshToken]!
+        var rotated = (await ReadJsonAsync(beforeRevocation))[TokenResponse.Parameters.RefreshToken]!
             .GetValue<string>();
 
         await RevokerOf(host).RevokeSubjectAsync(
+            TestTenant.Of(host.Services),
             subject, cancellationToken: TestContext.Current.CancellationToken);
 
         var afterRevocation = await RefreshAsync(client, discovery, rotated);
@@ -82,11 +82,11 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
         var subject = SubjectOf(tokens);
 
         var anHourAgo = ClockOf(host).GetUtcNow().AddHours(-1);
-        await RevokerOf(host).RevokeSubjectAsync(subject, anHourAgo, TestContext.Current.CancellationToken);
+        await RevokerOf(host).RevokeSubjectAsync(TestTenant.Of(host.Services), subject, anHourAgo, TestContext.Current.CancellationToken);
 
         var response = await RefreshAsync(client, discovery, refreshToken);
         Assert.True(
@@ -106,9 +106,10 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
 
         await RevokerOf(host).RevokeSubjectAsync(
+            TestTenant.Of(host.Services),
             $"somebody-else-{Guid.NewGuid():N}",
             cancellationToken: TestContext.Current.CancellationToken);
 
@@ -116,6 +117,62 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         Assert.True(
             response.IsSuccessStatusCode,
             $"another subject's revocation should not refuse this token, got {(int)response.StatusCode}");
+    }
+
+    /// <summary>
+    /// Withdrawing consent from one client stops the refresh tokens that client already holds for the end user.
+    /// </summary>
+    [Fact]
+    public async Task Revoking_a_subject_at_a_client_stops_that_clients_refresh_tokens()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+
+        var beforeRevocation = await RefreshAsync(client, discovery, refreshToken);
+        Assert.True(
+            beforeRevocation.IsSuccessStatusCode,
+            $"the refresh token should work before the revocation, got {(int)beforeRevocation.StatusCode}");
+        var rotated = (await ReadJsonAsync(beforeRevocation))[TokenResponse.Parameters.RefreshToken]!
+            .GetValue<string>();
+
+        await RevokerOf(host).RevokeSubjectAtClientAsync(
+            TestTenant.Of(host.Services),
+            SubjectOf(tokens),
+            TestConstants.ConfidentialClientId,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var afterRevocation = await RefreshAsync(client, discovery, rotated);
+        await AssertInvalidGrantAsync(afterRevocation);
+    }
+
+    /// <summary>
+    /// The same end user revoked at another client keeps this client's tokens: the cutoff names the pair, and one
+    /// that reached past its client would sign the end user out of clients they never withdrew from.
+    /// </summary>
+    [Fact]
+    public async Task Revoking_a_subject_at_another_client_leaves_this_clients_tokens_alone()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+
+        await RevokerOf(host).RevokeSubjectAtClientAsync(
+            TestTenant.Of(host.Services),
+            SubjectOf(tokens),
+            $"another-client-{Guid.NewGuid():N}",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var response = await RefreshAsync(client, discovery, refreshToken);
+        Assert.True(
+            response.IsSuccessStatusCode,
+            $"a revocation at another client should not refuse this token, got {(int)response.StatusCode}");
     }
 
     /// <summary>
@@ -134,14 +191,14 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
-        var idToken = tokens[ResponseParameters.IdToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
         var beforeLogout = await RefreshAsync(client, discovery, refreshToken);
         Assert.True(
             beforeLogout.IsSuccessStatusCode,
             $"the refresh token should work before the logout, got {(int)beforeLogout.StatusCode}");
-        var rotated = (await ReadJsonAsync(beforeLogout))[TokenRequest.Parameters.RefreshToken]!
+        var rotated = (await ReadJsonAsync(beforeLogout))[TokenResponse.Parameters.RefreshToken]!
             .GetValue<string>();
 
         await EndSessionAsync(client, discovery, idToken);
@@ -154,7 +211,8 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     /// And with the option left off, the same logout leaves the same token working.
     /// </summary>
     /// <remarks>
-    /// The control the test above needs. Without it, a logout that broke refresh for some unrelated reason -
+    /// The control <see cref="Ending_a_session_revokes_its_tokens_when_the_option_is_on"/> needs. Without it,
+    /// a logout that broke refresh for some unrelated reason -
     /// ending the session the grant hangs on, say - would read as the option working.
     /// </remarks>
     [Fact]
@@ -165,8 +223,8 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
-        var idToken = tokens[ResponseParameters.IdToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
         await EndSessionAsync(client, discovery, idToken);
 
@@ -202,6 +260,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         Assert.False(string.IsNullOrEmpty(codeBefore));
 
         await RevokerOf(host).RevokeSubjectAsync(
+            TestTenant.Of(host.Services),
             subject, cancellationToken: TestContext.Current.CancellationToken);
 
         var error = await AuthorizeAndExtractErrorAsync(client, discovery, SilentRenewal());
@@ -228,6 +287,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         Assert.False(string.IsNullOrEmpty(codeBefore));
 
         await RevokerOf(host).RevokeSessionAsync(
+            TestTenant.Of(host.Services),
             sessionId, cancellationToken: TestContext.Current.CancellationToken);
 
         var error = await AuthorizeAndExtractErrorAsync(client, discovery, SilentRenewal());
@@ -240,9 +300,9 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     /// again once the suspension is lifted.
     /// </summary>
     /// <remarks>
-    /// The control that keeps the two tests above honest. Written as a boolean rather than a comparison,
-    /// the change would refuse here too - and since a fresh sign-in carries the same subject, the refusal
-    /// would repeat for as long as the record is kept.
+    /// The control that keeps <see cref="Revoking_a_subject_stops_its_session_from_minting_more"/> honest.
+    /// Written as a boolean rather than a comparison, the change would refuse here too - and since a fresh sign-in
+    /// carries the same subject, the refusal would repeat for as long as the record is kept.
     /// </remarks>
     [Fact]
     public async Task A_cutoff_older_than_the_sign_in_leaves_the_session_working()
@@ -255,7 +315,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         var subject = SubjectOf(tokens);
 
         var anHourAgo = ClockOf(host).GetUtcNow().AddHours(-1);
-        await RevokerOf(host).RevokeSubjectAsync(subject, anHourAgo, TestContext.Current.CancellationToken);
+        await RevokerOf(host).RevokeSubjectAsync(TestTenant.Of(host.Services), subject, anHourAgo, TestContext.Current.CancellationToken);
 
         var code = await AuthorizeAndExtractCodeAsync(client, discovery, SilentRenewal());
 
@@ -295,12 +355,85 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
             $"the code should be redeemable before the revocation, got {(int)beforeRevocation.StatusCode}");
 
         await RevokerOf(host).RevokeSubjectAsync(
+            TestTenant.Of(host.Services),
             subject, cancellationToken: TestContext.Current.CancellationToken);
 
         var afterRevocation = await RedeemAsync(client, discovery, secondCode, secondVerifier);
 
         await AssertInvalidGrantAsync(afterRevocation);
     }
+
+    /// <summary>
+    /// A code the end user approved before withdrawing consent from the client cannot be redeemed after it, so it
+    /// cannot found a refresh token family that outlives the revocation, while a code they approve again afterwards,
+    /// in the same session, is redeemed.
+    /// </summary>
+    [Fact]
+    public async Task A_code_approved_before_a_revocation_at_its_client_cannot_be_redeemed_and_one_approved_after_can()
+    {
+        // No clock tolerance, so the code approved right after the revocation is past it at once; the tolerance a
+        // grant gets is pinned by the checker's unit tests
+        await using var host = CreateIsolatedHost(options => options.ReplicaClockSkew = TimeSpan.Zero);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var (verifierBefore, codeBefore) = await TakeCodeAsync(client, discovery);
+
+        await RevokerOf(host).RevokeSubjectAtClientAsync(
+            TestTenant.Of(host.Services),
+            SubjectOf(tokens),
+            TestConstants.ConfidentialClientId,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        await AssertInvalidGrantAsync(await RedeemAsync(client, discovery, codeBefore, verifierBefore));
+
+        var (verifierAfter, codeAfter) = await TakeCodeAsync(client, discovery);
+        var redeemedAfter = await RedeemAsync(client, discovery, codeAfter, verifierAfter);
+        Assert.True(
+            redeemedAfter.IsSuccessStatusCode,
+            $"a code approved after the revocation should be redeemed, got {(int)redeemedAfter.StatusCode}");
+    }
+
+    /// <summary>
+    /// An ID token the client received before the revocation cannot be exchanged for a new access token after it.
+    /// An ID token names its client only as its audience, so a check reading client_id alone would let it through.
+    /// </summary>
+    [Fact]
+    public async Task An_id_token_issued_before_a_revocation_at_its_client_cannot_be_exchanged()
+    {
+        await using var host = CreateIsolatedHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var idToken = tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
+
+        var beforeRevocation = await ExchangeIdTokenAsync(client, discovery, idToken);
+        Assert.True(
+            beforeRevocation.IsSuccessStatusCode,
+            $"the ID token should be exchanged before the revocation, got {(int)beforeRevocation.StatusCode}");
+
+        await RevokerOf(host).RevokeSubjectAtClientAsync(
+            TestTenant.Of(host.Services),
+            SubjectOf(tokens),
+            TestConstants.ConfidentialClientId,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var afterRevocation = await ExchangeIdTokenAsync(client, discovery, idToken);
+        Assert.Equal(HttpStatusCode.BadRequest, afterRevocation.StatusCode);
+    }
+
+    private static Task<HttpResponseMessage> ExchangeIdTokenAsync(
+        HttpClient client, DiscoveryDocument discovery, string idToken)
+        => FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
+            [TokenRequest.Parameters.SubjectToken] = idToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.IdToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
 
     /// <summary>
     /// Takes an authorization code from the session this client already holds, and the verifier that
@@ -332,9 +465,9 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
@@ -367,7 +500,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
 
     private static string SessionOf(JsonObject tokens)
     {
-        var payload = DecodeJwtPayload(tokens[ResponseParameters.IdToken]!.GetValue<string>());
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>());
         return payload[IanaClaimTypes.Sid]!.GetValue<string>();
     }
 
@@ -408,7 +541,7 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
 
     private static string SubjectOf(JsonObject tokens)
     {
-        var payload = DecodeJwtPayload(tokens[ResponseParameters.IdToken]!.GetValue<string>());
+        var payload = DecodeJwtPayload(tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>());
         return payload[IanaClaimTypes.Sub]!.GetValue<string>();
     }
 
@@ -429,6 +562,6 @@ public class SubjectRevocationTests(TestFactory factory) : TestBase(factory)
     {
         var body = await ReadJsonAsync(response);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidGrant, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidGrant, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 }

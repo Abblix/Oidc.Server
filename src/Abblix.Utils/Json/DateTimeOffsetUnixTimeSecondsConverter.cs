@@ -16,6 +16,9 @@ namespace Abblix.Utils.Json;
 /// </summary>
 public class DateTimeOffsetUnixTimeSecondsConverter: JsonConverter<DateTimeOffset>
 {
+    private static readonly long EarliestSeconds = DateTimeOffset.MinValue.ToUnixTimeSeconds();
+    private static readonly long LatestSeconds = DateTimeOffset.MaxValue.ToUnixTimeSeconds();
+
     /// <summary>
     /// Reads and converts the JSON to a <see cref="DateTimeOffset"/> object.
     /// </summary>
@@ -23,8 +26,22 @@ public class DateTimeOffsetUnixTimeSecondsConverter: JsonConverter<DateTimeOffse
     /// <param name="typeToConvert">The type of object to convert to.</param>
     /// <param name="options">Options for the serializer.</param>
     /// <returns>A <see cref="DateTimeOffset"/> object.</returns>
+    /// <remarks>
+    /// A Unix time is a NumericDate (RFC 7519 section 2), which may carry a fraction of a second; the fraction is
+    /// dropped, as the instant is kept to the second.
+    /// </remarks>
+    /// <exception cref="JsonException">
+    /// Thrown when the token is not a number, or names a time no <see cref="DateTimeOffset"/> can hold.
+    /// </exception>
     public override DateTimeOffset Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => DateTimeOffset.FromUnixTimeSeconds(reader.GetInt64());
+    {
+        // Every second a DateTimeOffset can hold lies well within the integers a double carries exactly
+        var seconds = Math.Truncate(reader.GetDouble());
+        if (seconds < EarliestSeconds || LatestSeconds < seconds)
+            throw new JsonException($"{seconds} is not a Unix time an instant can have");
+
+        return DateTimeOffset.FromUnixTimeSeconds((long)seconds);
+    }
 
     /// <summary>
     /// Writes a <see cref="DateTimeOffset"/> object as a Unix time (number of seconds since Unix epoch) to JSON.

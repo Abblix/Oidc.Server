@@ -160,6 +160,7 @@ public class ExternalKeyDecryptorTests
         var validator = provider.GetRequiredService<IJsonWebTokenValidator>();
         return await validator.ValidateAsync(jwe, new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             Options = ValidationOptions.ValidateIssuer | ValidationOptions.RequireSignedTokens,
             ValidateIssuer = iss => Task.FromResult(iss == Issuer),
             ResolveIssuerSigningKeys = _ => new[] { SigningKey.Sanitize(false) }.ToAsyncEnumerable(),
@@ -203,8 +204,13 @@ public class ExternalKeyDecryptorTests
     /// </summary>
     private sealed class FakeKeyCustodian(JsonWebKey fullKey) : IKeyCustodian
     {
+        public bool ServesKeyManagement(string algorithm) => true;
+
         public int UnwrapCalls { get; private set; }
         public int AgreeCalls { get; private set; }
+
+        /// <summary>Answers an agreement the way a custodian with no agreement primitive does.</summary>
+        public bool RefusesAgreement { get; init; }
 
         // This custodian holds only encryption keys, so the library never routes a signing operation here.
         public Task<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
@@ -223,23 +229,33 @@ public class ExternalKeyDecryptorTests
                 RsaJsonWebKey rsaKey => RsaDecrypt(rsaKey, algorithm, encryptedKey),
 
                 OctetJsonWebKey { KeyValue: { } secret }
-                    => AesKeyWrap.TryUnwrap(secret, encryptedKey, out var unwrapped) ? unwrapped : null,
+                    => UnwrapUnder(secret, encryptedKey),
 
                 _ => null,
             };
             return Task.FromResult(contentEncryptionKey);
         }
 
-        public Task<byte[]> AgreeKeyAsync(
+        private static byte[]? UnwrapUnder(byte[] secret, byte[] encryptedKey)
+        {
+            using var aes = Aes.Create();
+            aes.Key = secret;
+            return aes.TryUnwrapKey(encryptedKey, out var unwrapped) ? unwrapped : null;
+        }
+
+        public Task<byte[]?> AgreeKeyAsync(
             string keyId,
             string algorithm,
             JsonWebKey ephemeralPublicKey,
             CancellationToken cancellationToken)
         {
             AgreeCalls++;
+            if (RefusesAgreement)
+                return Task.FromResult<byte[]?>(null);
+
             using var recipient = ((EllipticCurveJsonWebKey)fullKey).ToEcdh();
             using var ephemeral = ((EllipticCurveJsonWebKey)ephemeralPublicKey).ToEcdh();
-            return Task.FromResult(recipient.DeriveRawSecretAgreement(ephemeral.PublicKey));
+            return Task.FromResult<byte[]?>(recipient.DeriveRawSecretAgreement(ephemeral.PublicKey));
         }
 
         public async IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(
@@ -271,5 +287,131 @@ public class ExternalKeyDecryptorTests
                 return null;
             }
         }
+    }
+
+    /// <summary>
+    /// Direct Key Agreement carries no Encrypted Key, so a token that carries one cannot open whatever the custodian
+    /// answers. It is refused before the agreement: in this path the agreement is a call to the custodian, and a
+    /// forged token should not cost one.
+    /// </summary>
+    [Fact]
+    public async Task ExternalEcdhEs_DirectAgreementWithAnEncryptedKey_IsRefusedWithoutAskingTheCustodian()
+    {
+        var (custodian, decryptor, publicOnly, header) = ExternalEcdhEs();
+
+        var key = await decryptor.DecryptKeyAsync(
+            header, publicOnly, EncryptionAlgorithms.KeyManagement.EcdhEs, new byte[32],
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(key);
+        Assert.Equal(0, custodian.AgreeCalls);
+    }
+
+    /// <summary>
+    /// The control for the row above: the same header with the empty Encrypted Key Direct Key Agreement carries is
+    /// agreed with the custodian.
+    /// </summary>
+    [Fact]
+    public async Task ExternalEcdhEs_DirectAgreementWithoutAnEncryptedKey_AsksTheCustodian()
+    {
+        var (custodian, decryptor, publicOnly, header) = ExternalEcdhEs();
+
+        var key = await decryptor.DecryptKeyAsync(
+            header, publicOnly, EncryptionAlgorithms.KeyManagement.EcdhEs, [],
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(key);
+        Assert.Equal(1, custodian.AgreeCalls);
+    }
+
+    /// <summary>
+    /// 'apu' and 'epk' come from the token, so a malformed one is a refusal of it rather than a fault, as it is in
+    /// process.
+    /// </summary>
+    [Theory]
+    [InlineData(MalformedAgreementPartyUInfo)]
+    [InlineData(MalformedEphemeralKey)]
+    public async Task ExternalEcdhEs_AMalformedHeader_IsRefused(string malformed)
+    {
+        var (_, decryptor, publicOnly, header) = ExternalEcdhEs();
+        Malform(header, malformed);
+
+        var key = await decryptor.DecryptKeyAsync(
+            header, publicOnly, EncryptionAlgorithms.KeyManagement.EcdhEs, [],
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(key);
+    }
+
+    /// <summary>
+    /// A custodian that cannot agree refuses with null, and the token is refused the way a key that does not open
+    /// is: the algorithm is the sender's choice, so nothing the custodian answers may become a server fault.
+    /// </summary>
+    [Fact]
+    public async Task ExternalEcdhEs_ACustodianThatCannotAgree_RefusesTheToken()
+    {
+        var fullKey = JsonWebKeyFactory.CreateEllipticCurve(
+            EllipticCurveTypes.P256, EncryptionAlgorithms.KeyManagement.EcdhEs) with { KeyId = "ext-ec" };
+        var custodian = new FakeKeyCustodian(fullKey) { RefusesAgreement = true };
+        var decryptor = new ExternalKeyDecryptor(custodian, BuildProvider(custodian));
+        var (_, _, publicOnly, header) = ExternalEcdhEs();
+
+        var key = await decryptor.DecryptKeyAsync(
+            header, publicOnly, EncryptionAlgorithms.KeyManagement.EcdhEs, [],
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(key);
+        Assert.Equal(1, custodian.AgreeCalls);
+    }
+
+    internal const string MalformedAgreementPartyUInfo = "apu";
+    internal const string MalformedEphemeralKey = "epk";
+
+    /// <summary>Spoils the header member <paramref name="malformed"/> names.</summary>
+    internal static void Malform(JsonWebTokenHeader header, string malformed)
+    {
+        switch (malformed)
+        {
+            case MalformedAgreementPartyUInfo:
+                header.AgreementPartyUInfo = "not base64url!";
+                break;
+
+            case MalformedEphemeralKey:
+                header.Json[JwtClaimTypes.EphemeralPublicKey] = new JsonObject
+                {
+                    ["kty"] = "EC",
+                    ["crv"] = EllipticCurveTypes.P256,
+                    ["x"] = 5,
+                };
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(malformed), malformed, null);
+        }
+    }
+
+    /// <summary>
+    /// A custodian holding an EC key, the decryptor over it, the key as the library holds it, and an ECDH-ES header
+    /// for A256GCM carrying an ephemeral key on the same curve.
+    /// </summary>
+    private static (FakeKeyCustodian Custodian, ExternalKeyDecryptor Decryptor, JsonWebKey PublicOnly,
+        JsonWebTokenHeader Header) ExternalEcdhEs()
+    {
+        var fullKey = JsonWebKeyFactory.CreateEllipticCurve(
+            EllipticCurveTypes.P256, EncryptionAlgorithms.KeyManagement.EcdhEs) with { KeyId = "ext-ec" };
+        var publicOnly = fullKey.Sanitize(includePrivateKeys: false);
+        var custodian = new FakeKeyCustodian(fullKey);
+        var decryptor = new ExternalKeyDecryptor(custodian, BuildProvider(custodian));
+
+        var ephemeral = JsonWebKeyFactory.CreateEllipticCurve(
+            EllipticCurveTypes.P256, EncryptionAlgorithms.KeyManagement.EcdhEs);
+        var header = new JsonWebTokenHeader(new JsonObject())
+        {
+            Algorithm = EncryptionAlgorithms.KeyManagement.EcdhEs,
+            EncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+        };
+        header.SetEphemeralPublicKey(ephemeral.Sanitize(includePrivateKeys: false));
+
+        return (custodian, decryptor, publicOnly, header);
     }
 }

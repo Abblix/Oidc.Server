@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Oidc.Server.Mvc.Model;
@@ -27,12 +28,16 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// Manages OAuth 2.0 and OpenID Connect token-related endpoints, including token issuance, revocation, and introspection.
 /// Serves as the primary interface between clients and the authorization server for managing tokens' lifecycle.
 /// </summary>
-[ApiController]
 [ReturnsOidcInvalidRequest]
+[ReturnsLibraryRefusalStatus]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
-[RequireHttps]
-[SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
+[RequireHttpsUnlessHttpIssuer]
+[RequireHost]
+[AwaitTenantLoad]
+[RequireTenant]
+[OidcRouteValue]
+[SuppressMessage("SonarLint", "S6967:ModelState.IsValid should be checked in controller actions", Justification = "ReturnsOidcInvalidRequest answers an invalid model state before any action runs")]
 public class TokenController : ControllerBase
 {
     /// <summary>
@@ -41,6 +46,7 @@ public class TokenController : ControllerBase
     /// </summary>
     /// <param name="handler">The service responsible for handling token issuance logic.</param>
     /// <param name="formatter">The service tasked with formatting the token issuance response.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="tokenRequest">Details of the token request, including a grant type and required parameters.</param>
     /// <param name="clientRequest">Contextual information about the client making the request.</param>
     /// <returns>A task that results in an action containing the token response, formatted as per OIDC specifications.
@@ -52,24 +58,26 @@ public class TokenController : ControllerBase
     /// OpenID Connect Token Endpoint Documentation
     /// </see>
     /// </remarks>
-    // RFC 6749 §3.2: the token endpoint MUST accept POST with application/x-www-form-urlencoded.
+    // RFC 6749 section 3.2: the token endpoint MUST accept POST with application/x-www-form-urlencoded.
     // GET is rejected so credentials (code, client_secret, refresh_token) never travel in the URL,
     // where they would be logged by proxies, servers and browser history.
-    [HttpPost(Path.Token)]
+    [HttpPost]
+    [ActionName(nameof(TokenAsync))]
     [Consumes(MediaTypes.FormUrlEncoded)]
     [Produces(MediaTypeNames.Application.Json)]
     [EnableCors(OidcConstants.CorsPolicyName)]
-    [EnabledBy(OidcEndpoints.Token)]
     public async Task<ActionResult<TokenResponse>> TokenAsync(
         [FromServices] ITokenHandler handler,
         [FromServices] ITokenResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] TokenRequest tokenRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.TokenRequest coreTokenRequest = tokenRequest;
         // The request's own token: CIBA holds this call open for the long-polling window, and without it a
         // client that disconnects leaves the server polling storage for an answer nobody is waiting for.
-        var response = await handler.HandleAsync(coreTokenRequest, clientRequest, HttpContext.RequestAborted);
+        var response = await handler.HandleAsync(
+            tenantAccessor.CurrentTenant(), coreTokenRequest, clientRequest, HttpContext.RequestAborted);
         return await formatter.FormatResponseAsync(coreTokenRequest, response);
     }
 
@@ -79,6 +87,7 @@ public class TokenController : ControllerBase
     /// </summary>
     /// <param name="handler">The service responsible for processing token revocation requests.</param>
     /// <param name="formatter">The service responsible for formatting the revocation response.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="revocationRequest">Details of the revocation request, including the token to be revoked.</param>
     /// <param name="clientRequest">Additional contextual information about the client making the revocation request.
     /// </param>
@@ -88,18 +97,19 @@ public class TokenController : ControllerBase
     /// securely.
     /// <see href="https://www.rfc-editor.org/rfc/rfc7009#section-2">OAuth 2.0 Token Revocation Documentation</see>
     /// </remarks>
-    [HttpPost(Path.Revocation)]
+    [HttpPost]
+    [ActionName(nameof(RevocationAsync))]
     [Consumes(MediaTypes.FormUrlEncoded)]
     [EnableCors(OidcConstants.CorsPolicyName)]
-    [EnabledBy(OidcEndpoints.Revocation)]
     public async Task<ActionResult> RevocationAsync(
         [FromServices] IRevocationHandler handler,
         [FromServices] IRevocationResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] RevocationRequest revocationRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.RevocationRequest coreRevocationRequest = revocationRequest;
-        var response = await handler.HandleAsync(coreRevocationRequest, clientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreRevocationRequest, clientRequest);
         return await formatter.FormatResponseAsync(coreRevocationRequest, response);
     }
 
@@ -110,6 +120,7 @@ public class TokenController : ControllerBase
     /// <param name="handler">The service responsible for validating and processing token introspection requests.</param>
     /// <param name="formatter">The service responsible for formatting the introspection response with detailed token
     /// information.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="introspectionRequest">Details of the introspection request, including the token to be introspected.
     /// </param>
     /// <param name="clientRequest">Additional contextual information about the client making the introspection request.
@@ -121,17 +132,18 @@ public class TokenController : ControllerBase
     /// securely.
     /// <see href="https://www.rfc-editor.org/rfc/rfc7662#section-2">OAuth 2.0 Token Introspection Documentation</see>
     /// </remarks>
-    [HttpPost(Path.Introspection)]
+    [HttpPost]
+    [ActionName(nameof(IntrospectionAsync))]
     [Consumes(MediaTypes.FormUrlEncoded)]
-    [EnabledBy(OidcEndpoints.Introspection)]
     public async Task<ActionResult> IntrospectionAsync(
         [FromServices] IIntrospectionHandler handler,
         [FromServices] IIntrospectionResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] IntrospectionRequest introspectionRequest,
         [FromForm] ClientRequest clientRequest)
     {
         Core.IntrospectionRequest coreIntrospectionRequest = introspectionRequest;
-        var response = await handler.HandleAsync(coreIntrospectionRequest, clientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreIntrospectionRequest, clientRequest);
         return await formatter.FormatResponseAsync(coreIntrospectionRequest, response);
     }
 }

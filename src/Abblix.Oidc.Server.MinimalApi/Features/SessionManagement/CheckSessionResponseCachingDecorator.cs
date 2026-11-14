@@ -6,7 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore.SessionManagement;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 using Microsoft.AspNetCore.Http;
 
@@ -17,9 +19,11 @@ namespace Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 /// </summary>
 public class CheckSessionResponseCachingDecorator(
     ICheckSessionResponseFormatter inner,
-    ICheckSessionResponseCache cache) : ICheckSessionResponseFormatter
+    ICheckSessionResponseCache<IResult> cache,
+    ITenantAccessor tenantAccessor,
+    ITenantCatalog catalog) : ICheckSessionResponseFormatter
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(CheckSessionResponse response)
-        => cache.GetOrAddAsync(response.CacheKey, () => inner.FormatResponseAsync(response));
+        => cache.GetOrAddAsync(response.CacheKey, () => inner.FormatResponseAsync(response), StoreTenantCatalog.ReleasedOf(catalog, tenantAccessor.CurrentTenant()));
 }

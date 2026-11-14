@@ -193,7 +193,7 @@ public class InteractionRedirectTests(TestFactory factory) : TestBase(factory)
     private sealed class WithholdingConsentsProvider : IUserConsentsProvider
     {
         public Task<UserConsents> GetUserConsentsAsync(
-            ValidAuthorizationRequest request, AuthSession authSession)
+            Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition tenant, ValidAuthorizationRequest request, AuthSession authSession)
             => Task.FromResult(new UserConsents
             {
                 Granted = new ConsentDefinition([], []),

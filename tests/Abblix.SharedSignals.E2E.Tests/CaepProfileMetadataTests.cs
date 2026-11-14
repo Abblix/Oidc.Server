@@ -11,7 +11,6 @@ using Abblix.Jwt;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SharedSignals.MinimalApi;
 using Abblix.SharedSignals.Model;
-using Abblix.SharedSignals;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
@@ -56,8 +55,8 @@ public sealed class CaepProfileMetadataTests
 
     /// <summary>
     /// The control, and the boundary of the default: a host supplying its own list gets exactly that
-    /// list. Without this a builder that appended the OAuth entry to everything would pass the test
-    /// above.
+    /// list. Without this a builder that appended the OAuth entry to everything would pass
+    /// <see cref="ATransmitterWithNothingButAnIssuer_AdvertisesOAuth"/>.
     /// </summary>
     [Fact]
     public async Task AHostThatSuppliesItsOwnSchemes_GetsExactlyThose()

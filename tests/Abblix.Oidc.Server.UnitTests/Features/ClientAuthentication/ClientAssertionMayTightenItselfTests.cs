@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
@@ -16,13 +18,15 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
+using System.Linq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
@@ -74,8 +78,8 @@ public class ClientAssertionMayTightenItselfTests
 
         Assert.Null(result);
 
-        // The refusal lands before the identifier is reserved: a reservation is spent and cannot be
-        // given back, so burning it on an assertion this pass rejects would refuse the client's next
+        // The refusal lands before the identifier is reserved: this path never gives a reservation
+        // back, so burning it on an assertion this pass rejects would refuse the client's next
         // attempt with the same identifier for the wrong reason.
         replayCache.Verify(
             r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()),
@@ -83,8 +87,9 @@ public class ClientAssertionMayTightenItselfTests
     }
 
     /// <summary>
-    /// And the same assertion from a client naming nothing authenticates, without which the case
-    /// above would be satisfied by a pass refusing every assertion dated ahead at all.
+    /// And the same assertion from a client naming nothing authenticates, without which
+    /// <see cref="AClientNamingFapi2_IsHeldToItsOwnForwardWindow"/> would be satisfied by a pass refusing every
+    /// assertion dated ahead at all.
     /// </summary>
     [Fact]
     public async Task AClientNamingNothing_KeepsTheDeploymentsForwardWindow()
@@ -92,6 +97,37 @@ public class ClientAssertionMayTightenItselfTests
         var result = await Authenticate(
             clientProfile: null,
             issuedAt: Now + BeyondEveryProfileButNone);
+
+        Assert.NotNull(result);
+    }
+
+    /// <summary>
+    /// The floor is the tenant's own: under a tenant naming FAPI 2.0 a client naming nothing is held to the seconds
+    /// the profile grants, though the validator here is a stub that applies no window at all.
+    /// </summary>
+    [Fact]
+    public async Task UnderATenantNamingFapi2_AClientNamingNothingIsHeldToIt()
+    {
+        var result = await Authenticate(
+            clientProfile: null,
+            issuedAt: Now + BeyondEveryProfileButNone,
+            tenantProfile: ClientSecurityProfile.Fapi2);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// And an assertion inside that window authenticates under the same tenant, without which
+    /// <see cref="UnderATenantNamingFapi2_AClientNamingNothingIsHeldToIt"/> would be satisfied by a tenant refusing
+    /// the assertion for another reason.
+    /// </summary>
+    [Fact]
+    public async Task UnderATenantNamingFapi2_AClientNamingNothingKeepsItsWindow()
+    {
+        var result = await Authenticate(
+            clientProfile: null,
+            issuedAt: Now.AddSeconds(5),
+            tenantProfile: ClientSecurityProfile.Fapi2);
 
         Assert.NotNull(result);
     }
@@ -112,7 +148,8 @@ public class ClientAssertionMayTightenItselfTests
 
     /// <summary>
     /// And the same expired assertion from a client naming nothing authenticates, which is what
-    /// makes the case above a statement about the profile rather than about expiry.
+    /// makes <see cref="AClientNamingFapi2_IsHeldToItsOwnExpiry"/> a statement about the profile rather than
+    /// about expiry.
     /// </summary>
     [Fact]
     public async Task AClientNamingNothing_KeepsTheDeploymentsExpiryTolerance()
@@ -166,8 +203,11 @@ public class ClientAssertionMayTightenItselfTests
     }
 
     /// <summary>
-    /// And an assertion inside the tighter window authenticates the FAPI client too, or the cases
-    /// above would be satisfied by a pass refusing every assertion from a client naming a profile.
+    /// And an assertion inside the tighter window authenticates the FAPI client too, or
+    /// <see cref="AClientNamingFapi2_IsHeldToItsOwnForwardWindow"/>,
+    /// <see cref="AClientNamingFapi2_IsHeldToItsOwnExpiry"/> and
+    /// <see cref="AClientNamingFapi2_IsHeldToItsOwnWindowOnNotBefore"/> would be satisfied by a pass refusing every
+    /// assertion from a client naming a profile.
     /// </summary>
     [Fact]
     public async Task AClientNamingFapi2_KeepsAnAssertionInsideItsOwnWindow()
@@ -181,7 +221,8 @@ public class ClientAssertionMayTightenItselfTests
 
     /// <summary>
     /// The forward direction accepts an <c>nbf</c> inside the tighter window, without which the
-    /// refusal above would be satisfied by a clause refusing on the mere presence of the claim.
+    /// refusal in <see cref="AClientNamingFapi2_IsHeldToItsOwnWindowOnNotBefore"/> would be satisfied by a clause
+    /// refusing on the mere presence of the claim.
     /// </summary>
     [Fact]
     public async Task AClientNamingFapi2_KeepsANotBeforeInsideItsOwnWindow()
@@ -197,7 +238,8 @@ public class ClientAssertionMayTightenItselfTests
         ClientSecurityProfile? clientProfile,
         DateTimeOffset? issuedAt = null,
         DateTimeOffset? expiresAt = null,
-        DateTimeOffset? notBefore = null)
+        DateTimeOffset? notBefore = null,
+        ClientSecurityProfile tenantProfile = ClientSecurityProfile.None)
     {
         var clientInfo = new ClientInfo(ClientId)
         {
@@ -206,18 +248,22 @@ public class ClientAssertionMayTightenItselfTests
         };
 
         clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var token = CreateAssertion(issuedAt, expiresAt, notBefore);
 
-        // The real validator drives these callbacks, and the assertion path depends on what they
-        // leave behind: the issuer callback is what resolves the client into the validation context.
+        // The real validator drives these callbacks, signing keys first and the issuer after, and the
+        // assertion path depends on what they leave behind: resolving the keys is what finds the client
+        // and records it in the validation context.
         tokenValidator
             .Setup(v => v.ValidateAsync(JwtAssertion, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(
                 async (_, parameters) =>
                 {
+                    if (parameters.ResolveIssuerSigningKeys != null)
+                        await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                     if (parameters.ValidateIssuer != null)
                         await parameters.ValidateIssuer(ClientId);
 
@@ -228,20 +274,16 @@ public class ClientAssertionMayTightenItselfTests
             .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
-        var requestInfoProvider = new Mock<IRequestInfoProvider>();
-        requestInfoProvider.Setup(p => p.RequestUri).Returns(Issuer);
-
         var authenticator = new ClientSecretJwtAuthenticator(
             Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             clientInfoProvider.Object,
-            requestInfoProvider.Object,
-            new FixedClock(Now),
+            new FakeTimeProvider(Now),
             replayCache.Object,
-            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == Issuer),
-            Options.Create(new OidcOptions { DefaultSecurityProfile = ClientSecurityProfile.None }));
+            new ServiceCollection().BuildServiceProvider());
 
-        return await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        var tenant = new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = tenantProfile }.ToTenant();
+        return await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
@@ -275,10 +317,5 @@ public class ClientAssertionMayTightenItselfTests
 
         token.Payload.Audiences = [Issuer];
         return token;
-    }
-
-    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

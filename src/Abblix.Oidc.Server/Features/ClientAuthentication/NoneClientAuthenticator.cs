@@ -8,10 +8,12 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -43,6 +45,7 @@ public partial class NoneClientAuthenticator(
     /// <summary>
     /// Attempts to authenticate a client based solely on its ID, without requiring a client secret.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the client's ID.</param>
     /// <returns>A task that returns the authenticated <see cref="ClientInfo"/>
     /// if successful, or null if authentication fails.</returns>
@@ -51,13 +54,13 @@ public partial class NoneClientAuthenticator(
     /// It verifies the existence of the client and ensures it is marked as a public client in the configuration.
     /// Clients not meeting these criteria are not authenticated.
     /// </remarks>
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
+    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
         var clientId = request.ClientId;
         if (!clientId.NotNullOrWhiteSpace())
             return null;
 
-        var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         switch (client)
         {
             case null:

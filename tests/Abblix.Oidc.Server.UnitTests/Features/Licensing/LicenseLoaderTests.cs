@@ -26,15 +26,12 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// These tests focus on:
 /// - Error handling for invalid JWTs
 /// - Validation of issuer requirements
-/// - Validation of JWT type requirements
 /// - Parsing error scenarios
 ///
 /// Successful license loading is tested through integration tests with actual licenses.
 /// </remarks>
 public class LicenseLoaderTests
 {
-    #region Invalid JWT Tests
-
     /// <summary>
     /// Verifies that LoadAsync throws InvalidOperationException for malformed JWT.
     /// </summary>
@@ -77,10 +74,6 @@ public class LicenseLoaderTests
             LicenseLoader.LoadAsync(nullJwt));
     }
 
-    #endregion
-
-    #region Invalid Issuer Tests
-
     /// <summary>
     /// Verifies that LoadAsync rejects JWT with invalid issuer.
     /// </summary>
@@ -105,10 +98,6 @@ public class LicenseLoaderTests
 
         Assert.Contains("can't be validated", exception.Message);
     }
-
-    #endregion
-
-    #region Invalid Signature Tests
 
     /// <summary>
     /// Verifies that LoadAsync rejects JWT with invalid signature.
@@ -155,41 +144,6 @@ public class LicenseLoaderTests
         Assert.Contains("can't be validated", exception.Message);
     }
 
-    #endregion
-
-    #region Invalid JWT Type Tests
-
-    /// <summary>
-    /// Verifies that LoadAsync rejects JWT with wrong type in header.
-    /// </summary>
-    /// <remarks>
-    /// Even if JWT is properly signed and has correct issuer, wrong type should be rejected.
-    /// This test uses a standard JWT type instead of the required license type.
-    /// </remarks>
-    [Fact]
-    public async Task LoadAsync_WrongJwtType_ThrowsInvalidOperationException()
-    {
-        // Arrange - JWT with standard type "JWT" instead of license type
-        // Header: {"alg":"RS256","typ":"JWT"}
-        // Payload: {"iss":"https://abblix.com","exp":9999999999}
-        // Note: This will fail at signature validation, but demonstrates type checking
-        const string jwtWithWrongType =
-            "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9." +
-            "eyJpc3MiOiJodHRwczovL2FiYmxpeC5jb20iLCJleHAiOjk5OTk5OTk5OTl9." +
-            "dummy_signature";
-
-        // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            LicenseLoader.LoadAsync(jwtWithWrongType));
-
-        // Will fail at validation stage before type check
-        Assert.Contains("can't be validated", exception.Message);
-    }
-
-    #endregion
-
-    #region Expired Token Tests
-
     /// <summary>
     /// Verifies that LoadAsync accepts expired license tokens.
     /// </summary>
@@ -218,10 +172,6 @@ public class LicenseLoaderTests
         Assert.Contains("can't be validated", exception.Message);
         Assert.DoesNotContain("expired", exception.Message.ToLower());
     }
-
-    #endregion
-
-    #region Design Documentation Tests
 
     /// <summary>
     /// Documents the validation flow and requirements of LicenseLoader.
@@ -309,6 +259,4 @@ public class LicenseLoaderTests
 
         Assert.True(true); // Documentation test always passes
     }
-
-    #endregion
 }

@@ -17,12 +17,18 @@ partial class IntrospectionRequestValidator
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.IntrospectionRequestValidator.InvalidJwt,
 		Level = LogLevel.Warning,
-		Message = "The incoming JWT token is invalid: {@JwtValidationError}")]
-	private partial void LogInvalidJwt(JwtValidationError JwtValidationError);
+		Message = "The incoming JWT token is invalid: {JwtValidationError}")]
+	private partial void LogInvalidJwt(Sanitized JwtValidationError);
 
 	[LoggerMessage(
 		EventId = LogEvents.Endpoints.IntrospectionRequestValidator.PublicClientRejected,
 		Level = LogLevel.Warning,
-		Message = "Introspection rejected for public client {ClientId}: 'none' authentication does not satisfy RFC 7662 §2.1")]
+		Message = "Introspection rejected for public client {ClientId}: 'none' authentication does not satisfy RFC 7662 section 2.1")]
 	private partial void LogPublicClientRejected(Sanitized ClientId);
+
+	[LoggerMessage(
+		EventId = LogEvents.Endpoints.IntrospectionRequestValidator.CallerRateLimited,
+		Level = LogLevel.Warning,
+		Message = "Introspection refused for client {ClientId}: it is over its budget of requests")]
+	private partial void LogCallerRateLimited(Sanitized ClientId);
 }

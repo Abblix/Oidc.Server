@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -39,13 +40,15 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 public class RequestedSubjectValidator : SyncAuthorizationContextValidatorBase
 {
     /// <inheritdoc />
-    protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+    protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         var requested = context.Request.Claims.RequestedSubjects();
         if (requested.TryGetFailure(out var reason))
             return context.InvalidRequest(reason);
 
-        context.RequestedSubjects = requested.GetSuccess();
+        // An empty set means the request named nobody in particular, and the session filter reads an
+        // absent constraint rather than an empty one - an empty array there would accept nobody.
+        context.RequestedSubjects = requested.GetSuccess() is { Length: > 0 } subjects ? subjects : null;
         return null;
     }
 }

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -22,9 +23,10 @@ public interface IUserInfoRequestValidator
 	/// <summary>
 	/// Asynchronously validates a user info request and generates a validation result.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="userInfoRequest">The user info request to validate.</param>
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>A <see cref="Task"/> representing the asynchronous operation,
 	/// which upon completion will yield a <see cref="Result{ValidUserInfoRequest, AuthError}"/>.</returns>
-	Task<Result<ValidUserInfoRequest, OidcError>> ValidateAsync(UserInfoRequest userInfoRequest, ClientRequest clientRequest);
+	Task<Result<ValidUserInfoRequest, OidcError>> ValidateAsync(TenantDefinition tenant, UserInfoRequest userInfoRequest, ClientRequest clientRequest);
 }

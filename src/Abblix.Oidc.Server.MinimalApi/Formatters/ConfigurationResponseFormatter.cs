@@ -6,8 +6,10 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -27,37 +29,38 @@ public class ConfigurationResponseFormatter(
     IOptionsSnapshot<OidcOptions> options,
     IHttpContextAccessor httpContextAccessor,
     LinkGenerator linkGenerator,
-    ISignedMetadataProvider signedMetadataProvider) : IConfigurationResponseFormatter
+    ISignedMetadataProvider signedMetadataProvider,
+    ITenantAccessor tenantAccessor) : IConfigurationResponseFormatter
 {
     /// <inheritdoc />
     public async Task<IResult> FormatResponseAsync(EndpointResponse response)
     {
-        var tokenEndpoint = Resolve(EndpointNames.Token, OidcEndpoints.Token);
-        var revocationEndpoint = Resolve(EndpointNames.Revocation, OidcEndpoints.Revocation);
-        var introspectionEndpoint = Resolve(EndpointNames.Introspection, OidcEndpoints.Introspection);
-        var userInfoEndpoint = Resolve(EndpointNames.UserInfo, OidcEndpoints.UserInfo);
+        var tokenEndpoint = Resolve(EndpointNames.Token, OidcEndpoints.Token, response.Issuer);
+        var revocationEndpoint = Resolve(EndpointNames.Revocation, OidcEndpoints.Revocation, response.Issuer);
+        var introspectionEndpoint = Resolve(EndpointNames.Introspection, OidcEndpoints.Introspection, response.Issuer);
+        var userInfoEndpoint = Resolve(EndpointNames.UserInfo, OidcEndpoints.UserInfo, response.Issuer);
 
         var modelResponse = new ModelResponse
         {
-            Issuer = response.Issuer,
+            Issuer = response.Issuer.OriginalString,
 
-            JwksUri = Resolve(EndpointNames.Keys, OidcEndpoints.Keys),
+            JwksUri = Resolve(EndpointNames.Keys, OidcEndpoints.Keys, response.Issuer),
 
-            AuthorizationEndpoint = Resolve(EndpointNames.Authorize, OidcEndpoints.Authorize),
+            AuthorizationEndpoint = Resolve(EndpointNames.Authorize, OidcEndpoints.Authorize, response.Issuer),
             UserInfoEndpoint = userInfoEndpoint,
-            EndSessionEndpoint = Resolve(EndpointNames.EndSession, OidcEndpoints.EndSession),
-            CheckSessionIframe = Resolve(EndpointNames.CheckSession, OidcEndpoints.CheckSession),
-            PushedAuthorizationRequestEndpoint = Resolve(EndpointNames.PushedAuthorizationRequest, OidcEndpoints.PushedAuthorizationRequest),
+            EndSessionEndpoint = Resolve(EndpointNames.EndSession, OidcEndpoints.EndSession, response.Issuer),
+            CheckSessionIframe = Resolve(EndpointNames.CheckSession, OidcEndpoints.CheckSession, response.Issuer),
+            PushedAuthorizationRequestEndpoint = Resolve(EndpointNames.PushedAuthorizationRequest, OidcEndpoints.PushedAuthorizationRequest, response.Issuer),
 
             TokenEndpoint = tokenEndpoint,
             RevocationEndpoint = revocationEndpoint,
             IntrospectionEndpoint = introspectionEndpoint,
 
-            RegistrationEndpoint = Resolve(EndpointNames.Register, OidcEndpoints.RegisterClient),
+            RegistrationEndpoint = Resolve(EndpointNames.Register, OidcEndpoints.RegisterClient, response.Issuer),
 
-            BackChannelAuthenticationEndpoint = Resolve(EndpointNames.BackChannelAuthentication, OidcEndpoints.BackChannelAuthentication),
+            BackChannelAuthenticationEndpoint = Resolve(EndpointNames.BackChannelAuthentication, OidcEndpoints.BackChannelAuthentication, response.Issuer),
 
-            DeviceAuthorizationEndpoint = Resolve(EndpointNames.DeviceAuthorization, OidcEndpoints.DeviceAuthorization),
+            DeviceAuthorizationEndpoint = Resolve(EndpointNames.DeviceAuthorization, OidcEndpoints.DeviceAuthorization, response.Issuer),
 
             FrontChannelLogoutSupported = response.FrontChannelLogoutSupported,
             FrontChannelLogoutSessionSupported = response.FrontChannelLogoutSessionSupported,
@@ -111,26 +114,11 @@ public class ConfigurationResponseFormatter(
             AuthorizationDetailsTypesSupported = response.AuthorizationDetailsTypesSupported,
         };
 
-        var mtlsOptions = options.Value.Discovery.MtlsEndpointAliases;
-        var mtlsBaseUri = options.Value.Discovery.MtlsBaseUri;
-
-        if (mtlsOptions != null || mtlsBaseUri != null)
-        {
-            modelResponse = modelResponse with
-            {
-                MtlsEndpointAliases = new Abblix.Oidc.Server.Model.MtlsAliases
-                {
-                    TokenEndpoint = mtlsOptions?.TokenEndpoint ?? Rebase(tokenEndpoint, mtlsBaseUri),
-                    RevocationEndpoint = mtlsOptions?.RevocationEndpoint ?? Rebase(revocationEndpoint, mtlsBaseUri),
-                    IntrospectionEndpoint = mtlsOptions?.IntrospectionEndpoint ?? Rebase(introspectionEndpoint, mtlsBaseUri),
-                    UserInfoEndpoint = mtlsOptions?.UserInfoEndpoint ?? Rebase(userInfoEndpoint, mtlsBaseUri),
-                }
-            };
-        }
+        modelResponse = MtlsEndpointAliasing.WithMtlsAliases(modelResponse, tenantAccessor.CurrentTenant().MtlsBaseUri);
 
         if (options.Value.Discovery.SignedMetadata)
         {
-            modelResponse = modelResponse with { SignedMetadata = await signedMetadataProvider.SignAsync(modelResponse) };
+            modelResponse = modelResponse with { SignedMetadata = await signedMetadataProvider.SignAsync(tenantAccessor.CurrentTenant(), modelResponse) };
         }
 
         return Results.Json(modelResponse);
@@ -141,7 +129,7 @@ public class ConfigurationResponseFormatter(
     /// active. Resolves through <see cref="LinkGenerator"/> so the URL carries any MapOidcEndpoints group prefix and
     /// the request's PathBase - the Minimal API counterpart of the MVC adapter's IUriResolver route resolution.
     /// </summary>
-    private Uri? Resolve(string endpointName, OidcEndpoints enablingFlag)
+    private Uri? Resolve(string endpointName, OidcEndpoints enablingFlag, Uri issuer)
     {
         if (!options.Value.Discovery.AllowEndpointPathsDiscovery ||
             !options.Value.EnabledEndpoints.HasFlag(enablingFlag))
@@ -149,30 +137,7 @@ public class ConfigurationResponseFormatter(
 
         var httpContext = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext));
         var url = linkGenerator.GetUriByName(httpContext, endpointName, values: null);
-        return url is null ? null : new Uri(url, UriKind.Absolute);
-    }
-
-    /// <summary>
-    /// Rebases an original URI onto a different base URI, preserving the original's path. Used to generate mTLS
-    /// endpoint aliases with an alternative base URL.
-    /// </summary>
-    private static Uri? Rebase(Uri? original, Uri? baseUri)
-    {
-        if (baseUri == null)
-            return original;
-
-        if (original == null)
-            return null;
-
-        var basePath = baseUri.AbsolutePath.TrimEnd('/');
-        var origPath = original.AbsolutePath.TrimStart('/');
-
-        var ub = new System.UriBuilder(baseUri)
-        {
-            Path = string.IsNullOrEmpty(basePath) || basePath == "/"
-                ? $"/{origPath}"
-                : $"{basePath}/{origPath}",
-        };
-        return ub.Uri;
+        return url is null ? null : MtlsEndpointAliasing.OnIssuersHost(
+            new Uri(url, UriKind.Absolute), issuer, tenantAccessor.CurrentTenant().MtlsBaseUri);
     }
 }

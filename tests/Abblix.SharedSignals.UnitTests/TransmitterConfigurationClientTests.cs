@@ -8,7 +8,6 @@
 
 using System.Net;
 using System.Net.Mime;
-using Abblix.SharedSignals.Receiver;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Xunit;
 

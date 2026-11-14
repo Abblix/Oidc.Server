@@ -18,8 +18,6 @@ public class JsonWebKeyOperationsTests
     private const string ModulusValue = "modulus";
     private const string CurveP256 = "P-256";
 
-    #region RSA Key Tests
-
     [Fact]
     public void RsaJsonWebKey_WithPrivateKey_HasBothPublicAndPrivateKeys()
     {
@@ -60,10 +58,6 @@ public class JsonWebKeyOperationsTests
         Assert.True(key.HasPublicKey);
         Assert.False(key.HasPrivateKey);
     }
-
-    #endregion
-
-    #region Elliptic Curve Key Tests
 
     [Fact]
     public void EllipticCurveJsonWebKey_WithPrivateKey_HasBothPublicAndPrivateKeys()
@@ -109,10 +103,6 @@ public class JsonWebKeyOperationsTests
         Assert.False(key.HasPrivateKey);
     }
 
-    #endregion
-
-    #region Octet Key Tests
-
     [Fact]
     public void OctetJsonWebKey_WithKeyValue_HasBothPublicAndPrivateKeys()
     {
@@ -148,10 +138,6 @@ public class JsonWebKeyOperationsTests
         Assert.False(key.HasPublicKey);
         Assert.False(key.HasPrivateKey);
     }
-
-    #endregion
-
-    #region Sanitize Consistency Tests
 
     [Fact]
     public void RsaJsonWebKey_HasPrivateKeyMatchesSanitizeBehavior()
@@ -220,6 +206,4 @@ public class JsonWebKeyOperationsTests
         Assert.False(keyWithoutValue.HasPrivateKey);
         Assert.Throws<InvalidOperationException>(() => keyWithoutValue.Sanitize(includePrivateKeys: true));
     }
-
-    #endregion
 }

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
@@ -14,7 +15,7 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 
 /// <summary>
-/// A device authorization request (RFC 8628 §3.1) that has passed all validators, paired with the
+/// A device authorization request (RFC 8628 section 3.1) that has passed all validators, paired with the
 /// authenticated client and the scope/resource sets resolved against the provider's catalog.
 /// </summary>
 public record ValidDeviceAuthorizationRequest
@@ -27,9 +28,10 @@ public record ValidDeviceAuthorizationRequest
     {
         Model = context.Request;
         ClientInfo = context.ClientInfo;
-        Scope = context.Scope.Select(s => s.Scope).ToArray();
+        Scope = AuthorizationContext.GetScopeNames(context.Scope, context.Resources);
         Resources = context.Resources.Select(r => r.Resource).ToArray();
         AuthorizationDetails = context.AuthorizationDetails;
+        ClientNamedNoScope = context.Request.Scope is not { Length: > 0 };
     }
 
     /// <summary>
@@ -53,9 +55,14 @@ public record ValidDeviceAuthorizationRequest
     public Uri[]? Resources { get; }
 
     /// <summary>
-    /// RFC 9396 §3 Rich Authorization Requests array (post-validation), which the downstream
+    /// RFC 9396 section 3 Rich Authorization Requests array (post-validation), which the downstream
     /// processor stashes on the persisted <c>DeviceAuthorizationRequest</c> so the
     /// user-verification step can carry it onto the eventual <c>AuthorizedGrant</c>.
     /// </summary>
     public JsonArray? AuthorizationDetails { get; }
+
+    /// <summary>
+    /// Whether the client named no scope, so <see cref="Scope"/> is the default the server served it with.
+    /// </summary>
+    public bool ClientNamedNoScope { get; }
 }

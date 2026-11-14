@@ -9,7 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
@@ -20,24 +20,22 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 /// Default <see cref="IResponseJwtBuilder"/>: resolves the client, builds the JARM
 /// (<see href="https://openid.net/specs/oauth-v2-jarm-final.html">JWT Secured Authorization Response Mode</see>)
 /// response JWT and hands it to <see cref="IClientJwtFormatter"/> for signing and - when the client registered an
-/// encryption algorithm - encryption to the client's public key (a Nested JWT per JARM §2.2).
+/// encryption algorithm - encryption to the client's public key (a Nested JWT per JARM section 2.2).
 /// </summary>
 /// <param name="clientInfoProvider">Resolves the client the response is intended for.</param>
 /// <param name="clientJwtFormatter">Signs and optionally encrypts the assembled JARM response JWT.</param>
-/// <param name="issuerProvider">Supplies the issuer identifier placed in the <c>iss</c> claim.</param>
 /// <param name="timeProvider">Supplies the current time for the <c>iat</c>/<c>exp</c> claims.</param>
 /// <param name="options">Supplies the JARM response-JWT lifetime (<c>exp</c> window).</param>
 public class ResponseJwtBuilder(
     IClientInfoProvider clientInfoProvider,
     IClientJwtFormatter clientJwtFormatter,
-    IIssuerProvider issuerProvider,
     TimeProvider timeProvider,
     IOptions<OidcOptions> options) : IResponseJwtBuilder
 {
     /// <inheritdoc />
-    public async Task<string> BuildAsync(string? clientId, IReadOnlyList<(string name, string? value)> parameters)
+    public async Task<string> BuildAsync(TenantDefinition tenant, string? clientId, IReadOnlyList<(string name, string? value)> parameters)
     {
-        var clientInfo = (await clientInfoProvider.TryFindClientAsync(clientId.NotNull(nameof(clientId))))
+        var clientInfo = (await clientInfoProvider.TryFindClientAsync(tenant, clientId.NotNull(nameof(clientId))))
             .NotNull(nameof(ClientInfo));
 
         var now = timeProvider.GetUtcNow();
@@ -57,7 +55,7 @@ public class ResponseJwtBuilder(
             {
                 IssuedAt = now,
                 ExpiresAt = now + options.Value.JwtAuthorizationResponseExpiresIn,
-                Issuer = issuerProvider.GetIssuer(),
+                Issuer = tenant.Issuer.OriginalString,
                 Audiences = [clientInfo.ClientId],
             },
         };
@@ -68,11 +66,15 @@ public class ResponseJwtBuilder(
                 token.Payload[name] = value;
         }
 
-        // JARM §2.2 / §3: encrypt only when the client registered authorization_encrypted_response_alg, defaulting
+        // JARM section 2.2 / section 3: encrypt only when the client registered authorization_encrypted_response_alg, defaulting
         // the content-encryption to A128CBC-HS256 when authorization_encrypted_response_enc is omitted.
-        return await clientJwtFormatter.FormatAsync(
+        // The client's key set was judged against its profile where the client was resolved in this request, so a refusal here
+        // is a key set changed in between
+        var formatted = await clientJwtFormatter.FormatAsync(
+            tenant,
             token,
             clientInfo,
             ClientJwtEncryption.ForJarm(clientInfo, options.Value));
+        return formatted.GetSuccess();
     }
 }

@@ -9,6 +9,7 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.DeclarativeBinding;
+using Abblix.Utils;
 using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Model;
@@ -18,6 +19,7 @@ namespace Abblix.Oidc.Server.Model;
 /// This request is initiated by a device with limited input capabilities to obtain
 /// a device code and user code for user authentication on a separate device.
 /// </summary>
+[ExternalInput]
 public record DeviceAuthorizationRequest
 {
     /// <summary>
@@ -40,9 +42,9 @@ public record DeviceAuthorizationRequest
     public Uri[]? Resources { get; init; }
 
     /// <summary>
-    /// RFC 9396 §3 Rich Authorization Requests array stored as the raw wire
+    /// RFC 9396 section 3 Rich Authorization Requests array stored as the raw wire
     /// <see cref="JsonArray"/>. Device flows accept <c>authorization_details</c> by spec
-    /// reference (RFC 9396 §3 cites RFC 8628); the array carries through to the eventual
+    /// reference (RFC 9396 section 3 cites RFC 8628); the array carries through to the eventual
     /// access token issued via the device-code grant byte-exact.
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetails)]
@@ -55,7 +57,7 @@ public record DeviceAuthorizationRequest
     public static class Parameters
     {
         /// <summary>The <c>scope</c> device authorization request parameter listing requested scopes
-        /// (RFC 8628 §3.1).</summary>
+        /// (RFC 8628 section 3.1).</summary>
         public const string Scope = "scope";
 
         /// <summary>The <c>resource</c> device authorization request parameter (RFC 8707) targeting a
@@ -63,7 +65,7 @@ public record DeviceAuthorizationRequest
         public const string Resource = "resource";
 
         /// <summary>The <c>authorization_details</c> device authorization request parameter
-        /// (RFC 9396 §3) carrying a JSON array of Rich Authorization Requests.</summary>
+        /// (RFC 9396 section 3) carrying a JSON array of Rich Authorization Requests.</summary>
         public const string AuthorizationDetails = "authorization_details";
     }
 }

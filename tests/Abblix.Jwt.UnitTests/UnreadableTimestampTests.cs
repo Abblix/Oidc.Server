@@ -9,6 +9,7 @@ using System.Buffers.Text;
 using System.Text;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Abblix.Jwt.UnitTests;
@@ -32,7 +33,7 @@ public class UnreadableTimestampTests
     private static IServiceProvider CreateServiceProvider()
     {
         var services = new ServiceCollection();
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
         services.AddLogging();
         services.AddJsonWebTokens();
         return services.BuildServiceProvider();
@@ -52,6 +53,7 @@ public class UnreadableTimestampTests
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         return validator.ValidateAsync(jwt, new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
             ResolveIssuerSigningKeys = _ => AsyncEnumerable.Empty<JsonWebKey>(),
@@ -106,7 +108,8 @@ public class UnreadableTimestampTests
     }
 
     /// <summary>
-    /// And a token whose timestamps read is judged on them, or the cases above would be satisfied
+    /// And a token whose timestamps read is judged on them, or the rows of
+    /// <see cref="ATimestampThePayloadCannotRead_IsRefusedAsMalformedNamingTheClaim"/> would be satisfied
     /// by a validator refusing every token as malformed.
     /// </summary>
     [Fact]
@@ -115,10 +118,5 @@ public class UnreadableTimestampTests
         var result = await Validate($$"""{"exp": {{Now.AddHours(1).ToUnixTimeSeconds()}}}""");
 
         Assert.True(result.TryGetSuccess(out _));
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

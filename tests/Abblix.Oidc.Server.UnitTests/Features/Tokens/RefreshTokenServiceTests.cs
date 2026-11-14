@@ -14,7 +14,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
@@ -53,16 +53,10 @@ public class RefreshTokenServiceTests
 
     public RefreshTokenServiceTests()
     {
-        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
-
         var timeProvider = new FakeTimeProvider(_currentTime);
 
         var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
         tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
-
-        var grantIdGenerator = new Mock<IGrantIdGenerator>(MockBehavior.Strict);
-        grantIdGenerator.Setup(g => g.GenerateGrantId()).Returns(GrantId);
 
         _jwtFormatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
 
@@ -71,14 +65,14 @@ public class RefreshTokenServiceTests
         // These tests exercise only public clients (default SubjectType), so a converter with no pairwise settings is
         // the exact production path: Convert and ConvertBack both pass the subject through unchanged.
         _service = new RefreshTokenService(
-            issuerProvider.Object,
             timeProvider,
             tokenIdGenerator.Object,
-            grantIdGenerator.Object,
             _jwtFormatter.Object,
             _tokenRegistry.Object,
-            new SubjectTypeConverter(),
-            Options.Create(new OidcOptions()));
+            new GrantRevocation(_tokenRegistry.Object, Mock.Of<IClientInfoProvider>()),
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
+            Options.Create(new OidcOptions()),
+            SingleIssuer.LicensedCatalog);
     }
 
     /// <summary>
@@ -97,16 +91,16 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(JwtTypes.RefreshToken, capturedToken!.Header.Type);
+        Assert.Equal(JwtTypes.RefreshToken, capturedToken.Header.Type);
         Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
     }
 
@@ -115,7 +109,7 @@ public class RefreshTokenServiceTests
     /// - IssuedAt (iat): Current time for new tokens
     /// - NotBefore (nbf): Current time
     /// - ExpiresAt (exp): IssuedAt + AbsoluteExpiresIn
-    /// - Issuer (iss): From IIssuerProvider
+    /// - Issuer (iss): From the tenant the request is served at
     /// - JwtId (jti): Unique token identifier from ITokenIdGenerator
     /// Per RFC 7519 registered claims.
     /// </summary>
@@ -134,16 +128,16 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime, capturedToken!.Payload.IssuedAt);
+        Assert.Equal(_currentTime, capturedToken.Payload.IssuedAt);
         Assert.Equal(_currentTime, capturedToken.Payload.NotBefore);
         Assert.Equal(_currentTime + absoluteExpiry, capturedToken.Payload.ExpiresAt);
         Assert.Equal(Issuer, capturedToken.Payload.Issuer);
@@ -166,16 +160,16 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Single(capturedToken!.Payload.Audiences);
+        Assert.Single(capturedToken.Payload.Audiences);
         Assert.Equal(Issuer, capturedToken.Payload.Audiences.Single());
     }
 
@@ -201,16 +195,16 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(UserId, capturedToken!.Payload.Subject);
+        Assert.Equal(UserId, capturedToken.Payload.Subject);
         Assert.Equal(SessionId, capturedToken.Payload.SessionId);
     }
 
@@ -232,34 +226,31 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(ClientId, capturedToken!.Payload.ClientId);
+        Assert.Equal(ClientId, capturedToken.Payload.ClientId);
         Assert.Equal(scopes, capturedToken.Payload.Scope);
     }
 
     /// <summary>
     /// FAPI 2.0 section 5.3.2.1: a server held to the profile "shall not use refresh token rotation
     /// except in extraordinary circumstances". The client below asks for rotation the ordinary way,
-    /// by leaving reuse off, and the profile decides over it - the one place a profile removes a
-    /// control instead of adding one. The proof is that the previous token is never marked, so a
+    /// by setting Rotate, and the profile decides over it. The proof is that the previous token is never marked, so a
     /// client presenting it again is not treated as a replay.
     /// </summary>
     [Fact]
-    public async Task CreateRefreshToken_WithRenewalUnderFapi2_ShouldNotSupersedeOldToken()
+    public async Task TrySpend_WithRenewalUnderFapi2_ShouldNotSupersedeOldToken()
     {
-        var authSession = CreateAuthSession();
-        var authContext = CreateAuthorizationContext();
         var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
         {
-            AllowReuse = false,
+            ReusePolicy = RefreshTokenReusePolicy.Rotate,
             AbsoluteExpiresIn = TimeSpan.FromHours(8),
         });
         clientInfo.SecurityProfile = ClientSecurityProfile.Fapi2;
@@ -274,33 +265,27 @@ public class RefreshTokenServiceTests
             }
         };
 
-        _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .ReturnsAsync(EncodedToken);
-
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
 
         _tokenRegistry.Verify(
-            r => r.SetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
+            r => r.TrySetStatusAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
             Times.Never);
     }
 
     /// <summary>
-    /// Verifies that when rotating a token (AllowReuse=false), the previous refresh token is marked
+    /// Verifies that when rotating a token (ReusePolicy Rotate), the previous refresh token is marked
     /// <see cref="JsonWebTokenStatus.Used"/> - superseded, not killed. Per the RFC 9700 Section 4.14.2
     /// rotation model, a later replay of a superseded token is the breach signal that
-    /// <see cref="TokenStatusValidatorDecorator"/> escalates into a whole-family revocation. Marking it
+    /// <see cref="TokenStatusCheck"/> escalates into a whole-family revocation. Marking it
     /// Revoked here would lose that signal by collapsing "superseded by rotation" into "explicitly killed".
     /// </summary>
     [Fact]
-    public async Task CreateRefreshToken_WithRenewalAndNoReuse_ShouldMarkOldTokenSuperseded()
+    public async Task TrySpend_WithRenewalAndNoReuse_ShouldMarkOldTokenSuperseded()
     {
         // Arrange
-        var authSession = CreateAuthSession();
-        var authContext = CreateAuthorizationContext();
         var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
         {
-            AllowReuse = false,
+            ReusePolicy = RefreshTokenReusePolicy.Rotate,
             AbsoluteExpiresIn = TimeSpan.FromHours(8),
         });
 
@@ -316,30 +301,25 @@ public class RefreshTokenServiceTests
         };
 
         _tokenRegistry
-            .Setup(r => r.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, oldTokenExpiry))
-            .Returns(Task.CompletedTask);
-
-        _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .ReturnsAsync(EncodedToken);
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, oldTokenExpiry))
+            .ReturnsAsync(true);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
 
         // Assert
         _tokenRegistry.Verify(
-            r => r.SetStatusAsync(OldTokenId, JsonWebTokenStatus.Used, oldTokenExpiry),
+            r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, oldTokenExpiry),
             Times.Once);
     }
 
     /// <summary>
-    /// Verifies that a first-issued refresh token starts a new token family: the
-    /// <c>grant_id</c> claim (<see cref="JsonWebTokenPayload.GrantId"/>) is populated so that
-    /// every token later rotated from it shares one lineage a detected replay can revoke whole
-    /// (RFC 9700 Section 4.14.2).
+    /// Verifies that the token joins the family its caller decided: the <c>grant_id</c> claim
+    /// (<c>grant_id</c>) is what ties every token of one grant into a lineage a
+    /// detected replay can revoke whole (RFC 9700 Section 4.14.2).
     /// </summary>
     [Fact]
-    public async Task CreateRefreshToken_NewToken_ShouldStartNewFamily()
+    public async Task CreateRefreshToken_ShouldJoinTheFamilyItIsGiven()
     {
         // Arrange
         var authSession = CreateAuthSession();
@@ -348,75 +328,30 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, refreshToken: null);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, refreshToken: null, grantId: GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(GrantId, capturedToken!.Payload.GrantId);
+        Assert.Equal(GrantId, capturedToken.Payload.GrantId);
     }
 
     /// <summary>
-    /// Verifies that rotation carries the existing token family forward: the new token inherits the previous
-    /// token's <c>grant_id</c> value instead of starting a fresh lineage. This is what lets a replay detected
-    /// on any single token cascade to the whole grant per the RFC 9700 Section 4.14.2 implementation note.
-    /// </summary>
-    [Fact]
-    public async Task CreateRefreshToken_WithRenewal_ShouldCarryFamilyForward()
-    {
-        // Arrange
-        const string grantId = "grant_root_001";
-        var authSession = CreateAuthSession();
-        var authContext = CreateAuthorizationContext();
-        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
-        {
-            AllowReuse = true, // isolate family propagation from the rotation status write
-            AbsoluteExpiresIn = TimeSpan.FromHours(10),
-        });
-
-        var oldToken = new JsonWebToken
-        {
-            Payload =
-            {
-                JwtId = OldTokenId,
-                IssuedAt = _currentTime.AddHours(-2),
-                ExpiresAt = _currentTime.AddHours(8),
-                GrantId = grantId,
-            }
-        };
-
-        JsonWebToken? capturedToken = null;
-        _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
-            .ReturnsAsync(EncodedToken);
-
-        // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
-
-        // Assert
-        Assert.NotNull(capturedToken);
-        Assert.Equal(grantId, capturedToken!.Payload.GrantId);
-    }
-
-    /// <summary>
-    /// Verifies that when renewing a token with AllowReuse=true, the old refresh token is NOT revoked.
+    /// Verifies that when renewing a token with ReusePolicy Reuse, the old refresh token is NOT revoked.
     /// Some OAuth 2.0 implementations allow refresh token reuse for better user experience,
     /// though this is less secure than token rotation.
     /// </summary>
     [Fact]
-    public async Task CreateRefreshToken_WithRenewalAndAllowReuse_ShouldNotRevokeOldToken()
+    public async Task TrySpend_WithRenewalAndReuse_ShouldNotRevokeOldToken()
     {
         // Arrange
-        var authSession = CreateAuthSession();
-        var authContext = CreateAuthorizationContext();
         var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
         {
-            AllowReuse = true,
+            ReusePolicy = RefreshTokenReusePolicy.Reuse,
             AbsoluteExpiresIn = TimeSpan.FromHours(8),
         });
 
@@ -430,16 +365,12 @@ public class RefreshTokenServiceTests
             }
         };
 
-        _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .ReturnsAsync(EncodedToken);
-
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
 
         // Assert
         _tokenRegistry.Verify(
-            r => r.SetStatusAsync(It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
+            r => r.TrySetStatusAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
             Times.Never);
     }
 
@@ -459,7 +390,7 @@ public class RefreshTokenServiceTests
         {
             AbsoluteExpiresIn = TimeSpan.FromHours(10),  // Long enough that -2h + 10h > now
             SlidingExpiresIn = null,
-            AllowReuse = true,
+            ReusePolicy = RefreshTokenReusePolicy.Reuse,
         });
 
         var originalIssuedAt = _currentTime.AddHours(-2);
@@ -475,17 +406,17 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        var result = await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         Assert.NotNull(result);
         Assert.NotNull(capturedToken);
-        Assert.Equal(originalIssuedAt, capturedToken!.Payload.IssuedAt);
+        Assert.Equal(originalIssuedAt, capturedToken.Payload.IssuedAt);
         Assert.Equal(_currentTime, capturedToken.Payload.NotBefore); // NotBefore is still current time
     }
 
@@ -509,16 +440,16 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime + absoluteExpiry, capturedToken!.Payload.ExpiresAt);
+        Assert.Equal(_currentTime + absoluteExpiry, capturedToken.Payload.ExpiresAt);
     }
 
     /// <summary>
@@ -541,7 +472,7 @@ public class RefreshTokenServiceTests
         {
             AbsoluteExpiresIn = absoluteExpiry,
             SlidingExpiresIn = slidingExpiry,
-            AllowReuse = true, // this test isolates expiry math from the rotation status write
+            ReusePolicy = RefreshTokenReusePolicy.Reuse, // this test isolates expiry math from the rotation status write
         });
 
         var oldToken = new JsonWebToken
@@ -556,12 +487,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        var result = await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         Assert.NotNull(result);
@@ -570,7 +501,7 @@ public class RefreshTokenServiceTests
         // now + 2h < originalIssuedAt + 30days, so the slid window wins - and it is LATER than the
         // old token's expiry (originalIssuedAt + 2h), proving the window actually extended.
         var expectedExpiry = _currentTime + slidingExpiry;
-        Assert.Equal(expectedExpiry, capturedToken!.Payload.ExpiresAt);
+        Assert.Equal(expectedExpiry, capturedToken.Payload.ExpiresAt);
         Assert.True(capturedToken.Payload.ExpiresAt > oldToken.Payload.ExpiresAt);
     }
 
@@ -593,7 +524,7 @@ public class RefreshTokenServiceTests
         {
             AbsoluteExpiresIn = absoluteExpiry,  // 8 hours from IssuedAt
             SlidingExpiresIn = slidingExpiry,    // 10 hours from IssuedAt
-            AllowReuse = true, // this test isolates expiry math from the rotation status write
+            ReusePolicy = RefreshTokenReusePolicy.Reuse, // this test isolates expiry math from the rotation status write
         });
 
         var oldToken = new JsonWebToken
@@ -608,12 +539,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         Assert.NotNull(capturedToken);
@@ -621,7 +552,7 @@ public class RefreshTokenServiceTests
         // Sliding: -7h + 10h = +3h from now
         // Absolute is shorter, so it wins
         var expectedExpiry = originalIssuedAt + absoluteExpiry;
-        Assert.Equal(expectedExpiry, capturedToken!.Payload.ExpiresAt);
+        Assert.Equal(expectedExpiry, capturedToken.Payload.ExpiresAt);
     }
 
     /// <summary>
@@ -655,11 +586,11 @@ public class RefreshTokenServiceTests
         };
 
         // Act
-        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, oldToken);
+        var result = await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, oldToken, GrantId);
 
         // Assert
         Assert.Null(result);
-        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()), Times.Never);
+        _jwtFormatter.Verify(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()), Times.Never);
     }
 
     /// <summary>
@@ -677,12 +608,12 @@ public class RefreshTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateRefreshTokenAsync(authSession, authContext, clientInfo, null);
+        var result = await _service.CreateRefreshTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, null, GrantId);
 
         // Assert
         Assert.NotNull(result);
@@ -710,11 +641,12 @@ public class RefreshTokenServiceTests
                 IdentityProvider = "okta",
                 ClientId = ClientId,  // Required for ToAuthorizationContext
                 Scope = [Scopes.OpenId],  // Required for ToAuthorizationContext
+                GrantId = GrantId,
             }
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
+        var result = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, refreshToken, CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -745,11 +677,12 @@ public class RefreshTokenServiceTests
                 IdentityProvider = "local",
                 ClientId = ClientId,
                 Scope = scopes,
+                GrantId = GrantId,
             }
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
+        var result = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, refreshToken, CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -777,11 +710,12 @@ public class RefreshTokenServiceTests
                 IdentityProvider = "local",
                 ClientId = ClientId,
                 Scope = [Scopes.OpenId],
+                GrantId = GrantId,
             }
         };
 
         // Act
-        var result = await _service.AuthorizeByRefreshTokenAsync(refreshToken, CreateClientInfo());
+        var result = await _service.AuthorizeByRefreshTokenAsync(SingleIssuer.Tenant, refreshToken, CreateClientInfo());
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -790,20 +724,289 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// Verifies the secure-by-default policy: an unconfigured <see cref="RefreshTokenOptions"/> rotates
-    /// (AllowReuse=false). A host that does not explicitly opt a client into multi-use refresh tokens gets
-    /// rotation with family revocation out of the box, satisfying RFC 9700 Section 2.2.2 for public clients.
+    /// By default a refresh token is reused only by a client whose every access token is bound to a key it proves:
+    /// one authenticating by certificate, or with private_key_jwt while requiring DPoP. Every other client rotates,
+    /// a shared-secret client requiring DPoP included.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, false)]
+    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth, false, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, true, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, false, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretPost, false, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretJwt, false, true)]
+    [InlineData(ClientAuthenticationMethods.None, false, true)]
+    [InlineData("urn:example:host-defined", true, true)]
+    public async Task TrySpend_ByDefault_RotatesUnlessTheClientIsAlwaysSenderConstrained(
+        string tokenEndpointAuthMethod,
+        bool requireDPoP,
+        bool supersedesTheOldToken)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = tokenEndpointAuthMethod;
+        clientInfo.RequireDPoP = requireDPoP;
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+
+        _tokenRegistry
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
+
+        _tokenRegistry.Verify(
+            registry => registry.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            supersedesTheOldToken ? Times.Once() : Times.Never());
+        _tokenRegistry.Verify(
+            registry => registry.TrySetStatusAsync(It.IsAny<TenantDefinition>(), OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            supersedesTheOldToken ? Times.Once() : Times.Never());
+    }
+
+    /// <summary>
+    /// A certificate client keeps reusing its refresh tokens when every access token it can receive still comes from
+    /// the token endpoint: one using CIBA ping or poll delivery, and one whose response types return no access token
+    /// from the authorization endpoint.
+    /// </summary>
+    [Theory]
+    [InlineData(BackchannelTokenDeliveryModes.Ping, false)]
+    [InlineData(BackchannelTokenDeliveryModes.Poll, false)]
+    [InlineData(null, true)]
+    public async Task TrySpend_ByDefault_KeepsReusingWhenEveryAccessTokenComesFromTheTokenEndpoint(
+        string? deliveryMode,
+        bool codeAndIdToken)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth;
+        clientInfo.BackChannelTokenDeliveryMode = deliveryMode;
+        if (codeAndIdToken)
+            clientInfo.AllowedResponseTypes = [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]];
+
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
+
+        _tokenRegistry.Verify(
+            registry => registry.TrySetStatusAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// A client held to FAPI 2.0 and registered for CIBA push delivery rotates: the profile forbids rotation only
+    /// because it binds every token, and a token delivered by push is bound by no request.
     /// </summary>
     [Fact]
-    public void RefreshTokenOptions_DefaultAllowReuse_ShouldBeFalse()
+    public async Task TrySpend_UnderFapi2WithPushDelivery_Rotates()
     {
-        Assert.False(new RefreshTokenOptions().AllowReuse);
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth;
+        clientInfo.SecurityProfile = ClientSecurityProfile.Fapi2;
+        clientInfo.BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push;
+
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+        _tokenRegistry
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
+
+        _tokenRegistry.Verify(
+            registry => registry.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            Times.Once());
     }
+
+    /// <summary>
+    /// A client whose access tokens can arrive unbound rotates by default, whatever binds its token requests: one
+    /// registered for CIBA push delivery, one allowed a response type that returns an access token from the
+    /// authorization endpoint, and a private_key_jwt client whose certificate binding is optional.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, true, false, false)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, false, true, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, true, false, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, false, true, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, false, false, true)]
+    public async Task TrySpend_ByDefault_RotatesAClientWhoseAccessTokensCanArriveUnbound(
+        string tokenEndpointAuthMethod,
+        bool requireDPoP,
+        bool pushDelivery,
+        bool accessTokenFromTheAuthorizationEndpoint,
+        bool optionalCertificateBinding)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = tokenEndpointAuthMethod;
+        clientInfo.RequireDPoP = requireDPoP;
+        clientInfo.TlsClientCertificateBoundAccessTokens = optionalCertificateBinding;
+        if (pushDelivery)
+            clientInfo.BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push;
+        if (accessTokenFromTheAuthorizationEndpoint)
+            clientInfo.AllowedResponseTypes = [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.Token]];
+
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+
+        _tokenRegistry
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
+
+        _tokenRegistry.Verify(
+            registry => registry.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            Times.Once());
+    }
+
+    /// <summary>
+    /// An explicit policy wins over the client's authentication method and its token binding, in both directions.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, RefreshTokenReusePolicy.Rotate, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, RefreshTokenReusePolicy.Reuse, false)]
+    public async Task TrySpend_WithAnExplicitPolicy_FollowsIt(
+        string tokenEndpointAuthMethod,
+        RefreshTokenReusePolicy reusePolicy,
+        bool supersedesTheOldToken)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            ReusePolicy = reusePolicy,
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = tokenEndpointAuthMethod;
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+
+        _tokenRegistry
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo);
+
+        _tokenRegistry.Verify(
+            registry => registry.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            supersedesTheOldToken ? Times.Once() : Times.Never());
+        _tokenRegistry.Verify(
+            registry => registry.TrySetStatusAsync(It.IsAny<TenantDefinition>(), OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            supersedesTheOldToken ? Times.Once() : Times.Never());
+    }
+
+    /// <summary>
+    /// A policy value the enum does not define, a number a configuration binder takes as it stands or a value a host's
+    /// client store holds, is refused rather than read as one of the three.
+    /// </summary>
+    [Fact]
+    public async Task TrySpend_WithAnUndefinedPolicy_Throws()
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            ReusePolicy = (RefreshTokenReusePolicy)42,
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo));
+    }
+
+    /// <summary>
+    /// Of two requests renewing one rotated token, the one that finds it already spent is refused, and the grant it
+    /// belongs to is revoked exactly as a later replay of a superseded token revokes it (RFC 9700 section 4.14.2).
+    /// </summary>
+    [Fact]
+    public async Task TrySpend_WhenAnotherRequestSpentTheToken_RevokesTheGrantAndRefuses()
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            ReusePolicy = RefreshTokenReusePolicy.Rotate,
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                GrantId = GrantId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+
+        _tokenRegistry
+            .Setup(r => r.TrySetStatusAsync(TestTenant.Matched, OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(false);
+        _tokenRegistry
+            .Setup(r => r.SetStatusAsync(TestTenant.Matched, GrantId, JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()))
+            .Returns(Task.CompletedTask);
+
+        Assert.False(await _service.TrySpendAsync(SingleIssuer.Tenant, oldToken, clientInfo));
+
+        _tokenRegistry.Verify(
+            r => r.SetStatusAsync(TestTenant.Matched, GrantId, JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
+            Times.Once);
+    }
+
 
     private static AuthSession CreateAuthSession() => new(
         Subject: UserId,
         SessionId: SessionId,
-        AuthenticationTime: DateTimeOffset.UtcNow.AddMinutes(-5),
+        AuthenticationTime: TimeProvider.System.GetUtcNow().AddMinutes(-5),
         IdentityProvider: "test");
 
     private static AuthorizationContext CreateAuthorizationContext() => new(
@@ -817,7 +1020,36 @@ public class RefreshTokenServiceTests
         {
             AbsoluteExpiresIn = TimeSpan.FromHours(8),
             SlidingExpiresIn = TimeSpan.FromHours(1),
-            AllowReuse = true,
+            ReusePolicy = RefreshTokenReusePolicy.Reuse,
         }
     };
+
+    /// <summary>
+    /// For a client naming no profile of its own, the default profile of the tenant the token is spent at decides
+    /// whether the token is rotated: a tenant holding clients to nothing marks it used, a tenant holding them to
+    /// FAPI 2.0, whose tokens are bound to a key the client proves, lets it be reused.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, false)]
+    public async Task TheTenantsDefaultProfile_DecidesWhetherATokenIsRotated(ClientSecurityProfile tenantDefault, bool rotated)
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        var oldToken = new JsonWebToken
+        {
+            Payload = { JwtId = OldTokenId, IssuedAt = _currentTime.AddHours(-1), ExpiresAt = _currentTime.AddHours(7) },
+        };
+        _tokenRegistry
+            .Setup(r => r.TrySetStatusAsync(It.IsAny<TenantDefinition>(), OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        await _service.TrySpendAsync(new TestIssuer { DefaultSecurityProfile = tenantDefault }.ToTenant(), oldToken, clientInfo);
+
+        _tokenRegistry.Verify(
+            r => r.TrySetStatusAsync(It.IsAny<TenantDefinition>(), OldTokenId, JsonWebTokenStatus.Used, It.IsAny<DateTimeOffset>()),
+            rotated ? Times.Once() : Times.Never());
+    }
 }

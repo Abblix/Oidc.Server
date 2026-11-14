@@ -22,8 +22,10 @@ message AuthSession {
   // Authentication context class reference (SAML/OIDC)
   optional string auth_context_class_ref = 5;
 
-  // Client identifiers the user has interacted with during the session
-  repeated string affected_client_ids = 6;
+  // Held the clients of the session in earlier releases, which ISessionClientRegistry now records.
+  // Reserved so the number and the name are never given to another field.
+  reserved 6;
+  reserved "affected_client_ids";
 
   // Authentication methods used (AMR values)
   repeated string authentication_method_references = 7;
@@ -39,4 +41,6 @@ message AuthSession {
   // arrays, and primitive values (string, number, boolean, null).
   // Maps directly to C# JsonObject without intermediate JSON string encoding.
   optional google.protobuf.Struct additional_claims = 10;
+  // When the session was last signed in: on authentication, or when the end user picked it
+  optional google.protobuf.Timestamp signed_in_at = 11;
 }

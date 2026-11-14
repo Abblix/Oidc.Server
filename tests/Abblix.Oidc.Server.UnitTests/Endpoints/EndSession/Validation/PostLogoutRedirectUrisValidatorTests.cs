@@ -69,7 +69,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(postLogoutRedirectUri: null);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(error);
@@ -88,7 +88,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(error);
@@ -107,7 +107,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(error);
@@ -116,23 +116,20 @@ public class PostLogoutRedirectUrisValidatorTests
     }
 
     /// <summary>
-    /// Verifies error when redirect URI provided but no client info available.
-    /// Client info is required to validate redirect URIs.
+    /// A redirect address with no client named has nothing confirming it, so OpenID Connect RP-Initiated Logout 1.0
+    /// section 3 rules the redirect out; the logout goes on, without the address and the state that goes back to it.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithRedirectUriButNoClientInfo_ShouldReturnError()
+    public async Task ARedirectWithNoClientNamed_IsDroppedAndTheLogoutGoesOn()
     {
-        // Arrange
-        var redirectUri = new Uri("https://client.example.com/logout");
-        var context = CreateContext(redirectUri, clientInfo: null);
+        var context = CreateContext(new Uri("https://client.example.com/logout"), clientInfo: null);
+        context.Request = context.Request with { State = "af0ifjsldkj" };
 
-        // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert
-        Assert.NotNull(error);
-        Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
-        Assert.Contains("Unable to determine a client", error.ErrorDescription);
+        Assert.Null(error);
+        Assert.Null(context.Request.PostLogoutRedirectUri);
+        Assert.Null(context.Request.State);
     }
 
     /// <summary>
@@ -148,7 +145,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert - Should fail because query parameter doesn't match
         Assert.NotNull(error);
@@ -171,7 +168,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(error);
@@ -190,7 +187,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert - Should fail due to case mismatch in path
         Assert.NotNull(error);
@@ -210,29 +207,29 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert - Should succeed because scheme and host are case-insensitive
         Assert.Null(error);
     }
 
     /// <summary>
-    /// Verifies validation with fragment in URI.
-    /// Per RFC 3986, fragments are stripped by Uri class before comparison.
+    /// A post-logout redirect URI carrying a fragment or user information the registered one lacks is refused, since
+    /// the comparison is exact and takes both into account.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithFragment_ShouldIgnoreFragment()
+    [Theory]
+    [InlineData("https://client.example.com/logout#fragment")]
+    [InlineData("https://user@client.example.com/logout")]
+    public async Task ValidateAsync_WithFragmentOrUserInfo_ShouldReturnError(string requested)
     {
-        // Arrange
-        var redirectUri = new Uri("https://client.example.com/logout#fragment");
+        var redirectUri = new Uri(requested);
         var clientInfo = CreateClientInfo("https://client.example.com/logout");
         var context = CreateContext(redirectUri, clientInfo);
 
-        // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert - Fragment is ignored by Uri, so validation succeeds
-        Assert.Null(error);
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     /// <summary>
@@ -248,7 +245,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(error);
@@ -268,7 +265,7 @@ public class PostLogoutRedirectUrisValidatorTests
         var context = CreateContext(redirectUri, clientInfo);
 
         // Act
-        var error = await _validator.ValidateAsync(context);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(error);

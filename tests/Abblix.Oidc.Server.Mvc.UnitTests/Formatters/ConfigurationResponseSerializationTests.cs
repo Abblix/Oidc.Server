@@ -7,40 +7,32 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
 using Abblix.Oidc.Server.Model;
-using Abblix.Utils.Json;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Formatters;
 
 public class ConfigurationResponseSerializationTests
 {
-    private static JsonSerializerOptions BuildOptions()
-    {
-        var options = new JsonSerializerOptions();
-        options.TypeInfoResolverChain.Add(
-            new DefaultJsonTypeInfoResolver { Modifiers = { JsonIgnoreNullsModifier.Apply } });
-        return options;
-    }
+    private static JsonSerializerOptions BuildOptions() => new();
 
     [Fact]
     public void ConfigurationResponse_NullableFieldsOmittedWhenNull()
     {
         // All nullable fields intentionally left at their default (null).
-        // RFC 8414 §2 requires absent optional fields - "null" is not compliant.
+        // RFC 8414 section 2 requires absent optional fields - "null" is not compliant.
         var response = new ConfigurationResponse
         {
             Issuer = "https://example.com",
-            ScopesSupported = ["openid"],
+            ScopesSupported = [Scopes.OpenId],
             ClaimsSupported = ["sub"],
-            GrantTypesSupported = ["authorization_code"],
-            ResponseTypesSupported = ["code"],
-            ResponseModesSupported = ["query"],
-            TokenEndpointAuthMethodsSupported = ["client_secret_post"],
+            GrantTypesSupported = [GrantTypes.AuthorizationCode],
+            ResponseTypesSupported = [ResponseTypes.Code],
+            ResponseModesSupported = [ResponseModes.Query],
+            TokenEndpointAuthMethodsSupported = [ClientAuthenticationMethods.ClientSecretPost],
             IdTokenSigningAlgValuesSupported = ["RS256"],
             SubjectTypesSupported = ["public"],
-            CodeChallengeMethodsSupported = ["S256"],
-            PromptValuesSupported = ["login"],
+            CodeChallengeMethodsSupported = [CodeChallengeMethods.S256],
+            PromptValuesSupported = [Prompts.Login],
         };
 
         var json = JsonSerializer.Serialize(response, BuildOptions());
@@ -56,16 +48,16 @@ public class ConfigurationResponseSerializationTests
         var response = new ConfigurationResponse
         {
             Issuer = "https://example.com",
-            ScopesSupported = ["openid"],
+            ScopesSupported = [Scopes.OpenId],
             ClaimsSupported = ["sub"],
-            GrantTypesSupported = ["authorization_code"],
-            ResponseTypesSupported = ["code"],
-            ResponseModesSupported = ["query"],
-            TokenEndpointAuthMethodsSupported = ["client_secret_post"],
+            GrantTypesSupported = [GrantTypes.AuthorizationCode],
+            ResponseTypesSupported = [ResponseTypes.Code],
+            ResponseModesSupported = [ResponseModes.Query],
+            TokenEndpointAuthMethodsSupported = [ClientAuthenticationMethods.ClientSecretPost],
             IdTokenSigningAlgValuesSupported = ["RS256"],
             SubjectTypesSupported = ["public"],
-            CodeChallengeMethodsSupported = ["S256"],
-            PromptValuesSupported = ["login"],
+            CodeChallengeMethodsSupported = [CodeChallengeMethods.S256],
+            PromptValuesSupported = [Prompts.Login],
             AuthorizationResponseIssParameterSupported = true,
         };
 
@@ -92,7 +84,7 @@ public class ConfigurationResponseSerializationTests
         var response = new ConfigurationResponse
         {
             Issuer = "https://example.com",
-            ResponseTypesSupported = ["code"],
+            ResponseTypesSupported = [ResponseTypes.Code],
             IdTokenSigningAlgValuesSupported = ["RS256"],
             SubjectTypesSupported = ["public"],
         };

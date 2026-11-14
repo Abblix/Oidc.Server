@@ -1,17 +1,27 @@
 # Abblix OIDC Server
 
-**Abblix OIDC Server** is a .NET library implementing the server side of OpenID Connect and OAuth 2.0: a certified provider you embed in your own ASP.NET Core application instead of running a separate identity product. It is certified by the OpenID Foundation across all login and logout profiles, builds on the standard .NET DI container, and uses its own JWT implementation built on .NET cryptographic primitives.
+Abblix OIDC Server is a .NET library implementing the server side of OpenID Connect and OAuth 2.0: a certified provider you embed in your own ASP.NET Core application instead of running a separate identity product. It is certified by the OpenID Foundation across all login and logout profiles, builds on the standard .NET DI container, and uses its own JWT implementation built on .NET cryptographic primitives.
 
-## What's New in Version 2.4
+## What's New in Version 3.0
+
+Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://docs.abblix.com/docs/upgrading-to-3-0) before moving a 2.x deployment.
 
 🚀 Features
-- Minimal API integration: every OIDC endpoint as ASP.NET Core route handlers via the new [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) package, with full protocol parity with the MVC integration
-- External signing keys: private keys held in HashiCorp Vault / OpenBao Transit ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)) or Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)) - the private halves never enter the process, the public halves publish to the JWKS endpoint
-- Security events and Shared Signals: a new package family implementing Security Event Tokens ([RFC 8417](https://datatracker.ietf.org/doc/html/rfc8417)) with Subject Identifiers ([RFC 9493](https://datatracker.ietf.org/doc/html/rfc9493)), push and poll SET delivery ([RFC 8935](https://datatracker.ietf.org/doc/html/rfc8935), [RFC 8936](https://datatracker.ietf.org/doc/html/rfc8936)), the OpenID Shared Signals Framework 1.0 in both transmitter and receiver roles, and the CAEP 1.0 and RISC 1.0 event dictionaries
-- A per-client security profile enforcing the [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0.html) control set as one setting: a server-wide profile is a floor no client can step under, and a client may hold itself to more
-- Revocation of every token issued to a user or within one session, and cross-client token introspection for protected resources ([RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662))
-- Opt-in endpoint registration, Authorization Server Metadata at its OAuth 2.0 well-known address ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414)), strict request-object processing ([RFC 9101](https://datatracker.ietf.org/doc/html/rfc9101)), and per-client requirements for pushed authorization requests, signed request objects and certificate-bound tokens
-- Independent signing and encryption settings per token type, an allow list for outbound fetches, and refresh tokens that rotate by default ([RFC 9700](https://datatracker.ietf.org/doc/html/rfc9700))
+- Multi-tenancy: one server serves several issuers, each a tenant with its own clients, scopes, resources, keys and pages, declared in the settings or kept in a store of the host's own and changed while the server runs
+- Every JWT validation states the token types it accepts ([RFC 8725](https://www.rfc-editor.org/rfc/rfc8725.html))
+- Tracing and metrics for the protocol endpoints
+- A default scope per client, the resources each client may get an access token for, and one resource per access token
+- Per-client budgets on introspection and revocation
+- A host step before anything is issued
+- Revoking one user's tokens at one client
+
+✏️ Improvements
+- Revocation reaches every token of a grant
+- A refresh token reuse policy
+- Three limits on guessing a user code
+- Each logout channel is the deployment's own choice, and a logout confirmation is a value the server issues
+- A client authentication JWT names the issuer as its only audience ([RFC 10070](https://www.rfc-editor.org/rfc/rfc10070.html))
+- Any port on a loopback redirect address
 
 ## Implemented Standards
 
@@ -63,20 +73,22 @@ dotnet add package Abblix.OIDC.Server
 
 | Package | Description |
 |---------|-------------|
-| **[Abblix.Utils](https://www.nuget.org/packages/Abblix.Utils)** | Utility library with crypto, URI, and JSON helpers |
-| **[Abblix.DependencyInjection](https://www.nuget.org/packages/Abblix.DependencyInjection)** | .NET DI extensions with aliasing, composites, and decorators |
-| **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
-| **[Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)** | Signing and decryption keys held in HashiCorp Vault / OpenBao Transit |
-| **[Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)** | Signing and decryption keys held in Azure Key Vault |
-| **Abblix.OIDC.Server** | Core OpenID Connect server implementation *(this package)* |
-| **[Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC)** | ASP.NET Core MVC integration |
-| **[Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI)** | ASP.NET Core Minimal API integration |
-| **[Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents)** | Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493): building, validation, and the delivery data types |
-| **[Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP)** | The CAEP 1.0 event dictionary: session and access lifecycle |
-| **[Abblix.SecurityEvents.RISC](https://www.nuget.org/packages/Abblix.SecurityEvents.RISC)** | The RISC 1.0 event dictionary: account risk incidents |
-| **[Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals)** | OpenID Shared Signals Framework 1.0 transmitter and receiver |
-| **[Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI)** | SSF endpoints as ASP.NET Core Minimal API route handlers |
-| **[Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis)** | Redis-native event outbox for multi-replica transmitters |
+| [Abblix.Utils](https://www.nuget.org/packages/Abblix.Utils) | Utility library with crypto, URI, and JSON helpers |
+| [Abblix.DependencyInjection](https://www.nuget.org/packages/Abblix.DependencyInjection) | .NET DI extensions with aliasing, composites, and decorators |
+| [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) | JWT signing, encryption, and validation using .NET crypto primitives |
+| [Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault) | Signing and decryption keys held in HashiCorp Vault / OpenBao Transit |
+| [Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure) | Signing and decryption keys held in Azure Key Vault |
+| [Abblix.OIDC](https://www.nuget.org/packages/Abblix.OIDC) | The OAuth 2.0 and OpenID Connect vocabulary the server shares with its client |
+| Abblix.OIDC.Server | Core OpenID Connect server implementation *(this package)* |
+| [Abblix.OIDC.Server.MVC](https://www.nuget.org/packages/Abblix.OIDC.Server.MVC) | ASP.NET Core MVC integration |
+| [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) | ASP.NET Core Minimal API integration |
+| [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents) | Security Event Tokens (RFC 8417) and Subject Identifiers (RFC 9493): building, validation, and the delivery data types |
+| [Abblix.SecurityEvents.CAEP](https://www.nuget.org/packages/Abblix.SecurityEvents.CAEP) | The CAEP 1.0 event dictionary: session and access lifecycle |
+| [Abblix.SecurityEvents.RISC](https://www.nuget.org/packages/Abblix.SecurityEvents.RISC) | The RISC 1.0 event dictionary: account risk incidents |
+| [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) | OpenID Shared Signals Framework 1.0 transmitter and receiver |
+| [Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI) | SSF endpoints as ASP.NET Core Minimal API route handlers |
+| [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis) | Redis-native event outbox for multi-replica transmitters |
+| [Abblix.OIDC.Server.SharedSignals](https://www.nuget.org/packages/Abblix.OIDC.Server.SharedSignals) | A Shared Signals transmitter per tenant |
 
 ## Getting Started
 

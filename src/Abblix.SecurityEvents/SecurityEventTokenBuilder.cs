@@ -41,7 +41,7 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
             [JwtClaimTypes.JwtId] = nameof(WithJwtId),
             [JwtClaimTypes.IssuedAt] = nameof(WithIssuedAt),
             [JwtClaimTypes.Subject] = nameof(WithSubject),
-            [JwtClaimTypes.Events] = nameof(WithEvent),
+            [IanaClaimTypes.Events] = nameof(WithEvent),
             [IanaClaimTypes.Txn] = nameof(WithTransactionId),
             [IanaClaimTypes.Toe] = nameof(WithTimeOfEvent),
             [IanaClaimTypes.SubId] = nameof(WithSubjectId),
@@ -279,7 +279,7 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
             throw new InvalidOperationException(
                 $"This token carries a single event statement and already holds '{present}', so "
                 + $"'{eventType}' cannot be added. The CAEP Interoperability Profile 1.0 requires the "
-                + $"'{JwtClaimTypes.Events}' claim to contain only one event; build the token without "
+                + $"'{IanaClaimTypes.Events}' claim to contain only one event; build the token without "
                 + $"{nameof(SingleEventStatement)} for the several-statement SET RFC 8417 Section 2 "
                 + "allows - the property is init-only, so it is settled when the builder is constructed.");
         }
@@ -299,7 +299,7 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
     /// through this method - every claim has exactly one writer. "exp" is rejected
     /// outright: RFC 8417 Section 2.2 already advises against it for a token that records
     /// history, and Sections 4.1 and 4.2 make its ABSENCE the wall between a SET and the ID and
-    /// access tokens an attacker would like to pass one off as - this builder takes that defence
+    /// access tokens an attacker would like to pass one off as - this builder takes that defense
     /// as its own profile rule rather than leaving it to every caller.</exception>
     public SecurityEventTokenBuilder WithClaim(string name, JsonNode? value)
     {
@@ -359,7 +359,7 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
         if (_events.Count == 0)
         {
             throw new InvalidOperationException(
-                $"A SET requires at least one event statement in '{JwtClaimTypes.Events}' "
+                $"A SET requires at least one event statement in '{IanaClaimTypes.Events}' "
                 + $"(RFC 8417 Section 2); call {nameof(WithEvent)} before {nameof(Build)}.");
         }
 
@@ -413,7 +413,7 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
             payload.SetProperty(name, value?.DeepClone());
         }
 
-        payload.SetProperty(JwtClaimTypes.Events, _events.Json.DeepClone());
+        payload.SetProperty(IanaClaimTypes.Events, _events.Json.DeepClone());
 
         return new SecurityEventToken(token);
     }

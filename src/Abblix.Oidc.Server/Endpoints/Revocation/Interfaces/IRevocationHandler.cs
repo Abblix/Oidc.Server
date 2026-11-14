@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -22,6 +23,7 @@ public interface IRevocationHandler
     /// Asynchronously handles a token revocation request by validating and then processing it to revoke
     /// the specified token.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="revocationRequest">The details of the revocation request, including the token to be revoked.</param>
     /// <param name="clientRequest">Additional information about the client making the revocation request,
     /// necessary for context-specific validation.</param>
@@ -36,6 +38,7 @@ public interface IRevocationHandler
     /// with token revocation, adhering to the OAuth 2.0 Token Revocation specification (RFC 7009).
     /// </remarks>
     Task<Result<TokenRevoked, OidcError>> HandleAsync(
+        TenantDefinition tenant,
         RevocationRequest revocationRequest,
         ClientRequest clientRequest);
 }

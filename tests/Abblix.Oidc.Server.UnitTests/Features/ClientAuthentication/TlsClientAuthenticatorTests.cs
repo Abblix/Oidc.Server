@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -73,7 +74,7 @@ public class TlsClientAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -97,7 +98,7 @@ public class TlsClientAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -118,11 +119,11 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("unknown-client"))
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "unknown-client"))
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -153,11 +154,11 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -186,7 +187,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -194,7 +195,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { certJwk }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(result);
@@ -224,7 +225,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -232,7 +233,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { certJwk }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(result);
@@ -263,7 +264,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -271,7 +272,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { differentJwk }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -301,7 +302,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -309,7 +310,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { differentJwk }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -335,7 +336,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -343,7 +344,7 @@ public class TlsClientAuthenticatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -374,7 +375,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -382,7 +383,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { otherJwk1, certJwk, otherJwk2 }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(result);
@@ -418,7 +419,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -426,7 +427,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { differentJwk }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -456,7 +457,7 @@ public class TlsClientAuthenticatorTests
         };
 
         _clientInfoProviderMock
-            .Setup(x => x.TryFindClientAsync("test-client"))
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
             .ReturnsAsync(client);
 
         _clientKeysProviderMock
@@ -464,7 +465,7 @@ public class TlsClientAuthenticatorTests
             .Returns(new[] { differentJwk }.ToAsyncEnumerable());
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -483,8 +484,8 @@ public class TlsClientAuthenticatorTests
             RSASignaturePadding.Pkcs1);
 
         var certificate = request.CreateSelfSigned(
-            DateTimeOffset.UtcNow.AddDays(-1),
-            DateTimeOffset.UtcNow.AddDays(365));
+            TimeProvider.System.GetUtcNow().AddDays(-1),
+            TimeProvider.System.GetUtcNow().AddDays(365));
 
         return certificate;
     }
@@ -501,8 +502,8 @@ public class TlsClientAuthenticatorTests
             HashAlgorithmName.SHA256);
 
         var certificate = request.CreateSelfSigned(
-            DateTimeOffset.UtcNow.AddDays(-1),
-            DateTimeOffset.UtcNow.AddDays(365));
+            TimeProvider.System.GetUtcNow().AddDays(-1),
+            TimeProvider.System.GetUtcNow().AddDays(365));
 
         return certificate;
     }

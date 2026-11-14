@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Tests.Shared;
+using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.Model;
@@ -42,6 +43,8 @@ public class PushDeliveryResilienceTests
         // The whole of what a host writes, naming nothing this library owns.
         services.ConfigureHttpClientDefaults(builder => builder.AddResilienceOfATypicalHost());
 
+        // The sender signs each SET as it leaves, so it needs a signer although these events are queued signed
+        services.AddSingleton<ISecurityEventTokenSigner, NamingSigner>();
         services.AddSecurityEvents();
         services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
         {

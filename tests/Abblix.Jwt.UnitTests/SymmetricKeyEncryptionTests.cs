@@ -18,7 +18,7 @@ namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
 /// Unit tests for symmetric key encryption algorithms in JWE (JSON Web Encryption).
-/// Tests AES-GCM Key Wrap (A128GCMKW, A192GCMKW, A256GCMKW) and Direct Key Agreement (dir).
+/// Tests AES-GCM Key Wrap (A128GCMKW, A192GCMKW, A256GCMKW) and Direct Encryption (dir).
 /// Verifies RFC 7518 Section 4.5 (Direct Encryption) and Section 4.7 (AES-GCM Key Wrap).
 /// </summary>
 public class SymmetricKeyEncryptionTests
@@ -116,7 +116,7 @@ public class SymmetricKeyEncryptionTests
 	}
 
 	/// <summary>
-	/// Tests "dir" (Direct Key Agreement) with all content encryption algorithms.
+	/// Tests "dir" (Direct Encryption) with all content encryption algorithms.
 	/// Verifies RFC 7518 Section 4.5 - the shared symmetric key is used directly as the CEK.
 	/// </summary>
 	[Theory]
@@ -126,7 +126,7 @@ public class SymmetricKeyEncryptionTests
 	[InlineData(EncryptionAlgorithms.ContentEncryption.Aes128Gcm, 16)]           // 128 bits
 	[InlineData(EncryptionAlgorithms.ContentEncryption.Aes192Gcm, 24)]           // 192 bits
 	[InlineData(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, 32)]           // 256 bits
-	public async Task DirectKeyAgreement_EncryptDecrypt_AllContentEncryptionAlgorithms_Success(
+	public async Task DirectEncryption_EncryptDecrypt_AllContentEncryptionAlgorithms_Success(
 		string contentEncryption,
 		int keySize)
 	{
@@ -192,13 +192,13 @@ public class SymmetricKeyEncryptionTests
 	}
 
 	/// <summary>
-	/// Tests that Direct Key Agreement requires the shared key to match the CEK size.
+	/// Tests that Direct Encryption requires the shared key to match the CEK size.
 	/// Per RFC 7518 Section 4.5: "the symmetric key value MUST be the same as the CEK".
 	/// The mismatch is rejected by the "dir" key encryptor itself with a message naming the
 	/// key-configuration cause, before the content encryptor is ever invoked.
 	/// </summary>
 	[Fact]
-	public async Task DirectKeyAgreement_WrongKeySize_ThrowsException()
+	public async Task DirectEncryption_WrongKeySize_ThrowsException()
 	{
 		// Arrange: Create key with wrong size for A256GCM (needs 32 bytes, providing 16)
 		var wrongSizeKey = new OctetJsonWebKey
@@ -268,11 +268,11 @@ public class SymmetricKeyEncryptionTests
 	}
 
 	/// <summary>
-	/// Tests that Direct Key Agreement produces empty encrypted_key field.
+	/// Tests that Direct Encryption produces empty encrypted_key field.
 	/// Per RFC 7518 Section 4.5: "The JWE Encrypted Key value is the empty octet sequence."
 	/// </summary>
 	[Fact]
-	public async Task DirectKeyAgreement_EncryptedKeyField_IsEmpty()
+	public async Task DirectEncryption_EncryptedKeyField_IsEmpty()
 	{
 		// Arrange
 		var sharedKey = new OctetJsonWebKey
@@ -398,7 +398,7 @@ public class SymmetricKeyEncryptionTests
 	/// </summary>
 	private static JsonWebToken CreateTestToken()
 	{
-		var issuedAt = DateTimeOffset.UtcNow;
+		var issuedAt = TimeProvider.System.GetUtcNow();
 
 		return new JsonWebToken
 		{
@@ -425,6 +425,7 @@ public class SymmetricKeyEncryptionTests
 	{
 		return new ValidationParameters
 		{
+			TokenTypes = TokenTypePolicy.CheckedByCaller,
 			ValidateAudience = aud => Task.FromResult(aud.Contains("test-audience")),
 			ValidateIssuer = iss => Task.FromResult(iss == "test-issuer"),
 			ResolveTokenDecryptionKeys = _ => encryptionKey.ToAsync(),
@@ -432,7 +433,7 @@ public class SymmetricKeyEncryptionTests
 		};
 	}
 	/// <summary>
-	/// RFC 7518 §4.7.1: AES-GCM key wrapping must put the 96-bit IV and 128-bit tag in the JOSE header
+	/// RFC 7518 section 4.7.1: AES-GCM key wrapping must put the 96-bit IV and 128-bit tag in the JOSE header
 	/// 'iv'/'tag' parameters and return ONLY the wrapped-CEK ciphertext as the encrypted_key. This test
 	/// asserts that wire shape (and that the pair still round-trips), so the previous IV||ct||tag layout
 	/// in the encrypted_key fails it.
@@ -470,7 +471,7 @@ public class SymmetricKeyEncryptionTests
 	}
 
 	/// <summary>
-	/// RFC 7518 §4.7.1: a wrap produced the standard way by an external JOSE library (encrypted_key =
+	/// RFC 7518 section 4.7.1: a wrap produced the standard way by an external JOSE library (encrypted_key =
 	/// ciphertext only, iv/tag in the header) must decrypt. The previous implementation sliced iv/ct/tag
 	/// out of encrypted_key and ignored the header, so it fails this test.
 	/// </summary>
@@ -486,7 +487,7 @@ public class SymmetricKeyEncryptionTests
 		};
 		var contentEncryptionKey = CryptoRandom.GetRandomBytes(32);
 
-		// Produce a standard RFC 7518 §4.7 wrap exactly as a conformant external producer would.
+		// Produce a standard RFC 7518 section 4.7 wrap exactly as a conformant external producer would.
 		var iv = CryptoRandom.GetRandomBytes(12);
 		var ciphertext = new byte[contentEncryptionKey.Length];
 		var tag = new byte[16];
@@ -503,5 +504,59 @@ public class SymmetricKeyEncryptionTests
 
 		Assert.True(encryptor.TryDecryptKey(header, keyEncryptionKey, ciphertext, out var recoveredKey));
 		Assert.Equal(contentEncryptionKey, recoveredKey);
+	}
+
+	/// <summary>
+	/// The 'iv' and 'tag' header parameters come from the token, so one of the wrong size is a refusal of it. The
+	/// platform's AES-GCM rejects a tag of another length with an argument fault rather than a cryptographic one, so
+	/// without the size check a shortened tag would escape as a fault where the token should simply not open.
+	/// </summary>
+	[Theory]
+	[InlineData(12, 8)]
+	[InlineData(8, 16)]
+	public void AesGcmKeyWrap_DecryptKey_RefusesAnIvOrTagOfTheWrongSize(int ivSize, int tagSize)
+	{
+		var keyValue = CryptoRandom.GetRandomBytes(32);
+		var keyEncryptionKey = new OctetJsonWebKey
+		{
+			KeyId = "kek",
+			Algorithm = EncryptionAlgorithms.KeyManagement.Aes256Gcmkw,
+			KeyValue = keyValue,
+		};
+
+		var header = new JsonWebTokenHeader(new JsonObject
+		{
+			[JwtClaimTypes.KeyWrapInitializationVector] = Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(ivSize)),
+			[JwtClaimTypes.KeyWrapAuthenticationTag] = Base64Url.EncodeToString(CryptoRandom.GetRandomBytes(tagSize)),
+		});
+
+		var encryptor = new AesGcmKeyWrapEncryptor(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
+
+		Assert.False(encryptor.TryDecryptKey(header, keyEncryptionKey, CryptoRandom.GetRandomBytes(32), out _));
+	}
+
+	/// <summary>
+	/// The key encryption key must be the size the algorithm names. A shorter key is a valid AES key too, so without the
+	/// size check a 128-bit key would open A256GCMKW tokens; this wraps a key with a 128-bit key and presents it as
+	/// A256GCMKW, where it must not open.
+	/// </summary>
+	[Fact]
+	public void AesGcmKeyWrap_DecryptKey_RefusesAKeyOfAnotherSize()
+	{
+		var keyValue = CryptoRandom.GetRandomBytes(16);
+		var keyEncryptionKey = new OctetJsonWebKey
+		{
+			KeyId = "kek",
+			Algorithm = EncryptionAlgorithms.KeyManagement.Aes128Gcmkw,
+			KeyValue = keyValue,
+		};
+		var contentEncryptionKey = CryptoRandom.GetRandomBytes(32);
+		var header = new JsonWebTokenHeader(new JsonObject());
+		var encryptedKey = new AesGcmKeyWrapEncryptor(EncryptionAlgorithms.KeyManagement.Aes128Gcmkw)
+			.EncryptKey(header, keyEncryptionKey, contentEncryptionKey);
+
+		var encryptor = new AesGcmKeyWrapEncryptor(EncryptionAlgorithms.KeyManagement.Aes256Gcmkw);
+
+		Assert.False(encryptor.TryDecryptKey(header, keyEncryptionKey, encryptedKey, out _));
 	}
 }

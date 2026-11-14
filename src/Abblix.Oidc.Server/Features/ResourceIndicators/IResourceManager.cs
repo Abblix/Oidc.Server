@@ -8,6 +8,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 
@@ -18,16 +19,18 @@ namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 /// </summary>
 /// <remarks>
 /// Acts as the registry that decides whether a requested resource URI corresponds to an audience
-/// the server is willing to mint tokens for, and which scopes that resource accepts.
+/// the server is willing to mint tokens for, and which scopes that resource accepts. Each tenant has its own: a
+/// resource one tenant declares is unknown at another.
 /// </remarks>
 public interface IResourceManager
 {
     /// <summary>
     /// Attempts to retrieve the resource definition associated with the specified URI.
     /// </summary>
+    /// <param name="tenant">The tenant whose resources are searched.</param>
     /// <param name="resource">The URI identifying the resource for which the definition is requested.</param>
     /// <param name="definition">When this method returns, contains the resource definition associated with
     /// the specified URI, if the resource is found; otherwise, null. This parameter is passed uninitialized.</param>
     /// <returns><c>true</c> if the resource definition is found; otherwise, <c>false</c>.</returns>
-    bool TryGet(Uri resource, [MaybeNullWhen(false)] out ResourceDefinition definition);
+    bool TryGet(TenantDefinition tenant, Uri resource, [MaybeNullWhen(false)] out ResourceDefinition definition);
 }

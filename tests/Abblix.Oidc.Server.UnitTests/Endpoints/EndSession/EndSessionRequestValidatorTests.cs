@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
@@ -62,18 +63,18 @@ public class EndSessionRequestValidatorTests
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.Is<EndSessionValidationContext>(c => c.Request == endSessionRequest)))
-            .Callback(new Action<EndSessionValidationContext>(ctx => ctx.ClientInfo = clientInfo))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.Is<EndSessionValidationContext>(c => c.Request == endSessionRequest)))
+            .Callback(new Action<TenantDefinition, EndSessionValidationContext>((_, ctx) => ctx.ClientInfo = clientInfo))
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(endSessionRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
         Assert.Same(endSessionRequest, validRequest.Model);
         Assert.Same(clientInfo, validRequest.ClientInfo);
-        _contextValidator.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
+        _contextValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
     }
 
     /// <summary>
@@ -90,16 +91,16 @@ public class EndSessionRequestValidatorTests
             "Invalid id_token_hint");
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
             .ReturnsAsync(error);
 
         // Act
-        var result = await _validator.ValidateAsync(endSessionRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var actualError));
         Assert.Same(error, actualError);
-        _contextValidator.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
+        _contextValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
     }
 
     /// <summary>
@@ -114,17 +115,17 @@ public class EndSessionRequestValidatorTests
         EndSessionValidationContext? capturedContext = null;
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
-            .Callback(new Action<EndSessionValidationContext>(ctx => capturedContext = ctx))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
+            .Callback(new Action<TenantDefinition, EndSessionValidationContext>((_, ctx) => capturedContext = ctx))
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        await _validator.ValidateAsync(endSessionRequest);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.NotNull(capturedContext);
         Assert.Same(endSessionRequest, capturedContext.Request);
-        _contextValidator.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
+        _contextValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
     }
 
     /// <summary>
@@ -138,14 +139,14 @@ public class EndSessionRequestValidatorTests
         var endSessionRequest = CreateEndSessionRequest();
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        await _validator.ValidateAsync(endSessionRequest);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
-        _contextValidator.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
+        _contextValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
     }
 
     /// <summary>
@@ -160,12 +161,12 @@ public class EndSessionRequestValidatorTests
         var expectedClientInfo = new ClientInfo("client_456");
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
-            .Callback(new Action<EndSessionValidationContext>(ctx => ctx.ClientInfo = expectedClientInfo))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
+            .Callback(new Action<TenantDefinition, EndSessionValidationContext>((_, ctx) => ctx.ClientInfo = expectedClientInfo))
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(endSessionRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -186,11 +187,11 @@ public class EndSessionRequestValidatorTests
             "Client not found");
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
             .ReturnsAsync(error);
 
         // Act
-        var result = await _validator.ValidateAsync(endSessionRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var actualError));
@@ -214,12 +215,12 @@ public class EndSessionRequestValidatorTests
         var clientInfo = new ClientInfo("client_999");
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
-            .Callback(new Action<EndSessionValidationContext>(ctx => ctx.ClientInfo = clientInfo))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
+            .Callback(new Action<TenantDefinition, EndSessionValidationContext>((_, ctx) => ctx.ClientInfo = clientInfo))
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(endSessionRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -245,11 +246,11 @@ public class EndSessionRequestValidatorTests
             clientId: null);
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(endSessionRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -268,12 +269,12 @@ public class EndSessionRequestValidatorTests
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
-            .Callback(new Action<EndSessionValidationContext>(ctx => ctx.ClientInfo = clientInfo))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
+            .Callback(new Action<TenantDefinition, EndSessionValidationContext>((_, ctx) => ctx.ClientInfo = clientInfo))
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(endSessionRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -298,11 +299,11 @@ public class EndSessionRequestValidatorTests
             clientId: "original_client");
 
         _contextValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        await _validator.ValidateAsync(endSessionRequest);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, endSessionRequest);
 
         // Assert
         Assert.Equal("original_token", endSessionRequest.IdTokenHint);

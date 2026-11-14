@@ -73,7 +73,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -92,7 +92,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -111,7 +111,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -130,7 +130,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -150,7 +150,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -169,7 +169,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         // Implementation accepts TimeSpan.Zero (it's <= MaximumExpiry)
@@ -189,7 +189,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -209,7 +209,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -229,7 +229,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -247,7 +247,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry: TimeSpan.FromMinutes(15));
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotEqual(TimeSpan.Zero, context.ExpiresIn);
@@ -266,7 +266,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -286,7 +286,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -307,7 +307,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -327,7 +327,7 @@ public class RequestedExpiryValidatorTests
         var context = CreateContext(requestedExpiry);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);

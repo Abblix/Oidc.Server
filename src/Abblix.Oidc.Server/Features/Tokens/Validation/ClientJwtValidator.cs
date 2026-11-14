@@ -9,12 +9,11 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Common.Configuration;
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -28,69 +27,81 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <remarks>
 /// The class is used for validating tokens like client authentication JWTs and request objects in OpenID Connect
 /// flows. It checks the authenticity of the JWT issuer, audience, and cryptographic signatures to ensure that
-/// only valid and authorized clients can interact with the authentication service.
+/// only valid and authorized clients can interact with the authentication service. A client authentication JWT
+/// is validated without the audience check: <c>JwtAssertionAuthenticatorBase</c> judges its audience, which
+/// RFC 10070 section 4 restricts to the issuer identifier alone.
 /// </remarks>
 /// <param name="logger">The logger used for recording validation activities and outcomes.</param>
 /// <param name="requestInfoProvider">Provides information about the current request, including the request URI.</param>
 /// <param name="tokenValidator">The service used to perform core JWT validation.</param>
 /// <param name="clientInfoProvider">Provides access to client information for validation purposes.</param>
 /// <param name="clientJwksProvider">Provides access to the client's JSON Web Keys (JWKs) for verifying signatures.</param>
-/// <param name="issuerProvider">Provides the authorization server's issuer identifier for audience validation.</param>
 /// <param name="serviceKeysProvider">Provides the server's own private keys used to decrypt request
 /// objects that the client encrypted to the server (RFC 9101 section 6.1).</param>
-/// <param name="oidcOptions">Carries the security profile every client is held to, and the default
-/// a client without one of its own falls back to.</param>
 /// <param name="timeProvider">Judges the token's timestamps against the client's own profile, once
 /// the client is known.</param>
-[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
-    Justification = "Every dependency is used: two resolve the client and its keys, two the server's own address and keys, and the options carry the security profile whose tolerance this validator applies. Splitting the class is a separate question from the profile it now reads.")]
 public partial class ClientJwtValidator(
     ILogger<ClientJwtValidator> logger,
     IRequestInfoProvider requestInfoProvider,
-    IJsonWebTokenValidator tokenValidator,
+    ProfiledJwtValidator tokenValidator,
     IClientInfoProvider clientInfoProvider,
     IClientKeysProvider clientJwksProvider,
-    IIssuerProvider issuerProvider,
     IAuthServiceKeysProvider serviceKeysProvider,
-    IOptions<OidcOptions> oidcOptions,
     TimeProvider timeProvider) : IClientJwtValidator
 {
-    private SecurityProfileRequirements Profile
-        => SecurityProfileRequirements.Resolve(oidcOptions.Value.DefaultSecurityProfile);
-
     /// <summary>
     /// Validates the JWT issued by a client, ensuring that it meets the expected criteria for issuer, audience,
     /// and cryptographic signatures. This method is used in scenarios such as private JWT client authentication
     /// and request object validation.
     /// </summary>
+    /// <param name="tenant">The tenant the token is for.</param>
+    /// <param name="client">The client the request names outside the token, or null.</param>
     /// <param name="jwt">The JWT to validate.</param>
+    /// <param name="tokenTypes">The token types the caller accepts.</param>
     /// <param name="options">Options to customize the validation process.</param>
     /// <returns>
     /// A task that returns a Result containing either a ValidJsonWebToken on success,
     /// or a JwtValidationError on failure.
     /// </returns>
     public async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateAsync(
+        TenantDefinition tenant,
+        ClientInfo? client,
         string jwt,
+        TokenTypePolicy tokenTypes,
         ValidationOptions options = ValidationOptions.Default)
     {
-        var context = new ValidationContext(clientInfoProvider, clientJwksProvider);
+        var context = new ValidationContext(clientInfoProvider, clientJwksProvider, tenant);
+
+        // The token is validated under the profile of the client the request names outside it, or what the
+        // deployment demands of every client where it names none, the guard holding its signature and each JWE layer
+        // to that profile; each layer is recorded so the profile of the client the token names can judge it too
+        var deployment = SecurityProfileRequirements.For(tenant, client);
+        var keyManagementAlgorithms = new List<string>();
 
         var result = await tokenValidator.ValidateAsync(
+            deployment,
             jwt,
             new ValidationParameters
             {
                 Options = options,
-                ValidateAudience = ValidateAudience,
+                TokenTypes = tokenTypes,
+                ValidateAudience = audiences => ValidateAudience(tenant, audiences),
                 ValidateIssuer = context.ValidateIssuer,
-                ResolveIssuerSigningKeys = context.ResolveIssuerSigningKeys,
+                ResolveIssuerSigningKeys = issuer => context.ResolveIssuerSigningKeys(issuer),
+                RefetchIssuerSigningKeys = issuer => context.ResolveIssuerSigningKeys(issuer, refetch: true),
                 // RFC 9101 section 6.1: a request object may be JWE-encrypted to the server. Decrypt it with
                 // the server's own private keys; the inner JWS is then verified with the client's key
                 // via ResolveIssuerSigningKeys. Harmless for plain JWS client assertions (the JWE path
                 // only runs for an actual JWE token).
-                ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(true),
+                ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
                 // The tolerance belongs to the profile this deployment is held to, ceiling
                 // included.
-                ClockSkew = Profile.ClockSkewOrDefault(),
+                ClockSkew = deployment.ClockSkewOrDefault(),
+                ValidateKeyManagementAlgorithm = algorithm =>
+                {
+                    keyManagementAlgorithms.Add(algorithm);
+                    return true;
+                },
             });
 
         if (result.TryGetFailure(out var error))
@@ -107,7 +118,7 @@ public partial class ClientJwtValidator(
             if (context.ClientInfo == null)
             {
                 // No client found by issuer, try client_id claim
-                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(clientIdFromJwt).WithLicenseCheck();
+                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientIdFromJwt);
             }
             else if (context.ClientInfo.ClientId != clientIdFromJwt)
             {
@@ -126,11 +137,20 @@ public partial class ClientJwtValidator(
             return new JwtValidationError(JwtError.InvalidToken, "Unable to determine client from JWT");
         }
 
-        // The pass above ran under the DEPLOYMENT's window, because the client is identified from the
-        // token being validated and is not known until that has finished. A client naming a profile
-        // of its own may be held to a tighter one, and this is the first line where there is a client
-        // to ask. It only narrows: a deployment-wide profile is a floor, so no client's window is
-        // wider than the one already applied.
+        var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
+
+        if (profile.AlgorithmOutside(validatedToken, keyManagementAlgorithms) is { } algorithm)
+        {
+            LogAlgorithmOutsideTheClientsProfile(context.ClientInfo.ClientId, Sanitized.Value(algorithm));
+            return new JwtValidationError(
+                JwtError.InvalidToken, "The token uses an algorithm the client's security profile does not admit");
+        }
+
+        // The pass above ran under the window of the client the request named outside the token, or the
+        // deployment's where it named none, because the client the token itself names is not known until
+        // that pass has finished. That client may be held to a tighter one, and this is the first line
+        // where it can be asked. It only narrows: what the pass applied is a floor, so no client's window
+        // is wider than the one already applied.
         //
         // The same flag the pass above reads, because the caller's options are handed to it
         // unchanged where the validation parameters are built. Not symmetry for its own sake: a
@@ -148,8 +168,7 @@ public partial class ClientJwtValidator(
                 return new JwtValidationError(JwtError.InvalidToken, whyUnreadable);
             }
 
-            var refusal = SecurityProfileRequirements
-                .For(context.ClientInfo, oidcOptions.Value.DefaultSecurityProfile)
+            var refusal = profile
                 .ClockSkewOrDefault()
                 .WhyRefused(timeProvider.GetUtcNow(), notBefore, expiresAt, issuedAt);
 
@@ -165,22 +184,24 @@ public partial class ClientJwtValidator(
     }
 
     /// <summary>
-    /// Validates the audience by checking if it matches either the request URI (token endpoint)
-    /// or the authorization server's issuer identifier.
-    /// Per RFC 7523 Section 3 and OpenID Connect Core 1.0 Section 9, both values are acceptable.
+    /// Validates the audience of a JWT the client sent other than a client authentication assertion - a request
+    /// object, a login hint token - by checking that it names either the request URI or the authorization
+    /// server's issuer identifier. The server's own client authenticators validate an assertion without this
+    /// check and judge its audience in <c>JwtAssertionAuthenticatorBase</c>.
     /// </summary>
+    /// <param name="tenant">The tenant whose issuer identifier is an audience the assertion may name.</param>
     /// <param name="audiences">The collection of audiences to validate against valid audience values.</param>
     /// <returns>A task that returns whether the audience is valid.</returns>
-    private Task<bool> ValidateAudience(IEnumerable<string> audiences)
+    private Task<bool> ValidateAudience(TenantDefinition tenant, IEnumerable<string> audiences)
     {
-        var requestUri = requestInfoProvider.RequestUri;
-        var issuer = issuerProvider.GetIssuer();
+        var requestUri = requestInfoProvider.RequestUri.OriginalString;
+        var issuer = tenant.Issuer.OriginalString;
 
         var materializedAudiences = audiences.Materialize();
         var result = materializedAudiences.Contains(requestUri) || materializedAudiences.Contains(issuer);
         if (!result)
         {
-            LogAudienceValidationFailed(materializedAudiences, requestUri, issuer);
+            LogAudienceValidationFailed(Sanitized.Values(materializedAudiences), requestUri, issuer);
         }
 
         return Task.FromResult(result);
@@ -192,7 +213,8 @@ public partial class ClientJwtValidator(
     /// </summary>
     private sealed class ValidationContext(
         IClientInfoProvider clientInfoProvider,
-        IClientKeysProvider clientJwksProvider)
+        IClientKeysProvider clientJwksProvider,
+        TenantDefinition tenant)
     {
         /// <summary>
         /// Holds client information after the issuer has been successfully validated.
@@ -227,7 +249,7 @@ public partial class ClientJwtValidator(
             if (!_clientLookupPerformed)
             {
                 // Attempt to find the client by issuer
-                ClientInfo = await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck();
+                ClientInfo = await clientInfoProvider.TryFindClientAsync(tenant, issuer);
                 _clientLookupPerformed = true;
             }
 
@@ -240,10 +262,11 @@ public partial class ClientJwtValidator(
         /// If issuer is not present, returns empty sequence as client will be identified by client_id claim.
         /// </summary>
         /// <param name="issuer">The issuer URL whose signing keys are to be resolved.</param>
+        /// <param name="refetch">Whether to read the client's published keys again past the copy held.</param>
         /// <returns>
         /// An asynchronous stream of <see cref="JsonWebKey" /> objects representing the issuer's signing keys.
         /// </returns>
-        public async IAsyncEnumerable<JsonWebKey> ResolveIssuerSigningKeys(string issuer)
+        public async IAsyncEnumerable<JsonWebKey> ResolveIssuerSigningKeys(string issuer, bool refetch = false)
         {
             // If issuer is not present, return empty sequence - client will be identified by client_id claim
             if (string.IsNullOrEmpty(issuer))
@@ -253,7 +276,18 @@ public partial class ClientJwtValidator(
                 yield break;
 
             var clientInfo = ClientInfo.NotNull(nameof(ClientInfo));
-            await foreach (var key in clientJwksProvider.GetSigningKeys(clientInfo))
+
+            // FAPI 1.0 Part 2 section 8.9 "requires that jwks_uri endpoints shall be served over TLS". Held here, where
+            // the keys are read, so no path verifies with keys fetched in the clear, whatever schemes the host lets
+            // the fetcher use
+            if (SecurityProfileConsistency.FindJwksUriViolations(
+                    clientInfo.JwksUri,
+                    SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile)).Count > 0)
+            {
+                yield break;
+            }
+
+            await foreach (var key in clientJwksProvider.GetSigningKeys(clientInfo, refetch))
                 yield return key;
         }
     }

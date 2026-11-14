@@ -22,7 +22,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Configuration;
 /// Unit tests for <see cref="JwtAlgorithmsProvider"/>. The provider proxies creator/validator
 /// algorithm sets unchanged for the existing pair (id-token / userinfo signing); the new
 /// <see cref="JwtAlgorithmsProvider.DpopSigningAlgorithmsSupported"/> property intersects the
-/// validator side with the static <see cref="DPoPAlgorithms.Allowed"/> whitelist (RFC 9449 §5.1).
+/// validator side with the static <see cref="DPoPAlgorithms.Allowed"/> whitelist (RFC 9449 section 5.1).
 /// </summary>
 public class JwtAlgorithmsProviderTests
 {
@@ -112,7 +112,7 @@ public class JwtAlgorithmsProviderTests
     }
 
     /// <summary>
-    /// OIDC Core §10.1: HS* signatures key on the client_secret, which this server stores only as
+    /// OIDC Core section 10.1: HS* signatures key on the client_secret, which this server stores only as
     /// a hash - so HMAC algorithms must not be advertised on any client-addressed response-signing
     /// list, even when the JWT layer has HMAC signers registered. Previously the full signer set
     /// (HS* included) leaked into discovery, a client could register HS256 via DCR, and the first
@@ -156,7 +156,7 @@ public class JwtAlgorithmsProviderTests
         Assert.Equal(contentEncryption, result);
     }
     /// <summary>
-    /// RFC 8414 §2 / OIDC Discovery 1.0 §3: token_endpoint_auth_signing_alg_values_supported MUST
+    /// RFC 8414 section 2 / OIDC Discovery 1.0 section 3: token_endpoint_auth_signing_alg_values_supported MUST
     /// NOT contain "none". HS* stay because client_secret_jwt keys on the client secret.
     /// </summary>
     [Fact]
@@ -173,7 +173,7 @@ public class JwtAlgorithmsProviderTests
     }
 
     /// <summary>
-    /// CIBA Core §7.1.1 requires an asymmetric signature, so
+    /// CIBA Core section 7.1.1 requires an asymmetric signature, so
     /// backchannel_authentication_request_signing_alg_values_supported excludes "none" and every HS*.
     /// </summary>
     [Fact]

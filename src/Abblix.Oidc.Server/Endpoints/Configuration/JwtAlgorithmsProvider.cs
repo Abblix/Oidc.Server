@@ -21,7 +21,7 @@ public sealed class JwtAlgorithmsProvider(
 {
 	/// <summary>
 	/// HMAC algorithms are excluded from every client-addressed response-signing list: per
-	/// OIDC Core §10.1 an HS* signature uses the client_secret as the key, but this server
+	/// OIDC Core section 10.1 an HS* signature uses the client_secret as the key, but this server
 	/// persists client secrets as SHA-512 hashes (except the client_secret_jwt case), so it
 	/// cannot derive the HMAC key at signing time. Advertising HS* let a client register it
 	/// via DCR and then fail with a server error on the first issued token. The JWT layer
@@ -41,7 +41,7 @@ public sealed class JwtAlgorithmsProvider(
 	public IEnumerable<string> SigningAlgorithmsSupported => jwtValidator.SigningAlgorithmsSupported;
 
 	/// <summary>
-	/// RFC 8414 §2 and OpenID Connect Discovery 1.0 §3 both state the value "none" MUST NOT appear
+	/// RFC 8414 section 2 and OpenID Connect Discovery 1.0 section 3 both state the value "none" MUST NOT appear
 	/// in token_endpoint_auth_signing_alg_values_supported - a client authenticates by signing a
 	/// JWT assertion, so an unsecured assertion would prove nothing. HS* stay because
 	/// client_secret_jwt legitimately keys on the shared client secret.
@@ -50,7 +50,7 @@ public sealed class JwtAlgorithmsProvider(
 		=> jwtValidator.SigningAlgorithmsSupported.Where(alg => alg != SigningAlgorithms.None);
 
 	/// <summary>
-	/// CIBA Core §7.1.1 requires the signed backchannel authentication request to use an asymmetric
+	/// CIBA Core section 7.1.1 requires the signed backchannel authentication request to use an asymmetric
 	/// algorithm, so both "none" and the symmetric HS* algorithms are excluded here.
 	/// </summary>
 	public IEnumerable<string> BackChannelAuthenticationRequestSigningAlgValuesSupported

@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Builds <see cref="OidcError"/> instances using the error codes RFC 7591 §3.2.2 reserves
+/// Builds <see cref="OidcError"/> instances using the error codes RFC 7591 section 3.2.2 reserves
 /// for dynamic client registration: <c>invalid_redirect_uri</c>, <c>invalid_client_metadata</c>,
 /// <c>invalid_software_statement</c>, and <c>unapproved_software_statement</c>.
 /// </summary>

@@ -6,17 +6,20 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// RFC 9396 §7.1 consent-side handling of Rich Authorization Requests, end-to-end:
+/// RFC 9396 section 7.1 consent-side handling of Rich Authorization Requests, end-to-end:
 /// narrowing, deny-all, drop-entry from a multi-set, cross-detail amount caps,
 /// null-grant passthrough, and refresh-token preservation of authorization_details.
 /// Core round-trip lives in <see cref="RichAuthorizationRequestsTests"/> and the
@@ -25,6 +28,95 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// </summary>
 public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
 {
+    private const string TransferOf200 =
+        """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"200"},"creditorAccount":{"iban":"DE02100100109307118603"}}]""";
+
+    /// <summary>
+    /// The end user lets the client transfer 100 of the 200 EUR it asked for, and the narrowed entry is what the
+    /// client is told it got (RFC 9396 section 7): in the access token, in the token response and in
+    /// introspection by the client the token was issued to.
+    /// </summary>
+    [Fact]
+    public async Task Consent_narrowing_an_amount_reaches_the_token_the_token_response_and_introspection()
+    {
+        const string transferOf100 =
+            """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"100"},"creditorAccount":{"iban":"DE02100100109307118603"}}]""";
+
+        var client = CreateClient();
+        using var _ = client.UseConsentOverride(JsonNode.Parse(transferOf100)!.AsArray());
+        var tokenResponse = await PerformParFlowAsync(
+            TestConstants.ConfidentialClientId,
+            TestConstants.ConfidentialClientSecret,
+            TestConstants.RedirectUri,
+            TransferOf200,
+            client: client);
+
+        var accessToken = tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+        Assert.Equal(
+            transferOf100,
+            DecodeJwtPayload(accessToken)[IanaClaimTypes.AuthorizationDetails]!.ToJsonString());
+        Assert.Equal(
+            transferOf100,
+            tokenResponse[TokenResponse.Parameters.AuthorizationDetails]!.ToJsonString());
+
+        var discovery = await FetchDiscoveryAsync(client);
+        using var introspection = await client.PostAsync(
+            discovery.IntrospectionEndpoint!,
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [IntrospectionRequest.Parameters.Token] = accessToken,
+                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            }),
+            TestContext.Current.CancellationToken);
+        var introspected = await introspection.Content.ReadFromJsonAsync<JsonObject>(
+            TestContext.Current.CancellationToken);
+        Assert.Equal(
+            transferOf100,
+            introspected![IanaClaimTypes.AuthorizationDetails]!.ToJsonString());
+    }
+
+    /// <summary>
+    /// A consent decision granting more than the end user was asked about, a higher amount or another
+    /// creditor account, is refused by the type's validator and told to the client as access_denied.
+    /// </summary>
+    [Theory]
+    [InlineData("""[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"300"},"creditorAccount":{"iban":"DE02100100109307118603"}}]""")]
+    [InlineData("""[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"100"},"creditorAccount":{"iban":"GB33BUKB20201555555555"}}]""")]
+    public async Task Consent_granting_more_than_was_requested_fails_with_access_denied(string granted)
+    {
+        var client = CreateClient();
+        using var _ = client.UseConsentOverride(JsonNode.Parse(granted)!.AsArray());
+        var discovery = await FetchDiscoveryAsync(client);
+        var (_, challenge) = GeneratePkcePair();
+
+        var parResponse = await PushAuthorizationRequestAsync(client, discovery, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
+            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+            [AuthorizationRequest.Parameters.AuthorizationDetails] = TransferOf200,
+        });
+
+        using var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [AuthorizationRequest.Parameters.RequestUri] =
+                    parResponse[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>(),
+            }),
+            TestContext.Current.CancellationToken);
+        var callback = System.Web.HttpUtility.ParseQueryString(response.Headers.Location!.Query);
+
+        Assert.StartsWith(TestConstants.RedirectUri, response.Headers.Location.OriginalString);
+        Assert.Equal(ErrorCodes.AccessDenied, callback[ResponseParameters.Error]);
+        Assert.Null(callback[ResponseParameters.Code]);
+    }
+
     [Fact]
     public async Task Consent_narrowing_authorization_details_propagates_to_access_token()
     {
@@ -50,14 +142,14 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
         {
             [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
-            [AuthorizationRequest.Parameters.ResponseType] = "code",
+            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
             [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
             [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
             [AuthorizationRequest.Parameters.AuthorizationDetails] = PaymentInitiationWireJson,
         });
-        var requestUri = parResponse[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
+        var requestUri = parResponse[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>();
 
         var error = await AuthorizeAndExtractErrorAsync(client, discovery, new Dictionary<string, string>
         {
@@ -65,13 +157,13 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
             [AuthorizationRequest.Parameters.RequestUri] = requestUri,
         });
 
-        Assert.Equal("access_denied", error);
+        Assert.Equal(ErrorCodes.AccessDenied, error);
     }
 
     [Fact]
     public async Task Consent_drop_entry_from_multi_set_token_carries_only_remaining_entries()
     {
-        // RFC 9396 §7.1 partial-consent drop-entry, E2E. Client requested two entries,
+        // RFC 9396 section 7.1 partial-consent drop-entry, E2E. Client requested two entries,
         // consent provider returns Granted.AuthorizationDetails with one entry only.
         const string requestedWireJson =
             """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}},{"type":"payment_initiation","actions":["status"],"instructedAmount":{"currency":"EUR","amount":"10.00"}}]""";
@@ -88,7 +180,7 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
     [Fact]
     public async Task Consent_cross_detail_total_amount_cap_propagates_to_access_token()
     {
-        // RFC 9396 §7.1 cross-detail policy, E2E. Three entries of 500.00 each; consent
+        // RFC 9396 section 7.1 cross-detail policy, E2E. Three entries of 500.00 each; consent
         // provider zeroes the last to stay under a total-amount cap of 1000.00.
         const string requestedWireJson =
             """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}},{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}},{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
@@ -106,15 +198,15 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
     public async Task Consent_passthrough_when_provider_grants_null_preserves_request_value()
     {
         // No Override -> provider leaves Granted.AuthorizationDetails as null -> processor
-        // falls back to the post-validator request value (PR #135 baseline behaviour).
+        // falls back to the post-validator request value (PR #135 baseline behavior).
         // Explicit anchor for the contract; functionally same path as the byte-exact tests
         // above, but stated as a #142 acceptance criterion in its own right.
         var tokenResponse = await PerformParFlowAsync(
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
 
-        var payload = DecodeJwtPayload(tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[IanaClaimTypes.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 
@@ -125,7 +217,7 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson,
             scope: Scopes.OpenId + " " + Scopes.OfflineAccess);
-        var refreshToken = initial[GrantTypes.RefreshToken]?.GetValue<string>()
+        var refreshToken = initial[TokenResponse.Parameters.RefreshToken]?.GetValue<string>()
             ?? throw new InvalidOperationException("Initial token response missing refresh_token");
 
         var client = CreateClient();
@@ -133,13 +225,13 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
         var refreshed = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
-            [GrantTypes.RefreshToken] = refreshToken,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [TokenRequest.Parameters.RefreshToken] = refreshToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
-        var payload = DecodeJwtPayload(refreshed[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(refreshed[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[IanaClaimTypes.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 
@@ -159,8 +251,8 @@ public class RarConsentTests(TestFactory factory) : RarTestBase(factory)
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, requestedWireJson, client: client);
 
-        var payload = DecodeJwtPayload(tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[IanaClaimTypes.AuthorizationDetails] as JsonArray)!;
         Assert.Equal(grantedWireJson, claim.ToJsonString());
         return claim;
     }

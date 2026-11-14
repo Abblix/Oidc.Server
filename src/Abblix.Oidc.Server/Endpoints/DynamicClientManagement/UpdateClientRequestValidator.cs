@@ -9,16 +9,17 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Validates an RFC 7592 §2.2 update request: authenticates the registration access token and
+/// Validates an RFC 7592 section 2.2 update request: authenticates the registration access token and
 /// confirms the client exists, then validates the supplied replacement metadata via the
 /// update-specific keyed <see cref="IRegisterClientRequestValidator"/>. Also enforces the
-/// RFC 7592 §2.2 rule that the request body's <c>client_id</c> must match the authenticated client.
+/// RFC 7592 section 2.2 rule that the request body's <c>client_id</c> must match the authenticated client.
 /// </summary>
 /// <param name="clientRequestValidator">Validator for the registration access token.</param>
 /// <param name="registrationRequestValidator">Update-flow metadata validator
@@ -36,10 +37,10 @@ public class UpdateClientRequestValidator(
     public const string RegistrationKey = nameof(UpdateClientRequestValidator);
 
     /// <inheritdoc />
-    public async Task<Result<ValidUpdateClientRequest, OidcError>> ValidateAsync(UpdateClientRequest request)
+    public async Task<Result<ValidUpdateClientRequest, OidcError>> ValidateAsync(TenantDefinition tenant, UpdateClientRequest request)
     {
         // First validate client authentication (registration_access_token)
-        var clientValidation = await clientRequestValidator.ValidateAsync(request.ClientRequest);
+        var clientValidation = await clientRequestValidator.ValidateAsync(tenant, request.ClientRequest);
         var validClientRequest = clientValidation;
 
         if (validClientRequest.TryGetFailure(out var clientError))
@@ -48,7 +49,7 @@ public class UpdateClientRequestValidator(
         var clientInfo = validClientRequest.GetSuccess();
 
         // RFC 7592 Section 2.2: client_id in request body must match authenticated client
-        if (request.RegistrationRequest.ClientId != clientInfo.ClientInfo.ClientId)
+        if (request.RegistrationRequest.ClientId != clientInfo.Client.ClientInfo.ClientId)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,
@@ -56,12 +57,23 @@ public class UpdateClientRequestValidator(
         }
 
         // Validate the registration request metadata using update-specific validator
-        var registrationValidation = await registrationRequestValidator.ValidateAsync(request.RegistrationRequest);
+        var registrationValidation = await registrationRequestValidator.ValidateAsync(tenant, request.RegistrationRequest);
+
+        // The pairwise subjects every end user of the client already holds are computed under its sector, so an
+        // update deriving another sector would hand each of them a new identity; it is refused instead
+        if (registrationValidation.TryGetSuccess(out var registration) &&
+            !string.Equals(registration.SectorIdentifier, clientInfo.Client.ClientInfo.SectorIdentifier, StringComparison.Ordinal))
+        {
+            return new OidcError(
+                ErrorCodes.InvalidClientMetadata,
+                "The subject type and the sector of a registered client cannot change, since its end users would be given new " +
+                "identifiers; a client that needs others registers anew");
+        }
 
         return registrationValidation.MapSuccess(
             validRegistration => new ValidUpdateClientRequest(
                 request,
-                clientInfo.ClientInfo,
+                clientInfo.Client,
                 validRegistration.Model));
     }
 }

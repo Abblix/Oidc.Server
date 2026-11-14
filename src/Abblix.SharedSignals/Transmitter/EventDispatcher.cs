@@ -6,11 +6,14 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Events;
 using Abblix.SecurityEvents.Subjects;
 using Abblix.SharedSignals.Model;
+using Abblix.SharedSignals.Telemetry;
 
 using Microsoft.Extensions.Logging;
 
@@ -25,10 +28,10 @@ namespace Abblix.SharedSignals.Transmitter;
 /// </summary>
 /// <param name="streams">The transmitter's streams.</param>
 /// <param name="outbox">Where minted SETs wait for delivery.</param>
-/// <param name="signer">Signs each minted SET.</param>
-/// <param name="issuer">
-/// The transmitter's issuer identifier - the "iss" of every SET, identical to the issuer the
-/// configuration metadata asserts (SSF 1.0 Section 7.1).</param>
+/// <param name="identity">
+/// Names the transmitter's issuer identifier - the "iss" of every SET, identical to the issuer the
+/// configuration metadata asserts (SSF 1.0 Section 7.1) - each time a SET is minted.</param>
+/// <param name="instruments">Traces each SET minted for a stream and counts it once it is in the outbox.</param>
 /// <param name="sharingPolicy">
 /// The host's Section 9.2 verdict; null shares every otherwise-matching event, which is the
 /// honest default only for a transmitter whose events carry nothing the receiver may not see.
@@ -40,78 +43,160 @@ namespace Abblix.SharedSignals.Transmitter;
 /// deployment claims a profile such as the CAEP Interoperability Profile. Null emits whatever the host
 /// builds, which is what a transmitter claiming no profile does.
 /// </param>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+    Justification = "Every dependency decides a different part of one dispatch: the logger, the streams, the outbox, the issuer identity, the instruments, the sharing and payload policies and the clock.")]
 public sealed partial class EventDispatcher(
     ILogger<EventDispatcher> logger,
     IStreamStore streams,
     IEventOutbox outbox,
-    ISecurityEventTokenSigner signer,
-    string issuer,
+    ITransmitterIdentity identity,
+    SharedSignalsInstruments instruments,
     IEventSharingPolicy? sharingPolicy = null,
     IEventPayloadPolicy? payloadPolicy = null,
     TimeProvider? clock = null)
 {
-    private readonly string _issuer = !string.IsNullOrEmpty(issuer)
-        ? issuer
-        : throw new ArgumentException("A transmitter without an issuer identifier can sign nothing.", nameof(issuer));
-
     /// <summary>
     /// Dispatches one event to every stream it matches.
     /// </summary>
     /// <param name="descriptor">The event as the application states it.</param>
-    /// <param name="cancellationToken">Cancels store reads, policy calls and signing.</param>
-    /// <returns>How many streams the event was enqueued for - zero is a legitimate answer for
-    /// an event nobody subscribed to.</returns>
-    public async Task<int> DispatchAsync(
+    /// <param name="cancellationToken">Cancels store reads, policy calls and the enqueue.</param>
+    /// <returns>How many streams the event was enqueued for, and the streams it failed on.</returns>
+    /// <exception cref="InvalidOperationException">The payload policy refused the event.</exception>
+    /// <exception cref="OperationCanceledException">
+    /// The dispatch was cancelled. The streams it had already reached keep the event.
+    /// </exception>
+    /// <remarks>
+    /// When the list of streams cannot be read, the exception leaves this method and no stream has the event, so
+    /// the whole dispatch can be made again.
+    /// </remarks>
+    public async Task<DispatchResult> DispatchAsync(
         SecurityEventDescriptor descriptor,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
         RefuseIfOutsidePolicy(descriptor);
 
-        var reached = 0;
-        foreach (var stream in await streams.ListAllAsync(cancellationToken))
+        return await DispatchToAsync(
+            descriptor, await streams.ListAllAsync(cancellationToken), [], cancellationToken);
+    }
+
+    /// <summary>
+    /// Dispatches one event again to the given streams alone - the ones an earlier dispatch reported as not
+    /// reached - so the streams left out of the list do not get it a second time under a new identifier.
+    /// </summary>
+    /// <param name="descriptor">The event, as it was dispatched the first time.</param>
+    /// <param name="streamsToReach">The streams to try. Any other stream is left alone.</param>
+    /// <param name="cancellationToken">Cancels store reads, policy calls and the enqueue.</param>
+    /// <returns>How many of the streams the event was enqueued for, and the ones it failed on again.</returns>
+    /// <remarks>
+    /// Each stream is read again and held to every check a full dispatch makes, so the event does not reach a
+    /// stream disabled since the first attempt, one that no longer takes the event or its subject, one the sharing
+    /// policy now refuses, or one that no longer exists. Such a stream is counted neither as reached nor as not
+    /// reached, as a full dispatch made now would not count it. A stream that cannot be read is not reached.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The payload policy refused the event.</exception>
+    /// <exception cref="OperationCanceledException">
+    /// The dispatch was cancelled. The streams it had already reached keep the event.
+    /// </exception>
+    public async Task<DispatchResult> DispatchAsync(
+        SecurityEventDescriptor descriptor,
+        IEnumerable<StreamReference> streamsToReach,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        ArgumentNullException.ThrowIfNull(streamsToReach);
+        RefuseIfOutsidePolicy(descriptor);
+
+        var found = new List<StreamState>();
+        var notReached = new List<StreamReference>();
+        foreach (var reference in streamsToReach.Distinct())
         {
-            // A disabled stream holds nothing (Section 8.1.2.1); a paused one is enqueued for -
-            // holding events IS the outbox waiting, and same-principal order is enqueue order.
-            if (stream.Status == StreamStatuses.Disabled)
-            {
-                continue;
-            }
-
-            if (stream.Configuration.EventsDelivered is not { } delivered
-                || !delivered.Contains(descriptor.EventType, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            if (!CoversSubject(stream, descriptor.Subject))
-            {
-                continue;
-            }
-
-            // The sharing policy runs last, so it is consulted only about deliveries that would
-            // otherwise happen - its cost and its logs both scale with reality.
-            if (sharingPolicy is not null
-                && !await sharingPolicy.IsSharingPermittedAsync(stream, descriptor, cancellationToken))
-            {
-                continue;
-            }
-
-            // One stream's failure is one stream's. Letting it out of the loop would drop the
-            // fan-out to every stream after it AND lose the count with the exception, so a caller
-            // would learn neither who received the event nor that anybody had.
             try
             {
-                await MintAndEnqueueAsync(stream, descriptor, asStatusAnnouncement: false, cancellationToken);
-                reached++;
+                if (await streams.FindAsync(reference.ReceiverId, reference.StreamId, cancellationToken) is { } stream)
+                {
+                    found.Add(stream);
+                }
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
-                LogStreamNotReached(exception, stream.StreamId, descriptor.EventType);
+                LogStreamNotRead(exception, reference.StreamId, reference.ReceiverId, descriptor.EventType);
+                notReached.Add(reference);
             }
         }
 
-        return reached;
+        return await DispatchToAsync(descriptor, found, notReached, cancellationToken);
+    }
+
+    /// <summary>
+    /// Puts the event into every one of <paramref name="candidates"/> it matches, adding the ones it fails on to
+    /// <paramref name="notReached"/>.
+    /// </summary>
+    private async Task<DispatchResult> DispatchToAsync(
+        SecurityEventDescriptor descriptor,
+        IEnumerable<StreamState> candidates,
+        List<StreamReference> notReached,
+        CancellationToken cancellationToken)
+    {
+        var reached = 0;
+        foreach (var stream in candidates)
+        {
+            // One stream's failure is one stream's, the host's sharing policy included. Letting it out of the loop
+            // would drop the fan-out to every stream after it AND lose the count with the exception, so a caller
+            // would learn neither who received the event nor who did not.
+            try
+            {
+                if (await DispatchIfMatchingAsync(stream, descriptor, cancellationToken))
+                {
+                    reached++;
+                }
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                LogStreamNotReached(exception, stream.StreamId, stream.ReceiverId, descriptor.EventType);
+                notReached.Add(new StreamReference(stream.ReceiverId, stream.StreamId));
+            }
+        }
+
+        return new DispatchResult(reached, notReached);
+    }
+
+    /// <summary>
+    /// Puts the event into the stream's outbox if the stream takes it, and says whether it did.
+    /// </summary>
+    private async Task<bool> DispatchIfMatchingAsync(
+        StreamState stream,
+        SecurityEventDescriptor descriptor,
+        CancellationToken cancellationToken)
+    {
+        // A disabled stream holds nothing (Section 8.1.2.1); a paused one is enqueued for -
+        // holding events IS the outbox waiting, and same-principal order is enqueue order.
+        if (stream.Status == StreamStatuses.Disabled)
+        {
+            return false;
+        }
+
+        if (stream.Configuration.EventsDelivered is not { } delivered
+            || !delivered.Contains(descriptor.EventType, StringComparer.Ordinal))
+        {
+            return false;
+        }
+
+        if (!CoversSubject(stream, descriptor.Subject))
+        {
+            return false;
+        }
+
+        // The sharing policy runs last, so it is consulted only about deliveries that would
+        // otherwise happen - its cost and its logs both scale with reality.
+        if (sharingPolicy is not null
+            && !await sharingPolicy.IsSharingPermittedAsync(stream, descriptor, cancellationToken))
+        {
+            return false;
+        }
+
+        await MintAndEnqueueAsync(stream, descriptor, asStatusAnnouncement: false, cancellationToken);
+        return true;
     }
 
     /// <summary>
@@ -187,7 +272,36 @@ public sealed partial class EventDispatcher(
                 $"Unknown {nameof(StreamSubjectsMode)}: {stream.SubjectsMode}."),
         };
 
+    /// <summary>
+    /// Mints the SET of <paramref name="descriptor"/> for <paramref name="stream"/> and puts it into the stream's
+    /// outbox, in a span of its own, and counts it once the outbox holds it.
+    /// </summary>
+    /// <remarks>
+    /// Both doors come through here, so the framework's own verification and stream-updated events are traced and
+    /// counted beside the host's. A stream whose SET could not be minted or enqueued is not counted.
+    /// </remarks>
     private async Task MintAndEnqueueAsync(
+        StreamState stream,
+        SecurityEventDescriptor descriptor,
+        bool asStatusAnnouncement,
+        CancellationToken cancellationToken)
+    {
+        using var span = instruments.StartSpan(SharedSignalsTelemetry.TransmitSpan, ActivityKind.Internal);
+        span?.SetTag(SharedSignalsTags.EventType, descriptor.EventType);
+        try
+        {
+            await MintAndEnqueueCoreAsync(stream, descriptor, asStatusAnnouncement, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            SharedSignalsInstruments.Fail(span, exception);
+            throw;
+        }
+
+        instruments.EventTransmitted(descriptor.EventType);
+    }
+
+    private async Task MintAndEnqueueCoreAsync(
         StreamState stream,
         SecurityEventDescriptor descriptor,
         bool asStatusAnnouncement,
@@ -205,7 +319,7 @@ public sealed partial class EventDispatcher(
         // as the unreachable arm in StreamManagementService.AddressRefusalOf, and said out loud for the
         // same reason: an unreachable guard nobody explained reads as one nobody finished.
         var builder = new SecurityEventTokenBuilder(clock) { SingleEventStatement = true }
-            .WithIssuer(_issuer)
+            .WithIssuer(Issuer)
             .WithJwtId(jwtId)
             .WithAudience([.. stream.Configuration.Audiences])
             .WithSubjectId(descriptor.Subject);
@@ -229,11 +343,21 @@ public sealed partial class EventDispatcher(
             builder.WithEvent(descriptor.EventType);
         }
 
-        var compactToken = await builder.SignAsync(signer, cancellationToken);
+        // Queued unsigned: the SET is signed as it leaves, so its "iat" is the moment of each delivery rather
+        // than the moment it was queued.
         await outbox.EnqueueAsync(
             stream.ReceiverId,
             stream.StreamId,
-            new OutboxItem(jwtId, compactToken, asStatusAnnouncement),
+            new OutboxItem(
+                jwtId,
+                CompactToken: null,
+                asStatusAnnouncement,
+                Unsigned: QueuedEventSigner.ToQueued(builder.Build())),
             cancellationToken);
     }
+
+    /// <summary>
+    /// The issuer the SETs minted now name, which a stream configuration names too (SSF 1.0 Section 7.2.2).
+    /// </summary>
+    internal string Issuer => identity.Issuer;
 }

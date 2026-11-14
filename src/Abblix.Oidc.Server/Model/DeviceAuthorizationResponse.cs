@@ -33,16 +33,16 @@ public record DeviceAuthorizationResponse
     public required string UserCode { get; init; }
 
     /// <summary>
-    /// The end-user verification URI where the user enters the user code (RFC 8628 §3.2). Carried on the wire DTO and
-    /// filled by the transport layer from the configured device authorization options; the protocol processor leaves
-    /// it unset.
+    /// The end-user verification URI where the user enters the user code (RFC 8628 section 3.2), which the section makes
+    /// REQUIRED. Filled by the device authorization processor from the configured page, resolved under the issuer
+    /// when relative; the transport layer sends it as it is, so a processor of the host's own fills it too.
     /// </summary>
     [JsonPropertyName(Parameters.VerificationUri)]
     public Uri? VerificationUri { get; init; }
 
     /// <summary>
-    /// The optional verification URI that already embeds the user code (RFC 8628 §3.2), letting capable devices render
-    /// a direct link or QR code so the user skips typing the code. Filled by the transport layer.
+    /// The optional verification URI that already embeds the user code (RFC 8628 section 3.2), letting capable devices render
+    /// a direct link or QR code so the user skips typing the code. Filled by the device authorization processor.
     /// </summary>
     [JsonPropertyName(Parameters.VerificationUriComplete)]
     public Uri? VerificationUriComplete { get; init; }
@@ -70,19 +70,19 @@ public record DeviceAuthorizationResponse
     public static class Parameters
     {
         /// <summary>The <c>device_code</c> response parameter the device polls the token endpoint with
-        /// (RFC 8628 §3.2).</summary>
+        /// (RFC 8628 section 3.2).</summary>
         public const string DeviceCode = "device_code";
 
         /// <summary>The <c>user_code</c> response parameter displayed to the end-user for entry on the
-        /// verification page (RFC 8628 §3.2).</summary>
+        /// verification page (RFC 8628 section 3.2).</summary>
         public const string UserCode = "user_code";
 
         /// <summary>The <c>verification_uri</c> response parameter the end-user navigates to in order to enter the
-        /// user code (RFC 8628 §3.2).</summary>
+        /// user code (RFC 8628 section 3.2).</summary>
         public const string VerificationUri = "verification_uri";
 
         /// <summary>The <c>verification_uri_complete</c> response parameter that embeds the user code in the
-        /// verification URI (RFC 8628 §3.2).</summary>
+        /// verification URI (RFC 8628 section 3.2).</summary>
         public const string VerificationUriComplete = "verification_uri_complete";
 
         /// <summary>The <c>expires_in</c> response parameter giving the lifetime of <c>device_code</c>

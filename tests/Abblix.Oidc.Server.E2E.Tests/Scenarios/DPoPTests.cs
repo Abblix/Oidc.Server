@@ -16,13 +16,13 @@ using Xunit;
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// RFC 9449 §6 token-endpoint binding (and §4.2 discovery advertisement) for DPoP,
+/// RFC 9449 section 6 token-endpoint binding (and section 4.2 discovery advertisement) for DPoP,
 /// end-to-end against the test OIDC provider. Each test mints a proof with a
 /// per-instance ECDSA P-256 keypair, threads it through the real HTTP flow
 /// (PAR -> /authorize -> /token), and asserts on the wire-level outcome: the issued
 /// access token's <c>cnf.jkt</c> claim, the wire <c>token_type</c>, or the error code
-/// returned by the AS. Refresh-token rebinding (§5) lives in
-/// <see cref="DPoPRefreshTests"/> and resource access (§9) in
+/// returned by the AS. Refresh-token rebinding (section 5) lives in
+/// <see cref="DPoPRefreshTests"/> and resource access (section 9) in
 /// <see cref="DPoPUserInfoTests"/>; the three share <see cref="DPoPTestBase"/>.
 /// </summary>
 /// <remarks>
@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// <see cref="TestConstants.DPoPRequiredClientId"/> -- <c>RequireDPoP = true</c>
 /// (mandatory binding; missing proof -> reject) and
 /// <see cref="TestConstants.DPoPOpportunisticClientId"/> -- <c>RequireDPoP = false</c>
-/// (proof optional; when present the AS still binds, RFC 9449 §5.2 opportunistic posture).
+/// (proof optional; when present the AS still binds, RFC 9449 section 5.2 opportunistic posture).
 /// Lower-level helpers from <see cref="TestBase"/> are used directly rather than
 /// <c>PerformParFlowAsync</c> because DPoP scenarios need different proofs on different
 /// endpoints (one per request) and a few exercise PAR-only or token-only deviations
@@ -127,7 +127,7 @@ public class DPoPTests(TestFactory factory) : DPoPTestBase(factory)
     [Fact]
     public async Task Proof_at_par_followed_by_different_key_at_token_is_rejected()
     {
-        // RFC 9449 §10: dpop_jkt committed at PAR pins which key the token endpoint
+        // RFC 9449 section 10: dpop_jkt committed at PAR pins which key the token endpoint
         // must see; a different key proves the auth code was hijacked by another client.
         using var parKey = new DPoPProofGenerator();
         using var tokenKey = new DPoPProofGenerator();
@@ -150,7 +150,7 @@ public class DPoPTests(TestFactory factory) : DPoPTestBase(factory)
     [Fact]
     public async Task Carry_over_committed_at_par_but_no_proof_at_token_is_rejected()
     {
-        // The canonical RFC 9449 §10 attack window: PAR pinned a key, but the redeemer
+        // The canonical RFC 9449 section 10 attack window: PAR pinned a key, but the redeemer
         // shows up at /token without a proof. Even an opportunistic-binding client MUST
         // reject -- the PAR-time commitment is unconditional.
         using var parKey = new DPoPProofGenerator();
@@ -201,7 +201,7 @@ public class DPoPTests(TestFactory factory) : DPoPTestBase(factory)
     [Fact]
     public async Task Token_endpoint_rejects_proof_whose_htm_does_not_match_the_request_method()
     {
-        // RFC 9449 §4.3 step 8: htm MUST match the HTTP method byte-exact. Mint a
+        // RFC 9449 section 4.3 step 8: htm MUST match the HTTP method byte-exact. Mint a
         // proof claiming GET, then POST it to /token - the validator should reject
         // and the wire response should carry error=invalid_dpop_proof at HTTP 400.
         using var proofKey = new DPoPProofGenerator();
@@ -222,7 +222,7 @@ public class DPoPTests(TestFactory factory) : DPoPTestBase(factory)
     [Fact]
     public async Task Token_endpoint_rejects_proof_with_corrupted_signature()
     {
-        // RFC 9449 §4.3 step 6: signature MUST verify. Mint a valid proof then
+        // RFC 9449 section 4.3 step 6: signature MUST verify. Mint a valid proof then
         // flip a byte in the signature segment; downstream signature verification
         // fails and the validator returns invalid_dpop_proof - pin the wire shape.
         using var proofKey = new DPoPProofGenerator();
@@ -247,7 +247,7 @@ public class DPoPTests(TestFactory factory) : DPoPTestBase(factory)
         var discovery = await FetchDiscoveryAsync(CreateClient());
 
         Assert.NotNull(discovery.DPoPSigningAlgValuesSupported);
-        // RFC 9449 §4.2 alg whitelist (no HMAC, no none); the AS advertises an asymmetric
+        // RFC 9449 section 4.2 alg whitelist (no HMAC, no none); the AS advertises an asymmetric
         // subset. We pin a few canonical values; full enumeration is a unit-test concern.
         Assert.Contains(SigningAlgorithms.ES256, discovery.DPoPSigningAlgValuesSupported);
         Assert.Contains(SigningAlgorithms.RS256, discovery.DPoPSigningAlgValuesSupported);

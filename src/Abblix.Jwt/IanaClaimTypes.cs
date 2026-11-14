@@ -38,10 +38,10 @@ public static class IanaClaimTypes
         Nonce, AuthTime, AtHash, CHash, Acr, Amr, SubJwk, Cnf, SipFromTag, SipDate, SipCallid, SipCseqNum, SipViaBranch,
         Orig, Dest, Mky, Events, Toe, Txn, Rph, Sid, Vot, Vtm, Attest, Origid, Act, Scope, ClientId, MayAct, Jcard,
         AtUseNbr, Div, Opt, Vc, Vp, Sph, AceProfile, Cnonce, Exi, Roles, Groups, Entitlements, TokenIntrospection,
-        Cdniv, Cdnicrit, Cdniip, Cdniuc, Cdniets, Cdnistt, Cdnistd, SigValClaims, AuthorizationDetails
+        Cdniv, Cdnicrit, Cdniip, Cdniuc, Cdniets, Cdnistt, Cdnistd, SigValClaims, AuthorizationDetails, Htm, Htu, Ath
     };
 
-    #region RFC7519, Section 4.1.1 - Issuer Claim
+    // RFC7519, Section 4.1.1 - Issuer Claim
 
     /// <summary>
     /// Represents the principal (e.g., authorization server) that issued the JWT.
@@ -52,9 +52,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Iss = "iss";
 
-    #endregion
-
-    #region RFC7519, Section 4.1.2 - Subject Claim
+    // RFC7519, Section 4.1.2 - Subject Claim
 
     /// <summary>
     /// Represents the principal that is the subject of the JWT.
@@ -65,9 +63,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Sub = "sub";
 
-    #endregion
-
-    #region RFC7519, Section 4.1.3 - Audience Claim
+    // RFC7519, Section 4.1.3 - Audience Claim
 
     /// <summary>
     /// Identifies the recipients that the JWT is intended for.
@@ -78,9 +74,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Aud = "aud";
 
-    #endregion
-
-    #region RFC7519, Section 4.1.4 - Expiration Time Claim
+    // RFC7519, Section 4.1.4 - Expiration Time Claim
 
     /// <summary>
     /// Specifies the expiration time on or after which the JWT must not be accepted for processing.
@@ -90,9 +84,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Exp = "exp";
 
-    #endregion
-
-    #region RFC7519, Section 4.1.5 - Not Before Claim
+    // RFC7519, Section 4.1.5 - Not Before Claim
 
     /// <summary>
     /// Defines a time before which the JWT MUST NOT be accepted for processing.
@@ -103,9 +95,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Nbf = "nbf";
 
-    #endregion
-
-    #region RFC7519, Section 4.1.6 - Issued At Claim
+    // RFC7519, Section 4.1.6 - Issued At Claim
 
     /// <summary>
     /// Indicates the time at which the JWT was issued.
@@ -116,9 +106,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Iat = "iat";
 
-    #endregion
-
-    #region RFC7519, Section 4.1.7 - JWT ID Claim
+    // RFC7519, Section 4.1.7 - JWT ID Claim
 
     /// <summary>
     /// Provides a unique identifier for the JWT.
@@ -129,9 +117,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Jti = "jti";
 
-    #endregion
-
-    #region OpenID Connect Core 1.0, Section 5.1 - Personal Identifiable Information Claims
+    // OpenID Connect Core 1.0, Section 5.1 - Personal Identifiable Information Claims
 
     /// <summary>
     /// Represents the full name of the user.
@@ -287,9 +273,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string UpdatedAt = "updated_at";
 
-    #endregion
-
-    #region OpenID Connect Core 1.0, Section 2 - Other Claims
+    // OpenID Connect Core 1.0, Section 2 - Other Claims
 
     /// <summary>
     /// Represents the authorized party - the party to which the ID Token was issued.
@@ -345,9 +329,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Amr = "amr";
 
-    #endregion
-
-    #region OpenID Connect Core 1.0, Section 3.3.2.11
+    // OpenID Connect Core 1.0, Section 3.3.2.11
 
     /// <summary>
     /// Represents the Code Hash Value.
@@ -358,9 +340,19 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string CHash = "c_hash";
 
-    #endregion
+    // Financial-grade API Security Profile 1.0 - Part 2: Advanced, Section 5.1.1
 
-    #region OpenID Connect Core 1.0, Section 7.4
+    /// <summary>
+    /// Represents the State Hash Value.
+    /// </summary>
+    /// <remarks>
+    /// Carried by an ID token returned from the authorization endpoint as a detached signature over the
+    /// response. It binds the <c>state</c> echoed in that response to the signed token, so a state swapped
+    /// in transit no longer matches it. Computed by the same recipe as <see cref="CHash"/>.
+    /// </remarks>
+    public const string SHash = "s_hash";
+
+    // OpenID Connect Core 1.0, Section 7.4
 
     /// <summary>
     /// Represents the subject's public key as a JSON Web Key (JWK).
@@ -371,9 +363,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string SubJwk = "sub_jwk";
 
-    #endregion
-
-    #region RFC7800, Section 3.1
+    // RFC7800, Section 3.1
 
     /// <summary>
     /// Represents confirmation methods used by the token.
@@ -385,7 +375,7 @@ public static class IanaClaimTypes
     public const string Cnf = "cnf";
 
     /// <summary>
-    /// Member names of the <c>cnf</c> confirmation-method JSON object (RFC 7800 §3.1 / IANA
+    /// Member names of the <c>cnf</c> confirmation-method JSON object (RFC 7800 section 3.1 / IANA
     /// "JWT Confirmation Methods" registry). Each member encodes a different proof-of-possession
     /// binding scheme; multiple members can coexist when a deployment uses several schemes
     /// concurrently (e.g. mTLS for client authentication and DPoP for token binding).
@@ -394,22 +384,20 @@ public static class IanaClaimTypes
     {
         /// <summary>
         /// Base64url-encoded SHA-256 thumbprint of the client X.509 certificate that
-        /// authenticated the request (RFC 8705 §3.1). Locks an access token to the
+        /// authenticated the request (RFC 8705 section 3.1). Locks an access token to the
         /// certificate the client presented at the token endpoint via mutual TLS.
         /// </summary>
         public const string CertificateSha256Thumbprint = "x5t#S256";
 
         /// <summary>
-        /// Base64url-encoded RFC 7638 JWK Thumbprint of the DPoP proof key (RFC 9449 §6.1).
+        /// Base64url-encoded RFC 7638 JWK Thumbprint of the DPoP proof key (RFC 9449 section 6.1).
         /// Locks an access token to the specific proof-of-possession key the client
         /// demonstrated control of when the token was issued.
         /// </summary>
         public const string JwkThumbprint = "jkt";
     }
 
-    #endregion
-
-    #region RFC8055 - SIP Claims
+    // RFC8055 - SIP Claims
 
     /// <summary>
     /// "sip_from_tag" - Value from the SIP 'From' tag header field, used in SIP-based communications.
@@ -436,9 +424,7 @@ public static class IanaClaimTypes
     /// </summary>
     public const string SipViaBranch = "sip_via_branch";
 
-    #endregion
-
-    #region RFC8225, Section 5.2.1 - 5.2.2
+    // RFC8225, Section 5.2.1 - 5.2.2
 
     /// <summary>
     /// Represents the originating identity in telecommunication protocols.
@@ -467,9 +453,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Mky = "mky";
 
-    #endregion
-
-    #region RFC8417, Section 2.2 - Security Event Tokens
+    // RFC8417, Section 2.2 - Security Event Tokens
 
     /// <summary>
     /// Represents specific security events or state changes.
@@ -509,9 +493,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string SubId = "sub_id";
 
-    #endregion
-
-    #region RFC8443, Section 3 - Resource Priority
+    // RFC8443, Section 3 - Resource Priority
 
     /// <summary>
     /// Represents a resource priority header.
@@ -523,9 +505,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Rph = "rph";
 
-    #endregion
-
-    #region OpenID Connect Front-Channel Logout 1.0, Section 3
+    // OpenID Connect Front-Channel Logout 1.0, Section 3
 
     /// <summary>
     /// Represents the session ID for front-channel logout in OpenID Connect sessions.
@@ -536,9 +516,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Sid = "sid";
 
-    #endregion
-
-    #region rfc8485 - Vector of Trust
+    // rfc8485 - Vector of Trust
 
     /// <summary>
     /// Represents the vector of trust for authentication processes.
@@ -559,9 +537,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Vtm = "vtm";
 
-    #endregion
-
-    #region rfc8588 - SHAKEN Framework
+    // rfc8588 - SHAKEN Framework
 
     /// <summary>
     /// Represents the attestation level in SHAKEN/STIR frameworks.
@@ -581,9 +557,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Origid = "origid";
 
-    #endregion
-
-    #region RFC8693 - OAuth 2.0 Token Exchange
+    // RFC8693 - OAuth 2.0 Token Exchange
 
     /// <summary>
     /// Represents the actor in OAuth 2.0 token exchange.
@@ -621,9 +595,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string MayAct = "may_act";
 
-    #endregion
-
-    #region rfc8688 - jCard Data
+    // rfc8688 - jCard Data
 
     /// <summary>
     /// Contains jCard data, representing contact information in a JSON format.
@@ -634,9 +606,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Jcard = "jcard";
 
-    #endregion
-
-    #region ETSI GS NFV-SEC 022 - API Request Number
+    // ETSI GS NFV-SEC 022 - API Request Number
 
     /// <summary>
     /// Indicates the number of API requests for which the access token can be used.
@@ -648,10 +618,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string AtUseNbr = "at_use_nbr";
 
-    #endregion
-
-    #region rfc8946 - Diverted Call Information
-
+    // rfc8946 - Diverted Call Information
 
     /// <summary>
     /// Contains information about a call that was diverted from its original destination.
@@ -672,9 +639,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Opt = "opt";
 
-    #endregion
-
-    #region W3C Verifiable Credentials
+    // W3C Verifiable Credentials
 
     /// <summary>
     /// Represents a verifiable credential as specified in the W3C Recommendation.
@@ -694,9 +659,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Vp = "vp";
 
-    #endregion
-
-    #region rfc9027 - SIP Priority Header
+    // rfc9027 - SIP Priority Header
 
     /// <summary>
     /// Used to indicate the priority of a SIP message.
@@ -708,9 +671,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Sph = "sph";
 
-    #endregion
-
-    #region RFC9200 - ACE Framework
+    // RFC9200 - ACE Framework
 
     /// <summary>
     /// Specifies the ACE profile a token is used with, indicating its application in constrained environments.
@@ -742,9 +703,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Exi = "exi";
 
-    #endregion
-
-    #region RFC7643 - SCIM Roles and Groups
+    // RFC7643 - SCIM Roles and Groups
 
     /// <summary>
     /// Represents the roles associated with the subject, often used in System for Cross-domain Identity Management (SCIM).
@@ -773,9 +732,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Entitlements = "entitlements";
 
-    #endregion
-
-    #region OAuth JWT Introspection
+    // OAuth JWT Introspection
 
     /// <summary>
     /// Contains the response from an OAuth 2.0 token introspection request.
@@ -786,9 +743,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string TokenIntrospection = "token_introspection";
 
-    #endregion
-
-    #region CDNI Claims - RFC9246
+    // CDNI Claims - RFC9246
 
     /// <summary>
     /// Version of the claim set used in Content Delivery Network Interconnection (CDNI).
@@ -858,9 +813,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string Cdnistd = "cdnistd";
 
-    #endregion
-
-    #region RFC9321 - Signature Validation
+    // RFC9321 - Signature Validation
 
     /// <summary>
     /// Contains claims used for validating signatures, often in security contexts.
@@ -872,9 +825,7 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string SigValClaims = "sig_val_claims";
 
-    #endregion
-
-    #region OAuth Rich Authorization Requests (RAR)
+    // OAuth Rich Authorization Requests (RAR)
 
     /// <summary>
     /// JSON array representing the authorization requirements for a specific resource or set of resources.
@@ -885,5 +836,22 @@ public static class IanaClaimTypes
     /// </remarks>
     public const string AuthorizationDetails = "authorization_details";
 
-    #endregion
+    // RFC9449, Section 12.7 - JSON Web Token Claims Registration
+
+    /// <summary>
+    /// The HTTP method of the request a DPoP proof is bound to (RFC 9449 section 4.2).
+    /// </summary>
+    public const string Htm = "htm";
+
+    /// <summary>
+    /// The HTTP target URI, without query and fragment, of the request a DPoP proof is bound to
+    /// (RFC 9449 section 4.2).
+    /// </summary>
+    public const string Htu = "htu";
+
+    /// <summary>
+    /// The hash of the access token a DPoP proof accompanies (RFC 9449 section 4.2): the base64url encoding of the
+    /// SHA-256 hash of the ASCII encoding of the access token's value.
+    /// </summary>
+    public const string Ath = "ath";
 }

@@ -43,8 +43,14 @@ public static class Enrolment
 
         new("M:Abblix.Oidc.Server.Features.BackChannelAuthentication.UserDeviceAuthenticationHandlerStub"
             + ".InitiateAuthenticationAsync("
+            + "Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition,"
             + "Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces"
             + ".ValidBackChannelAuthenticationRequest)", 0, "BackChannelHandler.cs"),
+
+        new("T:Abblix.Oidc.Server.Features.MultiTenancy.TenantScope", 0, "TenantScope.cs"),
+        new("T:Abblix.Oidc.Server.Features.Telemetry.OidcTelemetry", 0, "OpenTelemetrySetup.cs"),
+        new("T:Abblix.Oidc.Server.Features.Telemetry.IEndpointSpanEnricher", 0, "SpanEnricher.cs"),
+        new("T:Abblix.SharedSignals.Telemetry.SharedSignalsTelemetry", 0, "SharedSignalsTelemetrySetup.cs"),
     ];
 
     /// <summary>
@@ -66,7 +72,7 @@ public static class Enrolment
     /// equality is the guard rather than a promise about some future day.
     /// </para>
     /// <para>
-    /// Sixteen of the eighteen projects under <c>src/</c>. The two source generators are NOT referenced,
+    /// Every project under <c>src/</c> but two. The two source generators are NOT referenced,
     /// and that is a hole rather than a tidiness: they emit documentation and ship inside the Mvc and
     /// MinimalApi packages, so a sample written into either is invisible here. Referencing them was
     /// tried and refused by the runtime - a generator assembly needs the compiler's own assemblies to
@@ -77,7 +83,7 @@ public static class Enrolment
     /// as coverage.
     /// </para>
     /// </remarks>
-    public const int Libraries = 16;
+    public const int Libraries = 18;
 
     /// <summary>
     /// How many projects under <c>src/</c> this one names in its own project file.
@@ -97,7 +103,7 @@ public static class Enrolment
     /// design with a better failure.
     /// </para>
     /// </remarks>
-    public const int References = 16;
+    public const int References = 18;
 
     /// <summary>
     /// How many distinct code samples the compiler recorded that nothing here compiles.
@@ -113,5 +119,38 @@ public static class Enrolment
     /// names a fragment calls into, and a stub for whatever the integrator's own half invents.
     /// </para>
     /// </remarks>
-    public const int Unenrolled = 12;
+    public const int Unenrolled = 9;
+
+    /// <summary>
+    /// The README samples whose text is compiled, each with a copy under <c>Samples/</c>.
+    /// </summary>
+    /// <remarks>
+    /// A README ships INSIDE the package, so its snippets reach every consumer while no compiler reads
+    /// them. The quick-start below is the one that proved it: it called a constant from a library
+    /// <c>Abblix.Jwt</c> had deliberately stopped depending on, and a reader with only the packages got
+    /// a compiler error on the first line that mattered.
+    /// </remarks>
+    public static IReadOnlyList<ReadmeSample> ReadmeCompiled { get; } =
+    [
+        new("README.md", 0, "ReadmeQuickstart.cs"),
+        new("src/Abblix.Oidc.Server.SharedSignals/README.md", 0, "SharedSignalsMultiTenancy.cs"),
+        new("src/Abblix.Oidc.Server.SharedSignals/README.md", 1, "SharedSignalsConfiguredStreams.cs"),
+        new("src/Abblix.Oidc.Server.Mvc/README.md", 1, "MvcRoutes.cs"),
+    ];
+
+    /// <summary>
+    /// How many C# blocks the shipping READMEs carry that nothing here compiles.
+    /// </summary>
+    /// <remarks>
+    /// The same bargain as <see cref="Unenrolled"/> and for the same reason: a gate covering one snippet
+    /// out of fifty-six is honest only while the fifty-five are counted, and the count is what turns a
+    /// new uncompiled snippet into a failing row rather than into silence.
+    /// <para>
+    /// Most of the remainder are fragments rather than pastable programs - a line configuring a service
+    /// with <c>services</c> arriving from nowhere - so enrolling one means writing the wrapper that
+    /// supplies its ambient names, exactly as a doc-comment sample does. The number falls one at a time
+    /// as that work is done.
+    /// </para>
+    /// </remarks>
+    public const int ReadmeUnenrolled = 56;
 }

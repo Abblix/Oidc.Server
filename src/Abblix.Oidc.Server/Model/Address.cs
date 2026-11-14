@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.Model;
 public record Address
 {
     /// <summary>
-    /// Wire-level member names of the <c>address</c> claim (OIDC Core §5.1.1).
+    /// Wire-level member names of the <c>address</c> claim (OIDC Core section 5.1.1).
     /// </summary>
     private static class Parameters
     {

@@ -1,6 +1,6 @@
 # Abblix.Jwt.Vault
 
-**Abblix.Jwt.Vault** lets any [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) host - the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) included, but equally a service that only signs tokens - sign and decrypt with keys protected by the HashiCorp Vault / OpenBao Transit secrets engine, in either of two postures. Hold the keys inside Transit, non-exportable, so their private halves never enter your process and every signature is a Transit round-trip; or mint them in-process and seal each to a Transit key, so signing stays local and only the sealed copies leave the process. Either way only public halves are published, and signature verification runs locally and never calls Transit.
+Abblix.Jwt.Vault lets any [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) host - the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) included, but equally a service that only signs tokens - sign and decrypt with keys protected by the HashiCorp Vault / OpenBao Transit secrets engine, in either of two postures. Hold the keys inside Transit, non-exportable, so their private halves never enter your process and every signature is a Transit round-trip; or mint them in-process and seal each to a Transit key, so signing stays local and only the sealed copies leave the process. Either way only public halves are published, and signature verification runs locally and never calls Transit.
 
 Read [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) first. It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the placement call is required. This README covers only what is specific to Vault.
 
@@ -68,8 +68,8 @@ builder.Services
     .AddVaultCustodian(vault =>
     {
         // Vault must be reached over TLS: this connection carries the token and every signature.
-        vault.Address = builder.Configuration["Vault:Address"]
-            ?? throw new InvalidOperationException("Vault:Address is not configured.");
+        vault.Address = new Uri(builder.Configuration["Vault:Address"]
+            ?? throw new InvalidOperationException("Vault:Address is not configured."));
         vault.Token = builder.Configuration["Vault:Token"]; // from the environment, never hardcoded
         vault.TransitMount = "transit";                     // optional: this is the default mount
     })
@@ -139,7 +139,7 @@ Reach Vault over TLS in every environment that is not a local dev container: the
 
 ### The HTTP pipeline
 
-Both engines share one client from the host's `IHttpClientFactory`, so retries, a circuit breaker, timeouts, a proxy or a client certificate are added with the standard APIs and nothing of ours.
+Both engines share one client from the host's `IHttpClientFactory`, so retries, a circuit breaker, timeouts, a proxy or a client certificate are added with the standard APIs and nothing of ours. The examples below use `AddStandardResilienceHandler` from [Microsoft.Extensions.Http.Resilience](https://www.nuget.org/packages/Microsoft.Extensions.Http.Resilience), which your application installs itself.
 
 To make every outbound client of your application resilient, including this one, name none of them:
 
@@ -190,9 +190,9 @@ ECDH-ES key agreement is not supported: Vault Transit exposes no key-agreement p
 
 | Package | Description |
 |---------|-------------|
-| **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
-| **[Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)** | Azure Key Vault custodian for the same external-key seam |
-| **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
+| [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) | Core OpenID Connect server implementation |
+| [Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure) | Azure Key Vault custodian for the same external-key seam |
+| [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) | JWT signing, encryption, and validation using .NET crypto primitives |
 
 ## Getting Started
 
@@ -204,6 +204,6 @@ See [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
 
 ## Contacts
 
-- **General inquiries**: [info@abblix.com](mailto:info@abblix.com)
-- **Support and security reports**: [support@abblix.com](mailto:support@abblix.com)
-- **Website**: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)
+- General inquiries: [info@abblix.com](mailto:info@abblix.com)
+- Support and security reports: [support@abblix.com](mailto:support@abblix.com)
+- Website: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)

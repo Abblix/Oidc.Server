@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Xunit;
@@ -12,7 +13,7 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// Verifies how <see cref="JsonWebKeyExtensions.ToJsonWebKey"/> derives the JWK <c>use</c> from a certificate's
+/// Verifies how <see cref="CertificateJsonWebKeyExtensions.ToJsonWebKey"/> derives the JWK <c>use</c> from a certificate's
 /// Key Usage extension: one value for a single-purpose certificate, and no <c>use</c> (never a multi-valued
 /// string such as "sig enc") for one that permits both signing and encryption, per RFC 7517 &#167;4.2.
 /// </summary>
@@ -66,8 +67,8 @@ public class JsonWebKeyExtensionsTests
     /// <summary>
     /// A key declaring no algorithm is answerable, not unknown: RFC 7518 section 3.1 binds each signature
     /// algorithm to a key type and section 3.4 binds each ECDSA one to a single curve, so the material settles
-    /// what the declaration left open. This is the ordinary case for a certificate-imported key, which never
-    /// carries an <c>alg</c>.
+    /// what the declaration left open. This is the ordinary case for a key imported from an RSA certificate, which
+    /// never carries an <c>alg</c>.
     /// </summary>
     [Theory]
     [InlineData(SigningAlgorithms.RS256, true)]
@@ -102,5 +103,40 @@ public class JsonWebKeyExtensionsTests
         var key = JsonWebKeyFactory.CreateEllipticCurve(curve, SigningAlgorithms.ES256);
 
         Assert.Equal(expected, key.SupportsAlgorithm(algorithm));
+    }
+
+    /// <summary>
+    /// Every algorithm this library recognizes, except "none", is met by some key: the requirement table behind
+    /// <see cref="AlgorithmSupportExtensions.SupportsAlgorithm"/> is held complete here rather than by a default arm,
+    /// so an algorithm added to either catalog fails this test until its key requirement is written down.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(RecognizedAlgorithms))]
+    public void EveryRecognizedAlgorithm_IsMetBySomeKey(string algorithm)
+    {
+        JsonWebKey[] keys =
+        [
+            JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature),
+            JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256),
+            JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P384, SigningAlgorithms.ES384),
+            JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P521, SigningAlgorithms.ES512),
+            JsonWebKeyFactory.CreateHmac(SigningAlgorithms.HS256),
+        ];
+
+        Assert.Contains(keys, key => key.SupportsAlgorithm(algorithm));
+    }
+
+    public static TheoryData<string> RecognizedAlgorithms
+    {
+        get
+        {
+            var keyManagement = typeof(EncryptionAlgorithms.KeyManagement)
+                .GetFields(BindingFlags.Public | BindingFlags.Static)
+                .Where(constant => constant.IsLiteral)
+                .Select(constant => (string)constant.GetRawConstantValue()!);
+
+            return new TheoryData<string>(
+                SigningAlgorithms.Known.Where(algorithm => algorithm != SigningAlgorithms.None).Concat(keyManagement));
+        }
     }
 }

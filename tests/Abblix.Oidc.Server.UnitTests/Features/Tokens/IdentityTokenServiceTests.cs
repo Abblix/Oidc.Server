@@ -10,6 +10,7 @@ using System;
 using System.Buffers.Text;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -17,7 +18,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
@@ -54,16 +55,13 @@ public class IdentityTokenServiceTests
 
     public IdentityTokenServiceTests()
     {
-        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
-
         var timeProvider = new FakeTimeProvider(_currentTime);
 
         _jwtFormatter = new Mock<IClientJwtFormatter>(MockBehavior.Strict);
         _userClaimsProvider = new Mock<IUserClaimsProvider>(MockBehavior.Strict);
 
         _service = new IdentityTokenService(
-            issuerProvider.Object,
+            SingleIssuer.LicensedCatalog,
             timeProvider,
             _jwtFormatter.Object,
             _userClaimsProvider.Object,
@@ -84,21 +82,21 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null));
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SigningAlgorithms.RS256, capturedToken!.Header.Algorithm);
+        Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
     }
 
     /// <summary>
@@ -129,13 +127,13 @@ public class IdentityTokenServiceTests
         var clientInfo = CreateClientInfo();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(CreateUserClaims());
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         const string authenticationRequestId = "1c266114-a1be-4252-8ad1-04986c5b9ac1";
@@ -143,20 +141,18 @@ public class IdentityTokenServiceTests
         const string refreshTokenHash = "sHahCuSpXCRg5mkDDvvr4w";
 
         // Act
-        await _service.CreateIdentityTokenAsync(
-            authSession, authContext, clientInfo, true, null, null,
-            new PushDeliveryBindings(authenticationRequestId, refreshToken));
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null, new PushDeliveryBindings(authenticationRequestId, refreshToken)));
 
         // Assert
         Assert.NotNull(capturedToken);
 
         Assert.Equal(
             authenticationRequestId,
-            capturedToken!.Payload[JwtClaimTypes.AuthenticationRequestId]!.GetValue<string>());
+            capturedToken.Payload[OidcClaimTypes.AuthenticationRequestId]!.GetValue<string>());
 
         Assert.Equal(
             refreshTokenHash,
-            capturedToken.Payload[JwtClaimTypes.RefreshTokenHash]!.GetValue<string>());
+            capturedToken.Payload[OidcClaimTypes.RefreshTokenHash]!.GetValue<string>());
     }
 
     /// <summary>
@@ -175,28 +171,29 @@ public class IdentityTokenServiceTests
         var clientInfo = CreateClientInfo();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(CreateUserClaims());
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(
-            authSession, authContext, clientInfo, true, null, null,
-            new PushDeliveryBindings("some-request", RefreshToken: null));
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null, new PushDeliveryBindings("some-request", RefreshToken: null)));
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.NotNull(capturedToken!.Payload[JwtClaimTypes.AuthenticationRequestId]);
-        Assert.Null(capturedToken.Payload[JwtClaimTypes.RefreshTokenHash]);
+        Assert.NotNull(capturedToken.Payload[OidcClaimTypes.AuthenticationRequestId]);
+        Assert.Null(capturedToken.Payload[OidcClaimTypes.RefreshTokenHash]);
     }
 
     /// <summary>
-    /// The control, and it is what keeps the two rows above from being a rule about every ID Token: a
+    /// The control, and it is what keeps
+    /// <see cref="CreateIdentityToken_ForAPushDelivery_BindsTheRequestAndTheRefreshToken"/> and
+    /// <see cref="CreateIdentityToken_ForAPushDeliveryWithoutARefreshToken_OmitsOnlyThatHash"/> from being a rule
+    /// about every ID Token: a
     /// delivery that is not a push carries neither claim.
     /// </summary>
     /// <remarks>
@@ -213,22 +210,22 @@ public class IdentityTokenServiceTests
         var clientInfo = CreateClientInfo();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(CreateUserClaims());
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null));
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Null(capturedToken!.Payload[JwtClaimTypes.AuthenticationRequestId]);
-        Assert.Null(capturedToken.Payload[JwtClaimTypes.RefreshTokenHash]);
+        Assert.Null(capturedToken.Payload[OidcClaimTypes.AuthenticationRequestId]);
+        Assert.Null(capturedToken.Payload[OidcClaimTypes.RefreshTokenHash]);
     }
 
     /// <summary>
@@ -244,21 +241,21 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null));
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime, capturedToken!.Payload.IssuedAt);
+        Assert.Equal(_currentTime, capturedToken.Payload.IssuedAt);
         Assert.Equal(_currentTime, capturedToken.Payload.NotBefore);
         Assert.Equal(_currentTime.AddMinutes(15), capturedToken.Payload.ExpiresAt);
         Assert.Equal(Issuer, capturedToken.Payload.Issuer);
@@ -287,21 +284,21 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null));
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(SessionId, capturedToken!.Payload.SessionId);
+        Assert.Equal(SessionId, capturedToken.Payload.SessionId);
         Assert.Equal(authTime, capturedToken.Payload.AuthenticationTime);
         Assert.Equal("urn:oasis:names:tc:SAML:2.0:ac:classes:Password", capturedToken.Payload.AuthContextClassRef);
         Assert.Equal(["pwd", "mfa"], capturedToken.Payload.AuthenticationMethodReferences);
@@ -323,21 +320,21 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null));
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal([ClientId], capturedToken!.Payload.Audiences);
+        Assert.Equal([ClientId], capturedToken.Payload.Audiences);
         Assert.Equal("nonce_xyz123", capturedToken.Payload.Nonce);
     }
 
@@ -360,21 +357,21 @@ public class IdentityTokenServiceTests
         };
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null));
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(UserId, capturedToken!.Payload.Subject);
+        Assert.Equal(UserId, capturedToken.Payload.Subject);
         Assert.Equal("John Doe", capturedToken.Payload["name"]?.GetValue<string>());
         Assert.Equal("john.doe@example.com", capturedToken.Payload["email"]?.GetValue<string>());
         Assert.True(capturedToken.Payload["email_verified"]?.GetValue<bool>());
@@ -393,11 +390,11 @@ public class IdentityTokenServiceTests
         var clientInfo = CreateClientInfo();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync((JsonObject?)null);
 
         // Act
-        var result = await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        var result = await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null));
 
         // Assert
         Assert.Null(result);
@@ -405,23 +402,25 @@ public class IdentityTokenServiceTests
 
     /// <summary>
     /// Verifies that when includeUserClaims is false, the service filters out
-    /// profile, email, and address scopes per OIDC spec Section 5.4.
+    /// profile, email, address and phone scopes per OIDC spec Section 5.4.
     /// </summary>
     [Fact]
     public async Task CreateIdentityToken_WhenNotIncludingUserClaims_ShouldFilterScopes()
     {
         // Arrange
         var authSession = CreateAuthSession();
-        var scopes = new[] { Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Address, "custom_scope" };
+        var scopes = new[]
+            { Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Address, Scopes.Phone, "custom_scope" };
         var authContext = new AuthorizationContext(ClientId, scopes, null);
         var clientInfo = CreateClientInfo();
         var userClaims = CreateUserClaims();
 
-        // Expect only openid and custom_scope (profile, email, address filtered out)
+        // Expect only openid and custom_scope (profile, email, address, phone filtered out)
         var expectedScopes = new[] { Scopes.OpenId, "custom_scope" };
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 authSession,
                 It.Is<ICollection<string>>(s => s.SequenceEqual(expectedScopes)),
                 null,
@@ -429,15 +428,16 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(userClaims);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, false, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, false, null, null, null));
 
         // Assert
         _userClaimsProvider.Verify(
             p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 authSession,
                 It.Is<ICollection<string>>(s => s.SequenceEqual(expectedScopes)),
                 null,
@@ -454,7 +454,7 @@ public class IdentityTokenServiceTests
     {
         // Arrange
         var authSession = CreateAuthSession();
-        var scopes = new[] { Scopes.OpenId, Scopes.Profile, Scopes.Email };
+        var scopes = new[] { Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Phone };
         var authContext = new AuthorizationContext(ClientId, scopes, null);
         var clientInfo = CreateClientInfo();
         clientInfo.ForceUserClaimsInIdentityToken = true;
@@ -462,6 +462,7 @@ public class IdentityTokenServiceTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 authSession,
                 It.Is<ICollection<string>>(s => s.SequenceEqual(scopes)),  // All scopes preserved
                 null,
@@ -469,15 +470,16 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(userClaims);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, false, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, false, null, null, null));
 
         // Assert
         _userClaimsProvider.Verify(
             p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 authSession,
                 It.Is<ICollection<string>>(s => s.SequenceEqual(scopes)),
                 null,
@@ -500,24 +502,24 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, AuthCode, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, AuthCode, null, null));
 
         // Assert
         Assert.NotNull(capturedToken);
-        var cHash = capturedToken!.Payload[JwtClaimTypes.CodeHash];
+        var cHash = capturedToken.Payload[IanaClaimTypes.CHash];
         Assert.NotNull(cHash);
         Assert.IsType<string>(cHash?.GetValue<string>());
-        Assert.NotEmpty(cHash!.GetValue<string>());
+        Assert.NotEmpty(cHash.GetValue<string>());
     }
 
     /// <summary>
@@ -535,24 +537,24 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, AccessToken);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, AccessToken, null));
 
         // Assert
         Assert.NotNull(capturedToken);
-        var atHash = capturedToken!.Payload[JwtClaimTypes.AccessTokenHash];
+        var atHash = capturedToken.Payload[IanaClaimTypes.AtHash];
         Assert.NotNull(atHash);
         Assert.IsType<string>(atHash?.GetValue<string>());
-        Assert.NotEmpty(atHash!.GetValue<string>());
+        Assert.NotEmpty(atHash.GetValue<string>());
     }
 
     /// <summary>
@@ -569,33 +571,33 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, AuthCode, AccessToken);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, AuthCode, AccessToken, null));
 
         // Assert
         Assert.NotNull(capturedToken);
-        var cHash = capturedToken!.Payload[JwtClaimTypes.CodeHash];
-        var atHash = capturedToken.Payload[JwtClaimTypes.AccessTokenHash];
+        var cHash = capturedToken.Payload[IanaClaimTypes.CHash];
+        var atHash = capturedToken.Payload[IanaClaimTypes.AtHash];
 
         Assert.NotNull(cHash);
         Assert.NotNull(atHash);
-        Assert.NotEmpty(cHash!.GetValue<string>());
-        Assert.NotEmpty(atHash!.GetValue<string>());
+        Assert.NotEmpty(cHash.GetValue<string>());
+        Assert.NotEmpty(atHash.GetValue<string>());
         Assert.NotEqual(cHash.GetValue<string>(), atHash.GetValue<string>());
     }
 
     /// <summary>
     /// Verifies c_hash/at_hash are produced for non-RS256 signing algorithms, using the hash
-    /// matching the algorithm's digest size (OIDC Core §3.1.3.6 / §3.3.2.11): SHA-256 for *256,
+    /// matching the algorithm's digest size (OIDC Core section 3.1.3.6 / section 3.3.2.11): SHA-256 for *256,
     /// SHA-384 for *384, SHA-512 for *512. The claim is base64url of the left half of the digest,
     /// so its decoded length is half the digest size (16 / 24 / 32 bytes). Before the fix only
     /// RS256 was handled and these algorithms silently omitted the hashes, breaking hybrid flows.
@@ -614,22 +616,22 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, AuthCode, AccessToken);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, AuthCode, AccessToken, null));
 
         // Assert
         Assert.NotNull(capturedToken);
-        var cHash = capturedToken!.Payload[JwtClaimTypes.CodeHash]?.GetValue<string>();
-        var atHash = capturedToken.Payload[JwtClaimTypes.AccessTokenHash]?.GetValue<string>();
+        var cHash = capturedToken.Payload[IanaClaimTypes.CHash]?.GetValue<string>();
+        var atHash = capturedToken.Payload[IanaClaimTypes.AtHash]?.GetValue<string>();
         Assert.NotNull(cHash);
         Assert.NotNull(atHash);
         Assert.Equal(expectedHalfDigestBytes, Base64Url.DecodeFromChars(cHash).Length);
@@ -649,22 +651,70 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((jwt, _, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null));
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.False(capturedToken!.Payload.Json.ContainsKey(JwtClaimTypes.CodeHash));
-        Assert.False(capturedToken.Payload.Json.ContainsKey(JwtClaimTypes.AccessTokenHash));
+        Assert.False(capturedToken.Payload.Json.ContainsKey(IanaClaimTypes.CHash));
+        Assert.False(capturedToken.Payload.Json.ContainsKey(IanaClaimTypes.AtHash));
+    }
+
+    /// <summary>
+    /// The worked example of FAPI 1.0 Part 2, Appendix A: a request with state
+    /// <c>VgSUIEnflnDxTe1vAtr54o</c> answered by a PS256-signed ID token carrying s_hash
+    /// <c>9s6CBbOxiKE65d9-Qr0QIQ</c> (section 5.2.2.1 requires the claim whenever the client supplied a state).
+    /// </summary>
+    [Fact]
+    public async Task CreateIdentityToken_WithState_IncludesTheStateHashOfTheFapiExample()
+    {
+        var token = await CreateTokenWithStateAsync("VgSUIEnflnDxTe1vAtr54o");
+
+        Assert.Equal("9s6CBbOxiKE65d9-Qr0QIQ", token.Payload[IanaClaimTypes.SHash]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A request without a state has nothing for s_hash to protect, so the token carries no such claim.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task CreateIdentityToken_WithoutState_OmitsTheStateHash(string? state)
+    {
+        var token = await CreateTokenWithStateAsync(state);
+
+        Assert.False(token.Payload.Json.ContainsKey(IanaClaimTypes.SHash));
+    }
+
+    private async Task<JsonWebToken> CreateTokenWithStateAsync(string? state)
+    {
+        var authSession = CreateAuthSession();
+        var authContext = CreateAuthorizationContext();
+        var clientInfo = CreateClientInfo(signingAlgorithm: SigningAlgorithms.PS256);
+
+        _userClaimsProvider
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
+            .ReturnsAsync(CreateUserClaims());
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, AuthCode, null, state));
+
+        Assert.NotNull(capturedToken);
+        return capturedToken;
     }
 
     /// <summary>
@@ -689,6 +739,7 @@ public class IdentityTokenServiceTests
 
         _userClaimsProvider
             .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 authSession,
                 authContext.Scope,
                 It.Is<ICollection<KeyValuePair<string, RequestedClaimDetails>>>(
@@ -699,15 +750,16 @@ public class IdentityTokenServiceTests
             .ReturnsAsync(userClaims);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null));
 
         // Assert
         _userClaimsProvider.Verify(
             p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
                 authSession,
                 authContext.Scope,
                 It.Is<ICollection<KeyValuePair<string, RequestedClaimDetails>>>(
@@ -731,20 +783,21 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        var result = await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null));
 
         // Assert
-        Assert.NotNull(result);
-        Assert.NotNull(result!.Token);
-        Assert.Equal(EncodedToken, result.EncodedJwt);
+        var issued = result!.Value.GetSuccess();
+        Assert.NotNull(issued);
+        Assert.NotNull(issued.Token);
+        Assert.Equal(EncodedToken, issued.EncodedJwt);
     }
 
     /// <summary>
@@ -760,18 +813,18 @@ public class IdentityTokenServiceTests
         var userClaims = CreateUserClaims();
 
         _userClaimsProvider
-            .Setup(p => p.GetUserClaimsAsync(authSession, authContext.Scope, null, clientInfo))
+            .Setup(p => p.GetUserClaimsAsync(TestTenant.Matched, authSession, authContext.Scope, null, clientInfo))
             .ReturnsAsync(userClaims);
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateIdentityTokenAsync(authSession, authContext, clientInfo, true, null, null);
+        await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null));
 
         // Assert
-        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
+        _jwtFormatter.Verify(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
     }
 
     // Helper methods to create test objects
@@ -799,6 +852,360 @@ public class IdentityTokenServiceTests
             clientInfo.IdentityTokenExpiresIn = identityTokenExpiresIn.Value;
 
         return clientInfo;
+    }
+
+    /// <summary>
+    /// OpenID Connect Core 1.0 section 5.5.1.1: a request asking for <c>acr</c> as an essential claim of the ID
+    /// token AND naming the values it accepts must be answered with one of those values, and an outcome that
+    /// cannot meet it "MUST" be treated as a failed authentication attempt. The token states the session's own
+    /// acr, so a session at another level cannot satisfy such a request, and issuing anyway would state a level
+    /// the request declared unacceptable.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_TheSessionCannotMeet_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa1" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Essential = true, Values = ["urn:example:loa3"] });
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
+    /// The same request against a session that does hold one of the named values is met, so it is answered.
+    /// This is the row that keeps the rule from becoming a blanket refusal of every step-up request.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_TheSessionMeets_IssuesTheToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa3" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Essential = true, Values = ["urn:example:loa2", "urn:example:loa3"] });
+
+        Assert.NotNull(token);
+    }
+
+    /// <summary>
+    /// A request that marks acr essential without naming a value accepts whatever the session has - section
+    /// 5.5.1.1 conditions its rule on a <c>value</c> or <c>values</c> member - and a voluntary one takes the
+    /// ordinary rule of section 5.5.1, which forbids refusing over a claim at all.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [InlineData(null)]
+    public async Task AnAcrRequestNamingNoValue_IssuesTheToken(bool? essential)
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa1" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Essential = essential });
+
+        Assert.NotNull(token);
+    }
+
+    /// <summary>
+    /// A voluntary acr naming values takes the ordinary rule too: section 5.5.1.1 says the relying party "MAY
+    /// request the acr Claim as a Voluntary Claim ... by not including 'essential': true", and a voluntary claim
+    /// the server cannot match is not a failed authentication attempt.
+    /// </summary>
+    [Fact]
+    public async Task AVoluntaryAcr_TheSessionCannotMeet_IssuesTheToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa1" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Values = ["urn:example:loa3"] });
+
+        Assert.NotNull(token);
+    }
+
+    /// <summary>
+    /// The rule is written for the ID token, so the user-information half of the claims parameter does not
+    /// carry it: a request naming an unmet acr there still gets its ID token.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_InTheUserInfoHalf_IssuesTheToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa1" };
+        var authContext = new AuthorizationContext(ClientId, [Scopes.OpenId], null)
+        {
+            RequestedClaims = new RequestedClaims
+            {
+                UserInfo = new Dictionary<string, RequestedClaimDetails>
+                {
+                    [IanaClaimTypes.Acr] =
+                        new() { Essential = true, Values = ["urn:example:loa3"] },
+                },
+            },
+        };
+
+        var token = await CreateTokenAsync(authSession, authContext);
+
+        Assert.NotNull(token);
+    }
+
+    /// <summary>
+    /// The same request as it actually arrives. <see cref="RequestedClaimDetails.Values"/> is typed as
+    /// <c>object[]</c>, so a request read off the wire holds <see cref="JsonElement"/> values, while one
+    /// retrieved by <c>request_uri</c> was round-tripped through the store and holds strings. A reader
+    /// handling only strings would leave every wire request unchecked with nothing failing to say so.
+    /// </summary>
+    [Theory]
+    [InlineData("urn:example:loa1", false)]
+    [InlineData("urn:example:loa3", true)]
+    public async Task AnEssentialAcrReadOffTheWire_IsComparedLikeAnyOther(string sessionAcr, bool expectToken)
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = sessionAcr };
+        var requestedFromJson = JsonSerializer.Deserialize<RequestedClaimDetails>(
+            """{"essential": true, "values": ["urn:example:loa3"]}""");
+
+        var token = await CreateTokenForRequestedAcrAsync(authSession, requestedFromJson!);
+
+        Assert.Equal(expectToken, token is not null);
+    }
+
+    /// <summary>
+    /// A request whose qualifiers accept no level at all cannot be met by any authentication, so the rule of
+    /// section 5.5.1.1 applies to it whatever the session holds.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_NamingAnEmptyChoice_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa1" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Essential = true, Values = [] });
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
+    /// Both qualifiers bind, as they do for <c>sub</c>: a request naming a value outside its own choice
+    /// accepts nothing, so it is unmet even by the session that holds that very value. The session is the
+    /// one named by <c>value</c> deliberately - a reader that dropped <c>values</c> and kept <c>value</c>
+    /// would issue a token here, and a session holding neither could not tell the two apart.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_WhoseValueIsOutsideItsOwnChoice_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa3" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails
+            {
+                Essential = true,
+                Value = "urn:example:loa3",
+                Values = ["urn:example:loa1"],
+            });
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
+    /// The qualifiers narrow each other rather than one replacing the other, and this row is what says so
+    /// in the direction the others cannot: the session holds a level the choice lists, so a reader keeping
+    /// only <c>values</c> would issue a token. What the request accepts is the one level both qualifiers
+    /// name, which this session does not hold.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_WhoseQualifiersAgreeOnAnotherLevel_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa2" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails
+            {
+                Essential = true,
+                Value = "urn:example:loa3",
+                Values = ["urn:example:loa2", "urn:example:loa3"],
+            });
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
+    /// The qualifiers are matched against each other by the same equality section 5.5.1 prescribes for
+    /// matching a claim value, so a <c>value</c> differing from its own choice only in case is outside it.
+    /// The session holds that very value, which is what separates this from the comparison the identity
+    /// token makes afterwards.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_WhoseValueMatchesItsChoiceOnlyInCase_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "URN:EXAMPLE:LOA3" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails
+            {
+                Essential = true,
+                Value = "URN:EXAMPLE:LOA3",
+                Values = ["urn:example:loa3"],
+            });
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
+    /// A single <c>value</c> requests a level as much as a one-element <c>values</c> does - section 5.5.1
+    /// defines the two qualifiers together - so a session that does not hold it cannot meet the request.
+    /// </summary>
+    [Theory]
+    [InlineData("urn:example:loa1", false)]
+    [InlineData("urn:example:loa3", true)]
+    public async Task AnEssentialAcr_NamingASingleValue_IsComparedLikeAChoice(string sessionAcr, bool expectToken)
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = sessionAcr };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Essential = true, Value = "urn:example:loa3" });
+
+        Assert.Equal(expectToken, token is not null);
+    }
+
+    /// <summary>
+    /// The comparison is by equality, which section 5.5.1 states outright: "An equality comparison is used
+    /// to determine whether the requested Claim values match". A level differing only in case is a
+    /// different level.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_DifferingOnlyInCase_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:LOA3" };
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Essential = true, Values = ["urn:example:loa3"] });
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
+    /// A choice mixing a level the session does hold with a qualifier that is no level at all is refused
+    /// for the malformed member, not accepted for the sound one. The session is the match deliberately: a
+    /// reader that skipped what it could not parse would find the level it holds and issue the token.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AnEssentialAcr_MixingALevelWithSomethingElse_IssuesNoToken(bool throughTheStore)
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa3" };
+        var stored = new RequestedClaimDetails { Essential = true, Values = ["urn:example:loa3", 42] };
+        var readInline = JsonSerializer.Deserialize<RequestedClaimDetails>(
+            """{"essential": true, "values": ["urn:example:loa3", 42]}""")!;
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            throughTheStore ? stored : readInline);
+
+        Assert.Null(token);
+    }
+
+    /// <summary>
+    /// A session that records no authentication level at all - the shape a host produces when it never
+    /// assigns one - meets no request that names the levels it accepts, and the token would otherwise go
+    /// out stating no level for a request that demanded a particular one.
+    /// </summary>
+    [Fact]
+    public async Task AnEssentialAcr_AgainstASessionRecordingNoLevel_IssuesNoToken()
+    {
+        var authSession = CreateAuthSession();
+        Assert.Null(authSession.AuthContextClassRef);
+
+        var token = await CreateTokenForRequestedAcrAsync(
+            authSession,
+            new RequestedClaimDetails { Essential = true, Values = ["urn:example:loa3"] });
+
+        Assert.Null(token);
+    }
+
+
+    /// <summary>
+    /// A qualifier that is not a string states a level no authentication can hold, so it is unmet rather
+    /// than ignored - in either qualifier, and in either shape the request arrives in. A request read
+    /// inline holds <see cref="JsonElement"/> values, because the model types them as <c>object</c>; one
+    /// retrieved by <c>request_uri</c> was round-tripped through the store and holds boxed primitives.
+    /// Driving only the second would leave every inline request unchecked with nothing failing to say so.
+    /// </summary>
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public async Task AnEssentialAcr_NamingSomethingThatIsNotALevel_IssuesNoToken(
+        bool inTheChoice,
+        bool throughTheStore)
+    {
+        var authSession = CreateAuthSession() with { AuthContextClassRef = "urn:example:loa3" };
+        var member = inTheChoice ? "values\": [42]" : "value\": 42";
+        object? notALevel = inTheChoice ? null : 42;
+        object[]? choiceOfNotALevel = inTheChoice ? [42] : null;
+        var stored = new RequestedClaimDetails
+        {
+            Essential = true,
+            Value = notALevel,
+            Values = choiceOfNotALevel,
+        };
+        var readInline = JsonSerializer.Deserialize<RequestedClaimDetails>(
+            $"{{\"essential\": true, \"{member}}}")!;
+        var requested = throughTheStore ? stored : readInline;
+
+        var token = await CreateTokenForRequestedAcrAsync(authSession, requested);
+
+        Assert.Null(token);
+    }
+
+    private Task<EncodedJsonWebToken?> CreateTokenForRequestedAcrAsync(
+        AuthSession authSession,
+        RequestedClaimDetails acr)
+    {
+        var authContext = new AuthorizationContext(ClientId, [Scopes.OpenId], null)
+        {
+            RequestedClaims = new RequestedClaims
+            {
+                IdToken = new Dictionary<string, RequestedClaimDetails>
+                {
+                    [IanaClaimTypes.Acr] = acr,
+                },
+            },
+        };
+
+        return CreateTokenAsync(authSession, authContext);
+    }
+
+    private async Task<EncodedJsonWebToken?> CreateTokenAsync(
+        AuthSession authSession,
+        AuthorizationContext authContext)
+    {
+        var clientInfo = CreateClientInfo();
+
+        _userClaimsProvider
+            .Setup(p => p.GetUserClaimsAsync(
+                TestTenant.Matched,
+                authSession,
+                authContext.Scope,
+                It.IsAny<ICollection<KeyValuePair<string, RequestedClaimDetails>>>(),
+                clientInfo))
+            .ReturnsAsync(CreateUserClaims());
+
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
+            .ReturnsAsync(EncodedToken);
+
+        var created = await _service.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(authSession, authContext, clientInfo, true, null, null, null));
+        return created?.GetSuccess();
     }
 
     private static JsonObject CreateUserClaims() => new()

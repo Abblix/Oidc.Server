@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
 
@@ -56,29 +57,29 @@ public class ScopeValidatorTests
     /// </summary>
     private void SetupScopeManager()
     {
-        _scopeManager.Setup(m => m.TryGet(Scopes.OpenId, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(TestTenant.Matched, Scopes.OpenId, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = _openIdScope;
                 return true;
             }));
 
-        _scopeManager.Setup(m => m.TryGet(Scopes.Profile, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(TestTenant.Matched, Scopes.Profile, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = _profileScope;
                 return true;
             }));
 
-        _scopeManager.Setup(m => m.TryGet(Scopes.Email, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(TestTenant.Matched, Scopes.Email, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = _emailScope;
                 return true;
             }));
 
-        _scopeManager.Setup(m => m.TryGet(Scopes.OfflineAccess, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(TestTenant.Matched, Scopes.OfflineAccess, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = _offlineAccessScope;
                 return true;
@@ -86,7 +87,7 @@ public class ScopeValidatorTests
     }
 
     // Delegate for Moq out parameter support
-    private delegate bool ScopeManagerTryGetCallback(string scope, out ScopeDefinition? definition);
+    private delegate bool ScopeManagerTryGetCallback(TenantDefinition tenant, string scope, out ScopeDefinition? definition);
 
     /// <summary>
     /// Creates an AuthorizationValidationContext for testing.
@@ -94,20 +95,23 @@ public class ScopeValidatorTests
     private static AuthorizationValidationContext CreateContext(
         string[] scopes,
         FlowTypes flowType = FlowTypes.AuthorizationCode,
-        bool? offlineAccessAllowed = null,
-        ResourceDefinition[]? resources = null)
+        OfflineAccess offlineAccess = OfflineAccess.Disabled,
+        ResourceDefinition[]? resources = null,
+        string[]? prompt = null,
+        string[]? responseType = null)
     {
         var request = new AuthorizationRequest
         {
             ClientId = ClientId,
-            ResponseType = [ResponseTypes.Code],
+            ResponseType = responseType ?? [ResponseTypes.Code],
             RedirectUri = new Uri("https://client.example.com/callback"),
             Scope = scopes,
+            Prompt = prompt,
         };
 
         var clientInfo = new ClientInfo(ClientId)
         {
-            OfflineAccessAllowed = offlineAccessAllowed,
+            OfflineAccess = offlineAccess,
         };
 
         return new AuthorizationValidationContext(request)
@@ -131,7 +135,7 @@ public class ScopeValidatorTests
         var context = CreateContext([Scopes.OpenId, Scopes.Profile, Scopes.Email]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -143,107 +147,180 @@ public class ScopeValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts offline_access for authorization code flow.
-    /// Per OIDC Core 1.0 Section 11, offline_access is allowed for code flow.
-    /// Critical for refresh token issuance.
+    /// A default carrying offline_access is served without it where the server ignores it, as a request naming it
+    /// would be, so the resource validator, asking the same answer before the scope validator runs, never settles
+    /// resources for a scope the request is not served with. Received, it stays.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_OfflineAccessInAuthorizationCodeFlow_ShouldSucceed()
+    [Theory]
+    [InlineData(false, new[] { Scopes.OpenId })]
+    [InlineData(true, new[] { Scopes.OpenId, Scopes.OfflineAccess })]
+    public void ServedScope_OfADefaultCarryingOfflineAccess_LeavesItOutWhereIgnored(
+        bool promptConsent, string[] expected)
     {
-        // Arrange
         var context = CreateContext(
-            [Scopes.OpenId, Scopes.OfflineAccess],
-            offlineAccessAllowed: true);
+            [],
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: promptConsent ? [Prompts.Consent] : null);
+        context.ClientInfo.DefaultScope = [Scopes.OpenId, Scopes.OfflineAccess];
 
-        // Act
-        var result = await _validator.ValidateAsync(context);
-
-        // Assert
-        Assert.Null(result);
+        Assert.Equal(expected, context.ServedScope());
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync rejects offline_access for implicit flow.
-    /// Per OIDC Core 1.0, offline_access MUST NOT be used with implicit flow.
-    /// Critical security requirement (implicit can't securely store refresh tokens).
+    /// An offline_access the server ignores is as if never asked for, so a request naming it alone named no scope:
+    /// it is served the client's default on the first pass, marked as not named, and the same request read back from
+    /// a page answers the same, rather than nothing by value and the default after a page. Received, it is a scope
+    /// the client named.
+    /// </summary>
+    [Theory]
+    [InlineData(false, new[] { Scopes.OpenId }, true)]
+    [InlineData(true, new[] { Scopes.OfflineAccess }, false)]
+    public async Task ValidateAsync_OfflineAccessAlone_IsServedAlikeOnEveryPass(
+        bool promptConsent, string[] expectedScope, bool expectedNamedNoScope)
+    {
+        var context = CreateContext(
+            [Scopes.OfflineAccess],
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: promptConsent ? [Prompts.Consent] : null);
+        context.ClientInfo.DefaultScope = [Scopes.OpenId];
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+        Assert.Equal(expectedScope, context.Request.Scope);
+        Assert.Equal(expectedNamedNoScope, context.Request.ClientNamedNoScope);
+
+        var readBack = CreateContext(
+            context.Request.Scope,
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: promptConsent ? [Prompts.Consent] : null);
+        readBack.ClientInfo.DefaultScope = [Scopes.OpenId];
+        readBack.Request = readBack.Request with { ClientNamedNoScope = context.Request.ClientNamedNoScope };
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, readBack));
+        Assert.Equal(expectedScope, readBack.Request.Scope);
+        Assert.Equal(expectedNamedNoScope, readBack.Request.ClientNamedNoScope);
+    }
+
+    /// <summary>
+    /// OpenID Connect Core 1.0, sections 11 and 17.4: a request returning an authorization code and no access token
+    /// through the user agent receives offline_access when it asks for consent with prompt=consent, or when the
+    /// client is configured to receive it without, and has it ignored otherwise, the rest of the request going on.
+    /// Ignored, it leaves the request itself too, which the host's consent provider reads.
+    /// </summary>
+    [Theory]
+    [InlineData(FlowTypes.AuthorizationCode, ResponseTypes.Code, true, OfflineAccess.ConsentRequired, true)]
+    [InlineData(FlowTypes.AuthorizationCode, ResponseTypes.Code, false, OfflineAccess.Allowed, true)]
+    [InlineData(FlowTypes.AuthorizationCode, ResponseTypes.Code, false, OfflineAccess.ConsentRequired, false)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.IdToken}", true, OfflineAccess.ConsentRequired, true)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.IdToken}", false, OfflineAccess.ConsentRequired, false)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.Token}", true, OfflineAccess.Allowed, false)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.IdToken} {ResponseTypes.Token}", true, OfflineAccess.Allowed, false)]
+    [InlineData(FlowTypes.None, ResponseTypes.None, true, OfflineAccess.Allowed, false)]
+    public async Task ValidateAsync_OfflineAccess_IsReceivedOnlyWithConsentPromptOrClientConditions(
+        FlowTypes flowType, string responseType, bool promptConsent, OfflineAccess offlineAccess, bool received)
+    {
+        var context = CreateContext(
+            [Scopes.OpenId, Scopes.OfflineAccess],
+            flowType,
+            offlineAccess: offlineAccess,
+            prompt: promptConsent ? [Prompts.Consent] : null,
+            responseType: responseType.Split(' '));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal(received, Array.Exists(context.Scope, scope => scope.Scope == Scopes.OfflineAccess));
+        Assert.Equal(received, Array.IndexOf(context.Request.Scope, Scopes.OfflineAccess) >= 0);
+        Assert.Contains(context.Scope, scope => scope.Scope == Scopes.OpenId);
+    }
+
+    /// <summary>
+    /// A client the host lets keep offline access beside an access token carried through the user agent receives it
+    /// with such a response, past OpenID Connect Core 1.0 section 17.4, and only that rule is lifted: the response
+    /// still has to return an authorization code, and the consent conditions of section 11 still hold.
+    /// </summary>
+    [Theory]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.Token}", true, true)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.IdToken} {ResponseTypes.Token}", true, true)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.Token}", false, false)]
+    [InlineData(FlowTypes.Implicit, $"{ResponseTypes.IdToken} {ResponseTypes.Token}", true, false)]
+    public async Task ValidateAsync_OfflineAccessBesideAUserAgentAccessToken_IsReceivedOnlyWhereTheHostAllowsIt(
+        FlowTypes flowType, string responseType, bool promptConsent, bool received)
+    {
+        var context = CreateContext(
+            [Scopes.OpenId, Scopes.OfflineAccess],
+            flowType,
+            offlineAccess: OfflineAccess.ConsentRequired,
+            prompt: promptConsent ? [Prompts.Consent] : null,
+            responseType: responseType.Split(' '));
+        context.ClientInfo.AllowOfflineAccessWithUserAgentAccessToken = true;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal(received, Array.Exists(context.Scope, scope => scope.Scope == Scopes.OfflineAccess));
+    }
+
+    /// <summary>
+    /// OpenID Connect Core 1.0, section 11: a response returning no authorization code has offline_access ignored,
+    /// however the request asks, rather than refused.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_OfflineAccessInImplicitFlow_ShouldReturnError()
+    public async Task ValidateAsync_OfflineAccessInImplicitFlow_IsIgnored()
     {
-        // Arrange
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
             FlowTypes.Implicit,
-            offlineAccessAllowed: true);
+            offlineAccess: OfflineAccess.Allowed,
+            prompt: [Prompts.Consent],
+            responseType: [ResponseTypes.IdToken, ResponseTypes.Token]);
 
-        // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidScope, result.Error);
-        Assert.Contains("implicit", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("offline", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Verifies that ValidateAsync accepts offline_access for hybrid flow.
-    /// Per OIDC Core 1.0, offline_access is allowed for hybrid flow.
-    /// Tests hybrid flow refresh token capability.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_OfflineAccessInHybridFlow_ShouldSucceed()
-    {
-        // Arrange
-        var context = CreateContext(
-            [Scopes.OpenId, Scopes.OfflineAccess],
-            FlowTypes.Hybrid,
-            offlineAccessAllowed: true);
-
-        // Act
-        var result = await _validator.ValidateAsync(context);
-
-        // Assert
         Assert.Null(result);
+        Assert.DoesNotContain(context.Scope, scope => scope.Scope == Scopes.OfflineAccess);
+        Assert.DoesNotContain(Scopes.OfflineAccess, context.Request.Scope);
+        Assert.Contains(context.Scope, scope => scope.Scope == Scopes.OpenId);
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync rejects offline_access when client not authorized.
-    /// Per client configuration, offline_access must be explicitly allowed.
-    /// Critical security check preventing unauthorized refresh token issuance.
+    /// A client not allowed offline access is refused only for a request that would otherwise receive it: where
+    /// OpenID Connect Core 1.0 has the server ignore offline_access, it is ignored for this client too.
+    /// </summary>
+    [Theory]
+    [InlineData(FlowTypes.AuthorizationCode, ResponseTypes.Code, true, true)]
+    [InlineData(FlowTypes.AuthorizationCode, ResponseTypes.Code, false, false)]
+    [InlineData(FlowTypes.Implicit, $"{ResponseTypes.IdToken} {ResponseTypes.Token}", true, false)]
+    [InlineData(FlowTypes.Hybrid, $"{ResponseTypes.Code} {ResponseTypes.Token}", true, false)]
+    public async Task ValidateAsync_OfflineAccessWhenClientNotAuthorized_IsRefusedOnlyWhereReceived(
+        FlowTypes flowType, string responseType, bool promptConsent, bool refused)
+    {
+        var context = CreateContext(
+            [Scopes.OpenId, Scopes.OfflineAccess],
+            flowType,
+            offlineAccess: OfflineAccess.Disabled,
+            prompt: promptConsent ? [Prompts.Consent] : null,
+            responseType: responseType.Split(' '));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(refused ? ErrorCodes.InvalidScope : null, result?.Error);
+        Assert.Equal(refused, Array.IndexOf(context.Request.Scope, Scopes.OfflineAccess) >= 0);
+    }
+
+    /// <summary>
+    /// Verifies that ValidateAsync rejects offline_access from a client left with the default offline access,
+    /// Disabled: offline access is the host's explicit grant.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_OfflineAccessWhenClientNotAuthorized_ShouldReturnError()
+    public async Task ValidateAsync_OfflineAccessWhenDisabledByDefault_ShouldReturnError()
     {
         // Arrange
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            offlineAccessAllowed: false);
+            prompt: [Prompts.Consent]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidScope, result.Error);
-        Assert.Contains("not allowed", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("offline", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Verifies that ValidateAsync rejects offline_access when OfflineAccessAllowed is null.
-    /// Per validation logic, OfflineAccessAllowed must be explicitly true (not null or false).
-    /// Tests strict authorization requirement.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_OfflineAccessWhenNotExplicitlyAllowed_ShouldReturnError()
-    {
-        // Arrange
-        var context = CreateContext(
-            [Scopes.OpenId, Scopes.OfflineAccess]);
-
-        // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -259,8 +336,8 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithUnknownScope_ShouldReturnError()
     {
         // Arrange
-        _scopeManager.Setup(m => m.TryGet("unknown_scope", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(TestTenant.Matched, "unknown_scope", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = null!;
                 return false;
@@ -269,7 +346,7 @@ public class ScopeValidatorTests
         var context = CreateContext([Scopes.OpenId, "unknown_scope"]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -300,7 +377,7 @@ public class ScopeValidatorTests
         var context = CreateContext([Scopes.OpenId, "resource:read"], resources: resources);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -320,7 +397,7 @@ public class ScopeValidatorTests
         var context = CreateContext([Scopes.OpenId]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -340,7 +417,7 @@ public class ScopeValidatorTests
         var context = CreateContext([]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -360,7 +437,7 @@ public class ScopeValidatorTests
         Assert.Empty(context.Scope);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -379,12 +456,12 @@ public class ScopeValidatorTests
         // Arrange
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            FlowTypes.Implicit,
-            offlineAccessAllowed: true);
+            offlineAccess: OfflineAccess.Disabled,
+            prompt: [Prompts.Consent]);
         var originalScope = context.Scope;
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -403,12 +480,12 @@ public class ScopeValidatorTests
         var redirectUri = new Uri("https://client.example.com/callback");
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            FlowTypes.Implicit,
-            offlineAccessAllowed: true);
+            offlineAccess: OfflineAccess.Disabled,
+            prompt: [Prompts.Consent]);
         context.ValidRedirectUri = redirectUri;
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -427,12 +504,12 @@ public class ScopeValidatorTests
         const string responseMode = ResponseModes.Fragment;
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess],
-            FlowTypes.Implicit,
-            offlineAccessAllowed: true);
+            offlineAccess: OfflineAccess.Disabled,
+            prompt: [Prompts.Consent]);
         context.ResponseMode = responseMode;
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -450,22 +527,22 @@ public class ScopeValidatorTests
         var context = CreateContext([Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Address, Scopes.Phone]);
 
         // Setup additional scopes
-        _scopeManager.Setup(m => m.TryGet(Scopes.Address, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(TestTenant.Matched, Scopes.Address, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = new ScopeDefinition(Scopes.Address);
                 return true;
             }));
 
-        _scopeManager.Setup(m => m.TryGet(Scopes.Phone, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(TestTenant.Matched, Scopes.Phone, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = new ScopeDefinition(Scopes.Phone);
                 return true;
             }));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -483,7 +560,7 @@ public class ScopeValidatorTests
         var context = CreateContext([Scopes.Email, Scopes.Profile, Scopes.OpenId]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -505,7 +582,7 @@ public class ScopeValidatorTests
         var context = CreateContext([Scopes.OpenId, Scopes.Profile, Scopes.OpenId]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -520,8 +597,8 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithOfflineAccessAndUnknownScope_ShouldFailOnOfflineAccess()
     {
         // Arrange
-        _scopeManager.Setup(m => m.TryGet("unknown", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(TestTenant.Matched, "unknown", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = null!;
                 return false;
@@ -529,16 +606,16 @@ public class ScopeValidatorTests
 
         var context = CreateContext(
             [Scopes.OpenId, Scopes.OfflineAccess, "unknown"],
-            FlowTypes.Implicit,
-            offlineAccessAllowed: true);
+            offlineAccess: OfflineAccess.Disabled,
+            prompt: [Prompts.Consent]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidScope, result.Error);
-        Assert.Contains("implicit", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        _scopeManager.Verify(m => m.TryGet(It.IsAny<TenantDefinition>(), "unknown", out It.Ref<ScopeDefinition?>.IsAny), Times.Never);
     }
 
     /// <summary>
@@ -553,7 +630,7 @@ public class ScopeValidatorTests
         var context = CreateContext([Scopes.Profile]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -584,7 +661,7 @@ public class ScopeValidatorTests
         var context = CreateContext([Scopes.OpenId, "api:read", Scopes.Profile], resources: resources);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -601,8 +678,8 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithScopeInNeitherManagerNorResources_ShouldReturnError()
     {
         // Arrange
-        _scopeManager.Setup(m => m.TryGet("custom_scope", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new ScopeManagerTryGetCallback((string scope, out ScopeDefinition? definition) =>
+        _scopeManager.Setup(m => m.TryGet(TestTenant.Matched, "custom_scope", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string scope, out ScopeDefinition? definition) =>
             {
                 definition = null!;
                 return false;
@@ -618,10 +695,42 @@ public class ScopeValidatorTests
         var context = CreateContext([Scopes.OpenId, "custom_scope"], resources: resources);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidScope, result.Error);
+    }
+
+    /// <summary>
+    /// An authorization request naming no scope is served with the client's default scope, and goes on carrying it,
+    /// so the host's consent provider reads the scope the request is served with (RFC 6749 section 3.3).
+    /// </summary>
+    [Fact]
+    public async Task ARequestNamingNoScope_IsServedWithTheClientsDefault()
+    {
+        var context = CreateContext(scopes: []);
+        context.ClientInfo = new ClientInfo(ClientId) { AllowedScopes = [Scopes.Profile], DefaultScope = [Scopes.Profile] };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal([Scopes.Profile], context.Request.Scope);
+        Assert.Equal(Scopes.Profile, Assert.Single(context.Scope).Scope);
+    }
+
+    /// <summary>
+    /// A client required to name its scope is refused an authorization request naming none with
+    /// <c>invalid_scope</c>.
+    /// </summary>
+    [Fact]
+    public async Task ARequestNamingNoScope_OfAClientRequiredToNameOne_IsRefused()
+    {
+        var context = CreateContext(scopes: []);
+        context.ClientInfo = new ClientInfo(ClientId) { DefaultScope = [Scopes.Profile], RequireScope = true };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidScope, result?.Error);
     }
 }

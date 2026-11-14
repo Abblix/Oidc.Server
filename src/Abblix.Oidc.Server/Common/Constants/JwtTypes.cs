@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Common.Constants;
 /// there looks exactly as authoritative as one that was actually standardised.
 /// <para>
 /// Changing a prefixed value is possible but not free: it changes what an already-issued token
-/// looks like, so tokens minted before the change stop being recognised.
+/// looks like, so tokens minted before the change stop being recognized.
 /// </para>
 /// </remarks>
 public static class JwtTypes
@@ -37,36 +37,6 @@ public static class JwtTypes
 	/// would both risk collision and read as though somebody had standardised them.
 	/// </summary>
 	private const string VendorPrefix = "vnd.abblix.";
-
-	/// <summary>
-	/// Why the S1133 reminder is quiet on the aliases below: they are the migration bridge for the
-	/// surface v2.3 shipped, and their removal is not a "someday" to be reminded of but a scheduled
-	/// part of the next major release.
-	/// </summary>
-	private const string ObsoleteAliasJustification =
-		"Deliberate migration bridge for the v2.3-shipped surface; removal is scheduled for the next major release.";
-
-	/// <summary>
-	/// Standard JSON Web Token type.
-	/// Per RFC 7519 Section 5.1, this is the recommended value for the 'typ' header parameter.
-	/// </summary>
-	[SuppressMessage("Info Code Smell", "S1133:Deprecated code should be removed", Justification = ObsoleteAliasJustification)]
-	[Obsolete($"Moved to the JWT core's shared registry; use {nameof(JsonWebTokenTypes)}.{nameof(JsonWebTokenTypes.Jwt)}.")]
-	public const string Jwt = JsonWebTokenTypes.Jwt;
-
-	/// <summary>
-	/// The "AccessToken" JWT type per RFC 9068, fixed by the specification.
-	/// </summary>
-	[SuppressMessage("Info Code Smell", "S1133:Deprecated code should be removed", Justification = ObsoleteAliasJustification)]
-	[Obsolete($"Moved to the JWT core's shared registry; use {nameof(JsonWebTokenTypes)}.{nameof(JsonWebTokenTypes.AccessToken)}.")]
-	public const string AccessToken = JsonWebTokenTypes.AccessToken;
-
-	/// <summary>
-	/// The "LogoutToken" JWT type per OpenID Connect Back-Channel Logout, fixed by the specification.
-	/// </summary>
-	[SuppressMessage("Info Code Smell", "S1133:Deprecated code should be removed", Justification = ObsoleteAliasJustification)]
-	[Obsolete($"Moved to the JWT core's shared registry; use {nameof(JsonWebTokenTypes)}.{nameof(JsonWebTokenTypes.LogoutToken)}.")]
-	public const string LogoutToken = JsonWebTokenTypes.LogoutToken;
 
 	/// <summary>
 	/// The "RefreshToken" JWT type is used to represent refresh tokens, which allow obtaining new access tokens
@@ -111,18 +81,20 @@ public static class JwtTypes
 	public const string InitialAccessToken = VendorPrefix + "iat+jwt";
 
 	/// <summary>
-	/// The "DPoP proof" JWT type per RFC 9449 §4.2, fixed by the specification.
+	/// The typed tokens this server issues and accepts back at its introspection and revocation endpoints: access
+	/// and refresh tokens, which RFC 7662 and RFC 7009 cover, and the registration and initial access tokens.
 	/// </summary>
-	[SuppressMessage("Info Code Smell", "S1133:Deprecated code should be removed", Justification = ObsoleteAliasJustification)]
-	[Obsolete($"Moved to the JWT core's shared registry; use {nameof(JsonWebTokenTypes)}.{nameof(JsonWebTokenTypes.DPoPProof)}.")]
-	public const string DPoPProof = JsonWebTokenTypes.DPoPProof;
+	public static readonly TokenTypePolicy IntrospectableTokens = TokenTypePolicy.Exactly(
+		JsonWebTokenTypes.AccessToken, RefreshToken, RegistrationAccessToken, InitialAccessToken);
 
 	/// <summary>
-	/// The "token introspection response" JWT type per RFC 9701 §5, fixed by the specification.
+	/// The types an ID token may carry: none, since OpenID Connect Core defines none, or the generic <c>JWT</c> of
+	/// RFC 7519 Section 5.1.
 	/// </summary>
-	[SuppressMessage("Info Code Smell", "S1133:Deprecated code should be removed", Justification = ObsoleteAliasJustification)]
-	[Obsolete($"Moved to the JWT core's shared registry; use {nameof(JsonWebTokenTypes)}.{nameof(JsonWebTokenTypes.TokenIntrospection)}.")]
-	public const string TokenIntrospection = JsonWebTokenTypes.TokenIntrospection;
+	/// <remarks>
+	/// Every other token this server issues carries a type of its own, so this refuses each of them.
+	/// </remarks>
+	public static readonly TokenTypePolicy IdTokens = TokenTypePolicy.OrUntyped(JsonWebTokenTypes.Jwt);
 
 	/// <summary>
 	/// Every <c>typ</c> this server can name: the core registry's specification-fixed values plus the vendor

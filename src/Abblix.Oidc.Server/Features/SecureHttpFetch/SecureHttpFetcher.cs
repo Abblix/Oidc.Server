@@ -34,10 +34,11 @@ public partial class SecureHttpFetcher(
     /// </summary>
     /// <typeparam name="T">The type to deserialize the response to.</typeparam>
     /// <param name="uri">The URI to fetch content from.</param>
+    /// <param name="refetch">Changes nothing here: this fetcher holds no copy, so every fetch reads the URI anew.</param>
     /// <returns>
     /// A Result containing either the deserialized content or an OidcError.
     /// </returns>
-    public async Task<Result<T, OidcError>> FetchAsync<T>(Uri uri)
+    public async Task<Result<T, OidcError>> FetchAsync<T>(Uri uri, bool refetch = false)
     {
         T? content;
         try

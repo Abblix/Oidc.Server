@@ -10,15 +10,16 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Validates the algorithms a client requests for tokens this server signs:
-/// <c>id_token_signed_response_alg</c> and <c>userinfo_signed_response_alg</c> (OIDC DCR 1.0 §2), and
-/// <c>authorization_signed_response_alg</c> (JARM §3). Each must appear in the server's set of supported
-/// signing algorithms; in addition, JARM §3 forbids <c>none</c> for the authorization response.
+/// <c>id_token_signed_response_alg</c> and <c>userinfo_signed_response_alg</c> (OIDC DCR 1.0 section 2), and
+/// <c>authorization_signed_response_alg</c> (JARM section 3). Each must appear in the server's set of supported
+/// signing algorithms; in addition, JARM section 3 forbids <c>none</c> for the authorization response.
 /// </summary>
 /// <param name="jwtAlgorithms">Source of supported signing algorithms for outbound tokens. The same
 /// provider feeds the discovery document, so DCR accepts exactly what the server advertises -
@@ -30,12 +31,13 @@ public class SignedResponseAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorit
     /// Validates the signing algorithms specified for ID tokens, user info and JARM authorization responses.
     /// This method ensures that the JWT creator supports the requested algorithms.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing the client registration data.</param>
     /// <returns>
     /// A <see cref="OidcError"/> if any signing algorithm is not supported;
     /// otherwise, null if all validations are successful.
     /// </returns>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
         return ValidateIdTokenSignedResponseAlg(request) ??
@@ -45,7 +47,7 @@ public class SignedResponseAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorit
     }
 
     /// <summary>
-    /// Validates <c>id_token_signed_response_alg</c>. OIDC Registration 1.0 §2: the value none MUST
+    /// Validates <c>id_token_signed_response_alg</c>. OIDC Registration 1.0 section 2: the value none MUST
     /// NOT be used unless the client uses only response types that return no ID Token from the
     /// authorization endpoint - an unsigned ID Token delivered through the browser would be
     /// modifiable in transit.
@@ -66,7 +68,7 @@ public class SignedResponseAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorit
 
     /// <summary>
     /// Validates <c>authorization_signed_response_alg</c> for JARM. In addition to the supported-algorithm
-    /// check, JARM §3 explicitly forbids the <c>none</c> algorithm for the authorization response.
+    /// check, JARM section 3 explicitly forbids the <c>none</c> algorithm for the authorization response.
     /// </summary>
     private OidcError? ValidateAuthorizationSignedResponseAlg(string? alg)
     {

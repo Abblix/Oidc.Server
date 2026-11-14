@@ -11,7 +11,7 @@ namespace Abblix.Oidc.Server.Features.RandomGenerators;
 /// <summary>
 /// Produces unique identifiers for refresh-token grants, used as the <c>grant_id</c> claim that binds every
 /// refresh token derived from one authorization grant into a single lineage (a "token family" in RFC 9700
-/// terms). Rotation and family revocation (RFC 9700 §4.14.2) rely on this identifier, so implementations must
+/// terms). Rotation and family revocation (RFC 9700 section 4.14.2) rely on this identifier, so implementations must
 /// generate values with sufficient entropy to make collisions and guessing impractical.
 /// </summary>
 public interface IGrantIdGenerator

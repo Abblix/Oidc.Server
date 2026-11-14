@@ -8,12 +8,12 @@
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Recipient-side handler for one JWS 'crit' header extension spec (RFC 7515 §4.1.11).
+/// Recipient-side handler for one JWS 'crit' header extension spec (RFC 7515 section 4.1.11).
 /// Covers «understood AND processed»: the handler applies the extension's recipient-side
 /// semantics via <see cref="HandleAsync"/>. The JOSE header parameter name the handler
 /// implements is the DI key it is registered under - see
 /// <see cref="ServiceCollectionExtensions.AddCriticalHeaderHandler{THandler}"/> - so name
-/// and behaviour are inseparable: a name cannot be registered without a handler behind it.
+/// and behavior are inseparable: a name cannot be registered without a handler behind it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -38,7 +38,7 @@ namespace Abblix.Jwt;
 ///     <description>
 ///       <b>Stateful handler</b> - read the header value, mutate external state
 ///       (replay-cache, audit log, counters), accept or reject. Example:
-///       ACME-style 'nonce' (RFC 8555 §6.5.2) consumption with atomic
+///       ACME-style 'nonce' (RFC 8555 section 6.5.2) consumption with atomic
 ///       single-use semantics.
 ///     </description>
 ///   </item>

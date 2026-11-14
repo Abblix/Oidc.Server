@@ -41,7 +41,7 @@ public class IntrospectionHandlerTests
     private static IntrospectionRequest CreateIntrospectionRequest() => new()
     {
         Token = "access_token_value",
-        TokenTypeHint = "access_token",
+        TokenTypeHint = TokenTypeHints.AccessToken,
     };
 
     private static ClientRequest CreateClientRequest() => new()
@@ -75,21 +75,21 @@ public class IntrospectionHandlerTests
         var introspectionSuccess = CreateIntrospectionSuccess(true);
 
         _validator
-            .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Success(validRequest));
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, introspectionRequest, clientRequest))
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<IntrospectionSuccess, OidcError>.Success(introspectionSuccess));
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
+            .ReturnsAsync((Result<IntrospectionSuccess, OidcError>)(introspectionSuccess));
 
         // Act
-        var result = await _handler.HandleAsync(introspectionRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
         Assert.Same(introspectionSuccess, success);
-        _validator.Verify(v => v.ValidateAsync(introspectionRequest, clientRequest), Times.Once);
-        _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, introspectionRequest, clientRequest), Times.Once);
+        _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
 
     /// <summary>
@@ -107,16 +107,16 @@ public class IntrospectionHandlerTests
             "Client authentication failed");
 
         _validator
-            .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Failure(error));
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, introspectionRequest, clientRequest))
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(error));
 
         // Act
-        var result = await _handler.HandleAsync(introspectionRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
         Assert.Equal(error, failure);
-        _validator.Verify(v => v.ValidateAsync(introspectionRequest, clientRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, introspectionRequest, clientRequest), Times.Once);
         _processor.VerifyNoOtherCalls();
     }
 
@@ -136,21 +136,21 @@ public class IntrospectionHandlerTests
             "Failed to introspect token");
 
         _validator
-            .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Success(validRequest));
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, introspectionRequest, clientRequest))
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<IntrospectionSuccess, OidcError>.Failure(error));
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
+            .ReturnsAsync((Result<IntrospectionSuccess, OidcError>)(error));
 
         // Act
-        var result = await _handler.HandleAsync(introspectionRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
         Assert.Equal(error, failure);
-        _validator.Verify(v => v.ValidateAsync(introspectionRequest, clientRequest), Times.Once);
-        _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
+        _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, introspectionRequest, clientRequest), Times.Once);
+        _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
 
     /// <summary>
@@ -168,18 +168,18 @@ public class IntrospectionHandlerTests
         var introspectionSuccess = CreateIntrospectionSuccess(true);
 
         _validator
-            .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Success(validRequest));
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, introspectionRequest, clientRequest))
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(It.Is<ValidIntrospectionRequest>(r => r == validRequest)))
-            .ReturnsAsync(Result<IntrospectionSuccess, OidcError>.Success(introspectionSuccess));
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, It.Is<ValidIntrospectionRequest>(r => r == validRequest)))
+            .ReturnsAsync((Result<IntrospectionSuccess, OidcError>)(introspectionSuccess));
 
         // Act
-        await _handler.HandleAsync(introspectionRequest, clientRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
-        _processor.Verify(p => p.ProcessAsync(validRequest), Times.Once);
+        _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
 
     /// <summary>
@@ -198,23 +198,23 @@ public class IntrospectionHandlerTests
         var callOrder = new System.Collections.Generic.List<string>();
 
         _validator
-            .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, introspectionRequest, clientRequest))
             .ReturnsAsync(() =>
             {
                 callOrder.Add("validate");
-                return Result<ValidIntrospectionRequest, OidcError>.Success(validRequest);
+                return (Result<ValidIntrospectionRequest, OidcError>)(validRequest);
             });
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
             .ReturnsAsync(() =>
             {
                 callOrder.Add("process");
-                return Result<IntrospectionSuccess, OidcError>.Success(introspectionSuccess);
+                return (Result<IntrospectionSuccess, OidcError>)(introspectionSuccess);
             });
 
         // Act
-        await _handler.HandleAsync(introspectionRequest, clientRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.Equal(2, callOrder.Count);
@@ -237,11 +237,11 @@ public class IntrospectionHandlerTests
             "Token is invalid");
 
         _validator
-            .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Failure(error));
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, introspectionRequest, clientRequest))
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(error));
 
         // Act
-        var result = await _handler.HandleAsync(introspectionRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
@@ -263,15 +263,16 @@ public class IntrospectionHandlerTests
         var error = new OidcError(ErrorCodes.InvalidRequest, "Invalid request");
 
         _validator
-            .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Failure(error));
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, introspectionRequest, clientRequest))
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(error));
 
         // Act
-        await _handler.HandleAsync(introspectionRequest, clientRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         _validator.Verify(
             v => v.ValidateAsync(
+                TestTenant.Matched,
                 It.Is<IntrospectionRequest>(r => r == introspectionRequest),
                 It.Is<ClientRequest>(r => r == clientRequest)),
             Times.Once);
@@ -291,11 +292,11 @@ public class IntrospectionHandlerTests
         var error = new OidcError(ErrorCodes.InvalidClient, "Client not authorized");
 
         _validator
-            .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Failure(error));
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, introspectionRequest, clientRequest))
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(error));
 
         // Act
-        await _handler.HandleAsync(introspectionRequest, clientRequest);
+        await _handler.HandleAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         _processor.VerifyNoOtherCalls();
@@ -315,15 +316,15 @@ public class IntrospectionHandlerTests
         var introspectionSuccess = CreateIntrospectionSuccess(true);
 
         _validator
-            .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Success(validRequest));
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, introspectionRequest, clientRequest))
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<IntrospectionSuccess, OidcError>.Success(introspectionSuccess));
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
+            .ReturnsAsync((Result<IntrospectionSuccess, OidcError>)(introspectionSuccess));
 
         // Act
-        var result = await _handler.HandleAsync(introspectionRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var success));
@@ -344,15 +345,15 @@ public class IntrospectionHandlerTests
         var introspectionSuccess = CreateIntrospectionSuccess(false);
 
         _validator
-            .Setup(v => v.ValidateAsync(introspectionRequest, clientRequest))
-            .ReturnsAsync(Result<ValidIntrospectionRequest, OidcError>.Success(validRequest));
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, introspectionRequest, clientRequest))
+            .ReturnsAsync((Result<ValidIntrospectionRequest, OidcError>)(validRequest));
 
         _processor
-            .Setup(p => p.ProcessAsync(validRequest))
-            .ReturnsAsync(Result<IntrospectionSuccess, OidcError>.Success(introspectionSuccess));
+            .Setup(p => p.ProcessAsync(TestTenant.Matched, validRequest))
+            .ReturnsAsync((Result<IntrospectionSuccess, OidcError>)(introspectionSuccess));
 
         // Act
-        var result = await _handler.HandleAsync(introspectionRequest, clientRequest);
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, introspectionRequest, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var success));

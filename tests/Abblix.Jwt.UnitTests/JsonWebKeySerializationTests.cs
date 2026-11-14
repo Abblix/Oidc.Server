@@ -7,6 +7,7 @@
 
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Abblix.Jwt.UnitTests;
@@ -166,6 +167,20 @@ public class JsonWebKeySerializationTests
         // Act & Assert - Invalid kty values should fail deserialization
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<JsonWebKey>(json, JsonOptions));
     }
+
+    /// <summary>
+    /// A key a client sent, in a registration or a request object, that cannot be read is refused as malformed JSON,
+    /// the one exception a caller of the serializer is told to expect.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"kty":5}""")]
+    [InlineData("""{"kty":"RSA","n":5,"e":"AQAB"}""")]
+    [InlineData("""{"kty":"RSA","n":"!!!","e":"AQAB"}""")]
+    [InlineData("""{"kty":"EC","crv":"P-256","x":{},"y":"AQAB"}""")]
+    [InlineData("""{"kty":"oct","k":true}""")]
+    [InlineData("""{"kty":"RSA","x5c":[5]}""")]
+    public void AKeyThatCannotBeRead_IsRefusedAsMalformedJson(string json)
+        => Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<JsonWebKey>(json, JsonOptions));
 
     /// <summary>
     /// Verifies round-trip serialization/deserialization preserves all RSA key properties.
@@ -571,5 +586,77 @@ public class JsonWebKeySerializationTests
 
         foreach (var absent in new[] { "d", "p", "q", "dp", "dq", "qi", "x5c", "x5t" })
             Assert.False(jsonDoc.RootElement.TryGetProperty(absent, out _), $"'{absent}' must be absent, not null");
+    }
+
+    /// <summary>
+    /// A host that registers the key converter among its own converters still reads and writes a key: the converter
+    /// answers only for the base type, so serializing the concrete subtype with the host's converters does not call
+    /// back into it.
+    /// </summary>
+    [Fact]
+    public void AKey_RoundTrips_WhenTheHostRegistersTheConverterItself()
+    {
+        var hostOptions = new JsonSerializerOptions { Converters = { new JsonWebKeyConverter() } };
+        var key = new RsaJsonWebKey { KeyId = "abc", Exponent = [1, 0, 1], Modulus = [0xAB, 0xCD] };
+
+        var json = JsonSerializer.Serialize<JsonWebKey>(key, hostOptions);
+        var read = JsonSerializer.Deserialize<JsonWebKey>(json, hostOptions);
+
+        var rsa = Assert.IsType<RsaJsonWebKey>(read);
+        Assert.Equal("abc", rsa.KeyId);
+        Assert.Equal(key.Modulus, rsa.Modulus);
+    }
+
+    /// <summary>
+    /// Certificate bytes chosen so that standard base64 and base64url differ in every character class: they encode
+    /// to "+/+/AQ==" in base64 and "-_-_AQ" in base64url.
+    /// </summary>
+    private static readonly byte[] CertificateBytes = [0xfb, 0xff, 0xbf, 0x01];
+
+    /// <summary>
+    /// The certificates of 'x5c' are written in standard base64, as RFC 7517 section 4.7 requires, so a reader
+    /// decoding them as base64 gets the certificate back.
+    /// </summary>
+    [Fact]
+    public void Certificates_AreWrittenInStandardBase64()
+    {
+        var key = new RsaJsonWebKey { KeyId = "abc", Certificates = [CertificateBytes] };
+
+        var json = JsonNode.Parse(JsonSerializer.Serialize<JsonWebKey>(key))!;
+
+        var written = json["x5c"]![0]!.GetValue<string>();
+        Assert.Equal(CertificateBytes, Convert.FromBase64String(written));
+    }
+
+    /// <summary>
+    /// The base64 of 'x5c' reaches the published key as written, without its '+' escaped, so a consumer comparing
+    /// the published text sees the encoding RFC 7517 names.
+    /// </summary>
+    [Fact]
+    public void Certificates_ArePublishedWithoutEscaping()
+    {
+        var key = new RsaJsonWebKey { KeyId = "abc", Certificates = [CertificateBytes] };
+
+        var json = JsonSerializer.Serialize<JsonWebKey>(key);
+
+        Assert.Contains("\"x5c\":[\"+/+/AQ==\"]", json);
+    }
+
+    /// <summary>A chain another party publishes in standard base64 is read.</summary>
+    [Fact]
+    public void Certificates_InStandardBase64_AreRead()
+    {
+        var key = JsonSerializer.Deserialize<JsonWebKey>("""{"kty":"RSA","x5c":["+/+/AQ=="]}""");
+
+        Assert.Equal(CertificateBytes, Assert.Single(key!.Certificates!));
+    }
+
+    /// <summary>A chain stored in base64url before 'x5c' was written in standard base64 still reads.</summary>
+    [Fact]
+    public void Certificates_InBase64Url_AreStillRead()
+    {
+        var key = JsonSerializer.Deserialize<JsonWebKey>("""{"kty":"RSA","x5c":["-_-_AQ"]}""");
+
+        Assert.Equal(CertificateBytes, Assert.Single(key!.Certificates!));
     }
 }

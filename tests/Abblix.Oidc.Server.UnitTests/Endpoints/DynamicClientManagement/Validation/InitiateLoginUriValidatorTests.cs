@@ -46,7 +46,7 @@ public class InitiateLoginUriValidatorTests
         var context = CreateContext(initiateLoginUri: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -64,7 +64,7 @@ public class InitiateLoginUriValidatorTests
             initiateLoginUri: new Uri("https://example.com/initiate-login"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -82,7 +82,7 @@ public class InitiateLoginUriValidatorTests
             initiateLoginUri: new Uri("http://example.com/initiate-login"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -103,7 +103,7 @@ public class InitiateLoginUriValidatorTests
             initiateLoginUri: new Uri("/initiate-login", UriKind.Relative));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -123,7 +123,7 @@ public class InitiateLoginUriValidatorTests
             initiateLoginUri: new Uri("https://example.com/initiate-login?client_id=123"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -141,7 +141,7 @@ public class InitiateLoginUriValidatorTests
             initiateLoginUri: new Uri("https://example.com/initiate-login#section"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -159,7 +159,7 @@ public class InitiateLoginUriValidatorTests
             initiateLoginUri: new Uri("https://example.com:8443/initiate-login"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -177,7 +177,7 @@ public class InitiateLoginUriValidatorTests
             initiateLoginUri: new Uri("https://auth.example.com/initiate-login"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -195,7 +195,7 @@ public class InitiateLoginUriValidatorTests
             initiateLoginUri: new Uri("https://example.com/auth/v1/initiate-login"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -213,7 +213,7 @@ public class InitiateLoginUriValidatorTests
             initiateLoginUri: new Uri("ftp://example.com/initiate-login"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -233,7 +233,7 @@ public class InitiateLoginUriValidatorTests
             initiateLoginUri: new Uri("https://例え.jp/initiate-login"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -251,7 +251,7 @@ public class InitiateLoginUriValidatorTests
             initiateLoginUri: new Uri("https://192.168.1.1/initiate-login"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -269,7 +269,7 @@ public class InitiateLoginUriValidatorTests
             initiateLoginUri: new Uri("https://[2001:db8::1]/initiate-login"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);

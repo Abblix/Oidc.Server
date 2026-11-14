@@ -17,7 +17,6 @@ using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -38,6 +37,9 @@ public sealed class PollDeliveryByDefaultTests
     private const string Issuer = "https://transmitter.example";
     private const string ReceiverId = "https://receiver.example";
     private const string SomeEvent = "https://tenant.example.com/events/membership-changed";
+    private const string StreamsPath = "/ssf/stream";
+    private const string AlertsStream = "alerts/eu";
+    private const string PushEndpoint = "https://receiver.example/events";
 
     /// <summary>
     /// The address the transmitter mints is the address it serves. Asserted by USING it: a create with no
@@ -93,8 +95,10 @@ public sealed class PollDeliveryByDefaultTests
     /// </summary>
     /// <remarks>
     /// This is the row that a hard-coded default would fail, and the reason the default cannot live where
-    /// the option lives: only the code that maps the route knows where it was mapped. Without this the two
-    /// rows above would pass over an address that happens to match the default prefix.
+    /// the option lives: only the code that maps the route knows where it was mapped. Without this
+    /// <see cref="ACreateWithNoDeliveryObject_GetsAPollEndpointThatAnswers"/> and
+    /// <see cref="ACreateNamingPoll_GetsAPollEndpointThatAnswers"/> would pass over an address that happens to
+    /// match the default prefix.
     /// </remarks>
     [Fact]
     public async Task AHostThatMovesThePrefix_GetsThePollEndpointUnderIt()
@@ -124,7 +128,8 @@ public sealed class PollDeliveryByDefaultTests
     /// the internal one the route is mapped on.
     /// </summary>
     /// <remarks>
-    /// The row above moves both prefixes at once, so it would pass over either of them. This one moves
+    /// <see cref="AHostThatMovesThePrefix_GetsThePollEndpointUnderIt"/> moves both prefixes at once, so it
+    /// would pass over either of them. This one moves
     /// them apart, and it is the half that matters operationally: the five management addresses already
     /// follow <c>AdvertisedPrefix</c>, and a poll address that followed the internal one instead would
     /// send every receiver at a path the proxy does not publish - while every test that talks to the
@@ -169,7 +174,7 @@ public sealed class PollDeliveryByDefaultTests
                 [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "alerts eu" }]));
         var client = host.GetTestClient();
 
-        var streams = await client.GetFromJsonAsync<StreamConfiguration[]>("/ssf/stream", cancellationToken);
+        var streams = await client.GetFromJsonAsync<StreamConfiguration[]>(StreamsPath, cancellationToken);
         var poll = Assert.IsType<PollDeliveryMethod>(Assert.Single(streams!).Delivery);
 
         Assert.Equal("/ssf/poll/alerts%20eu", poll.EndpointUrl!.AbsolutePath);
@@ -207,7 +212,7 @@ public sealed class PollDeliveryByDefaultTests
                 [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = streamId }]));
 
         var streams = await host.GetTestClient()
-            .GetFromJsonAsync<StreamConfiguration[]>("/ssf/stream", cancellationToken);
+            .GetFromJsonAsync<StreamConfiguration[]>(StreamsPath, cancellationToken);
         var poll = Assert.IsType<PollDeliveryMethod>(Assert.Single(streams!).Delivery);
 
         Assert.Equal($"/ssf/poll/alerts{escaped}eu", poll.EndpointUrl!.AbsolutePath);
@@ -234,9 +239,10 @@ public sealed class PollDeliveryByDefaultTests
     /// the same measurement cleared <c>?</c>, <c>#</c>, <c>%</c>, <c>\</c> and non-ASCII, all of which a
     /// list assembled from the first failure would plausibly have caught.
     /// <para>
-    /// The control against over-refusing is not written here because it is already driven above: the
-    /// space and the URL syntax rows now pass through this same check and would go red if it refused
-    /// what the host can serve.
+    /// The control against over-refusing is not written here because it is already driven: the space
+    /// and the URL syntax rows, <see cref="ADeclaredStreamWithASpelledOutIdentifier_GetsAnAddressThatAnswers"/>
+    /// and <see cref="ADeclaredIdentifierCarryingUrlSyntax_SurvivesIntoTheAddressWhole"/>, now pass through
+    /// this same check and would go red if it refused what the host can serve.
     /// </para>
     /// </remarks>
     [Theory]
@@ -260,12 +266,14 @@ public sealed class PollDeliveryByDefaultTests
     }
 
     /// <summary>
-    /// The control for the row above: a transmitter that serves no poll delivery at all is refused with
+    /// The control for <see cref="ADeclaredIdentifierThatCannotSurviveOneSegment_IsRefused"/>: a transmitter
+    /// that serves no poll delivery at all is refused with
     /// the OTHER message, and its operator is sent to configure an address rather than to rename a stream.
     /// </summary>
     /// <remarks>
     /// This row holds the collapse in the other direction. Deleting the arm whole is caught by the
-    /// assertion twelve lines above; making that arm unconditional - so every operator is told to rename
+    /// "Rename the stream" assertion in <see cref="ADeclaredIdentifierThatCannotSurviveOneSegment_IsRefused"/>;
+    /// making that arm unconditional - so every operator is told to rename
     /// their stream - is caught here and nowhere else.
     /// </remarks>
     [Fact]
@@ -293,7 +301,8 @@ public sealed class PollDeliveryByDefaultTests
     /// The row that decides HOW the expected side is built. It has to be the <c>PathString</c>
     /// CONSTRUCTOR, which keeps the text as it is; the idiomatic <c>prefix.Add($"...")</c> compiles
     /// identically and runs the identifier through the decoder as well, and then <c>%2E%2E</c> reads as
-    /// <c>..</c> and is refused although this host serves it. The refusal rows above cannot see that,
+    /// <c>..</c> and is refused although this host serves it. The refusal rows of
+    /// <see cref="ADeclaredIdentifierThatCannotSurviveOneSegment_IsRefused"/> cannot see that,
     /// because they are refused either way.
     /// </remarks>
     [Fact]
@@ -305,7 +314,7 @@ public sealed class PollDeliveryByDefaultTests
                 [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = "%2E%2E" }]));
         var client = host.GetTestClient();
 
-        var streams = await client.GetFromJsonAsync<StreamConfiguration[]>("/ssf/stream", cancellationToken);
+        var streams = await client.GetFromJsonAsync<StreamConfiguration[]>(StreamsPath, cancellationToken);
         var poll = Assert.IsType<PollDeliveryMethod>(Assert.Single(streams!).Delivery);
 
         using var polled = await client.PostAsJsonAsync(
@@ -333,22 +342,23 @@ public sealed class PollDeliveryByDefaultTests
                 new ConfiguredStream
                 {
                     ReceiverId = ReceiverId,
-                    StreamId = "alerts/eu",
-                    PushEndpointUrl = new Uri("https://receiver.example/events"),
+                    StreamId = AlertsStream,
+                    PushEndpointUrl = new Uri(PushEndpoint),
                 },
             ]));
 
         var streams = await host.GetTestClient()
-            .GetFromJsonAsync<StreamConfiguration[]>("/ssf/stream", cancellationToken);
+            .GetFromJsonAsync<StreamConfiguration[]>(StreamsPath, cancellationToken);
 
-        Assert.Equal("alerts/eu", Assert.Single(streams!).StreamId);
+        Assert.Equal(AlertsStream, Assert.Single(streams!).StreamId);
     }
 
     /// <summary>
     /// A receiver moving an unaddressable PUSH stream to poll delivery is refused, not faulted at.
     /// </summary>
     /// <remarks>
-    /// The row above admits such a stream on purpose - a push stream needs no address of ours - and that
+    /// <see cref="ADeclaredPushStreamWithTheSameIdentifier_IsNotRefused"/> admits such a stream on purpose - a
+    /// push stream needs no address of ours - and that
     /// is exactly what makes this reachable: CAEP Interoperability Profile 1.0 Section 2.3.8.1 obliges a
     /// transmitter to entertain a request naming either delivery method, so the receiver may ask for the
     /// one address this identifier cannot have. The first version of this branch threw there, out of a
@@ -367,16 +377,16 @@ public sealed class PollDeliveryByDefaultTests
                 new ConfiguredStream
                 {
                     ReceiverId = ReceiverId,
-                    StreamId = "alerts/eu",
-                    PushEndpointUrl = new Uri("https://receiver.example/events"),
+                    StreamId = AlertsStream,
+                    PushEndpointUrl = new Uri(PushEndpoint),
                 },
             ]));
 
-        using var request = new HttpRequestMessage(new HttpMethod(verb), "/ssf/stream")
+        using var request = new HttpRequestMessage(new HttpMethod(verb), StreamsPath)
         {
             Content = JsonContent.Create(new UpdateStreamRequest
             {
-                StreamId = "alerts/eu",
+                StreamId = AlertsStream,
                 Delivery = new PollDeliveryMethod(),
             }),
         };
@@ -391,7 +401,7 @@ public sealed class PollDeliveryByDefaultTests
         var service = host.Services.GetRequiredService<StreamManagementService>();
         var refused = await service.UpdateStreamAsync(
             ReceiverId,
-            new UpdateStreamRequest { StreamId = "alerts/eu", Delivery = new PollDeliveryMethod() },
+            new UpdateStreamRequest { StreamId = AlertsStream, Delivery = new PollDeliveryMethod() },
             cancellationToken);
 
         Assert.Contains("no poll address for this stream", refused.Description!, StringComparison.Ordinal);

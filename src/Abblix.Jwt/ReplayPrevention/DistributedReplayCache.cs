@@ -20,11 +20,16 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// identifier can both hear "new" within a single cache round trip, because
 /// <see cref="IDistributedCache"/> offers Get and Set and no compare-and-set. Each profile
 /// decides whether that is acceptable - RFC 9449 Section 11.1 accepts probabilistic replay
-/// defence for DPoP proofs, and RFC 8935 Section 2 lets a transmitter redeliver a SET regardless,
+/// defense for DPoP proofs, and RFC 8935 Section 2 lets a transmitter redeliver a SET regardless,
 /// so a lost race costs one duplicate idempotent pass. A client assertion is the one that does not
 /// read that way, since RFC 7523 Section 3 lets an authorization server reject a reused one. A
 /// deployment relying on that rejection takes a <see cref="ReplayCacheBase"/> over a store
 /// that decides and writes in one operation.
+/// <para>
+/// A caller that gives a reservation back after its work failed widens the same race: when two
+/// instances both hear "new" for one identifier and one of them releases, the entry the other
+/// one's success rests on is gone, and the next presentation of the token passes as fresh.
+/// </para>
 /// </remarks>
 /// <param name="cache">The distributed cache the host registered; the store is the host's choice.
 /// </param>
@@ -52,4 +57,8 @@ public sealed class DistributedReplayCache(
         TimeSpan timeToLive,
         CancellationToken cancellationToken)
         => cache.TryAddAsync(key, timeToLive, cancellationToken);
+
+    /// <inheritdoc />
+    protected override Task RemoveAsync(string key, CancellationToken cancellationToken)
+        => cache.RemoveAsync(key, cancellationToken);
 }

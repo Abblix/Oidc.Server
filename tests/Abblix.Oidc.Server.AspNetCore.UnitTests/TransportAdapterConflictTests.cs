@@ -16,10 +16,8 @@ namespace Abblix.Oidc.Server.AspNetCore.UnitTests;
 /// The startup refusal that fires when an application carries both OIDC transport adapters.
 /// </summary>
 /// <remarks>
-/// Observed live: a host that swapped the MVC adapter for the Minimal API one but left the MVC package
-/// referenced saw all 460 of its conformance tests fail, every one of them at the first request with an
-/// AmbiguousMatchException naming the routing layer. Nothing in that message points at the two packages, which
-/// is what this guard is for. The assembly decision runs over a supplied list rather than the ambient
+/// Both adapters map the same paths, and the routing error the first request would meet names neither package,
+/// which is what this guard is for. The assembly decision runs over a supplied list rather than the ambient
 /// AppDomain, because loading the other adapter into this process is irreversible and would then trip every
 /// test that maps endpoints.
 /// </remarks>

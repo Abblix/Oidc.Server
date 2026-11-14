@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Model;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -45,25 +47,38 @@ public class StoredUriValidator : SyncClientRegistrationContextValidator
     /// Returns an <c>invalid_client_metadata</c> error naming the first member that carries a relative
     /// URI; <c>null</c> when every member is absent or absolute.
     /// </summary>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 
-        return Validate(Parameters.LogoUri, request.LogoUri)
-            ?? Validate(Parameters.ClientUri, request.ClientUri)
-            ?? Validate(Parameters.PolicyUri, request.PolicyUri)
-            ?? Validate(Parameters.TosUri, request.TermsOfServiceUri)
-            ?? Validate(Parameters.JwksUri, request.JwksUri)
-            ?? Validate(Parameters.SectorIdentifierUri, request.SectorIdentifierUri)
-            ?? Validate(Parameters.InitiateLoginUri, request.InitiateLoginUri)
-            ?? Validate(Parameters.BackChannelLogoutUri, request.BackChannelLogoutUri)
-            ?? Validate(Parameters.FrontChannelLogoutUri, request.FrontChannelLogoutUri)
-            ?? Validate(Parameters.BackChannelClientNotificationEndpoint, request.BackChannelClientNotificationEndpoint)
-            ?? Validate(Parameters.RedirectUris, request.RedirectUris)
-            ?? Validate(Parameters.PostLogoutRedirectUris, request.PostLogoutRedirectUris)
-            ?? Validate(Parameters.RequestUris, request.RequestUris)
-            ?? Validate(Parameters.TlsClientAuthSanUri, request.TlsClientAuthSanUri);
+        return MemberChecks
+            .Select(check => check(request))
+            .FirstOrDefault(error => error is not null);
     }
+
+    /// <summary>
+    /// One check per URI member, asked in this order; the first refusal answers (Chain of Responsibility).
+    /// </summary>
+    private static readonly Func<ClientRegistrationRequest, OidcError?>[] MemberChecks =
+    [
+        request => Validate(Parameters.LogoUri, request.LogoUri),
+        request => Validate(Parameters.ClientUri, request.ClientUri),
+        request => Validate(Parameters.PolicyUri, request.PolicyUri),
+        request => Validate(Parameters.TosUri, request.TermsOfServiceUri),
+        request => Validate(Parameters.JwksUri, request.JwksUri),
+        request => Validate(Parameters.SectorIdentifierUri, request.SectorIdentifierUri),
+        request => Validate(Parameters.InitiateLoginUri, request.InitiateLoginUri),
+        request => Validate(Parameters.BackChannelLogoutUri, request.BackChannelLogoutUri),
+        request => Validate(Parameters.FrontChannelLogoutUri, request.FrontChannelLogoutUri),
+        request => Validate(
+            Parameters.BackChannelClientNotificationEndpoint, request.BackChannelClientNotificationEndpoint),
+        request => Validate(Parameters.RedirectUris, request.RedirectUris),
+        request => Validate(Parameters.PostLogoutRedirectUris, request.PostLogoutRedirectUris),
+        request => Validate(Parameters.RequestUris, request.RequestUris),
+        request => Validate(Parameters.TlsClientAuthSanUri, request.TlsClientAuthSanUri),
+        request => Validate(Parameters.TokenExchangeSubjectTokenTypes, request.TokenExchangeSubjectTokenTypes),
+        request => Validate(Parameters.AllowedResources, request.AllowedResources),
+    ];
 
     /// <summary>
     /// A member the registration may omit: absent passes, present must be absolute.

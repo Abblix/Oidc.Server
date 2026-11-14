@@ -69,7 +69,7 @@ public sealed class JwksKeyResolutionOptions
     /// </para>
     /// <para>
     /// Answering null rather than throwing is what lets the selectors after it, and then the
-    /// convention, still run: a delegate that threw for an issuer it did not recognise would take
+    /// convention, still run: a delegate that threw for an issuer it did not recognize would take
     /// the fallback out for every other issuer, since nothing runs past a throw.
     /// </para>
     /// </remarks>
@@ -150,11 +150,16 @@ public sealed class JwksKeyResolutionOptions
     public TimeSpan CacheLifetime { get; set; } = TimeSpan.FromMinutes(15);
 
     /// <summary>
-    /// The floor between rollover refetches. A token naming a "kid" the cached set lacks forces
-    /// one refetch - that is how a rotation is noticed before the cache expires - but a flood of
-    /// tokens with a bogus identifier must not turn that courtesy into hammering the issuer, so
-    /// within this window the miss answers from cache.
+    /// The floor between two fetches of an issuer's key set. A token naming a "kid" the cached set
+    /// lacks forces one refetch - that is how a rotation is noticed before the cache expires - but a
+    /// flood of tokens with a bogus identifier must not turn that courtesy into hammering the issuer,
+    /// so within this window the fetch made last answers every resolution.
     /// </summary>
+    /// <remarks>
+    /// The window follows a failed fetch too: while the issuer's key set cannot be read, the
+    /// resolutions inside the window get that failure instead of each asking the issuer again. It is
+    /// never longer than <see cref="CacheLifetime"/>, so an expired copy is always fetched anew.
+    /// </remarks>
     public TimeSpan RolloverRefetchCooldown { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>

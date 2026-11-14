@@ -51,7 +51,7 @@ public partial class LicenseManager
             //
             // What an insert needs is the refreshed value. The report belongs where the license is
             // consulted, on a list that has stopped growing.
-            _currentLicense = Scan(DateTimeOffset.UtcNow).InForce;
+            _currentLicense = Scan(TimeProvider.System.GetUtcNow()).InForce;
         }
         finally
         {
@@ -497,8 +497,8 @@ public partial class LicenseManager
     /// <see cref="DateTimeOffset.AddTicks"/> refuses on either: it advances the CLOCK time and then
     /// revalidates the resulting INSTANT, so it throws with one message when the clock time leaves
     /// <see cref="DateTime"/> and a different one when the instant leaves year 10000. The two coincide
-    /// only at offset zero, which is the only offset a licence file can produce - <c>LicenseLoader</c>
-    /// reads unix seconds - so a suite built from loaded licences cannot tell the halves apart, and
+    /// only at offset zero, which is the only offset a license file can produce - <c>LicenseLoader</c>
+    /// reads unix seconds - so a suite built from loaded licenses cannot tell the halves apart, and
     /// either half alone reads as sufficient. <see cref="License"/> and <see cref="AddLicense"/> are
     /// public, and each half admits a value the other refuses: an expiry whose clock time is maximal
     /// under a POSITIVE offset sits below <see cref="DateTimeOffset.MaxValue"/>, and
@@ -619,6 +619,11 @@ public partial class LicenseManager
                     LicenseLogger.Instance,
                     expiresAt,
                     (int)(utcNow - expiresAt).TotalDays);
+                break;
+
+            // A license whose term has not started reports nothing yet; the arms above stay silent the same way when
+            // their condition does not hold.
+            case LicenseStatus.NotActiveYet:
                 break;
         }
     }

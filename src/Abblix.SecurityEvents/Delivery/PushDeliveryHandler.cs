@@ -19,11 +19,12 @@ namespace Abblix.SecurityEvents.Delivery;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The order inside is the security order. Validation decides first; the replay cache is asked
-/// only about a token that proved itself, so an attacker cannot burn identifiers with forgeries;
-/// and the sink consumes only what both let through. A repeat is acknowledged without
-/// re-processing - RFC 8935 Section 2 lets a transmitter redeliver regardless of earlier
-/// responses, so a duplicate is the protocol working, not failing.
+/// The order inside is the security order. Validation decides first, so an attacker cannot burn
+/// replay identifiers with forgeries; the sink then consumes what validation let through; and only
+/// a token the sink accepted is written to the replay cache. Nothing on this path READS that cache,
+/// so a redelivery reaches the sink again - RFC 8935 Section 2 lets a transmitter redeliver
+/// regardless of earlier responses, and <see cref="ISecurityEventSink"/> answers for it by
+/// requiring idempotent processing. Why the write cannot come earlier is on <c>RecordAsync</c>.
 /// </para>
 /// <para>
 /// Nothing here knows which profile of SET it carries. RFC 8935 is a delivery specification and
@@ -105,11 +106,11 @@ public sealed class PushDeliveryHandler(
                 + "'iat' are REQUIRED (RFC 8417 Section 2.2)."));
         }
 
-        var refusal = await sink.ConsumeAsync(validated!, cancellationToken);
+        var refusal = await sink.ConsumeAsync(validated, cancellationToken);
         if (refusal is not null)
             return PushDeliveryResult.BadRequest(refusal);
 
-        await RecordAsync(validated!, cancellationToken);
+        await RecordAsync(validated, cancellationToken);
         return PushDeliveryResult.Accepted;
     }
 
@@ -125,9 +126,7 @@ public sealed class PushDeliveryHandler(
     /// <para>
     /// The consequence is that a repeat reaches the sink again rather than being short-circuited
     /// here. That is what <see cref="ISecurityEventSink"/> already requires of it - "Processing
-    /// must be idempotent" - and it is the only correct short-circuit available while
-    /// <see cref="IReplayCache"/> can reserve but not release: a cache entry cannot be undone when
-    /// the work it stands for failed, so it must not be written until that work has succeeded.
+    /// must be idempotent".
     /// </para>
     /// </remarks>
     private async Task RecordAsync(

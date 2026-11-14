@@ -146,6 +146,23 @@ public class DecorateKeyedTests
 	}
 
 	/// <summary>
+	/// Verifies that the keyed copy wraps the non-keyed service the container resolves, the last one registered.
+	/// </summary>
+	[Fact]
+	public void DecorateKeyed_WhenSeveralNonKeyedExist_WrapsTheLastRegistered()
+	{
+		var services = new ServiceCollection();
+		services.AddScoped<IBaseService, ServiceA>();
+		services.AddScoped<IBaseService, ServiceB>();
+
+		services.DecorateKeyed<IBaseService, ServiceDecorator>(TestKey);
+		using var serviceProvider = services.BuildServiceProvider();
+
+		var decorator = Assert.IsType<ServiceDecorator>(serviceProvider.GetRequiredKeyedService<IBaseService>(TestKey));
+		Assert.IsType<ServiceB>(decorator.Inner);
+	}
+
+	/// <summary>
 	/// Verifies that the decorated keyed service wraps the inner service correctly
 	/// and passes calls through.
 	/// </summary>

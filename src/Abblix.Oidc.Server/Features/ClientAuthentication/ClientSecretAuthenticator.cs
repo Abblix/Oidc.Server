@@ -9,9 +9,11 @@
 using CryptographicOperations = System.Security.Cryptography.CryptographicOperations;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Hashing;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -31,20 +33,25 @@ public abstract partial class ClientSecretAuthenticator(
 	/// Asynchronously authenticates a client using provided credentials. It validates the client ID and secret
 	/// against stored values, considering the authentication method and secret expiration.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
 	/// <param name="clientId">Client ID for identification.</param>
 	/// <param name="secret">Client secret for verification.</param>
 	/// <param name="authenticationMethod">Authentication method used, ensuring compatibility with client configuration.</param>
 	/// <returns>
 	/// Authenticated client information if successful; otherwise, null.
 	/// </returns>
-	protected async Task<ClientInfo?> TryAuthenticateAsync(string? clientId, string? secret, string authenticationMethod)
+	protected async Task<ClientInfo?> TryAuthenticateAsync(
+		TenantDefinition tenant,
+		string? clientId,
+		[Credential] string? secret,
+		string authenticationMethod)
 	{
 		if (!clientId.NotNullOrWhiteSpace() || !secret.NotNullOrWhiteSpace())
 		{
 			return null;
 		}
 
-		var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+		var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
 		if (client == null)
 		{
 			LogClientNotFound(clientId);
@@ -79,7 +86,7 @@ public abstract partial class ClientSecretAuthenticator(
 	/// <returns>
 	/// True if the secret matches a stored hash and is not expired; otherwise, false.
 	/// </returns>
-	private bool TryValidateClientSecret(ClientInfo client, string secret)
+	private bool TryValidateClientSecret(ClientInfo client, [Credential] string secret)
 	{
 		// We store only client secret hashes, so we have to hash the raw secret to compare. And we do it lazy.
 		var matchingSha512Secrets = FindMatchingSecrets(
@@ -122,7 +129,7 @@ public abstract partial class ClientSecretAuthenticator(
 		ClientInfo client,
 		Func<ClientSecret, byte[]?> hashSelector,
 		HashAlgorithm hashAlgorithm,
-		string secretValue)
+		[Credential] string secretValue)
 	{
 		var validSecretHashes =
 			from clientSecret in client.ClientSecrets

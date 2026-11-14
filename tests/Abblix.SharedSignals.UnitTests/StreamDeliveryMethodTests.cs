@@ -118,7 +118,7 @@ public class StreamDeliveryMethodTests
     public void PushWithoutEndpointUrl_IsRefusedAsMalformedJson()
     {
         // The push endpoint URL is receiver-supplied and required; its constructor verdict is
-        // re-labelled to the serializer's own exception type at the converter boundary.
+        // re-labeled to the serializer's own exception type at the converter boundary.
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<StreamDeliveryMethod>(
             $$"""{"method": "{{PushDeliveryMethod.MethodUri}}"}"""));
     }

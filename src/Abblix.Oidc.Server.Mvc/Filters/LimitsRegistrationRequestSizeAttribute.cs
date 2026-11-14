@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Mvc.ActionResults;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -68,7 +69,7 @@ internal sealed class LimitsRegistrationRequestSizeAttribute : Attribute, IAsync
 		// is not one anybody makes to get further in.
 		if (request.ContentLength > maxBytes)
 		{
-			context.Result = new StatusCodeResult(StatusCodes.Status413PayloadTooLarge);
+			context.Result = new StatusOnlyResult(StatusCodes.Status413PayloadTooLarge);
 			return;
 		}
 
@@ -81,7 +82,7 @@ internal sealed class LimitsRegistrationRequestSizeAttribute : Attribute, IAsync
 		var copied = await CopyAtMostAsync(request.Body, buffer, maxBytes + 1, context.HttpContext.RequestAborted);
 		if (copied > maxBytes)
 		{
-			context.Result = new StatusCodeResult(StatusCodes.Status413PayloadTooLarge);
+			context.Result = new StatusOnlyResult(StatusCodes.Status413PayloadTooLarge);
 			return;
 		}
 

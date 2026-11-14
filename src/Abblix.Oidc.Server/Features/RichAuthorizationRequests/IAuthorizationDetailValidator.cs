@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
@@ -23,7 +24,7 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 /// <remarks>
 /// The library ships no concrete implementations of this interface - each authorization-detail
 /// type (e.g. <c>payment_initiation</c>, <c>consent</c>, OpenID4VC presentation schemas) demands
-/// its own per-type schema and is contributed by the host or a separate package. RFC 9396 §5
+/// its own per-type schema and is contributed by the host or a separate package. RFC 9396 section 5
 /// requires the AS to refuse any entry whose <c>type</c> is unknown; with zero implementations
 /// registered, every RAR-bearing request is rejected with <c>invalid_authorization_details</c>
 /// and the server still boots cleanly.
@@ -40,18 +41,20 @@ public interface IAuthorizationDetailValidator
     /// Validates a single authorization-detail entry against this validator's per-type schema
     /// and any per-client policy the implementation chooses to enforce.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="detail">The entry to validate. Its <see cref="AuthorizationDetail.Type"/>
     /// matches this validator's <see cref="Type"/>; the per-type schema lives in the raw
-    /// <see cref="AuthorizationDetail.Json"/> object alongside the RFC 9396 §2.2
+    /// <see cref="AuthorizationDetail.Json"/> object alongside the RFC 9396 section 2.2
     /// standardised members where applicable.</param>
     /// <param name="client">The client that submitted the request, for policy decisions that
     /// depend on per-client allowlists or registered metadata.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>The validated (and possibly normalised) detail on success, or a
     /// <see cref="OidcError"/> describing the rejection reason on
-    /// failure. RFC 9396 §5 makes the protocol-level error code at the wire
+    /// failure. RFC 9396 section 5 makes the protocol-level error code at the wire
     /// <c>invalid_authorization_details</c> regardless of the underlying reason.</returns>
     Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+        TenantDefinition tenant,
         AuthorizationDetail detail,
         ClientInfo client,
         CancellationToken token);
@@ -62,13 +65,13 @@ public interface IAuthorizationDetailValidator
     /// type that does not enrich answers the same question in both phases.
     /// </summary>
     /// <remarks>
-    /// RFC 9396 §7.1 says that "Whether enrichment is allowed and specifics of how it works are
+    /// RFC 9396 section 7.1 says that "Whether enrichment is allowed and specifics of how it works are
     /// necessarily part of the definition of the respective authorization details type", and in this
     /// library the definition of a type is this validator. Its worked example (Figures 16 and 17) is
     /// an <c>account_information</c> entry whose empty arrays are placeholders the server fills with
     /// the identifiers the user picked.
     /// <para>
-    /// That shape is one the request-time question may legitimately refuse: RFC 9396 §5 has the server
+    /// That shape is one the request-time question may legitimately refuse: RFC 9396 section 5 has the server
     /// reject an entry that "contains fields with invalid values for the authorization details type",
     /// and a type whose definition says the client must not choose the accounts makes a populated
     /// placeholder exactly that. Such a type overrides this member so the consent decision's own
@@ -84,26 +87,44 @@ public interface IAuthorizationDetailValidator
     /// input unconditionally hands a tampered consent decision straight to the issued token.
     /// </para>
     /// <para>
-    /// Note what this method is NOT given: the entry the client originally sent, and the end user who
-    /// answered. So an enrichable field can be bounded here only by rules that hold on their own - a
-    /// ceiling, a format, a per-client limit - and not by comparing the value against the request it
-    /// came from. A type whose enrichment needs that comparison has to make it where both sides are in
-    /// hand, which today is the consent provider that produced the decision.
+    /// This is also where a granted entry is held to the request it answers. RFC 9396 section 6.1 says
+    /// "there is no standardized mechanism to compare two arbitrary authorization detail requests" and
+    /// leaves the comparison to the definition of the type, so <paramref name="requested"/> carries the
+    /// entries of this type the client asked for, and an override decides whether the granted one stays
+    /// within them: an amount no higher, the same account. They are every entry of this type rather than
+    /// one partner, because a request may carry several of one type and a consent decision may drop or
+    /// reorder them. A granted type the request did not carry is refused before this method is asked, so
+    /// the list is empty only where no record of the request survives, as for a back-channel request
+    /// stored before the server recorded one; the type decides whether such an entry stands on the rules
+    /// that hold on their own or is refused.
+    /// </para>
+    /// <para>
+    /// An override says no in two ways that mean different things. An entry wider than the requested ones - a
+    /// higher amount, another account - is returned as an <see cref="OidcError"/>, which the authorization
+    /// endpoint answers with access_denied, since the likely cause is an end user who edited the consent form.
+    /// An entry no end user could have produced, one missing a member the type requires, is a fault in the
+    /// host's code that made the decision and is thrown, so it fails the host's own tests instead of reading
+    /// as a refusal. Without an override, every entry this type's request-phase rules refuse comes back as an
+    /// <see cref="OidcError"/>, the first of the two.
     /// </para>
     /// </remarks>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="detail">The granted entry, whose <see cref="AuthorizationDetail.Type"/> matches
     /// this validator's <see cref="Type"/>.</param>
+    /// <param name="requested">The entries of this validator's <see cref="Type"/> the request carried,
+    /// as the end user was shown them.</param>
     /// <param name="client">The client the grant is being issued to.</param>
     /// <param name="token">Cancellation token.</param>
     /// <returns>The validated (and possibly normalised) detail on success, or an
-    /// <see cref="OidcError"/> describing the rejection. A rejection here means the consent decision
-    /// escalated beyond what this type permits, which is a host-side defect rather than a client
-    /// error.</returns>
+    /// <see cref="OidcError"/> describing why the granted entry is refused, most likely for being wider than
+    /// the requested ones.</returns>
     Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+        TenantDefinition tenant,
         AuthorizationDetail detail,
+        IReadOnlyList<AuthorizationDetail> requested,
         ClientInfo client,
         CancellationToken token)
-        => ValidateAsync(detail, client, token);
+        => ValidateAsync(tenant, detail, client, token);
 
     /// <summary>
     /// Optional: produces a host-renderable <see cref="AuthorizationDetailDescriptor"/> describing
@@ -113,6 +134,7 @@ public interface IAuthorizationDetailValidator
     /// extract the structured payload from <see cref="AuthorizationDetail.Json"/> and project it to
     /// the descriptor's Title / Summary / Details shape.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="detail">The entry to describe. Already passed
     /// <see cref="ValidateAsync"/>, so the per-type schema is satisfied.</param>
     /// <param name="client">The requesting client, for descriptions that vary by client metadata
@@ -121,6 +143,7 @@ public interface IAuthorizationDetailValidator
     /// <returns>The descriptor on success; <c>null</c> when no structured description is
     /// available and the host should fall back to a JSON-dump rendering.</returns>
     Task<AuthorizationDetailDescriptor?> BuildConsentDescriptorAsync(
+        TenantDefinition tenant,
         AuthorizationDetail detail,
         ClientInfo client,
         CancellationToken cancellationToken)

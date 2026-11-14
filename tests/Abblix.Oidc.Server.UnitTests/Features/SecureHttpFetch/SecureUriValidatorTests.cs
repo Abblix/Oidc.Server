@@ -89,7 +89,7 @@ public class SecureUriValidatorTests
     [InlineData("0.1.2.3")]                 // 0.0.0.0/8
     [InlineData("100.64.0.1")]              // carrier-grade NAT 100.64.0.0/10 (RFC 6598)
     [InlineData("100.127.255.255")]         // CGNAT upper bound
-    [InlineData("::ffff:127.0.0.1")]        // IPv4-mapped IPv6 reaching loopback (RFC 4291 §2.5.5)
+    [InlineData("::ffff:127.0.0.1")]        // IPv4-mapped IPv6 reaching loopback (RFC 4291 section 2.5.5)
     [InlineData("::ffff:169.254.169.254")]  // IPv4-mapped IPv6 reaching cloud metadata
     [InlineData("::ffff:10.0.0.1")]         // IPv4-mapped IPv6 reaching a private range
     [InlineData("::")]                       // IPv6 unspecified address

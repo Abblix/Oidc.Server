@@ -6,11 +6,15 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.ExternalKeys;
@@ -27,37 +31,91 @@ namespace Abblix.Oidc.Server.Features.ExternalKeys;
 /// a token produced with a version it lacks. One provider serves any custodian, so the Vault and Azure packages
 /// carry no key provider of their own.
 /// </summary>
-public sealed class ExternalKeysProvider(
+public sealed partial class ExternalKeysProvider(
+    ILogger<ExternalKeysProvider> logger,
     IKeyCustodian custodian,
-    CustodianHeldKeys keys,
+    ITenantCatalog catalog,
     IOptions<OidcOptions> options,
     TimeProvider timeProvider)
     : IAuthServiceKeysProvider
 {
-    /// <inheritdoc />
-    public IAsyncEnumerable<JsonWebKey> GetSigningKeys(bool includePrivateKeys = false)
-        => PublishAsync(keys.SigningKeyName, PublicKeyUsages.Signature, keys.SigningAlgorithm);
+    /// <summary>
+    /// The refusal of a custodian placement that names no key to produce with.
+    /// </summary>
+    internal const string NoKeyNamed =
+        "The keys are held by a custodian, and none is named to produce with: name the custodian's keys of the " +
+        $"tenant in {nameof(TenantDefinition)}.{nameof(TenantDefinition.CustodianKeys)}.";
+
+    private static CustodianHeldKeys KeysOf(TenantDefinition tenant)
+        => tenant.CustodianKeys ?? throw new InvalidOperationException(NoKeyNamed);
 
     /// <inheritdoc />
-    public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(bool includePrivateKeys = false)
+    public IAsyncEnumerable<JsonWebKey> GetSigningKeys(TenantDefinition tenant, bool includePrivateKeys = false)
+    {
+        var keys = KeysOf(tenant);
+        return PublishAsync(tenant, keys.SigningKeyName, PublicKeyUsages.Signature, keys.SigningAlgorithm);
+    }
+
+    /// <inheritdoc />
+    public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(TenantDefinition tenant, bool includePrivateKeys = false)
+    {
         // A provider that issues no encrypted token names no encryption key, and then there is nothing to publish.
         // Asking the custodian for a guessed name instead would fail against a custodian that holds only a signing
         // key, which is the common high-assurance setup.
-        => keys.EncryptionKeyName is { } encryptionKeyName
-            ? PublishAsync(encryptionKeyName, PublicKeyUsages.Encryption, keys.EncryptionAlgorithm)
+        var keys = KeysOf(tenant);
+        return keys.EncryptionKeyName is { } encryptionKeyName
+            ? PublishAsync(tenant, encryptionKeyName, PublicKeyUsages.Encryption, keys.EncryptionAlgorithm)
             : AsyncEnumerable.Empty<JsonWebKey>();
+    }
 
-    // Note: this lists the custodian's key versions on every call. Versions change on human timescales (a
-    // rotation), so a production deployment caches the enumeration for a short lifetime and recomputes only the
-    // produce-first ordering (cheap and time-dependent) per call. It is left uncached here to keep the seam
-    // obvious; a host layers its own caching over this provider.
+    // The last enumeration that succeeded, per key name. It is not an optimization: the published set is what
+    // relying parties verify already-issued tokens against, so letting a custodian outage empty it stops them
+    // validating tokens that are perfectly good, which is a wider outage than the one that caused it. Serving
+    // the previous set costs freshness, and OpenID Connect Core 10.1.1 asks the document to keep recently
+    // retired keys for a while anyway.
+    //
+    // Only a TEMPORARY failure is served from here, and the distinction is not bookkeeping. A permanent one is
+    // an operator disabling a key or revoking this identity's read on it, so falling back would keep publishing
+    // a key that was deliberately retired, keep offering it to sign with, and keep advertising an encryption
+    // key nothing can unwrap with - for the life of the process, since only a later success replaces the entry.
+    //
+    // The staleness runs both ways, and this instance cannot tell which it is in: the failure caught here is
+    // ITS failure, not the custodian's, so another instance may have rotated meanwhile and this set would miss
+    // the new version. KeyRingRefreshService says the same of the minted-key path. That is why the fallback is
+    // reported rather than silent.
+    //
+    // Kept per tenant and key name, so a tenant created again under a key name another creation used keeps a set of
+    // its own, and each creation's sets go with it
+    private readonly ConcurrentDictionary<(string Partition, string KeyName), IReadOnlyList<KeyVersion>>
+        _lastPublished = new();
+
     private async IAsyncEnumerable<JsonWebKey> PublishAsync(
+        TenantDefinition tenant,
         string keyName,
         string usage,
         string algorithm,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var versions = await custodian.GetKeyVersionsAsync(keyName, cancellationToken).ToListAsync(cancellationToken);
+        IReadOnlyList<KeyVersion> versions;
+        try
+        {
+            versions = await custodian.GetKeyVersionsAsync(keyName, cancellationToken).ToListAsync(cancellationToken);
+            var tenantKey = (TenantKey.PartitionOf(tenant), keyName);
+            if (_lastPublished.TryAdd(tenantKey, versions))
+                StoreTenantCatalog.ReleasedOf(catalog, tenant).Register(() => _lastPublished.TryRemove(tenantKey, out _));
+            else
+                _lastPublished[tenantKey] = versions;
+        }
+        catch (KeyCustodianUnavailableException failure)
+        {
+            // A cold start has nothing to fall back on, and saying so is the honest answer: the endpoint turns
+            // this into the status that says whether to come back.
+            if (!_lastPublished.TryGetValue((TenantKey.PartitionOf(tenant), keyName), out var lastKnown))
+                throw;
+
+            LogServingLastKnownKeys(keyName, lastKnown.Count, failure);
+            versions = lastKnown;
+        }
 
         // Stamp the use and the configured algorithm on each version's bare public key (RSA or EC); keep the
         // version-specific kid the custodian set, falling back to the configured key name for a single-version

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.Tokens;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -58,6 +59,12 @@ public record SuccessfullyAuthenticated(
 	public string? SessionState { get; set; }
 
 	/// <summary>
+	/// How the user agent keeps the session the response was issued under, so the session management cookie written
+	/// beside it lasts as long as the session does.
+	/// </summary>
+	public required SessionPersistence SessionPersistence { get; init; }
+
+	/// <summary>
 	/// The granted <c>scope</c> as a space-delimited string, populated by the response encoder for
 	/// implicit/hybrid flows only (where the response itself carries tokens). <c>null</c> for the code flow.
 	/// </summary>
@@ -67,7 +74,7 @@ public record SuccessfullyAuthenticated(
 	/// The scope actually granted by the user-consent decision - the same set the issued access/ID token
 	/// carries. Threaded by the authorization request processor so the response encoder advertises it on
 	/// the front-channel <c>scope</c> parameter. May be a subset of the requested
-	/// <see cref="AuthorizationRequest.Scope"/> when the host consent provider narrows the grant (RFC 6749 §3.3).
+	/// <see cref="AuthorizationRequest.Scope"/> when the host consent provider narrows the grant (RFC 6749 section 3.3).
 	/// </summary>
 	public string[] GrantedScopes { get; init; } = [];
 }

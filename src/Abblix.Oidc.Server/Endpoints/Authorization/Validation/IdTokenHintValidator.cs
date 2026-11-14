@@ -6,9 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 
@@ -40,12 +39,12 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 public class IdTokenHintValidator(IIdTokenHintParser hintParser) : IAuthorizationContextValidator
 {
     /// <inheritdoc />
-    public async Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
+    public async Task<AuthorizationRequestValidationError?> ValidateAsync(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         if (!context.Request.IdTokenHint.HasValue())
             return null;
 
-        var result = await hintParser.ParseAsync(context.Request.IdTokenHint);
+        var result = await hintParser.ParseAsync(tenant, context.ClientInfo, context.Request.IdTokenHint);
         if (result.TryGetFailure(out var reason))
             return context.InvalidRequest(reason);
 

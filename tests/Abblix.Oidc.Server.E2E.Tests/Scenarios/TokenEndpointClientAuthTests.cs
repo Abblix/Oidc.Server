@@ -14,12 +14,11 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// RFC 6749 §5.2 client-authentication failures at the token endpoint: when the client attempted
+/// RFC 6749 section 5.2 client-authentication failures at the token endpoint: when the client attempted
 /// to authenticate via the Authorization header, the server MUST respond with 401 and a
 /// WWW-Authenticate challenge matching the scheme the client used.
 /// </summary>
@@ -45,13 +44,13 @@ public class TokenEndpointClientAuthTests(TestFactory factory) : TestBase(factor
 
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
-        // RFC 6749 §5.2: Authorization-header authentication failure -> 401 (not 400) with a
+        // RFC 6749 section 5.2: Authorization-header authentication failure -> 401 (not 400) with a
         // WWW-Authenticate challenge matching the scheme the client used (Basic).
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Contains(response.Headers.WwwAuthenticate, h => h.Scheme == TokenTypes.Basic);
 
         var body = JsonNode.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidClient, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidClient, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 }

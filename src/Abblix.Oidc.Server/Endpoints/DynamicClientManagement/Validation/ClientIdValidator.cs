@@ -8,16 +8,18 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Cross-checks the supplied <c>client_id</c> against the operation type:
-/// for <see cref="DynamicClientOperation.Update"/> (RFC 7592 §2.2) the client must already exist,
-/// for <see cref="DynamicClientOperation.Register"/> (RFC 7591 §3) it must not.
+/// for <see cref="DynamicClientOperation.Update"/> (RFC 7592 section 2.2) the client must already exist,
+/// for <see cref="DynamicClientOperation.Register"/> (RFC 7591 section 3) it must not.
 /// A missing <c>client_id</c> is treated as new-registration with server-assigned id.
 /// </summary>
 /// <param name="logger">Logger used for warnings about register/update conflicts.</param>
@@ -27,13 +29,13 @@ public partial class ClientIdValidator(
     IClientInfoProvider clientInfoProvider) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var clientId = context.Request.ClientId;
         if (!clientId.HasValue())
             return null;
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         switch (context.Operation)
         {
             // For UPDATE: client MUST exist

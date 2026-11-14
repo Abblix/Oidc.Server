@@ -8,12 +8,14 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
 /// <summary>
-/// Refuses a <c>claims</c> request whose <c>sub</c> qualifier is not a string.
+/// Refuses a <c>claims</c> request whose <c>sub</c> qualifier is not a string, or whose qualifiers leave
+/// no end user who could satisfy them.
 /// </summary>
 /// <remarks>
 /// This endpoint accepts the same <c>claims</c> parameter as the authorization endpoint and honours a
@@ -31,7 +33,7 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 public class RequestedSubjectValidator : IBackChannelAuthenticationContextValidator
 {
     /// <inheritdoc />
-    public Task<OidcError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, BackChannelAuthenticationValidationContext context)
         => Task.FromResult(Validate(context));
 
     private static OidcError? Validate(BackChannelAuthenticationValidationContext context)

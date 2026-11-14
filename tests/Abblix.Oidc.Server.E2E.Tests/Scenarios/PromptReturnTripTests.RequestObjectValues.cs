@@ -1,0 +1,333 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.Net;
+using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.E2E.Tests.Model;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Xunit;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
+
+namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
+
+/// <remarks>
+/// An unsupported value inside a signed request object is answered as the same value is in the query.
+/// </remarks>
+public partial class PromptReturnTripTests
+{
+    /// <summary>
+    /// How a signed request object reaches the server.
+    /// </summary>
+    public enum RequestObjectPassing
+    {
+        ByValue,
+        ByReference,
+        Pushed,
+    }
+
+    public static TheoryData<string, string, RequestObjectPassing> UnsupportedValuesByPassing()
+    {
+        (string Name, string Value)[] unsupported =
+        [
+            (AuthorizationRequest.Parameters.ResponseMode, "bogus"),
+            (AuthorizationRequest.Parameters.Display, "hologram"),
+            (AuthorizationRequest.Parameters.CodeChallengeMethod, "S1"),
+        ];
+
+        var data = new TheoryData<string, string, RequestObjectPassing>();
+        foreach (var (name, value) in unsupported)
+        {
+            foreach (var passing in Enum.GetValues<RequestObjectPassing>())
+                data.Add(name, value, passing);
+        }
+
+        return data;
+    }
+
+    /// <summary>
+    /// An unsupported value inside a signed request object gets the answer the same value gets in the query: a
+    /// 400 for a response mode, which no error response can be delivered in, and invalid_request at the redirect
+    /// URI for a display value and a code challenge method. A pushed object is answered by the pushed authorization
+    /// endpoint itself (RFC 9126, section 2.3), so there the error code is what has to match.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(UnsupportedValuesByPassing))]
+    public async Task UnsupportedValue_InRequestObject_IsAnsweredAsInTheQuery(
+        string name,
+        string value,
+        RequestObjectPassing passing)
+    {
+        var served = new RequestObjectServer();
+        var (client, host) = StartServing(served);
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var query = AuthorizeParameters(Prompts.Login);
+        query[name] = value;
+        using var viaQuery = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, query), TestContext.Current.CancellationToken);
+        var error = await ErrorOfAsync(viaQuery);
+        Assert.Equal(ErrorCodes.InvalidRequest, error);
+
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
+            client,
+            discovery,
+            Prompts.Login,
+            new Dictionary<string, string> { [name] = value },
+            requestUris: [RequestObjectServer.Address]);
+
+        using var viaObject = await SendRequestObjectAsync(
+            client, discovery, clientId, clientSecret, requestObject, passing, served);
+
+        if (passing != RequestObjectPassing.Pushed)
+            Assert.Equal(viaQuery.StatusCode, viaObject.StatusCode);
+
+        Assert.Equal(error, await ErrorOfAsync(viaObject));
+    }
+
+    /// <summary>
+    /// A value inside a signed request object that is refused as unsupported is described by the parameter's name in
+    /// the characters RFC 6749 allows, as the same value in the query is, never by the value the client wrote.
+    /// </summary>
+    [Theory]
+    [InlineData(AuthorizationRequest.Parameters.ResponseMode, "query\t")]
+    [InlineData(AuthorizationRequest.Parameters.Prompt, "login\t")]
+    public async Task UnsupportedValue_InRequestObject_IsDescribedByItsName(string name, string value)
+    {
+        var served = new RequestObjectServer();
+        var (client, host) = StartServing(served);
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
+            client,
+            discovery,
+            Prompts.Login,
+            new Dictionary<string, string> { [name] = value },
+            requestUris: [RequestObjectServer.Address]);
+
+        using var response = await SendRequestObjectAsync(
+            client, discovery, clientId, clientSecret, requestObject, RequestObjectPassing.ByValue, served);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorOfAsync(response));
+        var description = await ParameterOfAsync(response, ResponseParameters.ErrorDescription);
+        Assert.NotNull(description);
+        Assert.All(description, character => Assert.True(
+            RefusalDescriptionTests.IsAllowed(character), $"U+{(int)character:X4} in '{description}'"));
+        Assert.Contains(name, description, StringComparison.Ordinal);
+        Assert.DoesNotContain(RefusalDescriptionTests.AsEchoed(value), description, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The response mode values that are no response mode: empty, or whitespace alone.
+    /// </summary>
+    private static readonly string[] BlankValues = [string.Empty, " ", "\t"];
+
+    public static TheoryData<string> BlankResponseModes() => new(BlankValues);
+
+    public static TheoryData<string, RequestObjectPassing> BlankResponseModesByPassing()
+    {
+        var data = new TheoryData<string, RequestObjectPassing>();
+        foreach (var blank in BlankValues)
+        {
+            foreach (var passing in Enum.GetValues<RequestObjectPassing>())
+                data.Add(blank, passing);
+        }
+
+        return data;
+    }
+
+    /// <summary>
+    /// A response mode in the query that is empty or whitespace alone is no response mode, whichever host binds
+    /// it: the request goes on to the login page.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(BlankResponseModes))]
+    public async Task BlankResponseMode_InTheQuery_IsTakenAsAbsent(string blank)
+    {
+        var (client, _, host) = Start();
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var query = AuthorizeParameters(Prompts.Login);
+        query[AuthorizationRequest.Parameters.ResponseMode] = blank;
+
+        var sentTo = await RedirectOf(client, QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, query));
+
+        Assert.Equal(LoginPath, PathOf(sentTo));
+    }
+
+    /// <summary>
+    /// A response mode inside a request object that is empty or whitespace alone is no response mode, as the same
+    /// value in the query is: the request is taken, and goes on to the login page.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(BlankResponseModesByPassing))]
+    public async Task BlankResponseMode_InRequestObject_IsTakenAsAbsent(string blank, RequestObjectPassing passing)
+    {
+        var served = new RequestObjectServer();
+        var (client, host) = StartServing(served);
+        using var _ = host;
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
+            client,
+            discovery,
+            Prompts.Login,
+            new Dictionary<string, string> { [AuthorizationRequest.Parameters.ResponseMode] = blank },
+            requestUris: [RequestObjectServer.Address]);
+
+        using var response = await SendRequestObjectAsync(
+            client, discovery, clientId, clientSecret, requestObject, passing, served);
+
+        if (passing == RequestObjectPassing.Pushed)
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        else
+            Assert.Equal(LoginPath, PathOf(response.Headers.Location!));
+    }
+
+    /// <summary>
+    /// A request object the client serves at its request_uri comes back from the login page as the request it was:
+    /// the end user signs in, returns with the request_uri the page was handed, and the request ends in a code.
+    /// </summary>
+    [Fact]
+    public async Task RequestObjectByReference_ReturnsFromTheLoginPage_WithACode()
+    {
+        var served = new RequestObjectServer();
+        var endUser = new SignedInEndUser();
+        var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<IAuthSessionService>(endUser));
+            services.Replace(ServiceDescriptor.Singleton<ISecureHttpFetcher>(served));
+        }));
+        using var _ = host;
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        var discovery = await FetchDiscoveryAsync(client);
+        var (clientId, clientSecret, requestObject) = await SignedRequestAsync(
+            client, discovery, Prompts.Login, requestUris: [RequestObjectServer.Address]);
+
+        using var response = await SendRequestObjectAsync(
+            client, discovery, clientId, clientSecret, requestObject, RequestObjectPassing.ByReference, served);
+
+        await WalkPagesAsync(
+            client, discovery, clientId, response.Headers.Location!, false, (LoginPath, endUser.SignInAgain));
+    }
+
+    /// <summary>
+    /// Sends a signed request object the way <paramref name="passing"/> names and returns the server's answer.
+    /// </summary>
+    private static async Task<HttpResponseMessage> SendRequestObjectAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        string clientId,
+        string clientSecret,
+        string requestObject,
+        RequestObjectPassing passing,
+        RequestObjectServer served)
+    {
+        switch (passing)
+        {
+            case RequestObjectPassing.ByValue:
+                return await client.GetAsync(
+                    await FirstLegAsync(client, discovery, clientId, clientSecret, requestObject, pushed: false),
+                    TestContext.Current.CancellationToken);
+
+            case RequestObjectPassing.ByReference:
+            {
+                served.Content = requestObject;
+                var response = await client.GetAsync(
+                    Authorize(discovery, clientId, RequestObjectServer.Address),
+                    TestContext.Current.CancellationToken);
+                Assert.Equal(new Uri(RequestObjectServer.Address), served.Fetched);
+                return response;
+            }
+
+            case RequestObjectPassing.Pushed:
+                return await FormPostHelpers.PostFormAsync(
+                    client,
+                    discovery.PushedAuthorizationRequestEndpoint!,
+                    new Dictionary<string, string>
+                    {
+                        [AuthorizationRequest.Parameters.ClientId] = clientId,
+                        [ClientRequest.Parameters.ClientSecret] = clientSecret,
+                        [AuthorizationRequest.Parameters.Request] = requestObject,
+                    });
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(passing), passing, null);
+        }
+    }
+
+    /// <summary>
+    /// Answers the server's fetch of a request_uri with the request object the test sets, standing in for the
+    /// client's own web server.
+    /// </summary>
+    private sealed class RequestObjectServer : ISecureHttpFetcher
+    {
+        public const string Address = "https://client.example.com/request.jwt";
+
+        public string? Content { get; set; }
+
+        /// <summary>The address the server last fetched a request object from.</summary>
+        public Uri? Fetched { get; private set; }
+
+        public Task<Result<T, OidcError>> FetchAsync<T>(Uri uri, bool refetch = false)
+        {
+            Fetched = uri;
+            return Task.FromResult<Result<T, OidcError>>((T)(object)Content!);
+        }
+    }
+
+    /// <summary>
+    /// The server over a signed-in end user and a client web server serving request objects.
+    /// </summary>
+    private (HttpClient Client, IDisposable Host) StartServing(RequestObjectServer served)
+    {
+        var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<IAuthSessionService>(new SignedInEndUser()));
+            services.Replace(ServiceDescriptor.Singleton<ISecureHttpFetcher>(served));
+        }));
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        return (client, host);
+    }
+
+    /// <summary>
+    /// The error an authorization response carries: in the redirect it sends, or in the body of a 400.
+    /// </summary>
+    private static Task<string?> ErrorOfAsync(HttpResponseMessage response)
+        => ParameterOfAsync(response, ResponseParameters.Error);
+
+    /// <summary>
+    /// Reads a parameter of an error response, delivered at the redirect URI or in the body.
+    /// </summary>
+    private static async Task<string?> ParameterOfAsync(HttpResponseMessage response, string name)
+    {
+        if (response.Headers.Location is { } location)
+            return QueryValue(location, name);
+
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        return body[name]?.GetValue<string>();
+    }
+}

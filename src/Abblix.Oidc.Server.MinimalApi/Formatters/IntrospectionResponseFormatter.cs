@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// <c>Accept: application/token-introspection+jwt</c>, a signed/encrypted JWT (RFC 9701); the OAuth error otherwise.
 /// </summary>
 public class IntrospectionResponseFormatter(
-    IIssuerProvider issuerProvider,
+    ITenantAccessor tenantAccessor,
     IClientJwtFormatter clientJwtFormatter,
     TimeProvider clock,
     IOptionsSnapshot<OidcOptions> options,
@@ -40,18 +40,18 @@ public class IntrospectionResponseFormatter(
         => response.MatchAsync(
             onSuccess: FormatSuccessAsync,
             onFailure: error => Task.FromResult(
-                error.Format(StatusCodes.Status401Unauthorized, issuerProvider.GetIssuer())));
+                error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().Issuer.OriginalString)));
 
     private async Task<IResult> FormatSuccessAsync(IntrospectionSuccess success)
     {
         var introspectionResponse = success.Claims ?? new JsonObject();
 
-        // RFC 7662 §2.2: active is the only REQUIRED member and is a JSON boolean.
+        // RFC 7662 section 2.2: active is the only REQUIRED member and is a JSON boolean.
         introspectionResponse.SetProperty(IntrospectionSuccess.Parameters.Active, JsonValue.Create(success.Active));
 
         var clientInfo = success.ClientInfo;
 
-        // RFC 9701 §4: a JWT response is returned only when the client registered a signing algorithm AND requested
+        // RFC 9701 section 4: a JWT response is returned only when the client registered a signing algorithm AND requested
         // the JWT media type via Accept; otherwise the plain RFC 7662 JSON document is returned.
         if (clientInfo.IntrospectionSignedResponseAlgorithm == SigningAlgorithms.None || !AcceptsTokenIntrospectionJwt())
             return Results.Json(introspectionResponse);
@@ -67,19 +67,22 @@ public class IntrospectionResponseFormatter(
             Payload =
             {
                 IssuedAt = now,
-                Issuer = issuerProvider.GetIssuer(),
+                Issuer = tenantAccessor.CurrentTenant().Issuer.OriginalString,
                 Audiences = [clientInfo.ClientId],
 
-                // RFC 9701 §5: the introspection response object is carried as the token_introspection claim. The
+                // RFC 9701 section 5: the introspection response object is carried as the token_introspection claim. The
                 // object is cloned because it is otherwise still parented to the introspected token's payload.
                 [IanaClaimTypes.TokenIntrospection] = introspectionResponse.DeepClone(),
             },
         };
 
-        var jwt = await clientJwtFormatter.FormatAsync(
+        // The client's key set was judged against its profile where the client was resolved in this request, so a refusal here
+        // is a key set changed in between
+        var jwt = (await clientJwtFormatter.FormatAsync(
+            tenantAccessor.CurrentTenant(),
             token,
             clientInfo,
-            ClientJwtEncryption.ForIntrospection(clientInfo, options.Value));
+            ClientJwtEncryption.ForIntrospection(clientInfo, options.Value))).GetSuccess();
 
         return Results.Content(jwt, MediaTypes.TokenIntrospectionJwt);
     }

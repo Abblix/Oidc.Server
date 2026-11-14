@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Features.TokenExchange;
 /// <c>IdentityProvider</c> on the synthesised <c>AuthSession</c>. <c>null</c> when the resolver
 /// cannot determine it (e.g. opaque tokens without an issuer field).</param>
 /// <param name="Scope">Scopes the subject_token was granted. The grant handler intersects this
-/// with any <c>scope</c> the client supplied in the exchange request (RFC 8693 §2.1 narrow
+/// with any <c>scope</c> the client supplied in the exchange request (RFC 8693 section 2.1 narrow
 /// only -- never widen). <c>null</c> when the subject_token did not carry a scope claim.</param>
 /// <param name="AuthorizationDetails">RFC 9396 <c>authorization_details</c> attached to the
 /// subject_token, raw <see cref="JsonArray"/> so the byte-exact payload survives the exchange
@@ -37,7 +37,7 @@ public sealed record SubjectTokenContext(
     string[]? Scope,
     JsonArray? AuthorizationDetails)
 {
-    /// <summary>RFC 8693 §4.1 <c>act</c> claim attached to the subject_token, captured as
+    /// <summary>RFC 8693 section 4.1 <c>act</c> claim attached to the subject_token, captured as
     /// a raw <see cref="JsonObject"/>. When the exchange adds a new actor on top of a subject_token
     /// that already had its own act chain, the grant handler nests this value under the new actor's
     /// <c>act</c> member so the full delegation chain is preserved. <c>null</c> when the
@@ -54,11 +54,16 @@ public sealed record SubjectTokenContext(
     public string? OriginalClientId { get; init; }
 
     /// <summary>
-    /// For JWT-formatted subject_tokens, the value of the JWS <c>typ</c> header (e.g. <c>at+jwt</c>,
-    /// <c>id+jwt</c>, <c>rt+jwt</c>). The grant handler uses this to detect cross-type confusion --
-    /// a JWT minted as an id_token presented under <c>subject_token_type=access_token</c> is
-    /// rejected even though both pass signature validation. <c>null</c> when the subject_token is
-    /// not a JWT or the typ header was absent.
+    /// The refresh token family the subject_token carries, so the exchanged token joins it and a revoked family
+    /// refuses the exchanged token too (RFC 9700 section 4.14.2). The authority the exchange hands out comes from
+    /// the subject_token, so it must not outlive the grant that token came from. <c>null</c> when the
+    /// subject_token carries no family.
     /// </summary>
-    public string? JwtTokenType { get; init; }
+    public string? GrantId { get; init; }
+
+    /// <summary>
+    /// When the subject_token expires, so a token exchanged from it within a refresh token family does not outlive
+    /// it, and with it the revocation of that family. <c>null</c> when the subject_token states no expiry.
+    /// </summary>
+    public DateTimeOffset? ExpiresAt { get; init; }
 }

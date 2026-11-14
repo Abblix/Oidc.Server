@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -27,7 +28,6 @@ using Microsoft.Net.Http.Headers;
 using Xunit;
 using CibaParameters = Abblix.Oidc.Server.Model.BackChannelAuthenticationRequest.Parameters;
 using ClientParameters = Abblix.Oidc.Server.Model.ClientRequest.Parameters;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Abblix.Oidc.Server.E2E.Tests;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
@@ -39,8 +39,8 @@ namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 /// <remarks>
 /// The three refusal arms differ in status and in what they carry, and only one of them is reachable without
 /// an integrator-supplied device handler. A client that fails authentication is refused earlier, by the
-/// validator, and gets the plain 400 - the 401 and 403 arms belong to a device handler that refuses a request
-/// whose client already authenticated, which is why the tests below replace that handler rather than sending
+/// validator, and answered as the token endpoint answers it - the 401 and 403 arms belong to a device handler that refuses a request
+/// whose client already authenticated, which is why the tests in this class replace that handler rather than sending
 /// bad credentials.
 ///
 /// The 401 arm is the one worth driving carefully: RFC 9110 section 11.6.1 requires a challenge on a 401, and
@@ -89,8 +89,8 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
         var body = await ReadJsonAsync(response);
         Assert.True(response.IsSuccessStatusCode, $"registering a CIBA client failed: {(int)response.StatusCode} {body}");
 
-        var clientId = body[ClientParameters.ClientId];
-        var secret = body[ClientParameters.ClientSecret];
+        var clientId = body[ClientRegistrationResponse.Parameters.ClientId];
+        var secret = body[ClientRegistrationResponse.Parameters.ClientSecret];
         Assert.NotNull(clientId);
         Assert.NotNull(secret);
 
@@ -135,7 +135,7 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
         Assert.Contains(TestConstants.Issuer, challenge, StringComparison.Ordinal);
 
         var body = await ReadJsonAsync(response);
-        var error = body[ResponseParameters.Error];
+        var error = body[ErrorResponse.Parameters.Error];
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.AccessDenied, error.GetValue<string>());
     }
@@ -196,7 +196,7 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
         Assert.False(response.Headers.Contains(HeaderNames.WWWAuthenticate));
 
         var body = await ReadJsonAsync(response);
-        var error = body[ResponseParameters.Error];
+        var error = body[ErrorResponse.Parameters.Error];
         Assert.NotNull(error);
         Assert.Equal(ErrorCodes.AccessDenied, error.GetValue<string>());
     }
@@ -223,7 +223,7 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
         Assert.False(response.Headers.Contains(HeaderNames.WWWAuthenticate));
 
         var body = await ReadJsonAsync(response);
-        Assert.False(string.IsNullOrEmpty(body[ResponseParameters.Error]?.GetValue<string>()));
+        Assert.False(string.IsNullOrEmpty(body[ErrorResponse.Parameters.Error]?.GetValue<string>()));
     }
 
     /// <summary>
@@ -238,7 +238,10 @@ public sealed class BackChannelAuthenticationFormatterTests(TestFactory factory)
     /// </remarks>
     private sealed class RefusingUserDeviceHandler(OidcError refusal) : IUserDeviceAuthenticationHandler
     {
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1172",
+            Justification = "The parameters belong to the interface; this stand-in answers the same way at every tenant.")]
         public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(
+            TenantDefinition tenant,
             ValidBackChannelAuthenticationRequest request)
             => Task.FromResult<Result<AuthSession, OidcError>>(refusal);
     }

@@ -1,7 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
@@ -20,6 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Read by the architecture test that walks the library's own sources: the shape it looks for is
+         an ORDER of statements inside one method, which a text search cannot see. Already managed for
+         the source generators, so this reference adds no dependency to the graph. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Moq" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
@@ -46,8 +49,73 @@
     <ItemGroup>
         <!-- One statement of what a host is promised, compiled into every package's suite. -->
         <Compile Include="../Shared/HostResilienceProbe.cs" Link="Shared/HostResilienceProbe.cs" />
+        <Compile Include="../Shared/EntityStorageMock.cs" Link="Shared/EntityStorageMock.cs" />
         <Compile Include="..\Shared\FlakyOriginHandler.cs">
           <Link>Shared\FlakyOriginHandler.cs</Link>
         </Compile>
     </ItemGroup>
+  <!-- Every other project of the solution, built before this one and referenced for nothing else: the
+       architecture tests read the assemblies of the whole solution, and a project this one does not
+       reach would be read from an earlier build, or in continuous integration not at all.
+       EveryProjectIsBuiltFirstTests fails while a project of Abblix.Oidc.slnx is missing here. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Abblix.Jwt.Azure\Abblix.Jwt.Azure.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.Jwt.Vault\Abblix.Jwt.Vault.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.SecurityEvents.CAEP\Abblix.SecurityEvents.CAEP.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.SecurityEvents.MinimalApi\Abblix.SecurityEvents.MinimalApi.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.SecurityEvents.RISC\Abblix.SecurityEvents.RISC.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.SharedSignals\Abblix.Oidc.Server.SharedSignals.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.SharedSignals.MinimalApi\Abblix.SharedSignals.MinimalApi.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.SharedSignals.Redis\Abblix.SharedSignals.Redis.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.SharedSignals\Abblix.SharedSignals.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Analyzers.UnitTests\Abblix.Analyzers.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.DependencyInjection.UnitTests\Abblix.DependencyInjection.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.DocSamples.WebTemplate\Abblix.DocSamples.WebTemplate.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.DocSamples\Abblix.DocSamples.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Jwt.Azure.UnitTests\Abblix.Jwt.Azure.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Jwt.UnitTests\Abblix.Jwt.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.UnitTests\Abblix.Oidc.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Jwt.Vault.UnitTests\Abblix.Jwt.Vault.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.AspNetCore.UnitTests\Abblix.Oidc.Server.AspNetCore.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.E2E.TestHost\Abblix.Oidc.Server.E2E.TestHost.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.E2E.Tests\Abblix.Oidc.Server.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.Conformance.TestHost\Abblix.Oidc.Server.MinimalApi.Conformance.TestHost.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.E2E.TestHost\Abblix.Oidc.Server.MinimalApi.E2E.TestHost.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.E2E.Tests\Abblix.Oidc.Server.MinimalApi.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.MultiTenancy.E2E.Tests\Abblix.Oidc.Server.MultiTenancy.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.MinimalApi.UnitTests\Abblix.Oidc.Server.MinimalApi.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Oidc.Server.Mvc.UnitTests\Abblix.Oidc.Server.Mvc.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SecurityEvents.CAEP.UnitTests\Abblix.SecurityEvents.CAEP.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SecurityEvents.E2E.Tests\Abblix.SecurityEvents.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SecurityEvents.RISC.UnitTests\Abblix.SecurityEvents.RISC.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SecurityEvents.UnitTests\Abblix.SecurityEvents.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SharedSignals.E2E.Tests\Abblix.SharedSignals.E2E.Tests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SharedSignals.Redis.UnitTests\Abblix.SharedSignals.Redis.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.SharedSignals.UnitTests\Abblix.SharedSignals.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Abblix.Utils.UnitTests\Abblix.Utils.UnitTests.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.SourceGenerators.Mvc\Abblix.Oidc.Server.SourceGenerators.Mvc.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.SourceGenerators.MinimalApi\Abblix.Oidc.Server.SourceGenerators.MinimalApi.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <!-- Both an analyzer, so the decorator of a handler this suite lists is generated here as in the library, and
+         an assembly, so the suite drives the generator over sources of its own and reads its diagnostics. -->
+    <ProjectReference Include="..\..\src\Abblix.Oidc.Server.SourceGenerators.Telemetry\Abblix.Oidc.Server.SourceGenerators.Telemetry.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
+  </ItemGroup>
+
+  <!-- The references MSBuild evaluated for this project, conditions applied, and the restore file NuGet
+       wrote for it, both written into the assembly for EveryProjectIsBuiltFirstTests. Relative to this
+       project's folder, so a build moved or reached under another spelling of the path reads the same.
+       Last in the file, because an item transform sees only the items defined above it. -->
+  <ItemGroup>
+    <_BuildOrderReference Include="@(ProjectReference)">
+      <RelativePath>$([MSBuild]::MakeRelative($(MSBuildProjectDirectory), %(FullPath)))</RelativePath>
+    </_BuildOrderReference>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>ProjectReferences</_Parameter1>
+      <_Parameter2>@(_BuildOrderReference->'%(RelativePath)')</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>ProjectAssetsFile</_Parameter1>
+      <_Parameter2>$([MSBuild]::MakeRelative($(MSBuildProjectDirectory), $(ProjectAssetsFile)))</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>

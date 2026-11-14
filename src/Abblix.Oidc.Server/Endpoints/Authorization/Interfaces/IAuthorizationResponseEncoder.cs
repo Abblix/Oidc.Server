@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
 /// <summary>
@@ -28,6 +30,7 @@ public interface IAuthorizationResponseEncoder
 	/// Encodes the supplied authorization response in place. No-op for response types that are not
 	/// delivered to the client's redirect URI.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="response">The processed authorization response to encode.</param>
-	Task EncodeAsync(AuthorizationResponse response);
+	Task EncodeAsync(TenantDefinition tenant, AuthorizationResponse response);
 }

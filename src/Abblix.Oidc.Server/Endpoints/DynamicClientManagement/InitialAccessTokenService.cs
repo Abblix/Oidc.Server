@@ -10,8 +10,10 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.RandomGenerators;
+using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Microsoft.Extensions.Options;
 
@@ -22,14 +24,16 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 /// </summary>
 public class InitialAccessTokenService(
     IAuthServiceJwtFormatter serviceJwtFormatter,
-    IIssuerProvider issuerProvider,
+    ITenantCatalog catalog,
+    ITokenIdGenerator tokenIdGenerator,
     IOptions<OidcOptions> options) : IInitialAccessTokenService
 {
     /// <inheritdoc />
-    public Task<string> IssueTokenAsync(string subject, DateTimeOffset issuedAt, TimeSpan? expiresIn)
+    public async Task<EncodedJsonWebToken> IssueTokenAsync(
+        TenantDefinition tenant, string subject, DateTimeOffset issuedAt, TimeSpan expiresIn)
     {
         var signing = options.Value.ServiceTokens.InitialAccessToken.Signing;
-        var issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer());
+        var issuer = LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog);
 
         var token = new JsonWebToken
         {
@@ -52,10 +56,18 @@ public class InitialAccessTokenService(
                 // way back in. Every other token issued here for its own consumption does the same.
                 Audiences = [issuer],
                 Subject = subject,
+
+                // What the token is revoked by: the status check every token of this server passes reads the
+                // registry under this identifier
+                JwtId = tokenIdGenerator.GenerateTokenId(),
             },
         };
 
-        return serviceJwtFormatter.FormatAsync(
-            token, ServiceJwtEncryption.ForInitialAccessToken(options.Value));
+        var encoded = await serviceJwtFormatter.FormatAsync(
+            tenant,
+            token,
+            client: null,
+            ServiceJwtEncryption.ForInitialAccessToken(options.Value));
+        return new EncodedJsonWebToken(token, encoded);
     }
 }

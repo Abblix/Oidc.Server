@@ -15,6 +15,7 @@ using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using Xunit;
 
 namespace Abblix.SharedSignals.UnitTests;
@@ -75,7 +76,6 @@ public class StreamManagementServiceTests
         StreamManagementService Service,
         InMemoryStreamStore Store,
         InMemoryEventOutbox Outbox,
-        StubSigner Signer,
         FakeTimeProvider Clock);
 
     private static SharedSignalsTransmitterOptions DefaultOptions() => new()
@@ -88,19 +88,25 @@ public class StreamManagementServiceTests
 
     private static Harness CreateHarness() => CreateHarness(DefaultOptions());
 
-    private static Harness CreateHarness(SharedSignalsTransmitterOptions options)
+    private static Harness CreateHarness(
+        SharedSignalsTransmitterOptions options,
+        ITransmitterIdentity? identity = null)
     {
         var store = new InMemoryStreamStore();
         var outbox = new InMemoryEventOutbox();
-        var signer = new StubSigner();
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
         var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance, store, outbox, signer, options.Issuer, clock: clock);
+            NullLogger<EventDispatcher>.Instance,
+            store,
+            outbox,
+            identity ?? new OptionsTransmitterIdentity(options),
+            TestInstruments.Create(),
+            clock: clock);
 
         return new Harness(
             new StreamManagementService(
                 store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options), clock),
-            store, outbox, signer, clock);
+            store, outbox, clock);
     }
 
     private static async Task<StreamConfiguration> CreatedStreamAsync(
@@ -114,6 +120,140 @@ public class StreamManagementServiceTests
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         return created.Body!;
+    }
+
+    /// <summary>
+    /// A stream created after the identity changed names the issuer serving the request - the one its SETs carry,
+    /// which a receiver compares against the stream's (SSF 1.0 Section 7.2.2).
+    /// </summary>
+    [Fact]
+    public async Task Create_NamesTheIssuerServingTheRequest()
+    {
+        var identity = new SwitchableTransmitterIdentity("https://first.example.com");
+        var harness = CreateHarness(DefaultOptions(), identity);
+
+        identity.Issuer = "https://second.example.com";
+        var configuration = await CreatedStreamAsync(harness);
+
+        Assert.Equal("https://second.example.com", configuration.Issuer);
+    }
+
+    /// <summary>
+    /// A stream created before the identity changed is answered under the issuer serving the request, read alone, in
+    /// the receiver's list and in the answer to a change, though its stored record keeps the issuer it was created
+    /// under (SSF 1.0 Section 8.1.1).
+    /// </summary>
+    [Fact]
+    public async Task AStreamCreatedBeforeTheIdentityChanged_IsAnsweredUnderTheIssuerServingTheRequest()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var identity = new SwitchableTransmitterIdentity("https://first.example.com");
+        var harness = CreateHarness(DefaultOptions(), identity);
+        var created = await CreatedStreamAsync(harness);
+
+        identity.Issuer = "https://second.example.com";
+
+        var read = await harness.Service.GetStreamAsync(Receiver, created.StreamId, ct);
+        var listed = await harness.Service.ListStreamsAsync(Receiver, ct);
+        var changed = await harness.Service.UpdateStreamAsync(
+            Receiver, new UpdateStreamRequest { StreamId = created.StreamId, Description = "changed" }, ct);
+        var replaced = await harness.Service.ReplaceStreamAsync(
+            Receiver,
+            new UpdateStreamRequest { StreamId = created.StreamId, Delivery = new PollDeliveryMethod() },
+            ct);
+
+        Assert.Equal("https://first.example.com", created.Issuer);
+        Assert.Equal("https://second.example.com", read.Body!.Issuer);
+        Assert.Equal("https://second.example.com", Assert.Single(listed.Body!).Issuer);
+        Assert.Equal("https://second.example.com", changed.Body!.Issuer);
+        Assert.Equal("https://second.example.com", replaced.Body!.Issuer);
+    }
+
+    /// <summary>
+    /// A poll stream created before the identity changed is answered with the address its events are polled at under
+    /// the issuer serving the request, read alone, in the receiver's list and in the answer to a change, though its
+    /// stored record keeps the address it was created with.
+    /// </summary>
+    [Fact]
+    public async Task APollStreamCreatedBeforeTheIdentityChanged_IsAnsweredWithTheAddressItIsPolledAtNow()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var identity = new SwitchableTransmitterIdentity("https://first.example.com");
+        var options = DefaultOptions() with { PollEndpointFactory = null };
+        var routes = new TransmitterRoutes();
+        routes.ServePollAt((transmitter, streamId) => new Uri($"{transmitter.Issuer}/ssf/poll/{streamId}"));
+        var store = new InMemoryStreamStore();
+        var outbox = new InMemoryEventOutbox();
+        var dispatcher = new EventDispatcher(
+            NullLogger<EventDispatcher>.Instance, store, outbox, identity, TestInstruments.Create());
+        var service = new StreamManagementService(
+            store, outbox, dispatcher, options, PolicyFor(options), new PollEndpointLocator(options, routes, identity));
+        var created = (await service.CreateStreamAsync(Receiver, new CreateStreamRequest(), ct)).Body!;
+
+        identity.Issuer = "https://second.example.com";
+
+        var pollAt = new Uri($"https://second.example.com/ssf/poll/{created.StreamId}");
+        var read = await service.GetStreamAsync(Receiver, created.StreamId, ct);
+        var listed = await service.ListStreamsAsync(Receiver, ct);
+        var changed = await service.UpdateStreamAsync(
+            Receiver, new UpdateStreamRequest { StreamId = created.StreamId, Description = "changed" }, ct);
+        Assert.Equal(
+            new Uri($"https://first.example.com/ssf/poll/{created.StreamId}"),
+            Assert.IsType<PollDeliveryMethod>(created.Delivery).EndpointUrl);
+        Assert.Equal(pollAt, Assert.IsType<PollDeliveryMethod>(read.Body!.Delivery).EndpointUrl);
+        Assert.Equal(pollAt, Assert.IsType<PollDeliveryMethod>(Assert.Single(listed.Body!).Delivery).EndpointUrl);
+        Assert.Equal(pollAt, Assert.IsType<PollDeliveryMethod>(changed.Body!.Delivery).EndpointUrl);
+    }
+
+    /// <summary>
+    /// A poll stream of a transmitter that no longer serves poll delivery is answered with the address it stored, as
+    /// a configuration names one for every poll stream.
+    /// </summary>
+    [Fact]
+    public async Task APollStreamOfATransmitterNoLongerServingPoll_IsAnsweredWithTheAddressItStored()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var harness = CreateHarness();
+        var created = await CreatedStreamAsync(harness);
+        var options = DefaultOptions() with { PollEndpointFactory = null };
+        var withoutPoll = new StreamManagementService(
+            harness.Store,
+            harness.Outbox,
+            new EventDispatcher(
+                NullLogger<EventDispatcher>.Instance,
+                harness.Store,
+                harness.Outbox,
+                new OptionsTransmitterIdentity(options),
+                TestInstruments.Create()),
+            options,
+            PolicyFor(options),
+            PollEndpointsOf(options));
+
+        var read = await withoutPoll.GetStreamAsync(Receiver, created.StreamId, ct);
+
+        Assert.Equal(
+            Assert.IsType<PollDeliveryMethod>(created.Delivery).EndpointUrl,
+            Assert.IsType<PollDeliveryMethod>(read.Body!.Delivery).EndpointUrl);
+    }
+
+    /// <summary>
+    /// A push stream of a transmitter that also serves poll delivery is answered with the push delivery it stored,
+    /// read alone and in the receiver's list: only a poll stream's address is the transmitter's own.
+    /// </summary>
+    [Fact]
+    public async Task APushStream_IsAnsweredWithThePushDeliveryItStored()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var harness = CreateHarness();
+        var pushTo = new Uri("https://receiver.example.com/events");
+        var created = await CreatedStreamAsync(
+            harness, new CreateStreamRequest { EventsRequested = [TypeA], Delivery = new PushDeliveryMethod(pushTo) });
+
+        var read = await harness.Service.GetStreamAsync(Receiver, created.StreamId, ct);
+        var listed = await harness.Service.ListStreamsAsync(Receiver, ct);
+
+        Assert.Equal(pushTo, Assert.IsType<PushDeliveryMethod>(read.Body!.Delivery).EndpointUrl);
+        Assert.Equal(pushTo, Assert.IsType<PushDeliveryMethod>(Assert.Single(listed.Body!).Delivery).EndpointUrl);
     }
 
     [Fact]
@@ -189,7 +329,12 @@ public class StreamManagementServiceTests
         var outbox = new InMemoryEventOutbox();
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
         var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance, store, outbox, new StubSigner(), options.Issuer, clock: clock);
+            NullLogger<EventDispatcher>.Instance,
+            store,
+            outbox,
+            new OptionsTransmitterIdentity(options),
+            TestInstruments.Create(),
+            clock: clock);
         var service = new StreamManagementService(
             store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options), clock);
 
@@ -235,7 +380,12 @@ public class StreamManagementServiceTests
         var outbox = new InMemoryEventOutbox();
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
         var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance, store, outbox, new StubSigner(), options.Issuer, clock: clock);
+            NullLogger<EventDispatcher>.Instance,
+            store,
+            outbox,
+            new OptionsTransmitterIdentity(options),
+            TestInstruments.Create(),
+            clock: clock);
         var service = new StreamManagementService(
             store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options), clock);
 
@@ -262,6 +412,89 @@ public class StreamManagementServiceTests
                 (int)refused is >= 200 and <= 299,
                 $"A discarded write answered {(int)refused}, which the receiver reads as success.");
         }
+    }
+
+    /// <summary>
+    /// An update or a replacement that loses its write to another writer applies the receiver's members to the stream
+    /// as the other writer left it, so what that writer changed in the transmitter's half, such as the issuer of a
+    /// tenant that moved, is kept rather than written back from the first read, and the receiver is answered with the
+    /// stream as written.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AChangeThatLostItsWrite_KeepsWhatTheOtherWriterChanged(bool replace)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        const string movedIssuer = "https://moved.example.com";
+        string[] otherAudiences = ["https://other.example.com"];
+        var options = DefaultOptions();
+        var inner = new InMemoryStreamStore();
+        var otherWriterDone = false;
+        var store = new Mock<IStreamStore>(MockBehavior.Strict);
+        store
+            .Setup(s => s.TryCreateAsync(It.IsAny<StreamState>(), It.IsAny<CancellationToken>()))
+            .Returns((StreamState stream, CancellationToken token) => inner.TryCreateAsync(stream, token));
+        store
+            .Setup(s => s.FindAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns((string receiverId, string streamId, CancellationToken token) =>
+                inner.FindAsync(receiverId, streamId, token));
+        store
+            .Setup(s => s.ListAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns((string receiverId, CancellationToken token) => inner.ListAsync(receiverId, token));
+        store
+            .Setup(s => s.UpdateAsync(It.IsAny<StreamState>(), It.IsAny<CancellationToken>()))
+            .Returns(async (StreamState stream, CancellationToken token) =>
+            {
+                if (otherWriterDone)
+                    return await inner.UpdateAsync(stream, token);
+
+                // Another writer gets in between the receiver's read and its write
+                otherWriterDone = true;
+                var current = (await inner.FindAsync(stream.ReceiverId, stream.StreamId, token))!;
+                Assert.True(await inner.UpdateAsync(
+                    current with
+                    {
+                        Configuration = current.Configuration with { Issuer = movedIssuer, Audiences = otherAudiences },
+                    },
+                    token));
+                return await inner.UpdateAsync(stream, token);
+            });
+        var service = ServiceOver(store.Object, options);
+        var created = await service.CreateStreamAsync(
+            Receiver, new CreateStreamRequest { EventsRequested = [TypeA] }, ct);
+
+        var request = new UpdateStreamRequest
+        {
+            StreamId = created.Body!.StreamId,
+            Delivery = new PollDeliveryMethod(),
+            EventsRequested = [TypeB],
+        };
+        var changed = replace
+            ? await service.ReplaceStreamAsync(Receiver, request, ct)
+            : await service.UpdateStreamAsync(Receiver, request, ct);
+
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+        var stored = (await inner.FindAsync(Receiver, request.StreamId, ct))!.Configuration;
+        Assert.Equal(movedIssuer, stored.Issuer);
+        Assert.Equal([TypeB], stored.EventsRequested);
+        Assert.Equal([TypeB], stored.EventsDelivered);
+        Assert.Equal(otherAudiences, changed.Body!.Audiences);
+    }
+
+    private static StreamManagementService ServiceOver(IStreamStore store, SharedSignalsTransmitterOptions options)
+    {
+        var outbox = new InMemoryEventOutbox();
+        var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
+        var dispatcher = new EventDispatcher(
+            NullLogger<EventDispatcher>.Instance,
+            store,
+            outbox,
+            new OptionsTransmitterIdentity(options),
+            TestInstruments.Create(),
+            clock: clock);
+        return new StreamManagementService(
+            store, outbox, dispatcher, options, PolicyFor(options), PollEndpointsOf(options), clock);
     }
 
     [Fact]
@@ -468,10 +701,13 @@ public class StreamManagementServiceTests
 
         // The SET's subject is the stream itself, opaque (Section 8.1.4.1), and the state is
         // echoed in the event payload.
-        var minted = Assert.Single(harness.Signer.Signed);
-        Assert.Equal(created.StreamId, Assert.IsType<OpaqueSubject>(minted.GetSubjectId()).Id);
-        Assert.Single(await harness.Outbox.PendingAsync(
+        var queued = Assert.Single(await harness.Outbox.PendingAsync(
             Receiver, created.StreamId, null, TestContext.Current.CancellationToken));
+        var signer = new StubSigner();
+        await new QueuedEventSigner(signer, new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = "https://tr.example.com" }))
+            .SignAsync(queued, TestContext.Current.CancellationToken);
+        var minted = Assert.Single(signer.Signed);
+        Assert.Equal(created.StreamId, Assert.IsType<OpaqueSubject>(minted.GetSubjectId()).Id);
 
         var throttled = await harness.Service.RequestVerificationAsync(
             Receiver,
@@ -501,5 +737,6 @@ public class StreamManagementServiceTests
     /// does not - the row that refuses a poll create on a push-only transmitter. A host that maps the
     /// endpoints has the address declared by the mapping instead, which is covered end to end.
     /// </summary>
-    private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options) => new(options);
+    private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options)
+        => new(options, new TransmitterRoutes(), new OptionsTransmitterIdentity(options));
 }

@@ -15,12 +15,12 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 
 /// <summary>
-/// The licence is verified without lifetime handling, so the loader is the first reader of its
-/// timestamps - and a licence minted with one no date can hold failed the host at startup with
-/// the accessor's own exception rather than the message every other licence fault produces.
+/// The license is verified without lifetime handling, so the loader is the first reader of its
+/// timestamps - and a license minted with one no date can hold failed the host at startup with
+/// the accessor's own exception rather than the message every other license fault produces.
 /// </summary>
 /// <remarks>
-/// Driven through the read alone: verification needs a licence signed with the licensing key,
+/// Driven through the read alone: verification needs a license signed with the licensing key,
 /// which no test holds, and the read is what changed.
 /// </remarks>
 public class LicenseReadingTests

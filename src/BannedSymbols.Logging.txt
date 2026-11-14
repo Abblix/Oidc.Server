@@ -1,0 +1,1 @@
+T:Microsoft.Extensions.Logging.LoggerExtensions;Write a record through a [LoggerMessage] method, which the logging rules of Abblix.Analyzers can judge

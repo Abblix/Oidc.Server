@@ -7,13 +7,14 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 
 /// <summary>
-/// Endpoint contract for the OpenID Connect UserInfo endpoint (OIDC Core 1.0 §5.3),
+/// Endpoint contract for the OpenID Connect UserInfo endpoint (OIDC Core 1.0 section 5.3),
 /// which returns claims about the authenticated end-user identified by the bearer access
 /// token presented per RFC 6750.
 /// </summary>
@@ -23,6 +24,7 @@ public interface IUserInfoHandler
     /// Asynchronously handles a UserInfo request, validating the request for authorization and processing it to
     /// return the requested user information.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="userInfoRequest">The user info request containing the access token and possibly other parameters
     /// defining the scope of information requested.</param>
     /// <param name="clientRequest">Additional client-specific request information that may be necessary for processing
@@ -39,6 +41,7 @@ public interface IUserInfoHandler
     /// granted during the authorization process.
     /// </remarks>
     Task<Result<UserInfoFoundResponse, OidcError>> HandleAsync(
+        TenantDefinition tenant,
         UserInfoRequest userInfoRequest,
         ClientRequest clientRequest);
 }

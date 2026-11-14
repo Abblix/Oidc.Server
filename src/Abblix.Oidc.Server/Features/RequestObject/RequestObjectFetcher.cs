@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,20 +32,26 @@ namespace Abblix.Oidc.Server.Features.RequestObject;
 /// <param name="serviceProvider">The service provider used for resolving dependencies at runtime.</param>
 /// <param name="options">Options that define how request object validation is handled, including whether
 /// request objects must be signed.</param>
+/// <param name="timeProvider">The clock a profile's bound on how far in the past a request object's nbf may lie
+/// is measured against.</param>
 public partial class RequestObjectFetcher(
     ILogger<RequestObjectFetcher> logger,
     IJsonObjectBinder jsonObjectBinder,
     IServiceProvider serviceProvider,
-    IOptionsSnapshot<OidcOptions> options) : IRequestObjectFetcher
+    IOptionsSnapshot<OidcOptions> options,
+    TimeProvider timeProvider) : IRequestObjectFetcher
 {
     /// <summary>
     /// Fetches and processes the request object by validating its JWT and binding the payload to the request model.
     /// </summary>
     /// <typeparam name="T">The type of the request model.</typeparam>
+    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="client">The client the request names outside the object, or null.</param>
     /// <param name="request">The initial request model to bind the JWT payload to.</param>
     /// <param name="requestObject">The JWT contained within the request, if any.</param>
     /// <param name="requiredSigningAlgorithm">An optional selector returning the signing algorithm the
     /// request object must use for a given client, or <c>null</c> to impose no per-client requirement.</param>
+    /// <param name="forbiddenMembers">Parameters the request object must not include.</param>
     /// <returns>
     /// A task representing the asynchronous operation. The task result contains an <see cref="Result{T, AuthError}"/>
     /// which either represents a successfully processed request or an error indicating issues with the JWT validation.
@@ -54,31 +61,50 @@ public partial class RequestObjectFetcher(
     /// is bound to the request model. If the JWT is invalid, an error is returned and logged.
     /// </remarks>
     public async Task<Result<T, OidcError>> FetchAsync<T>(
+        TenantDefinition tenant,
+        ClientInfo? client,
         T request,
         string? requestObject,
-        Func<ClientInfo, string?>? requiredSigningAlgorithm = null)
+        Func<ClientInfo, string?>? requiredSigningAlgorithm,
+        string[] forbiddenMembers)
         where T : class
     {
         if (!requestObject.HasValue())
             return request;
 
-        var validationResult = await ValidateAsync(requestObject, requiredSigningAlgorithm);
+        var validationResult = await ValidateAsync(tenant, client, requestObject, requiredSigningAlgorithm);
         return await validationResult.BindAsync<T>(
             async validated =>
             {
                 var (payload, client) = validated;
 
-                // Strict RFC 9101 §6.3 processing - only the request object's parameters are used and anything
+                // Judged on the members the object carries rather than on the bound model, which cannot tell one
+                // included with a null value, and whose merge carries an outer parameter of the same name the object lacks
+                if (forbiddenMembers.FirstOrDefault(payload.ContainsKey) is { } included)
+                    return InvalidRequestObject($"The request object must not include the {included} parameter");
+
+                // Strict RFC 9101 section 6.3 processing - only the request object's parameters are used and anything
                 // passed outside it is ignored - applies when the host turns it on globally or the client's
-                // security profile (FAPI 2.0) mandates it. Otherwise the OpenID Connect Core §6.1 merge
+                // security profile (FAPI 2.0, FAPI 1.0 Advanced) mandates it. Otherwise the OpenID Connect Core section 6.1 merge
                 // semantics bind the payload over the outer request. The OAuth-syntax client_id/response_type
                 // duplicates are cross-checked against the result by the authorization-endpoint adapter in both.
                 var strict = options.Value.IgnoreParametersOutsideRequestObject
-                    || SecurityProfileRequirements.For(client, options.Value.DefaultSecurityProfile)
+                    || SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile)
                         .RequireStrictRequestObjectProcessing;
                 var target = strict ? Activator.CreateInstance<T>() : request;
 
-                var updatedRequest = await jsonObjectBinder.BindModelAsync(payload, target);
+                T? updatedRequest;
+                try
+                {
+                    updatedRequest = await jsonObjectBinder.BindModelAsync(payload, target);
+                }
+                catch (JsonException)
+                {
+                    // A member the request object carries in a shape its parameter cannot take, such as a negative
+                    // max_age, is the client's malformed object rather than a fault of the server
+                    return InvalidRequestObject("The request object carries a parameter of the wrong shape");
+                }
+
                 if (updatedRequest == null)
                     return InvalidRequestObject("Unable to bind request object");
 
@@ -91,7 +117,7 @@ public partial class RequestObjectFetcher(
     }
 
     /// <summary>
-    /// In strict mode (RFC 9101 §6.3) parameters passed outside the request object are silently dropped.
+    /// In strict mode (RFC 9101 section 6.3) parameters passed outside the request object are silently dropped.
     /// This surfaces them as a warning so an operator can see a client sending parameters that never take
     /// effect. A parameter is reported only when it is absent from the object, is not the parameter that
     /// carries the object itself, and differs from the request model's default (so it was actually supplied).
@@ -105,32 +131,35 @@ public partial class RequestObjectFetcher(
 
         var defaults = JsonSerializer.SerializeToNode(Activator.CreateInstance<T>())?.AsObject();
 
-        var ignored = new List<string>();
-        foreach (var (name, value) in outer)
-        {
-            // Carried by the object as well - used, not dropped.
-            if (payload.ContainsKey(name))
-                continue;
-
-            // The parameter that carries the request object itself is expected to be outside it.
-            if (value?.GetValueKind() == JsonValueKind.String && value.GetValue<string>() == requestObject)
-                continue;
-
-            // Left at its type default - the client did not actually supply it.
-            if (JsonNode.DeepEquals(value, defaults?[name]))
-                continue;
-
-            ignored.Add(name);
-        }
+        var ignored = outer
+            .Where(parameter => !payload.ContainsKey(parameter.Key) &&
+                                !CarriesRequestObject(parameter.Value, requestObject) &&
+                                !IsLeftAtDefault(parameter.Key, parameter.Value, defaults))
+            .Select(parameter => parameter.Key)
+            .ToList();
 
         if (ignored.Count > 0)
             LogParametersOutsideRequestObjectIgnored(string.Join(", ", ignored));
     }
 
     /// <summary>
+    /// Whether this outside parameter is the one carrying the request object, which is expected to be outside it.
+    /// </summary>
+    private static bool CarriesRequestObject(JsonNode? value, string? requestObject)
+        => value?.GetValueKind() == JsonValueKind.String && value.GetValue<string>() == requestObject;
+
+    /// <summary>
+    /// Whether this outside parameter is left at its type default, so the client did not actually supply it.
+    /// </summary>
+    private static bool IsLeftAtDefault(string name, JsonNode? value, JsonObject? defaults)
+        => JsonNode.DeepEquals(value, defaults?[name]);
+
+    /// <summary>
     /// Validates the JWT request object to ensure it complies with the required signing algorithm
     /// and structure, based on the OIDC options.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="namedClient">The client the request names outside the object, or null.</param>
     /// <param name="requestObject">The JWT request object to be validated.</param>
     /// <param name="requiredSigningAlgorithm">An optional selector returning the signing algorithm the
     /// request object must use for a given client, or <c>null</c> to impose no per-client requirement.</param>
@@ -143,13 +172,15 @@ public partial class RequestObjectFetcher(
     /// it accordingly. It retrieves a validator service from the DI container to perform the validation.
     /// </remarks>
     private async Task<Result<(JsonObject Payload, ClientInfo Client), OidcError>> ValidateAsync(
+        TenantDefinition tenant,
+        ClientInfo? namedClient,
         string requestObject,
         Func<ClientInfo, string?>? requiredSigningAlgorithm)
     {
         // Always validate issuer when present (but accept missing issuer)
         // Always validate signatures when present (ValidateIssuerSigningKey)
         // Always validate lifetime (exp/nbf claims) if present
-        // RFC 9101 §4 / OIDC Core §6.1: the aud of a request object SHOULD be the OP - when the
+        // RFC 9101 section 4 / OIDC Core section 6.1: the aud of a request object SHOULD be the OP - when the
         // object carries an audience, reject values addressed to another server (a request object
         // minted for a different OP must not be replayable here); an absent aud stays accepted.
         // Only require signed tokens when RequireSignedRequestObject is true
@@ -163,17 +194,22 @@ public partial class RequestObjectFetcher(
 
         using var scope = serviceProvider.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
-        var result = await tokenValidator.ValidateAsync(requestObject, validationOptions);
+
+        // The client the request names outside the object is known before the object is read, so its profile bounds
+        // every layer of it up front rather than once the object names its client (FAPI 1.0 Part 2 section 8.6.1)
+        // The type is judged below, where a refusal speaks the request object's error vocabulary
+        var result = await tokenValidator.ValidateAsync(
+            tenant, namedClient, requestObject, TokenTypePolicy.CheckedByCaller, validationOptions);
 
         return result.Match<Result<(JsonObject Payload, ClientInfo Client), OidcError>>(
             validJwt =>
             {
-                // A request object carries authorization request parameters; it is not a token. RFC 9101 §4
+                // A request object carries authorization request parameters; it is not a token. RFC 9101 section 4
                 // names its media type as "application/oauth-authz-req+jwt" while noting that "some existing
                 // deployments may alternatively be using the type application/jwt", so the exact value cannot
                 // be demanded of a conformant client. What can be refused is a JWT declaring itself some
                 // other type this class names, which is one being replayed where request parameters belong -
-                // the confusion RFC 8725 §3.11 describes. The client signs this one, so the kinds within its
+                // the confusion RFC 8725 section 3.11 describes. The client signs this one, so the kinds within its
                 // reach are not only the ones this server issued.
                 var tokenType = validJwt.Token.Header.Type;
                 if (!JwtTypes.IsPermitted(tokenType, JsonWebTokenTypes.RequestObject))
@@ -183,10 +219,12 @@ public partial class RequestObjectFetcher(
                         $"A token of type '{tokenType}' cannot be used as a request object");
                 }
 
-                // RFC 9101 §10.5: a client registered with require_signed_request_object committed
+                // RFC 9101 section 10.5: a client registered with require_signed_request_object committed
                 // to SIGNED request objects - an unsigned (alg=none) object satisfies the
-                // structural check but not the commitment.
-                if (validJwt.Client.RequireSignedRequestObject &&
+                // structural check but not the commitment. A profile requiring signed request objects
+                // (FAPI 1.0 Part 2 section 5.2.2) commits the client the same way.
+                var profile = SecurityProfileRequirements.For(validJwt.Client, tenant.DefaultSecurityProfile);
+                if ((validJwt.Client.RequireSignedRequestObject || profile.RequireSignedRequestObject) &&
                     string.Equals(validJwt.Token.Header.Algorithm, SigningAlgorithms.None, StringComparison.Ordinal))
                 {
                     return new OidcError(
@@ -208,6 +246,21 @@ public partial class RequestObjectFetcher(
                         "The request object signing algorithm does not match the client's registered algorithm");
                 }
 
+                // FAPI 1.0 Part 2 section 5.2.2: a profile may require nbf, exp
+                // and the issuer as aud, and bound the first two. Judged here rather than handed to the validator,
+                // because the profile belongs to the client, known only once the validator has finished.
+                var profileRefusal = RequestObjectProfileRules.WhyRefused(
+                    profile,
+                    validJwt.Token.Payload,
+                    tenant.Issuer,
+                    timeProvider.GetUtcNow());
+
+                if (profileRefusal != null)
+                {
+                    LogRefusedByProfile(validJwt.Client.ClientId, Sanitized.Value(profileRefusal));
+                    return InvalidRequestObject(profileRefusal);
+                }
+
                 return (validJwt.Token.Payload.Json, validJwt.Client);
             },
             error => InvalidRequestObject(error));
@@ -215,7 +268,7 @@ public partial class RequestObjectFetcher(
 
     private OidcError InvalidRequestObject(JwtValidationError error)
     {
-        LogInvalidToken(error);
+        LogInvalidToken(Sanitized.Value(error));
         return new OidcError(ErrorCodes.InvalidRequestObject, "The request object is invalid.");
     }
 

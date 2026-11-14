@@ -13,12 +13,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
 /// Represents a validated request to update a client's configuration per RFC 7592.
-/// Contains the original request, validated client info, and registration request.
+/// Contains the original request, the registration it was authenticated against, and the registration request.
 /// </summary>
 /// <param name="Model">The original update request.</param>
-/// <param name="ClientInfo">The validated client information from the data store.</param>
+/// <param name="Client">The registration of the addressed client, with the jti of the token the request was
+/// authenticated with.</param>
 /// <param name="RegistrationRequest">The validated registration request with updated metadata.</param>
 public record ValidUpdateClientRequest(
     UpdateClientRequest Model,
-    ClientInfo ClientInfo,
+    RegisteredClient Client,
     ClientRegistrationRequest RegistrationRequest);

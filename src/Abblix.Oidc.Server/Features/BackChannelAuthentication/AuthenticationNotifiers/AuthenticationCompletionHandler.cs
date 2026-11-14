@@ -6,11 +6,16 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
@@ -28,22 +33,32 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// keeps a request from being answered for an end user it did not name.
 /// </remarks>
 /// <param name="logger">Logger for tracking completion events and errors.</param>
+/// <param name="fingerprints">Names a CIBA request id in a record by its fingerprint.</param>
 /// <param name="storage">Storage for persisting authentication request state.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
 /// <param name="statusNotifier">Wakes a client waiting on a long poll. Optional, and defaulted so a
 /// handler outside this library keeps compiling - a deployment that registered none simply has nobody
 /// to wake.</param>
+/// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
 public abstract partial class AuthenticationCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
+    CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
+    TimeProvider clock,
     IBackChannelLongPollingService? statusNotifier = null)
 {
+    /// <summary>
+    /// The fingerprint that stands for a CIBA request id in this handler's and its delivery mode's records.
+    /// </summary>
+    protected Fingerprint FingerprintOf([Credential] string? authenticationRequestId) => fingerprints.Of(authenticationRequestId);
+
     /// <summary>
     /// Completes the authentication process by marking the request as authenticated and delegating
     /// to the mode-specific delivery implementation.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="authenticationRequestId">The auth_req_id identifying the authentication request.</param>
     /// <param name="request">The authentication request carrying the grant the end user approved. Its
     /// own Status is not read: whether this request may still be answered is decided from the STORED
@@ -55,8 +70,9 @@ public abstract partial class AuthenticationCompletionHandler(
     /// This method:
     /// <list type="bullet">
     ///   <item>Refuses unless the STORED record reads Pending</item>
-    ///   <item>Refuses an answer from somebody other than the end user the request named, by denying or
-    ///   removing according to the mode</item>
+    ///   <item>Refuses an answer from somebody other than the end user the request named, or at an
+    ///   authentication level its essential acr does not accept, by denying or removing according to the
+    ///   mode</item>
     ///   <item>Sets the request status to Authenticated</item>
     ///   <item>Delegates to HandleDeliveryAsync for mode-specific token delivery (poll/ping/push)</item>
     /// </list>
@@ -66,7 +82,8 @@ public abstract partial class AuthenticationCompletionHandler(
     /// identifier. The full statement of the condition, and why it is stated that way rather than as a
     /// list of causes, is on <see cref="IAuthenticationCompletionHandler.CompleteAsync"/>.</exception>
     public async Task CompleteAuthenticationAsync(
-        string authenticationRequestId,
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
         TimeSpan expiresIn)
@@ -82,10 +99,8 @@ public abstract partial class AuthenticationCompletionHandler(
         // whether the refusal fires would be the choice of the caller it exists to constrain. The
         // stored record is the one thing this seam owns.
         //
-        // Push is what makes a second completion reachable at all. Poll and ping persist Authenticated
-        // before they deliver, so a repeat already found a spent record; push stored nothing until
-        // PushModeCompletionHandler was given the same write, and until then a failed delivery left a
-        // record that still read Pending and still carried what the CLIENT asked for.
+        // Poll and ping persist Authenticated before they deliver, so a repeat finds a spent record; push
+        // takes the request before it mints, so a repeat finds none.
         //
         // Stated as what must be TRUE rather than as the ways it can fail. A record that is gone is not
         // a lesser case of one that is spent: a poll can have redeemed and removed it, and completing on
@@ -93,21 +108,41 @@ public abstract partial class AuthenticationCompletionHandler(
         //
         // And the refusal says only that, never WHY. Absence has more causes than this seam can tell
         // apart - a poll redeemed it, a push delivered it, its lifetime ran out while the end user was
-        // deciding, or push's own refusal path removed it after a configuration fault, where nothing was
-        // answered at all. Naming one of them would send an operator who just fixed a client
-        // registration looking for a second completion that never happened.
-        var stored = await storage.TryGetAsync(authenticationRequestId);
-        if (stored is not { Status: BackChannelAuthenticationStatus.Pending })
-        {
-            LogNotPendingOnCompletion(authenticationRequestId, stored?.Status.ToString());
+        // deciding, or push removed it after a configuration fault, where nothing was answered at all.
+        // Naming one of them would send an operator who just fixed a client registration looking for a
+        // second completion that never happened.
+        var stored = await ReadPendingAsync(tenant, authenticationRequestId, "completed");
 
-            throw new InvalidOperationException(
-                "The authentication request cannot be completed: the stored record "
-                + (stored is null
-                    ? "is not there"
-                    : $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}")
-                + ". Only a pending request can be answered. Recovering from a failed delivery means "
-                + "asking the end user again rather than completing the same request twice.");
+        // What the request recorded when it arrived - whom it named, what it asked for, the levels it
+        // required, and where and with which token the client is to be notified - is the STORED record's,
+        // never the host's copy: a host answers with a record of its own, and one it builds with a
+        // constructor carries none of it. Taken onto that copy rather than read beside it, because the copy
+        // is what every check below judges, what each mode delivers from and writes back, and the token
+        // endpoint judges the redeemed grant against the record it finds there. A request stored before the
+        // levels were recorded has them read from its grant now, while the grant still says what the client
+        // asked for.
+        request.RequestedSubjects = stored.RequestedSubjects;
+        request.RequestedAuthorizationDetails = stored.RequestedAuthorizationDetails;
+        request.RequiredAuthContextClassRefs = stored.RequiredAuthContextClassRefs
+            ?? stored.AuthorizedGrant.Context.RequestedClaims.RequiredAuthContextClassRefs()
+                .Match<string[]?>(levels => levels, _ => null);
+        request.ClientNotificationEndpoint = stored.ClientNotificationEndpoint;
+        request.ClientNotificationToken = stored.ClientNotificationToken;
+
+        // The grant the host completes with is minted for the client its context names, so that has to be
+        // the client the request came from. The grant itself cannot be taken from the stored record: it
+        // carries the end user's answer, which exists only in the host's copy. Refused with the STORED record,
+        // so the denial left behind belongs to the client that asked: the token endpoint matches the client
+        // before it reads the status, and a record carrying the host's grant would answer the asking client
+        // invalid_grant and the named one access_denied.
+        if (!string.Equals(
+                request.AuthorizedGrant.Context.ClientId,
+                stored.AuthorizedGrant.Context.ClientId,
+                StringComparison.Ordinal))
+        {
+            LogGrantNamesAnotherClient(FingerprintOf(authenticationRequestId), stored.AuthorizedGrant.Context.ClientId);
+            await RefuseAsync(tenant, authenticationRequestId, stored, GrantForAnotherClient, expiresIn);
+            return;
         }
 
         // Whoever answered the device has to be the end user the request named. OpenID Connect Core 1.0
@@ -118,16 +153,31 @@ public abstract partial class AuthenticationCompletionHandler(
         // Judged here rather than in the router so that each mode refuses the way it already refuses its own
         // failures: a mode that cannot leave a denied request behind removes it instead.
         if (request.RequestedSubjects is { } accepted &&
-            !subjectTypeConverter.Names(request.AuthorizedGrant.AuthSession, accepted, clientInfo))
+            !subjectTypeConverter.Names(tenant, request.AuthorizedGrant.AuthSession, accepted, clientInfo))
         {
-            LogAuthenticatedUserNotTheOneRequested(authenticationRequestId, clientInfo.ClientId);
-            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            LogAuthenticatedUserNotTheOneRequested(FingerprintOf(authenticationRequestId), clientInfo.ClientId);
+            await RefuseAsync(tenant, authenticationRequestId, request, NotTheRequestedEndUser, expiresIn);
+            return;
+        }
+
+        // And at the level the request required. OpenID Connect Core 1.0 Section 5.5.1.1: when an essential
+        // acr cannot be met, the server "MUST treat that outcome as a failed authentication attempt". The
+        // level exists only now, carried by the session the host completes with, so a request cannot be
+        // refused for it any earlier - and withholding the ID token later would answer a failed
+        // authentication with an access token and no reason.
+        if (!AuthenticationLevels.Accept(
+                request.RequiredAuthContextClassRefs,
+                stored.AuthorizedGrant.Context.RequestedClaims,
+                request.AuthorizedGrant.AuthSession.AuthContextClassRef))
+        {
+            LogAuthenticationLevelNotTheOneRequired(FingerprintOf(authenticationRequestId), clientInfo.ClientId);
+            await RefuseAsync(tenant, authenticationRequestId, request, NotTheRequiredLevel, expiresIn);
             return;
         }
 
         // The end user's answer arrives here and nowhere else, which makes this the seam a narrowed
         // authorization_details set travels through: a host whose device interaction let them approve
-        // part of the request replaces the grant's context before completing, and RFC 9396 §7 then has
+        // part of the request replaces the grant's context before completing, and RFC 9396 section 7 then has
         // the server return what was GRANTED rather than what was asked for.
         //
         // Narrowing is the host's to make; widening is not. The types are compared against what the
@@ -143,9 +193,9 @@ public abstract partial class AuthenticationCompletionHandler(
         if (EscapedAuthorizationDetailTypes(request) is { Length: > 0 } escaped)
         {
             LogGrantedAuthorizationDetailsExceedTheRequest(
-                authenticationRequestId, clientInfo.ClientId, string.Join(", ", escaped));
+                FingerprintOf(authenticationRequestId), clientInfo.ClientId, string.Join(", ", escaped));
 
-            await RefuseAsync(authenticationRequestId, request, expiresIn);
+            await RefuseAsync(tenant, authenticationRequestId, request, WidensTheRequest, expiresIn);
             return;
         }
 
@@ -157,10 +207,24 @@ public abstract partial class AuthenticationCompletionHandler(
         // registers for it. Push has no token endpoint to reach, so PushModeCompletionHandler asks it
         // there, before it mints.
 
+        // When the end user approved it, unless the host already said: a revocation of the end user at this client is
+        // measured against it at redemption, and the session the host hands over may be older than the approval.
+        //
+        // Whether the client named a scope is a fact about the request the server stored, not about the context the
+        // host may have rebuilt, so it is set from that record as the device approval sets it
+        request.AuthorizedGrant = request.AuthorizedGrant with
+        {
+            AuthorizedAt = request.AuthorizedGrant.AuthorizedAt ?? clock.GetUtcNow(),
+            Context = request.AuthorizedGrant.Context with
+            {
+                ClientNamedNoScope = stored.AuthorizedGrant.Context.ClientNamedNoScope,
+            },
+        };
+
         // Update status to Authenticated before handling delivery
         request.Status = BackChannelAuthenticationStatus.Authenticated;
 
-        await HandleDeliveryAsync(authenticationRequestId, request, clientInfo, expiresIn);
+        await HandleDeliveryAsync(tenant, authenticationRequestId, request, clientInfo, expiresIn);
     }
 
     /// <summary>
@@ -168,7 +232,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// the grant stays inside what was requested.
     /// </summary>
     /// <remarks>
-    /// Types only. RFC 9396 §6.1 defines no universal comparator for "is this entry a narrowing
+    /// Types only. RFC 9396 section 6.1 defines no universal comparator for "is this entry a narrowing
     /// of that one", so
     /// what can be judged without knowing a type's schema is whether an entry of that type was asked for at
     /// all. An entry that cannot be read as a JSON object counts as escaped: the conversion drops it silently,
@@ -205,29 +269,120 @@ public abstract partial class AuthenticationCompletionHandler(
     }
 
     /// <summary>
-    /// Refuses a request whose authenticated end user is not the one it named.
+    /// Denies a pending request on the end user's behalf, because they refused it on their device.
+    /// </summary>
+    /// <remarks>
+    /// The refusal each mode makes of an answer it cannot accept, with the reason CIBA Core 1.0 gives the end
+    /// user's own: poll leaves the request denied for the client to read, ping also tells the client to come
+    /// and read it, push removes it and delivers the error.
+    /// </remarks>
+    /// <param name="tenant">The tenant the request is completed at, which outside a request is the definition the tenant catalog returns.</param>
+    /// <param name="authenticationRequestId">The auth_req_id the end user refused.</param>
+    /// <param name="expiresIn">How long a denied request stays readable, for the modes that leave one.</param>
+    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
+    /// identifier: a request already answered, removed or expired cannot be refused either.</exception>
+    public async Task DenyAuthenticationAsync(TenantDefinition tenant, [Credential] string authenticationRequestId, TimeSpan expiresIn)
+    {
+        var stored = await ReadPendingAsync(tenant, authenticationRequestId, "denied");
+        await RefuseAsync(tenant, authenticationRequestId, stored, EndUserDenied, expiresIn);
+    }
+
+    /// <summary>
+    /// The stored record, when it is still pending; otherwise the refusal every answer to a request gets.
+    /// </summary>
+    /// <param name="tenant">The tenant the request is completed at.</param>
+    /// <param name="authenticationRequestId">The request being answered.</param>
+    /// <param name="answered">What the caller was doing, for the message: completed or denied.</param>
+    private async Task<BackChannelAuthenticationRequest> ReadPendingAsync(TenantDefinition tenant, [Credential] string authenticationRequestId, string answered)
+    {
+        var stored = await storage.TryGetAsync(tenant, authenticationRequestId);
+        if (stored is { Status: BackChannelAuthenticationStatus.Pending })
+            return stored;
+
+        LogNotPendingOnCompletion(FingerprintOf(authenticationRequestId), answered, stored?.Status.ToString());
+        throw NotPending(answered, stored);
+    }
+
+    /// <summary>
+    /// Refuses, and logs, an answer that found the request already taken - by a rival answer, or because the
+    /// store let the claim expire - so a caller that lost is never told it succeeded.
+    /// </summary>
+    /// <param name="authenticationRequestId">The request that could not be taken.</param>
+    protected InvalidOperationException ClaimLost([Credential] string authenticationRequestId)
+    {
+        LogNotPendingOnCompletion(FingerprintOf(authenticationRequestId), Answered, null);
+        return NotPending(Answered, null);
+    }
+
+    private const string Answered = "answered";
+
+    /// <summary>
+    /// The refusal of an answer to a request that is not pending, worded once for every caller.
+    /// </summary>
+    /// <param name="answered">What the caller was doing: completed or denied.</param>
+    /// <param name="stored">The record found, or null when there was none.</param>
+    internal static InvalidOperationException NotPending(string answered, BackChannelAuthenticationRequest? stored)
+        => new(
+            $"The authentication request cannot be {answered}: the stored record "
+            + (stored is null
+                ? "is not there"
+                : $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}")
+            + ". Only a pending request can be answered. Recovering from a failed delivery means "
+            + "asking the end user again rather than answering the same request twice.");
+
+    // The reasons a request is refused with. access_denied throughout: CIBA Core 1.0 defines it for the token
+    // endpoint and the push error payload alike, and it is the server or the end user denying the request.
+    // The descriptions stay inside the printable ASCII section 12 allows, without a double quote or backslash.
+    private static readonly OidcError EndUserDenied =
+        new(ErrorCodes.AccessDenied, "The end user denied the authorization request");
+
+    private static readonly OidcError NotTheRequestedEndUser =
+        new(ErrorCodes.AccessDenied, "The authenticated end user is not the one the request named");
+
+    private static readonly OidcError NotTheRequiredLevel =
+        new(ErrorCodes.AccessDenied, "The end user authenticated at a level the request does not accept");
+
+    private static readonly OidcError WidensTheRequest =
+        new(ErrorCodes.AccessDenied, "The grant carries authorization_details the request did not ask for");
+
+    private static readonly OidcError GrantForAnotherClient =
+        new(ErrorCodes.AccessDenied, "The grant names another client than the one the request came from");
+
+    /// <summary>
+    /// Refuses a request, for <paramref name="refusal"/>: the end user said no, or the answer does not answer
+    /// the request - another end user, a level it does not accept, authorization_details it did not ask for,
+    /// a grant for another client.
     /// </summary>
     /// <remarks>
     /// Denying and leaving the request behind is right for a mode whose client polls, since the poll is what
-    /// carries the outcome back. A mode that delivers instead of being polled overrides this, because a
-    /// denied request its client can never read is an orphan rather than an answer.
+    /// carries the outcome back. A mode that notifies or delivers overrides this, because its client learns
+    /// of the outcome only from what it is sent.
     /// </remarks>
+    /// <param name="tenant">The tenant the request is completed at.</param>
+    /// <param name="authenticationRequestId">The request refused.</param>
+    /// <param name="request">The request as it is written back, carrying where the client is notified.</param>
+    /// <param name="refusal">Why, in the terms a push-mode client is sent.</param>
+    /// <param name="expiresIn">How long a denied request stays readable.</param>
     protected virtual Task RefuseAsync(
-        string authenticationRequestId,
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
+        OidcError refusal,
         TimeSpan expiresIn)
-        => DenyRequestAsync(authenticationRequestId, request, expiresIn);
+        => DenyRequestAsync(tenant, authenticationRequestId, request, expiresIn);
 
     /// <summary>
     /// Handles the token delivery according to the specific delivery mode (poll, ping, or push).
     /// Derived classes implement the specific delivery logic for their mode.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information including delivery mode configuration.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid.</param>
     protected abstract Task HandleDeliveryAsync(
-        string authenticationRequestId,
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
         TimeSpan expiresIn);
@@ -247,7 +402,7 @@ public abstract partial class AuthenticationCompletionHandler(
         [NotNullWhen(true)] string? token,
         string deliveryMode,
         string clientId,
-        string authenticationRequestId)
+        [Credential] string authenticationRequestId)
     {
         var hasToken = token != null;
         if (hasToken && endpoint != null)
@@ -256,7 +411,7 @@ public abstract partial class AuthenticationCompletionHandler(
         LogMissingNotificationConfig(
             deliveryMode,
             clientId,
-            authenticationRequestId,
+            FingerprintOf(authenticationRequestId),
             endpoint?.ToString() ?? "null",
             hasToken);
 
@@ -267,16 +422,18 @@ public abstract partial class AuthenticationCompletionHandler(
     /// Marks the authentication request as denied and persists the status to storage.
     /// This is used when configuration errors or token generation failures prevent successful authentication.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authentication request to mark as denied.</param>
     /// <param name="expiresIn">How long the denied status remains in storage for client polling.</param>
     protected async Task DenyRequestAsync(
-        string authenticationRequestId,
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
     {
         request.Status = BackChannelAuthenticationStatus.Denied;
-        await StoreAsync(authenticationRequestId, request, expiresIn);
+        await StoreAsync(tenant, authenticationRequestId, request, expiresIn);
     }
 
     /// <summary>
@@ -301,20 +458,22 @@ public abstract partial class AuthenticationCompletionHandler(
     /// gone, which is what its own timeout already handles.
     /// </para>
     /// <para>
-    /// Whether anybody IS waiting is not this method's question either. Push goes through it and wakes
-    /// nobody, because nothing hands push a notifier: its constructor has no such parameter, so no
-    /// container configuration can supply one. A deployment that registered no notifier skips the call.
+    /// Whether anybody IS waiting is not this method's question either. Push never writes through it:
+    /// it takes the request instead, and no push client is ever a waiter. A deployment that registered no
+    /// notifier skips the call.
     /// </para>
     /// </remarks>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The request whose status has just changed.</param>
     /// <param name="expiresIn">How long the stored record remains available.</param>
     protected async Task StoreAsync(
-        string authenticationRequestId,
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn)
     {
-        await storage.UpdateAsync(authenticationRequestId, request, expiresIn);
+        await storage.UpdateAsync(tenant, authenticationRequestId, request, expiresIn);
 
         if (statusNotifier != null)
         {
@@ -330,12 +489,13 @@ public abstract partial class AuthenticationCompletionHandler(
     /// what keeps the write path from having a second door. Nobody is woken: a waiter reading a record
     /// that has just gone learns nothing its own timeout does not already tell it.
     /// </remarks>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The request to take away.</param>
     /// <returns>The request, when this caller took it - which means the protocol ran to the end and this
     /// caller's own claim was still in the store; otherwise null. A null covers the record not being
     /// there, somebody else having taken it, and a claim that expired mid-protocol, which happens to a
     /// single caller with nobody to lose to. A store fault after the removal raises rather than
     /// returning null.</returns>
-    protected Task<BackChannelAuthenticationRequest?> TakeRequestAsync(string authenticationRequestId)
-        => storage.TryRemoveAsync(authenticationRequestId);
+    protected Task<BackChannelAuthenticationRequest?> TakeRequestAsync(TenantDefinition tenant, [Credential] string authenticationRequestId)
+        => storage.TryRemoveAsync(tenant, authenticationRequestId);
 }

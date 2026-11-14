@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
@@ -44,12 +45,8 @@ public class FlowTypeValidatorTests
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Token),
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.IdToken),
         ];
-        _validator = new FlowTypeValidator(logger.Object, processors, ProfileOptions());
+        _validator = new FlowTypeValidator(logger.Object, processors);
     }
-
-    private static IOptions<OidcOptions> ProfileOptions(
-        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None)
-        => Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile });
 
     /// <summary>
     /// Creates an AuthorizationValidationContext for testing.
@@ -93,7 +90,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext([ResponseTypes.Code], [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -113,7 +110,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], [[ResponseTypes.IdToken]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -133,7 +130,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext([ResponseTypes.Token], [[ResponseTypes.Token]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -155,7 +152,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.IdToken, ResponseTypes.Token]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -177,7 +174,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code, ResponseTypes.IdToken]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -199,7 +196,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code, ResponseTypes.Token]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -221,7 +218,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code, ResponseTypes.IdToken, ResponseTypes.Token]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -231,7 +228,7 @@ public class FlowTypeValidatorTests
 
     /// <summary>
     /// Verifies that ValidateAsync rejects null response_type.
-    /// Per RFC 6749 §4.1.2.1, response_type is REQUIRED and a missing required parameter
+    /// Per RFC 6749 section 4.1.2.1, response_type is REQUIRED and a missing required parameter
     /// is invalid_request.
     /// </summary>
     [Fact]
@@ -241,7 +238,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext(null, [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -251,7 +248,7 @@ public class FlowTypeValidatorTests
 
     /// <summary>
     /// Verifies that ValidateAsync rejects empty response_type array.
-    /// Per RFC 6749 §4.1.2.1, an absent required parameter is invalid_request.
+    /// Per RFC 6749 section 4.1.2.1, an absent required parameter is invalid_request.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_EmptyResponseType_ShouldReturnError()
@@ -260,7 +257,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext([], [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -279,7 +276,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext(["unknown"], [["unknown"]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -289,8 +286,8 @@ public class FlowTypeValidatorTests
 
     /// <summary>
     /// Verifies that ValidateAsync rejects response_type not allowed by client.
-    /// Per RFC 6749 §4.1.2.1 / §4.2.2.1 this is unauthorized_client (the server supports the
-    /// method, this client is not registered for it), and per OAuth 2.0 Multiple Response Types §5
+    /// Per RFC 6749 section 4.1.2.1 / section 4.2.2.1 this is unauthorized_client (the server supports the
+    /// method, this client is not registered for it), and per OAuth 2.0 Multiple Response Types section 5
     /// the error for a fragment-encoded response_type must travel in the fragment.
     /// </summary>
     [Fact]
@@ -300,7 +297,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -322,7 +319,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code], [ResponseTypes.IdToken]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -343,7 +340,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.IdToken, ResponseTypes.Token]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -352,7 +349,7 @@ public class FlowTypeValidatorTests
 
     /// <summary>
     /// Verifies that ValidateAsync rejects an uppercase <c>response_type</c> at the server-level
-    /// support gate. RFC 6749 §3.1.1 declares <c>response_type</c> values case-sensitive; the
+    /// support gate. RFC 6749 section 3.1.1 declares <c>response_type</c> values case-sensitive; the
     /// server-level part check (introduced with the Implicit Flow opt-in in #90) compares each
     /// part against registered <see cref="IAuthorizationResponseBuilder"/> instances using
     /// <see cref="StringComparer.Ordinal"/>, so <c>CODE</c> does not match the registered
@@ -366,7 +363,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext(["CODE"], [["CODE"]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -377,7 +374,7 @@ public class FlowTypeValidatorTests
     /// Verifies that without <c>EnableImplicitFlow()</c> the validator rejects requests asking for
     /// the <c>token</c> response type with <c>unsupported_response_type</c>, even when the client
     /// is configured to allow it. The server-level support gate (registered processors) takes
-    /// precedence over the client-level <c>AllowedResponseTypes</c> whitelist - per OAuth 2.1 §1.4
+    /// precedence over the client-level <c>AllowedResponseTypes</c> whitelist - per OAuth 2.1 section 1.4
     /// the Implicit Grant is deprecated and the library default refuses to issue access tokens
     /// directly from the authorization endpoint.
     /// </summary>
@@ -393,14 +390,14 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, ProfileOptions());
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
 
         // Client is configured to allow the implicit response type, so without the server-level
         // gate the request would proceed past ResponseTypeAllowed.
         var context = CreateContext([implicitResponseType], [[implicitResponseType]]);
 
         // Act
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -427,12 +424,12 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, ProfileOptions());
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
 
         var context = CreateContext(hybridResponseType, [hybridResponseType]);
 
         // Act
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -453,7 +450,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result); // Succeeds after deduplication
@@ -472,7 +469,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext(null, [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -494,7 +491,7 @@ public class FlowTypeValidatorTests
             responseMode: ResponseModes.Fragment);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -521,19 +518,19 @@ public class FlowTypeValidatorTests
 
         // Test authorization code flow
         var context1 = CreateContext([ResponseTypes.Code], allowedResponseTypes);
-        var result1 = await _validator.ValidateAsync(context1);
+        var result1 = await _validator.ValidateAsync(SingleIssuer.Tenant, context1);
         Assert.Null(result1);
         Assert.Equal(FlowTypes.AuthorizationCode, context1.FlowType);
 
         // Test implicit flow
         var context2 = CreateContext([ResponseTypes.IdToken], allowedResponseTypes);
-        var result2 = await _validator.ValidateAsync(context2);
+        var result2 = await _validator.ValidateAsync(SingleIssuer.Tenant, context2);
         Assert.Null(result2);
         Assert.Equal(FlowTypes.Implicit, context2.FlowType);
 
         // Test hybrid flow
         var context3 = CreateContext([ResponseTypes.Code, ResponseTypes.IdToken], allowedResponseTypes);
-        var result3 = await _validator.ValidateAsync(context3);
+        var result3 = await _validator.ValidateAsync(SingleIssuer.Tenant, context3);
         Assert.Null(result3);
         Assert.Equal(FlowTypes.Hybrid, context3.FlowType);
     }
@@ -553,7 +550,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code, ResponseTypes.IdToken]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -562,7 +559,7 @@ public class FlowTypeValidatorTests
     }
 
     /// <summary>
-    /// OAuth 2.0 Multiple Response Types §5: a rejected hybrid request (contains token) must get
+    /// OAuth 2.0 Multiple Response Types section 5: a rejected hybrid request (contains token) must get
     /// its error in the fragment even when the rejection happens at the server-level support gate.
     /// </summary>
     [Fact]
@@ -574,13 +571,13 @@ public class FlowTypeValidatorTests
         [
             Mock.Of<IAuthorizationResponseBuilder>(p => p.ResponseType == ResponseTypes.Code),
         ];
-        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors, ProfileOptions());
+        var validator = new FlowTypeValidator(logger.Object, codeOnlyProcessors);
         var context = CreateContext(
             [ResponseTypes.Code, ResponseTypes.Token],
             [[ResponseTypes.Code, ResponseTypes.Token]]);
 
         // Act
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -600,7 +597,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext(null, [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -620,7 +617,7 @@ public class FlowTypeValidatorTests
         var context = CreateContext(null, [[ResponseTypes.Code]]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -640,7 +637,7 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code]],
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
         Assert.Equal(FlowTypes.AuthorizationCode, context.FlowType);
@@ -662,7 +659,7 @@ public class FlowTypeValidatorTests
             [[implicitResponseType]],
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
@@ -681,14 +678,14 @@ public class FlowTypeValidatorTests
             [[ResponseTypes.Code, ResponseTypes.IdToken]],
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
         Assert.Contains("security profile", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static FlowTypeValidator AllFlowsValidator(ClientSecurityProfile defaultProfile)
+    private static FlowTypeValidator AllFlowsValidator()
     {
         var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);
         IAuthorizationResponseBuilder[] processors =
@@ -697,7 +694,7 @@ public class FlowTypeValidatorTests
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Token),
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.IdToken),
         ];
-        return new FlowTypeValidator(logger.Object, processors, ProfileOptions(defaultProfile));
+        return new FlowTypeValidator(logger.Object, processors);
     }
 
     /// <summary>
@@ -707,10 +704,10 @@ public class FlowTypeValidatorTests
     [Fact]
     public async Task ValidateAsync_GlobalDefaultFapi2_RejectsImplicitForUnprofiledClient()
     {
-        var validator = AllFlowsValidator(ClientSecurityProfile.Fapi2);
+        var validator = AllFlowsValidator();
         var context = CreateContext([ResponseTypes.IdToken], [[ResponseTypes.IdToken]], securityProfile: null);
 
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
@@ -725,13 +722,13 @@ public class FlowTypeValidatorTests
     [Fact]
     public async Task ValidateAsync_ExplicitNoneUnderGlobalDefaultFapi2_StillRefusesImplicit()
     {
-        var validator = AllFlowsValidator(ClientSecurityProfile.Fapi2);
+        var validator = AllFlowsValidator();
         var context = CreateContext(
             [ResponseTypes.IdToken],
             [[ResponseTypes.IdToken]],
             securityProfile: ClientSecurityProfile.None);
 
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), context);
 
         Assert.NotNull(result);
         Assert.Contains("security profile", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
@@ -745,13 +742,13 @@ public class FlowTypeValidatorTests
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Code),
             Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.None),
         ];
-        return new FlowTypeValidator(logger.Object, processors, ProfileOptions());
+        return new FlowTypeValidator(logger.Object, processors);
     }
 
     /// <summary>
     /// With the none response type opted in (its builder registered), <c>response_type=none</c> is
     /// detected as the none flow with the query default response mode (OAuth 2.0 Multiple Response Type
-    /// Encoding Practices §4).
+    /// Encoding Practices section 4).
     /// </summary>
     [Fact]
     public async Task ValidateAsync_NoneResponseType_WhenEnabled_ShouldDetectNoneFlow()
@@ -759,7 +756,7 @@ public class FlowTypeValidatorTests
         var validator = NoneEnabledValidator();
         var context = CreateContext([ResponseTypes.None], [[ResponseTypes.None]]);
 
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
         Assert.Equal(FlowTypes.None, context.FlowType);
@@ -767,7 +764,7 @@ public class FlowTypeValidatorTests
     }
 
     /// <summary>
-    /// OAuth 2.0 Multiple Response Type Encoding Practices §4: <c>none</c> MUST stand alone. A
+    /// OAuth 2.0 Multiple Response Type Encoding Practices section 4: <c>none</c> MUST stand alone. A
     /// <c>none code</c> request matches no flow and is rejected with <c>unsupported_response_type</c>,
     /// even though both parts have registered builders.
     /// </summary>
@@ -779,7 +776,7 @@ public class FlowTypeValidatorTests
             [ResponseTypes.None, ResponseTypes.Code],
             [[ResponseTypes.None, ResponseTypes.Code]]);
 
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
@@ -796,9 +793,56 @@ public class FlowTypeValidatorTests
         // The shared _validator registers only Code/Token/IdToken (no None).
         var context = CreateContext([ResponseTypes.None], [[ResponseTypes.None]]);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require the response_type value code id_token, or the
+    /// response_type value code in conjunction with the response_mode value jwt". Every other combination is
+    /// refused for a client held to that profile, with the unsupported_response_type RFC 6749 section 4.1.2.1 names,
+    /// and only those two pass.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { ResponseTypes.Code }, null, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code }, ResponseModes.Query, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code }, ResponseModes.QueryJwt, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code, ResponseTypes.Token }, null, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code, ResponseTypes.IdToken, ResponseTypes.Token }, null, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.IdToken }, null, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code }, ResponseModes.Jwt, null)]
+    [InlineData(new[] { ResponseTypes.Code, ResponseTypes.IdToken }, null, null)]
+    [InlineData(new[] { ResponseTypes.IdToken, ResponseTypes.Code }, ResponseModes.Fragment, null)]
+    public async Task ValidateAsync_Fapi1Advanced_AdmitsOnlyASignedResponse(
+        string[] responseType, string? responseMode, string? expectedError)
+    {
+        var context = CreateContext(
+            responseType,
+            [responseType],
+            responseMode,
+            securityProfile: ClientSecurityProfile.Fapi1Advanced);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
+    /// Where both FAPI profiles hold the client, code with the JWT response mode is what remains: FAPI 2.0 refuses
+    /// code id_token, FAPI 1.0 Advanced refuses plain code, and neither refuses the other's answer.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_BothFapiProfiles_AdmitCodeWithTheJwtResponseMode()
+    {
+        var context = CreateContext(
+            [ResponseTypes.Code],
+            [[ResponseTypes.Code]],
+            ResponseModes.Jwt,
+            securityProfile: ClientSecurityProfile.Fapi1Advanced);
+        var fapi2Tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant();
+
+        Assert.Null(await _validator.ValidateAsync(fapi2Tenant, context));
     }
 }

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 
@@ -16,16 +17,20 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 /// Validates the client in a device authorization request.
 /// </summary>
 /// <param name="clientAuthenticator">The service used to authenticate clients.</param>
-public class ClientValidator(IClientAuthenticator clientAuthenticator) : IDeviceAuthorizationContextValidator
+public class ClientValidator(IClientAuthenticator clientAuthenticator)
+    : IDeviceAuthorizationContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(DeviceAuthorizationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
     {
-        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(context.ClientRequest);
+        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
+            tenant, context.ClientRequest);
         if (clientInfo == null)
         {
+            // RFC 8628 section 3.2 answers an error the way the token endpoint does, and RFC 6749 section 5.2 names
+            // a failed client authentication invalid_client.
             return new OidcError(
-                ErrorCodes.UnauthorizedClient,
+                ErrorCodes.InvalidClient,
                 "The client is not authorized");
         }
 

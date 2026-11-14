@@ -14,6 +14,7 @@
 [![GitHub release date](https://img.shields.io/github/release-date/Abblix/Oidc.Server)](#)
 [![GitHub last commit](https://img.shields.io/github/last-commit/Abblix/Oidc.Server)](#)
 [![getting started](https://img.shields.io/badge/getting_started-guide-1D76DB)](https://docs.abblix.com/docs/getting-started-guide)
+[![migrating from IdentityServer](https://img.shields.io/badge/migrating_from_IdentityServer-guide-1D76DB)](https://docs.abblix.com/docs/migrate-from-identityserver)
 [![License](https://img.shields.io/badge/license-Source_Available-blue)](LICENSE.md)
 [![Free](https://img.shields.io/badge/free_under_%241M_revenue-brightgreen)](#-license)
 
@@ -25,17 +26,16 @@
 [![Share](https://img.shields.io/badge/share-FF4500?logo=reddit&logoColor=white)](https://www.reddit.com/submit?title=Check%20out%20this%20project%20on%20GitHub:%20https://github.com/Abblix/Oidc.Server)
 [![Share](https://img.shields.io/badge/share-0088CC?logo=telegram&logoColor=white)](https://t.me/share/url?url=https://github.com/Abblix/Oidc.Server&text=Check%20out%20this%20project%20on%20GitHub)
 
-**Add a certified OpenID Connect provider to your own ASP.NET Core app, one you embed and own end to end rather than a separate server to run and operate.**
+Add a certified OpenID Connect provider to your own ASP.NET Core app, one you embed and own end to end rather than a separate server to run and operate.
 
 📑 For the full picture, see the [technical overview](https://resources.abblix.com/pdf/abblix-oidc-server-presentation-eng.pdf).
 
 ## Table of Contents
 - [About](#-about)
 - [Quickstart](#-quickstart)
-- [What's New](#-whats-new)
 - [Certification](#-certification)
 - [How to Install](#-how-to-install)
-- [How to Build](#-how-to-build)
+- [Upgrading to 3.0](#%EF%B8%8F-upgrading-to-30)
 - [Documentation](#-documentation)
 - [Abblix Account](#-abblix-account)
 - [Feedback and Contributions](#-feedback-and-contributions)
@@ -44,93 +44,62 @@
 
 ## 🚀 About
 
-**Abblix OIDC Server** turns your ASP.NET Core application into a fully certified OpenID Connect provider. Rather than deploying and operating a separate identity server, you embed the protocol directly into your app, so your users, your data, and your UI stay inside your product.
+Abblix OIDC Server turns your ASP.NET Core application into a fully certified OpenID Connect provider. Rather than deploying and operating a separate identity server, you embed the protocol directly into your app, so your users, your data, and your UI stay inside your product.
 
-- **Certified:** all seven OpenID Provider profiles and all four logout profiles, 634 conformance tests passed with none skipped and no warnings. FAPI is not among them.
-- **A library you own, not a server you run:** the OpenID Connect endpoints live inside your app, so users, data, and UI never leave it.
-- **Current with the modern security stack:** DPoP, PAR, JARM, RAR, token exchange, and certificate-bound tokens, alongside the OAuth 2.0 and OpenID Connect core.
-- **Engineering you can audit:** 2000+ passing tests, top SonarCloud security, reliability, and maintainability ratings, and CodeQL scanning on every change.
-- **Modern .NET, minimal friction:** targets .NET 8, 9, and 10, with drop-in adapters for both MVC and Minimal API.
+- Certified: all seven OpenID Provider profiles and all four logout profiles, 634 conformance tests passed with none skipped and no warnings. FAPI is not among them.
+- A library you own, not a server you run: the OpenID Connect endpoints live inside your app, so users, data, and UI never leave it.
+- Current with the modern security stack: DPoP, PAR, JARM, RAR, token exchange, and certificate-bound tokens, alongside the OAuth 2.0 and OpenID Connect core.
+- Engineering you can audit: 2000+ passing tests, top SonarCloud security, reliability, and maintainability ratings, and CodeQL scanning on every change.
+- Modern .NET, minimal friction: targets .NET 11, with drop-in adapters for both MVC and Minimal API.
+- Observable through OpenTelemetry: each endpoint request gets its own span and metrics, and the structured logs the server writes carry the trace of the request they belong to.
 
 Under the hood, the library leans on modular and hexagonal architecture and the standard .NET DI container, which keeps it testable and easy to extend. It ships two ASP.NET Core integration adapters that expose the same OpenID Connect endpoints (one for MVC controllers and routing, one for Minimal API endpoint routing), so you adopt whichever hosting model your application already uses, without taking a dependency on the other.
 
 ## ⚡ Quickstart
 
-Install the adapter for your hosting model and register the server in `Program.cs`:
+Install the Minimal API adapter, then register the server and map its endpoints in `Program.cs`:
 
 ```shell
-dotnet add package Abblix.OIDC.Server.MVC
+dotnet add package Abblix.OIDC.Server.MinimalApi
 ```
 
 ```csharp
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Mvc;
-using Microsoft.IdentityModel.Tokens;
+using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.MinimalApi;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddControllersWithViews();
 
-// Turn your ASP.NET Core app into an OpenID Connect provider
-builder.Services.AddOidcServices(options =>
+// Grants every client everything it asks for, which suits only clients of your own;
+// to ask the end user for consent, register your own IUserConsentsProvider instead
+builder.Services.AddConsentGrantedForEveryClient();
+
+// Turn your ASP.NET Core app into an OpenID Connect provider serving one issuer
+builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
-    options.LoginUri = new Uri("/Auth/Login", UriKind.Relative);
-    options.SigningKeys = new[] { JsonWebKeyFactory.CreateRsa(JsonWebKeyUseNames.Sig) };
-});
+    Id = "main",
+    // The address the app is served on, written into every token it issues
+    Issuer = new Uri("https://auth.example.com"),
+    LoginUri = new Uri("/Auth/Login", UriKind.Relative),
+    SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+}));
+
+var app = builder.Build();
+
+app.MapOidcEndpoints();
+app.Run();
 ```
 
-That registers the full set of certified OpenID Connect endpoints. Point `LoginUri` at your login page and plug in your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) walks through a complete, runnable solution.
+An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead. A host serving several tenants, a single tenant at an issuer with a path, or tenants from a store or catalog of its own also calls `app.UseMultiTenancy()` before its own routing, so each request reaches its tenant.
 
-## ✨ What's New
-
-### Version 2.4 (Latest)
-
-🚀 **Features**
-- **Minimal API integration**: every OIDC endpoint as ASP.NET Core route handlers via the new [Abblix.OIDC.Server.MinimalAPI](https://www.nuget.org/packages/Abblix.OIDC.Server.MinimalAPI) package, with full protocol parity with the MVC integration
-- **External signing keys**: private keys held in HashiCorp Vault / OpenBao Transit ([Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)) or Azure Key Vault ([Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)) - the private halves never enter the process, the public halves publish to the JWKS endpoint
-- **Security events and Shared Signals**: a new package family implementing Security Event Tokens ([RFC 8417](https://datatracker.ietf.org/doc/html/rfc8417)) with Subject Identifiers ([RFC 9493](https://datatracker.ietf.org/doc/html/rfc9493)), push and poll SET delivery ([RFC 8935](https://datatracker.ietf.org/doc/html/rfc8935), [RFC 8936](https://datatracker.ietf.org/doc/html/rfc8936)), the OpenID Shared Signals Framework 1.0 in both transmitter and receiver roles, and the CAEP 1.0 and RISC 1.0 event dictionaries
-
-### Version 2.3
-
-🚀 **Features**
-- **Rich Authorization Requests (RFC 9396)**: fine-grained, transaction-level authorization details across the authorization endpoint, PAR, the token endpoint, CIBA, and the device grant, carried end-to-end into the access token
-- **Token Exchange (RFC 8693)**: impersonation and delegation with multiple subject- and actor-token formats and a per-client allow-list of subject-token types
-- **DPoP sender-constrained tokens (RFC 9449)**: signature-based proof of possession for public clients that cannot use mTLS, binding access and refresh tokens to the client key
-- **Certificate-bound access tokens (RFC 8705 Section 3)**: resource-server verification that a presented token matches the client certificate on the TLS connection
-- **JARM**: the authorization response returned as a signed, optionally encrypted JWT, protecting it against tampering, mix-up, and parameter injection
-- **JWT-secured token introspection (RFC 9701)**: signed, optionally encrypted introspection responses via content negotiation
-- **JWE-encrypted request objects (RFC 9101)**: confidential request parameters in the front channel and by reference
-- **Signed authorization server metadata (RFC 8414)**: opt-in, integrity-protected discovery document
-
-🔒 **Security hardening**
-- Secure-by-default: Implicit Flow is now opt-in, and Dynamic Client Registration requires an Initial Access Token (RFC 7591)
-- JOSE critical-header handling (RFC 7515): well-formed critical parameters are rejected until a host registers a handler bound to each parameter name
-- Token-class confusion defense via opt-in token-type pinning (RFC 8725)
-- JWS verification key pinned to its declared algorithm (RFC 7517) and enforced HMAC key length (RFC 7518)
-- Pairwise subject identifier (PPID) derivation reimplemented as HMAC-based and key-rotatable, replacing the prior string-concatenation scheme (configurable hash and salt)
-- Authorization-response issuer parameter (RFC 9207) now advertised in discovery, so clients can require and verify the mix-up defense
-
-✏️ **Improvements**
-- Structured logging via a source generator across the whole server: named events with stable numeric identifiers, ready for audit pipelines
-- Unified client-addressed JWT signing and encryption across UserInfo, identity-token, JARM, and introspection responses
-- JWT validation returns errors instead of throwing on unsupported algorithm or key combinations
-- Dependency-injection registrations normalized so host pre-registrations win the resolution race
-
-> See 📋[Release Notes](https://github.com/Abblix/Oidc.Server/releases/tag/v2.4) for full details of 2.4, and [2.3](https://github.com/Abblix/Oidc.Server/releases/tag/v2.3) for the release before it.
-
-### ⚠️ Breaking Changes (upgrading from 2.2)
-
-Most deployments need only the first two; the rest apply if you use the named feature.
-
-- **Authorization response formatting unified.** `IAuthorizationErrorFormatter` is removed, and success and error responses now flow through a single `IAuthorizationResponseFormatter`, and `AuthorizationError` is a subtype of the response model. Re-point any decorator or implementation to `IAuthorizationResponseFormatter` and branch on `response is AuthorizationError` (the `{ RedirectUri: null }` variant is the one to render on your own error page).
-- **Implicit Flow is opt-in.** Implicit and hybrid response types are rejected at client registration unless you call `EnableImplicitFlow()` on the OIDC builder. Authorization Code Flow is the default; no action otherwise.
-- **Initial Access Token required for Dynamic Client Registration.** Anonymous registration is rejected by default (RFC 7591 Section 3). Issue and require Initial Access Tokens, or set `OidcOptions.RequireInitialAccessToken = false` to keep open registration.
-- **Back-channel logout endpoint validated at registration.** A `backchannel_logout_uri` with a non-`https` scheme, internal hostname, or private/loopback address is rejected with `invalid_client_metadata` under the secure default. Register public `https` endpoints, or relax `SecureHttpFetchOptions` for trusted internal deployments: set `BlockPrivateNetworks` to `false` and state `AllowedSchemes` in full, `https` included - the list replaces the default rather than extending it.
+This is the outline, not a complete application: the server also needs a cache, the CORS middleware, a login page and your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) builds a complete, runnable solution step by step.
 
 ## 🎓 Certification
 
 [![OpenID Foundation Certification](https://resources.abblix.com/imgs/svg/abblix-oidc-server-openid-foundation-certification-mark.svg)](https://oidc.abblix.com/certified-profiles)
 
-We are certified in all profiles. During the certification process, we skipped ZERO tests and received NO warnings. All **634** tests ![Passed](https://img.shields.io/badge/PASSED-brightgreen). For more details, click the links ([Certified OpenID Providers & Profiles](https://oidc.abblix.com/certified-profiles), [Certified OpenID Providers for Logout Profiles](https://oidc.abblix.com/certified-logout-profiles)).
+We are certified in all profiles. During the certification process, we skipped ZERO tests and received NO warnings. All 634 tests ![Passed](https://img.shields.io/badge/PASSED-brightgreen). For more details, click the links ([Certified OpenID Providers & Profiles](https://oidc.abblix.com/certified-profiles), [Certified OpenID Providers for Logout Profiles](https://oidc.abblix.com/certified-logout-profiles)).
 
 For convenience, the certification information is provided in the tables below:
 
@@ -144,7 +113,7 @@ For convenience, the certification information is provided in the tables below:
 |Dynamic OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=Ie4igUuhKheHC) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=wz8WwocsxeXLG) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=Vz0xyMMiabOuT) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=di3sWIakE1NfO) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=siWnWnxc0F25Q) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=sErNAjGZuRNMX)|127|
 |Form Post OP|[basic](https://www.certification.openid.net/plan-detail.html?public=true&plan=2hkxl3otFUbdm) \| [implicit](https://www.certification.openid.net/plan-detail.html?public=true&plan=81Tzj22qYpFCy) \| [hybrid](https://www.certification.openid.net/plan-detail.html?public=true&plan=ywUWjGPWsyFuS)|196|
 |3rd Party-Init OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=GB6nP470pDdVe) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=M89emXc0N5GMF) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=pe5s8Gus3Uz3y) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=JNX5OGMAKr2kr) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=gfI5xgx8UGzOL) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=k4e0SJnvHGuu9)|12|
-|**Total**||**532**|
+|Total||532|
 
 ### Logout Profiles
 
@@ -154,19 +123,19 @@ For convenience, the certification information is provided in the tables below:
 |Session OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=N3Tsp7nigWMiS) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=KqBqsHxH4vN03) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=KCwP7JqmXbcPf) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=MJxcSnziJTOaa) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=9sZ9qkcq8VY1O) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=OrRc3cBBm53OK)|12|
 |Front-Channel OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=FCIMtfChd8JUR) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=UPqVQppkBai8Q) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=TK2z4lTRgeU0O) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=ntjIMSdbzeBJN) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=0SfPTdERrzANP) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=RLQm9h40E4j1k)|12|
 |Back-Channel OP|[code](https://www.certification.openid.net/plan-detail.html?public=true&plan=5kbQfVOWmJV76) \| [code id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=VWmk225h0coIZ) \| [code id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=YzDOT2LFWi4X7) \| [code token](https://www.certification.openid.net/plan-detail.html?public=true&plan=RxPPCdLI7LlcR) \| [id_token](https://www.certification.openid.net/plan-detail.html?public=true&plan=x73qpcrHcFWv0) \| [id_token token](https://www.certification.openid.net/plan-detail.html?public=true&plan=uYoYs5BFAZkgr)|12|
-|**Total**||**102**|
+|Total||102|
 
 ## 📦 How to Install
 
 Add the adapter that matches your ASP.NET Core hosting model from NuGet.
 
-**For MVC** controllers and routing:
+For MVC controllers and routing:
 
 ```shell
 dotnet add package Abblix.OIDC.Server.MVC
 ```
 
-**For Minimal API** endpoint routing:
+For Minimal API endpoint routing:
 
 ```shell
 dotnet add package Abblix.OIDC.Server.MinimalApi
@@ -174,38 +143,35 @@ dotnet add package Abblix.OIDC.Server.MinimalApi
 
 Both adapters expose the same OpenID Connect endpoints and pull in the core `Abblix.OIDC.Server` package as a dependency, so pick the one that matches how your application maps requests. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
 
-## 📝 How to Build
+## ⚠️ Upgrading to 3.0
 
-To build the packages, follow these steps:
+Version 3.0 changes how a host registers and configures the server. The changes most hosts meet:
 
-```shell
-# Open a terminal (Command Prompt or PowerShell for Windows, Terminal for macOS or Linux)
+- The library targets .NET 11 only.
+- Every server serves tenants. A deployment with one issuer declares one `TenantDefinition` in `OidcOptions.Tenants`, and the settings of an issuer (its clients, scopes, resources, keys, pages and security profile) move from `OidcOptions` into that definition.
+- The host's own services are told the tenant of each call: `IUserInfoProvider.GetUserInfoAsync`, `IClientInfoProvider` and the other registries take a `TenantDefinition` as their first parameter.
+- A host calls `app.UseMultiTenancy()` before its own routing when it serves several tenants, one tenant at an issuer with a path, or tenants from a store or catalog of its own. A host with one tenant at an issuer without a path does not need the call.
+- An MVC host maps the endpoints with `app.MapOidcControllers()`, a Minimal API host with `app.MapOidcEndpoints()`.
+- A host chooses how end-user consent is obtained, or it does not start: it registers its own `IUserConsentsProvider`, or calls `AddConsentGrantedForEveryClient()`.
+- Neither logout channel is served unless the host registers it, with `AddBackChannelLogout()` or `AddFrontChannelLogout()`.
+- Refresh token reuse is set by `RefreshTokenOptions.ReusePolicy`, and a client gets refresh tokens only as its `ClientInfo.OfflineAccess` allows.
+- Every JWT validation states the token types it accepts in `ValidationParameters.TokenTypes`.
+- A client signing its own authentication JWT names the issuer as its only audience, as RFC 10070 requires.
+- What 2.x stored is not read by 3.0, so end users sign in again and earlier grants end once.
 
-# Ensure Git is installed
-# Visit https://git-scm.com to download and install console Git if not already installed
+The complete list, with what each change asks of a host, is in the [3.0 release notes](https://github.com/Abblix/Oidc.Server/releases/tag/v3.0). The [Upgrading to 3.0](https://docs.abblix.com/docs/upgrading-to-3-0) guide walks a 2.x deployment through the move, including how to keep the signing keys it minted.
 
-# Clone the repository
-git clone https://github.com/Abblix/Oidc.Server.git
-
-# Navigate to the project directory
-cd Oidc.Server
-
-# Check if .NET SDK is installed
-dotnet --version  # Check the installed version of .NET SDK
-# Visit the official Microsoft website to install or update it if necessary
-
-# Restore dependencies
-dotnet restore
-
-# Compile the project
-dotnet build
-
-```
 ## 📚 Documentation
 
 ### Getting Started
 Explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide).
 In this guide, you will create a working solution step by step, building an OpenID Connect Provider using ASP.NET MVC and the Abblix OIDC Server solution.
+
+### Migrating from IdentityServer
+[Migrating from IdentityServer4 or Duende](https://docs.abblix.com/docs/migrate-from-identityserver) walks through a real migration end to end: dotnet/eShop's Identity.API moved from Duende IdentityServer onto Abblix OIDC Server, every decision named along the way.
+
+### Shared Signals
+[A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) shows two hosts exchanging a signed Security Event Token over HTTPS, each verifying the other.
 
 The [Documentation](https://docs.abblix.com/docs) site covers configuration, deployment, the API reference and the OpenID Connect standard itself.
 
@@ -213,7 +179,7 @@ The [Documentation](https://docs.abblix.com/docs) site covers configuration, dep
 
 Prefer not to run the provider yourself? [Abblix Account](https://account.abblix.com) is a ready-to-use service hosted in the cloud, built on this library. You get passkeys, MFA, social login, and security event notifications: everything your users need, integrated into your website in minutes.
 
-👉 **See it live:** [Quorvel Coffee](https://quorvel.abblix.com) is a demo application using Abblix Account for user authentication. It shows how sign-in flows, session management, and user self-service, all delivered by Abblix Account, fit into a client website.
+👉 See it live: [Quorvel Coffee](https://quorvel.abblix.com) is a demo application using Abblix Account for user authentication. It shows how sign-in flows, session management, and user self-service, all delivered by Abblix Account, fit into a client website.
 
 ## 🤝 Feedback and Contributions
 
@@ -240,9 +206,9 @@ applications or users, and one production issuer per free deployment. See the
 
 For more details about our products, services, or any general information regarding the Abblix OIDC Server, feel free to reach out to us. Below are the best ways to contact our team:
 
-- **General inquiries**: [info@abblix.com](mailto:info@abblix.com)
-- **Support and security reports**: [support@abblix.com](mailto:support@abblix.com), see the [Security Policy](SECURITY.md)
-- **Website**: Visit the official Abblix OIDC Server page for more information: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
+- General inquiries: [info@abblix.com](mailto:info@abblix.com)
+- Support and security reports: [support@abblix.com](mailto:support@abblix.com), see the [Security Policy](SECURITY.md)
+- Website: Visit the official Abblix OIDC Server page for more information: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
 
 Subscribe to our LinkedIn and Twitter:
 

@@ -14,14 +14,15 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Validation;
 
@@ -64,7 +65,8 @@ public class ClientMayTightenItselfTests
     {
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
+            // An algorithm every profile admits, since what is under test is the clock window
+            Header = { Algorithm = SigningAlgorithms.PS256 },
             Payload =
             {
                 Issuer = ClientId,
@@ -84,7 +86,7 @@ public class ClientMayTightenItselfTests
         var clientInfo = new ClientInfo(ClientId) { SecurityProfile = clientProfile };
 
         var clientInfoProvider = new Mock<IClientInfoProvider>();
-        clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(clientInfo);
+        clientInfoProvider.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(clientInfo);
 
         var tokenValidator = new Mock<IJsonWebTokenValidator>();
         tokenValidator
@@ -92,28 +94,27 @@ public class ClientMayTightenItselfTests
             .ReturnsAsync(token);
 
         var requestInfoProvider = new Mock<IRequestInfoProvider>();
-        requestInfoProvider.Setup(p => p.RequestUri).Returns(Issuer);
-
-        var issuerProvider = new Mock<IIssuerProvider>();
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
+        requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri(Issuer));
 
         var serviceKeys = new Mock<IAuthServiceKeysProvider>();
         serviceKeys
-            .Setup(p => p.GetEncryptionKeys(It.IsAny<bool>()))
+            .Setup(p => p.GetEncryptionKeys(TestTenant.Matched, It.IsAny<bool>()))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         var validator = new ClientJwtValidator(
             NullLogger<ClientJwtValidator>.Instance,
             requestInfoProvider.Object,
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             clientInfoProvider.Object,
             new Mock<IClientKeysProvider>().Object,
-            issuerProvider.Object,
             serviceKeys.Object,
-            Options.Create(new OidcOptions { DefaultSecurityProfile = deploymentProfile }),
-            new FixedClock(Now));
+            new FakeTimeProvider(Now));
 
-        return await validator.ValidateAsync("header.payload.signature", options);
+        return await validator.ValidateAsync(
+            new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = deploymentProfile }.ToTenant(),
+            null, "header.payload.signature",
+            TokenTypePolicy.CheckedByCaller,
+            options);
     }
 
     /// <summary>
@@ -134,8 +135,9 @@ public class ClientMayTightenItselfTests
     }
 
     /// <summary>
-    /// And the same token from a client naming nothing is accepted, without which the case above
-    /// would be satisfied by a pass that refuses every token dated ahead at all.
+    /// And the same token from a client naming nothing is accepted, without which
+    /// <see cref="AClientNamingFapi2_IsHeldToItUnderADeploymentNamingNothing"/> would be satisfied by a pass
+    /// that refuses every token dated ahead at all.
     /// </summary>
     [Fact]
     public async Task AClientNamingNothing_KeepsTheDeploymentsWindow()
@@ -150,8 +152,8 @@ public class ClientMayTightenItselfTests
 
     /// <summary>
     /// A client naming the empty profile is not heard either way: it cannot loosen what the
-    /// deployment demands, and it demands nothing of its own. The same token is accepted, which is
-    /// the floor working rather than the tightening.
+    /// deployment demands, and it demands nothing of its own. The token dated a minute ahead is accepted,
+    /// which is the floor working rather than the tightening.
     /// </summary>
     [Fact]
     public async Task AClientNamingTheEmptyProfile_IsTreatedAsNamingNothing()
@@ -165,8 +167,9 @@ public class ClientMayTightenItselfTests
     }
 
     /// <summary>
-    /// And a token inside the tighter window passes for the FAPI client too, or the case above would
-    /// be satisfied by a pass that refuses every token from a client naming a profile.
+    /// And a token inside the tighter window passes for the FAPI client too, or
+    /// <see cref="AClientNamingFapi2_IsHeldToItUnderADeploymentNamingNothing"/> would be satisfied by a pass
+    /// that refuses every token from a client naming a profile.
     /// </summary>
     [Fact]
     public async Task AClientNamingFapi2_KeepsATokenInsideItsOwnWindow()
@@ -196,8 +199,9 @@ public class ClientMayTightenItselfTests
     }
 
     /// <summary>
-    /// And the same expired token from a client naming nothing is accepted, which is what makes the
-    /// case above a statement about the profile rather than about expiry.
+    /// And the same expired token from a client naming nothing is accepted, which is what makes
+    /// <see cref="AClientNamingFapi2_IsHeldToItsOwnExpiry"/> a statement about the profile rather than about
+    /// expiry.
     /// </summary>
     [Fact]
     public async Task AClientNamingNothing_KeepsTheDeploymentsExpiryTolerance()
@@ -227,7 +231,8 @@ public class ClientMayTightenItselfTests
     }
 
     /// <summary>
-    /// And the same post-dated token from a client naming nothing is accepted.
+    /// And the post-dated token of <see cref="AClientNamingFapi2_IsHeldToItsOwnWindowOnNotBefore"/> from a
+    /// client naming nothing is accepted.
     /// </summary>
     [Fact]
     public async Task AClientNamingNothing_KeepsTheDeploymentsWindowOnNotBefore()
@@ -242,7 +247,8 @@ public class ClientMayTightenItselfTests
 
     /// <summary>
     /// The forward direction accepts an <c>nbf</c> inside the tighter window, without which the
-    /// refusal above would be satisfied by a clause refusing on the mere presence of the claim.
+    /// refusal in <see cref="AClientNamingFapi2_IsHeldToItsOwnWindowOnNotBefore"/> would be satisfied by a
+    /// clause refusing on the mere presence of the claim.
     /// </summary>
     [Fact]
     public async Task AClientNamingFapi2_KeepsANotBeforeInsideItsOwnWindow()
@@ -289,10 +295,5 @@ public class ClientMayTightenItselfTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
         Assert.Contains("iat", error.ErrorDescription, StringComparison.Ordinal);
-    }
-
-    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

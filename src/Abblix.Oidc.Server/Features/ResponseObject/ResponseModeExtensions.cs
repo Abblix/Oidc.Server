@@ -33,7 +33,7 @@ public static class ResponseModeExtensions
     /// <see cref="ResponseModes.FragmentJwt"/>→<see cref="ResponseModes.Fragment"/>,
     /// <see cref="ResponseModes.FormPostJwt"/>→<see cref="ResponseModes.FormPost"/>. The
     /// <see cref="ResponseModes.Jwt"/> shortcut resolves to <see cref="ResponseModes.Fragment"/> for token-bearing
-    /// flows and <see cref="ResponseModes.Query"/> otherwise (JARM §2.3.4). A non-JWT mode is returned unchanged.
+    /// flows and <see cref="ResponseModes.Query"/> otherwise (JARM section 2.3.4). A non-JWT mode is returned unchanged.
     /// </summary>
     /// <param name="responseMode">The requested response mode.</param>
     /// <param name="carriesTokens">Whether the response carries front-channel tokens (used for the

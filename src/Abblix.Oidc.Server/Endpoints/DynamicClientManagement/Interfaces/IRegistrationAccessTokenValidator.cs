@@ -7,12 +7,15 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net.Http.Headers;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
 /// Validates the registration access token presented on calls to the client configuration
-/// endpoint per RFC 7592 §3. Verifies the bearer token from the <c>Authorization</c> header
+/// endpoint per RFC 7592 section 3. Verifies the bearer token from the <c>Authorization</c> header
 /// is bound to the requested <c>client_id</c>.
 /// </summary>
 public interface IRegistrationAccessTokenValidator
@@ -21,17 +24,12 @@ public interface IRegistrationAccessTokenValidator
     /// Validates the bearer token, ensuring it is well-formed, of the expected type, and
     /// authorized to manage the specified client.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="header">The HTTP <c>Authorization</c> header carrying the bearer token.</param>
     /// <param name="clientId">The <c>client_id</c> targeted by the management request.</param>
-    /// <param name="expectedTokenId">
-    /// The jti the token must carry to be accepted - the value stored on the client when its
-    /// current registration access token was issued. When <c>null</c> the binding is not enforced
-    /// (statically configured client, or a record predating the stored id) and only signature,
-    /// type and audience are checked.
-    /// </param>
     /// <returns>
-    /// <c>null</c> when the token is valid for the client; otherwise a human-readable description
-    /// of the validation failure.
+    /// The jti of the token when it is valid for the client, which the caller matches against the one its
+    /// registration holds; otherwise an <c>invalid_token</c> error describing the failure.
     /// </returns>
-    Task<string?> ValidateAsync(AuthenticationHeaderValue? header, string clientId, string? expectedTokenId);
+    Task<Result<string, OidcError>> ValidateAsync(TenantDefinition tenant, AuthenticationHeaderValue? header, string clientId);
 }

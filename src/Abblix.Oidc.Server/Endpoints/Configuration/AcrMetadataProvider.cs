@@ -8,15 +8,17 @@
 
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.Configuration;
 
 /// <summary>
-/// Default implementation of IAcrMetadataProvider that reads ACR values from OidcOptions configuration.
+/// Default implementation of IAcrMetadataProvider that reads ACR values from OidcOptions configuration, which every
+/// tenant shares.
 /// </summary>
 public sealed class AcrMetadataProvider(IOptionsSnapshot<OidcOptions> options) : IAcrMetadataProvider
 {
 	/// <inheritdoc />
-	public IEnumerable<string>? AcrValuesSupported => options.Value.Discovery.AcrValuesSupported;
+	public IEnumerable<string>? AcrValuesSupported(TenantDefinition tenant) => options.Value.Discovery.AcrValuesSupported;
 }

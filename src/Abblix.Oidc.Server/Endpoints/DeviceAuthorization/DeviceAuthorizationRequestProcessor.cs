@@ -12,6 +12,8 @@ using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
@@ -26,7 +28,7 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization;
 /// <param name="deviceCodeGenerator">Generator for high-entropy device codes.</param>
 /// <param name="userCodeGenerator">Generator for user-friendly verification codes.</param>
 /// <param name="options">Configuration options for device authorization.</param>
-/// <param name="timeProvider">Provider for current time.</param>
+/// <param name="timeProvider">Dates the instant the device code carries.</param>
 public class DeviceAuthorizationRequestProcessor(
     IDeviceAuthorizationStorage storage,
     IDeviceCodeGenerator deviceCodeGenerator,
@@ -36,13 +38,19 @@ public class DeviceAuthorizationRequestProcessor(
 {
     /// <inheritdoc />
     public async Task<Result<DeviceAuthorizationResponse, OidcError>> ProcessAsync(
+        TenantDefinition tenant,
         ValidDeviceAuthorizationRequest request)
     {
-        request.ClientInfo.CheckClientLicense();
 
         var deviceAuthOptions = options.Value.DeviceAuthorization.NotNull(nameof(OidcOptions.DeviceAuthorization));
 
-        var deviceCode = deviceCodeGenerator.GenerateDeviceCode();
+        // Before anything is stored, so a request refused for the page leaves no code behind
+        var verificationUri = VerificationUri(tenant, deviceAuthOptions.VerificationUri);
+
+        // The code carries its own expiry, so a poll after the record is evicted is still told expired_token
+        var deviceCode = ExpiringIdentifier.Compose(
+            deviceCodeGenerator.GenerateDeviceCode(),
+            timeProvider.GetUtcNow() + deviceAuthOptions.CodeLifetime);
         var userCode = userCodeGenerator.GenerateUserCode();
 
         var deviceRequest = new DeviceAuthorizationRequest(
@@ -53,31 +61,59 @@ public class DeviceAuthorizationRequestProcessor(
         {
             Status = DeviceAuthorizationStatus.Pending,
 
-            // The device may poll from the moment it holds the code, so the first allowed poll is now.
-            // RFC 8628 section 3.2 defines the interval as "the minimum amount of time in seconds that
-            // the client SHOULD wait between polling requests to the token endpoint" - it bounds the gap
-            // BETWEEN polls, and at issuance there is no earlier poll for it to sit after. This used to
-            // read now + interval, which answered the device's very first request with slow_down: not a
-            // violation, since slow_down is a variant of authorization_pending and a conforming device
-            // simply waits, but it charged every sign-in one interval of latency for polling too fast
-            // when nothing had been polled at all. The first poll stamps the interval, and the throttle
-            // governs every request after it.
-            NextPollAt = timeProvider.GetUtcNow(),
+            // Nothing is written about when the device may first poll, and that absence IS the answer:
+            // the token endpoint reads no instant for this code and lets the first poll through. RFC 8628
+            // section 3.2 defines the interval as the minimum wait "between polling requests", so it
+            // bounds the gap between two polls and has nothing to say before the first one.
 
-            // RFC 9396 §3: stash authorization_details on the persisted record so the
+            // RFC 9396 section 3: stash authorization_details on the persisted record so the
             // host's user-verification step can read it (via ValidUserCode) and thread it
             // onto the AuthorizedGrant's AuthorizationContext when approving.
             AuthorizationDetails = request.AuthorizationDetails,
+            ClientNamedNoScope = request.ClientNamedNoScope,
         };
 
-        await storage.StoreAsync(deviceCode, deviceRequest, deviceAuthOptions.CodeLifetime);
+        await storage.StoreAsync(tenant, deviceCode, deviceRequest, deviceAuthOptions.CodeLifetime);
 
         return new DeviceAuthorizationResponse
         {
             DeviceCode = deviceCode,
             UserCode = userCode,
+            VerificationUri = verificationUri,
+
+            // RFC 8628 section 3.2: verification_uri_complete lets capable devices render a direct link or QR
+            // code, so the user skips typing the code
+            VerificationUriComplete = new Uri(
+                verificationUri.AddToQuery([(DeviceAuthorizationResponse.Parameters.UserCode, userCode)])),
+
             ExpiresIn = deviceAuthOptions.CodeLifetime,
             Interval = deviceAuthOptions.PollingInterval,
         };
+    }
+
+    /// <summary>
+    /// The page the user enters the code on: <paramref name="configured"/> resolved against the issuer taken as a
+    /// directory, which leaves an absolute one as it is (RFC 3986 section 5.2.2).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// A relative page resolves under an issuer without TLS, where the user would authenticate in the clear. One
+    /// leaving the issuer's path was refused when it was configured.
+    /// </exception>
+    private static Uri VerificationUri(TenantDefinition tenant, Uri configured)
+    {
+        var issuer = new Uri(tenant.Issuer.OriginalString.AppendTrailingSlash());
+        var resolved = new Uri(issuer, configured);
+
+        if (configured.IsAbsoluteUri)
+            return resolved;
+
+        if (!string.Equals(resolved.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The relative {nameof(DeviceAuthorizationOptions.VerificationUri)} resolves to {resolved}, which " +
+                "does not use HTTPS: the user authenticates there, and RFC 6749 Section 3.1 requires TLS for that.");
+        }
+
+        return resolved;
     }
 }

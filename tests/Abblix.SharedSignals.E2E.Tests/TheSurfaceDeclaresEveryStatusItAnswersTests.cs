@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Net;
 using System.Net.Mime;
 using System.Text;
 using System.Net.Http.Json;
@@ -88,9 +87,9 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
         var answered = await DriveEveryOutcomeAsync();
 
         // A route that answered nothing would satisfy "declared covers answered" while proving no part
-        // of it, so the drive is required to have reached every route in the table below before
-        // anything is judged. No count is written here: the table is what says how many there are, and
-        // a number beside it is a second place to keep in step.
+        // of it, so the drive is required to have reached every route MappedRoutes lists before
+        // anything is judged. No count is written here: MappedRoutes is what says how many there are,
+        // and a number beside it is a second place to keep in step.
         var routes = MappedRoutes();
         var reached = answered.Select(answer => (answer.Method, answer.Pattern)).ToHashSet();
         Assert.True(
@@ -179,7 +178,7 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
             answers.Add(new Answer(method, pattern, (int)response.StatusCode));
         }
 
-        // Created, and the identifier every row below names.
+        // Created, and the identifier (_streamId) every request on the existing stream names.
         using (var created = await client.PostAsJsonAsync(
             StreamRoute, new { delivery = PushDelivery, events_requested = new[] { SomeEvent } }, ct))
         {
@@ -299,7 +298,7 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
             }
         }
 
-        // Deletion last: every row above needs the stream.
+        // Deletion last: every other request on _streamId needs the stream.
         await Record(HttpMethods.Delete, StreamRoute, $"{StreamRoute}?stream_id={MissingStream}");
         await Record(HttpMethods.Delete, StreamRoute, StreamRoute);
         await Record(HttpMethods.Delete, StreamRoute, $"{StreamRoute}?stream_id={_streamId}");
@@ -308,27 +307,30 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
 
         answers.AddRange(await DriveEveryRouteAsync(receiverId: null));
         answers.AddRange(await DriveEveryRouteAsync(receiverId: _ => Receiver, grantedScopes: _ => []));
+        answers.AddRange(await DriveEveryRouteAsync(receiverId: _ => Receiver, identity: new NoTransmitter()));
 
         return answers;
     }
 
     /// <summary>
-    /// One request per route against a host that names nobody, or grants no scope. Both refusals
-    /// belong to the GROUP rather than to any handler, so they are driven over every route rather than
-    /// sampled.
+    /// One request per route against a host that names nobody, grants no scope, or has no transmitter for
+    /// the request. Those refusals belong to the GROUP rather than to any handler, so they are driven over
+    /// every route rather than sampled.
     /// </summary>
     /// <remarks>
-    /// Not every route here is refused, and the one that is not is the point of driving all of them.
-    /// The configuration document is mapped outside that group and answers 200 to a caller with no
-    /// identity and no scope - which is what discovery is for, and what would break silently if the
-    /// group ever grew to cover it.
+    /// Not every route here is refused by the first two hosts, and the one that is not is the point of
+    /// driving all of them. The configuration document is mapped outside that group and answers 200 to a
+    /// caller with no identity and no scope - which is what discovery is for, and what would break silently
+    /// if the group ever grew to cover it. Only where no transmitter serves the request does it, like every
+    /// route, answer 404.
     /// </remarks>
     private async Task<List<Answer>> DriveEveryRouteAsync(
         Func<HttpContext, string?>? receiverId,
-        Func<HttpContext, IReadOnlyCollection<string>>? grantedScopes = null)
+        Func<HttpContext, IReadOnlyCollection<string>>? grantedScopes = null,
+        ITransmitterIdentity? identity = null)
     {
         var ct = TestContext.Current.CancellationToken;
-        await using var host = await StartAsync(receiverId, grantedScopes);
+        await using var host = await StartAsync(receiverId, grantedScopes, identity);
         var client = host.GetTestClient();
         var answers = new List<Answer>();
 
@@ -457,7 +459,8 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
 
     private async Task<WebApplication> StartAsync(
         Func<HttpContext, string?>? receiverId = null,
-        Func<HttpContext, IReadOnlyCollection<string>>? grantedScopes = null)
+        Func<HttpContext, IReadOnlyCollection<string>>? grantedScopes = null,
+        ITransmitterIdentity? identity = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -481,6 +484,9 @@ public sealed class TheSurfaceDeclaresEveryStatusItAnswersTests
 
         builder.Services.Replace(ServiceDescriptor.Singleton<IStreamStore>(
             _ => new RefusingUpdates(new InMemoryStreamStore())));
+
+        if (identity is not null)
+            builder.Services.Replace(ServiceDescriptor.Singleton(identity));
 
         builder.Services.AddSingleton(new SharedSignalsEndpointOptions
         {

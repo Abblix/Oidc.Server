@@ -11,7 +11,9 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
@@ -41,22 +43,45 @@ public sealed class JwtSubjectTokenResolver(
     IClientInfoProvider clientInfoProvider) : ISubjectTokenResolver
 {
     /// <summary>
-    /// An RFC 8693 subject_token was minted for a client or, under RFC 8707, for a resource server
-    /// -- never for this AS as its audience. Enforcing the default "aud must be a registered client"
-    /// rule would wrongly reject a resource-scoped access token presented for exchange. The token's
-    /// binding to the requesting client is enforced separately by the confused-deputy guard in
-    /// <see cref="Endpoints.Token.Grants.TokenExchangeGrantHandler"/>, so here we validate signature,
-    /// issuer and lifetime but deliberately drop the audience constraint.
+    /// The token types a subject token presented under <paramref name="tokenType"/> may carry, so a token issued
+    /// for one purpose is not exchanged as another.
     /// </summary>
-    private const ValidationOptions SubjectTokenValidation =
-        ValidationOptions.Default & ~ValidationOptions.RequireValidAudience;
+    /// <remarks>
+    /// An access token is typed <c>at+jwt</c> (RFC 9068 section 2.1); an ID token carries what
+    /// <see cref="JwtTypes.IdTokens"/> allows. The generic JWT type accepts either of those.
+    /// </remarks>
+    private static TokenTypePolicy? TokenTypesOf(string tokenType) => tokenType switch
+    {
+        TokenExchangeTokenTypes.AccessToken => TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken),
+        TokenExchangeTokenTypes.IdToken => JwtTypes.IdTokens,
+        TokenExchangeTokenTypes.Jwt => TokenTypePolicy.OrUntyped(JsonWebTokenTypes.AccessToken, JsonWebTokenTypes.Jwt),
+        _ => null,
+    };
 
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
-        string subjectToken,
+        TenantDefinition tenant,
+        ClientInfo client,
+        [Credential] string subjectToken,
+        Uri tokenType,
         CancellationToken cancellationToken)
     {
-        var validation = await jwtValidator.ValidateAsync(subjectToken, SubjectTokenValidation);
+        if (TokenTypesOf(tokenType.OriginalString) is not { } accepted)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest, $"The subject_token type '{tokenType}' is not a JWT this server reads.");
+        }
+
+        // An RFC 8693 subject_token may name a client (an ID token) or, under RFC 8707, a resource server in its
+        // audience rather than this server, so a resource-scoped access token presented for exchange is not refused
+        // for it. Its binding to the requesting client is enforced by the confused-deputy guard in
+        // TokenExchangeGrantHandler.
+        var validation = await jwtValidator.ValidateAsync(
+            tenant,
+            client,
+            subjectToken,
+            accepted,
+            ServiceTokenValidation.AnyAudience);
         if (!validation.TryGetSuccess(out var jwt))
         {
             return new OidcError(ErrorCodes.InvalidRequest, "The subject_token is invalid or has expired.");
@@ -70,20 +95,20 @@ public sealed class JwtSubjectTokenResolver(
 
         // The client the subject_token names (client_id, else azp, else the sole audience): used both to open a
         // pairwise 'sub' back to the real subject and as the confused-deputy origin below.
-        var originalClientId = jwt.Payload.ClientId ?? jwt.Payload.AuthorizedParty ?? SingleAudience(jwt);
+        var originalClientId = jwt.Payload.NamedClientId();
 
         // When the subject_token was issued to a pairwise client, 'sub' is that client's per-sector pseudonym; open
         // it against that client's sector. id_tokens, plain JWTs and public-client tokens carry the real subject
         // and pass through unchanged.
         var originalClient = originalClientId is not null
-            ? await clientInfoProvider.TryFindClientAsync(originalClientId).WithLicenseCheck()
+            ? await clientInfoProvider.TryFindClientAsync(tenant, originalClientId)
             : null;
 
         if (originalClient is not null)
         {
             // A pairwise 'sub' that does not open for its client (a foreign-sector or pre-change token) is rejected
             // rather than faulting the exchange.
-            var recovered = subjectTypeConverter.ConvertBack(subject, originalClient);
+            var recovered = subjectTypeConverter.ConvertBack(tenant, subject, originalClient);
             if (recovered is null)
                 return new OidcError(
                     ErrorCodes.InvalidRequest, "The subject_token's subject could not be resolved.");
@@ -97,7 +122,7 @@ public sealed class JwtSubjectTokenResolver(
         // rejects the second serialisation because the JsonNode is parented twice.
         var authorizationDetails = Extract<JsonArray>(jwt, IanaClaimTypes.AuthorizationDetails);
 
-        // RFC 8693 §4.1 act chain: preserve the subject_token's act so a delegation chain can
+        // RFC 8693 section 4.1 act chain: preserve the subject_token's act so a delegation chain can
         // be extended when this resolver feeds a Token Exchange request that also supplies an
         // actor_token. DeepClone for the same parenting reason as AD.
         var act = Extract<JsonObject>(jwt, IanaClaimTypes.Act);
@@ -105,7 +130,8 @@ public sealed class JwtSubjectTokenResolver(
         return new SubjectTokenContext(
             Subject: subject,
             Issuer: jwt.Payload.Issuer,
-            Scope: jwt.Payload.Scope?.ToArray(),
+            // A scope claim holding no scope is still the token's scope, unlike a token carrying no scope claim
+            Scope: jwt.Payload.Json.ContainsKey(IanaClaimTypes.Scope) ? [.. jwt.Payload.Scope] : null,
             AuthorizationDetails: authorizationDetails)
         {
             Act = act,
@@ -119,30 +145,13 @@ public sealed class JwtSubjectTokenResolver(
             // stays null, i.e. its origin is genuinely undeterminable.
             OriginalClientId = originalClientId,
 
-            // typ header for cross-type confusion check (e.g. id+jwt presented as access_token).
-            JwtTokenType = jwt.Header.Type,
+            // The family this token carries, taken into the exchanged token so a revoked family refuses it too.
+            GrantId = jwt.Payload.GrantId,
+            ExpiresAt = jwt.Payload.ExpiresAt,
         };
     }
 
     private static T? Extract<T>(JsonWebToken jwt, string name) where T: JsonNode
         => jwt.Payload.Json[name] is T node ? (T?)node.DeepClone() : null;
 
-    /// <summary>
-    /// Returns the sole audience of the token, or null when there is none or more than one. A
-    /// single-audience own-issued token (id_token, logout_token) puts the client there; multiple
-    /// audiences are ambiguous, so origin is determined from azp instead (handled by the caller).
-    /// </summary>
-    private static string? SingleAudience(JsonWebToken jwt)
-    {
-        string? single = null;
-        foreach (var audience in jwt.Payload.Audiences)
-        {
-            if (single is not null)
-                return null;
-
-            single = audience;
-        }
-
-        return single;
-    }
 }

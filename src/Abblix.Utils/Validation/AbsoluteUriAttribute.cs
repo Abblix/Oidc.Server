@@ -6,8 +6,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.ComponentModel.DataAnnotations;
-using System.Reflection;
-using System.Text.Json.Serialization;
 
 namespace Abblix.Utils.Validation;
 
@@ -35,29 +33,11 @@ public sealed class AbsoluteUriAttribute(string? requireScheme = null) : Validat
 
         Uri { IsAbsoluteUri: true, Scheme: var scheme }
             when requireScheme.HasValue() && !string.Equals(requireScheme, scheme, StringComparison.OrdinalIgnoreCase)
-            => new ValidationResult($"{GetName(validationContext)} value must use {requireScheme} scheme."),
+            => new ValidationResult($"{validationContext.GetWireName()} value must use {requireScheme} scheme."),
 
         Uri { IsAbsoluteUri: true } => ValidationResult.Success,
-        Uri => new ValidationResult($"{GetName(validationContext)} value is not absolute."),
+        Uri => new ValidationResult($"{validationContext.GetWireName()} value is not absolute."),
 
-        _ => new ValidationResult($"{GetName(validationContext)} is not Uri, but {value.GetType().Name}."),
+        _ => new ValidationResult($"{validationContext.GetWireName()} is not Uri, but {value.GetType().Name}."),
     };
-
-    /// <summary>
-    /// Returns the member's wire name (its <see cref="JsonPropertyNameAttribute"/>) for use in validation messages,
-    /// falling back to the context display name when the member declares none.
-    /// </summary>
-    /// <param name="context">The <see cref="ValidationContext"/> instance.</param>
-    /// <returns>The wire name, or the display name when no <see cref="JsonPropertyNameAttribute"/> is present.</returns>
-    private static string GetName(ValidationContext context)
-    {
-        if (context.MemberName != null)
-        {
-            var member = context.ObjectType.GetMember(context.MemberName).SingleOrDefault();
-            if (member?.GetCustomAttribute<JsonPropertyNameAttribute>() is { Name: var name })
-                return name;
-        }
-
-        return context.DisplayName;
-    }
 }

@@ -24,7 +24,7 @@ public interface IBackChannelAuthenticationResponseFormatter
     /// </summary>
     /// <param name="request">The original backchannel authentication request that triggered the response.</param>
     /// <param name="clientRequest">The client request, used to match the <c>WWW-Authenticate</c> scheme on a 401
-    /// per RFC 6749 §5.2.</param>
+    /// per RFC 6749 section 5.2.</param>
     /// <param name="response">The backchannel authentication result to format.</param>
     Task<IResult> FormatResponseAsync(
         BackChannelAuthenticationRequest request,

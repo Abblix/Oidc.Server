@@ -6,12 +6,15 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 
@@ -21,6 +24,7 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// In ping mode, the authenticated request is stored and a notification is sent to the client's registered endpoint.
 /// </summary>
 /// <param name="logger">Logger for tracking notification events.</param>
+/// <param name="fingerprints">Names a CIBA request id in a record by its fingerprint.</param>
 /// <param name="storage">Storage for authentication requests.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
@@ -28,26 +32,71 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="statusNotifier">Wakes a client waiting on a long poll. A ping client polls the token
 /// endpoint the same way a poll client does, and the long-poll gate does not read the delivery mode - so
 /// one that polls before its notification arrives waits, and is woken from here.</param>
+/// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
 public partial class PingModeCompletionHandler(
     ILogger<PingModeCompletionHandler> logger,
+    CredentialFingerprints fingerprints,
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     INotificationDeliveryService notificationService,
+    TimeProvider clock,
     IBackChannelLongPollingService? statusNotifier = null)
-    : AuthenticationCompletionHandler(logger, storage, subjectTypeConverter, statusNotifier)
+    : AuthenticationCompletionHandler(
+        logger, fingerprints, storage, subjectTypeConverter, clock, statusNotifier)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
+
+    /// <summary>
+    /// Denies the request and tells the client to come and read it, as for an approval.
+    /// </summary>
+    /// <remarks>
+    /// CIBA Core 1.0 section 10.2: the provider sends the ping "after a successful or failed end-user
+    /// authentication". A ping client polls only when told to, so a denial it is not told about is read only
+    /// when the request would have expired anyway. Nothing is sent where the client registered nowhere to
+    /// send it; the denial is still there for a poll.
+    /// </remarks>
+    /// <param name="tenant">The tenant the request is completed at.</param>
+    /// <param name="authenticationRequestId">The request refused.</param>
+    /// <param name="request">The request as it is written back, carrying where the client is notified.</param>
+    /// <param name="refusal">Why; a ping carries only the identifier, and the poll that follows reads
+    /// access_denied.</param>
+    /// <param name="expiresIn">How long the denied request stays readable.</param>
+    protected override async Task RefuseAsync(
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
+        BackChannelAuthenticationRequest request,
+        OidcError refusal,
+        TimeSpan expiresIn)
+    {
+        await DenyRequestAsync(tenant, authenticationRequestId, request, expiresIn);
+
+        if (ValidateNotificationConfiguration(
+                request.ClientNotificationEndpoint,
+                request.ClientNotificationToken,
+                BackchannelTokenDeliveryModes.Ping,
+                request.AuthorizedGrant.Context.ClientId,
+                authenticationRequestId))
+        {
+            await notificationService.SendAsync(
+                request.ClientNotificationEndpoint,
+                request.ClientNotificationToken,
+                new BackChannelPingNotificationRequest { AuthenticationRequestId = authenticationRequestId },
+                BackchannelTokenDeliveryModes.Ping);
+        }
+    }
 
     /// <summary>
     /// Handles ping mode delivery by storing the authenticated request and sending a notification to the client.
     /// The client will poll the token endpoint after receiving the notification.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information for validation.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     protected override async Task HandleDeliveryAsync(
-        string authenticationRequestId,
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         ClientInfo clientInfo,
         TimeSpan expiresIn)
@@ -59,13 +108,13 @@ public partial class PingModeCompletionHandler(
             clientInfo.ClientId,
             authenticationRequestId))
         {
-            await DenyRequestAsync(authenticationRequestId, request, expiresIn);
+            await DenyRequestAsync(tenant, authenticationRequestId, request, expiresIn);
             return;
         }
 
-        await StoreAsync(authenticationRequestId, request, expiresIn);
+        await StoreAsync(tenant, authenticationRequestId, request, expiresIn);
 
-        LogSendingPingNotification(authenticationRequestId);
+        LogSendingPingNotification(FingerprintOf(authenticationRequestId));
 
         var payload = new BackChannelPingNotificationRequest
         {

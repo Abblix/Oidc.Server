@@ -121,4 +121,18 @@ public class HashCalculatorTests
     {
         Assert.Null(HashCalculator.Compute(algorithm, "any-value"));
     }
+
+    /// <summary>
+    /// Every signing algorithm this library recognizes, except "none", has a digest paired with it, so an
+    /// algorithm added to <see cref="SigningAlgorithms.Known"/> fails here until its pairing is written down.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(SigningAlgorithmsWithDigest))]
+    public void EveryRecognizedSigningAlgorithm_HasPairedDigest(string algorithm)
+    {
+        Assert.NotNull(HashCalculator.Compute(algorithm, "any-value"));
+    }
+
+    public static TheoryData<string> SigningAlgorithmsWithDigest
+        => new(SigningAlgorithms.Known.Where(algorithm => algorithm != SigningAlgorithms.None));
 }

@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
@@ -16,14 +18,15 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -44,6 +47,9 @@ public class UnreadableAssertionTimestampTests
     private const string JwtAssertion = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.signature";
     private static readonly DateTimeOffset Now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
+    private static readonly TenantDefinition Tenant =
+        new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = ClientSecurityProfile.None }.ToTenant();
+
     [Theory]
     [InlineData(JwtClaimTypes.ExpiresAt)]
     [InlineData(JwtClaimTypes.IssuedAt)]
@@ -52,7 +58,7 @@ public class UnreadableAssertionTimestampTests
     {
         var (authenticator, replayCache) = Build(payload => payload[claim] = 99999999999999);
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        var result = await authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
@@ -68,15 +74,16 @@ public class UnreadableAssertionTimestampTests
     }
 
     /// <summary>
-    /// And the same assertion with readable dates authenticates, or the case above would be
-    /// satisfied by an authenticator refusing everything.
+    /// And the same assertion with readable dates authenticates, or
+    /// <see cref="AnAssertionWithATimestampOutsideTheRepresentableRange_IsRefused"/> would be satisfied by an
+    /// authenticator refusing everything.
     /// </summary>
     [Fact]
     public async Task AnAssertionWithReadableTimestamps_Authenticates()
     {
         var (authenticator, _) = Build(_ => { });
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest
+        var result = await authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
         {
             ClientAssertionType = ClientAssertionTypes.JwtBearer,
             ClientAssertion = JwtAssertion,
@@ -113,7 +120,7 @@ public class UnreadableAssertionTimestampTests
         };
 
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(clientInfo);
+        clientInfoProvider.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(clientInfo);
 
         // Hands the token back without reading a single claim of it, which is what leaves the
         // timestamps to be met first by the authenticator.
@@ -134,24 +141,14 @@ public class UnreadableAssertionTimestampTests
             .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
             .ReturnsAsync(true);
 
-        var requestInfoProvider = new Mock<IRequestInfoProvider>();
-        requestInfoProvider.Setup(p => p.RequestUri).Returns(Issuer);
-
         var authenticator = new ClientSecretJwtAuthenticator(
             Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             clientInfoProvider.Object,
-            requestInfoProvider.Object,
-            new FixedClock(Now),
+            new FakeTimeProvider(Now),
             replayCache.Object,
-            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == Issuer),
-            Options.Create(new OidcOptions { DefaultSecurityProfile = ClientSecurityProfile.None }));
+            new ServiceCollection().BuildServiceProvider());
 
         return (authenticator, replayCache);
-    }
-
-    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

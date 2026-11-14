@@ -3,6 +3,7 @@ syntax = "proto3";
 option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
 
 import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
 import "Features/Storages/Proto/RequestedClaims.proto";
 
 // Represents an authorization request for OpenID Connect or OAuth 2.0
@@ -72,16 +73,34 @@ message AuthorizationRequest {
   // Resources for which the access token is requested (RFC 8707)
   repeated string resources = 21;
 
-  // RFC 9449 §10 dpop_jkt: client's commitment to a DPoP proof-of-possession key
+  // RFC 9449 section 10 dpop_jkt: client's commitment to a DPoP proof-of-possession key
   // measured at the authorize / PAR endpoint. Token endpoint compares this against
   // the live proof's JWK thumbprint and rejects on mismatch - closing the
   // authorization-code injection window where an attacker swaps in their own key.
   optional string proof_key_thumbprint = 22;
 
   // RFC 9396 Rich Authorization Requests array, serialised as a JSON string. Stored
-  // as opaque JSON because each entry's type-specific payload (RFC 9396 §2.2 extension
+  // as opaque JSON because each entry's type-specific payload (RFC 9396 section 2.2 extension
   // data) is structurally unbounded; round-trip preserves the exact wire shape so PAR
   // persistence keeps byte-exact authorization_details until the front-channel
   // /authorize endpoint redeems the request_uri.
   optional string authorization_details_json = 23;
+
+  // Held a single moment the end user was sent to log in or to create an account in earlier releases,
+  // which prompted now records for each page. Reserved so the number and the name are never given to
+  // another field.
+  reserved 24;
+  reserved "prompted_at";
+
+  // The request URN this request was first fetched under, so it is consumed with the URN of
+  // the page the request comes back from once a code or token is issued
+  optional string origin_request_uri = 25;
+
+  // When the server sent the end user to the page of each prompt value the request asks for, so the
+  // request coming back with an answer given since then proceeds
+  map<string, google.protobuf.Timestamp> prompted = 26;
+
+  // Whether the client named no scope and the request carries the default it was served with; a request
+  // stored before the field existed reads false, as a scope the client named
+  bool client_named_no_scope = 27;
 }

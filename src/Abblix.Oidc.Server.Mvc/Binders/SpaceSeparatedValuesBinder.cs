@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 /// Binds a single space-separated request value into a string array.
 /// Mirrors the wire format used by OAuth 2.0 / OpenID Connect for parameters such as
 /// <c>scope</c>, <c>response_type</c>, <c>prompt</c>, <c>acr_values</c>, and <c>ui_locales</c>
-/// (RFC 6749 § 3.3 and OIDC Core 1.0 § 3.1.2.1).
+/// (RFC 6749 section 3.3 and OIDC Core 1.0 section 3.1.2.1).
 /// </summary>
 /// <remarks>
 /// Tokens are split on the ASCII space character; consecutive spaces produce no empty entries.

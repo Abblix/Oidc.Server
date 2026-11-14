@@ -41,7 +41,7 @@ public record DeviceAuthorizationValidationContext(
     public ResourceDefinition[] Resources { get; set; } = [];
 
     /// <summary>
-    /// RFC 9396 §3 Rich Authorization Requests array, populated after per-client allowlist
+    /// RFC 9396 section 3 Rich Authorization Requests array, populated after per-client allowlist
     /// and per-type validator dispatch by <see cref="DeviceAuthorizationDetailsValidator"/>.
     /// <c>null</c> when the request did not include <c>authorization_details</c>.
     /// </summary>

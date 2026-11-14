@@ -6,9 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -25,15 +28,17 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <param name="jwtValidator">Validates the software statement JWT signature and claims.</param>
 /// <param name="options">OIDC options containing software statement configuration.</param>
 /// <param name="secureFetcher">HTTP fetcher with SSRF protection for retrieving trusted issuer JWKS.</param>
+/// <param name="catalog">Tells an issuer this server serves, whose statements are refused.</param>
 public partial class SoftwareStatementValidator(
     ILogger<SoftwareStatementValidator> logger,
-    IJsonWebTokenValidator jwtValidator,
+    ProfiledJwtValidator jwtValidator,
     IOptionsMonitor<OidcOptions> options,
-    [FromKeyedServices(KeySetOwners.SoftwareStatementIssuer)] ISecureHttpFetcher secureFetcher)
+    [FromKeyedServices(KeySetOwners.SoftwareStatementIssuer)] ISecureHttpFetcher secureFetcher,
+    ITenantCatalog catalog)
     : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var softwareStatementOptions = options.CurrentValue.SoftwareStatement;
         var softwareStatement = context.Request.SoftwareStatement;
@@ -53,8 +58,7 @@ public partial class SoftwareStatementValidator(
                 "No trusted issuers configured for software statement validation");
         }
 
-        var profile = SecurityProfileRequirements.Resolve(
-            options.CurrentValue.DefaultSecurityProfile);
+        var profile = SecurityProfileRequirements.For(tenant, client: null);
 
         var validationParameters = new ValidationParameters
         {
@@ -65,11 +69,15 @@ public partial class SoftwareStatementValidator(
                       ~ValidationOptions.RequireAudience &
                       ~ValidationOptions.ValidateAudience,
 
+            // RFC 7591 Section 2.3 gives a software statement no type, so the type is judged below
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
+
             ValidateIssuer = issuer => ValidateIssuer(softwareStatementOptions, issuer),
             ResolveIssuerSigningKeys = issuer => ResolveSigningKeysAsync(softwareStatementOptions, issuer),
+            RefetchIssuerSigningKeys = issuer => ResolveSigningKeysAsync(softwareStatementOptions, issuer, refetch: true),
         };
 
-        var result = await jwtValidator.ValidateAsync(softwareStatement, validationParameters);
+        var result = await jwtValidator.ValidateAsync(profile, softwareStatement, validationParameters);
 
         if (result.TryGetFailure(out var error))
         {
@@ -78,18 +86,36 @@ public partial class SoftwareStatementValidator(
                 $"The software_statement is invalid: {error.ErrorDescription}");
         }
 
-        return ValidateSoftwareId(softwareStatementOptions, result.GetSuccess());
+        var statement = result.GetSuccess();
+
+        // A JWT declaring itself some other kind this server names is one replayed where a statement about the
+        // software belongs (RFC 8725 Section 3.11)
+        if (!JwtTypes.IsPermitted(statement.Header.Type))
+        {
+            return ErrorFactory.InvalidSoftwareStatement(
+                $"A token of type '{statement.Header.Type}' cannot be used as a software statement");
+        }
+
+        return ValidateSoftwareId(softwareStatementOptions, statement);
     }
 
     /// <summary>
     /// Checks whether the software statement issuer is in the configured trusted issuers list.
     /// </summary>
-    private Task<bool> ValidateIssuer(SoftwareStatementOptions statementOptions, string issuer)
+    private async Task<bool> ValidateIssuer(SoftwareStatementOptions statementOptions, string issuer)
     {
+        // A statement is validated as a token another issuer wrote, so nothing this server records about its own
+        // tokens is read for it: one of its own tenants' tokens, revoked included, would pass as a statement
+        if (await catalog.ServesAsync(issuer, CancellationToken.None))
+        {
+            LogIssuerIsServedTenant(issuer);
+            return false;
+        }
+
         var trusted = FindTrustedIssuer(statementOptions, issuer) != null;
         if (!trusted)
             LogIssuerNotTrusted(issuer);
-        return Task.FromResult(trusted);
+        return trusted;
     }
 
     /// <summary>
@@ -128,14 +154,15 @@ public partial class SoftwareStatementValidator(
     /// </summary>
     private async IAsyncEnumerable<JsonWebKey> ResolveSigningKeysAsync(
         SoftwareStatementOptions statementOptions,
-        string issuer)
+        string issuer,
+        bool refetch = false)
     {
         var trustedIssuer = FindTrustedIssuer(statementOptions, issuer);
         if (trustedIssuer == null)
             yield break;
 
         var keys = secureFetcher.FetchKeysAsync(
-            trustedIssuer.JwksUri, logger, issuer, KeySetOwners.SoftwareStatementIssuer);
+            trustedIssuer.JwksUri, logger, issuer, KeySetOwners.SoftwareStatementIssuer, refetch);
         await foreach (var key in keys.Where(k => k.Usage is null or PublicKeyUsages.Signature))
         {
             yield return key;

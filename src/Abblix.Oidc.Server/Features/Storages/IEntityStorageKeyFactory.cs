@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 namespace Abblix.Oidc.Server.Features.Storages;
@@ -19,13 +20,15 @@ public interface IEntityStorageKeyFactory
     /// <summary>
     /// Generates a storage key for JWT status by JWT ID.
     /// </summary>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
     /// <param name="jwtId">The JSON Web Token identifier.</param>
     /// <returns>A formatted storage key for the JWT status.</returns>
-    string JsonWebTokenStatusKey(string jwtId);
+    string JsonWebTokenStatusKey(TenantDefinition tenant, string jwtId);
 
     /// <summary>
     /// Names the revocation cutoff recorded against a subject or a session.
     /// </summary>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
     /// <param name="scope">Whether the principal is an end user or a single session.</param>
     /// <param name="principal">The subject identifier or the session identifier.</param>
     /// <returns>A formatted storage key for the cutoff.</returns>
@@ -43,71 +46,212 @@ public interface IEntityStorageKeyFactory
     /// account and every ended session quietly working again on deploy.
     /// </para>
     /// </remarks>
-    string RevocationCutoffKey(RevocationScope scope, string principal);
+    string RevocationCutoffKey(TenantDefinition tenant, RevocationScope scope, string principal);
 
     /// <summary>
     /// Generates a storage key for an authorization request by URI.
     /// </summary>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
     /// <param name="requestUri">The pushed authorization request URI.</param>
     /// <returns>A formatted storage key for the authorization request.</returns>
-    string AuthorizationRequestKey(Uri requestUri);
+    string AuthorizationRequestKey(TenantDefinition tenant, Uri requestUri);
+
+    /// <summary>
+    /// Generates a storage key for the record that a request URN's flow ended with a code or token.
+    /// </summary>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
+    /// <param name="requestUri">The request URN the flow began with.</param>
+    /// <returns>A formatted storage key for the record, never one a stored request is held under.</returns>
+    string ConsumedRequestUriKey(TenantDefinition tenant, Uri requestUri);
 
     /// <summary>
     /// Generates a storage key for an authorized grant by authorization code.
     /// </summary>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
     /// <param name="authorizationCode">The OAuth 2.0 authorization code.</param>
     /// <returns>A formatted storage key for the authorization grant.</returns>
-    string AuthorizedGrantKey(string authorizationCode);
+    string AuthorizedGrantKey(TenantDefinition tenant, string authorizationCode);
 
     /// <summary>
     /// Generates a storage key for a backchannel authentication request by request ID.
     /// </summary>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
     /// <param name="requestId">The CIBA authentication request identifier.</param>
     /// <returns>A formatted storage key for the backchannel authentication request.</returns>
-    string BackChannelAuthenticationRequestKey(string requestId);
+    string BackChannelAuthenticationRequestKey(TenantDefinition tenant, string requestId);
 
     /// <summary>
     /// Generates a storage key for a device authorization request by device code.
     /// </summary>
+    /// <remarks>
+    /// The key is also stored as a value: the user-code index entry holds it to lead back to the record. The device
+    /// code redeems the tokens once the user approves, so it must not be recoverable from the key, or a reader of
+    /// the stored values gets it from the index.
+    /// </remarks>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
     /// <param name="deviceCode">The device code identifier.</param>
     /// <returns>A formatted storage key for the device authorization request.</returns>
-    string DeviceAuthorizationRequestKey(string deviceCode);
+    string DeviceAuthorizationRequestKey(TenantDefinition tenant, string deviceCode);
 
     /// <summary>
-    /// Generates a storage key for mapping a user code to its device code.
+    /// Generates a storage key for the next-poll instant of a backchannel authentication request.
     /// </summary>
+    /// <remarks>
+    /// A top-level name of its own rather than one nested under the request's key, because an
+    /// identifier is a value the host's own generator produces: nested, an identifier that happened to
+    /// begin with this segment would name the request's own key and the next-poll write would land on the
+    /// authentication. A key of its own, because what the polling client changes is only this instant while what the
+    /// user's authentication changes is the request: a poll writing the request back to note the instant
+    /// overwrote a completion that had landed since it read.
+    /// </remarks>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
+    /// <param name="requestId">The CIBA authentication request identifier.</param>
+    /// <returns>A formatted storage key for that request's poll schedule.</returns>
+    string BackChannelAuthenticationNextPollKey(TenantDefinition tenant, string requestId);
+
+    /// <summary>
+    /// Generates a storage key for the next-poll instant of a device authorization request.
+    /// </summary>
+    /// <remarks>
+    /// A key of its own, for the same reason as its backchannel counterpart: a poll that wrote the
+    /// request back to note the instant overwrote an approval that had landed since it read, and the
+    /// device was told to keep waiting until the code expired.
+    /// </remarks>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
+    /// <param name="deviceCode">The device code identifier.</param>
+    /// <returns>A formatted storage key for that request's poll schedule.</returns>
+    string DeviceAuthorizationNextPollKey(TenantDefinition tenant, string deviceCode);
+
+    /// <summary>
+    /// Generates a storage key for the index entry that leads from a user code to its device authorization record.
+    /// </summary>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
     /// <param name="userCode">The user-friendly verification code.</param>
-    /// <returns>A formatted storage key for the user code mapping.</returns>
-    string DeviceAuthorizationUserCodeKey(string userCode);
+    /// <returns>A formatted storage key for the user code index entry.</returns>
+    string DeviceAuthorizationUserCodeKey(TenantDefinition tenant, string userCode);
 
     /// <summary>
-    /// Generates a storage key for rate limiting user code verification attempts.
+    /// Generates a storage key for one failed verification attempt against a user code.
     /// </summary>
+    /// <remarks>
+    /// One key per attempt rather than one key holding a number: attempts are counted by how many of
+    /// these exist, so failures arriving together are counted separately.
+    /// </remarks>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
     /// <param name="userCode">The user code being verified.</param>
-    /// <returns>A formatted storage key for the user code rate limit state.</returns>
-    string UserCodeRateLimitKey(string userCode);
+    /// <param name="life">Which life of that code the attempt belongs to, named by the verification that
+    /// started it and read from <see cref="UserCodeRateLimitGenerationKey"/>.</param>
+    /// <param name="attempt">Which attempt against that code this key stands for, counted from one.</param>
+    /// <returns>A formatted storage key for that attempt.</returns>
+    string UserCodeRateLimitAttemptKey(TenantDefinition tenant, string userCode, string life, int attempt);
 
     /// <summary>
-    /// Generates a storage key for rate limiting by IP address or client identifier.
+    /// Generates a storage key for which life of a user code its attempt records belong to.
     /// </summary>
+    /// <remarks>
+    /// A verified code starts a new life rather than having its records removed, because removing them is
+    /// what lets an attempt that began earlier land above the gap. The life carries a name drawn when the
+    /// verification happens rather than a count: a count is read before it is written, so it restarts whenever
+    /// this record expires and hands back a life whose attempt records may still be stored.
+    /// </remarks>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
+    /// <param name="userCode">The user code being verified.</param>
+    /// <returns>A formatted storage key for the name of that code's current life.</returns>
+    string UserCodeRateLimitGenerationKey(TenantDefinition tenant, string userCode);
+
+    /// <summary>
+    /// Generates a storage key for one failed verification attempt anywhere in the server, inside one
+    /// counting window.
+    /// </summary>
+    /// <remarks>
+    /// Not keyed by anything the caller chooses, which is the point: a guesser rotating addresses and
+    /// never repeating a code escapes every other count.
+    /// </remarks>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
+    /// <param name="window">Which counting window this attempt falls into.</param>
+    /// <param name="attempt">Which attempt within that window this key stands for, counted from one.</param>
+    /// <returns>A formatted storage key for that attempt.</returns>
+    string FailedAttemptKey(TenantDefinition tenant, long window, int attempt);
+
+    /// <summary>
+    /// Generates a storage key for one failed verification attempt from a client address, inside one
+    /// counting window.
+    /// </summary>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
     /// <param name="clientIdentifier">The client identifier (typically IP address).</param>
-    /// <returns>A formatted storage key for the IP rate limit state.</returns>
-    string IpRateLimitKey(string clientIdentifier);
+    /// <param name="window">Which counting window this attempt falls into.</param>
+    /// <param name="attempt">Which attempt within that window this key stands for, counted from one.</param>
+    /// <returns>A formatted storage key for that attempt.</returns>
+    string AddressRateLimitAttemptKey(TenantDefinition tenant, string clientIdentifier, long window, int attempt);
 
     /// <summary>
-    /// Generates a storage key for the registration access token binding of a client (RFC 7592).
+    /// Generates a storage key for the current generation of the list of clients that signed in to a session.
     /// </summary>
-    /// <param name="clientId">The identifier of the registered client.</param>
-    /// <returns>A formatted storage key for the client's current registration-access-token jti.</returns>
-    string RegistrationAccessTokenKey(string clientId);
+    /// <param name="tenant">The tenant whose space the key is in.</param>
+    /// <param name="sessionId">The session identifier.</param>
+    /// <returns>A formatted storage key for that session's generation.</returns>
+    string SessionClientsGenerationKey(TenantDefinition tenant, string sessionId);
+
+    /// <summary>
+    /// Generates a storage key for one position in one generation of the list of clients that signed in to a
+    /// session.
+    /// </summary>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
+    /// <param name="sessionId">The session identifier.</param>
+    /// <param name="generation">The generation the position belongs to.</param>
+    /// <param name="position">Which position in that generation's list this key stands for, counted from one.</param>
+    /// <returns>A formatted storage key for that position.</returns>
+    string SessionClientKey(TenantDefinition tenant, string sessionId, string generation, int position);
+
+    /// <summary>
+    /// Generates a storage key saying that a client is already recorded in one generation of a session's list.
+    /// </summary>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
+    /// <param name="sessionId">The session identifier.</param>
+    /// <param name="generation">The generation the client is recorded in.</param>
+    /// <param name="clientId">The client identifier.</param>
+    /// <returns>A formatted storage key for that client in that generation.</returns>
+    string SessionClientMarkerKey(TenantDefinition tenant, string sessionId, string generation, string clientId);
+
+    /// <summary>
+    /// Generates a storage key noting that one generation of a session's list was renewed recently enough to
+    /// need no renewal yet.
+    /// </summary>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
+    /// <param name="sessionId">The session identifier.</param>
+    /// <param name="generation">The generation that was renewed.</param>
+    /// <returns>A formatted storage key for that generation's last renewal.</returns>
+    string SessionClientsRenewalKey(TenantDefinition tenant, string sessionId, string generation);
 
     /// <summary>
     /// Generates a storage key for reuse detection of an authorization request value (a PKCE
     /// <c>code_challenge</c> or an OpenID Connect <c>nonce</c>), scoped to a client and the value's kind.
     /// </summary>
+    /// <remarks>
+    /// Leads with a segment of its own rather than with the client identifier, because an identifier is
+    /// chosen at registration: leading with it, a client registered as another family's segment would spell
+    /// that family's key for an awkward value.
+    /// </remarks>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
     /// <param name="clientId">The client the value belongs to.</param>
     /// <param name="valueKind">A discriminator for the value's role, so distinct kinds never collide.</param>
     /// <param name="valueHash">A hash of the value; the raw value is never part of the key.</param>
     /// <returns>A formatted storage key for the recorded value.</returns>
-    string AuthorizationValueReuseKey(string clientId, string valueKind, string valueHash);
+    string AuthorizationValueReuseKey(TenantDefinition tenant, string clientId, string valueKind, string valueHash);
+
+    /// <summary>
+    /// Generates a storage key for the logout confirmation a session currently has outstanding.
+    /// </summary>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
+    /// <param name="sessionId">The session whose end user was asked whether to log out.</param>
+    /// <returns>A formatted storage key for that session's outstanding confirmation.</returns>
+    string LogoutConfirmationKey(TenantDefinition tenant, string sessionId);
+
+    /// <summary>
+    /// Generates a storage key for the secret the nonces of one rotation bucket are signed with.
+    /// </summary>
+    /// <param name="tenant">The tenant whose space the key is in.</param>
+    /// <param name="bucket">The rotation bucket the secret signs nonces for.</param>
+    /// <returns>A formatted storage key for that bucket's secret.</returns>
+    string NonceSecretKey(TenantDefinition tenant, long bucket);
 }

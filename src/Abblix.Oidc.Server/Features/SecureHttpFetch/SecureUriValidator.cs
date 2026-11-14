@@ -64,11 +64,17 @@ public partial class SecureUriValidator : ISecureUriValidator
         => allowedDestinations is { Length: > 0 } destinations &&
            Array.Exists(destinations, allowed =>
                allowed.IsAbsoluteUri &&
-               string.Equals(uri.Scheme, allowed.Scheme, StringComparison.OrdinalIgnoreCase) &&
-               string.Equals(uri.Host, allowed.Host, StringComparison.OrdinalIgnoreCase) &&
-               uri.Port == allowed.Port &&
-               (allowed.AbsolutePath == "/" ||
-                string.Equals(uri.AbsolutePath, allowed.AbsolutePath, StringComparison.Ordinal)));
+               IsSameOrigin(uri, allowed) &&
+               PathIsCoveredBy(uri, allowed));
+
+    private static bool IsSameOrigin(Uri uri, Uri allowed)
+        => string.Equals(uri.Scheme, allowed.Scheme, StringComparison.OrdinalIgnoreCase) &&
+           string.Equals(uri.Host, allowed.Host, StringComparison.OrdinalIgnoreCase) &&
+           uri.Port == allowed.Port;
+
+    private static bool PathIsCoveredBy(Uri uri, Uri allowed)
+        => allowed.AbsolutePath == "/" ||
+           string.Equals(uri.AbsolutePath, allowed.AbsolutePath, StringComparison.Ordinal);
 
     /// <inheritdoc />
     public string? Validate(Uri uri)

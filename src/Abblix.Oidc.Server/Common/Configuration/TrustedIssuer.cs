@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
@@ -20,6 +22,13 @@ public record TrustedIssuer
     /// <example>https://accounts.google.com</example>
     /// <example>https://login.microsoftonline.com/{tenant-id}/v2.0</example>
     public required string Issuer { get; init; }
+
+    /// <summary>
+    /// Whether <paramref name="issuer"/> names this issuer, compared as <see cref="TenantIssuers.Same"/> compares
+    /// two issuers.
+    /// </summary>
+    internal bool Names(Uri issuer)
+        => Uri.TryCreate(Issuer, UriKind.Absolute, out var trusted) && TenantIssuers.Same(issuer, trusted);
 
     /// <summary>
     /// The URL to the JSON Web Key Set (JWKS) endpoint for this issuer.

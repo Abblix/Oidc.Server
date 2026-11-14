@@ -9,7 +9,6 @@
 using System;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -18,20 +17,18 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
-using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
-using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
-using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using StoredRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 using WireRequest = Abblix.Oidc.Server.Model.BackChannelAuthenticationRequest;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication;
 
@@ -63,11 +60,11 @@ public class BackChannelAuthenticationRequestProcessorTests
         // A public client, so the session's subject is what the client sees. The pairwise direction is the
         // shared comparison's own business and is covered where it lives.
         _subjectTypeConverter
-            .Setup(c => c.Convert(It.IsAny<string>(), It.IsAny<ClientInfo>()))
-            .Returns((string subject, ClientInfo _) => subject);
+            .Setup(c => c.Convert(TestTenant.Matched, It.IsAny<string>(), It.IsAny<ClientInfo>()))
+            .Returns((TenantDefinition _, string subject, ClientInfo _) => subject);
 
         _storage
-            .Setup(s => s.StoreAsync(It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
             .ReturnsAsync("auth-req-id");
 
         _processor = new BackChannelAuthenticationRequestProcessor(
@@ -79,7 +76,7 @@ public class BackChannelAuthenticationRequestProcessorTests
     }
 
     private ValidBackChannelAuthenticationRequest Request(
-        string? hintedSubject, string? claimsJson = null, JsonArray? authorizationDetails = null)
+        string? hintedSubject, string? claimsJson = null, JsonArray? authorizationDetails = null, bool namesScope = true)
     {
         var hint = hintedSubject is null
             ? null
@@ -92,7 +89,7 @@ public class BackChannelAuthenticationRequestProcessorTests
             new BackChannelAuthenticationValidationContext(
                 new WireRequest
                 {
-                    Scope = [Scopes.OpenId],
+                    Scope = namesScope ? [Scopes.OpenId] : [],
                     Claims = claimsJson is null
                         ? null
                         : JsonSerializer.Deserialize<RequestedClaims>(claimsJson),
@@ -115,8 +112,93 @@ public class BackChannelAuthenticationRequestProcessorTests
             AuthenticationTime: DateTimeOffset.UnixEpoch,
             IdentityProvider: "test");
 
-        _handler.Setup(h => h.InitiateAuthenticationAsync(It.IsAny<ValidBackChannelAuthenticationRequest>()))
+        _handler.Setup(h => h.InitiateAuthenticationAsync(TestTenant.Matched, It.IsAny<ValidBackChannelAuthenticationRequest>()))
             .Returns(Task.FromResult(session));
+    }
+
+    /// <summary>
+    /// A handler that empties the request while it authenticates leaves the requested set untouched.
+    /// </summary>
+    /// <remarks>
+    /// The whole request is handed to the handler, which is a host seam, and what the request asked for
+    /// is read back afterwards - both onto the grant and as the baseline the completion-time widening
+    /// check measures against. A handler that edits what it was given, which is how narrowing is written
+    /// throughout this repository, would otherwise erase the record of what was asked for and leave that
+    /// check comparing an empty set against whatever arrives.
+    /// </remarks>
+    [Fact]
+    public async Task AHandlerEmptyingTheRequestWhileItAuthenticates_LeavesTheRequestedDetailsAsTheyWere()
+    {
+        var requested = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
+
+        Result<AuthSession, OidcError> session = new AuthSession(
+            Subject: Approved,
+            SessionId: "session-1",
+            AuthenticationTime: DateTimeOffset.UnixEpoch,
+            IdentityProvider: "test");
+
+        _handler.Setup(h => h.InitiateAuthenticationAsync(TestTenant.Matched, It.IsAny<ValidBackChannelAuthenticationRequest>()))
+            .Callback((TenantDefinition _, ValidBackChannelAuthenticationRequest r) => r.AuthorizationDetails?.Clear())
+            .Returns(Task.FromResult(session));
+
+        StoredRequest? stored = null;
+        _storage
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((TenantDefinition _, StoredRequest request, TimeSpan _) => stored = request)
+            .ReturnsAsync("auth-req-id");
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, authorizationDetails: requested));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.NotNull(stored);
+
+        Assert.Equal(
+            """[{"type":"payment_initiation"}]""",
+            stored.RequestedAuthorizationDetails!.ToJsonString());
+
+        Assert.Equal(
+            """[{"type":"payment_initiation"}]""",
+            stored.AuthorizedGrant.Context.AuthorizationDetails!.ToJsonString());
+    }
+
+    /// <summary>
+    /// The levels an essential <c>acr</c> requires are recorded on the stored request, read before the host
+    /// is handed the request, and a request requiring none records that as an empty set. A requirement no
+    /// level could satisfy, reaching here past the validator, records nothing, so completion reads it from
+    /// the grant and refuses every level.
+    /// </summary>
+    /// <remarks>
+    /// The grant's own copy of the <c>claims</c> parameter is the one a host replaces when the end user
+    /// approves part of the request, so the requirement completion judges has to be kept apart from it. An
+    /// empty set rather than nothing, because nothing is how a request stored by an earlier build reads.
+    /// </remarks>
+    [Theory]
+    [InlineData("""{"id_token":{"acr":{"essential":true,"values":["urn:example:acr:strong"]}}}""", new[] { "urn:example:acr:strong" })]
+    [InlineData("""{"id_token":{"acr":{"values":["urn:example:acr:strong"]}}}""", new string[0])]
+    [InlineData(null, new string[0])]
+    [InlineData("""{"id_token":{"acr":{"essential":true,"values":[]}}}""", null)]
+    public async Task TheRequiredLevels_AreRecordedOnTheStoredRequest(string? claimsJson, string[]? expected)
+    {
+        Result<AuthSession, OidcError> session = new AuthSession(
+            Subject: Approved,
+            SessionId: "session-1",
+            AuthenticationTime: DateTimeOffset.UnixEpoch,
+            IdentityProvider: "test");
+
+        _handler.Setup(h => h.InitiateAuthenticationAsync(TestTenant.Matched, It.IsAny<ValidBackChannelAuthenticationRequest>()))
+            .Returns(Task.FromResult(session));
+
+        StoredRequest? stored = null;
+        _storage
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((TenantDefinition _, StoredRequest request, TimeSpan _) => stored = request)
+            .ReturnsAsync("auth-req-id");
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, claimsJson));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.NotNull(stored);
+        Assert.Equal(expected, stored.RequiredAuthContextClassRefs);
     }
 
     /// <summary>
@@ -128,7 +210,7 @@ public class BackChannelAuthenticationRequestProcessorTests
     /// the two would make the widening check at completion compare a value against itself, which cannot
     /// refuse anything - and it would do so silently, because the shipped storage serialises both and
     /// separates them, so the defect would wait for the first host that registers an in-memory
-    /// <c>IEntityStorage</c>. Reference identity is asserted through the behaviour it decides rather than
+    /// <c>IEntityStorage</c>. Reference identity is asserted through the behavior it decides rather than
     /// on its own, so the test still means something if the copy is made somewhere else.
     /// </remarks>
     [Fact]
@@ -138,13 +220,13 @@ public class BackChannelAuthenticationRequestProcessorTests
 
         StoredRequest? stored = null;
         _storage
-            .Setup(s => s.StoreAsync(It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
-            .Callback((StoredRequest request, TimeSpan _) => stored = request)
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((TenantDefinition _, StoredRequest request, TimeSpan _) => stored = request)
             .ReturnsAsync("auth-req-id");
 
         var requested = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
 
-        var result = await _processor.ProcessAsync(Request(null, authorizationDetails: requested));
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, authorizationDetails: requested));
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.NotNull(stored);
@@ -172,12 +254,12 @@ public class BackChannelAuthenticationRequestProcessorTests
     {
         HostAuthenticates(Approved);
 
-        var result = await _processor.ProcessAsync(Request("somebody-else"));
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request("somebody-else"));
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
         _storage.Verify(
-            s => s.StoreAsync(It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()),
+            s => s.StoreAsync(It.IsAny<TenantDefinition>(), It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -185,17 +267,39 @@ public class BackChannelAuthenticationRequestProcessorTests
     /// A hint naming the end user who approved is accepted.
     /// </summary>
     /// <remarks>
-    /// The control for the case above: without it the same assertions would hold over a processor that
-    /// refused every request carrying a hint at all.
+    /// The control for <see cref="AHintNamingSomebodyElse_IsRefusedBeforeAnythingIsStored"/>: without it the
+    /// same assertions would hold over a processor that refused every request carrying a hint at all.
     /// </remarks>
     [Fact]
     public async Task AHintNamingTheEndUserWhoApproved_IsAccepted()
     {
         HostAuthenticates(Approved);
 
-        var result = await _processor.ProcessAsync(Request(Approved));
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(Approved));
 
         Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// The scope validator serves a request naming no scope with the client's default without rewriting the
+    /// request, so the stored grant reads whether the client named one from the request as it was sent.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task TheStoredGrant_SaysWhetherTheClientNamedAScope(bool namesScope, bool expected)
+    {
+        HostAuthenticates(Approved);
+        StoredRequest? stored = null;
+        _storage
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((TenantDefinition _, StoredRequest request, TimeSpan _) => stored = request)
+            .ReturnsAsync("auth-req-id");
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, namesScope: namesScope));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(expected, stored?.AuthorizedGrant.Context.ClientNamedNoScope);
     }
 
     /// <summary>
@@ -211,7 +315,7 @@ public class BackChannelAuthenticationRequestProcessorTests
     {
         HostAuthenticates(Approved);
 
-        var result = await _processor.ProcessAsync(Request(null));
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null));
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -231,6 +335,7 @@ public class BackChannelAuthenticationRequestProcessorTests
         HostAuthenticates(Approved);
 
         var result = await _processor.ProcessAsync(
+            SingleIssuer.Tenant,
             Request(null, RequestingSubject("somebody-else")));
 
         Assert.True(result.TryGetFailure(out var error));
@@ -241,7 +346,8 @@ public class BackChannelAuthenticationRequestProcessorTests
     /// A <c>claims</c> request naming the end user the host reaches is accepted.
     /// </summary>
     /// <remarks>
-    /// The control: without it the case above would hold over a processor that refused every request
+    /// The control: without it <see cref="AClaimsRequestNamingSomebodyElse_IsRefused"/> would hold over a
+    /// processor that refused every request
     /// carrying a claims parameter at all.
     /// </remarks>
     [Fact]
@@ -249,7 +355,7 @@ public class BackChannelAuthenticationRequestProcessorTests
     {
         HostAuthenticates(Approved);
 
-        var result = await _processor.ProcessAsync(Request(null, RequestingSubject(Approved)));
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, RequestingSubject(Approved)));
 
         Assert.True(result.TryGetSuccess(out _));
     }
@@ -267,6 +373,7 @@ public class BackChannelAuthenticationRequestProcessorTests
         HostAuthenticates(Approved);
 
         var result = await _processor.ProcessAsync(
+            SingleIssuer.Tenant,
             Request(Approved, RequestingSubject("somebody-else")));
 
         Assert.True(result.TryGetFailure(out var error));

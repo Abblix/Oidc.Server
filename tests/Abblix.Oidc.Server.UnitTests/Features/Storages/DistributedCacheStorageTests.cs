@@ -134,7 +134,7 @@ public class DistributedCacheStorageTests
         // Arrange
         var key = "test_key";
         var value = CreateTestData();
-        var absoluteExpiration = DateTimeOffset.UtcNow.AddHours(1);
+        var absoluteExpiration = TimeProvider.System.GetUtcNow().AddHours(1);
         var relativeExpiration = TimeSpan.FromMinutes(30);
         var slidingExpiration = TimeSpan.FromMinutes(10);
         var options = CreateStorageOptions(
@@ -162,7 +162,7 @@ public class DistributedCacheStorageTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(absoluteExpiration, capturedOptions!.AbsoluteExpiration);
+        Assert.Equal(absoluteExpiration, capturedOptions.AbsoluteExpiration);
         Assert.Equal(relativeExpiration, capturedOptions.AbsoluteExpirationRelativeToNow);
         Assert.Equal(slidingExpiration, capturedOptions.SlidingExpiration);
     }
@@ -177,7 +177,7 @@ public class DistributedCacheStorageTests
         // Arrange
         var key = "test_key";
         var value = CreateTestData();
-        var absoluteExpiration = DateTimeOffset.UtcNow.AddDays(1);
+        var absoluteExpiration = TimeProvider.System.GetUtcNow().AddDays(1);
         var options = CreateStorageOptions(absoluteExpiration: absoluteExpiration);
         DistributedCacheEntryOptions? capturedOptions = null;
 
@@ -200,7 +200,7 @@ public class DistributedCacheStorageTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(absoluteExpiration, capturedOptions!.AbsoluteExpiration);
+        Assert.Equal(absoluteExpiration, capturedOptions.AbsoluteExpiration);
     }
 
     /// <summary>
@@ -236,7 +236,7 @@ public class DistributedCacheStorageTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(relativeExpiration, capturedOptions!.AbsoluteExpirationRelativeToNow);
+        Assert.Equal(relativeExpiration, capturedOptions.AbsoluteExpirationRelativeToNow);
     }
 
     /// <summary>
@@ -272,7 +272,7 @@ public class DistributedCacheStorageTests
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(slidingExpiration, capturedOptions!.SlidingExpiration);
+        Assert.Equal(slidingExpiration, capturedOptions.SlidingExpiration);
     }
 
     /// <summary>
@@ -327,7 +327,7 @@ public class DistributedCacheStorageTests
 
     /// <summary>
     /// Verifies that SetAsync passes provided cancellation token to cache.
-    /// Cancellation tokens allow operations to be cancelled when needed.
+    /// Cancellation tokens allow operations to be canceled when needed.
     /// </summary>
     [Fact]
     public async Task SetAsync_WithProvidedToken_ShouldPassTokenToCache()
@@ -646,7 +646,7 @@ public class DistributedCacheStorageTests
 
     /// <summary>
     /// Verifies that RemoveAsync passes provided cancellation token to cache.
-    /// Cancellation tokens allow removal operations to be cancelled when needed.
+    /// Cancellation tokens allow removal operations to be canceled when needed.
     /// </summary>
     [Fact]
     public async Task RemoveAsync_WithProvidedToken_ShouldPassTokenToCache()
@@ -858,7 +858,7 @@ public class DistributedCacheStorageTests
         var bytes = new byte[] { 1, 2, 3 };
 
         var absoluteOptions = CreateStorageOptions(
-            absoluteExpiration: DateTimeOffset.UtcNow.AddHours(2));
+            absoluteExpiration: TimeProvider.System.GetUtcNow().AddHours(2));
 
         var relativeOptions = CreateStorageOptions(
             absoluteExpirationRelativeToNow: TimeSpan.FromMinutes(15));

@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+
+using Abblix.Oidc;
 using System.Security.Cryptography;
 using System.Text;
 using Abblix.Jwt;
@@ -23,13 +25,16 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.MinimalApi;
 using Abblix.Oidc.Server.MinimalApi.E2E.TestHost.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 // Load the embedded test license JWT before any OIDC service touches LicenseChecker.
-// The license is scoped to valid_issuers=["https://auth.example.com"] (TestConstants.Issuer)
-// with issuer_limit=1, so it physically cannot be lifted into a production host -
+// The license is scoped to valid_issuers=["https://auth.example.com", "http://auth.example.com"]
+// (TestConstants.Issuer, and its http form for a test of an http issuer) with issuer_limit=2,
+// so it physically cannot be lifted into a production host -
 // LicenseChecker.CheckIssuer throws on a non-matching issuer at startup.
 await LoadEmbeddedTestLicenseAsync();
 
@@ -49,24 +54,52 @@ builder.Services.AddIntrospection();
 builder.Services.AddCheckSession();
 builder.Services.AddDynamicClientRegistration();
 
+// Each logout channel is the host's own choice. This host serves both, because the suite drives both.
+builder.Services.AddFrontChannelLogout();
+builder.Services.AddBackChannelLogout();
+
 // AddOidcMinimalApi = AddOidcCore + the Minimal API transport, the exact counterpart of the MVC
 // host's AddOidcServices (= AddOidcCore + AddOidcMvc). The options block below is identical to the
 // MVC host's: the framework-neutral core is shared and only the transport registration differs.
-builder.Services.AddOidcServices(options =>
+builder.Services.AddOidcServices((options, services) =>
 {
-    options.Issuer = TestConstants.Issuer;
+    // The host serves one tenant at the issuer, built from settings a test may change for its own host.
+    options.Tenants.Add(services.GetRequiredService<IOptions<TestTenantSettings>>().Value.ToTenant());
+
+    // RFC 8628 device flow settings. These are nullable with no DI default; the device endpoint throws
+    // (HTTP 500) unless the host supplies them. VerificationUri must be https; DeviceCodeLength >= 16.
+    options.DeviceAuthorization = new DeviceAuthorizationOptions
+    {
+        VerificationUri = new Uri($"{TestConstants.Issuer}/device"),
+        CodeLifetime = TimeSpan.FromMinutes(15),
+        PollingInterval = TimeSpan.FromSeconds(5),
+        DeviceCodeLength = 32,
+        UserCodeLength = 8,
+    };
+
+    // What a dynamically registered client may reach is the host's grant rather than the client's choice
+    options.NewClientOptions = new NewClientOptions
+    {
+        AllowedResources = [new Uri(TestConstants.ApiResource)],
+        TokenExchangeAudiences = [TestConstants.ExchangeAudience],
+    };
+});
+
+builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
+{
+    tenant.Issuer = TestConstants.IssuerUri;
     // Every interaction destination, each distinct, so a test can tell which one the endpoint chose.
     // A host that configures only LoginUri leaves the other arms of the authorization response formatter
     // unreachable: they throw a loud "not configured" instead of redirecting, and the branch stays dark.
-    options.LoginUri = new Uri("/login", UriKind.Relative);
-    options.ConsentUri = new Uri("/consent", UriKind.Relative);
-    options.AccountSelectionUri = new Uri("/select-account", UriKind.Relative);
-    options.RegistrationUri = new Uri("/register", UriKind.Relative);
-    options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
+    tenant.LoginUri = new Uri("/login", UriKind.Relative);
+    tenant.ConsentUri = new Uri("/consent", UriKind.Relative);
+    tenant.AccountSelectionUri = new Uri("/select-account", UriKind.Relative);
+    tenant.RegistrationUri = new Uri("/register", UriKind.Relative);
+    tenant.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)];
     var secret = new ClientSecret { Sha512Hash = SHA512.HashData(Encoding.UTF8.GetBytes(TestConstants.ConfidentialClientSecret)) };
     var redirect = new Uri(TestConstants.RedirectUri, UriKind.Absolute);
 
-    options.Clients =
+    tenant.Clients =
     [
         Mint(TestConstants.ConfidentialClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: false),
         Mint(TestConstants.IdTokenRarClientId, secret, redirect, [TestConstants.PaymentInitiationType], idTokenRar: true),
@@ -81,10 +114,20 @@ builder.Services.AddOidcServices(options =>
         Mint(TestConstants.DPoPRequiredClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: true),
         // RFC 9449 opportunistic-binding client: proof optional; when present, AS binds the issued token.
         Mint(TestConstants.DPoPOpportunisticClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: false),
-        // RFC 9449 §5 public client: same-key MUST be presented on refresh.
+        // RFC 9449 section 5 public client: same-key MUST be presented on refresh.
         Mint(TestConstants.DPoPPublicClientId, secret, redirect, allowlist: null, idTokenRar: false, requireDPoP: false, isPublic: true),
+        // Its access tokens each name one resource, so a token request names the one of its grant it is for
+        Mint(TestConstants.SingleResourceClientId, secret, redirect, allowlist: null, idTokenRar: false) with
+        {
+            SingleResourceAccessTokens = true,
+        },
+        Mint(TestConstants.DefaultScopeCodeClientId, secret, redirect, allowlist: null, idTokenRar: false) with
+        {
+            DefaultScope = [TestConstants.ApiScope],
+            OfflineAccess = OfflineAccess.ConsentRequired,
+        },
 
-        // RFC 6749 §4.4 client_credentials client, used to verify that an RFC 8707 resource
+        // RFC 6749 section 4.4 client_credentials client, used to verify that an RFC 8707 resource
         // indicator reaches the issued access token's aud. This grant has no user-agent leg, so
         // no redirect_uri / PKCE is configured. This is the primary form-encoded POST path the
         // generated TokenRequest / ClientRequest BindAsync must drive correctly.
@@ -92,6 +135,51 @@ builder.Services.AddOidcServices(options =>
         {
             ClientSecrets = [secret],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+        },
+        // The raw value is kept because client_secret_jwt verifies the assertion with the secret itself
+        new ClientInfo(TestConstants.ClientSecretJwtClientId)
+        {
+            ClientSecrets = [new ClientSecret { Value = TestConstants.ClientSecretJwtSecret }],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+        },
+        new ClientInfo(TestConstants.DefaultScopeClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            AllowedScopes = [Scopes.Profile],
+            DefaultScope = [Scopes.Profile],
+        },
+        new ClientInfo(TestConstants.ScopeRequiredClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            AllowedScopes = [Scopes.Profile],
+            DefaultScope = [Scopes.Profile],
+            RequireScope = true,
+        },
+        new ClientInfo(TestConstants.AllowedResourceClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            AllowedResources = [new Uri(TestConstants.ApiResource)],
+        },
+        new ClientInfo(TestConstants.DefaultResourceScopeClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials, GrantTypes.DeviceAuthorization],
+            AllowedScopes = [TestConstants.ApiScope, Scopes.Profile],
+            DefaultScope = [TestConstants.ApiScope],
+        },
+        new ClientInfo(TestConstants.ClientSecretBasicClientId)
+        {
+            ClientSecrets = [secret],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             AllowedGrantTypes = [GrantTypes.ClientCredentials],
         },
 
@@ -121,23 +209,16 @@ builder.Services.AddOidcServices(options =>
         },
     ];
 
-    // A single registered RFC 8707 resource indicator. The AS only mints audience-restricted
+    // Two registered RFC 8707 resource indicators, one scope each. The AS only mints audience-restricted
     // tokens for a resource it knows; an unregistered target is rejected with invalid_target.
-    options.Resources =
+    tenant.Resources =
     [
-        new ResourceDefinition(new Uri(TestConstants.ApiResource)),
+        new ResourceDefinition(new Uri(TestConstants.ApiResource), new ScopeDefinition(TestConstants.ApiScope)),
+        new ResourceDefinition(
+            new Uri(TestConstants.OtherApiResource),
+            new ScopeDefinition(TestConstants.OtherApiScope)),
     ];
 
-    // RFC 8628 device flow settings. These are nullable with no DI default; the device endpoint throws
-    // (HTTP 500) unless the host supplies them. VerificationUri must be https; DeviceCodeLength >= 16.
-    options.DeviceAuthorization = new DeviceAuthorizationOptions
-    {
-        VerificationUri = new Uri($"{TestConstants.Issuer}/device"),
-        CodeLifetime = TimeSpan.FromMinutes(15),
-        PollingInterval = TimeSpan.FromSeconds(5),
-        DeviceCodeLength = 32,
-        UserCodeLength = 8,
-    };
     return;
 
     static ClientInfo Mint(
@@ -166,7 +247,9 @@ builder.Services.AddOidcServices(options =>
         PostLogoutRedirectUris = [new Uri(MinimalApiTestConstants.PostLogoutRedirectUri, UriKind.Absolute)],
         AuthorizationDetailsTypes = allowlist,
         ForceAuthorizationDetailsInIdentityToken = idTokenRar,
-        OfflineAccessAllowed = true,
+        // The host grants consent on its own, so it states the conditions that let its clients receive offline
+        // access without prompt=consent (OpenID Connect Core 1.0, section 11)
+        OfflineAccess = OfflineAccess.Allowed,
         RequireDPoP = requireDPoP,
     };
 });
@@ -199,7 +282,7 @@ builder.Services.AddDistributedMemoryCache();
 builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
-app.UseRouting();
+app.UseMultiTenancy();
 
 // Lift the X-Test-Consent-Override-AuthorizationDetails header into HttpContext.Items before
 // the OIDC pipeline reaches AutoConsentsProvider.
@@ -208,9 +291,9 @@ app.UseMiddleware<TestConsentOverrideMiddleware>();
 app.UseCors();
 app.UseAuthorization();
 
-// The Minimal API counterpart of MVC's app.MapControllers(): maps every OIDC endpoint as a route handler.
+// The Minimal API counterpart of MVC's app.MapOidcControllers(): maps every OIDC endpoint as a route handler.
 // The prefix is empty by default; the routing test sets it through configuration to verify MapOidcEndpoints(prefix).
-var routePrefix = app.Configuration[MinimalApiTestConstants.RoutePrefixConfigKey] ?? string.Empty;
+var routePrefix = app.Configuration[TestConstants.RoutePrefixConfigKey] ?? string.Empty;
 app.MapOidcEndpoints(routePrefix);
 
 // Test-only probe over IOidcEndpointResolver, the contract both transport adapters answer. The resolver needs

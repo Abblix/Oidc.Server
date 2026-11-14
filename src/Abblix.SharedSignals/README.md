@@ -2,7 +2,9 @@
 
 The [OpenID Shared Signals Framework 1.0](https://openid.net/specs/openid-sharedsignals-framework-1_0.html) for .NET: transmitter and receiver in one package, built on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents). A transmitter tells its receivers that something security-relevant happened to a shared subject - a session revoked, a credential compromised - and this package carries both ends of that conversation: the event streams, their management API, and delivery over push (RFC 8935) and poll (RFC 8936).
 
-[Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) explains what streams are for: the management questions OIDC client registration answered for Back-Channel Logout, and that nothing answers outside it.
+[A map of the Shared Signals layers and back-channel logout](https://www.abblix.com/en/docs/shared-signals-framework) explains what streams are for: the management questions OIDC client registration answered for Back-Channel Logout, and that nothing answers outside it.
+
+[A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) is that conversation running: two hosts, and a real push delivery between them.
 
 ## What is inside
 
@@ -72,6 +74,19 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
 });
 ```
 
+The call returns how many streams took the event and which streams it failed on, for example because the
+outbox store did not answer. An event that no stream takes is a normal outcome, not a failure.
+
+If you send events from a queue of your own, store `NotReached` with the entry and retry with the overload that
+takes those streams. It reads each stream again and runs every check, and the streams left out of the list do not
+get the event again. Some things to plan for:
+
+- Cap the retries. A failure that does not go away, such as a token that cannot be built, fails on every attempt.
+- A stream in the list can end up with two copies. If the outbox stored the event and then reported an error, a
+  timeout for example, the retry queues it again under a new `jti`, and the receiver cannot tell it is a duplicate.
+- A retried event is queued behind whatever that stream received in the meantime.
+- If the dispatch is cancelled, it throws, and the streams it had already reached keep the event.
+
 ## A receiver
 
 ```csharp
@@ -114,7 +129,7 @@ The framework carries events; their vocabularies ship as separate dictionary pac
 
 ## Part of the Abblix product family
 
-Abblix.SharedSignals sits on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents), which owns the token and the wire. Its ASP.NET Core routes come from [Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI) and its replica-safe outbox from [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis). The identity provider these signals originate from is [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
+Abblix.SharedSignals sits on [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents), which owns the token and the wire. Its ASP.NET Core routes come from [Abblix.SharedSignals.MinimalAPI](https://www.nuget.org/packages/Abblix.SharedSignals.MinimalAPI) and its replica-safe outbox from [Abblix.SharedSignals.Redis](https://www.nuget.org/packages/Abblix.SharedSignals.Redis). On a multi-tenant Abblix OIDC Server, [Abblix.OIDC.Server.SharedSignals](https://www.nuget.org/packages/Abblix.OIDC.Server.SharedSignals) makes the transmitter one per tenant. The identity provider these signals originate from is [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server).
 
 ## License
 

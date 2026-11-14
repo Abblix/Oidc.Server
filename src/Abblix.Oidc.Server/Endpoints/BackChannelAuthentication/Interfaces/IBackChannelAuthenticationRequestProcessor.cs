@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -25,9 +26,10 @@ public interface IBackChannelAuthenticationRequestProcessor
 	/// to a backchannel authentication request, including generating tokens, managing
 	/// session state, and any other necessary operations.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The validated backchannel authentication request containing the original request data
 	/// and associated client information.</param>
 	/// <returns>A task that returns a <see cref="Result{BackChannelAuthenticationSuccess, AuthError}"/> that contains the result of the processing,
 	/// such as an authentication request ID and the expires_in value.</returns>
-	Task<Result<BackChannelAuthenticationSuccess, OidcError>> ProcessAsync(ValidBackChannelAuthenticationRequest request);
+	Task<Result<BackChannelAuthenticationSuccess, OidcError>> ProcessAsync(TenantDefinition tenant, ValidBackChannelAuthenticationRequest request);
 }

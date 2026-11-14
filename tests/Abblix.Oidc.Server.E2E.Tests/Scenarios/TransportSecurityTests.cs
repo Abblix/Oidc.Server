@@ -32,7 +32,7 @@ public class TransportSecurityTests(TestFactory factory) : TestBase(factory)
         var httpClient = Factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
-            BaseAddress = new Uri("http://localhost"),
+            BaseAddress = new Uri("http://auth.example.com"),
         });
 
         // TestServer honours the request scheme, so Request.IsHttps is false here and [RequireHttps] redirects.

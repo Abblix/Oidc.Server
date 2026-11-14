@@ -46,7 +46,7 @@ public class EncryptedResponseAlgorithmsValidatorTests
     [Fact]
     public async Task ValidateAsync_WithNoAlgorithms_ShouldReturnNull()
     {
-        var result = await _validator.ValidateAsync(CreateContext(Request()));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(Request()));
         Assert.Null(result);
     }
 
@@ -67,7 +67,7 @@ public class EncryptedResponseAlgorithmsValidatorTests
             AuthorizationEncryptedResponseEnc = SupportedEnc,
         };
 
-        var result = await _validator.ValidateAsync(CreateContext(request));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
 
         Assert.Null(result);
     }
@@ -90,7 +90,7 @@ public class EncryptedResponseAlgorithmsValidatorTests
             _ => Request() with { AuthorizationEncryptedResponseAlg = unsupported },
         };
 
-        var result = await _validator.ValidateAsync(CreateContext(request));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -106,7 +106,7 @@ public class EncryptedResponseAlgorithmsValidatorTests
             AuthorizationEncryptedResponseEnc = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
         };
 
-        var result = await _validator.ValidateAsync(CreateContext(request));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);

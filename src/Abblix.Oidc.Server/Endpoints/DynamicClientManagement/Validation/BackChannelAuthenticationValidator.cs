@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
@@ -26,7 +27,7 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
     : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
-    public Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>
@@ -68,6 +69,15 @@ public class BackChannelAuthenticationValidator(IJsonWebTokenValidator jwtValida
                 return new OidcError(
                     ErrorCodes.InvalidClientMetadata,
                     "The specified token delivery mode is not supported");
+            // CIBA Core 1.0 sections 7.1 and 10.1 require the client to authenticate at both endpoints of the flow,
+            // which a client registered with the method "none" never does.
+            case {
+                BackChannelTokenDeliveryMode: not null,
+                TokenEndpointAuthMethod: ClientAuthenticationMethods.None,
+            }:
+                return new OidcError(
+                    ErrorCodes.InvalidClientMetadata,
+                    "A client using backchannel authentication must authenticate to the server");
         }
 
         // The VALUE, asked after the mode is settled and before a registration that names no mode can

@@ -8,12 +8,13 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Rejects client registration when any value in <c>grant_types</c> is not advertised as
-/// supported by this server, returning <c>invalid_client_metadata</c> per OIDC DCR §3.2.
+/// supported by this server, returning <c>invalid_client_metadata</c> per OIDC DCR section 3.2.
 /// Without this gate the registration would succeed and the client would only fail later at
 /// the token endpoint with <c>unsupported_grant_type</c>, or at the authorization endpoint
 /// for the <c>implicit</c> grant. Companion to <see cref="SupportedResponseTypeValidator"/>,
@@ -37,7 +38,7 @@ public class SupportedGrantTypeValidator(
         .ToHashSet(StringComparer.Ordinal);
 
     /// <inheritdoc />
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var unsupported = context.Request.GrantTypes
             .Where(grantType => !_supportedGrantTypes.Contains(grantType))

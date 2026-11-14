@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 
@@ -27,6 +28,7 @@ internal class UserDeviceAuthenticationHandlerStub : IUserDeviceAuthenticationHa
     /// <summary>
     /// Initiates the back-channel authentication process for a user’s device.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">
     /// A validated <see cref="ValidBackChannelAuthenticationRequest"/> containing the CIBA parameters
     /// (e.g. client ID, login hint, scope, etc.).
@@ -55,7 +57,7 @@ internal class UserDeviceAuthenticationHandlerStub : IUserDeviceAuthenticationHa
     ///   </item>
     /// </list>
     /// </exception>
-    public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(ValidBackChannelAuthenticationRequest request)
+    public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(TenantDefinition tenant, ValidBackChannelAuthenticationRequest request)
     {
         throw new NotImplementedException(
             "CIBA (Client-Initiated Backchannel Authentication) is not configured yet. " +

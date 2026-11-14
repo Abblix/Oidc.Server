@@ -73,7 +73,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], nonce: ValidNonce);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -90,13 +90,13 @@ public class NonceValidatorTests
         // Arrange
         var reuseDetector = new Mock<IAuthorizationValueReuseDetector>();
         reuseDetector
-            .Setup(d => d.IsReusedAsync(ClientId, It.IsAny<string>(), ValidNonce))
+            .Setup(d => d.IsReusedAsync(TestTenant.Matched, ClientId, It.IsAny<string>(), ValidNonce))
             .ReturnsAsync(true);
         var validator = new NonceValidator(reuseDetector.Object);
         var context = CreateContext([ResponseTypes.Code], nonce: ValidNonce);
 
         // Act
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -114,7 +114,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], nonce: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -136,7 +136,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.Code, ResponseTypes.Token], nonce: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -154,7 +154,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], nonce: string.Empty);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -173,7 +173,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.Code], nonce: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -191,7 +191,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.Code], nonce: ValidNonce);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -209,7 +209,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.Token], nonce: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -227,7 +227,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.Code, ResponseTypes.IdToken], nonce: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -245,7 +245,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.Code, ResponseTypes.IdToken], nonce: ValidNonce);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -263,7 +263,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.Code, ResponseTypes.Token, ResponseTypes.IdToken], nonce: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -281,7 +281,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.Code, ResponseTypes.Token, ResponseTypes.IdToken], nonce: ValidNonce);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -299,7 +299,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.IdToken, ResponseTypes.Token], nonce: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -317,7 +317,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.IdToken, ResponseTypes.Token], nonce: ValidNonce);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -335,7 +335,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], nonce: "   ");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -354,7 +354,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], nonce: longNonce);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -373,7 +373,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], nonce: specialNonce);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -392,7 +392,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], nonce: unicodeNonce);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -410,7 +410,7 @@ public class NonceValidatorTests
         var context = CreateContext(["ID_TOKEN"], nonce: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -428,7 +428,7 @@ public class NonceValidatorTests
         var context = CreateContext(["custom_id_token"], nonce: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -448,7 +448,7 @@ public class NonceValidatorTests
         context.ValidRedirectUri = redirectUri;
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -469,7 +469,7 @@ public class NonceValidatorTests
         context.ResponseMode = responseMode;
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -488,7 +488,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], nonce: "a");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -506,7 +506,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.Token, ResponseTypes.IdToken], nonce: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -525,7 +525,7 @@ public class NonceValidatorTests
         var context = CreateContext([], nonce: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result); // No id_token, so no nonce required
@@ -543,7 +543,7 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], nonce: "1234567890");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -562,9 +562,55 @@ public class NonceValidatorTests
         var context = CreateContext([ResponseTypes.IdToken], nonce: base64Nonce);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 5.2.2.2, which Part 2 section 5.2.2 takes in: "If the client requests the openid scope,
+    /// the authorization server shall require the nonce parameter". The condition is the scope, not the response
+    /// type, so a client held to FAPI 1.0 Advanced is refused a code request naming openid without a nonce, which
+    /// OpenID Connect Core alone lets through; one not naming openid, or carrying a nonce, passes.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, Scopes.OpenId, null, ErrorCodes.InvalidRequest)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, Scopes.OpenId, ValidNonce, null)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, Scopes.Profile, null, null)]
+    [InlineData(null, Scopes.OpenId, null, null)]
+    public async Task ValidateAsync_Fapi1Advanced_RequiresANonceWithTheOpenIdScope(
+        ClientSecurityProfile? profile, string scope, string? nonce, string? expectedError)
+    {
+        var context = CreateContext([ResponseTypes.Code], nonce);
+        context.Request = context.Request with { Scope = [scope] };
+        context.ClientInfo.SecurityProfile = profile;
+        context.ClientInfo.AllowedScopes = [scope];
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
+    /// The FAPI 1.0 Part 1 section 5.2.2.2 condition is that "the client requests the openid scope": a request naming
+    /// no scope is not asked for a nonce although the default it is served carries openid, on its first pass and on its
+    /// way back from a page, where the request carries the served scope.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ValidateAsync_Fapi1Advanced_ADefaultOpenIdScope_AsksNoNonce(bool comingBack)
+    {
+        var context = CreateContext([ResponseTypes.Code], nonce: null);
+        context.Request = context.Request with
+        {
+            Scope = comingBack ? [Scopes.OpenId] : [],
+            ClientNamedNoScope = comingBack,
+        };
+        context.ClientInfo.SecurityProfile = ClientSecurityProfile.Fapi1Advanced;
+        context.ClientInfo.DefaultScope = [Scopes.OpenId];
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 }

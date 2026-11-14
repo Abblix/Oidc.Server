@@ -17,7 +17,7 @@ namespace Abblix.Oidc.Server.Features.NoneFlow;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Enables the <c>none</c> response type (OAuth 2.0 Multiple Response Type Encoding Practices §4),
+    /// Enables the <c>none</c> response type (OAuth 2.0 Multiple Response Type Encoding Practices section 4),
     /// which authorizes a request without returning any code or token - the authorization endpoint
     /// responds with only <c>state</c> and, when advertised, <c>iss</c> (RFC 9207).
     /// </summary>

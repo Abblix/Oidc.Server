@@ -54,7 +54,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
             OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint),
             new Dictionary<string, string>
             {
-                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
                 [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
                 [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
                 [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
@@ -68,7 +68,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         Assert.Equal(3, responseJwt.Split('.').Length);
         var payload = OidcFlows.DecodeJwtPayload(responseJwt);
 
-        // JARM §2.1 mandated claims, plus the authorization response packed inside the JWT (not on the wire).
+        // JARM section 2.1 mandated claims, plus the authorization response packed inside the JWT (not on the wire).
         Assert.Equal(
             discovery[ConfigurationResponse.Parameters.Issuer]!.GetValue<string>().TrimEnd('/'),
             payload[IanaClaimTypes.Iss]!.GetValue<string>().TrimEnd('/'));
@@ -80,7 +80,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         var code = payload[ResponseParameters.Code]!.GetValue<string>();
         var token = await OidcFlows.ExchangeCodeAsync(
             client, discovery, code, verifier, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret);
-        Assert.NotNull(token[ResponseParameters.AccessToken]);
+        Assert.NotNull(token[TokenResponse.Parameters.AccessToken]);
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
 
         response.EnsureSuccessStatusCode();
 
-        // RFC 6749 §5.1: the token response MUST carry Cache-Control: no-store. The adapter applies it through
+        // RFC 6749 section 5.1: the token response MUST carry Cache-Control: no-store. The adapter applies it through
         // OidcResults.WithNoCacheHeaders rather than MVC response filters.
         Assert.True(response.Headers.CacheControl?.NoStore,
             $"expected Cache-Control: no-store, got '{response.Headers.CacheControl}'");
@@ -119,7 +119,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         var response = await client.GetAsync(OidcFlows.BuildQuery(
             OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), new Dictionary<string, string>
             {
-                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
                 [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
                 [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
                 [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
@@ -137,7 +137,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         Assert.Contains(TestConstants.RedirectUri, html);
         Assert.Contains(state, html);
 
-        // The auto-submit page must never be framed by another origin (clickjacking defense, RFC 9700 §4.16).
+        // The auto-submit page must never be framed by another origin (clickjacking defense, RFC 9700 section 4.16).
         Assert.True(response.Headers.TryGetValues("Content-Security-Policy", out var csp));
         Assert.Contains("frame-ancestors 'none'", csp);
         Assert.True(response.Headers.TryGetValues("X-Frame-Options", out var xFrameOptions));
@@ -184,11 +184,11 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
             TestContext.Current.CancellationToken);
         var registered = JsonNode.Parse(
             await registerResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        var clientId = registered[ClientRequest.Parameters.ClientId]!.GetValue<string>();
-        var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>();
 
         var accessToken = (await client.AuthCodeTokensViaParAsync(discovery, clientId, clientSecret))
-            [ResponseParameters.AccessToken]!.GetValue<string>();
+            [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var introspectionEndpoint = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.IntrospectionEndpoint);
 
         // The +jwt media type yields a 3-segment signed JWT carried under that content type.
@@ -247,7 +247,7 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         Assert.True(response.Headers.TryGetValues(HeaderNames.ContentSecurityPolicy, out var cspValues),
             "check_session response is missing the Content-Security-Policy header");
         var match = Regex.Match(
-            string.Join(' ', cspValues!), "nonce-([A-Za-z0-9+/=]+)", RegexOptions.None, TimeSpan.FromSeconds(1));
+            string.Join(' ', cspValues), "nonce-([A-Za-z0-9+/=]+)", RegexOptions.None, TimeSpan.FromSeconds(1));
         Assert.True(match.Success, "no nonce in the Content-Security-Policy header");
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         return (match.Groups[1].Value, body);

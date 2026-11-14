@@ -84,7 +84,7 @@ public class EcdhEsKeyAgreementTests
 	}
 
 	/// <summary>
-	/// RFC 7518 §4.6: in Direct Key Agreement mode the JWE Encrypted Key is the empty octet
+	/// RFC 7518 section 4.6: in Direct Key Agreement mode the JWE Encrypted Key is the empty octet
 	/// sequence - a non-empty value signals a malformed or tampered token and must be rejected.
 	/// </summary>
 	[Fact]
@@ -100,7 +100,24 @@ public class EcdhEsKeyAgreementTests
 	}
 
 	/// <summary>
-	/// RFC 7518 §4.6.2: when both PartyUInfo and PartyVInfo are present they must be distinct -
+	/// 'apu' and 'epk' come from the token, so a malformed one is a refusal of it rather than a fault: RFC 7516
+	/// section 11.5 has the caller answer it like any key that does not open.
+	/// </summary>
+	[Theory]
+	[InlineData(ExternalKeyDecryptorTests.MalformedAgreementPartyUInfo)]
+	[InlineData(ExternalKeyDecryptorTests.MalformedEphemeralKey)]
+	public void TryDecryptKey_AMalformedHeader_Fails(string malformed)
+	{
+		var header = CreateAppendixCHeader();
+		ExternalKeyDecryptorTests.Malform(header, malformed);
+
+		var encryptor = new EcdhEsKeyEncryptor(EncryptionAlgorithms.KeyManagement.EcdhEs, ServiceProvider);
+
+		Assert.False(encryptor.TryDecryptKey(header, CreateAppendixCRecipientKey(), [], out _));
+	}
+
+	/// <summary>
+	/// RFC 7518 section 4.6.2: when both PartyUInfo and PartyVInfo are present they must be distinct -
 	/// equal values collapse the producer and recipient identities the KDF is meant to bind.
 	/// </summary>
 	[Fact]
@@ -137,7 +154,7 @@ public class EcdhEsKeyAgreementTests
 		var foreignCurveKey = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P384, SigningAlgorithms.ES384);
 
 		var header = CreateAppendixCHeader();
-		header.EphemeralPublicKey = (EllipticCurveJsonWebKey)foreignCurveKey.Sanitize(includePrivateKeys: false);
+		header.SetEphemeralPublicKey(foreignCurveKey.Sanitize(includePrivateKeys: false));
 
 		var encryptor = new EcdhEsKeyEncryptor(EncryptionAlgorithms.KeyManagement.EcdhEs, ServiceProvider);
 
@@ -186,12 +203,15 @@ public class EcdhEsKeyAgreementTests
 
 		// Assert: 'epk' carries a public-only EC key on the recipient's curve; encrypted key is empty
 		Assert.Empty(encryptedKey);
-		var ephemeralKey = Assert.IsType<EllipticCurveJsonWebKey>(header.EphemeralPublicKey);
+		Assert.True(header.TryReadEphemeralPublicKey(out var epk));
+		var ephemeralKey = Assert.IsType<EllipticCurveJsonWebKey>(epk);
 		Assert.Equal(recipientKey.Curve, ephemeralKey.Curve);
 		Assert.True(ephemeralKey.HasPublicKey);
 		Assert.False(ephemeralKey.HasPrivateKey);
-		Assert.False(((JsonObject)header.Json[JwtClaimTypes.EphemeralPublicKey]!)
-			.ContainsKey(JsonWebKeyPropertyNames.PrivateExponent));
+		// The wire form a recipient reads: the ephemeral key's own public members and nothing else
+		Assert.Equal(
+			["crv", "kty", "x", "y"],
+			((JsonObject)header.Json[JwtClaimTypes.EphemeralPublicKey]!).Select(member => member.Key).Order());
 
 		// Assert: the recipient re-derives exactly the same CEK from the published header
 		Assert.True(encryptor.TryDecryptKey(header, recipientKey, encryptedKey, out var rederivedKey));
@@ -281,7 +301,7 @@ public class EcdhEsKeyAgreementTests
 		var creator = ServiceProvider.GetRequiredService<IJsonWebTokenCreator>();
 		var jwe = await creator.IssueAsync(token, signingKey, recipientKey, keyManagementAlgorithm, contentEncryption);
 
-		// Assert: JWE structure per RFC 7518 §4.6 - the encrypted key is empty exactly in direct mode
+		// Assert: JWE structure per RFC 7518 section 4.6 - the encrypted key is empty exactly in direct mode
 		var parts = jwe.Split('.');
 		Assert.Equal(5, parts.Length);
 		Assert.Equal(emptyEncryptedKey, parts[1].Length == 0);
@@ -318,6 +338,7 @@ public class EcdhEsKeyAgreementTests
 
 	private static ValidationParameters CreateValidationParameters(JsonWebKey decryptionKey, JsonWebKey signingKey) => new()
 	{
+		TokenTypes = TokenTypePolicy.CheckedByCaller,
 		ValidateAudience = aud => Task.FromResult(aud.Contains("test-audience")),
 		ValidateIssuer = iss => Task.FromResult(iss == "test-issuer"),
 		ResolveTokenDecryptionKeys = _ => decryptionKey.ToAsync(),

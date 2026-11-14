@@ -10,8 +10,8 @@ namespace Abblix.Jwt;
 /// <summary>
 /// Named EventId constants for every <c>[LoggerMessage]</c> in this assembly,
 /// grouped into nested static classes per feature area. Refer to events as
-/// <c>LogEvents.Jwt.NoSigningKeys</c> from the attribute. See <c>LOGGING.md</c>
-/// at the repository root for the canonical range allocation and authoring rules.
+/// <c>LogEvents.Jwt.NoSigningKeys</c> from the attribute. The ranges of every package are listed in the
+/// allocation of Abblix.Oidc.Server, since the packages log into one process.
 /// </summary>
 internal static class LogEvents
 {
@@ -24,8 +24,9 @@ internal static class LogEvents
 
         public const int NoSigningKeys = Base + 1;
         public const int NoMatchingKey = Base + 2;
-        public const int RsaEncryptionFailed = Base + 3;
         public const int KeyBelowTheFloor = Base + 4;
+        public const int NoDecryptionKey = Base + 5;
+        public const int NoDecryptionKeyOpened = Base + 6;
     }
 
     /// <summary>

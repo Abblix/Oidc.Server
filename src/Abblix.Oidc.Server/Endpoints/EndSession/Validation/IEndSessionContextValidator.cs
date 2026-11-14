@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
@@ -21,6 +22,7 @@ public interface IEndSessionContextValidator
 	/// <summary>
 	/// Performs this validator's check against the shared context.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="context">
 	/// Mutable validation context shared with subsequent steps; this validator may
 	/// populate fields (such as resolved <c>ClientInfo</c> or parsed <c>id_token_hint</c>).
@@ -28,5 +30,5 @@ public interface IEndSessionContextValidator
 	/// <returns>
 	/// <c>null</c> if the request passes this step, otherwise the error to surface.
 	/// </returns>
-	Task<OidcError?> ValidateAsync(EndSessionValidationContext context);
+	Task<OidcError?> ValidateAsync(TenantDefinition tenant, EndSessionValidationContext context);
 }

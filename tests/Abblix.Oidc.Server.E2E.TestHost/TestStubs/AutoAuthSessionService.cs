@@ -32,7 +32,8 @@ public sealed class AutoAuthSessionService(TimeProvider clock) : IAuthSessionSer
 
     public Task<AuthSession?> AuthenticateAsync() => Task.FromResult<AuthSession?>(_session);
 
-    public Task SignInAsync(AuthSession authSession) => Task.CompletedTask;
+    public Task<AuthSessionSignInResult> SignInAsync(AuthSession authSession)
+        => Task.FromResult(new AuthSessionSignInResult(authSession, []));
 
     public Task SignOutAsync() => Task.CompletedTask;
 }

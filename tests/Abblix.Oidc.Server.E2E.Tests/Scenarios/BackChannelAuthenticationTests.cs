@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -30,7 +31,6 @@ using CibaParameters = Abblix.Oidc.Server.Model.BackChannelAuthenticationRequest
 using CibaResponse = Abblix.Oidc.Server.Model.BackChannelAuthenticationSuccess.Parameters;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using RegistrationResponse = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -44,7 +44,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// a separate device, then polls the token endpoint for the result. Nothing in the flow carries a
 /// redirect_uri, a browser session or a user-present code, so the guarantees a normal authorization-code
 /// flow gets for free from the user agent have to be enforced by the server on its own. That is where the
-/// tests below sit.
+/// tests in this class sit.
 ///
 /// The host already opts into the endpoint, but no test drove it. The files elsewhere in the suite that
 /// mention "backchannel" are about back-channel logout, an unrelated feature.
@@ -55,7 +55,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// host with a handler that accepts the user - so the request lands in storage as Pending, exactly the state
 /// a real deployment sits in while it waits for the user to answer their phone.
 /// </remarks>
-public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(factory)
+public partial class BackChannelAuthenticationTests(TestFactory factory) : TestBase(factory)
 {
     [Fact]
     public async Task An_auth_req_id_is_not_redeemable_before_the_user_authenticates()
@@ -74,11 +74,11 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         var body = await ReadJsonAsync(response);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.AuthorizationPending, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.AuthorizationPending, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
 
         // The half that matters: an error code alongside a usable token would be the breach this test exists
         // to catch.
-        Assert.Null(body[ResponseParameters.AccessToken]);
+        Assert.Null(body[TokenResponse.Parameters.AccessToken]);
     }
 
     [Fact]
@@ -101,8 +101,8 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         var body = await ReadJsonAsync(response);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidGrant, body[ResponseParameters.Error]!.GetValue<string>());
-        Assert.Null(body[ResponseParameters.AccessToken]);
+        Assert.Equal(ErrorCodes.InvalidGrant, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+        Assert.Null(body[TokenResponse.Parameters.AccessToken]);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
 
         var body = await ReadJsonAsync(response);
         Assert.False(response.IsSuccessStatusCode, $"a hintless request must not be accepted: {body}");
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
         Assert.Null(body[CibaResponse.AuthenticationRequestId]);
     }
 
@@ -152,7 +152,10 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
 
         var body = await ReadJsonAsync(response);
         Assert.False(response.IsSuccessStatusCode, $"an unauthenticated request must not be accepted: {body}");
-        Assert.Equal(ErrorCodes.UnauthorizedClient, body[ResponseParameters.Error]!.GetValue<string>());
+
+        // CIBA Core 1.0 section 13 lists invalid_client, "Client authentication failed", under HTTP 401.
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClient, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
         Assert.Null(body[CibaResponse.AuthenticationRequestId]);
     }
 
@@ -176,7 +179,7 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
 
         var body = await ReadJsonAsync(response);
         Assert.False(response.IsSuccessStatusCode, $"an unknown auth_req_id must not be accepted: {body}");
-        Assert.Null(body[ResponseParameters.AccessToken]);
+        Assert.Null(body[TokenResponse.Parameters.AccessToken]);
     }
 
     [Fact]
@@ -230,11 +233,11 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         // Token - sit beside each other with nothing tying the first to the last, and a client following
         // its own MUST to check that this claim matches the identifier it asked about cannot accept the
         // notification at all.
-        //
+        var idToken = DecodeJwtPayload(payload[BackChannelPushNotificationRequest.Parameters.IdToken]!.GetValue<string>());
+
         // Read out of the delivered ID Token rather than out of storage, because storage would prove
         // only that the value was known. Asserted as the literal claim name a client reads off the wire,
         // for the reason the refusal tests give: comparing a constant with itself lets a rename pass.
-        var idToken = DecodeJwtPayload(payload["id_token"]!.GetValue<string>());
         Assert.Equal(
             authRequestId,
             idToken["urn:openid:params:jwt:claim:auth_req_id"]!.GetValue<string>());
@@ -251,7 +254,7 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         // succeeded, leaves every test in this file green and only the unit test red.
         using var scope = host.Services.CreateScope();
         var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
-        Assert.Null(await storage.TryGetAsync(authRequestId));
+        Assert.Null(await storage.TryGetAsync(TestTenant.Of(host.Services), authRequestId));
     }
 
     [Fact]
@@ -271,7 +274,7 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         await CompleteAsync(host, authRequestId, ApprovedDetail);
 
         var delivered = Assert.Single(deliveries.Received);
-        var granted = ReadAuthorizationDetails(delivered.Payload["access_token"]!.GetValue<string>());
+        var granted = ReadAuthorizationDetails(delivered.Payload[BackChannelPushNotificationRequest.Parameters.AccessToken]!.GetValue<string>());
 
         var entry = Assert.Single(granted);
         Assert.Equal(TestConstants.PaymentInitiationType, entry!["type"]!.GetValue<string>());
@@ -282,16 +285,18 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
     }
 
     [Fact]
-    public async Task A_push_grant_the_per_type_validator_refuses_delivers_nothing()
+    public async Task A_push_grant_the_per_type_validator_refuses_delivers_an_error_and_no_tokens()
     {
         // The per-type gate for push exists because a push client is never judged at the token endpoint,
         // where the other two modes are. A gate that refuses and delivers anyway, or that lets a grant the
         // validator rejected through, is invisible to a unit test whose fixture could not be delivered to
-        // in the first place. Here a token either arrives or it does not.
+        // in the first place. Here a token either arrives or it does not - and what does arrive is the error
+        // CIBA Core 1.0 section 12 has a push client told, so it is not left waiting for the request to
+        // expire.
         //
-        // The narrowing is one a host got WRONG rather than a malicious one: the entry keeps the type it
-        // asked for and loses the amount, which is the shape the type comparison structurally cannot see
-        // and the reason the per-type validator is asked at all.
+        // The grant keeps the type the request asked for and raises the amount, which is the shape the type
+        // comparison structurally cannot see and the reason the per-type validator is asked at all, handed the
+        // requested entries to hold it to.
         var deliveries = new NotificationRecorder();
         await using var host = CreateCibaHost(deliveries);
         var client = CreateClientFor(host);
@@ -301,8 +306,8 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         var authRequestId = await InitiateAsync(client, discovery, ciba, RequestedDetails, NotificationToken);
 
         // What the request ASKED for has to be on it. With nothing requested, the type comparison one
-        // step earlier refuses first, removes the request and delivers nothing - the identical observable
-        // state, reached without the per-type validator ever being asked, and this rules that out.
+        // step earlier refuses first, removes the request and delivers the same error - the identical
+        // observable state, reached without the per-type validator ever being asked, and this rules that out.
         //
         // It rules out only that. The same comparison also refuses a granted type absent from a non-empty
         // baseline, and no assertion here separates the two refusals: they differ in the log line and in
@@ -310,15 +315,41 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         // has no reason to fire - but that is an argument, not a measurement.
         await AssertTheRequestCarriesWhatWasAskedFor(host, authRequestId);
 
-        await CompleteAsync(host, authRequestId, DetailWithoutAmount);
+        await CompleteAsync(host, authRequestId, DetailWithAHigherAmount);
 
-        Assert.Empty(deliveries.Received);
+        var delivered = Assert.Single(deliveries.Received);
+        Assert.Equal(ErrorCodes.AccessDenied, delivered.Payload[BackChannelPushErrorNotificationRequest.Parameters.Error]!.GetValue<string>());
+        Assert.Equal(authRequestId, delivered.Payload[BackChannelPushErrorNotificationRequest.Parameters.AuthReqId]!.GetValue<string>());
+        Assert.False(delivered.Payload.ContainsKey(BackChannelPushNotificationRequest.Parameters.AccessToken));
 
         // And the request does not sit there afterwards. A push client never polls, so a refused request
         // left in storage is an orphan nobody reads until it expires.
         using var scope = host.Services.CreateScope();
         var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
-        Assert.Null(await storage.TryGetAsync(authRequestId));
+        Assert.Null(await storage.TryGetAsync(TestTenant.Of(host.Services), authRequestId));
+    }
+
+    [Fact]
+    public async Task A_push_grant_no_end_user_could_produce_tells_the_client_the_transaction_failed()
+    {
+        // An entry without its amount is no end user's answer but a fault in the host's code, which the
+        // validator throws. The request is already taken by then and a push client never polls, so it is
+        // told the transaction failed, and the fault reaches the host that completed the request.
+        var deliveries = new NotificationRecorder();
+        await using var host = CreateCibaHost(deliveries);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var ciba = await RegisterPushCibaClientAsync(client, discovery);
+
+        var authRequestId = await InitiateAsync(client, discovery, ciba, RequestedDetails, NotificationToken);
+        await AssertTheRequestCarriesWhatWasAskedFor(host, authRequestId);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CompleteAsync(host, authRequestId, DetailWithoutAmount));
+
+        var delivered = Assert.Single(deliveries.Received);
+        Assert.Equal(ErrorCodes.TransactionFailed, delivered.Payload[BackChannelPushErrorNotificationRequest.Parameters.Error]!.GetValue<string>());
+        Assert.False(delivered.Payload.ContainsKey(BackChannelPushNotificationRequest.Parameters.AccessToken));
     }
 
     /// <summary>The identifier the client passes to name the end-user to be contacted.</summary>
@@ -344,11 +375,18 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         """[{"type":"payment_initiation","actions":["status"],"instructedAmount":{"currency":"EUR","amount":"10.00"}}]""";
 
     /// <summary>
-    /// A narrowing of <see cref="RequestedDetails"/> that keeps the type and drops the amount, which is what
-    /// <c>PaymentInitiationValidator</c> refuses.
+    /// <see cref="RequestedDetails"/> without its amount, which no end user could produce and
+    /// <c>PaymentInitiationValidator</c> throws for.
     /// </summary>
     private const string DetailWithoutAmount =
         """[{"type":"payment_initiation","actions":["initiate"]}]""";
+
+    /// <summary>
+    /// <see cref="RequestedDetails"/> with the amount raised, which <c>PaymentInitiationValidator</c> refuses as
+    /// wider than what was requested.
+    /// </summary>
+    private const string DetailWithAHigherAmount =
+        """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"900.00"}}]""";
 
     private sealed record CibaClient(string ClientId, string ClientSecret);
 
@@ -526,7 +564,7 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
         using var scope = host.Services.CreateScope();
         var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
 
-        var stored = await storage.TryGetAsync(authenticationRequestId);
+        var stored = await storage.TryGetAsync(TestTenant.Of(host.Services), authenticationRequestId);
         Assert.NotNull(stored);
         Assert.NotEmpty(stored.RequestedAuthorizationDetails ?? []);
     }
@@ -545,10 +583,11 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
     private static async Task CompleteAsync(
         WebApplicationFactory<Program> host, string authenticationRequestId, string grantedDetails)
     {
+        using var tenant = TestTenant.Enter(host.Services);
         using var scope = host.Services.CreateScope();
         var storage = scope.ServiceProvider.GetRequiredService<IBackChannelRequestStorage>();
 
-        var stored = await storage.TryGetAsync(authenticationRequestId);
+        var stored = await storage.TryGetAsync(TestTenant.Of(host.Services), authenticationRequestId);
         Assert.NotNull(stored);
 
         var session = new AuthSession(
@@ -567,7 +606,7 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
 
         await scope.ServiceProvider
             .GetRequiredService<IAuthenticationCompletionHandler>()
-            .CompleteAsync(authenticationRequestId, completed, TimeSpan.FromMinutes(5));
+            .CompleteAsync(TestTenant.Of(host.Services), authenticationRequestId, completed, TimeSpan.FromMinutes(5));
     }
 
     private static JsonArray ReadAuthorizationDetails(string accessToken)
@@ -620,7 +659,10 @@ public class BackChannelAuthenticationTests(TestFactory factory) : TestBase(fact
     /// </summary>
     private sealed class ReachableUserDeviceHandler(TimeProvider clock) : IUserDeviceAuthenticationHandler
     {
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1172",
+            Justification = "The parameters belong to the interface; this stand-in answers the same way at every tenant.")]
         public Task<Result<AuthSession, OidcError>> InitiateAuthenticationAsync(
+            TenantDefinition tenant,
             ValidBackChannelAuthenticationRequest request)
             => Task.FromResult<Result<AuthSession, OidcError>>(new AuthSession(
                 Subject: LoginHint,

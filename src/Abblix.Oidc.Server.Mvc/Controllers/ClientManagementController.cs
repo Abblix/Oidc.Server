@@ -11,6 +11,7 @@ using System.Net.Http.Headers;
 using System.Net.Mime;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Filters;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Abblix.Oidc.Server.Mvc.Model;
@@ -30,13 +31,16 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// and removing clients. This is crucial for systems where client applications need to be managed programmatically without manual intervention.
 /// For detailed protocol specifications, refer to <see href="https://openid.net/specs/openid-connect-registration-1_0.html"/>.
 /// </remarks>
-[ApiController]
 [ReturnsOidcInvalidRequest]
+[ReturnsLibraryRefusalStatus]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [SkipStatusCodePages]
-[RequireHttps]
-[EnabledBy(OidcEndpoints.RegisterClient)]
-[SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
+[RequireHttpsUnlessHttpIssuer]
+[RequireHost]
+[AwaitTenantLoad]
+[RequireTenant]
+[OidcRouteValue]
+[SuppressMessage("SonarLint", "S6967:ModelState.IsValid should be checked in controller actions", Justification = "ReturnsOidcInvalidRequest answers an invalid model state before any action runs")]
 public class ClientManagementController : ControllerBase
 {
     /// <summary>
@@ -45,6 +49,7 @@ public class ClientManagementController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing client registration requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client registration response.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="request">The details of the client registration request.</param>
     /// <param name="authorizationHeader">The optional initial access token from the Authorization header,
     /// used to authenticate the registration request per RFC 7591 Section 3.</param>
@@ -55,13 +60,16 @@ public class ClientManagementController : ControllerBase
     /// to register dynamically. It validates the request, processes it if valid, and formats a response that
     /// can include either the successful registration details or an error message.
     /// </remarks>
-    [HttpPost(Path.Register)]
+    [HttpPost]
+    [ActionName(nameof(RegisterClientAsync))]
     [Produces(MediaTypeNames.Application.Json)]
     [Consumes(MediaTypeNames.Application.Json)]
     [LimitsRegistrationRequestSize]
+    [RefusesUnreadableClientMetadata]
     public async Task<ActionResult> RegisterClientAsync(
         [FromServices] IRegisterClientHandler handler,
         [FromServices] IRegisterClientResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         [FromBody] Core.ClientRegistrationRequest request,
         [FromHeader(Name = HttpRequestHeaders.Authorization)] AuthenticationHeaderValue? authorizationHeader)
     {
@@ -69,7 +77,7 @@ public class ClientManagementController : ControllerBase
         // Authorization header is the only value the body cannot carry.
         var clientRegistrationRequest = request with { AuthorizationHeader = authorizationHeader };
 
-        var response = await handler.HandleAsync(clientRegistrationRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), clientRegistrationRequest);
         return await formatter.FormatResponseAsync(clientRegistrationRequest, response);
     }
 
@@ -78,6 +86,7 @@ public class ClientManagementController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing client information requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client information response.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="authorizationRequest">The client authorization request containing client_id and registration_access_token.</param>
     /// <returns>A task that returns an action result that includes
     /// the client information response.</returns>
@@ -86,15 +95,17 @@ public class ClientManagementController : ControllerBase
     /// Per RFC 7592 Section 2.1, the endpoint URL format is /connect/register/{client_id}.
     /// The registration_access_token is passed via Authorization: Bearer header.
     /// </remarks>
-    [HttpGet(Path.RegisterClient)]
+    [HttpGet]
+    [ActionName(nameof(ReadClientAsync))]
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> ReadClientAsync(
         [FromServices] IReadClientHandler handler,
         [FromServices] IReadClientResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         ClientAuthorizationRequest authorizationRequest)
     {
         Core.ClientRequest coreClientRequest = authorizationRequest;
-        var response = await handler.HandleAsync(coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreClientRequest);
         return await formatter.FormatResponseAsync(coreClientRequest, response);
     }
 
@@ -103,6 +114,7 @@ public class ClientManagementController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing client update requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client update response.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="authorizationRequest">The client authorization request containing client_id and registration_access_token.</param>
     /// <param name="registrationRequest">The updated client metadata from request body.</param>
     /// <returns>A task that returns an action result with the updated client configuration.</returns>
@@ -113,20 +125,23 @@ public class ClientManagementController : ControllerBase
     /// The request body must contain all client metadata including the client_id and client_secret.
     /// Returns 200 OK with updated configuration on success.
     /// </remarks>
-    [HttpPut(Path.RegisterClient)]
+    [HttpPut]
+    [ActionName(nameof(UpdateClientAsync))]
     [Produces(MediaTypeNames.Application.Json)]
     [Consumes(MediaTypeNames.Application.Json)]
     [LimitsRegistrationRequestSize]
+    [RefusesUnreadableClientMetadata]
     public async Task<ActionResult> UpdateClientAsync(
         [FromServices] IUpdateClientHandler handler,
         [FromServices] IUpdateClientResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         ClientAuthorizationRequest authorizationRequest,
         [FromBody] Core.ClientRegistrationRequest registrationRequest)
     {
         var updateRequest = new UpdateClientRequest(
             authorizationRequest,
             registrationRequest);
-        var response = await handler.HandleAsync(updateRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), updateRequest);
         return await formatter.FormatResponseAsync(updateRequest, response);
     }
 
@@ -136,6 +151,7 @@ public class ClientManagementController : ControllerBase
     /// </summary>
     /// <param name="handler">The handler responsible for processing client removal requests.</param>
     /// <param name="formatter">The formatter responsible for generating the client removal response.</param>
+    /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
     /// <param name="authorizationRequest">The client authorization request containing client_id and registration_access_token.</param>
     /// <returns>A task that returns an action result that confirms
     /// the client removal.</returns>
@@ -144,15 +160,17 @@ public class ClientManagementController : ControllerBase
     /// Per RFC 7592, the endpoint URL format is /connect/register/{client_id}.
     /// The registration_access_token is passed via Authorization: Bearer header.
     /// </remarks>
-    [HttpDelete(Path.RegisterClient)]
+    [HttpDelete]
+    [ActionName(nameof(RemoveClientAsync))]
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> RemoveClientAsync(
         [FromServices] IRemoveClientHandler handler,
         [FromServices] IRemoveClientResponseFormatter formatter,
+        [FromServices] ITenantAccessor tenantAccessor,
         ClientAuthorizationRequest authorizationRequest)
     {
         Core.ClientRequest coreClientRequest = authorizationRequest;
-        var response = await handler.HandleAsync(coreClientRequest);
+        var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreClientRequest);
         return await formatter.FormatResponseAsync(coreClientRequest, response);
     }
 }

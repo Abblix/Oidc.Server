@@ -6,6 +6,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Buffers.Text;
+using System.Collections.Frozen;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -13,13 +14,13 @@ namespace Abblix.Jwt;
 
 /// <summary>
 /// Computes the detached-signature hashes an ID Token carries for values delivered beside it:
-/// <c>at_hash</c> for an access token and <c>c_hash</c> for an authorization code.
+/// <c>at_hash</c> for an access token, <c>c_hash</c> for an authorization code and <c>s_hash</c> for a state.
 /// </summary>
 /// <remarks>
 /// OpenID Connect Core 1.0 gives one recipe for all of them, in section 3.2.2.9 for <c>at_hash</c> and
 /// section 3.3.2.10 for <c>c_hash</c>: hash the ASCII octets of the value with the algorithm JWA pairs
 /// with the <c>alg</c> of the ID Token's own JOSE header, take the left-most half of the digest, and
-/// base64url-encode it.
+/// base64url-encode it. FAPI 1.0 Part 2 section 5.1.1 defines <c>s_hash</c> by the same recipe.
 /// The point of the construction is to bind the ID Token to the value: an attacker who swaps the code
 /// or the access token for one of their own is caught, because the signed ID Token still carries the
 /// hash of the original. Which is why the issuing and the verifying side must compute it identically -
@@ -27,6 +28,28 @@ namespace Abblix.Jwt;
 /// </remarks>
 public static class HashCalculator
 {
+    /// <summary>
+    /// The digest each JWS algorithm pairs with, keyed by <c>alg</c>.
+    /// </summary>
+    private static readonly FrozenDictionary<string, Func<byte[], byte[]>> DigestsByAlgorithm =
+        new Dictionary<string, Func<byte[], byte[]>>
+        {
+            [SigningAlgorithms.RS256] = SHA256.HashData,
+            [SigningAlgorithms.PS256] = SHA256.HashData,
+            [SigningAlgorithms.ES256] = SHA256.HashData,
+            [SigningAlgorithms.HS256] = SHA256.HashData,
+
+            [SigningAlgorithms.RS384] = SHA384.HashData,
+            [SigningAlgorithms.PS384] = SHA384.HashData,
+            [SigningAlgorithms.ES384] = SHA384.HashData,
+            [SigningAlgorithms.HS384] = SHA384.HashData,
+
+            [SigningAlgorithms.RS512] = SHA512.HashData,
+            [SigningAlgorithms.PS512] = SHA512.HashData,
+            [SigningAlgorithms.ES512] = SHA512.HashData,
+            [SigningAlgorithms.HS512] = SHA512.HashData,
+        }.ToFrozenDictionary(StringComparer.Ordinal);
+
     /// <summary>
     /// Returns the base64url-encoded left-most half of <paramref name="value"/>'s digest, or
     /// <see langword="null"/> when <paramref name="signingAlgorithm"/> has no hash paired with it.
@@ -39,7 +62,7 @@ public static class HashCalculator
     /// so on up. ES512 is the one that looks irregular and is not - it signs with SHA-512, matching its
     /// name rather than its P-521 curve.
     /// A null result is a real answer, not a failure to compute: <c>none</c> has no digest, and neither
-    /// does an algorithm this library does not recognise. The two sides then part ways, which is why
+    /// does an algorithm this library does not recognize. The two sides then part ways, which is why
     /// the decision is left here to the caller - an issuer omits the claim, while a client MUST refuse
     /// to treat the binding as satisfied, since "no hash was computable" and "the hash matched" would
     /// otherwise look the same to it.
@@ -54,28 +77,11 @@ public static class HashCalculator
 
     private static byte[]? ComputeDigest(string signingAlgorithm, string value)
     {
+        if (!DigestsByAlgorithm.TryGetValue(signingAlgorithm, out var hashData))
+            return null;
+
         // ASCII, not UTF-8: section 3.2.2.9 says "the ASCII representation" of the value, and every
         // value this binds - an access token, a code, a state - is drawn from an ASCII alphabet.
-        var octets = Encoding.ASCII.GetBytes(value);
-
-        return signingAlgorithm switch
-        {
-            SigningAlgorithms.RS256 or
-            SigningAlgorithms.PS256 or
-            SigningAlgorithms.ES256 or
-            SigningAlgorithms.HS256 => SHA256.HashData(octets),
-
-            SigningAlgorithms.RS384 or
-            SigningAlgorithms.PS384 or
-            SigningAlgorithms.ES384 or
-            SigningAlgorithms.HS384 => SHA384.HashData(octets),
-
-            SigningAlgorithms.RS512 or
-            SigningAlgorithms.PS512 or
-            SigningAlgorithms.ES512 or
-            SigningAlgorithms.HS512 => SHA512.HashData(octets),
-
-            _ => null,
-        };
+        return hashData(Encoding.ASCII.GetBytes(value));
     }
 }

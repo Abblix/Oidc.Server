@@ -12,13 +12,14 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
 /// JWT Secured Authorization Response Mode (JARM). The client requests <c>response_mode=query.jwt</c>; the
 /// authorization server returns the authorization response parameters packed into a single signed
-/// <c>response</c> JWT carrying the JARM-mandated <c>iss</c>/<c>aud</c>/<c>exp</c> claims (JARM §2.1). The
+/// <c>response</c> JWT carrying the JARM-mandated <c>iss</c>/<c>aud</c>/<c>exp</c> claims (JARM section 2.1). The
 /// end-to-end invariant: the authorization code lives inside the response JWT, not as a bare query parameter,
 /// and that code is still redeemable at the token endpoint.
 /// </summary>
@@ -32,17 +33,17 @@ public class JwtSecuredAuthorizationResponseTests(TestFactory factory) : TestBas
         var (verifier, challenge) = GeneratePkcePair();
 
         // Register a code-flow client. No JARM-specific registration is required: the response is signed with
-        // the server's default algorithm (RS256, JARM §3); the client opts in purely by the response mode.
+        // the server's default algorithm (RS256, JARM section 3); the client opts in purely by the response mode.
         var dcrBody = new JsonObject
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
-            ["response_types"] = new JsonArray { ResponseTypes.Code },
-            ["token_endpoint_auth_method"] = "client_secret_post",
+            [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
         };
         var registered = await RegisterClientAsync(httpClient, discovery, dcrBody);
-        var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
-        var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>();
 
         var state = Guid.NewGuid().ToString("N");
 
@@ -65,17 +66,17 @@ public class JwtSecuredAuthorizationResponseTests(TestFactory factory) : TestBas
 
         var payload = DecodeJwtPayload(responseJwt);
 
-        // JARM §2.1 mandated claims. Compare the issuer ignoring a trailing slash (Uri.AbsoluteUri keeps one,
+        // JARM section 2.1 mandated claims. Compare the issuer ignoring a trailing slash (Uri.AbsoluteUri keeps one,
         // the issuer identifier does not).
         Assert.Equal(
             discovery.Issuer.AbsoluteUri.TrimEnd('/'),
-            payload["iss"]!.GetValue<string>().TrimEnd('/'));
+            payload[ResponseParameters.Issuer]!.GetValue<string>().TrimEnd('/'));
         Assert.Equal(clientId, payload["aud"]!.GetValue<string>());
         Assert.NotNull(payload["exp"]);
 
         // The authorization response parameters are inside the JWT, not on the wire.
-        Assert.Equal(state, payload[AuthorizationRequest.Parameters.State]!.GetValue<string>());
-        var code = payload[TokenRequest.Parameters.Code]!.GetValue<string>();
+        Assert.Equal(state, payload[ResponseParameters.State]!.GetValue<string>());
+        var code = payload[ResponseParameters.Code]!.GetValue<string>();
         Assert.False(string.IsNullOrEmpty(code));
 
         // The code extracted from the response JWT is a real, redeemable authorization code.
@@ -83,12 +84,12 @@ public class JwtSecuredAuthorizationResponseTests(TestFactory factory) : TestBas
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
 
-        Assert.NotNull(tokenResponse[UserInfoRequest.Parameters.AccessToken]);
+        Assert.NotNull(tokenResponse[TokenResponse.Parameters.AccessToken]);
     }
 }

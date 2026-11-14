@@ -17,8 +17,11 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 
@@ -59,6 +62,27 @@ public class GrantedRevalidationTests
         """;
 
     /// <summary>
+    /// What the client asked for: the worked example itself, so a granted entry equal to it is within it.
+    /// </summary>
+    private static JsonArray RequestedAsInTheExample() => JsonNode.Parse(WorkedExample)!.AsArray();
+
+    /// <summary>
+    /// The out-of-band flows hand the validators what the client asked for, so a type can hold a stored
+    /// grant to it when the grant is spent.
+    /// </summary>
+    [Fact]
+    public async Task TheValidatorsAreHandedTheRequestedEntries()
+    {
+        var policy = PolicyWith<RequiringTheRequestValidator>();
+
+        Assert.Null(await policy.RefuseAsync(
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId),
+            TestContext.Current.CancellationToken));
+        Assert.NotNull(await policy.RefuseAsync(
+            SingleIssuer.Tenant, GrantWith(WorkedExample), null, new ClientInfo(ClientId), TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
     /// A validator that changes nothing is not read as changing something.
     /// </summary>
     /// <remarks>
@@ -72,7 +96,7 @@ public class GrantedRevalidationTests
         var policy = PolicyWith<PassThroughValidator>();
 
         Assert.Null(await policy.RefuseAsync(
-            GrantWith(WorkedExample), new ClientInfo(ClientId), TestContext.Current.CancellationToken));
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -89,7 +113,7 @@ public class GrantedRevalidationTests
         var policy = PolicyWith<ReorderingValidator>();
 
         Assert.Null(await policy.RefuseAsync(
-            GrantWith(WorkedExample), new ClientInfo(ClientId), TestContext.Current.CancellationToken));
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -106,31 +130,91 @@ public class GrantedRevalidationTests
         var policy = PolicyWith<CappingValidator>();
 
         var refusal = await policy.RefuseAsync(
-            GrantWith(WorkedExample), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
-        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal!.Value.Error.Error);
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal.Value.Error.Error);
     }
 
     /// <summary>
-    /// A dispatch that edits in place and answers "nothing to change" is a refusal too.
+    /// A dispatch that edits in place and answers an empty set is a refusal too.
     /// </summary>
     /// <remarks>
     /// The other half, which the shipped composite cannot produce - it always returns a fresh array - so it
     /// takes a policy of its own to reach. <see cref="IAuthorizationDetailsPolicy"/> is public and
-    /// registered with TryAdd, so a host may supply exactly this shape, and without the probe comparison
-    /// the edit would travel into the token unseen.
+    /// registered with TryAdd, so a host may supply exactly this shape. Both halves of the comparison fire
+    /// on it; what the probe comparison alone catches is
+    /// <see cref="ADispatchThatEditsInPlaceAndAnswersACopyOfWhatItWasGiven_IsARefusal"/>.
     /// </remarks>
     [Fact]
-    public async Task ADispatchThatEditsInPlaceAndAnswersNull_IsARefusal()
+    public async Task ADispatchThatEditsInPlaceAndAnswersAnEmptySet_IsARefusal()
     {
         IAuthorizationDetailsPolicy policy = new InPlaceEditingPolicy();
 
         var refusal = await policy.RefuseAsync(
-            GrantWith(WorkedExample), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.NotNull(refusal);
-        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal!.Value.Error.Error);
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal.Value.Error.Error);
+    }
+
+    /// <summary>
+    /// A dispatch that edits in place and answers with what it was given BEFORE editing is a refusal.
+    /// </summary>
+    /// <remarks>
+    /// The one shape only the probe comparison can catch: the answer is equal to what is stored, so
+    /// reading the answer alone says nothing changed, while the array the policy was handed now carries an
+    /// amount the validators would cap. Without this the probe comparison can be deleted and every other
+    /// test still passes, which is how a guard loses its guard.
+    /// </remarks>
+    [Fact]
+    public async Task ADispatchThatEditsInPlaceAndAnswersACopyOfWhatItWasGiven_IsARefusal()
+    {
+        IAuthorizationDetailsPolicy policy = new EditingInPlaceAndAnsweringTheOriginalPolicy();
+
+        var refusal = await policy.RefuseAsync(
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+
+        Assert.NotNull(refusal);
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal.Value.Error.Error);
+    }
+
+    /// <summary>
+    /// A dispatch that removes every entry is a refusal, even though it touched nothing it was handed.
+    /// </summary>
+    /// <remarks>
+    /// Removing an entry is how a validator says the grant may not be issued as stored, so answering an
+    /// empty set is a refusal however it is reached. The probe comparison cannot see this one - the array
+    /// the policy was handed comes back untouched - so the answer itself has to be read, and reading it by
+    /// COUNT is what makes an empty answer indistinguishable from "nothing to change". Without this the
+    /// grant is spent carrying exactly the entries the deployment's own policy deleted.
+    /// </remarks>
+    [Fact]
+    public async Task ADispatchThatRemovesEveryEntry_IsARefusal()
+    {
+        IAuthorizationDetailsPolicy policy = new EmptyingPolicy();
+
+        var refusal = await policy.RefuseAsync(
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+
+        Assert.NotNull(refusal);
+        Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, refusal.Value.Error.Error);
+    }
+
+    /// <summary>
+    /// The grant is revalidated at the tenant it is spent at, which is the tenant its validators are asked at.
+    /// </summary>
+    [Fact]
+    public async Task AGrant_IsRevalidatedAtTheTenantItIsSpentAt()
+    {
+        var policy = PolicyWith<ServedTenantOnlyValidator>();
+
+        Assert.Null(await policy.RefuseAsync(
+            SingleIssuer.Tenant, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId),
+            TestContext.Current.CancellationToken));
+        Assert.NotNull(await policy.RefuseAsync(
+            new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") }, GrantWith(WorkedExample), RequestedAsInTheExample(), new ClientInfo(ClientId),
+            TestContext.Current.CancellationToken));
     }
 
     private static IAuthorizationDetailsPolicy PolicyWith<TValidator>()
@@ -155,8 +239,31 @@ public class GrantedRevalidationTests
         public string Type => PaymentType;
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+    }
+
+    /// <summary>Accepts a granted entry only when the request carried an entry of its type.</summary>
+    private sealed class RequiringTheRequestValidator : IAuthorizationDetailValidator
+    {
+        public string Type => PaymentType;
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => Task.FromResult<Result<AuthorizationDetail, OidcError>>(
+                requested.Count > 0
+                    ? detail
+                    : new OidcError(ErrorCodes.InvalidAuthorizationDetails, "nothing was requested"));
     }
 
     /// <summary>Returns an entry carrying the same members, sorted by name.</summary>
@@ -165,6 +272,7 @@ public class GrantedRevalidationTests
         public string Type => PaymentType;
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
         {
             var sorted = new JsonObject();
@@ -182,6 +290,7 @@ public class GrantedRevalidationTests
         public string Type => PaymentType;
 
         public Task<Result<AuthorizationDetail, OidcError>> ValidateAsync(
+            TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
         {
             var capped = (JsonObject)detail.Json.DeepClone();
@@ -191,16 +300,44 @@ public class GrantedRevalidationTests
         }
     }
 
-    /// <summary>A dispatch of the shape a host may register: edits what it is handed, answers null.</summary>
+    /// <summary>A dispatch of the shape a host may register: edits what it is handed, answers an empty set.</summary>
     private sealed class InPlaceEditingPolicy : IAuthorizationDetailsPolicy
     {
-        public Task<Result<JsonArray?, OidcError>> ApplyAsync(
+        public Task<Result<JsonArray, OidcError>> ApplyAsync(
+            TenantDefinition tenant,
             JsonArray? raw, ClientInfo client, CancellationToken token)
         {
             if (raw?[0] is JsonObject entry)
                 entry["instructedAmount"]!["amount"] = "100.00";
 
-            return Task.FromResult<Result<JsonArray?, OidcError>>((JsonArray?)null);
+            return Task.FromResult<Result<JsonArray, OidcError>>(new JsonArray());
+        }
+    }
+
+    /// <summary>A dispatch that leaves its input alone and answers with every entry removed.</summary>
+    private sealed class EmptyingPolicy : IAuthorizationDetailsPolicy
+    {
+        public Task<Result<JsonArray, OidcError>> ApplyAsync(
+            TenantDefinition tenant,
+            JsonArray? raw, ClientInfo client, CancellationToken token)
+            => Task.FromResult<Result<JsonArray, OidcError>>(new JsonArray());
+    }
+
+    /// <summary>
+    /// A dispatch that edits what it was handed and answers with a copy taken before the edit.
+    /// </summary>
+    private sealed class EditingInPlaceAndAnsweringTheOriginalPolicy : IAuthorizationDetailsPolicy
+    {
+        public Task<Result<JsonArray, OidcError>> ApplyAsync(
+            TenantDefinition tenant,
+            JsonArray? raw, ClientInfo client, CancellationToken token)
+        {
+            var asGiven = (JsonArray)raw!.DeepClone();
+
+            if (raw[0] is JsonObject entry)
+                entry["instructedAmount"]!["amount"] = "100.00";
+
+            return Task.FromResult<Result<JsonArray, OidcError>>(asGiven);
         }
     }
 }

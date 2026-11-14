@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Utils;
@@ -30,6 +31,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// </summary>
 public class AuthorizationResponseFormatter(
     IOptions<OidcOptions> options,
+    ITenantAccessor tenantAccessor,
     IAuthorizationRequestStorage authorizationRequestStorage,
     ISessionManagementService sessionManagementService,
     IParametersProvider parametersProvider,
@@ -42,25 +44,25 @@ public class AuthorizationResponseFormatter(
         {
             case AccountSelectionRequired:
                 return await RedirectAsync(
-                    options.Value.AccountSelectionUri.NotNull(nameof(OidcOptions.AccountSelectionUri)), response.Model);
+                    tenantAccessor.CurrentTenant().AccountSelectionUri.NotNull(nameof(TenantDefinition.AccountSelectionUri)), response.Model);
 
             case ConsentRequired:
                 return await RedirectAsync(
-                    options.Value.ConsentUri.NotNull(nameof(OidcOptions.ConsentUri)), response.Model);
+                    tenantAccessor.CurrentTenant().ConsentUri.NotNull(nameof(TenantDefinition.ConsentUri)), response.Model);
 
             case InteractionRequired:
                 return await RedirectAsync(
-                    options.Value.InteractionUri.NotNull(nameof(OidcOptions.InteractionUri)), response.Model);
+                    tenantAccessor.CurrentTenant().InteractionUri.NotNull(nameof(TenantDefinition.InteractionUri)), response.Model);
 
             case LoginRequired:
                 return await RedirectAsync(
-                    options.Value.LoginUri.NotNull(nameof(OidcOptions.LoginUri)), response.Model);
+                    tenantAccessor.CurrentTenant().LoginUri.NotNull(nameof(TenantDefinition.LoginUri)), response.Model);
 
             // prompt=create: a dedicated registration UI when configured, otherwise the login UI - the original
             // request parameters travel in the redirect so a combined page can still branch on them.
             case RegistrationRequired:
                 return await RedirectAsync(
-                    options.Value.RegistrationUri ?? options.Value.LoginUri.NotNull(nameof(OidcOptions.LoginUri)),
+                    tenantAccessor.CurrentTenant().RegistrationUri ?? tenantAccessor.CurrentTenant().LoginUri.NotNull(nameof(TenantDefinition.LoginUri)),
                     response.Model);
 
             // JARM (*.jwt): success and error alike deliver the single packed response JWT. Matched first so any
@@ -116,7 +118,7 @@ public class AuthorizationResponseFormatter(
             authenticated.SessionId.HasValue() &&
             authenticated.Model.Scope.Contains(Scopes.OpenId))
         {
-            var cookie = sessionManagementService.GetSessionCookie();
+            var cookie = sessionManagementService.GetSessionCookie(tenantAccessor.CurrentTenant(), authenticated.SessionPersistence);
 
             result = result.WithAppendCookie(
                 cookie.Name,
@@ -134,7 +136,7 @@ public class AuthorizationResponseFormatter(
         Scope = success.Scope,
         Code = success.Code,
         TokenType = success.TokenType,
-        // RFC 6749 §4.2.2: expires_in is RECOMMENDED whenever an access token is delivered from the authorization
+        // RFC 6749 section 4.2.2: expires_in is RECOMMENDED whenever an access token is delivered from the authorization
         // endpoint; derived from the issued token's own iat/exp so the advertised lifetime matches the token.
         ExpiresIn = success.AccessToken is { Token.Payload: { ExpiresAt: { } expiresAt, IssuedAt: { } issuedAt } }
             ? expiresAt - issuedAt
@@ -158,7 +160,7 @@ public class AuthorizationResponseFormatter(
 
     private async Task<IResult> RedirectAsync(Uri uri, CoreModel.AuthorizationRequest request)
     {
-        var stored = await authorizationRequestStorage.StoreAsync(request, options.Value.LoginSessionExpiresIn);
+        var stored = await authorizationRequestStorage.StoreAsync(tenantAccessor.CurrentTenant(), request, options.Value.AuthenticationRequestExpiresIn);
         var resolved = ResolveContent(uri);
         var target = resolved.AddToQuery([(options.Value.RequestUriParameterName, stored.RequestUri.OriginalString)]);
         return new SeeOtherResult(target);
@@ -174,11 +176,6 @@ public class AuthorizationResponseFormatter(
             return uri;
 
         var request = httpContextAccessor.HttpContext.NotNull(nameof(HttpContext)).Request;
-        var appUrl = request.GetAppUrl();
-        var path = uri.OriginalString;
-
-        return path.StartsWith("~/")
-            ? new Uri(appUrl + path[1..], UriKind.Absolute)
-            : new Uri(new Uri(appUrl, UriKind.Absolute), path);
+        return request.ResolveInteractionUri(uri.OriginalString);
     }
 }

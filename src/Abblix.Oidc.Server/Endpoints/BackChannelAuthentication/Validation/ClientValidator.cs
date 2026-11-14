@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
@@ -17,12 +18,14 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 /// and authorized to perform the request as part of the authentication validation process.
 /// </summary>
 /// <param name="clientAuthenticator">The service used to authenticate and retrieve client information.</param>
-public class ClientValidator(IClientAuthenticator clientAuthenticator) : IBackChannelAuthenticationContextValidator
+public class ClientValidator(IClientAuthenticator clientAuthenticator)
+    : IBackChannelAuthenticationContextValidator
 {
     /// <summary>
     /// Validates the client in the context of a backchannel authentication request.
     /// Ensures that the client is recognized and authorized to make the request.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">
     /// The validation context containing the backchannel authentication request and client information.
     /// </param>
@@ -31,16 +34,21 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator) : IBackCh
     /// or null if the client is authorized.
     /// </returns>
     public async Task<OidcError?> ValidateAsync(
+        TenantDefinition tenant,
         BackChannelAuthenticationValidationContext context)
     {
-        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(context.ClientRequest);
+        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
+            tenant, context.ClientRequest);
         if (clientInfo == null)
         {
+            // CIBA Core 1.0 section 13 lists invalid_client under HTTP 401: "Client authentication failed".
             return new OidcError(
-                ErrorCodes.UnauthorizedClient, "The client is not authorized");
+                ErrorCodes.InvalidClient, "The client is not authorized");
         }
 
-        if (!clientInfo.EffectiveGrantTypes.Contains(GrantTypes.Ciba))
+        // CIBA Core 1.0 section 7.1: "The Client MUST authenticate to the Backchannel Authentication Endpoint". A
+        // client registered with the method "none" authenticates nobody, so the flow is not open to it.
+        if (!clientInfo.EffectiveGrantTypes.Contains(GrantTypes.Ciba) || clientInfo is { ClientType: ClientType.Public })
         {
             return new OidcError(
                 ErrorCodes.UnauthorizedClient, "The Client is not authorized to use this authentication flow");
@@ -48,8 +56,11 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator) : IBackCh
 
         if (string.IsNullOrEmpty(clientInfo.BackChannelTokenDeliveryMode))
         {
+            // The client has authenticated, so this is not invalid_client (a 401 challenging credentials that
+            // worked): CIBA Core 1.0 section 13, unauthorized_client, "The Client is not authorized to use this
+            // authentication flow".
             return new OidcError(
-                ErrorCodes.InvalidClient,
+                ErrorCodes.UnauthorizedClient,
                 "The client is not properly configured for backchannel authentication. " +
                 "A token delivery mode (poll, ping, or push) must be specified.");
         }

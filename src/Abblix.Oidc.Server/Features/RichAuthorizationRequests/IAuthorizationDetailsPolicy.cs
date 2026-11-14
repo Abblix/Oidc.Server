@@ -9,26 +9,27 @@
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 
 /// <summary>
 /// Single request-time entry point for the RFC 9396 authorization_details policy: per-client
-/// allowlist (§10) plus per-type composite dispatch (§5). Endpoint-side adapters delegate
+/// allowlist (section 10) plus per-type composite dispatch (section 5). Endpoint-side adapters delegate
 /// here so /authorize, /par, CIBA and device-flow share one policy source.
 /// </summary>
 /// <remarks>
 /// Registered unconditionally by <see cref="ServiceCollectionExtensions.AddRichAuthorizationRequests"/>
 /// so the server boots cleanly with zero <see cref="IAuthorizationDetailValidator"/>
-/// implementations registered. Per RFC 9396 §5 (the AS MUST refuse unknown types), an empty
+/// implementations registered. Per RFC 9396 section 5 (the AS MUST refuse unknown types), an empty
 /// registry rejects every RAR-bearing request - this is conformance-mandatory, not a
 /// configurable policy.
 /// </remarks>
 public interface IAuthorizationDetailsPolicy
 {
     /// <summary>
-    /// Full RFC 9396 §5 + §10 request-time validation entry point. Takes the raw
+    /// Full RFC 9396 section 5 + section 10 request-time validation entry point. Takes the raw
     /// authorization_details array as it landed on the wire, applies the per-client
     /// allowlist, dispatches each typed entry to its keyed
     /// <see cref="IAuthorizationDetailValidator"/>, and returns the validated raw array
@@ -37,25 +38,30 @@ public interface IAuthorizationDetailsPolicy
     /// <remarks>
     /// The returned <see cref="JsonArray"/> reflects the post-validation set: when per-type
     /// validators leave their inputs untouched it is byte-equivalent to the input, but when
-    /// a validator narrows / extends per RFC 9396 §7.1 (e.g. a consent-UI slider, an AS-policy
+    /// a validator narrows / extends per RFC 9396 section 7.1 (e.g. a consent-UI slider, an AS-policy
     /// cap, or canonicalisation), the mutation surfaces here and the pipeline forwards the
     /// post-validation shape into <c>AuthorizationContext</c> - token emission reflects what
     /// was actually granted, not the original request.
     /// </remarks>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="raw">The raw <c>authorization_details</c> array off the wire, or
     /// <c>null</c> / empty when the request did not carry one.</param>
     /// <param name="client">The authenticated client; <see cref="ClientInfo.AuthorizationDetailsTypes"/>
     /// drives the allowlist branch.</param>
     /// <param name="token">Cancellation token forwarded to per-type validators.</param>
     /// <returns>
-    /// On success - the raw <see cref="JsonArray"/> that survived validation (or <c>null</c>
-    /// when the input was null / empty / contained no typed entries - there is nothing to
-    /// forward in that case). On failure - a fully-formed <see cref="OidcError"/> with
-    /// <c>error = invalid_authorization_details</c> (RFC 9396 §5) and the rejection
+    /// On success - the raw <see cref="JsonArray"/> that survived validation, empty only when the input
+    /// carried no entries to begin with, since there is nothing to forward in that case. An
+    /// implementation that would leave nothing of a non-empty input refuses instead: dropping every entry
+    /// says the request may not be honoured as asked, and every caller treats an empty answer to a
+    /// non-empty input as a fault - see <see cref="AuthorizationDetailsPolicyContract.EveryEntryDropped"/>.
+    /// On failure - a fully-formed <see cref="OidcError"/> with
+    /// <c>error = invalid_authorization_details</c> (RFC 9396 section 5) and the rejection
     /// description; the endpoint adapter forwards it as-is when its error type is
     /// <see cref="OidcError"/>, or re-wraps the description otherwise.
     /// </returns>
-    Task<Result<JsonArray?, OidcError>> ApplyAsync(
+    Task<Result<JsonArray, OidcError>> ApplyAsync(
+        TenantDefinition tenant,
         JsonArray? raw,
         ClientInfo client,
         CancellationToken token);
@@ -69,8 +75,8 @@ public interface IAuthorizationDetailsPolicy
     /// <remarks>
     /// Everything outside the per-type question is phase-independent and still applies: the entries
     /// must be JSON objects, their types must be known, and the per-client allowlist still binds.
-    /// Only the question put to the per-type validator differs, because RFC 9396 §7.1 lets the server
-    /// add values during consent that §5 obliges it to refuse from a client.
+    /// Only the question put to the per-type validator differs, because RFC 9396 section 7.1 lets the server
+    /// add values during consent that section 5 obliges it to refuse from a client.
     /// <para>
     /// A decorator around this interface MUST forward this member too. The default sends it to
     /// <see cref="ApplyAsync"/>, so a decorator that implements only that one turns the granted phase
@@ -79,14 +85,44 @@ public interface IAuthorizationDetailsPolicy
     /// loose one answers with a null task result the caller then dereferences.
     /// </para>
     /// </remarks>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="granted">The <c>authorization_details</c> the consent decision granted.</param>
+    /// <param name="requested">The <c>authorization_details</c> the request carried, which each per-type
+    /// validator is handed, filtered to its own type, to hold the granted entry to.</param>
     /// <param name="client">The client the grant is being issued to.</param>
     /// <param name="token">Cancellation token forwarded to per-type validators.</param>
     /// <returns>The same shape as <see cref="ApplyAsync"/>: the post-validation array on success, or
     /// an <see cref="OidcError"/> naming the entry that was refused.</returns>
-    Task<Result<JsonArray?, OidcError>> ApplyGrantedAsync(
+    Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
+        TenantDefinition tenant,
         JsonArray? granted,
+        JsonArray? requested,
         ClientInfo client,
         CancellationToken token)
-        => ApplyAsync(granted, client, token);
+        => ApplyAsync(tenant, granted, client, token);
+}
+
+/// <summary>
+/// The refusal every caller of <see cref="IAuthorizationDetailsPolicy"/> owes when an implementation
+/// breaks the one part of its contract nothing else can catch.
+/// </summary>
+internal static class AuthorizationDetailsPolicyContract
+{
+    /// <summary>
+    /// A policy answered with nothing to a request that carried entries.
+    /// </summary>
+    /// <remarks>
+    /// Dropping every entry says the request may not be honoured as asked, which is a refusal, and the
+    /// contract says so. Read as consent instead, it authorizes the request with its
+    /// <c>authorization_details</c> silently gone - the one outcome neither the client nor the resource
+    /// server can detect. The shipped policy cannot produce it, so reaching this means a host
+    /// implementation or a decorator did.
+    /// </remarks>
+    /// <returns>The exception to throw.</returns>
+    public static InvalidOperationException EveryEntryDropped()
+        => new(
+            $"An {nameof(IAuthorizationDetailsPolicy)} implementation answered with an empty set for a "
+            + "request that carried authorization_details. Dropping every entry is a refusal and has to "
+            + "be returned as one, because forwarding the request without them authorizes something "
+            + "nobody asked for.");
 }

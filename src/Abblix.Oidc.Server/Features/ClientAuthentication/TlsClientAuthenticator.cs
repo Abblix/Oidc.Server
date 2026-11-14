@@ -9,10 +9,12 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -46,6 +48,7 @@ public partial class TlsClientAuthenticator(
     /// Attempts to authenticate a client using self-signed TLS client authentication.
     /// Validates the client certificate's public key against the client's registered JWKS.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the certificate and client ID to authenticate.</param>
     /// <returns>
     /// A task that returns the authenticated <see cref="ClientInfo"/> if successful; otherwise, null.
@@ -61,7 +64,7 @@ public partial class TlsClientAuthenticator(
     /// 5. Comparing it against all keys in the client's JWKS (jwks or jwks_uri)
     /// Supports both RSA and ECDSA certificates.
     /// </remarks>
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
+    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
         // Require client certificate and client_id
         var certificate = request.ClientCertificate;
@@ -72,7 +75,7 @@ public partial class TlsClientAuthenticator(
         if (!clientId.NotNullOrWhiteSpace())
             return null;
 
-        var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
+        var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         if (client == null)
         {
             LogClientNotFound(clientId);
@@ -89,11 +92,11 @@ public partial class TlsClientAuthenticator(
         var certJwk = certificate.ToJsonWebKey();
         if (!await clientKeysProvider.GetSigningKeys(client).AnyAsync(PublicKeysMatch(certJwk)))
         {
-            LogNoMatchingPublicKey(clientId);
+            LogNoMatchingPublicKey(client.ClientId);
             return null;
         }
 
-        LogAuthenticated(clientId);
+        LogAuthenticated(client.ClientId);
         return client;
     }
 

@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
@@ -35,11 +36,12 @@ public interface IAuthorizationResponseBuilder : IGrantTypeInformer
 
     /// <summary>
     /// Populates the relevant field on <paramref name="result"/> for this processor's response type.
-    /// Implementations mutate <paramref name="result"/> in place and may read fields populated by
-    /// processors that ran earlier in the canonical iteration order
-    /// (<c>code</c> before <c>token</c> before <c>id_token</c>).
+    /// Implementations mutate <paramref name="result"/> in place. The <c>id_token</c> builder runs after every
+    /// other builder and may read what they put on <paramref name="result"/>; the others run in registration
+    /// order and must not read each other's fields.
     /// </summary>
     Task BuildResponseAsync(
+        TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result);

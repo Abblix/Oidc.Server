@@ -43,6 +43,25 @@ public class SecureHttpFetchOptions
     public TimeSpan ClientKeysCacheDuration { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
+    /// The shortest time between two fetches of one URI made past the cache, as a key set is read again when a
+    /// token names a key it does not hold. Default: 1 minute.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Core 1.0 section 10.1.1 has a verifier go back to the signer's jwks_uri on an unfamiliar kid,
+    /// which anyone able to send a token can trigger with a kid of their choosing. Within the interval the document
+    /// fetched last is served instead, so such a stream reaches the signer's host once per interval, and a signer
+    /// rotating its key twice within it waits for the interval to pass before the second key is accepted. A refetch is
+    /// never served longer than the copy itself is held, so a consumer caching for less, or not at all, refetches more
+    /// often. Zero or less turns the limit off, and every refetch reaches the URI.
+    /// <para>
+    /// The interval also follows a fetch that failed, an ordinary one included: the fetches of that URI inside it get
+    /// the failure rather than each reaching a host that is down, so a URI that recovers is read again once the
+    /// interval has passed. Requests arriving while a fetch runs wait for it rather than starting their own.
+    /// </para>
+    /// </remarks>
+    public TimeSpan RefetchInterval { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
     /// How long a protected resource's fetched key set is held before it is fetched again. Default: 1 hour.
     /// </summary>
     /// <remarks>

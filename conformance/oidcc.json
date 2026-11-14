@@ -1,0 +1,12 @@
+{
+  "description": "Abblix OIDC Server conformance host",
+  "server": {
+    "discoveryUrl": "https://oidc-host:9443/.well-known/openid-configuration"
+  },
+  "client": {
+    "client_name": "first-openid-client"
+  },
+  "client2": {
+    "client_name": "second-openid-client"
+  }
+}

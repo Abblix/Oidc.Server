@@ -6,11 +6,14 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
@@ -44,10 +47,20 @@ public sealed class RefreshTokenSubjectTokenResolver(
 {
     /// <inheritdoc/>
     public async Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
-        string subjectToken,
+        TenantDefinition tenant,
+        ClientInfo client,
+        [Credential] string subjectToken,
+        Uri tokenType,
         CancellationToken cancellationToken)
     {
-        var validation = await jwtValidator.ValidateAsync(subjectToken);
+        // The refresh token's audience holds the resources of the grant it continues (RefreshTokenService), so it
+        // need not name this server
+        var validation = await jwtValidator.ValidateAsync(
+            tenant,
+            client,
+            subjectToken,
+            TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
+            ServiceTokenValidation.AnyAudience);
         if (!validation.TryGetSuccess(out var jwt))
         {
             return new OidcError(
@@ -55,25 +68,27 @@ public sealed class RefreshTokenSubjectTokenResolver(
                 "The subject_token is invalid or has expired.");
         }
 
-        if (jwt.Header.Type != JwtTypes.RefreshToken)
-        {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                $"subject_token has unexpected typ header '{jwt.Header.Type}' for token type refresh_token.");
-        }
-
         // The refresh token was issued to its original client (not necessarily the requesting one); the real
         // subject is opened against that client's sector.
         var originalClientId = jwt.Payload.ClientId;
         var originalClient = originalClientId is null
             ? null
-            : await clientInfoProvider.TryFindClientAsync(originalClientId).WithLicenseCheck();
+            : await clientInfoProvider.TryFindClientAsync(tenant, originalClientId);
         if (originalClient is null)
         {
             return new OidcError(ErrorCodes.InvalidRequest, "The subject_token's client is not known.");
         }
 
-        var grantLookup = await refreshTokenService.AuthorizeByRefreshTokenAsync(jwt, originalClient);
+        // A refresh token exists only for offline access, so withdrawing its client's permission ends it here as it
+        // does for the refresh grant; otherwise the token would keep buying access tokens until it expires
+        if (!originalClient.OfflineAccess.IsAllowed())
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The subject_token's client is not allowed offline access.");
+        }
+
+        var grantLookup = await refreshTokenService.AuthorizeByRefreshTokenAsync(tenant, jwt, originalClient);
         if (!grantLookup.TryGetSuccess(out var grant))
         {
             return new OidcError(
@@ -99,9 +114,8 @@ public sealed class RefreshTokenSubjectTokenResolver(
             // the handler's cross-client guard.
             OriginalClientId = grant.Context.ClientId,
             
-            // Refresh tokens always have typ=rt+jwt (enforced above). Recording it here makes
-            // the typ-confusion check at the handler uniform across resolvers.
-            JwtTokenType = jwt.Header.Type,
+            GrantId = jwt.Payload.GrantId,
+            ExpiresAt = jwt.Payload.ExpiresAt,
         };
     }
 }

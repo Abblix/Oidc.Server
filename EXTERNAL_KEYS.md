@@ -2,10 +2,10 @@
 
 How signing and encryption keys that live outside the process - in an HSM, a cloud KMS, or a vault - are used. This document is the shared model. It applies to every custodian package:
 
-| Package | Custodian |
-|---------|-----------|
-| **[Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)** | HashiCorp Vault / OpenBao Transit |
-| **[Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)** | Azure Key Vault |
+| Package                                                                 | Custodian                         |
+|-------------------------------------------------------------------------|-----------------------------------|
+| [Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault) | HashiCorp Vault / OpenBao Transit |
+| [Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure) | Azure Key Vault                   |
 
 Each package's README covers what is specific to its backend: how to provision the keys, how to authenticate, which algorithms it maps, and what the published `kid` looks like. Everything below is the same whichever one you pick.
 
@@ -18,12 +18,12 @@ Wiring is two steps for `UseKeysInCustodian`, three for `UseKeysInProcess` (the 
 ```csharp
 builder.Services
     .AddVaultCustodian(vault => { /* which custodian, and how to reach it */ })
-    .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
+    .UseKeysInCustodian();
 ```
 
-The first step says *which* custodian holds the keys. The second says *how* the library uses it, and that is the security posture, so you name it at the call site.
+The first step says *which* custodian holds the keys. The second says *how* the library uses it, and that is the security posture, so you name it at the call site. An OpenID Provider names the keys themselves for each tenant, in `TenantDefinition.CustodianKeys` (`new CustodianHeldKeys { SigningKeyName = "oidc-sign" }`), so no two tenants sign with one key, and it refuses to start with keys named for the whole server. A host without the OIDC server names them in the placement call instead: `UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "sign" })`.
 
-The second step is required. A custodian registered without it fails at startup, before the HTTP port opens. That failure exists because the alternative is silent and worse: the OIDC server's default key provider reads static keys from `OidcOptions`, so a half-wired custodian would otherwise serve local keys with a clean log and no complaint. Order matters in one direction only: chain these calls after `AddJsonWebTokens`, because the placement call composes the external crypto backends with their in-process peers, and those peers must already be registered. `AddOidcServices` and `AddOidcCore` perform `AddJsonWebTokens`, so for an OpenID Provider that means after the OIDC registration.
+The second step is required. A custodian registered without it fails at startup, before the HTTP port opens. That failure exists because the alternative is silent and worse: the OIDC server's default key provider reads static keys from each tenant's settings (`TenantDefinition.SigningKeys`), so a half-wired custodian would otherwise serve local keys with a clean log and no complaint. Order matters in one direction only: chain these calls after `AddJsonWebTokens`, because the placement call composes the external crypto backends with their in-process peers, and those peers must already be registered. `AddOidcServices` and `AddOidcCore` perform `AddJsonWebTokens`, so for an OpenID Provider that means after the OIDC registration.
 
 ## You do not need the OIDC server for this
 
@@ -86,7 +86,7 @@ With `UseKeysInProcess`, the guarantee moves from the process to the store. At r
 `UseKeysInCustodian` puts a network call on the path of every token, because the private half stays outside:
 
 - Every issued token costs at least two round-trips: at least one to discover the signing key's versions (some backends read each version separately), and one to sign. Decrypting inbound encrypted material, an encrypted request object or client assertion, adds an unwrap; issuing an encrypted token adds nothing, because it is wrapped to the recipient's public key locally. Signature verification is local and free, because it runs on the published public halves.
-- The provider does not cache: it lists key versions on every call, so without a short-lived cache in front of it, every `/jwks` hit and every token issuance reaches the custodian. `/jwks` is public and unauthenticated, so an uncached provider lets any client or scraper amplify load and cost onto the custodian and trip its rate limits, which then stops token issuance too. Wrap the registered `IAuthServiceKeysProvider` in a short-lived cache in production; versions change on human timescales, so the cache does not hide a rotation.
+- The provider does not cache: it lists key versions on every call, so without a short-lived cache in front of it, every `/jwks` hit and every token issuance reaches the custodian. `/jwks` is public and unauthenticated, so an uncached provider lets any client or scraper amplify load and cost onto the custodian and trip its rate limits, which then stops token issuance too. Wrap the registered `IAuthServiceKeysProvider` in a short-lived cache in production; versions change on human timescales, so the cache does not hide a rotation. Register the wrapper on the `IServiceCollection` the server is added to, not only through a third-party container's own API: that registration is how the server tells a provider of yours from its own without building it.
 - Availability is coupled. A custodian that is unreachable, sealed or throttling means no tokens issued and no `/jwks` served. Size it for your peak token rate and set an explicit HTTP timeout.
 - The latency lands on the token endpoint, not at startup.
 
@@ -110,9 +110,19 @@ Rotation differs by placement, but both overlap old and new so a client with a s
 
 With `UseKeysInCustodian` you rotate in the custodian, and nothing redeploys. Every version of a key is published at `/jwks`, each under its own `kid`. The version the provider signs with is the newest one older than `OidcOptions.KeyRolloverPropagation` (default 1 hour): a new version is published immediately but starts signing only once that window has passed. Older versions keep verifying and unwrapping until you retire them, so remove one only after every token signed by it has expired.
 
-With `UseKeysInProcess` the server rotates on its own schedule: it mints the next key ahead of time, publishes it, and starts signing with it once the same propagation window has passed, then retires the previous one after it is no longer needed. You provision nothing per rotation. Pods do not elect a leader; the first to reach a new period wins it through the store's insert-if-absent write, and the rest read the winner's key. Rotating the key-encryption key needs no re-sealing either: each sealed entry names the version that sealed it, so a new version seals new keys while older entries keep opening under theirs.
+With `UseKeysInProcess` the server rotates on its own schedule: it mints the next key ahead of time, publishes it, and starts signing with it once the same propagation window has passed (the server sets the key ring's `KeyRingOptions.KeyRolloverPropagation` from `OidcOptions.KeyRolloverPropagation`, over the ring's own setting), then retires the previous one after it is no longer needed. You provision nothing per rotation. Pods do not elect a leader; the first to reach a new period wins it through the store's insert-if-absent write, and the rest read the winner's key. Rotating the key-encryption key needs no re-sealing either: each sealed entry names the version that sealed it, so a new version seals new keys while older entries keep opening under theirs.
 
-The `/jwks` response carries a `Cache-Control` max-age derived from the propagation window, so publication and signing cannot drift apart. Set the window to your slowest client's JWKS cache lifetime. Either way, every pod derives the same active version from the version creation times and this window, so the deployment needs no coordination beyond the store `UseKeysInProcess` already relies on.
+The `/jwks` response carries a `Cache-Control` max-age derived from the propagation window, so publication and signing cannot drift apart. Set the window to your slowest client's JWKS cache lifetime. With `UseKeysInProcess` each pod re-reads the store at half the window, never more often than once a second and never less often than once a day, which is what lets a key minted on one pod be loaded by every other before it signs; a window under two seconds gives up that margin. Either way, every pod derives the same active version from the version creation times and this window, so the deployment needs no coordination beyond the store `UseKeysInProcess` already relies on.
+
+### Watching that rotation is still happening
+
+A ring that has stopped rotating looks exactly like one that is working. It keeps serving the keys it already holds, every signature still verifies, and nothing goes red, while it drifts away from what the other pods hold. So the ring reports when its newest key for a role appeared, and the age of that key is what separates the two: past the rotation period plus the propagation window, a rotation was due and did not happen.
+
+Read it for a role the ring actually rotates. A role served by a key you adopted, or by one that names no role and so serves every role, has no rotation to be late for, and its age grows without bound while the deployment is perfectly healthy. And it answers about the ring rather than the store, so a custodian that goes briefly unreachable does not make the pod unhealthy - deliberately, because the refresh loop already treats that as a condition to log and carry on from.
+
+No answer at all means the ring holds no key for that role: a pod that has not loaded yet, a custodian that has never answered, and a role nothing mints for are one answer between them. It says the ring cannot speak about the role, not that the role is well or unwell.
+
+With `UseKeysInProcess` a background service refreshes the ring on a timer and mints the next key when its period comes, so the age it reports follows the rotation schedule and a health check can read it as one. The in-memory ring, whose keys never leave the process, mints when it is asked for a key instead, so the age it reports is the age of what it has been asked for.
 
 ## Bringing your own custodian
 
@@ -121,14 +131,16 @@ The seam is public. If your keys live somewhere these packages do not cover, imp
 ```csharp
 builder.Services
     .AddCustodian<MyCustodian>()
-    .UseKeysInCustodian(new CustodianHeldKeys { SigningKeyName = "oidc-sign" });
+    .UseKeysInCustodian();
 ```
 
 `AddCustodian<T>` builds your custodian through the container, so it may depend on your own services. If you registered it yourself instead - as a typed `HttpClient`, or as an instance you built - call `RequireKeyPlacement()` in its place: it registers nothing and only opens the placement choice, which is the step that must not be skipped. Either way the custodian must be a singleton, because the signing and decryption backends that reach it are; a shorter lifetime is refused at the placement call rather than left to pin one scope's custodian for the life of the process.
 
-Implement only the operations your keys need, and the placement narrows that further: `UseKeysInProcess` calls only `UnwrapKeyAsync` and the version enumeration, because the signing runs in the process, while `UseKeysInCustodian` also needs `SignAsync`. A signing-only custodian leaves unwrap and agree unreachable. Address every private operation by the `kid` you published for that key version. Direct encryption (`dir`) and password-based key management (PBES2) have no external form, since the CEK is the secret itself or is derived from it, so they never route to a custodian and fail closed.
+Implement only the operations your keys need, and the placement narrows that further: `UseKeysInProcess` calls only `UnwrapKeyAsync` (or `AgreeKeyAsync` for an EC key encryption key) and the version enumeration, because the signing runs in the process, while `UseKeysInCustodian` also needs `SignAsync`. A signing-only custodian leaves unwrap and agree unreachable. Address every private operation by the `kid` you published for that key version. Direct encryption (`dir`) and password-based key management (PBES2) have no external form, since the CEK is the secret itself or is derived from it, so they never route to a custodian and fail closed. The key management algorithm of an inbound token is the sender's choice, so answer one your custodian does not serve with null from `UnwrapKeyAsync` or `AgreeKeyAsync`, as you answer a ciphertext that does not open, and log it for the operator: an exception there turns any sender's token into a server fault.
 
-`AgreeKeyAsync` is the seam's answer to ECDH-ES. Neither Vault Transit nor Azure Key Vault exposes a key-agreement primitive, so their packages leave it unsupported; a backend that does offer one (AWS KMS `DeriveSharedSecret`, or a PKCS#11 HSM) can implement it against the same seam.
+`ServesKeyManagement` says which key management algorithms your custodian opens, and its answer must match what `UnwrapKeyAsync` and `AgreeKeyAsync` actually open; a signing-only custodian answers false for every algorithm. The host is held to it at startup: a custodian-held encryption key published under an algorithm the custodian does not serve, or a key ring sealed under one, stops the host, and a tenant naming such an encryption key is refused when it is added.
+
+`AgreeKeyAsync` is the seam's answer to ECDH-ES. Neither Vault Transit nor Azure Key Vault exposes a key-agreement primitive, so their packages answer it with null; a backend that does offer one (AWS KMS `DeriveSharedSecret`, or a PKCS#11 HSM) can implement it against the same seam.
 
 ## Related
 

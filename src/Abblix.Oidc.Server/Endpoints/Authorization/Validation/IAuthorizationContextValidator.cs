@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
@@ -20,6 +21,7 @@ public interface IAuthorizationContextValidator
 	/// <summary>
 	/// Asynchronously validates an authorization request within a given context.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="context">
 	/// The <see cref="AuthorizationValidationContext"/> that contains the details
 	/// of the authorization request to be validated.
@@ -29,5 +31,5 @@ public interface IAuthorizationContextValidator
 	/// an <see cref="AuthorizationRequestValidationError"/> if a validation error is found,
 	/// or null if validation is successful.
 	/// </returns>
-	Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context);
+	Task<AuthorizationRequestValidationError?> ValidateAsync(TenantDefinition tenant, AuthorizationValidationContext context);
 }

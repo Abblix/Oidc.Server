@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
@@ -28,55 +29,40 @@ public record OidcOptions
 	public DiscoveryOptions Discovery { get; set; } = new();
 
 	/// <summary>
-	/// Represents the unique identifier of the OIDC server.
-	/// It is recommended to use a URL controlled by the entity operating the OIDC server, and it should be
-	/// consistent across different environments to maintain trust with client applications.
+	/// The tenants this deployment serves, each reached at its issuer and declaring what is its own: its clients, scopes
+	/// and resources, its pages, its security profile and its keys.
 	/// </summary>
-	public string? Issuer { get; set; }
+	/// <remarks>
+	/// A deployment serving one issuer declares one tenant. These are the tenants the server starts with when it reads
+	/// its tenants from these settings; a host that keeps its tenants in a store of its own leaves the list empty.
+	/// </remarks>
+	public List<TenantDefinition> Tenants { get; set; } = [];
 
 	/// <summary>
-	/// A collection of client configurations supported by this OIDC server. Each <see cref="ClientInfo"/> object
-	/// defines the settings and capabilities of a registered client, including client ID, client secrets,
-	/// redirect URIs, and other OAuth2/OIDC parameters. Proper client configuration is essential for securing client
-	/// applications and enabling them to interact with the OIDC server according to the OAuth2 and OIDC specifications.
+	/// How often the server reads the store of tenants again, which bounds how long a tenant created, changed or
+	/// removed on another instance takes to reach this one.
 	/// </summary>
-	public IEnumerable<ClientInfo> Clients { get; set; } = [];
+	public TimeSpan RefreshTenantsEvery { get; set; } = TimeSpan.FromMinutes(1);
 
 	/// <summary>
-	/// The URL to a user interface or service that allows users to select an account during the authentication process.
-	/// This is useful in scenarios where users have multiple accounts and need to choose which one to use for signing in.
+	/// Lets an http issuer through, for a server run locally for development. Off by default, so only an https issuer
+	/// is accepted, as OpenID Connect Core 1.0 section 1.2 requires. Applies to every tenant's issuer.
 	/// </summary>
-	public Uri? AccountSelectionUri { get; set; }
+	/// <remarks>
+	/// The endpoints are served over plain http only at a tenant whose issuer is http.
+	/// </remarks>
+	public bool AllowHttpIssuer { get; set; }
 
 	/// <summary>
-	/// The URL to a user interface or service for obtaining user consent during the authentication process. Consent is
-	/// often required when the client application requests access to user data or when sharing information between
-	/// different parties. This URI should point to a page or API that can manage consent workflows and communicate
-	/// the user's decisions back to the OIDC server.
+	/// A base64 secret of at least 32 bytes that keys the fingerprints standing for credentials - a device code, a
+	/// user code, a CIBA request id - in log records. Set the same value on every node so the records of one flow match
+	/// across nodes and restarts; left unset, each process draws its own key and records match within it only.
 	/// </summary>
-	public Uri? ConsentUri { get; set; }
-
-	/// <summary>
-	/// The URL to a user interface or service for handling additional interactions required during the authentication
-	/// process. This can include multiple factor authentication, user consent, or any custom interaction required by
-	/// the authentication flow. The OIDC server can redirect users to this URI when additional interaction is needed.
-	/// </summary>
-	public Uri? InteractionUri { get; set; }
-
-	/// <summary>
-	/// The URL to initiate the login process. This URI is typically used in scenarios where the OIDC server needs to
-	/// direct users to a specific login interface or when integrating with external identity providers. Configuring
-	/// this URI allows the OIDC server to delegate the initial user authentication step to another service or UI.
-	/// </summary>
-	public Uri? LoginUri { get; set; }
-
-	/// <summary>
-	/// The URL of the account-creation (registration) UI the user is redirected to when a client requests
-	/// user registration via <c>prompt=create</c> (Initiating User Registration via OpenID Connect 1.0).
-	/// When not set, <see cref="LoginUri"/> is used instead, so hosts whose login page also offers
-	/// registration need no extra configuration.
-	/// </summary>
-	public Uri? RegistrationUri { get; set; }
+	/// <remarks>
+	/// It protects what the log would otherwise give away, so keep it out of the log's reach: anybody holding it can
+	/// try every user code against a fingerprint.
+	/// </remarks>
+	public string? FingerprintKey { get; set; }
 
 	/// <summary>
 	/// The name of the parameter used by the OIDC server to pass the authorization request identifier. This parameter
@@ -97,20 +83,11 @@ public record OidcOptions
 	/// validating - an endpoint it was never asked to serve. Setting this to <see cref="OidcEndpoints.All"/> only
 	/// re-advertises and routes every endpoint - the handler for each opt-in endpoint (CheckSession, Revocation,
 	/// Introspection, dynamic client registration, CIBA, device authorization) is still registered solely by its
-	/// <c>AddX()</c> call, so <c>All</c> restores the previous every-endpoint-on behaviour only when combined with
+	/// <c>AddX()</c> call, so <c>All</c> restores the previous every-endpoint-on behavior only when combined with
 	/// all of those opt-in calls. Setting <c>All</c> without them advertises and routes endpoints whose handlers are
 	/// absent, so every request to such an endpoint fails at runtime.
 	/// </summary>
 	public OidcEndpoints EnabledEndpoints { get; set; } = OidcEndpoints.Base;
-
-	/// <summary>
-	/// The collection of JSON Web Keys (JWK) used for signing tokens issued by the OIDC server.
-	/// Signing tokens is a critical security measure that ensures the integrity and authenticity of the tokens.
-	/// These keys are used to digitally sign ID tokens, access tokens, and other JWT tokens issued by the server,
-	/// allowing clients to verify that the tokens have not been tampered with and were indeed issued by this server.
-	/// It is recommended to rotate these keys periodically to maintain the security of the token signing process.
-	/// </summary>
-	public IReadOnlyCollection<JsonWebKey> SigningKeys { get; set; } = [];
 
 	/// <summary>
 	/// Options related to the check session mechanism in OIDC. This configuration controls how the OIDC server manages
@@ -120,26 +97,24 @@ public record OidcOptions
 	public CheckSessionCookieOptions CheckSessionCookie { get; set; } = new();
 
 	/// <summary>
-	/// The duration after which a login session expires. This setting determines how long a user's authentication
-	/// session remains valid before requiring re-authentication. Configuring this duration is essential for balancing
-	/// security concerns with usability, particularly in environments with varying security requirements.
+	/// How long the end user has on each of the host's pages of an authentication request - login, consent, account
+	/// selection - and how long the other pages of that request stay refused once a code or token is issued.
 	/// </summary>
-	public TimeSpan LoginSessionExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
+	/// <remarks>
+	/// The request is stored each time the server sends the end user to a page, and found again by the address the
+	/// page comes back with, so the time starts over on every page. A page that comes back later is answered with
+	/// invalid_request_uri, and the end user begins again at the client. Once a code or token is issued, a refreshed
+	/// or revisited page of the same request is refused for this long. How long the end user stays signed in is not
+	/// set here: the host's authentication cookie decides that. A request a client pushed waits for its first use for
+	/// <see cref="PushedAuthorizationRequestExpiresIn"/> instead.
+	/// </remarks>
+	public TimeSpan AuthenticationRequestExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
 
 	/// <summary>
 	/// Configuration options for registering new clients dynamically in the OIDC server. These options define default
 	/// values and constraints for new client registrations, facilitating dynamic and secure client onboarding processes.
 	/// </summary>
-	public NewClientOptions NewClientOptions { get; init; } = new();
-
-	/// <summary>
-	/// The collection of JSON Web Keys (JWK) used for encrypting tokens or sensitive information sent to the clients.
-	/// Encryption is essential for protecting sensitive data within tokens, especially when tokens are passed through
-	/// less secure channels or when storing tokens on the client side.
-	/// These keys are used to encrypt ID tokens and, optionally, access tokens when the OIDC server sends them to clients.
-	/// Clients use the corresponding public keys to decrypt the tokens and access the contained claims.
-	/// </summary>
-	public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; set; } = [];
+	public NewClientOptions NewClientOptions { get; set; } = new();
 
 	/// <summary>
 	/// The key-rollover propagation window: how long a newly published signing or encryption key is served at the
@@ -182,7 +157,7 @@ public record OidcOptions
 	/// <summary>
 	/// Per-type signing and encryption settings for the JWTs the server issues for itself (access, refresh,
 	/// registration access and initial access tokens). Each type signs with RS256 and, when a server
-	/// <see cref="EncryptionKeys"/> entry is configured, is encrypted to it by default, as in prior versions.
+	/// <see cref="TenantDefinition.EncryptionKeys"/> entry is configured, is encrypted to it by default, as in prior versions.
 	/// A host controls each type independently: it can pin the signing algorithm or key, choose the
 	/// key-management algorithm or encryption key, or disable encryption for a specific type by setting that
 	/// type's <see cref="ServiceTokenOptions.Encrypt"/> to <c>false</c> (for example to keep the access token
@@ -201,7 +176,7 @@ public record OidcOptions
 	/// <summary>
 	/// The lifetime of a JARM (JWT Secured Authorization Response Mode) <c>response</c> JWT. The authorization
 	/// response is consumed by the client immediately upon redirect, so a short window suffices and mostly
-	/// absorbs clock skew. JARM §2.1 RECOMMENDS a maximum of 10 minutes; deployments with stricter requirements
+	/// absorbs clock skew. JARM section 2.1 RECOMMENDS a maximum of 10 minutes; deployments with stricter requirements
 	/// (e.g. FAPI) may shorten it.
 	/// </summary>
 	public TimeSpan JwtAuthorizationResponseExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
@@ -225,68 +200,34 @@ public record OidcOptions
 	public int RequestUriLength { get; set; } = 64;
 
 	/// <summary>
-	/// The supported scopes and their respective claim types, which outline the access permissions and associated data
-	/// that clients can request.
-	/// This setting determines what information and operations are available to different clients based on the scopes
-	/// they request during authorization.
-	/// </summary>
-	public ScopeDefinition[]? Scopes { get; set; }
-
-	/// <summary>
-	/// The resource definitions supported by the OIDC server. This setting outlines the resources that clients
-	/// can request access to during authorization, ensuring the OIDC server can enforce access control policies
-	/// and permissions based on these definitions.
-	/// </summary>
-	public ResourceDefinition[]? Resources { get; set; }
-
-	/// <summary>
-	/// The resource an access token is minted for when the request names none. Left null, the token's
-	/// <c>aud</c> falls back to the client identifier, which is what prior versions did.
-	/// </summary>
-	/// <remarks>
-	/// RFC 9068 Section 3 requires an authorization server to "use a default resource indicator in the `aud`
-	/// claim" when a request carries no <c>resource</c> parameter, and Section 4 tells a resource server to
-	/// reject a token whose <c>aud</c> does not name it. A client identifier names the party that asked for the
-	/// token rather than the one meant to consume it, so a conforming resource server should refuse it; a
-	/// deployment with one API therefore says so here once, instead of teaching every client to send
-	/// <c>resource</c>.
-	/// This is opt-in because the value is read by every resource server in the deployment: changing it is a
-	/// change to their contract, not to this server's configuration alone. The fallback is unchanged until a
-	/// host states otherwise. Must be an absolute URI naming a registered <see cref="Resources"/> entry -
-	/// startup refuses anything else, since a token minted for a resource this server does not know is one
-	/// nobody can accept.
-	/// </remarks>
-	public Uri? DefaultResourceIndicator { get; set; }
-
-	/// <summary>
 	/// Whether an access token carries only the <c>authorization_details</c> entries whose
 	/// <c>locations</c> name one of its audiences. Off, every granted entry is emitted, which is what
 	/// prior versions did.
 	/// </summary>
 	/// <remarks>
 	/// A deployment fact rather than a protocol one, which is why it is a switch and not a default. RFC
-	/// 9396 §2.2 says <c>locations</c> "typically" holds URIs identifying resource servers, and §9.1's own
+	/// 9396 section 2.2 says <c>locations</c> "typically" holds URIs identifying resource servers, and section 9.1's own
 	/// worked example pairs a client-style <c>aud</c> with a resource URI in <c>locations</c> - so the two
 	/// members are not required to be drawn from the same namespace, and comparing them is only meaningful
-	/// where a deployment has decided they are. §7 leaves what an access token carries to the authorization
-	/// server where the client did not ask, and §13 asks for need-to-know "as determined by local policy".
+	/// where a deployment has decided they are. section 7 leaves what an access token carries to the authorization
+	/// server where the client did not ask, and section 13 asks for need-to-know "as determined by local policy".
 	/// This is that policy, stated once.
 	///
 	/// The shape this was written for: several resource servers, every access token that carries
 	/// authorization details minted for a <c>resource</c>, and each server's <c>locations</c> written
-	/// exactly as the resource indicator it is registered under. That is RFC 9396 §12's
+	/// exactly as the resource indicator it is registered under. That is RFC 9396 section 12's
 	/// multiple-resource-server case, which is what <c>locations</c> was defined for. Matching a deployment
 	/// against that description is the operator's judgement, not a recommendation made here.
 	///
-	/// With no <see cref="Resources"/> registered and no token exchange in use, the audience is the issuer
+	/// With no <see cref="TenantDefinition.Resources"/> registered and no token exchange in use, the audience is the issuer
 	/// on every token and the filter can only delete: nothing can put a resource in the audience for a
 	/// <c>locations</c> value to match. That combination is not refused at startup, because it cannot be
 	/// told apart there from a deployment whose audiences arrive through RFC 8693 token exchange, where
 	/// they come from the client's own allowlist rather than from this list and the filter works.
 	///
-	/// Turn it on and an entry naming only other resource servers stops travelling to this one, which is
-	/// what §9.1 recommends where the comparison holds. Turn it on where it does not - RFC 8693 audiences
-	/// are opaque logical names, and a <see cref="DefaultResourceIndicator"/> names one API while
+	/// Turn it on and an entry naming only other resource servers stops traveling to this one, which is
+	/// what section 9.1 recommends where the comparison holds. Turn it on where it does not - RFC 8693 audiences
+	/// are opaque logical names, and a <see cref="TenantDefinition.DefaultResourceIndicator"/> names one API while
 	/// <c>locations</c> name others - and every located entry disappears from every token. The switch is
 	/// off until a host says the two agree, because nothing here can check that they do.
 	///
@@ -322,6 +263,21 @@ public record OidcOptions
 	public DeviceAuthorizationOptions? DeviceAuthorization { get; set; }
 
 	/// <summary>
+	/// How many requests one authenticated client may make to the introspection and revocation endpoints within
+	/// a window. On by default with a high limit, so a client that starts looping is stopped before it costs
+	/// the deployment its capacity.
+	/// </summary>
+	public CallerRateLimitOptions CallerRateLimit { get; set; } = new();
+
+	/// <summary>
+	/// How many client authentications may fail from one source address within a window before this server stops
+	/// looking at credentials from it, at every endpoint that authenticates a client - the token endpoint
+	/// included. It bounds what a sender that never authenticates successfully can cost, which the per-client
+	/// budget cannot reach.
+	/// </summary>
+	public AuthenticationFailureLimitOptions AuthenticationFailureLimit { get; set; } = new();
+
+	/// <summary>
 	/// Specifies the length of session identifiers used by the OIDC server.
 	/// The length determines the uniqueness and security of the session identifiers.
 	/// </summary>
@@ -342,6 +298,20 @@ public record OidcOptions
 	public int GrantIdLength { get; set; } = 64;
 
 	/// <summary>
+	/// Specifies the length, in random bytes, of the value that carries an end user's answer to the logout
+	/// question back to this server. A value somebody else could state would let any site end a session, so it
+	/// must carry enough entropy to make guessing hopeless.
+	/// </summary>
+	public int LogoutConfirmationLength { get; set; } = 64;
+
+	/// <summary>
+	/// How long an issued logout confirmation stays good for. It bounds how long the page asking the end user may
+	/// sit open before their answer is refused, so it is measured in the patience of somebody reading a question,
+	/// not in the length of a session. Only a non-positive value is refused at startup.
+	/// </summary>
+	public TimeSpan LogoutConfirmationLifetime { get; set; } = TimeSpan.FromMinutes(10);
+
+	/// <summary>
 	/// Determines whether the OIDC server requires Pushed Authorization Requests (PAR).
 	/// </summary>
 	public bool RequirePushedAuthorizationRequests { get; set; } = false;
@@ -355,15 +325,15 @@ public record OidcOptions
 	/// <summary>
 	/// Governs how a request object resolves a parameter that appears both inside the object and in the
 	/// OAuth query syntax - a choice between two specifications. When <c>false</c> (the default), request-object
-	/// processing follows the OpenID Connect Core §6.1 merge semantics: the object's values supersede those
+	/// processing follows the OpenID Connect Core section 6.1 merge semantics: the object's values supersede those
 	/// passed outside it, but a parameter passed only outside the object is still used. Set to <c>true</c> for
-	/// the strict RFC 9101 §6.3 rule, where the authorization request is exactly the content of the object and
+	/// the strict RFC 9101 section 6.3 rule, where the authorization request is exactly the content of the object and
 	/// any parameter passed outside it is ignored ("the authorization server MUST only use the parameters in
 	/// the Request Object"). The strict rule suits FAPI-style OAuth deployments; as an OpenID Provider the
-	/// server defaults to the merge behaviour, since strict processing would drop parameters that existing
+	/// server defaults to the merge behavior, since strict processing would drop parameters that existing
 	/// OpenID Connect clients commonly pass outside the object. A client held to the FAPI 2.0 security profile
 	/// is processed strictly regardless of this global default.
-	/// This switch affects only parameter exclusivity; the other RFC 9101 §6.3 requirement - that a
+	/// This switch affects only parameter exclusivity; the other RFC 9101 section 6.3 requirement - that a
 	/// <c>client_id</c> or <c>response_type</c> present both inside and outside the object be identical - is
 	/// enforced in both modes and cannot be turned off.
 	/// </summary>
@@ -425,12 +395,16 @@ public record OidcOptions
 	public long? MaxRegistrationRequestSize { get; set; } = 128 * 1024;
 
 	/// <summary>
-	/// The set of revoked initial access token identifiers (JWT subject claims).
-	/// Tokens whose subject appears in this set will be rejected during client registration.
-	/// For production use with large or dynamic revocation lists, replace
-	/// <see cref="Endpoints.DynamicClientManagement.Interfaces.IInitialAccessTokenRevocationProvider"/>
-	/// with a database- or cache-backed implementation.
+	/// No longer read: an initial access token is revoked by its identifier, recorded in
+	/// <see cref="Features.Storages.ITokenRegistry"/> at the tenant that issued it.
 	/// </summary>
+	/// <remarks>
+	/// Kept so that a deployment still listing subjects here does not start, rather than starting with every
+	/// token it revoked accepted again.
+	/// </remarks>
+	[Obsolete("Revoke an initial access token by its jti, recorded as revoked in ITokenRegistry at the tenant that issued it.")]
+	[System.Diagnostics.CodeAnalysis.SuppressMessage("Info Code Smell", "S1133",
+		Justification = "Kept on purpose: a deployment still listing subjects here is refused at startup instead of ignored.")]
 	public HashSet<string> RevokedInitialAccessTokenSubjects { get; set; } = [];
 
 	/// <summary>
@@ -455,15 +429,48 @@ public record OidcOptions
 	public TimeSpan RevocationCutoffRetention { get; set; } = TimeSpan.FromDays(31);
 
 	/// <summary>
-	/// How far a token may appear to have been issued after a revocation cutoff and still be refused by it.
+	/// How long the record of which clients signed in to a session is kept at least, counted from the session's
+	/// last authorization of any client. It is kept at most twice as long.
 	/// </summary>
 	/// <remarks>
-	/// The cutoff compares an instant one instance recorded against an <c>iat</c> another instance stamped, so
+	/// Logout notifies the clients this record names, so a session that ends after its record has expired does not
+	/// tell the clients that signed in before the expiry.
+	/// <para>
+	/// Set this to at least the longest a session can stay signed in without authorizing a client, which is the
+	/// host's authentication cookie lifetime. With sliding expiration, a session kept alive only by visits to the
+	/// host's own pages records nothing here and can outlast any value, so choose the longest such stretch the
+	/// deployment expects. It cannot be derived here, because the cookie belongs to the host. Keeping it longer
+	/// costs a few small records per client per session until they expire. A value under an hour is refused at
+	/// startup.
+	/// </para>
+	/// </remarks>
+	public TimeSpan SessionClientsRetention { get; set; } = TimeSpan.FromDays(31);
+
+	/// <summary>
+	/// The worst difference between the clocks of this server's own instances: how far a token this server issued
+	/// may appear to be dated ahead and still be accepted, and how far it may appear to have been issued after a
+	/// revocation cutoff and still be refused by it. Defaults to five seconds.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Not the tolerance for assertions other parties sign, which is <see cref="JwtBearerOptions.ClockSkew"/>: this
+	/// one prices the drift between the instances of this deployment, and one number holds it, since two settings
+	/// for one fact would be set apart and the larger one would let a token through the smaller one's gap.
+	/// </para>
+	/// <para>
+	/// A token this server issued is read back by whichever instance the next request reaches, and that instance's
+	/// clock may lag the one that issued it, so a token presented within the second it was issued would read as not
+	/// yet valid. Its <c>nbf</c> and <c>iat</c> may therefore be up to this far ahead; its <c>exp</c> is never
+	/// extended, since the expiry the issuing instance set is a deadline no instance moves.
+	/// </para>
+	/// <para>
+	/// A revocation cutoff compares an instant one instance recorded against an <c>iat</c> another instance stamped, so
 	/// the two come from different clocks. The error is not symmetric in consequence. A token that reads as
 	/// older than it is gets refused once and the client asks again; a token that reads as newer escapes the
 	/// revocation entirely, and because a refresh rotation carries the original <c>iat</c> forward it keeps
 	/// escaping on every use. A drift of seconds therefore becomes access that never ends, and nothing
 	/// reports it.
+	/// </para>
 	/// <para>
 	/// The value is added to the cutoff, so it widens what a revocation catches, and the cost is that it
 	/// catches more than the revocation named. A token minted after a legitimate sign-in, but inside this
@@ -479,16 +486,18 @@ public record OidcOptions
 	/// deployment that knows its clocks are worse, and price the lockout when doing so.
 	/// </para>
 	/// <para>
-	/// It applies to tokens alone. An authentication session is judged with no tolerance at all, because
-	/// there the same widening would refuse the fresh sign-in a user answers the refusal with, and that
+	/// It applies to tokens, and to a grant redeemed against a revocation of the end user at its client, whose
+	/// tokens the same window would refuse anyway. An authentication session is judged with no tolerance at all,
+	/// because there the same widening would refuse the fresh sign-in a user answers the refusal with, and that
 	/// retry lands in the same window - a loop rather than a wait.
 	/// </para>
 	/// <para>
 	/// Zero is allowed and means the tokens are trusted to carry comparable instants, which is true of a
-	/// single-instance deployment and of nothing else.
+	/// single-instance deployment and of nothing else. A tenant held to FAPI 2.0 is refused while the value is above
+	/// that profile's ceiling.
 	/// </para>
 	/// </remarks>
-	public TimeSpan RevocationCutoffSkew { get; set; } = TimeSpan.FromSeconds(5);
+	public TimeSpan ReplicaClockSkew { get; set; } = TimeSpan.FromSeconds(5);
 
 	/// <summary>
 	/// Whether ending a session also revokes the tokens issued within it.
@@ -531,21 +540,9 @@ public record OidcOptions
 
 	/// <summary>
 	/// Configuration options for OAuth 2.0 DPoP (RFC 9449), governing the
-	/// <see cref="ProofValidator"/> behaviour and related primitives.
+	/// <see cref="ProofValidator"/> behavior and related primitives.
 	/// </summary>
 	public DPoPOptions DPoP { get; set; } = new();
-
-	/// <summary>
-	/// The security profile this deployment holds EVERY client to, whatever
-	/// <see cref="ClientInfo.SecurityProfile"/> each one names for itself. A single-profile
-	/// deployment sets this once - for example to <see cref="ClientSecurityProfile.Fapi2"/> - and
-	/// every client is held to the FAPI 2.0 control bundle.
-	/// This is a floor rather than a default: a client can ask for more and no registration can take
-	/// it out from under what is set here. The default <see cref="ClientSecurityProfile.None"/>
-	/// demands nothing, leaving each client governed by whatever it names for itself, or by its
-	/// individual metadata flags where it names nothing.
-	/// </summary>
-	public ClientSecurityProfile DefaultSecurityProfile { get; set; } = ClientSecurityProfile.None;
 
 	/// <summary>
 	/// Enables detection of a client reusing a constant PKCE <c>code_challenge</c> or OpenID Connect

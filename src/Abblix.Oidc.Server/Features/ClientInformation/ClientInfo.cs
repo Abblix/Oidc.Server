@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
@@ -71,6 +72,11 @@ public record ClientInfo(string ClientId)
     public bool? PkceRequired { get; set; } = true;
 
     /// <summary>
+    /// Whether the client uses PKCE when nothing else requires it: what it states, or true when it states nothing.
+    /// </summary>
+    public bool EffectivePkceRequired => PkceRequired ?? true;
+
+    /// <summary>
     /// Indicates if the client is allowed to use the "plain" method for PKCE.
     /// It is recommended to use stronger methods like "S256" for enhanced security.
     /// </summary>
@@ -87,6 +93,15 @@ public record ClientInfo(string ClientId)
     /// Shorter access token lifetimes reduce the risk of token leakage.
     /// </summary>
     public TimeSpan AccessTokenExpiresIn { get; set; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Whether every access token issued to this client names one resource. An authorization may still grant several
+    /// resources, and each token request names the one its access token is for (RFC 8707 section 2.2): a token request
+    /// naming several, or naming none while its grant holds several, is refused with <c>invalid_target</c>. A request
+    /// that has no later token request to name one at, an authorization request returning an access token, a device
+    /// authorization request or a backchannel authentication request, is refused for naming several itself.
+    /// </summary>
+    public bool SingleResourceAccessTokens { get; set; }
 
     /// <summary>
     /// Configures the behavior and properties of refresh tokens issued to this client,
@@ -158,7 +173,7 @@ public record ClientInfo(string ClientId)
     /// its effective response mode (the explicit <c>response_mode</c>, or the flow default when the parameter is
     /// omitted) is a member of the list, compared by exact, case-sensitive string match. This lets a host close a
     /// response-mode downgrade: a client the host intends to run with
-    /// <see cref="Common.Constants.ResponseModes.FormPost"/> cannot be driven with <c>fragment</c> or
+    /// <see cref="Abblix.Oidc.ResponseModes.FormPost"/> cannot be driven with <c>fragment</c> or
     /// <c>query</c> on a crafted request, nor by omitting the parameter to inherit the flow default. The
     /// restriction is applied on top of, and after, the flow-compatibility check. When <c>null</c> or empty (the
     /// default) it imposes no per-client restriction. There is no registered DCR metadata parameter for it, so
@@ -167,9 +182,27 @@ public record ClientInfo(string ClientId)
     public string[]? AllowedResponseModes { get; set; }
 
     /// <summary>
-    /// Allows the client to request tokens that enable access to the user's resources while they’re offline.
+    /// Whether the client may receive offline access, and whether its authorization request has to ask for consent
+    /// with <c>prompt=consent</c> to receive it. Disabled by default.
     /// </summary>
-    public bool? OfflineAccessAllowed { get; set; } = false;
+    public OfflineAccess OfflineAccess { get; set; }
+
+    /// <summary>
+    /// Lets this client receive the offline access it is allowed from an authorization request whose response carries
+    /// an access token through the user agent, as with the <c>code token</c> and <c>code id_token token</c> response
+    /// types. Off by default.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Core 1.0 section 17.4: "this specification mandates ignoring the offline access request when the
+    /// Access Token is transmitted through the User Agent", since an access token exposed there could be used to
+    /// reach the UserInfo endpoint and should not be one that enables offline access. A client built on servers that
+    /// issued the refresh token anyway keeps working while it moves to a response type returning the access token from
+    /// the token endpoint alone. Granted by the host, never through dynamic client registration, and no wider than
+    /// <see cref="OfflineAccess"/> allows. An update of a dynamically registered client (RFC 7592) builds the client
+    /// anew, so it takes <see cref="Common.Configuration.NewClientOptions.AllowOfflineAccessWithUserAgentAccessToken"/>
+    /// again, replacing whatever the host set on that one client.
+    /// </remarks>
+    public bool AllowOfflineAccessWithUserAgentAccessToken { get; set; } = false;
 
     /// <summary>
     /// The set of JSON Web Keys used by the client, typically for signing request objects and decrypting
@@ -184,7 +217,7 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// Specifies the algorithm that must be used for signing identity token responses issued to this client.
-    /// Per Back-Channel Logout 1.0 §2.4 logout tokens are signed in the same manner as ID Tokens, so this
+    /// Per Back-Channel Logout 1.0 section 2.4 logout tokens are signed in the same manner as ID Tokens, so this
     /// value also serves as the default signing algorithm for back-channel logout tokens unless
     /// <see cref="LogoutTokenSignedResponseAlgorithm"/> overrides it.
     /// </summary>
@@ -193,7 +226,7 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// The algorithm used to sign back-channel logout tokens issued to this client. When null
     /// (the default), the value of <see cref="IdentityTokenSignedResponseAlgorithm"/> applies -
-    /// Back-Channel Logout 1.0 §2.4 signs logout tokens in the same manner as ID Tokens, and this
+    /// Back-Channel Logout 1.0 section 2.4 signs logout tokens in the same manner as ID Tokens, and this
     /// property makes that otherwise implicit coupling visible and overridable per client. There is
     /// no registered DCR metadata parameter for it, so the override is host-side configuration only.
     /// </summary>
@@ -206,7 +239,7 @@ public record ClientInfo(string ClientId)
     public bool ForceUserClaimsInIdentityToken { get; set; } = false;
 
     /// <summary>
-    /// RFC 9396 §10: the client's per-client allowlist of authorization-detail <c>type</c>
+    /// RFC 9396 section 10: the client's per-client allowlist of authorization-detail <c>type</c>
     /// values it may use in <c>authorization_details</c> requests. DCR-exposed
     /// (<c>authorization_details_types</c>). Semantics:
     /// <list type="bullet">
@@ -234,7 +267,7 @@ public record ClientInfo(string ClientId)
     public bool ForceAuthorizationDetailsInIdentityToken { get; set; } = false;
 
     /// <summary>
-    /// RFC 8693 §2.1 per-client allowlist of <c>subject_token_type</c> URIs this client may submit
+    /// RFC 8693 section 2.1 per-client allowlist of <c>subject_token_type</c> URIs this client may submit
     /// to the Token Exchange grant. Independent of <see cref="EffectiveGrantTypes"/> -- a client must
     /// have <c>urn:ietf:params:oauth:grant-type:token-exchange</c> in
     /// <see cref="EffectiveGrantTypes"/> to invoke the grant, and the requested
@@ -249,10 +282,10 @@ public record ClientInfo(string ClientId)
     /// </list>
     /// Mirrors the <see cref="AuthorizationDetailsTypes"/> tri-state pattern.
     /// </summary>
-    public string[]? TokenExchangeAllowedSubjectTokenTypes { get; set; }
+    public Uri[]? TokenExchangeAllowedSubjectTokenTypes { get; set; }
 
     /// <summary>
-    /// RFC 8693 §2.1 per-client allowlist of <c>audience</c> values this client may request when
+    /// RFC 8693 section 2.1 per-client allowlist of <c>audience</c> values this client may request when
     /// exchanging a token. The requested audience is written into the issued token's <c>aud</c>
     /// claim, so without a constraint a client could mint a token for any target service it names.
     /// This allowlist is therefore <b>default-deny</b>, unlike the unconstrained-by-default
@@ -269,12 +302,12 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// The locations this client answers for when it acts as a resource server, matched against the
-    /// RFC 9396 §2.2 <c>locations</c> of an <c>authorization_details</c> entry. Introspecting a token
+    /// RFC 9396 section 2.2 <c>locations</c> of an <c>authorization_details</c> entry. Introspecting a token
     /// issued to somebody else returns the entries addressed to one of these, and nothing when the
     /// list is absent.
     /// </summary>
     /// <remarks>
-    /// RFC 9396 §9 obliges the server to make the granted details available to the resource server
+    /// RFC 9396 section 9 obliges the server to make the granted details available to the resource server
     /// enforcing them, and allows either channel: the access token, or the introspection response.
     /// A deployment whose access tokens are readable by their audience needs neither this member nor
     /// the disclosure, since the details ride in the token. One encrypting them to its own keys has
@@ -283,7 +316,7 @@ public record ClientInfo(string ClientId)
     /// Absent by default, so no existing deployment starts disclosing anything.
     /// </para>
     /// <para>
-    /// Matching is TEXTUAL and exact. RFC 9396 §12 requires it: "No additional transformation or
+    /// Matching is TEXTUAL and exact. RFC 9396 section 12 requires it: "No additional transformation or
     /// normalization is to be done in evaluating equivalence of string values". A location is
     /// therefore compared to what is written here character for character, so a trailing slash, a
     /// spelled-out default port or a different case is a different location. Write the value exactly
@@ -299,7 +332,7 @@ public record ClientInfo(string ClientId)
     public Uri[]? ResourceLocations { get; set; }
 
     /// <summary>
-    /// RFC 8693 §1.3: by default this AS rejects a Token Exchange request where the
+    /// RFC 8693 section 1.3: by default this AS rejects a Token Exchange request where the
     /// <c>subject_token</c> was originally issued to a different client than the one presenting
     /// it -- the "confused deputy" anti-pattern. When this client is intended to operate as an
     /// audit broker / proxy that legitimately receives tokens issued to other clients, set this
@@ -311,17 +344,17 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// Marks this client as a protected resource entitled to introspect tokens issued to other clients.
-    /// RFC 7662 §4: the authorization server "SHOULD require protected resources to be specifically authorized
+    /// RFC 7662 section 4: the authorization server "SHOULD require protected resources to be specifically authorized
     /// to call the introspection endpoint". This is that authorization.
     /// </summary>
     /// <remarks>
     /// Without it a caller may only ask about tokens issued to itself, which is the one caller RFC 7662 is not
-    /// written for: §2.1 has the protected resource make the call, and a protected resource is by construction
+    /// written for: section 2.1 has the protected resource make the call, and a protected resource is by construction
     /// not the client the token was issued to. Such a caller would otherwise be told a live token does not
-    /// exist, the answer §2.2 reserves for a token that was never issued or that the caller may not ask about.
+    /// exist, the answer section 2.2 reserves for a token that was never issued or that the caller may not ask about.
     /// <para>
     /// The response is narrowed for a token issued to somebody else: the end-user identifier and any claims
-    /// beyond the members RFC 7662 §2.2 defines are withheld, per §5 - "omitting privacy-sensitive information
+    /// beyond the members RFC 7662 section 2.2 defines are withheld, per section 5 - "omitting privacy-sensitive information
     /// from an introspection response is the simplest way of minimizing privacy issues".
     /// </para>
     /// This is granted by the host, never through dynamic client registration. A client may take a restriction
@@ -330,7 +363,41 @@ public record ClientInfo(string ClientId)
     public bool AllowCrossClientIntrospection { get; set; } = false;
 
     /// <summary>
-    /// Describes how the client authenticates to the token endpoint per RFC 6749 §2.3 / OIDC Core §9.
+    /// What this client's authentication assertions may name as their audience, and in which form: the issuer identifier
+    /// RFC 10070 section 4 requires, as a string, and for a client the host lets keep an older form while it changes,
+    /// the token endpoint URL (<see cref="ClientAssertionAudiences.TokenEndpoint"/>), the backchannel authentication
+    /// endpoint URL CIBA Core 1.0 section 7.1 names
+    /// (<see cref="ClientAssertionAudiences.BackChannelAuthenticationEndpoint"/>), an array holding any of them beside
+    /// other values (<see cref="ClientAssertionAudiences.AllowArray"/>), or several of these.
+    /// </summary>
+    /// <remarks>
+    /// RFC 10070 makes the authorization server "reject any JWT that does not contain its issuer identifier as its sole
+    /// audience value", which a client written to Core's "The Audience SHOULD be the URL of the Authorization Server's
+    /// Token Endpoint", or to RFC 7523's array, does not meet. Section 6 of the same RFC expects such clients to need time
+    /// to change, and the values beyond <see cref="ClientAssertionAudiences.Issuer"/> are that time, given to one client
+    /// at a time while every other client stays held to the rule.
+    /// <para>
+    /// A value left unset, zero, reads as <see cref="ClientAssertionAudiences.Issuer"/>, so a host that stores its
+    /// clients itself and has no value for this one holds the client to the rule. A configured set without
+    /// <see cref="ClientAssertionAudiences.Issuer"/>, or naming a value the enumeration does not define, is refused at
+    /// startup, and one beyond the issuer alone is refused for a client held to FAPI 2.0, at startup and when the
+    /// client authenticates.
+    /// </para>
+    /// <para>
+    /// This is granted by the host, never through dynamic client registration. An update of a dynamically registered
+    /// client (RFC 7592) builds the client anew, so it takes
+    /// <see cref="Common.Configuration.NewClientOptions.ClientAssertionAudiences"/> again, replacing whatever the host
+    /// set on that one client.
+    /// </para>
+    /// </remarks>
+    public ClientAssertionAudiences ClientAssertionAudiences
+    {
+        get => field.ByDefault(ClientAssertionAudiences.Issuer);
+        set => field = value.ByDefault(ClientAssertionAudiences.Issuer);
+    } = ClientAssertionAudiences.Issuer;
+
+    /// <summary>
+    /// Describes how the client authenticates to the token endpoint per RFC 6749 section 2.3 / OIDC Core section 9.
     /// Common values include <c>client_secret_basic</c>, <c>client_secret_post</c>, <c>private_key_jwt</c>,
     /// <c>client_secret_jwt</c>, <c>tls_client_auth</c> (RFC 8705), and <c>none</c> (public clients).
     /// Drives the value of <see cref="ClientType"/>.
@@ -343,7 +410,7 @@ public record ClientInfo(string ClientId)
     public TlsClientAuthOptions? TlsClientAuth { get; set; }
 
     /// <summary>
-    /// RFC 9449 §5.2 client metadata (<c>dpop_bound_access_tokens</c>): when <c>true</c>,
+    /// RFC 9449 section 5.2 client metadata (<c>dpop_bound_access_tokens</c>): when <c>true</c>,
     /// the client MUST present a valid DPoP proof on the token endpoint and the issued
     /// access token will be DPoP-bound (<c>cnf.jkt</c>). When <c>false</c>, DPoP is
     /// opportunistic - a valid proof still binds the token, otherwise a Bearer token is
@@ -352,7 +419,7 @@ public record ClientInfo(string ClientId)
     public bool RequireDPoP { get; set; } = false;
 
     /// <summary>
-    /// RFC 9126 §6 client metadata (<c>require_pushed_authorization_requests</c>): when <c>true</c>,
+    /// RFC 9126 section 6 client metadata (<c>require_pushed_authorization_requests</c>): when <c>true</c>,
     /// a pushed authorization request is the only way this client may start an authorization flow -
     /// a request arriving at the authorization endpoint without a PAR-issued request URI is rejected
     /// even when the server-wide requirement is off. FAPI-grade clients set this so a granular
@@ -361,7 +428,7 @@ public record ClientInfo(string ClientId)
     public bool RequirePushedAuthorizationRequests { get; set; } = false;
 
     /// <summary>
-    /// RFC 9101 §10.5 client metadata (<c>require_signed_request_object</c>): when <c>true</c>,
+    /// RFC 9101 section 10.5 client metadata (<c>require_signed_request_object</c>): when <c>true</c>,
     /// this client must deliver its authorization request parameters as a signed request object
     /// (via the request parameter or a pushed authorization request) - plain-parameter requests and
     /// unsigned request objects are rejected.
@@ -369,7 +436,7 @@ public record ClientInfo(string ClientId)
     public bool RequireSignedRequestObject { get; set; } = false;
 
     /// <summary>
-    /// RFC 8705 §3.4 client metadata (<c>tls_client_certificate_bound_access_tokens</c>): when
+    /// RFC 8705 section 3.4 client metadata (<c>tls_client_certificate_bound_access_tokens</c>): when
     /// <c>true</c>, access tokens issued to this client are certificate-bound whenever the token
     /// request arrives over mutual TLS - independently of the client authentication method, which
     /// is what distinguishes this flag from the implicit binding the mTLS authentication methods
@@ -381,8 +448,9 @@ public record ClientInfo(string ClientId)
     /// A named security profile this client asks to be held to, ON TOP of whatever the deployment
     /// demands of every client. <see cref="ClientSecurityProfile.Fapi2"/> forces the FAPI 2.0
     /// control bundle (PKCE restricted to <c>S256</c>, Pushed Authorization Requests,
-    /// sender-constrained tokens, code-only responses) and prevents the individual toggles above
-    /// from weakening it.
+    /// sender-constrained tokens, code-only responses), <see cref="ClientSecurityProfile.Fapi1Advanced"/> the
+    /// FAPI 1.0 Advanced one (signed request objects and only their parameters, sender-constrained tokens), and
+    /// either prevents the individual toggles above from weakening it.
     ///
     /// It can only tighten. <see cref="ClientSecurityProfile.None"/> names no controls of its
     /// own and therefore changes nothing where the deployment names some: a server-wide profile is
@@ -392,7 +460,7 @@ public record ClientInfo(string ClientId)
     /// turned on.
     ///
     /// <c>null</c> (the default) states no preference and leaves the client on
-    /// <see cref="Common.Configuration.OidcOptions.DefaultSecurityProfile"/> alone.
+    /// <see cref="MultiTenancy.TenantDefinition.DefaultSecurityProfile"/> alone.
     /// </summary>
     public ClientSecurityProfile? SecurityProfile { get; set; }
 
@@ -440,6 +508,12 @@ public record ClientInfo(string ClientId)
     /// representing the client's sector.
     /// </summary>
     public string? SectorIdentifier { get; set; }
+
+    /// <summary>
+    /// The sector identifier URI the client registered (OpenID Connect Core 1.0 section 8.1), kept so the
+    /// registration responses return it; <see cref="SectorIdentifier"/> is the host derived from it.
+    /// </summary>
+    public Uri? SectorIdentifierUri { get; set; }
 
     /// <summary>
     /// Indicates whether the login hint token should be parsed and validated as a JSON Web Token (JWT).
@@ -563,7 +637,7 @@ public record ClientInfo(string ClientId)
 
     /// <summary>
     /// JARM (<c>authorization_signed_response_alg</c>): the JWS algorithm used to sign authorization responses
-    /// packed into a JWT for this client. Defaults to <see cref="SigningAlgorithms.RS256"/> per JARM §3; the
+    /// packed into a JWT for this client. Defaults to <see cref="SigningAlgorithms.RS256"/> per JARM section 3; the
     /// algorithm <c>none</c> is not permitted. Only consulted when the client requests a JWT response mode.
     /// </summary>
     public string AuthorizationSignedResponseAlgorithm { get; set; } = SigningAlgorithms.RS256;
@@ -606,6 +680,60 @@ public record ClientInfo(string ClientId)
     /// The scope values the client is allowed to request per RFC 7591 Section 2.
     /// </summary>
     public string[]? AllowedScopes { get; set; }
+
+    /// <summary>
+    /// The resources this client may get an access token for (RFC 8707), checked against the audience each access
+    /// token carries: a resource the request names, one inferred from its scopes, one carried over from an earlier
+    /// grant and the tenant's default resource indicator alike. Unset, the client may get a token for any registered
+    /// resource, as a client with no <see cref="AllowedScopes"/> may ask for any scope.
+    /// </summary>
+    /// <remarks>
+    /// Not to be confused with <see cref="ResourceLocations"/>, which describes this client acting as a resource
+    /// server. The audiences a client names in token exchange are held to
+    /// <see cref="TokenExchangeAllowedAudiences"/> instead.
+    /// </remarks>
+    public Uri[]? AllowedResources { get; set; }
+
+    /// <summary>
+    /// Whether this client may get an access token addressed to <paramref name="resource"/>.
+    /// </summary>
+    public bool MayGetTokenFor(Uri resource)
+        => AllowedResources is not { } allowed || allowed.Contains(resource);
+
+    /// <summary>
+    /// The scope a request of this client naming none is served with: the pre-defined default RFC 6749 section 3.3
+    /// lets the server use when the client omits the scope parameter.
+    /// </summary>
+    /// <remarks>
+    /// It applies wherever a client may omit the scope and nothing else gives the request one: the authorization,
+    /// device authorization and backchannel authentication requests, and the token requests of the client
+    /// credentials, password and JWT bearer grants. A request naming a scope is served with the one it names. Unset
+    /// or empty, such a request is served with no scope, unless <see cref="RequireScope"/> refuses it. The default is
+    /// held to <see cref="AllowedScopes"/> as a scope the request named would be.
+    /// </remarks>
+    public string[]? DefaultScope { get; set; }
+
+    /// <summary>
+    /// Whether a request of this client naming no scope is refused with <c>invalid_scope</c>, the other answer
+    /// RFC 6749 section 3.3 allows, rather than served with <see cref="DefaultScope"/>.
+    /// </summary>
+    public bool RequireScope { get; set; }
+
+    /// <summary>
+    /// The scope a request naming <paramref name="requested"/> is served with: that scope when it names one, or else
+    /// <see cref="DefaultScope"/>, or null when <see cref="RequireScope"/> refuses a request naming none.
+    /// </summary>
+    /// <param name="requested">The scope the request names, empty when it names none.</param>
+    public string[]? ScopeServedFor(string[] requested)
+    {
+        if (requested.Length > 0)
+            return requested;
+
+        if (RequireScope)
+            return null;
+
+        return DefaultScope ?? [];
+    }
 
     /// <summary>
     /// A unique identifier for the client software per RFC 7591 Section 2.

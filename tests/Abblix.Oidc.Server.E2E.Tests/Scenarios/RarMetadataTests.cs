@@ -7,11 +7,15 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 
@@ -21,7 +25,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// RFC 9396 / RFC 8693 server-metadata surface for Rich Authorization Requests:
 /// discovery advertisement (grant types, authorization_details_types_supported),
 /// DCR round-trip of authorization_details_types, the embedded-license issuer
-/// whitelist, and introspection echo of authorization_details (§9.2). Core round-trip
+/// whitelist, and introspection echo of authorization_details (section 9.2). Core round-trip
 /// lives in <see cref="RichAuthorizationRequestsTests"/> and consent in
 /// <see cref="RarConsentTests"/>; the three share <see cref="RarTestBase"/>.
 /// </summary>
@@ -30,7 +34,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
     [Fact]
     public async Task Discovery_exposes_token_exchange_grant_type()
     {
-        // RFC 8693 §5: AS that supports Token Exchange MUST advertise it in grant_types_supported.
+        // RFC 8693 section 5: AS that supports Token Exchange MUST advertise it in grant_types_supported.
         // Exposure follows the host opting in: AddTokenExchangeGrant() -> AddAuthorizationGrant
         // <TokenExchangeGrantHandler>, CompositeAuthorizationGrantHandler aggregates GrantTypesSupported
         // across all registered handlers and the discovery pipeline reads from it. A host that never calls
@@ -39,7 +43,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         Assert.NotNull(discovery.GrantTypesSupported);
-        Assert.Contains("urn:ietf:params:oauth:grant-type:token-exchange", discovery.GrantTypesSupported!);
+        Assert.Contains(GrantTypes.TokenExchange, discovery.GrantTypesSupported);
     }
 
     [Fact]
@@ -49,7 +53,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         Assert.NotNull(discovery.AuthorizationDetailsTypesSupported);
-        Assert.Contains(TestConstants.PaymentInitiationType, discovery.AuthorizationDetailsTypesSupported!);
+        Assert.Contains(TestConstants.PaymentInitiationType, discovery.AuthorizationDetailsTypesSupported);
     }
 
     [Fact]
@@ -61,23 +65,23 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         var requested = new JsonObject
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
-            ["response_types"] = new JsonArray { "code" },
-            ["token_endpoint_auth_method"] = "client_secret_post",
-            ["authorization_details_types"] = new JsonArray { TestConstants.PaymentInitiationType },
+            [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
+            [RegistrationMembers.AuthorizationDetailsTypes] = new JsonArray { TestConstants.PaymentInitiationType },
         };
         var registered = await RegisterClientAsync(client, discovery, requested);
 
-        var echoed = registered["authorization_details_types"] as JsonArray;
+        var echoed = registered[ClientRegistrationResponse.Parameters.AuthorizationDetailsTypes] as JsonArray;
         Assert.NotNull(echoed);
         Assert.Single(echoed);
         Assert.Equal(TestConstants.PaymentInitiationType, echoed[0]!.GetValue<string>());
     }
 
     [Fact]
-    public async Task Embedded_test_license_rejects_any_issuer_other_than_TestConstants_Issuer()
+    public async Task Embedded_test_license_rejects_an_issuer_it_does_not_name()
     {
-        // The embedded test license declares valid_issuers = [TestConstants.Issuer] only.
+        // The embedded test license names only TestConstants.Issuer and its http form.
         // Loading it at TestHost startup registers a permissive license, but
         // LicenseChecker.CheckIssuer throws on any issuer that is not on that whitelist -
         // physically preventing the license from being lifted into a production host with
@@ -85,21 +89,24 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         // the host (which is what triggers LicenseLoader.LoadAsync on the embedded JWT).
         var client = CreateClient();
         _ = await FetchDiscoveryAsync(client);
+        using var tenant = TestTenant.Enter(Factory.Services);
+        var served = Factory.Services.GetRequiredService<ITenantAccessor>().CurrentTenant();
+        var catalog = Factory.Services.GetRequiredService<ITenantCatalog>();
 
-        Assert.Equal(TestConstants.Issuer, LicenseChecker.CheckIssuer(TestConstants.Issuer));
+        Assert.Equal(TestConstants.Issuer, LicenseChecker.CheckIssuer(TestConstants.Issuer, served, catalog));
 
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => LicenseChecker.CheckIssuer("https://attacker.example.com"));
+        var ex = Assert.ThrowsAny<InvalidOperationException>(
+            () => LicenseChecker.CheckIssuer("https://attacker.example.com", served, catalog));
         Assert.Contains("license", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task Introspection_response_echoes_authorization_details_from_access_token(/* RFC 9396 §9.2 */)
+    public async Task Introspection_response_echoes_authorization_details_from_access_token(/* RFC 9396 section 9.2 */)
     {
         var tokenResponse = await PerformParFlowAsync(
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
-        var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
@@ -108,7 +115,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         using var introspectRequest = new HttpRequestMessage(HttpMethod.Post, discovery.IntrospectionEndpoint);
         introspectRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             [IntrospectionRequest.Parameters.Token] = accessToken,
             [IntrospectionRequest.Parameters.TokenTypeHint] = UserInfoRequest.Parameters.AccessToken,
@@ -121,7 +128,7 @@ public class RarMetadataTests(TestFactory factory) : RarTestBase(factory)
         Assert.NotNull(body);
         Assert.True(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
 
-        var echoed = body[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray;
+        var echoed = body[IanaClaimTypes.AuthorizationDetails] as JsonArray;
         Assert.NotNull(echoed);
         Assert.Equal(PaymentInitiationWireJson, echoed.ToJsonString());
     }

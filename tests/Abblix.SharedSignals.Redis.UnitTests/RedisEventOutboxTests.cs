@@ -16,13 +16,13 @@ using Xunit;
 namespace Abblix.SharedSignals.Redis.UnitTests;
 
 /// <summary>
-/// Pins the Redis-native outbox against a REAL Redis-protocol server - the embedded Garnet the
-/// fixture starts - because the whole point of this implementation is server-side atomicity,
+/// Pins the Redis-native outbox against a REAL Redis server - the container the fixture starts -
+/// because the whole point of this implementation is server-side atomicity,
 /// which a mock of the client API cannot witness. The concurrency test is the reason the
 /// package exists: mutations from independent instances must compose, where the
 /// one-value-per-queue design loses them.
 /// </summary>
-public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<GarnetFixture>
+public sealed class RedisEventOutboxTests(RedisFixture redis) : IClassFixture<RedisFixture>
 {
     /// <summary>
     /// Streams are namespaced per test: the class fixture is one shared server, and a
@@ -39,7 +39,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
 
     private static readonly RedisOutboxOptions Options = new();
 
-    private RedisEventOutbox NewOutbox() => new(garnet.Connection, Options);
+    private RedisEventOutbox NewOutbox() => new(redis.Connection, Options);
 
     /// <summary>
     /// The key the outbox stores under, spelled out here rather than taken from the implementation: a
@@ -104,7 +104,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         // so two instances over one multiplexer are one instance - and the client keeps the physical
         // connection for a whole transaction, so their commands never interleave at the server. Built
         // that way this test would exclude the very concurrency it claims to measure.
-        await using var secondConnection = garnet.CreateConnection();
+        await using var secondConnection = redis.CreateConnection();
         var first = NewOutbox();
         var second = new RedisEventOutbox(secondConnection, Options);
         var streamId = NewStreamId();
@@ -144,12 +144,12 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         // register an override: with AddSingleton the later call simply wins, so the test would pass
         // in the order it exercises and fail in the other, while claiming both.
         var services = new ServiceCollection();
-        services.AddSingleton<IConnectionMultiplexer>(garnet.Connection);
+        services.AddSingleton<IConnectionMultiplexer>(redis.Connection);
         services.TryAddSingleton<IEventOutbox, NeverCalledOutbox>();
         services.AddSharedSignalsRedisOutbox();
 
         var reversed = new ServiceCollection();
-        reversed.AddSingleton<IConnectionMultiplexer>(garnet.Connection);
+        reversed.AddSingleton<IConnectionMultiplexer>(redis.Connection);
         reversed.AddSharedSignalsRedisOutbox();
         reversed.TryAddSingleton<IEventOutbox, NeverCalledOutbox>();
         await using (var reversedProvider = reversed.BuildServiceProvider())
@@ -187,7 +187,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         var streamId = NewStreamId();
 
         // The queue key holds a string, so the append against it cannot succeed.
-        await garnet.Connection.GetDatabase().StringSetAsync(
+        await redis.Connection.GetDatabase().StringSetAsync(
             StoredKeyOf(streamId, "queue"), "not a list");
 
         await Assert.ThrowsAsync<RedisServerException>(
@@ -217,7 +217,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct);
         await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-broken", "b.b.b"), ct);
         await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-3", "c.c.c"), ct);
-        await garnet.Connection.GetDatabase().HashSetAsync(itemsKey, "jti-broken", planted);
+        await redis.Connection.GetDatabase().HashSetAsync(itemsKey, "jti-broken", planted);
 
         var pending = await outbox.PendingAsync(ReceiverId, streamId, null, ct);
         Assert.Equal(["jti-1", "jti-3"], pending.Select(item => item.JwtId));
@@ -227,7 +227,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
         Assert.Equal(2, (await outbox.PendingAsync(ReceiverId, streamId, null, ct)).Count);
         Assert.Equal(
             2,
-            await garnet.Connection.GetDatabase().ListLengthAsync(
+            await redis.Connection.GetDatabase().ListLengthAsync(
                 StoredKeyOf(streamId, "queue")));
     }
 
@@ -240,14 +240,14 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     {
         var ct = TestContext.Current.CancellationToken;
         var outbox = new RedisEventOutbox(
-            garnet.Connection, new RedisOutboxOptions { Retention = TimeSpan.FromHours(1) });
+            redis.Connection, new RedisOutboxOptions { Retention = TimeSpan.FromHours(1) });
         var streamId = NewStreamId();
         var queueKey = (RedisKey)StoredKeyOf(streamId, "queue");
         var itemsKey = (RedisKey)StoredKeyOf(streamId, "items");
 
         await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a"), ct);
 
-        var database = garnet.Connection.GetDatabase();
+        var database = redis.Connection.GetDatabase();
         Assert.NotNull(await database.KeyTimeToLiveAsync(queueKey));
         Assert.NotNull(await database.KeyTimeToLiveAsync(itemsKey));
 
@@ -320,7 +320,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
     /// two keys hash to different slots fails every multi-key call under Cluster. Escaping each half closed
     /// that by construction, so the refusal went with the condition it watched. Only <c>}</c> does
     /// anything at all, and only on the RECEIVER does it empty the tag rather than merely cut it - which
-    /// is why the rows below carry the other positions as their own controls. Dropping the escaping from
+    /// is why this theory's rows carry the other positions as their own controls. Dropping the escaping from
     /// the receiver half kills exactly the rows whose closing brace LEADS the receiver: everything else
     /// survives, including a closing brace that does not lead - it cuts the tag short without emptying
     /// it, and both keys are cut identically, so they stay together.
@@ -354,9 +354,11 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
 
         Assert.Equal("jti-1", Assert.Single(await outbox.PendingAsync(receiverId, streamId, null, ct)).JwtId);
 
-        var written = garnet.Connection.GetServer(garnet.Connection.GetEndPoints()[0])
+        var written = redis.Connection.GetServer(redis.Connection.GetEndPoints()[0])
             .Keys(pattern: $"Abblix.SharedSignals:RedisEventOutbox:*{marker}*")
+#pragma warning disable S8969 // The compiler does warn here without it (CS8600): a RedisKey converts to a nullable string
             .Select(key => (string)key!)
+#pragma warning restore S8969
             .ToArray();
 
         Assert.Equal(2, written.Length);
@@ -438,7 +440,7 @@ public sealed class RedisEventOutboxTests(GarnetFixture garnet) : IClassFixture<
 
         await outbox.EnqueueAsync(ReceiverId, streamId, new OutboxItem("jti-1", "a.a.a", true), ct);
 
-        var raw = (await garnet.Connection.GetDatabase().HashGetAsync(
+        var raw = (await redis.Connection.GetDatabase().HashGetAsync(
             StoredKeyOf(streamId, "items"), "jti-1")).ToString();
 
         Assert.Contains("\"jti\":\"jti-1\"", raw, StringComparison.Ordinal);

@@ -19,20 +19,9 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// mapping to the polymorphic <see cref="JsonWebKey"/> hierarchy.
 /// </summary>
 /// <remarks>
-/// The same primitive is exposed at two layers so the host can apply the fix as close
-/// to the source binding as practical:
-/// <list type="bullet">
-/// <item><description>
-/// <c>settings.Clients.WithJwksFromConfiguration(section)</c> - eager, runs right after
-/// <c>configuration.Get&lt;Settings&gt;()</c>, so every later consumer of
-/// <c>settings.Clients</c> sees populated <c>Jwks</c>.
-/// </description></item>
-/// <item><description>
-/// <c>options.AddClientJwksFromConfiguration(section)</c> - convenience inside the
-/// <c>AddOidcServices</c> options lambda, equivalent to mutating
-/// <c>options.Clients</c> through <c>WithJwksFromConfiguration</c>.
-/// </description></item>
-/// </list>
+/// The host applies it right after binding, <c>tenant.Clients.WithJwksFromConfiguration(section)</c> for a tenant
+/// bound from configuration, so every later consumer of the clients sees populated <c>Jwks</c>. A tenant's clients
+/// bound as an array are populated in place.
 /// </remarks>
 public static class ClientJwksConfigurationExtensions
 {
@@ -103,16 +92,5 @@ public static class ClientJwksConfigurationExtensions
         }
 
         return array;
-    }
-
-    /// <summary>
-    /// Convenience wrapper for use inside the <c>AddOidcServices</c> options lambda:
-    /// equivalent to <c>options.Clients = options.Clients.WithJwksFromConfiguration(section)</c>.
-    /// </summary>
-    public static void AddClientJwksFromConfiguration(
-        this OidcOptions options,
-        IConfigurationSection clientsSection)
-    {
-        options.Clients = options.Clients.WithJwksFromConfiguration(clientsSection);
     }
 }

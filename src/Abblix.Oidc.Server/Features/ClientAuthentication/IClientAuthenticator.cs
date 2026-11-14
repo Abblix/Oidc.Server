@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -27,10 +28,11 @@ public interface IClientAuthenticator
     /// Attempts to authenticate a client based on the provided request.
     /// It verifies the client's credentials and determines the authenticity of the client.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing authentication information.</param>
     /// <returns>
     /// A task that resolves to the authenticated <see cref="ClientInfo"/> if successful,
     /// or null if authentication fails.
     /// </returns>
-    Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request);
+    Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request);
 }

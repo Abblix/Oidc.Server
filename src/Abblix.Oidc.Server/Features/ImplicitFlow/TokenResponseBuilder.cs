@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
 
 namespace Abblix.Oidc.Server.Features.ImplicitFlow;
@@ -36,6 +37,7 @@ public class TokenResponseBuilder(IAccessTokenService accessTokenService)
 
     /// <inheritdoc />
     public async Task BuildResponseAsync(
+        TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result)
@@ -43,8 +45,12 @@ public class TokenResponseBuilder(IAccessTokenService accessTokenService)
         result.TokenType = TokenTypes.Bearer;
 
         result.AccessToken = await accessTokenService.CreateAccessTokenAsync(
+            tenant,
             authorizedGrant.AuthSession,
             authorizedGrant.Context,
-            request.ClientInfo);
+            request.ClientInfo,
+            // The authorization endpoint never issues a refresh token, so there is no family to join.
+            grantId: null,
+            expiresNoLaterThan: null);
     }
 }

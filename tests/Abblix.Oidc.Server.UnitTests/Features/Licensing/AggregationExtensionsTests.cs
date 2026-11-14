@@ -20,8 +20,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Licensing;
 /// </summary>
 public class AggregationExtensionsTests
 {
-    #region Greater<T> Tests
-
     /// <summary>
     /// Verifies that Greater returns null when both values are null, treating null as positive infinity.
     /// </summary>
@@ -111,7 +109,7 @@ public class AggregationExtensionsTests
     public void Greater_WithDateTimeOffset_WorksCorrectly()
     {
         // Arrange
-        DateTimeOffset? earlier = DateTimeOffset.UtcNow;
+        DateTimeOffset? earlier = TimeProvider.System.GetUtcNow();
         DateTimeOffset? later = earlier.Value.AddDays(1);
 
         // Act
@@ -120,10 +118,6 @@ public class AggregationExtensionsTests
         // Assert
         Assert.Equal(later, result);
     }
-
-    #endregion
-
-    #region Lesser<T> Tests
 
     /// <summary>
     /// Verifies that Lesser returns null when both values are null, treating null as negative infinity.
@@ -214,7 +208,7 @@ public class AggregationExtensionsTests
     public void Lesser_WithDateTimeOffset_ReturnsEarlierDate()
     {
         // Arrange
-        DateTimeOffset? earlier = DateTimeOffset.UtcNow;
+        DateTimeOffset? earlier = TimeProvider.System.GetUtcNow();
         DateTimeOffset? later = earlier.Value.AddDays(1);
 
         // Act
@@ -223,10 +217,6 @@ public class AggregationExtensionsTests
         // Assert
         Assert.Equal(earlier, result);
     }
-
-    #endregion
-
-    #region Join<T> Tests
 
     /// <summary>
     /// Verifies that Join returns null when both sets are null.
@@ -387,10 +377,6 @@ public class AggregationExtensionsTests
         Assert.Equal(currentCountBefore, current.Count);
     }
 
-    #endregion
-
-    #region Integration Tests
-
     /// <summary>
     /// Verifies that extension methods work together to simulate license aggregation logic.
     /// This simulates how LicenseManager combines multiple active licenses.
@@ -402,8 +388,8 @@ public class AggregationExtensionsTests
         int? clientLimit1 = 10;
         int? clientLimit2 = 20;
 
-        DateTimeOffset? expiresAt1 = DateTimeOffset.UtcNow.AddDays(30);
-        DateTimeOffset? expiresAt2 = DateTimeOffset.UtcNow.AddDays(60);
+        DateTimeOffset? expiresAt1 = TimeProvider.System.GetUtcNow().AddDays(30);
+        DateTimeOffset? expiresAt2 = TimeProvider.System.GetUtcNow().AddDays(60);
 
         var validIssuers1 = new HashSet<string>(StringComparer.Ordinal) { "https://issuer1.com", "https://issuer2.com" };
         var validIssuers2 = new HashSet<string>(StringComparer.Ordinal) { "https://issuer2.com", "https://issuer3.com" };
@@ -440,6 +426,4 @@ public class AggregationExtensionsTests
         // Assert - Unlimited (null) should win
         Assert.Null(result);
     }
-
-    #endregion
 }

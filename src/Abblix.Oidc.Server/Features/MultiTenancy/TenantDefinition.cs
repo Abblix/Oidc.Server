@@ -1,0 +1,211 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
+
+namespace Abblix.Oidc.Server.Features.MultiTenancy;
+
+/// <summary>
+/// A tenant this deployment serves.
+/// </summary>
+public sealed class TenantDefinition
+{
+    /// <summary>
+    /// The identifier the tenant is registered under: ASCII letters, digits, '-' and '_'.
+    /// </summary>
+    /// <remarks>
+    /// It stands in the names the tenant's data, keys and check-session cookie are kept under, so a tenant whose id
+    /// holds anything else is refused wherever the server takes it in.
+    /// </remarks>
+    public required string Id { get; init; }
+
+    /// <summary>
+    /// Which creation of the tenant under <see cref="Id"/> this is, assigned each time a tenant is created -
+    /// by <see cref="ITenantManager"/>, or by the store of a host writing it otherwise - and kept for as long as it
+    /// lives: ASCII letters, digits, '-' and '_'. Empty for a tenant the settings declare.
+    /// </summary>
+    /// <remarks>
+    /// What the server keeps for a tenant - its stored codes and tokens, its minted keys, what it builds from the
+    /// definition - is kept under its id and generation together, so a tenant created again under the id of one
+    /// removed starts with none of it.
+    /// </remarks>
+#pragma warning disable S2292 // The field is written by WithGeneration on a copy, where an init accessor cannot be
+    // A store's deserializer may write null here whatever the annotation says, and the tenant is then one with no
+    // generation rather than one that fails every reading of the store
+    public string Generation { get => _generation; init => _generation = value ?? string.Empty; }
+#pragma warning restore S2292
+
+    private string _generation = string.Empty;
+
+    /// <summary>
+    /// This definition as a creation under <paramref name="generation"/>, everything else shared with it.
+    /// </summary>
+    /// <remarks>
+    /// A copy of every member rather than a list of them, so a member added later is carried over too.
+    /// </remarks>
+    internal TenantDefinition WithGeneration(string generation)
+    {
+        var copy = (TenantDefinition)MemberwiseClone();
+        copy._generation = generation;
+        return copy;
+    }
+
+    /// <summary>
+    /// The tenant's issuer identifier, as it appears in every token the tenant issues and in its discovery
+    /// document - and the address the tenant is served at.
+    /// </summary>
+    /// <remarks>
+    /// A request belongs to the tenant whose issuer names its host and the longest start of its path, so the
+    /// host and path of the address the discovery document is fetched from are the issuer's, as OpenID Connect
+    /// Discovery 1.0 section 4.3 requires: <c>https://acme.example.com</c> serves a whole host,
+    /// <c>https://auth.example.com/tenants/acme</c> a path on a shared one. Scheme and port are not compared,
+    /// since behind a proxy the request carries its own; the host's forwarded-headers setup decides those.
+    /// <para>
+    /// The issuer is judged as the server's own is: an https URL with no query, fragment, user name or password,
+    /// written with no whitespace and well formed, http only when
+    /// <see cref="Common.Configuration.OidcOptions.AllowHttpIssuer"/> lets it through. It is written into tokens and
+    /// discovery as configured, through <see cref="Uri.OriginalString"/>.
+    /// </para>
+    /// </remarks>
+    public required Uri Issuer { get; init; }
+
+    /// <summary>
+    /// The clients registered with this tenant. A client is known only at the tenant that lists it, or at which it
+    /// was registered dynamically, so two tenants may each register a client under the same id.
+    /// </summary>
+    public IEnumerable<ClientInfo> Clients { get; init; } = [];
+
+    /// <summary>
+    /// The scopes this tenant defines beyond the standard ones, with the claim types each grants, which outline what
+    /// a client of this tenant can request access to.
+    /// </summary>
+    public ScopeDefinition[]? Scopes { get; init; }
+
+    /// <summary>
+    /// The resources this tenant issues tokens for: what a client can request access to, and the audience a token
+    /// is restricted to (RFC 8707).
+    /// </summary>
+    /// <remarks>
+    /// With none registered and no token exchange in use, a token's audience is the issuer.
+    /// </remarks>
+    public ResourceDefinition[]? Resources { get; init; }
+
+    /// <summary>
+    /// The resource an access token is minted for when the request names none and none is inferred from its scopes
+    /// (<see cref="InferResourceFromScope"/>). Left null, the token's <c>aud</c> falls back to the issuer.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9068 Section 3 requires an authorization server to "use a default resource indicator in the `aud`
+    /// claim" when a request carries no <c>resource</c> parameter, and Section 4 tells a resource server to reject a
+    /// token whose <c>aud</c> does not name it, so a tenant with one API says so here once, instead of teaching every
+    /// client to send <c>resource</c>. The value is read by every resource server of the tenant, so changing it is a
+    /// change to their contract. It must be an absolute URI naming one of this tenant's <see cref="Resources"/> -
+    /// the tenant is refused otherwise, since a token minted for a resource it does not know is one nobody can
+    /// accept.
+    /// </remarks>
+    public Uri? DefaultResourceIndicator { get; init; }
+
+    /// <summary>
+    /// Whether a request naming no resource is taken to be for the one of this tenant's <see cref="Resources"/>
+    /// whose definition declares a requested scope.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9068 section 3 says an authorization server SHOULD infer the default resource indicator from the
+    /// <c>scope</c> parameter, and SHOULD reject with <c>invalid_scope</c> a request whose scopes refer to different
+    /// resources; both happen only when this is set, because the inferred resource becomes the <c>aud</c> every
+    /// resource server reads. The audience is then the resource the request names, else the one its scopes refer
+    /// to, else <see cref="DefaultResourceIndicator"/>, else the issuer. At the token endpoint it is inferred only
+    /// for a grant the token request itself authorizes and only when the request names no <c>audience</c>; a code,
+    /// a refresh token, a device code or a back-channel request carries the audience its authorization settled.
+    /// </remarks>
+    public bool InferResourceFromScope { get; init; }
+
+    /// <summary>
+    /// The page a user picks an account on, when they hold several and have to choose the one to sign in with. A
+    /// relative address is a page under this tenant's issuer.
+    /// </summary>
+    public Uri? AccountSelectionUri { get; init; }
+
+    /// <summary>
+    /// The page a user gives consent on, when a client requests access to their data. A relative address is a page
+    /// under this tenant's issuer.
+    /// </summary>
+    public Uri? ConsentUri { get; init; }
+
+    /// <summary>
+    /// The page the end user completes a step of the host's own on, such as accepting a new version of the terms,
+    /// when <see cref="UserInteraction.IUserInteractionRequirement"/> requires one before anything is issued. A
+    /// relative address is a page under this tenant's issuer.
+    /// </summary>
+    public Uri? InteractionUri { get; init; }
+
+    /// <summary>
+    /// The page a user signs in on. A relative address is a page under this tenant's issuer.
+    /// </summary>
+    public Uri? LoginUri { get; init; }
+
+    /// <summary>
+    /// The page a user creates an account on when a client requests registration with <c>prompt=create</c>
+    /// (Initiating User Registration via OpenID Connect 1.0); left unset, <see cref="LoginUri"/> is used instead,
+    /// so a login page that also offers registration needs nothing more. A relative address is a page under this
+    /// tenant's issuer.
+    /// </summary>
+    public Uri? RegistrationUri { get; init; }
+
+    /// <summary>
+    /// The security profile this tenant holds EVERY client to, whatever <see cref="ClientInfo.SecurityProfile"/>
+    /// each one names for itself: a floor rather than a default, so a client can ask for more and no registration
+    /// can take it out from under what is set here. The default <see cref="ClientSecurityProfile.None"/> demands
+    /// nothing, leaving each client governed by what it names for itself.
+    /// </summary>
+    public ClientSecurityProfile DefaultSecurityProfile { get; init; } = ClientSecurityProfile.None;
+
+    /// <summary>
+    /// The key sealing this tenant's pairwise subject identifiers, or null when its clients take public ones only.
+    /// Each tenant keeps its own, so the pseudonyms two tenants give one user cannot be matched to each other.
+    /// </summary>
+    public PairwiseSubjectSettings? PairwiseSubject { get; init; }
+
+    /// <summary>
+    /// The keys this tenant signs its tokens with and publishes in its JWKS, when the keys come from each tenant's
+    /// settings. Each tenant keeps its own, so a party trusting one tenant's keys cannot verify another tenant's
+    /// tokens.
+    /// </summary>
+    public IReadOnlyCollection<JsonWebKey> SigningKeys { get; init; } = [];
+
+    /// <summary>
+    /// The keys clients encrypt to this tenant with, when the keys come from each tenant's settings. Each tenant
+    /// keeps its own, so what a client encrypts to one tenant no other can read.
+    /// </summary>
+    public IReadOnlyCollection<JsonWebKey> EncryptionKeys { get; init; } = [];
+
+    /// <summary>
+    /// The custodian's keys this tenant produces with, when the server keeps its keys in a custodian: each tenant
+    /// names keys of its own there, as it declares its own <see cref="SigningKeys"/> otherwise.
+    /// </summary>
+    public CustodianHeldKeys? CustodianKeys { get; init; }
+
+    /// <summary>
+    /// The scheme, host and port this tenant's mutual-TLS endpoint aliases (RFC 8705 section 5) are served at. The
+    /// aliases keep the tenant's issuer path, so a request to this host under that path is the tenant's as a request to the issuer's host is;
+    /// the address therefore carries no path of its own.
+    /// </summary>
+    /// <remarks>
+    /// The server publishes an alias at this address for each mutual-TLS endpoint its discovery document names, so
+    /// none while endpoint paths are hidden from discovery, and names no alias of any other kind: a request reaches a
+    /// tenant only at its issuer and at this address, so an alias anywhere else would send a client where no request
+    /// reaches the tenant.
+    /// </remarks>
+    public Uri? MtlsBaseUri { get; init; }
+}

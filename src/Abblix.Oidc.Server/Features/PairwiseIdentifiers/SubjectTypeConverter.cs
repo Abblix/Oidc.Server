@@ -22,7 +22,7 @@ namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 /// authenticated encryption keyed by the pairwise salt and bound to the sector as associated data, so different
 /// sectors seal the same user to unlinkable values and a pseudonym cannot be opened under the wrong sector.
 /// </summary>
-public class SubjectTypeConverter : ISubjectTypeConverter
+public class SubjectTypeConverter
 {
     private readonly DeterministicAeadEncryptor? _encryptor;
 
@@ -32,27 +32,34 @@ public class SubjectTypeConverter : ISubjectTypeConverter
     /// pairwise request fails loud.
     /// </summary>
     /// <param name="settings">The pairwise salt and hash, or null when pairwise identifiers are not configured.</param>
+    /// <exception cref="ArgumentException">The settings name a hash or carry a salt the seal cannot use.</exception>
     public SubjectTypeConverter(PairwiseSubjectSettings? settings = null)
     {
-        _encryptor = settings switch
-        {
-            { HashAlgorithm: var algorithm, Salt: {} salt }
-                => new DeterministicAeadEncryptor(algorithm, System.Convert.FromBase64String(salt)),
+        if (settings is null)
+            return;
 
-            _ => null,
-        };
+        var hashAlgorithm = PairwiseSubjectSettings.HashAlgorithmNamed(settings.HashAlgorithm) ??
+            throw new ArgumentException(
+                PairwiseSubjectSettings.HashAlgorithmRefusal(settings.HashAlgorithm), nameof(settings));
+
+        if (PairwiseSubjectSettings.SaltRefusal(settings.Salt) is { } saltRefusal)
+            throw new ArgumentException(saltRefusal, nameof(settings));
+
+        _encryptor = new DeterministicAeadEncryptor(hashAlgorithm, System.Convert.FromBase64String(settings.Salt));
     }
 
     /// <summary>
-    /// The two OIDC Core Section 8 subject types this converter implements: <c>public</c> (passes the local
-    /// subject through unchanged) and <c>pairwise</c> (a reversible, per-sector sealed identifier).
+    /// The OIDC Core Section 8 subject types this converter can issue: <c>public</c> (passes the local subject
+    /// through unchanged) always, and <c>pairwise</c> (a reversible, per-sector sealed identifier) when it holds
+    /// the key to seal one, so no client is offered or registered for a pseudonym it would never get.
     /// </summary>
     public IEnumerable<string> SubjectTypesSupported
     {
         get
         {
             yield return SubjectTypes.Public;
-            yield return SubjectTypes.Pairwise;
+            if (_encryptor != null)
+                yield return SubjectTypes.Pairwise;
         }
     }
 
@@ -102,8 +109,8 @@ public class SubjectTypeConverter : ISubjectTypeConverter
 
     private DeterministicAeadEncryptor Encryptor(ClientInfo clientInfo)
         => _encryptor ?? throw new InvalidOperationException(
-            "PairwiseSubjectSettings must be configured to use pairwise subject identifiers (client " +
-            $"'{clientInfo.ClientId}' has {nameof(clientInfo.SubjectType)}={clientInfo.SubjectType}).");
+            "A pairwise key must be configured to use pairwise subject identifiers - the tenant's PairwiseSubject " +
+            $"(client '{clientInfo.ClientId}' has {nameof(clientInfo.SubjectType)}={clientInfo.SubjectType}).");
 
     /// <summary>
     /// The sector the pseudonym is bound to (OIDC Core Section 8.1), as associated-data bytes.

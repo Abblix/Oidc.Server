@@ -41,14 +41,22 @@ public static class SubjectMatcher
             : Identical(first, second);
     }
 
+    /// <summary>
+    /// The seven members SSF 1.0 Section 3.3 registers, each read off a Complex Subject.
+    /// </summary>
+    private static readonly Func<ComplexSubject, SubjectIdentifier?>[] RegisteredMembers =
+    [
+        subject => subject.User,
+        subject => subject.Device,
+        subject => subject.Session,
+        subject => subject.Application,
+        subject => subject.Tenant,
+        subject => subject.OrgUnit,
+        subject => subject.Group,
+    ];
+
     private static bool FieldsMatch(ComplexSubject first, ComplexSubject second)
-        => MemberMatches(first.User, second.User)
-           && MemberMatches(first.Device, second.Device)
-           && MemberMatches(first.Session, second.Session)
-           && MemberMatches(first.Application, second.Application)
-           && MemberMatches(first.Tenant, second.Tenant)
-           && MemberMatches(first.OrgUnit, second.OrgUnit)
-           && MemberMatches(first.Group, second.Group)
+        => RegisteredMembers.All(member => MemberMatches(member(first), member(second)))
            && AdditionalMembersMatch(first.AdditionalMembers, second.AdditionalMembers);
 
     private static bool MemberMatches(SubjectIdentifier? first, SubjectIdentifier? second)

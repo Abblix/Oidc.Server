@@ -6,10 +6,11 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
-using Abblix.Oidc.Server.Mvc.Controllers;
-using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -23,8 +24,9 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// </summary>
 public class ConfigurationResponseFormatter(
 	IOptionsSnapshot<OidcOptions> options,
-	IEndpointResolver endpointResolver,
-	ISignedMetadataProvider signedMetadataProvider) : IConfigurationResponseFormatter
+	IOidcEndpointResolver endpointResolver,
+	ISignedMetadataProvider signedMetadataProvider,
+	ITenantAccessor tenantAccessor) : IConfigurationResponseFormatter
 {
 	/// <summary>
 	/// Formats the configuration response by mapping metadata and adding endpoint URLs.
@@ -33,32 +35,32 @@ public class ConfigurationResponseFormatter(
 	/// <returns>An action result with the MVC-enriched configuration response including URLs.</returns>
 	public async Task<ActionResult<ModelResponse>> FormatResponseAsync(EndpointResponse response)
 	{
-		var tokenEndpoint = Resolve<TokenController>(nameof(TokenController.TokenAsync), OidcEndpoints.Token);
-		var revocationEndpoint = Resolve<TokenController>(nameof(TokenController.RevocationAsync), OidcEndpoints.Revocation);
-		var introspectionEndpoint = Resolve<TokenController>(nameof(TokenController.IntrospectionAsync), OidcEndpoints.Introspection);
-		var userInfoEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.UserInfoAsync), OidcEndpoints.UserInfo);
+		var tokenEndpoint = Resolve(OidcEndpoints.Token, response.Issuer);
+		var revocationEndpoint = Resolve(OidcEndpoints.Revocation, response.Issuer);
+		var introspectionEndpoint = Resolve(OidcEndpoints.Introspection, response.Issuer);
+		var userInfoEndpoint = Resolve(OidcEndpoints.UserInfo, response.Issuer);
 
 		var mvcResponse = new ModelResponse
 		{
-			Issuer = response.Issuer,
+			Issuer = response.Issuer.OriginalString,
 
-			JwksUri = Resolve<DiscoveryController>(nameof(DiscoveryController.KeysAsync), OidcEndpoints.Keys),
+			JwksUri = Resolve(OidcEndpoints.Keys, response.Issuer),
 
-			AuthorizationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.AuthorizeAsync), OidcEndpoints.Authorize),
+			AuthorizationEndpoint = Resolve(OidcEndpoints.Authorize, response.Issuer),
 			UserInfoEndpoint = userInfoEndpoint,
-			EndSessionEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.EndSessionAsync), OidcEndpoints.EndSession),
-			CheckSessionIframe = Resolve<AuthenticationController>(nameof(AuthenticationController.CheckSessionAsync), OidcEndpoints.CheckSession),
-			PushedAuthorizationRequestEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.PushAuthorizeAsync), OidcEndpoints.PushedAuthorizationRequest),
+			EndSessionEndpoint = Resolve(OidcEndpoints.EndSession, response.Issuer),
+			CheckSessionIframe = Resolve(OidcEndpoints.CheckSession, response.Issuer),
+			PushedAuthorizationRequestEndpoint = Resolve(OidcEndpoints.PushedAuthorizationRequest, response.Issuer),
 
 			TokenEndpoint = tokenEndpoint,
 			RevocationEndpoint = revocationEndpoint,
 			IntrospectionEndpoint = introspectionEndpoint,
 
-			RegistrationEndpoint = Resolve<ClientManagementController>(nameof(ClientManagementController.RegisterClientAsync), OidcEndpoints.RegisterClient),
+			RegistrationEndpoint = Resolve(OidcEndpoints.RegisterClient, response.Issuer),
 
-			BackChannelAuthenticationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.BackChannelAuthenticationAsync), OidcEndpoints.BackChannelAuthentication),
+			BackChannelAuthenticationEndpoint = Resolve(OidcEndpoints.BackChannelAuthentication, response.Issuer),
 
-			DeviceAuthorizationEndpoint = Resolve<AuthenticationController>(nameof(AuthenticationController.DeviceAuthorizationAsync), OidcEndpoints.DeviceAuthorization),
+			DeviceAuthorizationEndpoint = Resolve(OidcEndpoints.DeviceAuthorization, response.Issuer),
 
 			FrontChannelLogoutSupported = response.FrontChannelLogoutSupported,
 			FrontChannelLogoutSessionSupported = response.FrontChannelLogoutSessionSupported,
@@ -112,71 +114,28 @@ public class ConfigurationResponseFormatter(
 			AuthorizationDetailsTypesSupported = response.AuthorizationDetailsTypesSupported,
 		};
 
-		// Add mTLS endpoint aliases if configured
-		var mtlsOptions = options.Value.Discovery.MtlsEndpointAliases;
-		var mtlsBaseUri = options.Value.Discovery.MtlsBaseUri;
-
-		if (mtlsOptions != null || mtlsBaseUri != null)
-		{
-			mvcResponse = mvcResponse with
-			{
-				MtlsEndpointAliases = new Abblix.Oidc.Server.Model.MtlsAliases
-				{
-					TokenEndpoint = mtlsOptions?.TokenEndpoint ?? Rebase(tokenEndpoint, mtlsBaseUri),
-					RevocationEndpoint = mtlsOptions?.RevocationEndpoint ?? Rebase(revocationEndpoint, mtlsBaseUri),
-					IntrospectionEndpoint = mtlsOptions?.IntrospectionEndpoint ?? Rebase(introspectionEndpoint, mtlsBaseUri),
-					UserInfoEndpoint = mtlsOptions?.UserInfoEndpoint ?? Rebase(userInfoEndpoint, mtlsBaseUri),
-				}
-			};
-		}
+		mvcResponse = MtlsEndpointAliasing.WithMtlsAliases(mvcResponse, tenantAccessor.CurrentTenant().MtlsBaseUri);
 
 		if (options.Value.Discovery.SignedMetadata)
 		{
-			mvcResponse = mvcResponse with { SignedMetadata = await signedMetadataProvider.SignAsync(mvcResponse) };
+			mvcResponse = mvcResponse with { SignedMetadata = await signedMetadataProvider.SignAsync(tenantAccessor.CurrentTenant(), mvcResponse) };
 		}
 
 		return mvcResponse;
 	}
 
 	/// <summary>
-	/// Resolves the absolute URL for a controller action if endpoint path discovery is enabled and the endpoint is active.
+	/// Resolves the absolute URL of an endpoint if endpoint path discovery is enabled and the endpoint is active.
 	/// </summary>
-	/// <typeparam name="T">The controller type containing the action method.</typeparam>
-	/// <param name="actionName">The name of the action method to resolve.</param>
-	/// <param name="enablingFlag">The endpoint flag that must be enabled for the URL to be resolved.</param>
+	/// <param name="endpoint">The endpoint flag that must be enabled for the URL to be resolved.</param>
+	/// <param name="issuer">The issuer the document describes.</param>
 	/// <returns>The absolute URI to the endpoint if discovery and endpoint are enabled; otherwise, null.</returns>
-	private Uri? Resolve<T>(string actionName, OidcEndpoints enablingFlag) where T : ControllerBase
+	private Uri? Resolve(OidcEndpoints endpoint, Uri issuer)
 	{
 		return options.Value.Discovery.AllowEndpointPathsDiscovery &&
-		       options.Value.EnabledEndpoints.HasFlag(enablingFlag)
-			? endpointResolver.Resolve(MvcUtils.NameOf<T>(), MvcUtils.TrimAsync(actionName))
+		       options.Value.EnabledEndpoints.HasFlag(endpoint)
+			? MtlsEndpointAliasing.OnIssuersHost(
+				endpointResolver.Resolve(endpoint), issuer, tenantAccessor.CurrentTenant().MtlsBaseUri)
 			: null;
-	}
-
-	/// <summary>
-	/// Rebases an original URI to use a different base URI, preserving the original's path.
-	/// Used to generate mTLS endpoint aliases with alternative base URLs.
-	/// </summary>
-	/// <param name="original">The original URI to rebase.</param>
-	/// <param name="baseUri">The new base URI to use (scheme, host, port, and optionally base path).</param>
-	/// <returns>A new URI combining the base URI with the original's path, or null if either parameter is null.</returns>
-	private static Uri? Rebase(Uri? original, Uri? baseUri)
-	{
-		if (baseUri == null)
-			return original;
-
-		if (original == null)
-			return null;
-
-		var basePath = baseUri.AbsolutePath.TrimEnd('/');
-		var origPath = original.AbsolutePath.TrimStart('/');
-
-		var ub = new UriBuilder(baseUri)
-		{
-			Path = string.IsNullOrEmpty(basePath) || basePath == "/"
-				? $"/{origPath}"
-				: $"{basePath}/{origPath}",
-		};
-		return ub.Uri;
 	}
 }

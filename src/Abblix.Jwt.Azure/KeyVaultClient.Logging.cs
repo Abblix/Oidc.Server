@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Jwt.Azure;
@@ -22,4 +23,13 @@ partial class KeyVaultClient
         Message = "Key Vault rejected an unwrap for key '{KeyId}': the ciphertext is a wrong or tampered key, or " +
                   "the version that wrapped it is disabled. No key material is logged.")]
     private static partial void LogUnwrapRejected(ILogger logger, string keyId);
+
+    [LoggerMessage(
+        EventId = LogEvents.KeyVaultClient.AlgorithmNotServed,
+        Level = LogLevel.Warning,
+        Message = "Key Vault does not serve '{Algorithm}' for key '{KeyId}', so the encrypted message was refused without " +
+                  "asking the vault. Key Vault decrypts under the RSA algorithms and agrees no ECDH-ES; " +
+                  "a key configured with an algorithm the store cannot serve makes every message encrypted to it " +
+                  "fail this way, so check the key's configured algorithm if this repeats.")]
+    private static partial void LogAlgorithmNotServed(ILogger logger, Sanitized Algorithm, string KeyId);
 }

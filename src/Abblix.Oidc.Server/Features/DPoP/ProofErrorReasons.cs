@@ -67,10 +67,10 @@ public static class ProofErrorReasons
     /// <summary>Payload <c>htu</c> claim is missing.</summary>
     public const string HttpUriMissing = "htu_missing";
 
-    /// <summary>Payload <c>htu</c> is not a valid absolute URI.</summary>
+    /// <summary>Payload <c>htu</c> is not an absolute http or https URI.</summary>
     public const string HttpUriInvalid = "htu_invalid";
 
-    /// <summary>Payload <c>htu</c> does not match the request URI after RFC 3986 §6.2 canonicalisation.</summary>
+    /// <summary>Payload <c>htu</c> does not match the request URI after RFC 3986 section 6.2 canonicalization.</summary>
     public const string HttpUriMismatch = "htu_mismatch";
 
     /// <summary>Payload <c>iat</c> claim is missing.</summary>
@@ -93,4 +93,27 @@ public static class ProofErrorReasons
 
     /// <summary>Payload <c>jti</c> has already been used within the acceptance window.</summary>
     public const string ReplayDetected = "replay_detected";
+
+    /// <summary>The reason a <see cref="Abblix.Jwt.JwtError"/> category from the JWT validator maps to.</summary>
+    /// <remarks>
+    /// The validator already covered JWS structure, typ pinning, alg-whitelist, header shape and signature
+    /// verification, so each of its categories has a matching token here.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">The category has no reason.</exception>
+    internal static string Of(Abblix.Jwt.JwtError error) => error switch
+    {
+        Abblix.Jwt.JwtError.MalformedToken => MalformedJwt,
+        Abblix.Jwt.JwtError.InvalidAlgorithm => InvalidAlgorithm,
+        Abblix.Jwt.JwtError.InvalidTokenType => InvalidTokenType,
+        Abblix.Jwt.JwtError.InvalidHeader => InvalidHeader,
+        Abblix.Jwt.JwtError.InvalidSignature => SignatureInvalid,
+
+        // A proof is checked without lifetime, replay or revocation stages, so these come only from a validator
+        // configured otherwise; they keep the reason they had before every category was named.
+        Abblix.Jwt.JwtError.InvalidToken => SignatureInvalid,
+        Abblix.Jwt.JwtError.TokenAlreadyUsed => SignatureInvalid,
+        Abblix.Jwt.JwtError.TokenRevoked => SignatureInvalid,
+
+        _ => throw new ArgumentOutOfRangeException(nameof(error), error, "A JWT error without a proof reason."),
+    };
 }

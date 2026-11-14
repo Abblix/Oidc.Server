@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -27,6 +28,7 @@ public class UpdateClientHandler(
     /// <summary>
     /// Processes a client configuration update request per RFC 7592 Section 2.2.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The update request containing client authentication and updated metadata.</param>
     /// <returns>A task that results in updated client configuration or an error response.</returns>
     /// <exception cref="UnexpectedTypeException">Thrown if the validation result does not match expected types.</exception>
@@ -35,9 +37,9 @@ public class UpdateClientHandler(
     /// configurations. It ensures that only valid and authorized requests are processed, safeguarding against
     /// unauthorized modifications to client information.
     /// </remarks>
-    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(UpdateClientRequest request)
+    public async Task<Result<ReadClientSuccessfulResponse, OidcError>> HandleAsync(TenantDefinition tenant, UpdateClientRequest request)
     {
-        var validationResult = await validator.ValidateAsync(request);
-        return await validationResult.BindAsync(processor.ProcessAsync);
+        var validationResult = await validator.ValidateAsync(tenant, request);
+        return await validationResult.BindAsync(request => processor.ProcessAsync(tenant, request));
     }
 }

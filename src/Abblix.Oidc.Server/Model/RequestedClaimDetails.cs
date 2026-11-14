@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Serialization;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Model;
 
@@ -14,11 +15,17 @@ namespace Abblix.Oidc.Server.Model;
 /// Represents the details of a requested claim in OAuth2 or OpenID Connect scenarios.
 /// This can include whether the claim is essential, and specific values or a range of values for the claim.
 /// </summary>
+[ExternalInput]
 public record RequestedClaimDetails
 {
     /// <summary>
-    /// Indicates whether the claim is essential for the authorization process.
-    /// If true, the claim is essential and should be provided by the user for successful authorization.
+    /// Whether the client declared this claim essential, which OpenID Connect Core 1.0 section 5.5.1 defines
+    /// as what the relying party tells the end user: releasing it "will ensure a smooth authorization for the
+    /// specific task requested by the End-User". The same section forbids answering with an error when the
+    /// claim is not returned, essential or voluntary alike, unless the description of that specific claim says
+    /// otherwise - so this is not a condition a response has to meet. The claims whose description does
+    /// say otherwise are <c>sub</c>, whose mismatch fails the authentication, <c>auth_time</c>, which this
+    /// server writes on every ID token, and <c>acr</c>, under section 5.5.1.1.
     /// </summary>
     [JsonPropertyName("essential")]
     public bool? Essential { get; init; }

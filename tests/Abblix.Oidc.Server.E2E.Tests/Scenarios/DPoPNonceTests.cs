@@ -17,12 +17,11 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using Xunit;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
-/// RFC 9449 §8 (AS) and §9 (RS) DPoP-Nonce challenge-response tests. The default
+/// RFC 9449 section 8 (AS) and section 9 (RS) DPoP-Nonce challenge-response tests. The default
 /// <see cref="TestFactory"/> ships with nonce enforcement OFF; these tests run against
 /// <see cref="NonceEnabledTestFactory"/> (RequireAtTokenEndpoint and
 /// RequireAtUserInfoEndpoint both = true) under a dedicated xunit collection so the
@@ -41,7 +40,7 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
             await NavigateTokenNonceChallengeAsync(client, discovery, proofKey);
 
         Assert.Equal(HttpStatusCode.BadRequest, challengeResponse.StatusCode);
-        Assert.Equal(ErrorCodes.UseDPoPNonce, challengeBody[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.UseDPoPNonce, challengeBody[ErrorResponse.Parameters.Error]!.GetValue<string>());
         Assert.False(string.IsNullOrEmpty(nonce));
     }
 
@@ -55,7 +54,7 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
         var tokenBody = await ObtainDPoPBoundTokenViaNonceFlowAsync(client, discovery, proofKey);
 
         Assert.Equal(TokenTypes.DPoP,
-            tokenBody[BackChannelTokenPushRequest.Parameters.TokenType]!.GetValue<string>());
+            tokenBody[TokenResponse.Parameters.TokenType]!.GetValue<string>());
     }
 
     [Fact]
@@ -65,10 +64,10 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
         var accessToken = (await ObtainDPoPBoundTokenViaNonceFlowAsync(client, discovery, proofKey))
-            [UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+            [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         // First UserInfo call: no nonce on the proof - RS issues a fresh nonce challenge
-        // (RFC 9449 §9 + §7.1 SHOULD WWW-Authenticate: DPoP).
+        // (RFC 9449 section 9 + section 7.1 SHOULD WWW-Authenticate: DPoP).
         var proofWithoutNonce = proofKey.BuildProof(
             HttpMethods.Get, discovery.UserInfoEndpoint!, accessToken: accessToken);
         var response = await SendUserInfoAsync(client, discovery, accessToken, proofWithoutNonce);
@@ -88,7 +87,7 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
         var accessToken = (await ObtainDPoPBoundTokenViaNonceFlowAsync(client, discovery, proofKey))
-            [UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+            [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         // Step 1: no nonce → challenge carries fresh nonce.
         var firstProof = proofKey.BuildProof(
@@ -110,8 +109,8 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
     /// <summary>
     /// Bootstraps PAR + /authorize, then makes the first /token call with a proof that
     /// carries no nonce - the AS issues a 400 + <c>use_dpop_nonce</c> + a fresh
-    /// <c>DPoP-Nonce</c> response header (RFC 9449 §8). Returns the PKCE verifier, the
-    /// auth code (still spendable per §8 retry semantics), the fresh nonce, the parsed
+    /// <c>DPoP-Nonce</c> response header (RFC 9449 section 8). Returns the PKCE verifier, the
+    /// auth code (still spendable per section 8 retry semantics), the fresh nonce, the parsed
     /// error body, and the raw response so callers can pin extra assertions.
     /// </summary>
     private static async Task<(string Verifier, string Code, string Nonce, JsonObject Body, HttpResponseMessage Response)>
@@ -122,7 +121,7 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
     {
         var (verifier, challenge) = GeneratePkcePair();
         var parResponse = await PushAuthorizationRequestAsync(client, discovery, BuildParForm(challenge));
-        var requestUri = parResponse[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
+        var requestUri = parResponse[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>();
         var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
         {
             [AuthorizationRequest.Parameters.ClientId] = TestConstants.DPoPRequiredClientId,
@@ -142,7 +141,7 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
     /// <summary>
     /// Walks the full token-endpoint nonce dance - first request gets a challenge, second
     /// embeds the issued nonce and succeeds - and returns the parsed success-body. Used
-    /// directly by the retry-success test and as bootstrap for the §9 UserInfo nonce tests.
+    /// directly by the retry-success test and as bootstrap for the section 9 UserInfo nonce tests.
     /// </summary>
     private static async Task<JsonObject> ObtainDPoPBoundTokenViaNonceFlowAsync(
         HttpClient client,
@@ -179,9 +178,9 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.DPoPRequiredClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.DPoPRequiredClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         };
         return await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, form, proofJwt);

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -46,6 +47,8 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
     private const string RequestHeaderMarkerName = "RequestHeaderAttribute";
     private const string AuthorizationHeaderMarkerName = "AuthorizationHeaderAttribute";
     private const string ClientCertificateMarkerName = "ClientCertificateAttribute";
+    private const string QueryParameterMarkerName = "QueryParameterAttribute";
+    private const string FormParameterMarkerName = "FormParameterAttribute";
 
     // Validation markers - translated to the executable Minimal API validation attributes of the same name, so a
     // Validator pass over the bound model enforces the rule the core declared.
@@ -53,6 +56,24 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
     private const string AbsoluteUriMarkerName = "AbsoluteUriAttribute";
     private const string ElementsRequiredMarkerName = "ElementsRequiredAttribute";
     private const string RequiredMarkerName = "RequiredAttribute";
+
+    private static readonly ImmutableHashSet<string> WireFormatMarkerNames = ImmutableHashSet.Create(
+        StringComparer.Ordinal,
+        SpaceSeparatedStringMarkerName, TotalSecondsMarkerName, JsonObjectMarkerName, CultureListMarkerName);
+
+    private static readonly ImmutableHashSet<string> SourceMarkerNames = ImmutableHashSet.Create(
+        StringComparer.Ordinal,
+        RequestHeaderMarkerName, AuthorizationHeaderMarkerName, ClientCertificateMarkerName,
+        QueryParameterMarkerName, FormParameterMarkerName);
+
+    // RequiredMarkerName is left out: it lives in DataAnnotations, not among the declarative markers.
+    private static readonly ImmutableHashSet<string> ValidationMarkerNames = ImmutableHashSet.Create(
+        StringComparer.Ordinal,
+        AllowedValuesMarkerName, AbsoluteUriMarkerName, ElementsRequiredMarkerName);
+
+    // Every declarative marker the generator acts on; one outside it is reported rather than silently ignored.
+    private static readonly ImmutableHashSet<string> RecognizedMarkerNames =
+        SourceMarkerNames.Union(WireFormatMarkerNames).Union(ValidationMarkerNames);
 
     // The generator emits references to these helper types. Rather than hardcode their fully-qualified names -
     // which silently rot into broken generated code when a type moves namespace - they are resolved to their live
@@ -236,7 +257,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             var elementsRequired = ResolveTwin(compilation, validationNamespace, ElementsRequiredMarkerName, diagnostics);
             var allowedValues = ResolveTwin(compilation, validationNamespace, AllowedValuesMarkerName, diagnostics);
 
-            // The declarative markers are recognised on core models by their namespace; resolve it from an anchor
+            // The declarative markers are recognized on core models by their namespace; resolve it from an anchor
             // marker so a rename of the marker namespace fails loud here instead of silently unmatching every marker.
             var declarativeAnchor = ResolveExecutable(compilation, DeclarativeMarkerAnchor, diagnostics);
 
@@ -248,19 +269,22 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 diagnostics.Add(new DiagnosticInfo(
                     SupportsGetPropertyMissing, LocationInfo.None, SupportsGetPropertyName, GeneratedFromAttributeName));
 
-            if (formValues == null || requestValues == null || validatableModel == null ||
-                allowedValues == null || absoluteUri == null || elementsRequired == null || declarativeAnchor == null ||
-                !supportsGetDeclared)
+            // Each helper either resolved or left its diagnostic above, so the set is usable only when all resolved.
+            var resolved = (formValues, requestValues, validatableModel, allowedValues, absoluteUri, elementsRequired,
+                declarativeAnchor);
+            if (!supportsGetDeclared ||
+                resolved is not
+                    ({ } form, { } request, { } validatable, { } allowed, { } uri, { } elements, { } anchor))
                 return new KnownTypesResult(null, new EquatableArray<DiagnosticInfo>([.. diagnostics]));
 
             var known = new KnownTypes(
-                formValues.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                requestValues.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                validatableModel.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                EmitName(allowedValues),
-                EmitName(absoluteUri),
-                EmitName(elementsRequired),
-                declarativeAnchor.ContainingNamespace.ToDisplayString());
+                form.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                request.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                validatable.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                EmitName(allowed),
+                EmitName(uri),
+                EmitName(elements),
+                anchor.ContainingNamespace.ToDisplayString());
 
             return new KnownTypesResult(known, new EquatableArray<DiagnosticInfo>([]));
         }
@@ -337,6 +361,12 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
         private readonly List<string> _preStatements = [];
         private readonly List<(string Name, string Expression)> _assignments = [];
 
+        // The wire names read as one value, which the request must not carry more than once (RFC 6749 section 3.1).
+        // A repeated parameter such as resource binds to an array without a wire-format marker and may repeat.
+        private readonly List<string> _singleValuedWireNames = [];
+        private bool _readsWire;
+        private readonly List<(string WireName, string Member)> _wireMembers = [];
+
         public GenerationResult Emit()
         {
             foreach (var property in CollectProperties(coreType))
@@ -361,7 +391,8 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
             // When any property carries a translated validation attribute, the model opts into validation by the
             // group-scoped endpoint filter through this marker.
-            var marker = _properties.Any(property => property.Validations.Count > 0) ? $" : {known.ValidatableModel}" : string.Empty;
+            var validatable = _properties.Any(property => property.Validations.Count > 0) || _readsWire;
+            var marker = validatable ? $" : {known.ValidatableModel}" : string.Empty;
             // Nobody writes this file, so counting its lines tells nobody anything: it drags the adapter's
             // coverage denominator down with code that can only be changed by changing the generator, and
             // hides the hand-written shortfall behind it. The attribute travels with the source rather than
@@ -372,6 +403,9 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             _writer.AppendLine("{");
 
             EmitProperties();
+            if (validatable)
+                EmitParameterRefusals();
+
             EmitBindAsync();
             EmitProjection();
 
@@ -397,7 +431,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
                 case AuthorizationHeaderMarkerName:
                     // The Authorization header is the standard transport for client/registration credentials
-                    // (RFC 9110 §11.6.2); parsed once into a local that every authorization-header property reads.
+                    // (RFC 9110 section 11.6.2); parsed once into a local that every authorization-header property reads.
                     if (_preStatements.All(static statement => !statement.Contains("authorizationHeader")))
                     {
                         _preStatements.Add(
@@ -423,6 +457,21 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                     _assignments.Add((property.Name, "clientCertificate"));
                     break;
 
+                // A wire parameter read from one part of the request alone. RequestValues with the other part left
+                // out reads it exactly as the query-or-form models read theirs
+                case QueryParameterMarkerName
+                    when sourceMarker.ConstructorArguments is [{ Value: string queryName }]:
+                    ClassifySingleSourceWire(property, queryName, $"new {known.RequestValues}(request.Query, null)");
+                    return;
+
+                case FormParameterMarkerName
+                    when sourceMarker.ConstructorArguments is [{ Value: string formName }]:
+                    ClassifySingleSourceWire(
+                        property,
+                        formName,
+                        $"new {known.RequestValues}(global::Microsoft.AspNetCore.Http.QueryCollection.Empty, form)");
+                    return;
+
                 default:
                     return;
             }
@@ -442,19 +491,83 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
             var type = property.Type.ToDisplayString(FullyQualifiedWithNullability);
             _properties.Add((property.Name, type, GetInitializer(property), CollectValidations(property)));
-            _assignments.Add((property.Name, GetBindExpression(property, wireName)));
+            _assignments.Add((
+                property.Name,
+                $"{known.FormValues}.Read(() => {GetBindExpression(property, wireName)}, {Literal(wireName)}, malformed)"));
+            _readsWire = true;
+            _wireMembers.Add((wireName, property.Name));
+
+            if (property.Type is not IArrayTypeSymbol || GetWireFormatMarkerName(property) != null)
+                _singleValuedWireNames.Add(wireName);
+        }
+
+        /// <summary>
+        /// Classifies a parameter that one source marker restricts to the query or the form. It is a wire parameter
+        /// all the same, malformed and repeated like the others, and the query-or-form <c>source</c> counts it, so a
+        /// model that splits one parameter by source refuses it sent in both, as it refused it before the split.
+        /// </summary>
+        private void ClassifySingleSourceWire(IPropertySymbol property, string wireName, string sourceExpression)
+        {
+            var type = property.Type.ToDisplayString(FullyQualifiedWithNullability);
+            _properties.Add((property.Name, type, GetInitializer(property), CollectValidations(property)));
+
+            var value = $"{sourceExpression}[{Literal(wireName)}]";
+            _assignments.Add((
+                property.Name,
+                $"{known.FormValues}.Read(() => {ConvertByType(property, value)}, {Literal(wireName)}, malformed)"));
+            _readsWire = true;
+
+            // One wire name may stand behind a member per source, and the refusals name it once
+            if (_wireMembers.All(member => member.WireName != wireName))
+                _wireMembers.Add((wireName, property.Name));
+
+            if (!_singleValuedWireNames.Contains(wireName))
+                _singleValuedWireNames.Add(wireName);
+        }
+
+        private void EmitParameterRefusals()
+        {
+            _writer.AppendLine("\t/// <inheritdoc/>");
+            _writer.AppendLine(
+                "\tpublic global::System.Collections.Generic.IReadOnlyList<string> RepeatedParameters { get; init; } = [];");
+            _writer.AppendLine();
+            _writer.AppendLine("\t/// <inheritdoc/>");
+            _writer.AppendLine(
+                "\tpublic global::System.Collections.Generic.IReadOnlyList<string> MalformedParameters { get; init; } = [];");
+            _writer.AppendLine();
+            _writer.AppendLine("\t/// <inheritdoc/>");
+            _writer.AppendLine("\tpublic bool FormUnreadable { get; init; }");
+            _writer.AppendLine();
+            _writer.AppendLine(
+                $"\tstring {known.ValidatableModel}.MemberOf(string parameter) => parameter switch");
+            _writer.AppendLine("\t{");
+            foreach (var (wireName, member) in _wireMembers)
+                _writer.AppendLine($"\t\t{Literal(wireName)} => nameof({member}),");
+            _writer.AppendLine(
+                "\t\t_ => throw new global::System.ArgumentOutOfRangeException(nameof(parameter), parameter, null),");
+            _writer.AppendLine("\t};");
+            _writer.AppendLine();
         }
 
         /// <summary>
         /// Maps a wire-payload property to the expression that reads its value from <c>source</c> (which exposes a
         /// <c>this[string] -&gt; StringValues</c> indexer for both the form-only and query-or-form cases). The
-        /// wire-format marker selects the value conversion; otherwise the property type does.
+        /// wire-format marker selects the value conversion; otherwise the property type does - a two-link Chain of
+        /// Responsibility.
         /// </summary>
         private string GetBindExpression(IPropertySymbol property, string wireName)
         {
             var value = $"source[{Literal(wireName)}]";
+            return ConvertByWireFormat(property, value) ?? ConvertByType(property, value);
+        }
 
-            switch (GetWireFormatMarkerName(property))
+        /// <summary>
+        /// The conversion the property's wire-format marker selects, or null when it carries none.
+        /// </summary>
+        private string? ConvertByWireFormat(IPropertySymbol property, string value)
+        {
+            var markerName = GetWireFormatMarkerName(property);
+            switch (markerName)
             {
                 case SpaceSeparatedStringMarkerName:
                     return IsNonNullableReference(property.Type)
@@ -470,8 +583,22 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
                 case CultureListMarkerName:
                     return $"{known.FormValues}.Cultures({value})";
-            }
 
+                case null:
+                    return null;
+
+                default:
+                    throw new InvalidOperationException(
+                        $"The wire-format marker '{markerName}' that {nameof(GetWireFormatMarkerName)} recognizes " +
+                        "has no conversion.");
+            }
+        }
+
+        /// <summary>
+        /// The conversion the property's type selects.
+        /// </summary>
+        private string ConvertByType(IPropertySymbol property, string value)
+        {
             if (property.Type is IArrayTypeSymbol array)
             {
                 return array.ElementType.SpecialType == SpecialType.System_String
@@ -500,6 +627,12 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             foreach (var (name, type, initializer, validations) in _properties)
             {
                 _writer.AppendLine($"\t/// <inheritdoc cref=\"{coreType.ToDisplayString()}.{name}\"/>");
+
+                // A validation message names the member by its display name, and the client knows it by the wire name
+                var (wireName, _) = _wireMembers.FirstOrDefault(wire => wire.Member == name);
+                if (wireName != null)
+                    _writer.AppendLine($"\t[global::{DataAnnotationsNamespace}.Display(Name = {Literal(wireName)})]");
+
                 foreach (var validation in validations)
                     _writer.AppendLine($"\t[{validation}]");
                 _writer.AppendLine($"\tpublic {type} {name} {{ get; init; }}{initializer}");
@@ -521,26 +654,31 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
             // A form-only model never reads the query - per RFC 6749 the token-endpoint parameters must travel in the
             // request body. A SupportsGet model reads query-or-form via RequestValues.
-            if (stub.SupportsGet)
-            {
-                _writer.AppendLine(
-                    "\t\tvar form = request.HasFormContentType ? await request.ReadFormAsync(context.RequestAborted) : null;");
-                _writer.AppendLine(
-                    $"\t\tvar source = new {known.RequestValues}(request.Query, form);");
-            }
-            else
-            {
-                _writer.AppendLine(
-                    "\t\tvar source = request.HasFormContentType " +
-                    "? await request.ReadFormAsync(context.RequestAborted) " +
-                    ": (global::Microsoft.AspNetCore.Http.IFormCollection)global::Microsoft.AspNetCore.Http.FormCollection.Empty;");
-            }
+            _writer.AppendLine($"\t\tvar form = await {known.FormValues}.ReadFormAsync(request, context.RequestAborted);");
+            _writer.AppendLine(stub.SupportsGet
+                ? $"\t\tvar source = new {known.RequestValues}(request.Query, form);"
+                : "\t\tvar source = form ?? (global::Microsoft.AspNetCore.Http.IFormCollection)global::Microsoft.AspNetCore.Http.FormCollection.Empty;");
+
+            if (_readsWire)
+                _writer.AppendLine("\t\tvar malformed = new global::System.Collections.Generic.List<string>();");
 
             _writer.AppendLine($"\t\treturn new {stub.Name}");
             _writer.AppendLine("\t\t{");
 
             foreach (var (name, expression) in _assignments)
                 _writer.AppendLine($"\t\t\t{name} = {expression},");
+
+            if (_singleValuedWireNames.Count > 0)
+            {
+                var names = string.Join(", ", _singleValuedWireNames.Select(Literal));
+                _writer.AppendLine($"\t\t\tRepeatedParameters = {known.FormValues}.Repeated(source, [{names}]),");
+            }
+
+            if (_readsWire)
+            {
+                _writer.AppendLine("\t\t\tMalformedParameters = malformed,");
+                _writer.AppendLine("\t\t\tFormUnreadable = request.HasFormContentType && form is null,");
+            }
 
             _writer.AppendLine("\t\t};");
             _writer.AppendLine("\t}");
@@ -567,9 +705,7 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 .Where(attributeClass =>
                     attributeClass?.ContainingNamespace.ToDisplayString() == known.DeclarativeMarkerNamespace)
                 .Select(static attributeClass => attributeClass!.Name)
-                .FirstOrDefault(static name => name is
-                    SpaceSeparatedStringMarkerName or TotalSecondsMarkerName or
-                    JsonObjectMarkerName or CultureListMarkerName);
+                .FirstOrDefault(static name => WireFormatMarkerNames.Contains(name));
 
         /// <summary>
         /// Translates a core property's declarative validation markers into the executable Minimal API validation
@@ -634,13 +770,11 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
         private AttributeData? TryGetSourceMarker(IPropertySymbol property)
             => property.GetAttributes().FirstOrDefault(attribute =>
-                attribute.AttributeClass is
-                {
-                    Name: RequestHeaderMarkerName or AuthorizationHeaderMarkerName or ClientCertificateMarkerName,
-                } attributeClass &&
+                attribute.AttributeClass is { } attributeClass &&
+                SourceMarkerNames.Contains(attributeClass.Name) &&
                 attributeClass.ContainingNamespace.ToDisplayString() == known.DeclarativeMarkerNamespace);
 
-        // A declarative-binding attribute the generator does not recognise - renamed on the core side without
+        // A declarative-binding attribute the generator does not recognize - renamed on the core side without
         // updating the matching const here, or newly added - would silently drop its binding or validation. Each
         // such marker fails the build instead, mirroring the MVC generator's MarkerWithoutBinder guard.
         private void ReportUnrecognizedMarkers(IPropertySymbol property)
@@ -650,17 +784,12 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                 .Where(attributeClass =>
                     attributeClass is not null &&
                     attributeClass.ContainingNamespace.ToDisplayString() == known.DeclarativeMarkerNamespace &&
-                    !IsRecognizedMarkerName(attributeClass.Name));
+                    !RecognizedMarkerNames.Contains(attributeClass.Name));
 
             foreach (var attributeClass in unrecognized)
                 _diagnostics.Add(new DiagnosticInfo(
                     UnrecognizedMarker, stub.Location, attributeClass!.Name, coreType.ToDisplayString(), property.Name));
         }
-
-        private static bool IsRecognizedMarkerName(string name) => name is
-            RequestHeaderMarkerName or AuthorizationHeaderMarkerName or ClientCertificateMarkerName or
-            SpaceSeparatedStringMarkerName or TotalSecondsMarkerName or JsonObjectMarkerName or CultureListMarkerName or
-            AllowedValuesMarkerName or AbsoluteUriMarkerName or ElementsRequiredMarkerName;
 
         private static bool IsExcludedFromWire(IPropertySymbol property)
             => property.GetAttributes().Any(static attribute =>

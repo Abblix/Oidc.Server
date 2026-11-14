@@ -6,13 +6,15 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.TokenExchange;
 
 /// <summary>
-/// Resolves a wire-level <c>subject_token</c> of a specific RFC 8693 §3 token type into a
+/// Resolves a wire-level <c>subject_token</c> of a specific RFC 8693 section 3 token type into a
 /// portable <see cref="SubjectTokenContext"/>. One resolver per supported token type URI,
 /// registered with keyed DI under the URI as key; the
 /// <see cref="Endpoints.Token.Grants.TokenExchangeGrantHandler"/> dispatches by reading the
@@ -36,12 +38,19 @@ public interface ISubjectTokenResolver
     /// Parses or looks up the wire-level <paramref name="subjectToken"/> and returns the
     /// portable subject context on success, or an <see cref="OidcError"/> on failure.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="client">The client requesting the exchange, whose security profile the token is held to.</param>
     /// <param name="subjectToken">The exact <c>subject_token</c> string from the wire.</param>
+    /// <param name="tokenType">The token type URI the token was presented under (RFC 8693 section 3), which
+    /// decides the token types the resolver accepts, since one resolver may serve several URIs.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The resolved subject context on success; an OIDC error describing the
     /// rejection reason on failure. The handler maps every failure to wire-level
-    /// <c>invalid_request</c> per RFC 8693 §2.2.2.</returns>
+    /// <c>invalid_request</c> per RFC 8693 section 2.2.2.</returns>
     Task<Result<SubjectTokenContext, OidcError>> ResolveAsync(
+        TenantDefinition tenant,
+        ClientInfo client,
         string subjectToken,
+        Uri tokenType,
         CancellationToken cancellationToken);
 }

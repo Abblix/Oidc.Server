@@ -59,12 +59,7 @@ public class ArrayConverter<TElement, TConverter> : JsonConverter<TElement?[]?>
                     result.Add(default);
                     break;
 
-                case JsonTokenType.String:
-                case JsonTokenType.Number:
-                case JsonTokenType.True:
-                case JsonTokenType.False:
-                case JsonTokenType.StartObject:
-                case JsonTokenType.StartArray:
+                case var token when ElementValueTokens.Opens(token):
                     var element = _elementConverter.Read(ref reader, typeof(TElement), options);
                     result.Add(element);
                     break;

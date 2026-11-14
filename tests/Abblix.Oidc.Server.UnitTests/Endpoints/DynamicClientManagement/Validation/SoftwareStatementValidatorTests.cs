@@ -6,13 +6,17 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using System;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -41,9 +45,10 @@ public class SoftwareStatementValidatorTests
 
         _validator = new SoftwareStatementValidator(
             NullLogger<SoftwareStatementValidator>.Instance,
-            _jwtValidator.Object,
+            new ProfiledJwtValidator(_jwtValidator.Object),
             optionsMonitor.Object,
-            _secureFetcher.Object);
+            _secureFetcher.Object,
+            SingleIssuer.LicensedCatalog);
     }
 
     private static ClientRegistrationValidationContext CreateContext(string? softwareStatement = null)
@@ -61,7 +66,7 @@ public class SoftwareStatementValidatorTests
     {
         _oidcOptions.SoftwareStatement.RequireSoftwareStatement = false;
 
-        var result = await _validator.ValidateAsync(CreateContext());
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext());
         Assert.Null(result);
     }
 
@@ -70,7 +75,7 @@ public class SoftwareStatementValidatorTests
     {
         _oidcOptions.SoftwareStatement.RequireSoftwareStatement = true;
 
-        var result = await _validator.ValidateAsync(CreateContext());
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext());
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidSoftwareStatement, result.Error);
@@ -81,7 +86,7 @@ public class SoftwareStatementValidatorTests
     {
         _oidcOptions.SoftwareStatement.TrustedIssuers = [];
 
-        var result = await _validator.ValidateAsync(CreateContext("eyJ.fake.jwt"));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.fake.jwt"));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidSoftwareStatement, result.Error);
@@ -104,7 +109,7 @@ public class SoftwareStatementValidatorTests
             .Setup(v => v.ValidateAsync("eyJ.invalid.jwt", It.IsAny<ValidationParameters>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Signature verification failed"));
 
-        var result = await _validator.ValidateAsync(CreateContext("eyJ.invalid.jwt"));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.invalid.jwt"));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidSoftwareStatement, result.Error);
@@ -135,8 +140,106 @@ public class SoftwareStatementValidatorTests
             .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
             .ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(CreateContext("eyJ.valid.jwt"));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// A statement whose issuer is a tenant this server serves is refused even when the settings trust that issuer,
+    /// since nothing this server records about its own tokens is read for a statement and a revoked one would pass;
+    /// another trusted issuer is accepted.
+    /// </summary>
+    [Fact]
+    public async Task AnIssuerThatIsATenantOfThisServer_IsRefused_EvenWhereTrusted()
+    {
+        var served = SingleIssuer.Tenant.Issuer.OriginalString;
+        _oidcOptions.SoftwareStatement.TrustedIssuers =
+        [
+            new TrustedIssuer { Issuer = served, JwksUri = new Uri(served + "/.well-known/jwks.json") },
+            new TrustedIssuer
+            {
+                Issuer = "https://trusted-issuer.example.com",
+                JwksUri = new Uri("https://trusted-issuer.example.com/.well-known/jwks.json"),
+            },
+        ];
+        ValidationParameters? captured = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
+            .Callback(new Action<string, ValidationParameters>((_, p) => captured = p))
+            .ReturnsAsync(new JsonWebToken());
+
+        await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
+        var validateIssuer = captured!.ValidateIssuer!;
+
+        Assert.False(await validateIssuer(served));
+        Assert.True(await validateIssuer("https://trusted-issuer.example.com"));
+    }
+
+    /// <summary>
+    /// The keys read again on an unfamiliar kid are the trusted issuer's, fetched past the copy held, while the keys
+    /// first returned come from the copy.
+    /// </summary>
+    [Fact]
+    public async Task TheTrustedIssuersKeys_AreReadPastTheCopyOnlyForTheRefetch()
+    {
+        var jwksUri = new Uri("https://trusted-issuer.example.com/.well-known/jwks.json");
+        _oidcOptions.SoftwareStatement.TrustedIssuers =
+        [
+            new TrustedIssuer { Issuer = "https://trusted-issuer.example.com", JwksUri = jwksUri },
+        ];
+        ValidationParameters? captured = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
+            .Callback(new Action<string, ValidationParameters>((_, p) => captured = p))
+            .ReturnsAsync(new JsonWebToken());
+        _secureFetcher
+            .Setup(f => f.FetchAsync<JsonWebKeySet>(jwksUri, It.IsAny<bool>()))
+            .ReturnsAsync(new OidcError(ErrorCodes.ServerError, "not the subject of this test"));
+
+        await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
+        await captured!.ResolveIssuerSigningKeys!("https://trusted-issuer.example.com").ToArrayAsync(TestContext.Current.CancellationToken);
+        await captured.RefetchIssuerSigningKeys!("https://trusted-issuer.example.com").ToArrayAsync(TestContext.Current.CancellationToken);
+
+        _secureFetcher.Verify(f => f.FetchAsync<JsonWebKeySet>(jwksUri, false), Times.Once);
+        _secureFetcher.Verify(f => f.FetchAsync<JsonWebKeySet>(jwksUri, true), Times.Once);
+    }
+
+    /// <summary>
+    /// A signed JWT of another kind this server names, such as an access token of a trusted issuer, is refused as a
+    /// software statement rather than read as one (RFC 8725 Section 3.11).
+    /// </summary>
+    [Theory]
+    [InlineData(JsonWebTokenTypes.AccessToken)]
+    [InlineData(JwtTypes.RegistrationAccessToken)]
+    public async Task ValidateAsync_WithATokenOfAnotherKind_ShouldReturnError(string tokenType)
+    {
+        _oidcOptions.SoftwareStatement.TrustedIssuers =
+        [
+            new TrustedIssuer
+            {
+                Issuer = "https://trusted-issuer.example.com",
+                JwksUri = new Uri("https://trusted-issuer.example.com/.well-known/jwks.json"),
+            },
+        ];
+        _oidcOptions.SoftwareStatement.ApprovedSoftwareIds = [];
+
+        var token = new JsonWebToken
+        {
+            Header = { Type = tokenType },
+            Payload = new JsonWebTokenPayload(new JsonObject
+            {
+                ["software_id"] = "any-software",
+            }),
+        };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
+            .ReturnsAsync(token);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidSoftwareStatement, result.Error);
     }
 
     [Fact]
@@ -164,7 +267,7 @@ public class SoftwareStatementValidatorTests
             .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
             .ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(CreateContext("eyJ.valid.jwt"));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
         Assert.Null(result);
     }
 
@@ -193,7 +296,7 @@ public class SoftwareStatementValidatorTests
             .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
             .ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(CreateContext("eyJ.valid.jwt"));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnapprovedSoftwareStatement, result.Error);
@@ -222,9 +325,38 @@ public class SoftwareStatementValidatorTests
             .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
             .ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(CreateContext("eyJ.valid.jwt"));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.valid.jwt"));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnapprovedSoftwareStatement, result.Error);
+    }
+
+    /// <summary>
+    /// A software statement is a JWS this server processes, so at a tenant held to FAPI 1.0 Advanced it is accepted only
+    /// under the algorithms Part 2 section 8.6 names, as a JWT bearer assertion is; a tenant held to no profile names no
+    /// list.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, true)]
+    [InlineData(ClientSecurityProfile.None, false)]
+    public async Task TheSignatureAlgorithms_AreTheTenantsProfiles(ClientSecurityProfile profile, bool bounded)
+    {
+        _oidcOptions.SoftwareStatement.TrustedIssuers =
+        [
+            new TrustedIssuer { Issuer = "https://trusted-issuer.example.com", JwksUri = new Uri("https://trusted-issuer.example.com/jwks") },
+        ];
+        ValidationParameters? captured = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
+            .Callback(new Action<string, ValidationParameters>((_, p) => captured = p))
+            .ReturnsAsync(new JsonWebToken());
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+
+        await _validator.ValidateAsync(tenant, CreateContext("eyJ.valid.jwt"));
+
+        if (bounded)
+            Assert.Equal([SigningAlgorithms.ES256, SigningAlgorithms.PS256], captured!.AllowedSigningAlgorithms!.Order());
+        else
+            Assert.Null(captured!.AllowedSigningAlgorithms);
     }
 }

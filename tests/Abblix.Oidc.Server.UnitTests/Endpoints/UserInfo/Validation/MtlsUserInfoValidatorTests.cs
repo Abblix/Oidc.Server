@@ -20,7 +20,7 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.UserInfo.Validation;
 
 /// <summary>
-/// Verifies RFC 8705 §3 resource-side enforcement of certificate-bound access tokens in
+/// Verifies RFC 8705 section 3 resource-side enforcement of certificate-bound access tokens in
 /// <see cref="MtlsUserInfoValidator"/>: a token carrying <c>cnf.x5t#S256</c> is accepted only
 /// when the certificate presented on the mutual-TLS connection hashes to the bound value, and
 /// rejected with <c>invalid_token</c> otherwise. Tokens without the binding pass through.
@@ -57,7 +57,7 @@ public class MtlsUserInfoValidatorTests
     [Fact]
     public void BoundToken_WithoutCertificate_IsRejected()
     {
-        // RFC 8705 §3: a certificate-bound token presented over a connection that carries no
+        // RFC 8705 section 3: a certificate-bound token presented over a connection that carries no
         // client certificate must be rejected - the token is replayable otherwise.
         var token = CreateBoundToken("some-committed-thumbprint");
         var request = new ClientRequest();
@@ -72,7 +72,7 @@ public class MtlsUserInfoValidatorTests
     public void BoundToken_WithDifferentCertificate_IsRejected()
     {
         // The presented certificate is not the one the token was bound to (stolen-token replay
-        // by a holder of a different certificate). RFC 8705 §3 requires rejection.
+        // by a holder of a different certificate). RFC 8705 section 3 requires rejection.
         using var boundCertificate = CreateCertificate();
         using var otherCertificate = CreateCertificate();
         var token = CreateBoundToken(ThumbprintOf(boundCertificate));

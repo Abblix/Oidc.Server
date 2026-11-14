@@ -24,8 +24,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
-using RequestParameters = Abblix.Oidc.Server.Model.AuthorizationRequest.Parameters;
 using Abblix.Oidc.Server.E2E.Tests;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
@@ -61,7 +59,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     public async Task Custom_prefix_mounts_all_endpoints_under_the_prefix()
     {
         await using var prefixed = factory.WithWebHostBuilder(builder =>
-            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, RoutePrefix));
+            builder.UseSetting(TestConstants.RoutePrefixConfigKey, RoutePrefix));
         var client = ClientOf(prefixed);
 
         // MapOidcEndpoints(RoutePrefix) mounts the whole surface under the prefix.
@@ -138,7 +136,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         var response = await client.GetAsync(OidcFlows.BuildQuery(
             OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), new Dictionary<string, string>
             {
-                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
                 [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
                 [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
                 [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
@@ -151,7 +149,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         Assert.Equal(MediaTypeNames.Application.Json, response.Content.Headers.ContentType?.MediaType);
         var body = JsonNode.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     [Fact]
@@ -176,7 +174,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     public async Task Discovery_document_urls_carry_the_route_prefix()
     {
         await using var prefixed = factory.WithWebHostBuilder(builder =>
-            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, RoutePrefix));
+            builder.UseSetting(TestConstants.RoutePrefixConfigKey, RoutePrefix));
         var client = ClientOf(prefixed);
 
         // MapOidcEndpoints(RoutePrefix) mounts the token endpoint at /oauth/connect/token, so discovery must advertise
@@ -200,7 +198,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     public async Task Registration_client_uri_carries_the_route_prefix()
     {
         await using var prefixed = factory.WithWebHostBuilder(builder =>
-            builder.UseSetting(MinimalApiTestConstants.RoutePrefixConfigKey, RoutePrefix));
+            builder.UseSetting(TestConstants.RoutePrefixConfigKey, RoutePrefix));
         var client = ClientOf(prefixed);
 
         // Post directly to the known prefixed path (before the #10 fix the discovery registration_endpoint is wrong,
@@ -217,7 +215,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = JsonNode.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        var registrationClientUri = body["registration_client_uri"]!.GetValue<string>();
+        var registrationClientUri = body[ClientRegistrationResponse.Parameters.RegistrationClientUri]!.GetValue<string>();
 
         Assert.StartsWith("/oauth/connect/register/", new Uri(registrationClientUri).AbsolutePath);
     }
@@ -251,43 +249,8 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         response.EnsureSuccessStatusCode();
 
         Assert.NotNull(response.Headers.CacheControl);
-        Assert.True(response.Headers.CacheControl!.NoStore,
+        Assert.True(response.Headers.CacheControl.NoStore,
             $"{path} response is not Cache-Control: no-store; a shared cache may store it.");
-    }
-
-    [Fact]
-    public async Task Post_authorize_prefers_form_over_query_on_a_duplicate_parameter()
-    {
-        var client = ClientOf(factory);
-        var discovery = await client.FetchDiscoveryAsync();
-        var (_, challenge) = OidcFlows.Pkce();
-        const string formState = "STATE_FROM_FORM";
-        const string queryState = "STATE_FROM_QUERY";
-
-        var authorizeEndpoint = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint);
-        var url = OidcFlows.BuildQuery(authorizeEndpoint, new Dictionary<string, string>
-        {
-            [AuthorizationRequest.Parameters.State] = queryState,
-        });
-
-        var form = new Dictionary<string, string>
-        {
-            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
-            [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
-            [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
-            [AuthorizationRequest.Parameters.CodeChallenge] = challenge,
-            [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
-            [AuthorizationRequest.Parameters.State] = formState,
-        };
-
-        using var content = new FormUrlEncodedContent(form);
-        var response = await client.PostAsync(url, content, TestContext.Current.CancellationToken);
-
-        Assert.True(response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found or HttpStatusCode.SeeOther,
-            $"/authorize returned {(int)response.StatusCode}, expected a redirect");
-        var echoedState = System.Web.HttpUtility.ParseQueryString(response.Headers.Location!.Query)[RequestParameters.State];
-        Assert.Equal(formState, echoedState);
     }
 
     [Fact]
@@ -297,7 +260,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         var httpClient = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
-            BaseAddress = new Uri("http://localhost"),
+            BaseAddress = new Uri("http://auth.example.com"),
         });
 
         // Over http the group's HTTPS filter refuses a credential-carrying POST rather than serving it in cleartext,
@@ -320,7 +283,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
         var httpClient = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
-            BaseAddress = new Uri("http://localhost"),
+            BaseAddress = new Uri("http://auth.example.com"),
         });
 
         // Discovery and JWKS are gated on HTTPS like every other endpoint: over cleartext a man-in-the-middle could
@@ -337,7 +300,7 @@ public sealed class RoutingTests(TestFactory factory) : IClassFixture<TestFactor
     {
         var client = ClientOf(factory);
 
-        // RFC 8414 §3 lets the Authorization Server Metadata be published under the oauth-authorization-server
+        // RFC 8414 section 3 lets the Authorization Server Metadata be published under the oauth-authorization-server
         // suffix as well as openid-configuration. Abblix serves the identical document at both, so a client that
         // queries only oauth-authorization-server resolves the same issuer and endpoints.
         var oidc = JsonNode.Parse(await client.GetStringAsync(

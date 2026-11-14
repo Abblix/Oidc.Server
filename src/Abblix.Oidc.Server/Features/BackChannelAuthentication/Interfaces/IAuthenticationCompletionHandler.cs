@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 
 /// <summary>
@@ -25,10 +27,14 @@ public interface IAuthenticationCompletionHandler
     /// Completes the authentication process and handles token delivery according to
     /// the client's configured delivery mode.
     /// </summary>
+    /// <param name="tenant">The tenant the request is completed at, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="authenticationRequestId">The auth_req_id identifying the authentication request.</param>
-    /// <param name="request">The authentication request carrying the grant the end user approved. Its
-    /// own Status is not read: whether this request may still be answered is decided from the STORED
-    /// record, so a caller cannot make the decision by setting a field on its own copy.</param>
+    /// <param name="request">The authentication request carrying the grant the end user approved. Only
+    /// the grant is read from it, and the grant has to be for the client the request came from. Everything
+    /// the request recorded when it arrived - its status, the end users it named, the authorization_details
+    /// and authentication levels it asked for, the client's notification endpoint and token - is taken
+    /// from the STORED record and written over this copy, so a caller cannot change any of it by setting a
+    /// field on its own copy.</param>
     /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
     /// <returns>A task representing the asynchronous completion operation.</returns>
     /// <remarks>
@@ -42,17 +48,37 @@ public interface IAuthenticationCompletionHandler
     /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
     /// identifier. Stated as what must be true rather than as a list of causes, because the causes are
     /// more numerous than they look and this seam cannot tell them apart: the request may have been
-    /// answered, refused or expired, its record may have been redeemed and removed by a poll, removed by
-    /// push's own refusal path after a configuration fault where nothing was answered at all, evicted,
-    /// or never stored. A host that persists the status itself before calling lands here too, on its
+    /// answered, refused or expired, its record may have been redeemed and removed by a poll, taken by
+    /// push - by a rival answer, or by push itself after a configuration fault where nothing was answered
+    /// at all - evicted, or never stored. A client the stored request names that is no longer registered is
+    /// refused the same way. A host that persists the status itself before calling lands here too, on its
     /// FIRST completion and with nothing over-granted.
     /// <para>
     /// Completing a request that is not pending would deliver a second answer for one authentication.
     /// Recovering from a failed delivery therefore means asking the end user again, not repeating the
     /// call.
+    /// </para>
+    /// <para>
+    /// Any other exception from a push-mode completion was raised after the request was taken, while its
+    /// authorization details were checked or its tokens issued, and the client has already been sent
+    /// <c>transaction_failed</c>. The request is gone, so here too the recovery is to ask the end user again.
     /// </para></exception>
     Task CompleteAsync(
+        TenantDefinition tenant,
         string authenticationRequestId,
         BackChannelAuthenticationRequest request,
         TimeSpan expiresIn);
+
+    /// <summary>
+    /// Denies a pending request because the end user refused it on their device, and lets the client know
+    /// the way its delivery mode knows anything: a poll reads access_denied, a ping client is told to come
+    /// and read it, a push client is sent the error.
+    /// </summary>
+    /// <param name="tenant">The tenant the request is completed at, which outside a request is the definition the tenant catalog returns.</param>
+    /// <param name="authenticationRequestId">The auth_req_id the end user refused.</param>
+    /// <param name="expiresIn">How long a denied request stays readable, for the modes that leave one.</param>
+    /// <returns>A task representing the asynchronous denial.</returns>
+    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
+    /// identifier, the same condition <see cref="CompleteAsync"/> refuses on.</exception>
+    Task DenyAsync(TenantDefinition tenant, string authenticationRequestId, TimeSpan expiresIn);
 }

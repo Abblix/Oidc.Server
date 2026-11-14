@@ -6,14 +6,18 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Threading.RateLimiting;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 
@@ -31,14 +35,21 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection;
 /// <param name="logger">The logger for logging activities within the validator.</param>
 /// <param name="clientAuthenticator">The client request authenticator to authenticate the client.</param>
 /// <param name="jwtValidator">The JWT validator to validate the token.</param>
+/// <param name="rateLimiter">
+/// The budget of introspection requests one client gets, spent once the caller is known to be that client.
+/// </param>
 public partial class IntrospectionRequestValidator(
 	ILogger<IntrospectionRequestValidator> logger,
 	IClientAuthenticator clientAuthenticator,
-	IAuthServiceJwtValidator jwtValidator) : IIntrospectionRequestValidator
+	IAuthServiceJwtValidator jwtValidator,
+	[FromKeyedServices(CallerRateLimiters.Introspection)]
+	PartitionedRateLimiter<(string ClientId, string? Source)> rateLimiter)
+	: IIntrospectionRequestValidator
 {
 	/// <summary>
 	/// Validates the introspection request properties and authenticates a client that initiated the request.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="introspectionRequest">The introspection request to validate. It includes the token and client information for validation.</param>
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>
@@ -46,22 +57,37 @@ public partial class IntrospectionRequestValidator(
 	/// <see cref="Result{ValidIntrospectionRequest, AuthError}"/> which indicates whether the request is valid or contains errors.
 	/// </returns>
 	public async Task<Result<ValidIntrospectionRequest, OidcError>> ValidateAsync(
+		TenantDefinition tenant,
 		IntrospectionRequest introspectionRequest,
 		ClientRequest clientRequest)
 	{
-		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(clientRequest);
+		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
 		if (clientInfo == null)
 		{
 			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
 		}
 
-		// RFC 7662 §2.1: the introspection endpoint MUST require some form of authorization to
+		// RFC 7662 section 2.1: the introspection endpoint MUST require some form of authorization to
 		// prevent token scanning. A public client (auth method "none") presents only its client_id,
 		// which is not a credential - reject it even though "none" is valid at the token endpoint.
 		if (clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.None)
 		{
 			LogPublicClientRejected(clientInfo.ClientId);
 			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
+		}
+
+		// Charged after the caller has proven which client it is and before the token is read, which is where
+		// the signature verification this endpoint spends on a looping client sits. What authentication
+		// itself costs is not charged here, and a caller that fails it never reaches this line. The source
+		// half of the key is left unset: a public client is turned away above.
+		using var lease = rateLimiter.AttemptAcquire((clientInfo.ClientId, null));
+		if (!lease.IsAcquired)
+		{
+			LogCallerRateLimited(clientInfo.ClientId);
+			return new TooManyRequestsError(
+				"Too many introspection requests from this client",
+				lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter) ? retryAfter : null,
+				CallerRateLimiters.Introspection);
 		}
 
 		// The audience is deliberately not required to name this server. Introspection reports on a token, it
@@ -78,8 +104,9 @@ public partial class IntrospectionRequestValidator(
 		// identifier does not say which resource is asking. The same section closes the list with "it is up to
 		// the authorization server to determine which of these checks (and any other checks) apply".
 		var result = await jwtValidator.ValidateAsync(
-			introspectionRequest.Token,
-			ValidationOptions.Default & ~ValidationOptions.RequireValidAudience);
+			tenant, clientInfo, introspectionRequest.Token,
+			JwtTypes.IntrospectableTokens,
+			ServiceTokenValidation.AnyAudience);
 
 		return result.Match(
 			token =>
@@ -101,7 +128,7 @@ public partial class IntrospectionRequestValidator(
 			},
 			error =>
 			{
-				LogInvalidJwt(error);
+				LogInvalidJwt(Sanitized.Value(error));
 				return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 			});
 	}

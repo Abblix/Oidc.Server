@@ -24,7 +24,7 @@ public sealed record BackChannelPingNotificationRequest : IBackChannelNotificati
 
     /// <summary>
     /// Wire-level parameter names for the CIBA ping-mode notification payload
-    /// (OpenID Connect CIBA Core 1.0 §10.2).
+    /// (OpenID Connect CIBA Core 1.0 section 10.2).
     /// </summary>
     public static class Parameters
     {

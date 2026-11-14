@@ -9,6 +9,8 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ScopeManagement;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 
@@ -19,22 +21,23 @@ namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 public class ScopeValidator(IScopeManager scopeManager) : IDeviceAuthorizationContextValidator
 {
     /// <inheritdoc />
-    public Task<OidcError?> ValidateAsync(DeviceAuthorizationValidationContext context)
-        => Task.FromResult(Validate(context));
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
+        => Task.FromResult(Validate(tenant, context));
 
-    private OidcError? Validate(DeviceAuthorizationValidationContext context)
+    private OidcError? Validate(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
     {
-        var scopes = context.Request.Scope ?? [];
+        if (context.ClientInfo.ScopeServedFor(context.Request.Scope ?? []) is not { } scopes)
+            return new OidcError(ErrorCodes.InvalidScope, ScopeRefusals.NoneNamed);
 
         if (scopes.Contains(Scopes.OfflineAccess) &&
-            context.ClientInfo.OfflineAccessAllowed != true)
+            !context.ClientInfo.OfflineAccess.IsAllowed())
         {
             return new OidcError(
                 ErrorCodes.InvalidScope,
                 "This client is not allowed to request for offline access");
         }
 
-        if (!scopeManager.Validate(
+        if (!scopeManager.Validate(tenant, 
                 scopes,
                 context.Resources,
                 context.ClientInfo.AllowedScopes,

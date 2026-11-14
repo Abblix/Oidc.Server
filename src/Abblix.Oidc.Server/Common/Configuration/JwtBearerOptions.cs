@@ -57,6 +57,10 @@ public record JwtBearerOptions
 	/// It bounds two things, both about the same clock: how far a timestamp may sit either side of
 	/// this server's, and how much older than <see cref="MaxJwtAge"/> an assertion may be.
 	/// </para>
+	/// <para>
+	/// Not the drift between this server's own instances, which a token it issued is read back across:
+	/// that is <see cref="OidcOptions.ReplicaClockSkew"/>.
+	/// </para>
 	/// </remarks>
 	public TimeSpan? ClockSkew { get; set; }
 
@@ -105,9 +109,9 @@ public record JwtBearerOptions
 	public int MaxJwtSize { get; set; } = 8192;
 
 	/// <summary>
-	/// When true, the JWT audience claim must exactly match the token endpoint URL per RFC 7523 Section 3.
-	/// When false, the application base URI is also accepted for compatibility with common implementations.
-	/// Default is true for strict RFC 7523 compliance and security.
+	/// When true, the JWT audience claim must name the token endpoint URL or the tenant's issuer identifier, each
+	/// compared as written, per RFC 7523 Section 3 as RFC 10070 section 4 updates it. When false, the application
+	/// base URI is also accepted for compatibility with common implementations. Default is true.
 	/// </summary>
 	/// <remarks>
 	/// Set to false only if you have legacy clients that use the application base URI as audience.
@@ -132,14 +136,15 @@ public record JwtBearerOptions
 
 	/// <summary>
 	/// Allowed values for the 'typ' (type) header in JWT assertions.
-	/// When not empty, JWTs must have a typ header matching one of these values.
-	/// Common values include "JWT" and "at+jwt".
-	/// Default is empty (typ header validation disabled).
+	/// When not empty, a JWT carrying a typ header must match one of these values; a JWT without one is accepted,
+	/// since RFC 7523 defines no type for an assertion. Common values include "JWT" and "at+jwt".
+	/// Default is empty: a token typed as another kind of token, such as an access token, is refused, and any
+	/// other type is accepted.
 	/// </summary>
 	/// <remarks>
-	/// While RFC 7523 does not mandate typ header validation, validating it prevents token confusion attacks
-	/// in multi-token environments where different token types (access tokens, ID tokens, assertions) may coexist.
-	/// Set to ["JWT"] or ["at+jwt"] based on your token ecosystem requirements.
+	/// Listing the types separates typed tokens only: a token without a type, an ID token included, passes any
+	/// list and is held back by the audience check, which requires this server's token endpoint. A deployment
+	/// whose trusted issuers send their access tokens as assertions lists "at+jwt".
 	/// </remarks>
 	public string[] AllowedTokenTypes { get; set; } = [];
 }

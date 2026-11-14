@@ -9,12 +9,14 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
 /// <summary>
-/// Refuses a grant whose authentication session a revocation cutoff has caught.
+/// Refuses a grant whose authentication session a revocation cutoff has caught, or which the end user approved
+/// before a cutoff recorded against them at the grant's client.
 /// </summary>
 /// <remarks>
 /// The third place a revocation has to be read, and the only one that sees this case. The token side compares
@@ -37,8 +39,10 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 /// client identifier, and under the assertion grants it belongs to a federated issuer.
 /// </para>
 /// </remarks>
-/// <param name="cutoffChecker">Decides whether a cutoff refuses the session behind the grant.</param>
-public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker) : ITokenContextValidator
+/// <param name="cutoffChecker">Decides whether a cutoff refuses the session behind the grant, or the grant itself
+/// at its client.</param>
+public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker)
+    : ITokenContextValidator
 {
     /// <summary>
     /// The grant types whose session was authenticated before this request and can therefore have been
@@ -59,12 +63,12 @@ public class RevokedSessionValidator(IRevocationCutoffChecker cutoffChecker) : I
     ];
 
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, TokenValidationContext context, CancellationToken cancellationToken)
     {
         if (context.Request.GrantType is not { } grantType || !RedeemsAnEarlierSession.Contains(grantType))
             return null;
 
-        if (!await cutoffChecker.IsSessionRefusedAsync(context.AuthorizedGrant.AuthSession))
+        if (!await cutoffChecker.IsGrantRefusedAsync(tenant, context.AuthorizedGrant, grantType))
             return null;
 
         // RFC 6749 Section 5.2 names this case in the definition of the code: the grant is "invalid,

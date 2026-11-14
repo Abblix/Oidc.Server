@@ -9,6 +9,8 @@
 using System;
 using System.Globalization;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
@@ -37,8 +39,8 @@ public class AuthorizationRequestStorageTests
 
         // Setup key factory to return URI as key (original string)
         _keyFactory
-            .Setup(kf => kf.AuthorizationRequestKey(It.IsAny<Uri>()))
-            .Returns<Uri>(uri => $"Abblix.Oidc.Server:PAR:{uri.OriginalString}");
+            .Setup(kf => kf.AuthorizationRequestKey(TestTenant.Matched, It.IsAny<Uri>()))
+            .Returns<TenantDefinition, Uri>((_, uri) => $"Abblix.Oidc.Server:PAR:{uri.OriginalString}");
 
         _requestStorage = new AuthorizationRequestStorage(
             _uriGenerator.Object,
@@ -55,7 +57,7 @@ public class AuthorizationRequestStorageTests
         return new AuthorizationRequest
         {
             ClientId = TestConstants.DefaultClientId,
-            ResponseType = ["code"],
+            ResponseType = [ResponseTypes.Code],
             RedirectUri = new Uri("https://client.example.com/callback"),
             Scope = [TestConstants.DefaultScope],
         };
@@ -70,21 +72,21 @@ public class AuthorizationRequestStorageTests
         return new AuthorizationRequest
         {
             ClientId = "client_456",
-            ResponseType = ["code", "id_token"],
+            ResponseType = [ResponseTypes.Code, ResponseTypes.IdToken],
             RedirectUri = new Uri("https://client.example.com/callback"),
-            Scope = [TestConstants.DefaultScope, "profile", "email", "offline_access"],
+            Scope = [TestConstants.DefaultScope, Scopes.Profile, Scopes.Email, Scopes.OfflineAccess],
             State = "state_xyz",
-            ResponseMode = "form_post",
+            ResponseMode = ResponseModes.FormPost,
             Nonce = "nonce_abc",
-            Display = "page",
-            Prompt = "consent",
+            Display = DisplayModes.Page,
+            Prompt = [Prompts.Consent],
             MaxAge = TimeSpan.FromHours(2),
             UiLocales = [CultureInfo.GetCultureInfo("en-US"), CultureInfo.GetCultureInfo("fr-FR")],
             IdTokenHint = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
             LoginHint = "user@example.com",
             AcrValues = ["urn:mace:incommon:iap:silver"],
             CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
-            CodeChallengeMethod = "S256",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
         };
     }
 
@@ -113,7 +115,7 @@ public class AuthorizationRequestStorageTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _requestStorage.StoreAsync(request, expiresIn);
+        var result = await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
 
         // Assert
         Assert.Equal(expectedUri, result.RequestUri);
@@ -147,7 +149,7 @@ public class AuthorizationRequestStorageTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _requestStorage.StoreAsync(request, expiresIn);
+        await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
 
         // Assert
         Assert.Equal($"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}", capturedKey);
@@ -178,7 +180,7 @@ public class AuthorizationRequestStorageTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _requestStorage.StoreAsync(request, expiresIn);
+        var result = await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
 
         // Assert
         Assert.Same(request, result.Model);
@@ -209,7 +211,7 @@ public class AuthorizationRequestStorageTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _requestStorage.StoreAsync(request, expiresIn);
+        var result = await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
 
         // Assert
         Assert.Equal(expectedUri, result.RequestUri);
@@ -240,7 +242,7 @@ public class AuthorizationRequestStorageTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _requestStorage.StoreAsync(request, expiresIn);
+        var result = await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
 
         // Assert
         Assert.Equal(expiresIn, result.ExpiresIn);
@@ -274,7 +276,7 @@ public class AuthorizationRequestStorageTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _requestStorage.StoreAsync(request, expiresIn);
+        await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
 
         // Assert
         Assert.Equal($"Abblix.Oidc.Server:PAR:{requestUri.OriginalString}", capturedKey);
@@ -308,11 +310,11 @@ public class AuthorizationRequestStorageTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _requestStorage.StoreAsync(request, expiresIn);
+        await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(expiresIn, capturedOptions!.AbsoluteExpirationRelativeToNow);
+        Assert.Equal(expiresIn, capturedOptions.AbsoluteExpirationRelativeToNow);
     }
 
     /// <summary>
@@ -340,7 +342,7 @@ public class AuthorizationRequestStorageTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _requestStorage.StoreAsync(request, expiresIn);
+        await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
 
         // Assert
         _uriGenerator.Verify(g => g.GenerateRequestUri(), Times.Once);
@@ -371,7 +373,7 @@ public class AuthorizationRequestStorageTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _requestStorage.StoreAsync(request, expiresIn);
+        await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
 
         // Assert
         _storage.Verify(
@@ -409,9 +411,9 @@ public class AuthorizationRequestStorageTests
             .Returns(Task.CompletedTask);
 
         // Act
-        var result1 = await _requestStorage.StoreAsync(request, expiresIn);
-        var result2 = await _requestStorage.StoreAsync(request, expiresIn);
-        var result3 = await _requestStorage.StoreAsync(request, expiresIn);
+        var result1 = await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
+        var result2 = await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
+        var result3 = await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
 
         // Assert
         Assert.NotEqual(result1.RequestUri, result2.RequestUri);
@@ -438,7 +440,7 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(expectedRequest);
 
         // Act
-        var result = await _requestStorage.TryGetAsync(requestUri);
+        var result = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, requestUri);
 
         // Assert
         Assert.NotNull(result);
@@ -463,7 +465,7 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync((AuthorizationRequest?)null);
 
         // Act
-        var result = await _requestStorage.TryGetAsync(requestUri);
+        var result = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, requestUri);
 
         // Assert
         Assert.Null(result);
@@ -488,7 +490,7 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        await _requestStorage.TryGetAsync(requestUri);
+        await _requestStorage.TryGetAsync(SingleIssuer.Tenant, requestUri);
 
         // Assert
         _storage.Verify(
@@ -521,7 +523,7 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        await _requestStorage.TryGetAsync(requestUri, true);
+        await _requestStorage.TryGetAsync(SingleIssuer.Tenant, requestUri, true);
 
         // Assert
         Assert.True(capturedShouldRemove);
@@ -549,7 +551,7 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        await _requestStorage.TryGetAsync(requestUri);
+        await _requestStorage.TryGetAsync(SingleIssuer.Tenant, requestUri);
 
         // Assert
         Assert.False(capturedShouldRemove);
@@ -574,7 +576,7 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        await _requestStorage.TryGetAsync(requestUri);
+        await _requestStorage.TryGetAsync(SingleIssuer.Tenant, requestUri);
 
         // Assert
         _storage.Verify(
@@ -613,8 +615,8 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request2);
 
         // Act
-        var result1 = await _requestStorage.TryGetAsync(uri1);
-        var result2 = await _requestStorage.TryGetAsync(uri2);
+        var result1 = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, uri1);
+        var result2 = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, uri2);
 
         // Assert
         Assert.NotEqual(uri1.OriginalString, uri2.OriginalString);
@@ -654,8 +656,8 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        var storeResult = await _requestStorage.StoreAsync(request, expiresIn);
-        var getResult = await _requestStorage.TryGetAsync(storeResult.RequestUri);
+        var storeResult = await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
+        var getResult = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, storeResult.RequestUri);
 
         // Assert
         Assert.Same(request, getResult);
@@ -693,8 +695,8 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        var storeResult = await _requestStorage.StoreAsync(request, expiresIn);
-        var getResult = await _requestStorage.TryGetAsync(storeResult.RequestUri, true);
+        var storeResult = await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
+        var getResult = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, storeResult.RequestUri, true);
 
         // Assert
         Assert.Same(request, getResult);
@@ -719,9 +721,9 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        var result1 = await _requestStorage.TryGetAsync(requestUri);
-        var result2 = await _requestStorage.TryGetAsync(requestUri);
-        var result3 = await _requestStorage.TryGetAsync(requestUri);
+        var result1 = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, requestUri);
+        var result2 = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, requestUri);
+        var result3 = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, requestUri);
 
         // Assert
         Assert.Same(request, result1);
@@ -755,8 +757,8 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync((AuthorizationRequest?)null);
 
         // Act
-        var firstGet = await _requestStorage.TryGetAsync(requestUri, true);
-        var secondGet = await _requestStorage.TryGetAsync(requestUri, true);
+        var firstGet = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, requestUri, true);
+        var secondGet = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, requestUri, true);
 
         // Assert
         Assert.Same(request, firstGet);
@@ -813,10 +815,10 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request2);
 
         // Act
-        var store1 = await _requestStorage.StoreAsync(request1, expiresIn);
-        var store2 = await _requestStorage.StoreAsync(request2, expiresIn);
-        var get1 = await _requestStorage.TryGetAsync(store1.RequestUri);
-        var get2 = await _requestStorage.TryGetAsync(store2.RequestUri);
+        var store1 = await _requestStorage.StoreAsync(SingleIssuer.Tenant, request1, expiresIn);
+        var store2 = await _requestStorage.StoreAsync(SingleIssuer.Tenant, request2, expiresIn);
+        var get1 = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, store1.RequestUri);
+        var get2 = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, store2.RequestUri);
 
         // Assert
         Assert.Same(request1, get1);
@@ -852,8 +854,8 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request2);
 
         // Act
-        var result1 = await _requestStorage.TryGetAsync(uri1);
-        var result2 = await _requestStorage.TryGetAsync(uri2);
+        var result1 = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, uri1);
+        var result2 = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, uri2);
 
         // Assert
         Assert.Same(request1, result1);
@@ -895,10 +897,10 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request2);
 
         // Act
-        await _requestStorage.StoreAsync(request1, expiresIn);
-        var getResult1 = await _requestStorage.TryGetAsync(requestUri);
-        await _requestStorage.StoreAsync(request2, expiresIn);
-        var getResult2 = await _requestStorage.TryGetAsync(requestUri);
+        await _requestStorage.StoreAsync(SingleIssuer.Tenant, request1, expiresIn);
+        var getResult1 = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, requestUri);
+        await _requestStorage.StoreAsync(SingleIssuer.Tenant, request2, expiresIn);
+        var getResult2 = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, requestUri);
 
         // Assert
         Assert.Same(request1, getResult1);
@@ -944,8 +946,8 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        var storeResult = await _requestStorage.StoreAsync(request, expiresIn);
-        var getResult = await _requestStorage.TryGetAsync(storeResult.RequestUri);
+        var storeResult = await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
+        var getResult = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, storeResult.RequestUri);
 
         // Assert
         Assert.Same(request, getResult);
@@ -987,8 +989,8 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        var storeResult = await _requestStorage.StoreAsync(request, expiresIn);
-        var getResult = await _requestStorage.TryGetAsync(storeResult.RequestUri);
+        var storeResult = await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
+        var getResult = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, storeResult.RequestUri);
 
         // Assert
         Assert.Same(request, getResult);
@@ -1027,11 +1029,11 @@ public class AuthorizationRequestStorageTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _requestStorage.StoreAsync(request, expiresIn);
+        await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(expiresIn, capturedOptions!.AbsoluteExpirationRelativeToNow);
+        Assert.Equal(expiresIn, capturedOptions.AbsoluteExpirationRelativeToNow);
     }
 
     /// <summary>
@@ -1062,11 +1064,11 @@ public class AuthorizationRequestStorageTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _requestStorage.StoreAsync(request, expiresIn);
+        await _requestStorage.StoreAsync(SingleIssuer.Tenant, request, expiresIn);
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(expiresIn, capturedOptions!.AbsoluteExpirationRelativeToNow);
+        Assert.Equal(expiresIn, capturedOptions.AbsoluteExpirationRelativeToNow);
     }
 
     /// <summary>
@@ -1096,8 +1098,8 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        var urnResult = await _requestStorage.TryGetAsync(urnUri);
-        var httpsResult = await _requestStorage.TryGetAsync(httpsUri);
+        var urnResult = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, urnUri);
+        var httpsResult = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, httpsUri);
 
         // Assert
         Assert.Same(request, urnResult);
@@ -1124,7 +1126,7 @@ public class AuthorizationRequestStorageTests
             .ReturnsAsync(request);
 
         // Act
-        var result = await _requestStorage.TryGetAsync(complexUri);
+        var result = await _requestStorage.TryGetAsync(SingleIssuer.Tenant, complexUri);
 
         // Assert
         Assert.Same(request, result);

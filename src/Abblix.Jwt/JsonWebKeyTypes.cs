@@ -28,7 +28,7 @@ public static class JsonWebKeyTypes
 
 	/// <summary>
 	/// Symmetric (Octet Sequence) key (RFC 7518 Section 6.4). Maps to <see cref="OctetJsonWebKey"/>;
-	/// usable with HS* signing, AES-GCM key wrap, and direct key agreement.
+	/// usable with HS* signing, AES-GCM key wrap, and direct encryption (dir).
 	/// </summary>
 	public const string Octet = "oct";
 }

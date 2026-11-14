@@ -11,9 +11,11 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Model;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
@@ -29,6 +31,18 @@ namespace Abblix.Oidc.Server.E2E.Tests;
 /// </summary>
 public abstract class TestBase(TestFactory factory)
 {
+    /// <summary>
+    /// Asserts the request is refused with a 400 whose body names invalid_request.
+    /// </summary>
+    protected static async Task AssertInvalidRequestAsync(HttpClient client, Uri uri)
+    {
+        using var response = await client.GetAsync(uri, TestContext.Current.CancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
+        Assert.Equal(ErrorCodes.InvalidRequest, JsonNode.Parse(raw)![ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
     /// <summary>
     /// The shared test host factory, exposed for tests that need to build an isolated host variant
     /// (for example to turn on an opt-in option) via <see cref="Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory{TEntryPoint}.WithWebHostBuilder"/>.
@@ -60,7 +74,7 @@ public abstract class TestBase(TestFactory factory)
         JsonObject body)
     {
         Assert.NotNull(discovery.RegistrationEndpoint);
-        var response = await client.PostAsJsonAsync(discovery.RegistrationEndpoint!, body);
+        var response = await client.PostAsJsonAsync(discovery.RegistrationEndpoint, body);
         var raw = await response.Content.ReadAsStringAsync();
         Assert.True(response.IsSuccessStatusCode, $"DCR failed: {(int)response.StatusCode} {raw}");
         var parsed = JsonNode.Parse(raw)?.AsObject();
@@ -74,7 +88,7 @@ public abstract class TestBase(TestFactory factory)
         IEnumerable<KeyValuePair<string, string>> form)
     {
         Assert.NotNull(discovery.PushedAuthorizationRequestEndpoint);
-        var response = await FormPostHelpers.PostFormAsync(client, discovery.PushedAuthorizationRequestEndpoint!, form);
+        var response = await FormPostHelpers.PostFormAsync(client, discovery.PushedAuthorizationRequestEndpoint, form);
         var raw = await response.Content.ReadAsStringAsync();
         Assert.True(response.IsSuccessStatusCode, $"PAR failed: {(int)response.StatusCode} {raw}");
         var parsed = JsonNode.Parse(raw)?.AsObject();
@@ -82,12 +96,28 @@ public abstract class TestBase(TestFactory factory)
         return parsed;
     }
 
+    /// <summary>
+    /// The parameters of an OpenID authorization code request with PKCE for <paramref name="clientId"/>, redirected
+    /// to the test redirect address, with a fresh state and nonce.
+    /// </summary>
+    protected static Dictionary<string, string> CodeFlowParameters(string clientId, string codeChallenge) => new()
+    {
+        [AuthorizationRequest.Parameters.ClientId] = clientId,
+        [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
+        [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+        [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+        [AuthorizationRequest.Parameters.State] = Guid.NewGuid().ToString("N"),
+        [AuthorizationRequest.Parameters.Nonce] = Guid.NewGuid().ToString("N"),
+        [AuthorizationRequest.Parameters.CodeChallenge] = codeChallenge,
+        [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
+    };
+
     protected static async Task<string> AuthorizeAndExtractCodeAsync(
         HttpClient client,
         DiscoveryDocument discovery,
         Dictionary<string, string> queryParams) =>
         await AuthorizeAndExtractFromCallbackAsync(
-            client, discovery, queryParams, TokenRequest.Parameters.Code);
+            client, discovery, queryParams, ResponseParameters.Code);
 
     /// <summary>
     /// Drives /authorize and asserts the AS redirected back to <c>redirect_uri</c> with an
@@ -98,7 +128,7 @@ public abstract class TestBase(TestFactory factory)
         HttpClient client,
         DiscoveryDocument discovery,
         Dictionary<string, string> queryParams) =>
-        await AuthorizeAndExtractFromCallbackAsync(client, discovery, queryParams, "error");
+        await AuthorizeAndExtractFromCallbackAsync(client, discovery, queryParams, ResponseParameters.Error);
 
     /// <summary>
     /// Drives /authorize for a JARM (JWT Secured Authorization Response Mode) request and returns the value of
@@ -108,17 +138,18 @@ public abstract class TestBase(TestFactory factory)
         HttpClient client,
         DiscoveryDocument discovery,
         Dictionary<string, string> queryParams) =>
-        await AuthorizeAndExtractFromCallbackAsync(client, discovery, queryParams, "response");
+        await AuthorizeAndExtractFromCallbackAsync(client, discovery, queryParams, ResponseParameters.Response);
 
     /// <summary>
     /// Drives /authorize, asserts the AS responded with a 302/303 back to <c>redirect_uri</c>,
     /// and returns the value of the requested callback-URI query parameter. Shared body of
-    /// <see cref="AuthorizeAndExtractCodeAsync"/> and <see cref="AuthorizeAndExtractErrorAsync"/>.
+    /// <see cref="AuthorizeAndExtractCodeAsync"/> and <see cref="AuthorizeAndExtractErrorAsync"/>, and called
+    /// directly by a scenario repeating a parameter, as one naming two resources does.
     /// </summary>
-    private static async Task<string> AuthorizeAndExtractFromCallbackAsync(
+    protected static async Task<string> AuthorizeAndExtractFromCallbackAsync(
         HttpClient client,
         DiscoveryDocument discovery,
-        Dictionary<string, string> queryParams,
+        IEnumerable<KeyValuePair<string, string>> queryParams,
         string paramName)
     {
         var uri = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, queryParams);
@@ -170,9 +201,48 @@ public abstract class TestBase(TestFactory factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+    }
+
+    /// <summary>
+    /// The audiences a token payload names, whether its <c>aud</c> claim is one string or an array.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7519 section 4.1.3: aud is in the general case an array, and a token with one audience MAY carry it as a
+    /// single string.
+    /// </remarks>
+    protected static string[] ExtractAudiences(JsonObject payload) =>
+        payload[JwtClaimTypes.Audience] switch
+        {
+            JsonArray array => array.Select(node => node!.GetValue<string>()).ToArray(),
+            JsonValue value => [value.GetValue<string>()],
+            _ => [],
+        };
+
+    /// <summary>
+    /// The token response of an authorization code grant the confidential client is given for the registered
+    /// resource, with a refresh token.
+    /// </summary>
+    protected static async Task<JsonObject> ObtainResourceGrantTokensAsync(
+        HttpClient client, DiscoveryDocument discovery)
+    {
+        var (verifier, challenge) = GeneratePkcePair();
+        var parameters = CodeFlowParameters(TestConstants.ConfidentialClientId, challenge);
+        parameters[AuthorizationRequest.Parameters.Scope] = $"{Scopes.OpenId} {Scopes.OfflineAccess}";
+        parameters[AuthorizationRequest.Parameters.Resource] = TestConstants.ApiResource;
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, parameters);
+
+        return await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
     }
@@ -201,7 +271,7 @@ public abstract class TestBase(TestFactory factory)
         using var request = new HttpRequestMessage(HttpMethod.Post, discovery.IntrospectionEndpoint);
         request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            [AuthorizationRequest.Parameters.ClientId] = callerClientId,
+            [ClientRequest.Parameters.ClientId] = callerClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
             [IntrospectionRequest.Parameters.Token] = token,
             [IntrospectionRequest.Parameters.TokenTypeHint] = UserInfoRequest.Parameters.AccessToken,
@@ -247,7 +317,7 @@ public abstract class TestBase(TestFactory factory)
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
             [AuthorizationRequest.Parameters.AuthorizationDetails] = authorizationDetailsWireJson,
         });
-        var requestUri = parResponse[AuthorizationRequest.Parameters.RequestUri]?.GetValue<string>()
+        var requestUri = parResponse[PushedAuthorizationResponse.Parameters.RequestUri]?.GetValue<string>()
             ?? throw new InvalidOperationException("PAR did not return request_uri");
 
         var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
@@ -260,9 +330,9 @@ public abstract class TestBase(TestFactory factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = redirectUri,
+            [TokenRequest.Parameters.RedirectUri] = redirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
     }
@@ -308,7 +378,7 @@ public abstract class TestBase(TestFactory factory)
         Assert.False(response.IsSuccessStatusCode,
             $"Expected error response but got {(int)response.StatusCode}: {raw}");
         var body = JsonNode.Parse(raw)?.AsObject();
-        var errorCode = body?[ResponseParameters.Error]?.GetValue<string>();
+        var errorCode = body?[ErrorResponse.Parameters.Error]?.GetValue<string>();
         Assert.Equal(ErrorCodes.InvalidAuthorizationDetails, errorCode);
     }
 

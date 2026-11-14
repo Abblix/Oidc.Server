@@ -90,4 +90,24 @@ public abstract class SubjectIdentifier(string format)
         => string.IsNullOrEmpty(value)
             ? throw new ArgumentException($"The '{memberName}' member is required and must not be null or empty.", parameterName)
             : value;
+
+    /// <summary>
+    /// Returns <paramref name="value"/> when it is present and an absolute URI, the form RFC 9493 gives every member
+    /// it defines as a URI, and throws otherwise.
+    /// </summary>
+    /// <param name="value">The member value supplied by the caller.</param>
+    /// <param name="memberName">The member's name on the wire, taken from <see cref="SubjectMemberNames"/>.</param>
+    /// <param name="parameterName">
+    /// Filled in by the compiler with the caller's argument expression; never passed explicitly.
+    /// </param>
+    protected static Uri RequireUri(
+        Uri? value,
+        string memberName,
+        [CallerArgumentExpression(nameof(value))] string? parameterName = null)
+        => value switch
+        {
+            null => throw new ArgumentException($"The '{memberName}' member is required and must not be null or empty.", parameterName),
+            { IsAbsoluteUri: false } => throw new ArgumentException($"The '{memberName}' member must be an absolute URI.", parameterName),
+            _ => value,
+        };
 }

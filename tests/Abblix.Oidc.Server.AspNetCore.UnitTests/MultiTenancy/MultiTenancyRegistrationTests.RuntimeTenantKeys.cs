@@ -1,0 +1,473 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.Security.Cryptography;
+using Abblix.Jwt;
+using Abblix.Jwt.ExternalKeys;
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Time.Testing;
+using Microsoft.Extensions.Options;
+
+
+namespace Abblix.Oidc.Server.AspNetCore.UnitTests.MultiTenancy;
+
+public partial class MultiTenancyRegistrationTests
+{
+    private const string KeyEncryptionKeyName = "kek";
+
+    /// <summary>
+    /// A key ring store keeping its entries in memory, shared by every ring of one container.
+    /// </summary>
+    private sealed class MemoryKeyRingStore : IKeyRingStore
+    {
+        private readonly Lock _entriesLock = new();
+        private readonly List<StoredKey> _entries = [];
+
+        /// <summary>How many times the store was read.</summary>
+        public int Loads { get; private set; }
+
+        /// <summary>The prefix of the entries whose removal fails, as a store losing them mid-way.</summary>
+        public string? FailingRemovals { get; set; }
+
+        public Task<IReadOnlyList<StoredKey>> LoadAsync(CancellationToken cancellationToken)
+        {
+            lock (_entriesLock)
+            {
+                Loads++;
+                return Task.FromResult<IReadOnlyList<StoredKey>>([.._entries]);
+            }
+        }
+
+        public Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
+        {
+            lock (_entriesLock)
+            {
+                if (_entries.Exists(entry => entry.Id == key.Id))
+                    return Task.FromResult(false);
+
+                _entries.Add(key);
+                return Task.FromResult(true);
+            }
+        }
+
+        public Task RemoveAsync(string id, CancellationToken cancellationToken)
+        {
+            if (FailingRemovals is { } prefix && id.StartsWith(prefix, StringComparison.Ordinal))
+                throw new InvalidOperationException("the store refused the removal");
+
+            lock (_entriesLock)
+                _entries.RemoveAll(entry => entry.Id == id);
+
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// A container minting its keys for real: each ring seals what it mints to a key-encryption key a stub custodian
+    /// holds, and keeps it in a store in memory.
+    /// </summary>
+    private static ServiceProvider MintingRealKeys(
+        ChangingTenantStore? store,
+        IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>>? adoptedKeys = null,
+        Action<OidcOptions>? settings = null,
+        bool serverFirst = false)
+    {
+        var keyEncryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { KeyId = "kek-1" };
+        var custodian = new Moq.Mock<IKeyCustodian>();
+        custodian.Setup(c => c.ServesKeyManagement(Moq.It.IsAny<string>())).Returns(true);
+        custodian
+            .Setup(c => c.GetKeyVersionsAsync(KeyEncryptionKeyName, Moq.It.IsAny<CancellationToken>()))
+            .Returns(new[] { new KeyVersion(keyEncryptionKey.Sanitize(false), DateTimeOffset.UnixEpoch) }
+                .ToAsyncEnumerable());
+        custodian
+            .Setup(c => c.UnwrapKeyAsync(
+                keyEncryptionKey.KeyId, Moq.It.IsAny<string>(), Moq.It.IsAny<JsonWebTokenHeader>(),
+                Moq.It.IsAny<byte[]>(), Moq.It.IsAny<CancellationToken>()))
+            .Returns((string _, string algorithm, JsonWebTokenHeader _, byte[] encryptedKey, CancellationToken _) =>
+                Task.FromResult<byte[]?>(Unwrap(keyEncryptionKey, algorithm, encryptedKey)));
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOptions<OidcOptions>();
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider());
+        services.AddSingleton(custodian.Object);
+        services.AddSingleton<IKeyRingStore>(new MemoryKeyRingStore());
+        if (store is not null)
+            services.AddSingleton<ITenantStore>(store);
+
+        if (serverFirst)
+            services.AddServerStorage().ServeTenants(settings ?? (_ => { }));
+
+        services.AddJsonWebTokens();
+        services.AddAuthServiceJwt();
+        services.RequireKeyPlacement()
+            .UseKeysInProcess(new MintedKeys
+            {
+                KeyEncryptionKeyName = KeyEncryptionKeyName,
+                AdoptedKeys = adoptedKeys ?? new Dictionary<string, IReadOnlyList<JsonWebKey>>(),
+            });
+        if (!serverFirst)
+            services.AddServerStorage().ServeTenants(settings ?? (_ => { }));
+
+        return services.BuildServiceProvider();
+    }
+
+    private static byte[] Unwrap(RsaJsonWebKey keyEncryptionKey, string algorithm, byte[] encryptedKey)
+    {
+        using var rsa = RSA.Create();
+        rsa.ImportParameters(keyEncryptionKey.ToRsaParameters());
+        var padding = algorithm == EncryptionAlgorithms.KeyManagement.RsaOaep256
+            ? RSAEncryptionPadding.OaepSHA256
+            : RSAEncryptionPadding.OaepSHA1;
+        return rsa.Decrypt(encryptedKey, padding);
+    }
+
+    /// <summary>
+    /// A tenant the host adds to its own store while the server runs signs with a key of its own once the store is
+    /// read again, with no restart: the server mints its first key before it starts serving the tenant.
+    /// </summary>
+    [Fact]
+    public async Task ATenantAddedToTheHostsStore_SignsWithAKeyOfItsOwn_OnceTheStoreIsReadAgain()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = MintingRealKeys(store);
+        Assert.Empty(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
+
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
+        store.Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")];
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
+        EnterTenant(provider, await catalog.FindByIdAsync("acme", TestContext.Current.CancellationToken));
+        var atAcme = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
+        EnterTenant(provider, await catalog.FindByIdAsync("globex", TestContext.Current.CancellationToken));
+        var atGlobex = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotEqual(Assert.Single(atAcme).KeyId, Assert.Single(atGlobex).KeyId);
+    }
+
+    /// <summary>
+    /// A tenant the host removes from its store is no longer rotated once the store is read again, while a request
+    /// that began before still finds its keys.
+    /// </summary>
+    [Fact]
+    public async Task ATenantRemovedFromTheHostsStore_IsNoLongerKept_OnceTheStoreIsReadAgain()
+    {
+        var store = new ChangingTenantStore();
+        using var provider = MintingRealKeys(store);
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var partitions = provider.GetRequiredService<IKeyRingPartitions>();
+
+        store.Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(["acme", "globex"], partitions.Kept.Order());
+
+        store.Tenants = [new StoredTenant(Acme, "1")];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(["acme"], partitions.Kept);
+
+        EnterTenant(provider, globex);
+        var stillHeld = await provider.GetRequiredService<IAuthServiceKeysProvider>().GetSigningKeys(Entered(provider))
+            .ToArrayAsync(TestContext.Current.CancellationToken);
+        Assert.Single(stillHeld);
+    }
+
+    /// <summary>
+    /// The ring of a tenant the store no longer holds, its keys with it, is let go once the tenant is released; until
+    /// then a request still holding the tenant signs with it.
+    /// </summary>
+    [Fact]
+    public async Task TheRingOfAReleasedTenant_IsLetGo()
+    {
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1")] };
+        using var provider = MintingRealKeys(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var rings = provider.GetRequiredService<IKeyRings>();
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        store.Tenants = [];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.NotEmpty(rings.For("acme").Get(PublicKeyUsages.Signature, false));
+
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.Throws<InvalidOperationException>(() => rings.For("acme"));
+    }
+
+    /// <summary>
+    /// The keys minted for a released tenant are deleted from the key ring's store when it is closed, while another
+    /// tenant's stay.
+    /// </summary>
+    [Fact]
+    public async Task TheKeysOfAReleasedTenant_AreDeletedFromTheStore()
+    {
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
+        using var provider = MintingRealKeys(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var keyStore = provider.GetRequiredService<IKeyRingStore>();
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(await keyStore.LoadAsync(TestContext.Current.CancellationToken), IsOf("acme"));
+
+        store.Tenants = [new StoredTenant(globex, "1")];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(left, IsOf("acme"));
+        Assert.Contains(left, IsOf("globex"));
+    }
+
+    /// <summary>
+    /// A creation of a tenant released while a later creation under the same id is served loses its keys alone: each
+    /// creation mints into a partition of its own generation.
+    /// </summary>
+    [Fact]
+    public async Task TheKeysOfAReleasedCreation_AreDeleted_AndTheNextCreationsStay()
+    {
+        var first = new TenantDefinition { Id = Acme.Id, Issuer = Acme.Issuer, Generation = "1" };
+        var second = new TenantDefinition { Id = Acme.Id, Issuer = Acme.Issuer, Generation = "2" };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(first, "1")] };
+        using var provider = MintingRealKeys(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var keyStore = provider.GetRequiredService<IKeyRingStore>();
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        store.Tenants = [new StoredTenant(second, "1")];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(await keyStore.LoadAsync(TestContext.Current.CancellationToken), IsOf("acme~1"));
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(left, IsOf("acme~1"));
+        Assert.Contains(left, IsOf("acme~2"));
+    }
+
+    /// <summary>
+    /// A tenant refused for an id that spells another tenant's partition is never opened, so releasing it deletes
+    /// nothing, and the tenant whose partition its id spells keeps its keys.
+    /// </summary>
+    [Fact]
+    public async Task ReleasingATenantWhoseIdSpellsAnothersPartition_LeavesThatPartitionsKeys()
+    {
+        var live = new TenantDefinition { Id = Acme.Id, Issuer = Acme.Issuer, Generation = "1" };
+        var spelling = new TenantDefinition { Id = "acme~1", Issuer = new Uri("https://auth.example.com/tenants/spelling") };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(live, "1"), new StoredTenant(spelling, "1")] };
+        using var provider = MintingRealKeys(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var keyStore = provider.GetRequiredService<IKeyRingStore>();
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        store.Tenants = [new StoredTenant(live, "1")];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Contains(await keyStore.LoadAsync(TestContext.Current.CancellationToken), IsOf("acme~1"));
+    }
+
+    /// <summary>
+    /// The tenants one reading releases are deleted from the key ring's store with one read of it, however many they
+    /// are.
+    /// </summary>
+    [Fact]
+    public async Task TheTenantsOfOneReading_AreDeletedWithOneReadOfTheStore()
+    {
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
+        using var provider = MintingRealKeys(store);
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        var keyStore = (MemoryKeyRingStore)provider.GetRequiredService<IKeyRingStore>();
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        store.Tenants = [];
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+        ((FakeTimeProvider)provider.GetRequiredService<TimeProvider>()).Advance(new OidcOptions().RefreshTenantsEvery);
+        var loadsBefore = keyStore.Loads;
+        await catalog.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, keyStore.Loads - loadsBefore);
+        Assert.Empty(await keyStore.LoadAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A partition whose entries cannot be removed is reported for its own tenant, and the other tenants' entries are
+    /// removed all the same.
+    /// </summary>
+    [Fact]
+    public async Task APartitionThatCannotBeDeleted_IsReportedForItsTenant_AndTheOthersDeleted()
+    {
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
+        using var provider = MintingRealKeys(store);
+        await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(TestContext.Current.CancellationToken);
+        var keyStore = (MemoryKeyRingStore)provider.GetRequiredService<IKeyRingStore>();
+        keyStore.FailingRemovals = "globex.";
+        var closing = provider.GetServices<ITenantClosing>().OfType<TenantKeyRingClosing>().Single();
+
+        var failures = await closing.CloseAsync([Acme, globex], TestContext.Current.CancellationToken);
+
+        Assert.Same(globex, Assert.Single(failures).Key);
+        var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(left, IsOf("globex"));
+        Assert.DoesNotContain(left, IsOf("acme"));
+    }
+
+    /// <summary>
+    /// A deletion stopped before it began asks the store nothing, so a store that ignores the token keeps every
+    /// partition, and each tenant is reported not closed.
+    /// </summary>
+    [Fact]
+    public async Task ADeletionAlreadyStopped_RemovesNothing_AndReportsEveryTenant()
+    {
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
+        var store = new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")] };
+        using var provider = MintingRealKeys(store);
+        await provider.GetRequiredService<StoreTenantCatalog>().RefreshAsync(TestContext.Current.CancellationToken);
+        var keyStore = provider.GetRequiredService<IKeyRingStore>();
+        var closing = provider.GetServices<ITenantClosing>().OfType<TenantKeyRingClosing>().Single();
+
+        var failures = await closing.CloseAsync([Acme, globex], new CancellationToken(canceled: true));
+
+        Assert.Equal(2, failures.Count);
+        Assert.All(failures.Values, failure => Assert.IsType<OperationCanceledException>(failure));
+        var left = await keyStore.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(left, IsOf("acme"));
+        Assert.Contains(left, IsOf("globex"));
+    }
+
+    private static Predicate<StoredKey> IsOf(string partition)
+        => entry => entry.Id.StartsWith(partition + ".", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Keys adopted into the tenant's part of the ring are served by that tenant and no other.
+    /// </summary>
+    [Fact]
+    public async Task KeysAdoptedIntoATenantsPartition_AreServedByThatTenantAlone()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var store = new ChangingTenantStore();
+        using var provider = MintingRealKeys(
+            store,
+            new Dictionary<string, IReadOnlyList<JsonWebKey>> { [TenantKey.PartitionOf(Acme)] = [adopted] });
+        var globex = new TenantDefinition { Id = "globex", Issuer = new Uri("https://auth.example.com/tenants/globex") };
+        store.Tenants = [new StoredTenant(Acme, "1"), new StoredTenant(globex, "1")];
+        var catalog = provider.GetRequiredService<StoreTenantCatalog>();
+        await catalog.RefreshAsync(ct);
+
+        var keys = provider.GetRequiredService<IAuthServiceKeysProvider>();
+        var atAcme = await keys.GetSigningKeys((await catalog.FindByIdAsync("acme", ct))!).ToArrayAsync(ct);
+        var atGlobex = await keys.GetSigningKeys((await catalog.FindByIdAsync("globex", ct))!).ToArrayAsync(ct);
+
+        Assert.Contains(atAcme, key => key.KeyId == adopted.KeyId);
+        Assert.DoesNotContain(atGlobex, key => key.KeyId == adopted.KeyId);
+    }
+
+    /// <summary>
+    /// Keys adopted into the unnamed part of the ring would be served by no tenant, so the server refuses to start
+    /// with them, its store empty or not.
+    /// </summary>
+    [Fact]
+    public async Task KeysAdoptedIntoTheUnnamedPartition_RefuseTheStart()
+    {
+        using var provider = MintingRealKeys(
+            new ChangingTenantStore(),
+            new Dictionary<string, IReadOnlyList<JsonWebKey>>
+            {
+                [KeyRingOptions.DefaultPartition] = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
+            });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => StartLikeTheHostAsync(provider));
+    }
+
+    /// <summary>
+    /// Keys adopted into a partition no tenant of the server's settings is kept in would be served by no tenant, so the
+    /// server refuses to start with them when its tenants are only those; adopted into a declared tenant's partition,
+    /// it starts.
+    /// </summary>
+    [Theory]
+    [InlineData("initech")]
+    [InlineData("acme~1")]
+    public async Task KeysAdoptedIntoAPartitionNoDeclaredTenantIsKeptIn_RefuseTheStart(string partition)
+    {
+        using var kept = MintingRealKeys(store: null, AdoptedInto(TenantKey.PartitionOf(Acme)), Declaring);
+        await StartLikeTheHostAsync(kept);
+
+        using var unkept = MintingRealKeys(store: null, AdoptedInto(partition), Declaring);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => StartLikeTheHostAsync(unkept));
+    }
+
+    private static void Declaring(OidcOptions options) => options.Tenants.Add(Acme);
+
+    private static Dictionary<string, IReadOnlyList<JsonWebKey>> AdoptedInto(string partition)
+        => new() { [partition] = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] };
+
+    /// <summary>
+    /// Keys adopted into a partition no tenant is kept in are refused before any tenant's partition mints its first
+    /// key, with the server registered before the key ring as well, so a host that fixes the adoption still has its
+    /// keys taken on the next start.
+    /// </summary>
+    [Fact]
+    public async Task KeysAdoptedIntoAPartitionNoTenantIsKeptIn_AreRefusedBeforeAnyKeyIsMinted()
+    {
+        using var provider = MintingRealKeys(store: null, AdoptedInto("initech"), Declaring, serverFirst: true);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => StartLikeTheHostAsync(provider));
+
+        Assert.Empty(await provider.GetRequiredService<IKeyRingStore>().LoadAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A host that reads the catalog before it starts opens its tenants' partitions then, so keys adopted where no
+    /// partition will take them are refused at that read, before any partition mints a key: into a partition no tenant
+    /// of the settings is kept in, or into the unnamed one when the tenants come from a store of the host's own.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task KeysAdoptedWhereNoPartitionTakesThem_AreRefusedAtACatalogReadBeforeTheStart(bool hostsOwnStore)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var store = hostsOwnStore ? new ChangingTenantStore { Tenants = [new StoredTenant(Acme, "1")] } : null;
+        using var provider = MintingRealKeys(
+            store,
+            AdoptedInto(hostsOwnStore ? KeyRingOptions.DefaultPartition : "initech"),
+            hostsOwnStore ? null : Declaring);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await provider.GetRequiredService<ITenantCatalog>().FindByIdAsync(Acme.Id, ct));
+
+        Assert.Empty(await provider.GetRequiredService<IKeyRingStore>().LoadAsync(ct));
+    }
+
+    /// <summary>
+    /// Starts the hosted services as the host does: every one's <see cref="IHostedLifecycleService.StartingAsync"/>
+    /// before any one's <see cref="IHostedService.StartAsync"/>.
+    /// </summary>
+    private static async Task StartLikeTheHostAsync(IServiceProvider provider)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var services = provider.GetServices<IHostedService>().ToArray();
+        foreach (var service in services.OfType<IHostedLifecycleService>())
+            await service.StartingAsync(ct);
+
+        foreach (var service in services)
+            await service.StartAsync(ct);
+    }
+}

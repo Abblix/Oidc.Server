@@ -11,11 +11,12 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
+using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
@@ -27,7 +28,7 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// OpenID Connect specifications. It integrates additional security by incorporating claims for token integrity
 /// verification.
 /// </summary>
-/// <param name="issuerProvider">Provides the issuer URL, used in the 'iss' claim of the identity token.</param>
+/// <param name="catalog">The catalog the tenant was resolved from, which the license counts it by.</param>
 /// <param name="clock">Provides the current UTC time, used to set the issued and expiration times of the identity
 /// token.</param>
 /// <param name="jwtFormatter">Handles the formatting and signing of the JSON Web Token, ensuring it meets
@@ -36,8 +37,7 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// based on the authentication session and client's requested scopes and claims.</param>
 /// <param name="options">Supplies the default content-encryption algorithm used when the client registered a
 /// key-management algorithm but no <c>id_token_encrypted_response_enc</c>.</param>
-internal class IdentityTokenService(
-	IIssuerProvider issuerProvider,
+internal class IdentityTokenService(ITenantCatalog catalog,
 	TimeProvider clock,
 	IClientJwtFormatter jwtFormatter,
 	IUserClaimsProvider userClaimsProvider,
@@ -49,16 +49,8 @@ internal class IdentityTokenService(
 	/// user-specific claims if required, and `c_hash` or `at_hash` to validate the authorization code and access token
 	/// integrity.
 	/// </summary>
-	/// <param name="authSession">Details of the authenticated user's session.</param>
-	/// <param name="authContext">Contextual information about the authorization, including scopes and nonce.</param>
-	/// <param name="clientInfo">Information about the requesting client.</param>
-	/// <param name="includeUserClaims">Indicates whether to include detailed user claims in the token.</param>
-	/// <param name="authorizationCode">Authorization code to generate `c_hash`, validating the code's integrity.
-	/// </param>
-	/// <param name="accessToken">Access token to generate `at_hash`, ensuring the token's integrity.</param>
-	/// <param name="pushBindings">The CIBA push notification this token travels in, or <c>null</c> when it
-	/// does not. Non-null adds the two bindings Section 10.3.1 requires in push mode: the request
-	/// identifier verbatim, and the refresh token's hash when one is sent.</param>
+	/// <param name="tenant">The tenant the request is served at.</param>
+	/// <param name="request">What the token is issued from.</param>
 	/// <returns>A task that resolves to an <see cref="EncodedJsonWebToken"/>, representing the identity token.
 	/// </returns>
 	/// <remarks>
@@ -66,15 +58,26 @@ internal class IdentityTokenService(
 	/// user identification across services. It explicitly handles `c_hash` and `at_hash` creation, providing additional
 	/// security checks for token integrity.
 	/// </remarks>
-	public async Task<EncodedJsonWebToken?> CreateIdentityTokenAsync(
-		AuthSession authSession,
-		AuthorizationContext authContext,
-		ClientInfo clientInfo,
-		bool includeUserClaims,
-		string? authorizationCode,
-		string? accessToken,
-		PushDeliveryBindings? pushBindings = null)
+	public async Task<Result<EncodedJsonWebToken, OidcError>?> CreateIdentityTokenAsync(
+		TenantDefinition tenant,
+		IdentityTokenRequest request)
 	{
+		var (authSession, authContext, clientInfo, includeUserClaims, authorizationCode, accessToken, state,
+			pushBindings) = request;
+
+		// OpenID Connect Core 1.0 section 5.5.1.1: a request requiring specific authentication levels of the
+		// ID token must be answered with one of them, and an outcome that cannot meet it "MUST" be treated as
+		// a failed authentication attempt. This token states the session's own acr, so a session at another
+		// level cannot satisfy such a request, and issuing anyway would state a level the request declared
+		// unacceptable.
+		//
+		// The failed attempt itself is answered before a grant exists: the authorization endpoint chooses a
+		// session against the requirement and refuses where the request forbids interaction, and a decoupled
+		// authentication is refused at completion and again at redemption. This keeps a token from stating a
+		// level the request declared unacceptable, whatever produced the grant it is minted from.
+		if (!authContext.RequestedClaims.AcceptsAuthenticationLevel(authSession.AuthContextClassRef))
+			return null;
+
 		var scope = authContext.Scope;
 		if (!includeUserClaims && !clientInfo.ForceUserClaimsInIdentityToken)
 		{
@@ -83,10 +86,17 @@ internal class IdentityTokenService(
 			// as described in Section 5.3.2, when a response_type value is used that results in an Access Token being issued.
 			// However, when no Access Token is issued (which is the case for the response_type value id_token),
 			// the resulting Claims are returned in the ID Token.
-			scope = scope.Except([Scopes.Profile, Scopes.Email, Scopes.Address]).ToArray();
+			scope = scope.Except([Scopes.Profile, Scopes.Email, Scopes.Address, Scopes.Phone]).ToArray();
 		}
 
+		// Read before the claims provider is handed the session: it is a host seam, and this is what the
+		// id_token reports about how the end user authenticated.
+		string[]? authenticationMethods = authSession.AuthenticationMethodReferences is { } methods
+			? [..methods]
+			: null;
+
 		var userInfo = await userClaimsProvider.GetUserClaimsAsync(
+			tenant,
 			authSession,
 			scope,
 			authContext.RequestedClaims?.IdToken,
@@ -103,7 +113,8 @@ internal class IdentityTokenService(
 			{
 				// No explicit type. OpenID Connect Core defines none for an ID token, no relying party checks
 				// one, and a vendor value only breaks when two servers of different builds share a deployment.
-				// The JWT library writes the generic JWT that RFC 7519 Section 5.1 recommends.
+				// The token therefore goes out without a typ header, which is what lets an id_token_hint be
+				// told from every typed token this server issues.
 				Algorithm = clientInfo.IdentityTokenSignedResponseAlgorithm,
 			},
 			Payload = new JsonWebTokenPayload(userInfo)
@@ -111,12 +122,16 @@ internal class IdentityTokenService(
 				IssuedAt = issuedAt,
 				NotBefore = issuedAt,
 				ExpiresAt = issuedAt + clientInfo.IdentityTokenExpiresIn,
-				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
+				Issuer = LicenseChecker.CheckLicense(
+					tenant.Issuer.OriginalString,
+					tenant,
+					catalog,
+					authContext.ClientId),
 
 				SessionId = authSession.SessionId,
 				AuthenticationTime = authSession.AuthenticationTime,
 				AuthContextClassRef = authSession.AuthContextClassRef,
-				AuthenticationMethodReferences = authSession.AuthenticationMethodReferences,
+				AuthenticationMethodReferences = authenticationMethods,
 
 				Audiences = [authContext.ClientId],
 				Nonce = authContext.Nonce,
@@ -139,14 +154,17 @@ internal class IdentityTokenService(
 			clientInfo.IdentityTokenSignedResponseAlgorithm,
 			authorizationCode,
 			accessToken,
+			state,
 			pushBindings);
 
+		// A client whose key set its profile leaves nothing in to encrypt to is refused by the caller, in its protocol
 		var jwt = await jwtFormatter.FormatAsync(
+			tenant,
 			identityToken,
 			clientInfo,
 			ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value));
 
-		return new EncodedJsonWebToken(identityToken, jwt);
+		return jwt.MapSuccess(encoded => new EncodedJsonWebToken(identityToken, encoded));
 	}
 
 	// The signing algorithm arrives as a parameter rather than being read back off the token's own
@@ -159,14 +177,22 @@ internal class IdentityTokenService(
 		string signingAlgorithm,
 		string? authorizationCode,
 		string? accessToken,
+		string? state,
 		PushDeliveryBindings? pushBindings)
 	{
 		// OIDC Core 1.0 section 3.3.2.11 (c_hash) and section 3.1.3.6 (at_hash): both are the left-most
 		// half of the value's digest, taken with the hash JWA pairs with this token's own signing 'alg'.
 		// The computation is shared with the client package through Abblix.Jwt, because a binding both
 		// sides must agree on is not something to write twice.
-		AddHashClaim(identityToken, signingAlgorithm, JwtClaimTypes.CodeHash, authorizationCode);
-		AddHashClaim(identityToken, signingAlgorithm, JwtClaimTypes.AccessTokenHash, accessToken);
+		AddHashClaim(identityToken, signingAlgorithm, IanaClaimTypes.CHash, authorizationCode);
+		AddHashClaim(identityToken, signingAlgorithm, IanaClaimTypes.AtHash, accessToken);
+
+		// FAPI 1.0 Part 2 section 5.1.1 defines s_hash by the same recipe, and section 5.2.2.1 requires it in a
+		// code id_token response whenever the client supplied a state: the ID token is the response's detached
+		// signature, and without it the state is the one response parameter swapped unnoticed. It is added for
+		// every front-channel ID token with a state rather than for that response type alone, since a relying
+		// party ignores a claim it does not use and one rule cannot miss a response type.
+		AddHashClaim(identityToken, signingAlgorithm, IanaClaimTypes.SHash, state);
 
 		if (pushBindings is null)
 			return;
@@ -175,12 +201,12 @@ internal class IdentityTokenService(
 		// sentence being phrased about hashes: the worked example beside it carries the plain value, and
 		// the client's own requirement is to check this claim MATCHES the identifier it asked about,
 		// which it could not do against a digest.
-		identityToken.Payload[JwtClaimTypes.AuthenticationRequestId] = pushBindings.AuthenticationRequestId;
+		identityToken.Payload[OidcClaimTypes.AuthenticationRequestId] = pushBindings.AuthenticationRequestId;
 
 		// The refresh token's hash is a hash, by the same recipe as at_hash, and only when one is sent -
 		// "In case a Refresh Token is sent to the Client".
 		AddHashClaim(
-			identityToken, signingAlgorithm, JwtClaimTypes.RefreshTokenHash, pushBindings.RefreshToken);
+			identityToken, signingAlgorithm, OidcClaimTypes.RefreshTokenHash, pushBindings.RefreshToken);
 	}
 
 	private static void AddHashClaim(
@@ -199,4 +225,5 @@ internal class IdentityTokenService(
 		if (hash is not null)
 			identityToken.Payload[claimType] = hash;
 	}
+
 }

@@ -6,11 +6,17 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Utils;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 
@@ -19,55 +25,132 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// with the expected issuer, audience, and cryptographic signatures.
 /// </summary>
 /// <param name="validator">The service used to perform the core JWT validation.</param>
-/// <param name="issuerProvider">The provider used to resolve the expected issuer of the JWT, which is also the
-/// only audience these tokens may name.</param>
+/// <param name="catalog">The catalog the tenant was resolved from, which the license counts it by.</param>
 /// <param name="serviceKeysProvider">The provider used to retrieve the cryptographic keys for signing and
 /// decrypting tokens.</param>
+/// <param name="statusCheck">Refuses a token revoked, rotated or cut off at the tenant it is validated for.</param>
+/// <param name="oidcOptions">Supplies <see cref="OidcOptions.ReplicaClockSkew"/>, the drift between this server's
+/// instances.</param>
+/// <param name="clientInfoProvider">Finds the client a token presented by another was issued to, whose profile it is
+/// held to as well.</param>
 public class AuthServiceJwtValidator(
-	IJsonWebTokenValidator validator,
-	IIssuerProvider issuerProvider,
-	IAuthServiceKeysProvider serviceKeysProvider) : IAuthServiceJwtValidator
+	ProfiledJwtValidator validator,
+	ITenantCatalog catalog,
+	IAuthServiceKeysProvider serviceKeysProvider,
+	TokenStatusCheck statusCheck,
+	IOptions<OidcOptions> oidcOptions,
+	IClientInfoProvider clientInfoProvider) : IAuthServiceJwtValidator
 {
 
 	/// <summary>
 	/// Asynchronously validates a JWT, checking its authenticity, issuer, audience, and cryptographic signatures.
 	/// </summary>
+	/// <param name="tenant">The tenant the token is for.</param>
+	/// <param name="client">The client presenting the token, or null where none is known.</param>
 	/// <param name="jwt">The JWT string to validate.</param>
+	/// <param name="tokenTypes">The token types the caller accepts.</param>
 	/// <param name="options">Validation options to apply. Defaults to <see cref="ValidationOptions.Default"/>.</param>
 	/// <returns>
 	/// A task representing the asynchronous validation operation, which yields a Result containing either a validated JsonWebToken or a JwtValidationError.
 	/// </returns>
-	public Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(string jwt, ValidationOptions options = ValidationOptions.Default)
+	public async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
+		TenantDefinition tenant,
+		ClientInfo? client,
+		string jwt,
+		TokenTypePolicy tokenTypes,
+		ValidationOptions options = ValidationOptions.Default)
 	{
-		return validator.ValidateAsync(
+		// The profile of the client presenting the token where it is known, else the tenant's, so a token this server
+		// signed or encrypted otherwise before that profile was in force is refused. Each JWE layer is recorded for
+		// the client the token was issued to, known only once it is read
+		var keyManagementAlgorithms = new List<string>();
+		var result = await validator.ValidateAsync(
+			SecurityProfileRequirements.For(tenant, client),
 			jwt,
 			new ValidationParameters
 			{
 				Options = options,
-				ValidateIssuer = ValidateIssuerAsync,
-				ValidateAudience = ValidateAudienceAsync,
-				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(),
-				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(true),
+				TokenTypes = tokenTypes,
+				ValidateIssuer = issuer => ValidateIssuerAsync(tenant, issuer),
+				ValidateAudience = audiences => ValidateAudienceAsync(tenant, audiences),
+				ResolveIssuerSigningKeys = _ => serviceKeysProvider.GetSigningKeys(tenant),
+				ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
 
-				// No profile tolerance here, and the absence is a decision. These are tokens this
-				// server issued and reads back, so the freshness a profile bounds is not the
-				// question: a tolerance tight enough for a third party would turn one node running
-				// ahead of another into a refusal of this server's own refresh token, which is an
-				// operational hazard rather than the requirement.
+				// These are tokens this server issued and reads back, often on another instance whose clock lags
+				// the issuing one, so a token dated a little ahead is still this server's own. Only that direction
+				// is tolerated: the expiry the issuing instance set is a deadline no instance moves. A value above
+				// a tenant's profile ceiling gets that tenant refused by ClockSkewCeilingCheck
+				ClockSkew = new ClockSkew { Past = TimeSpan.Zero, Future = oidcOptions.Value.ReplicaClockSkew },
+				ValidateKeyManagementAlgorithm = algorithm =>
+				{
+					keyManagementAlgorithms.Add(algorithm);
+					return true;
+				},
 			});
+
+		if (!result.TryGetSuccess(out var token))
+			return result;
+
+		if (await AlgorithmOutsideTheOwnersProfileAsync(tenant, client, token, keyManagementAlgorithms) is { } algorithm)
+		{
+			return new JwtValidationError(
+				JwtError.InvalidToken,
+				$"The token uses {algorithm}, which the security profile of the client it was issued to does not admit");
+		}
+
+		// What is recorded about a refresh token, revoked, rotated or cut off, is kept for the tenant and creation it
+		// was issued at, so one of another creation of this tenant, or of a version before 3.0, which names none,
+		// would be judged against no records at all, at every endpoint that reads it. Refused before the records are
+		// read, since a replay found there revokes the grant it belongs to.
+		if (JwtTypeName.Matches(token.Header.Type, JwtTypes.RefreshToken) &&
+		    !RefreshTokenTenant.Names(token.Payload, TenantKey.PartitionOf(tenant)))
+		{
+			return new JwtValidationError(JwtError.InvalidToken, "The refresh token does not name this tenant and creation");
+		}
+
+		return await statusCheck.CheckAsync(tenant, token, options);
+	}
+
+	/// <summary>
+	/// The algorithm of <paramref name="token"/> the profile of the client it was issued to does not admit, where that
+	/// client is not the one presenting it, or none is known to present it; null otherwise.
+	/// </summary>
+	/// <remarks>
+	/// A token one client holds may be presented by another - introspected by a resource server, exchanged on a
+	/// delegation - and both clients' profiles bound how it may be processed, so the stricter wins. The presenter's
+	/// profile was applied while validating; the owner's is known only from the token, so it is applied here. Where no
+	/// presenter is known - a bearer access token at userinfo, an id_token_hint at end session - the owner's profile is
+	/// the only one that bounds the token, and FAPI 2.0 section 5.4.1 holds the server to it "when creating or
+	/// processing JWTs". The owner is the client the token names: an access or refresh token's client_id, an ID
+	/// token's azp or sole audience.
+	/// </remarks>
+	private async Task<string?> AlgorithmOutsideTheOwnersProfileAsync(
+		TenantDefinition tenant,
+		ClientInfo? presenter,
+		JsonWebToken token,
+		List<string> keyManagementAlgorithms)
+	{
+		if (token.Payload.NamedClientId() is not { } ownerId || ownerId == presenter?.ClientId)
+			return null;
+
+		if (await clientInfoProvider.TryFindClientAsync(tenant, ownerId) is not { } owner)
+			return null;
+
+		return SecurityProfileRequirements.For(tenant, owner).AlgorithmOutside(token, keyManagementAlgorithms);
 	}
 
 	/// <summary>
 	/// Validates the issuer of the JWT against the expected issuer.
 	/// </summary>
+	/// <param name="tenant">The tenant the caller passes, which outside a request is the definition the tenant catalog returns.</param>
 	/// <param name="issuer">The issuer value to validate.</param>
 	/// <returns>A task that yields true if the issuer is valid, otherwise false.</returns>
-	private Task<bool> ValidateIssuerAsync(string issuer)
+	private Task<bool> ValidateIssuerAsync(TenantDefinition tenant, string issuer)
 	{
-		var result = issuer == issuerProvider.GetIssuer();
+		var result = issuer == tenant.Issuer.OriginalString;
 		if (result)
 		{
-			LicenseChecker.CheckIssuer(issuer);
+			LicenseChecker.CheckIssuer(issuer, tenant, catalog);
 		}
 
 		return Task.FromResult(result);
@@ -76,13 +159,15 @@ public class AuthServiceJwtValidator(
 	/// <summary>
 	/// Validates the audience of the JWT by checking whether it names this service or any known client.
 	/// </summary>
+	/// <param name="tenant">The tenant the caller passes, which outside a request is the definition the tenant catalog returns.</param>
 	/// <param name="audiences">A collection of audience values to validate.</param>
 	/// <returns>A task that yields true if any of the audience values are valid, otherwise false.</returns>
 	/// <remarks>
-	/// The issuer is the only acceptable audience. Every token this service issues for its own consumption
-	/// names it: refresh, registration and initial access tokens round-trip here, and an access token whose
-	/// request named no resource carries the issuer for the same reason, since RFC 9068 Section 4 has a
-	/// resource server reject a token whose audience does not name it.
+	/// The issuer is the only acceptable audience. Registration and initial access tokens round-trip here naming it,
+	/// and an access token whose request named no resource carries the issuer for the same reason, since RFC 9068
+	/// Section 4 has a resource server reject a token whose audience does not name it. A reader whose token may be
+	/// addressed to somebody else, such as a refresh token whose audience holds its grant's resources, does not ask
+	/// for this check (<see cref="ServiceTokenValidation.AnyAudience"/>).
 	/// <para>
 	/// A client identifier is deliberately not accepted. An audience names the party meant to consume the
 	/// token, and a client is the party that asked for it. The one token type that legitimately carries a
@@ -92,9 +177,9 @@ public class AuthServiceJwtValidator(
 	/// A token minted for a named resource names that resource, so it is not valid here either - which is what
 	/// keeps a token issued for somebody else's API from opening this service's own endpoints.
 	/// </remarks>
-	private Task<bool> ValidateAudienceAsync(IEnumerable<string> audiences)
+	private static Task<bool> ValidateAudienceAsync(TenantDefinition tenant, IEnumerable<string> audiences)
 	{
-		var issuer = issuerProvider.GetIssuer();
+		var issuer = tenant.Issuer.OriginalString;
 		return Task.FromResult(audiences.Contains(issuer, StringComparer.Ordinal));
 	}
 }

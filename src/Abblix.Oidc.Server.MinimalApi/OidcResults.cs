@@ -22,13 +22,16 @@ namespace Abblix.Oidc.Server.MinimalApi;
 public static class OidcResults
 {
     /// <summary>
-    /// Formats an <see cref="OidcError"/> as an HTTP error response per RFC 6750 §3 / RFC 6749 §5.2:
+    /// Formats an <see cref="OidcError"/> as an HTTP error response per RFC 6750 section 3 / RFC 6749 section 5.2:
     /// <c>invalid_token</c> returns 401 with a <c>WWW-Authenticate</c> Bearer challenge and no body;
     /// <c>insufficient_scope</c> returns 403 with the header; <c>invalid_client</c> returns 401 with a Basic challenge
     /// and the JSON error body; everything else uses the fallback status code with a JSON body.
     /// </summary>
     public static IResult Format(this OidcError error, int fallbackStatusCode, string? realm = null)
     {
+        if (FormatRefusal(error) is { } refusal)
+            return refusal;
+
         var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm);
 
         return (error.Error, fallbackStatusCode) switch
@@ -41,7 +44,7 @@ public static class OidcResults
                 .StatusCode(StatusCodes.Status403Forbidden)
                 .WithHeader(HeaderNames.WWWAuthenticate, challenge),
 
-            // RFC 6749 §5.2: a 401 with a Basic challenge for a client-authentication failure; the error stays in the
+            // RFC 6749 section 5.2: a 401 with a Basic challenge for a client-authentication failure; the error stays in the
             // JSON body because RFC 7617 defines no error attributes for the Basic scheme.
             (ErrorCodes.InvalidClient, _) => Results
                 .Json(new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status401Unauthorized)
@@ -58,7 +61,7 @@ public static class OidcResults
     }
 
     /// <summary>
-    /// Formats an <see cref="OidcError"/> as an HTTP error response that advertises the DPoP scheme (RFC 9449 §7.1) on
+    /// Formats an <see cref="OidcError"/> as an HTTP error response that advertises the DPoP scheme (RFC 9449 section 7.1) on
     /// the <c>WWW-Authenticate</c> header, optionally alongside Bearer. <see cref="UseDPoPNonceError"/> additionally
     /// emits the <c>DPoP-Nonce</c> header so the client can echo the freshly issued nonce on retry.
     /// </summary>
@@ -69,6 +72,9 @@ public static class OidcResults
         IEnumerable<string> dpopAlgs,
         bool advertiseBearer)
     {
+        if (FormatRefusal(error) is { } refusal)
+            return refusal;
+
         var challenges = WwwAuthenticateBuilder.BuildChallenges(error, realm, dpopAlgs, advertiseBearer);
 
         var result = error switch
@@ -98,6 +104,10 @@ public static class OidcResults
         return result;
     }
 
+    /// <summary>Decorates a result to shape the response before the inner result executes.</summary>
+    internal static IResult WithResponse(this IResult inner, Action<HttpResponse> decorate)
+        => new ResultDecorator(inner, decorate);
+
     /// <summary>Decorates a result to set a response header before the inner result executes.</summary>
     public static IResult WithHeader(this IResult inner, string name, string value)
         => new ResultDecorator(inner, response => response.Headers[name] = value);
@@ -109,6 +119,28 @@ public static class OidcResults
             foreach (var value in values)
                 response.Headers.Append(name, value);
         });
+
+    /// <summary>
+    /// Answers a caller that has spent its budget of requests: 429, with the interval the limiter named and no
+    /// body, because the status says the whole of it and no registered error code means "you asked too often".
+    /// The header is left off when the limiter named no interval - one saying nothing is worse than none.
+    /// </summary>
+    /// <remarks>
+    /// Every way of formatting an error passes through here first, so a refusal cannot take the status of
+    /// whichever endpoint it happened to arrive at.
+    /// </remarks>
+    private static IResult? FormatRefusal(OidcError error)
+        => error switch
+        {
+            TooManyRequestsError { RetryAfter: { } interval }
+                => Results
+                    .StatusCode(StatusCodes.Status429TooManyRequests)
+                    .WithHeader(HeaderNames.RetryAfter, HttpResponseExtensions.RetryAfterHeaderValue(interval)),
+
+            TooManyRequestsError => Results.StatusCode(StatusCodes.Status429TooManyRequests),
+
+            _ => null,
+        };
 
     /// <summary>
     /// Decorates a self-rendered HTML result (the form_post auto-submit page) with the anti-framing headers so it

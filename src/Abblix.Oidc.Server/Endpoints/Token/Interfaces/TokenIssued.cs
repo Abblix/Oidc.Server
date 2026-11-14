@@ -12,8 +12,8 @@ using Abblix.Oidc.Server.Features.Tokens;
 namespace Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 
 /// <summary>
-/// Successful token endpoint response per RFC 6749 §5.1, optionally extended with the OIDC Core 1.0
-/// §3.1.3.3 <c>id_token</c>.
+/// Successful token endpoint response per RFC 6749 section 5.1, optionally extended with the OIDC Core 1.0
+/// section 3.1.3.3 <c>id_token</c>.
 /// </summary>
 /// <param name="AccessToken">The issued access token (<c>access_token</c>).</param>
 /// <param name="TokenType">The <c>token_type</c>, typically <c>Bearer</c> (RFC 6750).</param>
@@ -38,7 +38,7 @@ public record TokenIssued(EncodedJsonWebToken AccessToken, string TokenType, Tim
 
 	/// <summary>
 	/// The RFC 9396 <c>authorization_details</c> assigned to the access token as the raw
-	/// <see cref="JsonArray"/>, surfaced byte-exact in the JSON token response per RFC 9396 §7
+	/// <see cref="JsonArray"/>, surfaced byte-exact in the JSON token response per RFC 9396 section 7
 	/// (MUST). <c>null</c> when no RAR was used.
 	/// </summary>
 	public JsonArray? AuthorizationDetails { get; init; }

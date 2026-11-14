@@ -16,7 +16,6 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
 using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
-using Abblix.Oidc.Server.E2E.Tests;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
 
@@ -96,7 +95,7 @@ internal static class OidcFlows
     {
         var par = await client.PostFormJsonAsync(
             Endpoint(discovery, ConfigurationResponse.Parameters.PushedAuthorizationRequestEndpoint), form);
-        return par[AuthorizationRequest.Parameters.RequestUri]!.GetValue<string>();
+        return par[PushedAuthorizationResponse.Parameters.RequestUri]!.GetValue<string>();
     }
 
     /// <summary>
@@ -114,7 +113,7 @@ internal static class OidcFlows
         var (verifier, challenge) = Pkce();
         var parForm = new List<KeyValuePair<string, string>>
         {
-            new(ClientRequest.Parameters.ClientId, clientId),
+            new(AuthorizationRequest.Parameters.ClientId, clientId),
             new(ClientRequest.Parameters.ClientSecret, clientSecret),
             new(AuthorizationRequest.Parameters.ResponseType, ResponseTypes.Code),
             new(AuthorizationRequest.Parameters.RedirectUri, TestConstants.RedirectUri),
@@ -132,7 +131,7 @@ internal static class OidcFlows
             Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint),
             new Dictionary<string, string>
             {
-                [ClientRequest.Parameters.ClientId] = clientId,
+                [AuthorizationRequest.Parameters.ClientId] = clientId,
                 [AuthorizationRequest.Parameters.RequestUri] = requestUri,
             },
             ResponseParameters.Code);

@@ -39,20 +39,20 @@ public class AuthorizationCodeGrantHandlerTests
 	}
 
 	/// <summary>
-	/// RFC 6749 §5.2: a token request without the required code parameter is the caller's protocol
+	/// RFC 6749 section 5.2: a token request without the required code parameter is the caller's protocol
 	/// error and yields invalid_request - previously it threw and surfaced as HTTP 500.
 	/// </summary>
 	[Fact]
 	public async Task AuthorizeAsync_MissingCode_ReturnsInvalidRequest()
 	{
-		var result = await _handler.AuthorizeAsync(new TokenRequest(), new ClientInfo("client1"), TestContext.Current.CancellationToken);
+		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, new TokenRequest(), new ClientInfo("client1"), TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
 	}
 
 	/// <summary>
-	/// RFC 6749 §5.2 lists a code issued to another client explicitly under invalid_grant -
+	/// RFC 6749 section 5.2 lists a code issued to another client explicitly under invalid_grant -
 	/// previously this case was reported as unauthorized_client, which describes a client barred
 	/// from the grant type itself.
 	/// </summary>
@@ -63,13 +63,13 @@ public class AuthorizationCodeGrantHandlerTests
 			"2026-06-11T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture);
 		var tokenRequest = new TokenRequest { Code = "abc" };
 		_authCodeService
-			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))
+			.Setup(s => s.AuthorizeByCodeAsync(TestTenant.Matched, tokenRequest.Code))
 			.ReturnsAsync(
 				new AuthorizedGrant(
 					new AuthSession("123", "session1", authenticationTime, "ip"),
 					Context: new AuthorizationContext("original-client", [Scopes.OpenId], null)));
 
-		var result = await _handler.AuthorizeAsync(tokenRequest, new ClientInfo("another-client"), TestContext.Current.CancellationToken);
+		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo("another-client"), TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -102,7 +102,7 @@ public class AuthorizationCodeGrantHandlerTests
 	[InlineData(CodeChallengeMethods.S256, "qwerty", null)]
 	[InlineData(CodeChallengeMethods.Plain, "qwerty", "asdfgh")]
 	[InlineData(CodeChallengeMethods.Plain, "qwerty", null)]
-	// RFC 7636 §4.6: the plain verifier is compared byte-for-byte, so a case flip must fail. This case
+	// RFC 7636 section 4.6: the plain verifier is compared byte-for-byte, so a case flip must fail. This case
 	// would have passed under the previous case-insensitive comparison - it locks the ordinal comparison in.
 	[InlineData(CodeChallengeMethods.Plain, "qwerty", "QWERTY")]
 	public async Task PkceFailureChallengeTest(string codeChallengeMethod, string codeChallenge, string? codeVerifier)
@@ -115,7 +115,7 @@ public class AuthorizationCodeGrantHandlerTests
 	}
 
 	/// <summary>
-	/// RFC 9700 (OAuth 2.0 Security BCP) §2.1.1: presenting a code_verifier for an authorization code that
+	/// RFC 9700 (OAuth 2.0 Security BCP) section 2.1.1: presenting a code_verifier for an authorization code that
 	/// was issued without a code_challenge signals a PKCE downgrade / code-injection attempt. The verifier
 	/// must be rejected (invalid_grant) rather than silently ignored while tokens are issued.
 	/// </summary>
@@ -126,13 +126,13 @@ public class AuthorizationCodeGrantHandlerTests
 		var tokenRequest = new TokenRequest { Code = "abc", CodeVerifier = "unexpected-verifier" };
 
 		_authCodeService
-			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))
+			.Setup(s => s.AuthorizeByCodeAsync(TestTenant.Matched, tokenRequest.Code))
 			.ReturnsAsync(
 				new AuthorizedGrant(
-					new AuthSession("123", "session1", DateTimeOffset.UtcNow, "ip"),
+					new AuthSession("123", "session1", TimeProvider.System.GetUtcNow(), "ip"),
 					Context: new AuthorizationContext(clientInfo.ClientId, [Scopes.OpenId], null)));
 
-		var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetFailure(out var error));
 		Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
@@ -149,13 +149,13 @@ public class AuthorizationCodeGrantHandlerTests
 		var tokenRequest = new TokenRequest { Code = "abc" };
 
 		_authCodeService
-			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))
+			.Setup(s => s.AuthorizeByCodeAsync(TestTenant.Matched, tokenRequest.Code))
 			.ReturnsAsync(
 				new AuthorizedGrant(
-					new AuthSession("123", "session1", DateTimeOffset.UtcNow, "ip"),
+					new AuthSession("123", "session1", TimeProvider.System.GetUtcNow(), "ip"),
 					Context: new AuthorizationContext(clientInfo.ClientId, [Scopes.OpenId], null)));
 
-		var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
 		Assert.True(result.TryGetSuccess(out var grant));
 		Assert.NotNull(grant);
@@ -168,10 +168,10 @@ public class AuthorizationCodeGrantHandlerTests
 		var tokenRequest = new TokenRequest { Code = "abc", CodeVerifier = codeVerifier };
 
 		_authCodeService
-			.Setup(s => s.AuthorizeByCodeAsync(tokenRequest.Code))
+			.Setup(s => s.AuthorizeByCodeAsync(TestTenant.Matched, tokenRequest.Code))
 			.ReturnsAsync(
 				new AuthorizedGrant(
-					new AuthSession("123", "session1", DateTimeOffset.UtcNow, "ip"),
+					new AuthSession("123", "session1", TimeProvider.System.GetUtcNow(), "ip"),
 					Context: new AuthorizationContext(clientInfo.ClientId, [Scopes.OpenId], null)
 					{
 						CodeChallenge = codeChallenge,
@@ -179,7 +179,7 @@ public class AuthorizationCodeGrantHandlerTests
 					}));
 
 		// act
-		var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+		var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 		return result;
 	}
 }

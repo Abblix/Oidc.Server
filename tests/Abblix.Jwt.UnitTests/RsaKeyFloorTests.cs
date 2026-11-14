@@ -45,12 +45,12 @@ public class RsaKeyFloorTests
     [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep, "Section 4.3")]
     [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, "Section 4.3")]
     public void RsaSectionFor_NamesTheSectionThatCarriesTheRequirement(string algorithm, string expected)
-        => Assert.Equal(expected, JsonWebKeyExtensions.RsaSectionFor(algorithm));
+        => Assert.Equal(expected, KeySizeFloors.RsaSectionFor(algorithm));
 
     [Fact]
     public void RsaSectionFor_AnAlgorithmWithNoFloor_Refuses()
         => Assert.Throws<ArgumentException>(
-            () => JsonWebKeyExtensions.RsaSectionFor(SigningAlgorithms.ES256));
+            () => KeySizeFloors.RsaSectionFor(SigningAlgorithms.ES256));
 
     /// <summary>
     /// The message-building form must never throw, because it is called while composing a refusal: an
@@ -62,7 +62,7 @@ public class RsaKeyFloorTests
     [InlineData(SigningAlgorithms.None, "for RSA signatures")]
     [InlineData(SigningAlgorithms.ES256, "for RSA signatures")]
     public void RsaSectionForOrNothing_NeverThrows(string algorithm, string expected)
-        => Assert.Equal(expected, JsonWebKeyExtensions.RsaSectionForOrNothing(algorithm));
+        => Assert.Equal(expected, KeySizeFloors.RsaSectionForOrNothing(algorithm));
 
     /// <summary>
     /// The encryption-side floor. Deleting it outright used to pass the whole suite.
@@ -70,15 +70,14 @@ public class RsaKeyFloorTests
     [Fact]
     public void EncryptKey_AKeyBelowTheFloor_IsRefused()
     {
-        var encryptor = new RsaKeyEncryptor(
-            NullLogger<RsaKeyEncryptor>.Instance, EncryptionAlgorithms.KeyManagement.RsaOaep256);
+        var encryptor = new RsaKeyEncryptor(EncryptionAlgorithms.KeyManagement.RsaOaep256);
 
         var error = Assert.Throws<InvalidOperationException>(
             () => encryptor.EncryptKey(HeaderFor(EncryptionAlgorithms.KeyManagement.RsaOaep256),
                 PublicOnlyKey(1024), new byte[32]));
 
         Assert.Contains("1024", error.Message);
-        Assert.Contains(JsonWebKeyExtensions.MinimumRsaKeyBits.ToString(), error.Message);
+        Assert.Contains(KeySizeFloors.MinimumRsaKeyBits.ToString(), error.Message);
 
         // The half a swapped citation would break: RSA-OAEP-256 is governed by Section 4.3, and an
         // operator who opens Section 4 instead finds nothing that refuses anything.
@@ -86,20 +85,20 @@ public class RsaKeyFloorTests
     }
 
     /// <summary>
-    /// The control. Without it an encryptor that refused every key would pass the test above.
+    /// The control. Without it an encryptor that refused every key would pass
+    /// <see cref="EncryptKey_AKeyBelowTheFloor_IsRefused"/>.
     /// </summary>
     [Fact]
     public void EncryptKey_AKeyAtTheFloor_Encrypts()
     {
-        var encryptor = new RsaKeyEncryptor(
-            NullLogger<RsaKeyEncryptor>.Instance, EncryptionAlgorithms.KeyManagement.RsaOaep256);
+        var encryptor = new RsaKeyEncryptor(EncryptionAlgorithms.KeyManagement.RsaOaep256);
 
         var encrypted = encryptor.EncryptKey(
             HeaderFor(EncryptionAlgorithms.KeyManagement.RsaOaep256),
-            PublicOnlyKey(JsonWebKeyExtensions.MinimumRsaKeyBits),
+            PublicOnlyKey(KeySizeFloors.MinimumRsaKeyBits),
             new byte[32]);
 
-        Assert.Equal(JsonWebKeyExtensions.MinimumRsaKeyBits / 8, encrypted.Length);
+        Assert.Equal(KeySizeFloors.MinimumRsaKeyBits / 8, encrypted.Length);
     }
 
     /// <summary>
@@ -144,16 +143,16 @@ public class RsaKeyFloorTests
             () => JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256, 1024));
 
         Assert.Contains("1024", error.Message);
-        Assert.Contains(JsonWebKeyExtensions.MinimumRsaKeyBits.ToString(), error.Message);
+        Assert.Contains(KeySizeFloors.MinimumRsaKeyBits.ToString(), error.Message);
     }
 
     [Fact]
     public void CreateRsa_AtTheFloor_Mints()
     {
         var key = JsonWebKeyFactory.CreateRsa(
-            PublicKeyUsages.Signature, SigningAlgorithms.RS256, JsonWebKeyExtensions.MinimumRsaKeyBits);
+            PublicKeyUsages.Signature, SigningAlgorithms.RS256, KeySizeFloors.MinimumRsaKeyBits);
 
-        Assert.Equal(JsonWebKeyExtensions.MinimumRsaKeyBits, key.ModulusBitLength());
+        Assert.Equal(KeySizeFloors.MinimumRsaKeyBits, key.ModulusBitLength());
     }
 
     private static JsonWebTokenHeader HeaderFor(string algorithm)
@@ -172,7 +171,7 @@ public class RsaKeyFloorTests
     /// does not check out, and <c>Verify</c> returning false is what says that. What was wrong was the
     /// silence around it. The case is not a hostile peer but a rotation - a key ring holding one retired
     /// sub-floor key signs new tokens with the leading key and fails every token signed before the
-    /// upgrade, all of them labelled as tampering, with nothing anywhere naming a size.
+    /// upgrade, all of them labeled as tampering, with nothing anywhere naming a size.
     /// <para>
     /// Driven through the real signer rather than through the reporting method, because the property is
     /// that the two arrive together: a test calling the reporter directly would pass over a build where
@@ -193,20 +192,21 @@ public class RsaKeyFloorTests
         var warning = Assert.Single(log.Entries);
         Assert.Equal(LogLevel.Warning, warning.Level);
         Assert.Contains("1024", warning.Message);
-        Assert.Contains(JsonWebKeyExtensions.MinimumRsaKeyBits.ToString(), warning.Message);
+        Assert.Contains(KeySizeFloors.MinimumRsaKeyBits.ToString(), warning.Message);
         Assert.Contains(key.KeyId!, warning.Message);
     }
 
     /// <summary>
     /// The control. Without it a reporter that named every failed verification as undersized would pass
-    /// the row above, and every ordinary bad signature would arrive carrying a key-size explanation.
+    /// <see cref="ValidateAsync_ACandidateKeyBelowTheFloor_IsNamedInTheLog"/>, and every ordinary bad
+    /// signature would arrive carrying a key-size explanation.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_ASignatureThatSimplyDoesNotMatch_SaysNothingAboutSizes()
     {
         var log = new CapturingLogger();
-        var (token, _) = SignedWithAnRsaKeyOf(JsonWebKeyExtensions.MinimumRsaKeyBits);
-        var (_, somebodyElse) = SignedWithAnRsaKeyOf(JsonWebKeyExtensions.MinimumRsaKeyBits);
+        var (token, _) = SignedWithAnRsaKeyOf(KeySizeFloors.MinimumRsaKeyBits);
+        var (_, somebodyElse) = SignedWithAnRsaKeyOf(KeySizeFloors.MinimumRsaKeyBits);
 
         var error = await SignerWith(log).ValidateAsync(
             token.Split('.'), HeaderOf(token), Keys(somebodyElse), TestContext.Current.CancellationToken);
@@ -265,7 +265,9 @@ public class RsaKeyFloorTests
         services.AddKeyedSingleton<ISignatureAlgorithm<RsaJsonWebKey>>(
             SigningAlgorithms.RS256, (_, _) => new RsaSigner(SigningAlgorithms.RS256));
 
-        return new JsonWebTokenSigner(log, services.BuildServiceProvider(), NoSigning.Instance);
+        return new JsonWebTokenSigner(
+            new JwsTokenSigner(NoSigning.Instance),
+            new JwsSignatureVerifier(log, new KeyedSignatureCheck(services.BuildServiceProvider())));
     }
 
     /// <summary>The signing seam, which the verify path never reaches.</summary>
@@ -280,7 +282,7 @@ public class RsaKeyFloorTests
             => throw new NotSupportedException("The verify path does not sign.");
     }
 
-    private sealed class CapturingLogger : ILogger<JsonWebTokenSigner>
+    private sealed class CapturingLogger : ILogger<JwsSignatureVerifier>
     {
         private readonly List<(LogLevel Level, string Message)> _entries = [];
 
@@ -398,10 +400,10 @@ public class RsaKeyFloorTests
     [InlineData(SigningAlgorithms.None)]
     public void MinimumRsaKeyBitsFor_AgreesWithTheSectionTheRefusalCites(string algorithm)
     {
-        var hasSection = JsonWebKeyExtensions.RsaSectionForOrNothing(algorithm).StartsWith(
+        var hasSection = KeySizeFloors.RsaSectionForOrNothing(algorithm).StartsWith(
             "per RFC 7518", StringComparison.Ordinal);
 
-        Assert.Equal(hasSection, JsonWebKeyExtensions.MinimumRsaKeyBitsFor(algorithm).HasValue);
+        Assert.Equal(hasSection, KeySizeFloors.MinimumRsaKeyBitsFor(algorithm).HasValue);
     }
 
     private static RsaJsonWebKey PublicOnlyKey(int bits)

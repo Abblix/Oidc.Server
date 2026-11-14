@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 
@@ -24,6 +25,7 @@ public interface IAudienceKeyResolver
     /// The encryption key published by the audience named in <paramref name="resources"/>, or <c>null</c>
     /// when none of them publishes one.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="resources">The resources the token is minted for.</param>
     /// <remarks>
     /// A resource that publishes no key contributes nothing, which is how it says a signed JWS is what it
@@ -34,7 +36,7 @@ public interface IAudienceKeyResolver
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// Several of the named resources each publish an encryption key.</exception>
-    Task<JsonWebKey?> FindEncryptionKeyAsync(IReadOnlyCollection<Uri> resources);
+    Task<JsonWebKey?> FindEncryptionKeyAsync(TenantDefinition tenant, IReadOnlyCollection<Uri> resources);
 }
 
 /// <summary>
@@ -47,14 +49,14 @@ public class AudienceKeyResolver(
     IResourceKeysProvider resourceKeysProvider) : IAudienceKeyResolver
 {
     /// <inheritdoc />
-    public async Task<JsonWebKey?> FindEncryptionKeyAsync(IReadOnlyCollection<Uri> resources)
+    public async Task<JsonWebKey?> FindEncryptionKeyAsync(TenantDefinition tenant, IReadOnlyCollection<Uri> resources)
     {
         JsonWebKey? audienceKey = null;
         Uri? keyOwner = null;
 
         foreach (var resource in resources)
         {
-            if (!resourceManager.TryGet(resource, out var definition))
+            if (!resourceManager.TryGet(tenant, resource, out var definition))
                 continue;
 
             var key = await resourceKeysProvider.GetEncryptionKeys(definition).FirstOrDefaultAsync();

@@ -15,11 +15,11 @@ namespace Abblix.SecurityEvents;
 public static class LogEvents
 {
     /// <summary>
-    /// Composition and dependency-injection wiring: range 1000-1099.
+    /// Composition and dependency-injection wiring: range 14000-14099.
     /// </summary>
     public static class Composition
     {
-        private const int Base = 1000;
+        private const int Base = 14000;
 
         /// <summary>
         /// The composed validation profile lacks a security-critical default step under an
@@ -29,16 +29,22 @@ public static class LogEvents
     }
 
     /// <summary>
-    /// Back-channel logout intake: range 1100-1199.
+    /// Back-channel logout intake: range 14100-14199.
     /// </summary>
     public static class BackChannelLogout
     {
-        private const int Base = 1100;
+        private const int Base = 14100;
 
         /// <summary>
         /// A logout request was refused; the message carries the error code and the description
-        /// that travelled back to the provider.
+        /// that traveled back to the provider.
         /// </summary>
         public const int RequestRefused = Base + 1;
+
+        /// <summary>
+        /// A Logout Token the sink did not report success for could not be released from the replay
+        /// cache. The message carries its issuer and identifier, and the exception says why.
+        /// </summary>
+        public const int ReservationKept = Base + 2;
     }
 }

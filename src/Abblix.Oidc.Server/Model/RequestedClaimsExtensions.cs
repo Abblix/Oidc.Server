@@ -9,19 +9,20 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
-/// Reading the end users a <c>claims</c> request will accept for <c>sub</c>.
+/// Reading what a <c>claims</c> request will accept: the end users for <c>sub</c>, and the authentication
+/// levels for <c>acr</c>.
 /// </summary>
 public static class RequestedClaimsExtensions
 {
     /// <summary>
-    /// The end users this request will accept for <c>sub</c>: <c>null</c> when it named none in particular,
-    /// an empty array when it named a combination nobody can satisfy, or a failure describing a malformed
-    /// qualifier.
+    /// The end users this request will accept for <c>sub</c>: an empty array when it named none in
+    /// particular, or a failure describing a qualifier that is malformed or that nobody can satisfy.
     /// </summary>
     /// <remarks>
     /// OpenID Connect Core 1.0 Section 3.1.2.2 names this and <c>id_token_hint</c> as two ways to make one
@@ -34,7 +35,9 @@ public static class RequestedClaimsExtensions
     /// Section 5.5.1 defines both qualifiers as OPTIONAL and says nothing about carrying them together, so a
     /// request doing so is read as stating both constraints: the subject has to be the one named by
     /// <c>value</c> AND one of those listed in <c>values</c>. Incompatible constraints leave nothing
-    /// acceptable, which is the guaranteed mismatch that same section already prescribes an outcome for.
+    /// acceptable, which is the guaranteed mismatch that same section prescribes an outcome for - said
+    /// here as a refusal naming the contradiction, rather than as a set that silently matches no session
+    /// and sends the end user to authenticate for a request that can never be answered.
     /// </para>
     /// <para>
     /// Only the <c>id_token</c> member is read, deliberately. Section 3.1.2.2 scopes the requirement to a
@@ -43,43 +46,137 @@ public static class RequestedClaimsExtensions
     /// mismatch rule then governs that response, not the authentication.
     /// </para>
     /// </remarks>
-    public static Result<string[]?, string> RequestedSubjects(this RequestedClaims? claims)
+    public static Result<string[], string> RequestedSubjects(this RequestedClaims? claims)
     {
         if (claims?.IdToken is not { } requested ||
             !requested.TryGetValue(IanaClaimTypes.Sub, out var details) ||
             details is null)
-            return (string[]?)null;
+            return Array.Empty<string>();
 
-        string? value = null;
-        if (details.Value is not null && !TryReadSubject(details.Value, out value))
-            return MalformedSubject;
+        return details.AcceptedValues(MalformedSubject, NoAcceptableSubject);
+    }
 
-        string[]? values = null;
-        if (details.Values is { } requestedValues)
+    /// <summary>
+    /// The authentication levels this request requires of the ID token: an empty array when it requires
+    /// none, or a failure when its qualifiers name a level nobody can hold.
+    /// </summary>
+    /// <remarks>
+    /// OpenID Connect Core 1.0 Section 5.5.1.1 conditions its rule on three things the request states: the
+    /// <c>acr</c> claim is essential, it is asked of the ID token, and it carries "a value or values
+    /// parameter requesting specific Authentication Context Class Reference values". Given those, the server
+    /// "MUST return an acr Claim Value that matches one of the requested values", and "MUST treat that
+    /// outcome as a failed authentication attempt" when it cannot. A fourth condition of that sentence, that
+    /// the implementation supports the <c>claims</c> parameter, this server meets everywhere: its
+    /// authorization metadata publishes <c>claims_parameter_supported</c> as true.
+    /// <para>
+    /// A voluntary <c>acr</c> is read as requiring nothing, which the same section says outright: the
+    /// relying party "MAY request the acr Claim as a Voluntary Claim ... by not including
+    /// <c>"essential": true</c>", and an unmet voluntary claim is not a failed authentication. So is an
+    /// essential one naming no values: it accepts whatever the session holds.
+    /// </para>
+    /// <para>
+    /// The two qualifiers bind together, as they do for <c>sub</c> above and for the same reason, and a
+    /// request whose qualifiers accept no level at all - an empty choice, or a <c>value</c> outside its own
+    /// <c>values</c> - is a failure rather than an empty set, because an empty set is how this answer says
+    /// that nothing was required.
+    /// </para>
+    /// </remarks>
+    public static Result<string[], string> RequiredAuthContextClassRefs(this RequestedClaims? claims)
+    {
+        if (claims?.IdToken is not { } requested ||
+            !requested.TryGetValue(IanaClaimTypes.Acr, out var details) ||
+            details is not { Essential: true })
+            return Array.Empty<string>();
+
+        return details.AcceptedValues(MalformedAcr, NoAcceptableAcr);
+    }
+
+    /// <summary>
+    /// Whether an authentication at <paramref name="level"/> meets the <c>acr</c> this request requires of
+    /// the ID token.
+    /// </summary>
+    /// <remarks>
+    /// A requirement <see cref="RequiredAuthContextClassRefs"/> refuses names qualifiers no authentication
+    /// could satisfy, which is unmet by construction. The levels themselves are compared by
+    /// <see cref="AuthenticationLevels"/>, the rule every place judging a session's level shares.
+    /// </remarks>
+    public static bool AcceptsAuthenticationLevel(this RequestedClaims? claims, string? level)
+        => claims.RequiredAuthContextClassRefs().TryGetSuccess(out var levels) &&
+           AuthenticationLevels.Accept(levels, level);
+
+    /// <summary>
+    /// The values a requested claim's qualifiers accept together, or a failure when one of them is malformed
+    /// or the two leave nothing acceptable.
+    /// </summary>
+    /// <remarks>
+    /// A helper parameterized by each public reader: the reader passes the refusals that are specific to its
+    /// claim, and this reads the qualifiers and then combines them the same way for all of them.
+    /// </remarks>
+    /// <param name="details">The requested claim's qualifiers.</param>
+    /// <param name="malformed">The refusal for a qualifier that is not a string.</param>
+    /// <param name="noneAcceptable">The refusal for qualifiers nothing can satisfy.</param>
+    private static Result<string[], string> AcceptedValues(
+        this RequestedClaimDetails details,
+        string malformed,
+        string noneAcceptable)
+        => TryReadQualifiers(details, out var value, out var values)
+            ? Combined(value, values, noneAcceptable)
+            : malformed;
+
+    /// <summary>
+    /// Reads both qualifiers of a requested claim, failing when either holds a value that is not a string.
+    /// </summary>
+    private static bool TryReadQualifiers(RequestedClaimDetails details, out string? value, out string[]? values)
+    {
+        value = null;
+        values = null;
+        if (details.Value is not null && !TryReadQualifier(details.Value, out value))
+            return false;
+
+        if (details.Values is not { } requestedValues)
+            return true;
+
+        var read = new string[requestedValues.Length];
+        for (var i = 0; i < requestedValues.Length; i++)
         {
-            values = new string[requestedValues.Length];
-            for (var i = 0; i < requestedValues.Length; i++)
-            {
-                if (!TryReadSubject(requestedValues[i], out var subject))
-                    return MalformedSubject;
+            if (!TryReadQualifier(requestedValues[i], out var qualifier))
+                return false;
 
-                values[i] = subject;
-            }
+            read[i] = qualifier;
         }
 
-        return (value, values) switch
-        {
-            (null, null) => (string[]?)null,
-            (null, { } many) => many,
-            ({ } one, null) => [one],
-            ({ } one, { } many) => many.Contains(one, StringComparer.Ordinal) ? [one] : [],
-        };
+        values = read;
+        return true;
     }
+
+    /// <summary>
+    /// What <c>value</c> and <c>values</c> accept together: <c>value</c> AND one of <c>values</c>, each
+    /// constraining only when present.
+    /// </summary>
+    private static Result<string[], string> Combined(string? value, string[]? values, string noneAcceptable)
+        => (value, values) switch
+        {
+            (null, null) => Array.Empty<string>(),
+            (null, []) => noneAcceptable,
+            (null, { } many) => many,
+            ({ } one, null) => new[] { one },
+            ({ } one, { } many) => many.Contains(one, StringComparer.Ordinal)
+                ? new[] { one }
+                : noneAcceptable,
+        };
+
+    private const string MalformedAcr = "The acr claim was requested with a value that is not a string";
+
+    private const string NoAcceptableAcr =
+        "The acr claim was requested with qualifiers no authentication can satisfy";
 
     private const string MalformedSubject = "The sub claim was requested with a value that is not a string";
 
+    private const string NoAcceptableSubject =
+        "The sub claim was requested with qualifiers no end user can satisfy";
+
     /// <summary>
-    /// Reads a requested <c>sub</c> value, failing when the qualifier is not a string.
+    /// Reads one qualifier of a requested claim, failing when it is not a string.
     /// </summary>
     /// <remarks>
     /// Two shapes arrive here because the same property carries both. A request read off the wire holds a
@@ -95,7 +192,7 @@ public static class RequestedClaimsExtensions
     /// outright instead of refusing as though nobody were logged in.
     /// </para>
     /// </remarks>
-    private static bool TryReadSubject(object? requested, [NotNullWhen(true)] out string? subject)
+    private static bool TryReadQualifier(object? requested, [NotNullWhen(true)] out string? subject)
     {
         switch (requested)
         {

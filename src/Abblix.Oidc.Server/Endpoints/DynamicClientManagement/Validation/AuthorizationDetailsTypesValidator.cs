@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,8 +15,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Rejects client registration when the requested <c>authorization_details_types</c> per-client
-/// allowlist (RFC 9396 §10) names any <c>type</c> value the server does not understand,
-/// returning <c>invalid_client_metadata</c> per OIDC DCR §3.2. Without this gate the
+/// allowlist (RFC 9396 section 10) names any <c>type</c> value the server does not understand,
+/// returning <c>invalid_client_metadata</c> per OIDC DCR section 3.2. Without this gate the
 /// registration would succeed and every RAR-bearing request from this client would fail at
 /// the authorize/PAR endpoint with <c>invalid_authorization_details</c> - a worse error
 /// surface for the deployer who registered with a typo.
@@ -37,7 +38,7 @@ public class AuthorizationDetailsTypesValidator(
     IServiceProvider serviceProvider) : SyncClientRegistrationContextValidator
 {
     /// <inheritdoc />
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var requested = context.Request.AuthorizationDetailsTypes;
         if (requested is null || requested.Length == 0)

@@ -1,0 +1,1020 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
+using Xunit;
+
+
+namespace Abblix.Oidc.Server.UnitTests.Features.MultiTenancy;
+
+/// <summary>
+/// The tenants a store holds, as the server serves them: what the checks refuse is left out and logged, the rest
+/// is served, and a change in the store reaches the server with the next reading.
+/// </summary>
+public class StoreTenantCatalogTests
+{
+    /// <summary>
+    /// A store whose tenants a test changes between readings, can make unreadable, and can hold the next reading
+    /// back until the test lets it answer with what it held when asked.
+    /// </summary>
+    private sealed class FakeStore : ITenantStore
+    {
+        public List<StoredTenant> Tenants { get; } = [];
+
+        public Exception? FailWith { get; set; }
+
+        public int FailingReadings { get; set; }
+
+        public TaskCompletionSource? HoldNextReading { get; set; }
+
+        private int _readings;
+
+        public int Readings => Volatile.Read(ref _readings);
+
+        public async Task<IReadOnlyCollection<StoredTenant>> ListAsync(CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _readings);
+            IReadOnlyCollection<StoredTenant> held = [..Tenants];
+            if (HoldNextReading is { } hold)
+            {
+                HoldNextReading = null;
+                await hold.Task;
+            }
+
+            if (FailWith is not null)
+                throw FailWith;
+
+            if (FailingReadings > 0)
+            {
+                FailingReadings--;
+                throw new InvalidOperationException("the store of tenants did not answer this once");
+            }
+
+            return held;
+        }
+    }
+
+    /// <summary>Counts the records of refused tenants, and keeps each error's event and the tenant it names.</summary>
+    private sealed class RecordingLogger : ILogger<StoreTenantCatalog>
+    {
+        public List<string> Errors { get; } = [];
+
+        public List<(int EventId, object? TenantId)> ErrorEvents { get; } = [];
+
+        public List<(object? TenantId, object? Generation)> NotClosed { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel != LogLevel.Error)
+                return;
+
+            Errors.Add(formatter(state, exception));
+            var values = (state as IEnumerable<KeyValuePair<string, object?>>)?.ToArray() ?? [];
+            object? ValueOf(string name) => values.FirstOrDefault(pair => pair.Key == name).Value;
+            ErrorEvents.Add((eventId.Id, ValueOf("TenantId")));
+            if (eventId.Id == LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed)
+                NotClosed.Add((ValueOf("TenantId"), ValueOf("Generation")));
+        }
+    }
+
+    /// <summary>
+    /// Readies each tenant it is asked to, failing those named in <see cref="Failing"/>, and holds every opening
+    /// back while <see cref="Hold"/> is set, as a custodian that does not answer.
+    /// </summary>
+    private sealed class FakeOpening : ITenantOpening
+    {
+        public HashSet<string> Failing { get; } = [];
+
+        public TaskCompletionSource? Hold { get; set; }
+
+        /// <summary>
+        /// Whether a stop while held is reported as failures of the tenants not in <see cref="ReadyBeforeTheStop"/>,
+        /// as the key rings report the partitions they did not reach.
+        /// </summary>
+        public bool ReportsAStopAsFailures { get; set; }
+
+        public HashSet<string> ReadyBeforeTheStop { get; } = [];
+
+        public async Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
+            IReadOnlyCollection<TenantDefinition> tenants,
+            CancellationToken cancellationToken)
+        {
+            if (Hold is { } hold)
+            {
+                try
+                {
+                    await hold.Task.WaitAsync(cancellationToken);
+                }
+                catch (OperationCanceledException stop) when (ReportsAStopAsFailures)
+                {
+                    return tenants
+                        .Where(tenant => !ReadyBeforeTheStop.Contains(tenant.Id))
+                        .ToDictionary(tenant => tenant.Id, Exception (_) => stop);
+                }
+            }
+
+            return tenants
+                .Where(tenant => Failing.Contains(tenant.Id))
+                .ToDictionary(
+                    tenant => tenant.Id,
+                    Exception (_) => new InvalidOperationException("the tenant's first key could not be minted"));
+        }
+    }
+
+    private const string Version = "1";
+
+    private readonly FakeStore _store = new();
+    private readonly RecordingLogger _logger = new();
+    private readonly FakeOpening _opening = new();
+    private readonly FakeClosing _failingClosing = new() { Failing = { "acme" } };
+    private readonly FakeClosing _closing = new();
+
+    private readonly OidcOptions _options = new();
+
+    private readonly FakeTimeProvider _time = new();
+
+    /// <summary>Reads the store once a refresh period has passed, as the refresh loop does.</summary>
+    private async Task ReadAfterAPeriodAsync(StoreTenantCatalog catalog, CancellationToken ct)
+    {
+        _time.Advance(_options.RefreshTenantsEvery);
+        await catalog.RefreshAsync(ct);
+    }
+
+    private StoreTenantCatalog Catalog(ITenantStore? store = null, ITenantClosing[]? closings = null) => new(
+        _logger,
+        store ?? _store,
+        [new TenantDefinitionsCheck()],
+        [_opening],
+        closings ?? [_closing],
+        Options.Create(_options),
+        _time);
+
+    private static StoredTenant Stored(string id, string issuer, string version = Version)
+        => new(new TenantDefinition { Id = id, Issuer = new Uri(issuer), Generation = "g1" }, version);
+
+    /// <summary>
+    /// A tenant the checks refuse is left out and logged by name, and the others are served.
+    /// </summary>
+    [Theory]
+    [InlineData("https://bro\u200Dken.example.com")]
+    [InlineData("https://auth.example.com//broken")]
+    public async Task ATenantTheChecksRefuse_IsLeftOut_AndTheOthersServed(string brokenIssuer)
+    {
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("broken", brokenIssuer));
+        var catalog = Catalog();
+        var ct = TestContext.Current.CancellationToken;
+
+        await catalog.RefreshAsync(ct);
+
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+        Assert.Null(await catalog.FindByIdAsync("broken", ct));
+        Assert.Contains("broken", Assert.Single(_logger.Errors), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Every party to a conflict is left out, so every instance reading the store serves the same tenants however
+    /// the conflict was written.
+    /// </summary>
+    [Fact]
+    public async Task TwoTenantsAtOneAddress_AreBothLeftOut()
+    {
+        _store.Tenants.Add(Stored("acme", "https://auth.example.com/tenants/x"));
+        _store.Tenants.Add(Stored("globex", "https://auth.example.com/tenants/x"));
+        var catalog = Catalog();
+        var ct = TestContext.Current.CancellationToken;
+
+        await catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("acme", ct));
+        Assert.Null(await catalog.FindByIdAsync("globex", ct));
+        Assert.Null(await catalog.FindByAddressAsync("auth.example.com", "/tenants/x/token", ct));
+    }
+
+    /// <summary>
+    /// A refusal standing from one reading to the next is logged once, so a bad row does not fill the log at every
+    /// reading.
+    /// </summary>
+    [Fact]
+    public async Task ARefusalStandingAcrossReadings_IsLoggedOnce()
+    {
+        _store.Tenants.Add(Stored("broken", "https://bro\u200Dken.example.com"));
+        var catalog = Catalog();
+        var ct = TestContext.Current.CancellationToken;
+
+        await catalog.RefreshAsync(ct);
+        await catalog.RefreshAsync(ct);
+
+        Assert.Single(_logger.Errors);
+    }
+
+    /// <summary>
+    /// A tenant the store gains is served after the next reading, and one it loses is no longer found by id or by
+    /// address.
+    /// </summary>
+    [Fact]
+    public async Task ANextReading_ServesWhatTheStoreGained_AndDropsWhatItLost()
+    {
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        var ct = TestContext.Current.CancellationToken;
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Clear();
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        await catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("acme", ct));
+        Assert.Null(await catalog.FindByAddressAsync("acme.example.com", "/", ct));
+        Assert.NotNull(await catalog.FindByAddressAsync("globex.example.com", "/", ct));
+    }
+
+    /// <summary>
+    /// A tenant the store gains that cannot be readied is left out of that reading and logged while the others are
+    /// served, and is served by the first reading that readies it.
+    /// </summary>
+    [Fact]
+    public async Task ATenantThatCannotBeOpened_IsLeftOutAndLogged_UntilAReadingOpensIt()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        _opening.Failing.Add("globex");
+        await catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("globex", ct));
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+        await catalog.RefreshAsync(ct);
+        Assert.Single(_logger.Errors);
+
+        _opening.Failing.Clear();
+        await catalog.RefreshAsync(ct);
+
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+    }
+
+    /// <summary>
+    /// A tenant of a store of the host's own that cannot be readied on the reading the server starts with is left
+    /// out and logged like any other, so one failing tenant does not stop the server serving the rest.
+    /// </summary>
+    [Fact]
+    public async Task ATenantOfAStoreThatCannotBeOpened_OnTheFirstReading_IsLeftOut()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        _opening.Failing.Add("acme");
+        var catalog = Catalog();
+
+        await catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("acme", ct));
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+        Assert.Single(_logger.Errors);
+    }
+
+    /// <summary>
+    /// A tenant the settings declare that cannot be readied on the reading the server starts with refuses the start,
+    /// as the settings would refuse it; the reading is not kept.
+    /// </summary>
+    [Fact]
+    public async Task ATenantTheSettingsDeclare_ThatCannotBeOpened_FailsTheFirstReading()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var declared = new OidcOptions
+        {
+            Tenants = [new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }],
+        };
+        _opening.Failing.Add("acme");
+        var catalog = Catalog(new OptionsTenantStore(Options.Create(declared)));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => catalog.RefreshAsync(ct));
+
+        _opening.Failing.Clear();
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+    }
+
+    /// <summary>
+    /// While a tenant new to the catalog is being readied, the changes and removals of the tenants served before
+    /// are served already, so a custodian slow to answer holds back only the new tenant.
+    /// </summary>
+    [Fact]
+    public async Task WhileANewTenantIsReadied_ARemovalIsServedAlready()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Clear();
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var hold = new TaskCompletionSource();
+        _opening.Hold = hold;
+        var reading = catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("acme", ct));
+        Assert.Null(await catalog.FindByIdAsync("globex", ct));
+
+        hold.SetResult();
+        await reading;
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+    }
+
+    /// <summary>
+    /// The server starts only once every tenant the settings declare is readied, so on the reading it starts with
+    /// their openings are not cut short by the refresh period.
+    /// </summary>
+    [Fact]
+    public async Task TheTenantsTheSettingsDeclare_AreOpenedWithoutALimit_OnTheFirstReading()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var declared = new OidcOptions
+        {
+            Tenants = [new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com") }],
+        };
+        _options.RefreshTenantsEvery = TimeSpan.FromMilliseconds(1);
+        var hold = new TaskCompletionSource();
+        _opening.Hold = hold;
+        var catalog = Catalog(new OptionsTenantStore(Options.Create(declared)));
+
+        var reading = catalog.RefreshAsync(ct);
+        await Task.Delay(_options.RefreshTenantsEvery * 100, ct);
+        hold.SetResult();
+        await reading;
+
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+    }
+
+    /// <summary>
+    /// A reading stopped while its new tenants are readied, as the host stopping, is a stop: it serves nothing new,
+    /// keeps the tenants read last and logs no tenant as not readied, though the opening reports the stop as
+    /// failures of the tenants it did not reach.
+    /// </summary>
+    [Fact]
+    public async Task AReadingStoppedWhileOpening_IsAStop_AndNoTenantIsLoggedAsNotReadied()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        _opening.Hold = new TaskCompletionSource();
+        _opening.ReportsAStopAsFailures = true;
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var reading = catalog.RefreshAsync(stop.Token);
+        await stop.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reading);
+        Assert.Empty(_logger.Errors);
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+        Assert.Null(await catalog.FindByIdAsync("globex", ct));
+    }
+
+    /// <summary>
+    /// Openings that run out of their refresh period serve the tenants they readied by then, so new tenants too
+    /// many to ready within one period come into service over several readings rather than never.
+    /// </summary>
+    [Fact]
+    public async Task OpeningsThatRunOutOfTime_ServeWhatTheyReadiedByThen()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        _options.RefreshTenantsEvery = TimeSpan.FromMilliseconds(1);
+        _opening.Hold = new TaskCompletionSource();
+        _opening.ReportsAStopAsFailures = true;
+        _opening.ReadyBeforeTheStop.Add("acme");
+        var catalog = Catalog();
+
+        await catalog.RefreshAsync(ct);
+
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+        Assert.Null(await catalog.FindByIdAsync("globex", ct));
+    }
+
+    /// <summary>
+    /// The openings of one reading may take one refresh period, so a custodian that never answers leaves the new
+    /// tenants out of that reading instead of stopping the readings.
+    /// </summary>
+    [Fact]
+    public async Task OpeningsThatDoNotFinishWithinTheRefreshPeriod_LeaveTheNewTenantsOut()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _options.RefreshTenantsEvery = TimeSpan.FromMilliseconds(1);
+        _opening.Hold = new TaskCompletionSource();
+        var catalog = Catalog();
+
+        await catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("acme", ct));
+        Assert.Single(_logger.Errors);
+    }
+
+    /// <summary>
+    /// A tenant the store no longer holds is released at the first reading one refresh period after a reading found
+    /// it gone, however often the store is read, so a request begun while it was served finishes with what was kept
+    /// for it; the definition last served is forgotten with it.
+    /// </summary>
+    [Fact]
+    public async Task ATenantGoneFromTheStore_IsReleased_OneRefreshPeriodAfterAReadingMissedIt()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        var acme = (await catalog.FindByIdAsync("acme", ct))!;
+        var released = catalog.Released(acme);
+
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        _time.Advance(_options.RefreshTenantsEvery - TimeSpan.FromSeconds(1));
+        await catalog.RefreshAsync(ct);
+        Assert.False(released.IsCancellationRequested);
+        Assert.Same(acme, catalog.InForce(acme));
+
+        _time.Advance(TimeSpan.FromSeconds(1));
+        await catalog.RefreshAsync(ct);
+        Assert.True(released.IsCancellationRequested);
+        Assert.Null(catalog.InForce(acme));
+    }
+
+    /// <summary>
+    /// A request asking for a creation's token while that creation is being released gets one canceled, never one
+    /// that is not, so nothing it keeps then outlives the creation.
+    /// </summary>
+    [Fact]
+    public async Task ACreationAskedForWhileItIsReleased_IsReleasedAlready()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        var acme = (await catalog.FindByIdAsync("acme", ct))!;
+        bool? askedMeanwhile = null;
+        catalog.Released(acme).Register(() => askedMeanwhile = catalog.Released(acme).IsCancellationRequested);
+
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.True(askedMeanwhile);
+    }
+
+    /// <summary>
+    /// A creation released again while its last release is still remembered, as when the wall clock is set back and
+    /// the tenant is listed and dropped once more, is released again rather than fail every reading after it.
+    /// </summary>
+    [Fact]
+    public async Task ACreationReleasedAgain_AfterTheClockWasSetBack_DoesNotFailTheReading()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var start = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var now = start;
+        var clock = new Moq.Mock<TimeProvider>();
+        clock.Setup(provider => provider.GetUtcNow()).Returns(() => now);
+        var catalog = new StoreTenantCatalog(
+            _logger,
+            _store,
+            [new TenantDefinitionsCheck()],
+            [_opening],
+            [],
+            Options.Create(_options),
+            clock.Object);
+        var pause = _options.RefreshTenantsEvery;
+
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        now = start + pause;
+        await catalog.RefreshAsync(ct);
+
+        // The clock is set back, and the same creation is listed and dropped once more
+        now = start;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        now = start + pause;
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        await catalog.RefreshAsync(ct);
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+    }
+
+    /// <summary>
+    /// Something kept for a released tenant that fails to be let go is logged, and neither fails the reading nor
+    /// keeps the other tenants gone with it from being released.
+    /// </summary>
+    [Fact]
+    public async Task AReleaseThatFails_IsLogged_AndTheOthersAreReleased()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        catalog.Released((await catalog.FindByIdAsync("acme", ct))!)
+            .Register(() => throw new InvalidOperationException("a limiter failed to be disposed"));
+        var globex = catalog.Released((await catalog.FindByIdAsync("globex", ct))!);
+
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.True(globex.IsCancellationRequested);
+        Assert.Single(_logger.Errors);
+    }
+
+    /// <summary>
+    /// A tenant released is handed to every closing within the reading that releases it, in the creation that was
+    /// served; one closing that fails for it is logged and keeps neither the other closings nor the other tenants from
+    /// running, nor fails the reading.
+    /// </summary>
+    [Fact]
+    public async Task AReleasedTenant_IsClosed_AndAClosingThatFailsIsLogged()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var catalog = Catalog(closings: [_failingClosing, _closing]);
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        Assert.Empty(_closing.Closed);
+
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.Equal(["acme/g1", "globex/g1"], _closing.Closed.Order());
+        Assert.Equal(["globex/g1"], _failingClosing.Closed);
+        Assert.Equal(
+            [(LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed, (object?)"acme")],
+            _logger.ErrorEvents);
+    }
+
+    /// <summary>
+    /// Two creations of one id released by one reading are each reported and logged with their generation, so the
+    /// failure of one does not hide the other's.
+    /// </summary>
+    [Fact]
+    public async Task TwoCreationsOfOneIdReleasedTogether_AreEachLoggedNotClosed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog(closings: [_failingClosing]);
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Add(new StoredTenant(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com"), Generation = "g2" }, "2"));
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.Equal([("acme", "g1"), ("acme", "g2")], _logger.NotClosed.Order());
+    }
+
+    /// <summary>
+    /// A closing that does not answer is cut off one refresh period into its call and every tenant of the call is
+    /// logged, and the closings after it get a period of their own, so a closing that heeds its token still closes
+    /// every tenant.
+    /// </summary>
+    [Fact]
+    public async Task AClosingThatDoesNotAnswer_IsCutOffAndCostsNoOtherClosing()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var hanging = new FakeClosing { Hanging = { "acme" } };
+        var heeding = new FakeClosing { HeedsItsToken = true };
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var catalog = Catalog(closings: [hanging, heeding]);
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        _time.Advance(_options.RefreshTenantsEvery);
+
+        var reading = catalog.RefreshAsync(ct);
+        Assert.False(reading.IsCompleted);
+        _time.Advance(_options.RefreshTenantsEvery);
+
+        // Bounded in real time too, so a closing never cut off turns the test red rather than hang it
+        await reading.WaitAsync(TimeSpan.FromSeconds(10), ct);
+
+        Assert.Equal(["acme/g1", "globex/g1"], heeding.Closed.Order());
+        Assert.Equal(
+            ["acme", "globex"],
+            _logger.ErrorEvents
+                .Where(entry => entry.EventId == LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed)
+                .Select(entry => (string)entry.TenantId!)
+                .Order());
+    }
+
+    /// <summary>
+    /// A reading stopped while a closing runs, as when the server shuts down, still hands every released tenant over
+    /// and logs each one not closed with its id, since none is handed over again.
+    /// </summary>
+    [Fact]
+    public async Task AReadingStoppedWhileClosing_LogsEveryTenantNotClosed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var hanging = new FakeClosing { Hanging = { "acme", "globex" } };
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var catalog = Catalog(closings: [hanging]);
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        _time.Advance(_options.RefreshTenantsEvery);
+
+        using var stopping = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var reading = catalog.RefreshAsync(stopping.Token);
+        await stopping.CancelAsync();
+        await Record.ExceptionAsync(() => reading);
+
+        Assert.Equal(
+            ["acme", "globex"],
+            _logger.ErrorEvents
+                .Where(entry => entry.EventId == LogEvents.MultiTenancy.StoreTenantCatalog.TenantNotClosed)
+                .Select(entry => (string)entry.TenantId!)
+                .Order());
+    }
+
+    /// <summary>
+    /// A creation released after its tenant was created again under the same id is closed in the definition last
+    /// served for that creation, not the one the new creation serves nor the one it was first listed in.
+    /// </summary>
+    [Fact]
+    public async Task ACreationReplacedByANewOne_IsClosedInItsOwnLastDefinition()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        _store.Tenants.Add(Stored("acme", "https://acme.example.net", "2"));
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Clear();
+        _store.Tenants.Add(new StoredTenant(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.org"), Generation = "g2" }, "3"));
+        await catalog.RefreshAsync(ct);
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.Equal(["acme/g1"], _closing.Closed);
+        Assert.Equal(["https://acme.example.net"], _closing.Issuers);
+    }
+
+    /// <summary>
+    /// A tenant whose definition changed within its creation, as to another issuer, is closed in the definition last
+    /// served, since that is the one what it kept was kept under.
+    /// </summary>
+    [Fact]
+    public async Task ATenantChangedWithinItsCreation_IsClosedInTheDefinitionLastServed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        _store.Tenants.Clear();
+        _store.Tenants.Add(Stored("acme", "https://acme.example.net", "2"));
+        await catalog.RefreshAsync(ct);
+
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.Equal(["https://acme.example.net"], _closing.Issuers);
+    }
+
+    /// <summary>
+    /// A tenant the store still holds is not released while the checks refuse it, so what was kept for it, the
+    /// clients registered with it included, outlives a mistake in its definition.
+    /// </summary>
+    [Fact]
+    public async Task ATenantTheChecksRefuse_IsNotReleased()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        var released = catalog.Released((await catalog.FindByIdAsync("acme", ct))!);
+
+        // A second tenant claiming the same address has the checks refuse both
+        _store.Tenants.Add(Stored("globex", "https://acme.example.com"));
+        await catalog.RefreshAsync(ct);
+        await catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("acme", ct));
+        Assert.False(released.IsCancellationRequested);
+    }
+
+    /// <summary>
+    /// A tenant created again under the same id is a new creation, so the former one is released while the new
+    /// one is not.
+    /// </summary>
+    [Fact]
+    public async Task ATenantCreatedAgain_ReleasesItsFormerCreation()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        var former = catalog.Released((await catalog.FindByIdAsync("acme", ct))!);
+
+        _store.Tenants.Clear();
+        _store.Tenants.Add(new StoredTenant(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com"), Generation = "g2" },
+            Version));
+        await catalog.RefreshAsync(ct);
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.True(former.IsCancellationRequested);
+        Assert.False(catalog.Released((await catalog.FindByIdAsync("acme", ct))!).IsCancellationRequested);
+    }
+
+    /// <summary>
+    /// A creation the last reading released, as a late request still carries, is released from the start, so what
+    /// such a request keeps for it is let go at once; a creation the store never listed is never released, since
+    /// the catalog cannot tell it is gone.
+    /// </summary>
+    [Fact]
+    public async Task ACreationReleasedLately_IsReleasedAlready_AndOneNeverListed_IsNeverReleased()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        await catalog.RefreshAsync(ct);
+        var acme = (await catalog.FindByIdAsync("acme", ct))!;
+        _store.Tenants.Clear();
+        await catalog.RefreshAsync(ct);
+        await ReadAfterAPeriodAsync(catalog, ct);
+
+        Assert.True(catalog.Released(acme).IsCancellationRequested);
+        Assert.False(catalog.Released(new TenantDefinition { Id = "globex", Issuer = new Uri("https://globex.example.com") })
+            .CanBeCanceled);
+
+        // Released already through every reading of one pause, however often the store is read, and forgotten
+        // after it, so the record does not grow
+        await catalog.RefreshAsync(ct);
+        Assert.True(catalog.Released(acme).IsCancellationRequested);
+        await ReadAfterAPeriodAsync(catalog, ct);
+        Assert.False(catalog.Released(acme).CanBeCanceled);
+    }
+
+    /// <summary>
+    /// A tenant the store holds unchanged keeps the definition served before, so what was built from it is kept;
+    /// a new version of it replaces the definition.
+    /// </summary>
+    [Fact]
+    public async Task AnUnchangedTenant_KeepsItsDefinition_AndAChangedOneIsReplaced()
+    {
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        var ct = TestContext.Current.CancellationToken;
+        await catalog.RefreshAsync(ct);
+        var served = await catalog.FindByIdAsync("acme", ct);
+
+        _store.Tenants[0] = Stored("acme", "https://acme.example.com");
+        await catalog.RefreshAsync(ct);
+        Assert.Same(served, await catalog.FindByIdAsync("acme", ct));
+
+        _store.Tenants[0] = Stored("acme", "https://acme.example.com", version: "2");
+        await catalog.RefreshAsync(ct);
+        Assert.NotSame(served, await catalog.FindByIdAsync("acme", ct));
+    }
+
+    /// <summary>
+    /// A reading that fails keeps the tenants of the last one: an outage of the store is not an outage of every
+    /// tenant.
+    /// </summary>
+    [Fact]
+    public async Task AFailedReading_KeepsTheTenantsOfTheLastOne()
+    {
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        var ct = TestContext.Current.CancellationToken;
+        await catalog.RefreshAsync(ct);
+
+        _store.FailWith = new InvalidOperationException("the store of tenants is unreachable");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => catalog.RefreshAsync(ct));
+
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+    }
+
+    /// <summary>
+    /// A reading begun before a newer one does not replace it: they run one at a time, so a tenant created between
+    /// them stays served.
+    /// </summary>
+    [Fact]
+    public async Task AnOlderReading_DoesNotReplaceANewerOne()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var catalog = Catalog();
+        var release = new TaskCompletionSource();
+        _store.HoldNextReading = release;
+
+        var older = catalog.RefreshAsync(ct);
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var newer = catalog.RefreshAsync(ct);
+        release.SetResult();
+        await Task.WhenAll(older, newer);
+
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+    }
+
+    /// <summary>
+    /// A first reading made on a question and failed is not kept: the next question reads the store again.
+    /// </summary>
+    [Fact]
+    public async Task AFailedFirstReading_IsNotKept()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.FailingReadings = 1;
+        var catalog = Catalog();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await catalog.FindByIdAsync("acme", ct));
+        Assert.NotNull(await catalog.FindByIdAsync("acme", ct));
+    }
+
+    /// <summary>
+    /// An id the store holds twice, or a tenant with no id, is left out and logged once, reading after reading,
+    /// while the other tenants are served.
+    /// </summary>
+    [Fact]
+    public async Task AnIdHeldTwice_OrNone_IsLeftOut_ReadingAfterReading()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        _store.Tenants.Add(Stored("acme", "https://acme2.example.com"));
+        _store.Tenants.Add(Stored(null!, "https://nobody.example.com"));
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        var catalog = Catalog();
+
+        await catalog.RefreshAsync(ct);
+        await catalog.RefreshAsync(ct);
+
+        Assert.Null(await catalog.FindByIdAsync("acme", ct));
+        Assert.Null(await catalog.FindByAddressAsync("nobody.example.com", "/", ct));
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+        Assert.Equal(2, _logger.Errors.Count);
+    }
+
+    /// <summary>
+    /// Questions arriving together before anything read the store wait for one reading rather than each make
+    /// their own.
+    /// </summary>
+    [Fact]
+    public async Task QuestionsArrivingBeforeAnyReading_ShareOne()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+        var release = new TaskCompletionSource();
+        _store.HoldNextReading = release;
+        var catalog = Catalog();
+
+        var first = AskAsync();
+        var second = AskAsync();
+        release.SetResult();
+        await Task.WhenAll(first, second);
+
+        Assert.Equal(1, _store.Readings);
+
+        async Task<TenantDefinition?> AskAsync() => await catalog.FindByIdAsync("acme", ct);
+    }
+
+    /// <summary>
+    /// Asked before anything refreshed it, as in a container no host started, the catalog reads the store once
+    /// itself.
+    /// </summary>
+    [Fact]
+    public async Task AskedBeforeAnyReading_TheCatalogReadsTheStore()
+    {
+        _store.Tenants.Add(Stored("acme", "https://acme.example.com"));
+
+        Assert.NotNull(await Catalog().FindByIdAsync("acme", TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A closing that records each tenant it closed, by id and generation, reports the tenants named as failing, and
+    /// does not answer once it reaches a tenant named as hanging.
+    /// </summary>
+    private sealed class FakeClosing : ITenantClosing
+    {
+        public HashSet<string> Failing { get; } = new(StringComparer.Ordinal);
+
+        public HashSet<string> Hanging { get; } = new(StringComparer.Ordinal);
+
+        public bool HeedsItsToken { get; init; }
+
+        public List<string> Closed { get; } = [];
+
+        public List<string> Issuers { get; } = [];
+
+        public async Task<IReadOnlyDictionary<TenantDefinition, Exception>> CloseAsync(
+            IReadOnlyCollection<TenantDefinition> tenants,
+            CancellationToken cancellationToken)
+        {
+            var failures = new Dictionary<TenantDefinition, Exception>();
+            foreach (var tenant in tenants)
+            {
+                if (Failing.Contains(tenant.Id))
+                {
+                    failures[tenant] = new InvalidOperationException("the tenant's streams could not be deleted");
+                    continue;
+                }
+
+                if (Hanging.Contains(tenant.Id))
+                    await Task.Delay(Timeout.Infinite, cancellationToken);
+
+                if (HeedsItsToken)
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                Closed.Add($"{tenant.Id}/{tenant.Generation}");
+                Issuers.Add(tenant.Issuer.OriginalString);
+            }
+
+            return failures;
+        }
+    }
+
+    /// <summary>
+    /// A stored tenant whose id or generation could spell another tenant's data is left out and logged, while the
+    /// others are served, even when the host has replaced every check of the tenant list.
+    /// </summary>
+    [Theory]
+    [InlineData("acme:eu", "")]
+    [InlineData("acme~eu", "")]
+    [InlineData("acme.eu", "")]
+    [InlineData("acme/eu", "")]
+    [InlineData("acme eu", "")]
+    [InlineData("münchen", "")]
+    [InlineData("acme", "g:1")]
+    [InlineData("acme", "g~1")]
+    public async Task ATenantThatCannotNameItsData_IsLeftOut_WithoutAnyCheck(string id, string generation)
+    {
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        _store.Tenants.Add(new StoredTenant(
+            new TenantDefinition { Id = id, Issuer = new Uri("https://acme.example.com"), Generation = generation },
+            Version));
+        var catalog = new StoreTenantCatalog(
+            _logger, _store, [], [_opening], [_closing], Options.Create(_options), _time);
+        var ct = TestContext.Current.CancellationToken;
+
+        await catalog.RefreshAsync(ct);
+
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+        Assert.Null(await catalog.FindByIdAsync(id, ct));
+        Assert.Contains(id, Assert.Single(_logger.Errors), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A store whose deserializer leaves a tenant's generation null serves that tenant as one with no generation,
+    /// and the reading serves the others rather than failing.
+    /// </summary>
+    [Fact]
+    public async Task ATenantStoredWithANullGeneration_IsServedAsOneWithNone()
+    {
+        _store.Tenants.Add(Stored("globex", "https://globex.example.com"));
+        _store.Tenants.Add(new StoredTenant(
+            new TenantDefinition { Id = "acme", Issuer = new Uri("https://acme.example.com"), Generation = null! },
+            Version));
+        var catalog = Catalog();
+        var ct = TestContext.Current.CancellationToken;
+
+        await catalog.RefreshAsync(ct);
+
+        Assert.NotNull(await catalog.FindByIdAsync("globex", ct));
+        Assert.Equal(string.Empty, (await catalog.FindByIdAsync("acme", ct))?.Generation);
+    }
+}

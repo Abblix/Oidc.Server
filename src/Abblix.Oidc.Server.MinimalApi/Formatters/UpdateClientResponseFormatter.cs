@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
@@ -17,7 +18,7 @@ using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>
-/// Formats a client-update result (RFC 7592 §2.2) as <see cref="IResult"/>: a 200 with the updated client
+/// Formats a client-update result (RFC 7592 section 2.2) as <see cref="IResult"/>: a 200 with the updated client
 /// configuration on success, or the JSON OAuth error on failure.
 /// </summary>
 /// <param name="uriBuilder">Builds the <c>registration_client_uri</c> for the client.</param>

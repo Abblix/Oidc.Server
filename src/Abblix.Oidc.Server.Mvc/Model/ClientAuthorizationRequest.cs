@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net.Http.Headers;
+using Abblix.Oidc.Server.AspNetCore;
 using Microsoft.AspNetCore.Mvc;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 
@@ -28,7 +29,7 @@ public record ClientAuthorizationRequest
     /// <summary>
     /// The client identifier from the URL path parameter.
     /// </summary>
-    [FromRoute(Name = Path.ClientId)]
+    [FromRoute(Name = OidcRouteOptions.ClientIdRouteParameter)]
     public required string ClientId { get; init; }
 
     /// <summary>

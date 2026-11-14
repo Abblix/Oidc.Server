@@ -6,7 +6,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Net;
-using Abblix.SecurityEvents;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Validation;
@@ -68,6 +67,9 @@ public class PushDeliveryHandlerTests
             DateTimeOffset expiresAt,
             CancellationToken cancellationToken = default)
             => Task.FromResult(_seen.Add(identifier));
+
+        public Task ReleaseAsync(string identifier, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 
     [Fact]

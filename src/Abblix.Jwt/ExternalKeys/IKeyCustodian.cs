@@ -53,9 +53,11 @@ public interface IKeyCustodian
     /// <param name="header">The JWE header; AES-GCM-KW reads its <c>iv</c> / <c>tag</c> parameters from it.</param>
     /// <param name="encryptedKey">The wrapped or RSA-encrypted CEK from the JWE Encrypted Key.</param>
     /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
-    /// <returns>The recovered CEK, or null on any failure. Returning null rather than throwing keeps a
-    /// decryption failure indistinguishable from a wrong key, which the RFC 7516 §11.5 mitigation upstream
-    /// relies on to close the Bleichenbacher / padding-oracle side channel.</returns>
+    /// <returns>The recovered CEK, or null on any failure, an algorithm the custodian does not serve included.
+    /// Returning null rather than throwing keeps a decryption failure indistinguishable from a wrong key, which the
+    /// RFC 7516 section 11.5 mitigation upstream relies on to close the Bleichenbacher / padding-oracle side
+    /// channel; and the algorithm is the token sender's choice, so a thrown refusal would let any sender turn a
+    /// token into a server fault.</returns>
     Task<byte[]?> UnwrapKeyAsync(
         string keyId,
         string algorithm,
@@ -72,12 +74,26 @@ public interface IKeyCustodian
     /// <param name="algorithm">The JWE <c>alg</c> value (ECDH-ES or an ECDH-ES+A*KW variant).</param>
     /// <param name="ephemeralPublicKey">The originator's ephemeral public key from the <c>epk</c> header.</param>
     /// <param name="cancellationToken">Cancels the round-trip to the custodian.</param>
-    /// <returns>The raw ECDH shared secret Z (the agreement's field-sized X-coordinate).</returns>
-    Task<byte[]> AgreeKeyAsync(
+    /// <returns>The raw ECDH shared secret Z (the agreement's field-sized X-coordinate), or null when the custodian
+    /// cannot agree with this key: like the algorithm of an unwrap, ECDH-ES is the token sender's choice, so a
+    /// custodian with no agreement primitive refuses the token rather than faulting on it.</returns>
+    Task<byte[]?> AgreeKeyAsync(
         string keyId,
         string algorithm,
         JsonWebKey ephemeralPublicKey,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether the custodian can recover a Content Encryption Key under the JWE key management algorithm
+    /// <paramref name="algorithm"/>, by unwrapping or by key agreement. Asked when the host starts, about the
+    /// algorithm a key held here is published with and the one a key ring is sealed under, and again whenever a
+    /// tenant is added or read again, so a configuration whose every encrypted token would fail to open is refused
+    /// instead. The answer must match what <see cref="UnwrapKeyAsync"/> and <see cref="AgreeKeyAsync"/> open: a
+    /// custodian holding signing keys only answers false for every algorithm.
+    /// </summary>
+    /// <param name="algorithm">A JWE <c>alg</c> value, such as <c>RSA-OAEP-256</c> or <c>ECDH-ES</c>.</param>
+    /// <returns>True when <see cref="UnwrapKeyAsync"/> or <see cref="AgreeKeyAsync"/> serves the algorithm.</returns>
+    bool ServesKeyManagement(string algorithm);
 
     /// <summary>
     /// Enumerates every current version of the key named <paramref name="keyName"/> as its public half, each

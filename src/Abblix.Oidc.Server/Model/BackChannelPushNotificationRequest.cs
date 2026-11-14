@@ -15,6 +15,7 @@ namespace Abblix.Oidc.Server.Model;
 /// <summary>
 /// Represents the token delivery payload sent to the client in push mode.
 /// </summary>
+[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 public sealed record BackChannelPushNotificationRequest : IBackChannelNotificationRequest
 {
     /// <summary>
@@ -56,7 +57,7 @@ public sealed record BackChannelPushNotificationRequest : IBackChannelNotificati
 
     /// <summary>
     /// Wire-level parameter names for the CIBA push-mode token delivery payload
-    /// (OpenID Connect CIBA Core 1.0 §10.3.1).
+    /// (OpenID Connect CIBA Core 1.0 section 10.3.1).
     /// </summary>
     public static class Parameters
     {

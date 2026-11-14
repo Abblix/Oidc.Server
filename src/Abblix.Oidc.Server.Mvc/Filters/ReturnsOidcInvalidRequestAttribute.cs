@@ -14,25 +14,22 @@ using Microsoft.AspNetCore.Mvc.Filters;
 namespace Abblix.Oidc.Server.Mvc.Filters;
 
 /// <summary>
-/// Renders a failed model-validation pass as the OAuth <c>invalid_request</c> error instead of the
-/// <c>[ApiController]</c> default <see cref="Microsoft.AspNetCore.Mvc.ValidationProblemDetails"/> 400, so the
-/// rejection joins the JSON error envelope every other rejection on these endpoints uses. Applied to this
-/// library's own OIDC controllers, which confines the OAuth shape to them and leaves a host's own controllers
-/// on their default validation response.
+/// Answers a failed model-binding or validation pass with the OAuth <c>invalid_request</c> error before the action
+/// runs, so the rejection joins the JSON error envelope every other rejection on these endpoints uses. Applied to
+/// this library's own OIDC controllers, which confines the OAuth shape to them and leaves a host's own controllers
+/// on their own validation response.
 /// </summary>
 /// <remarks>
 /// Implemented as a controller attribute rather than a globally registered filter so it is pure controller
 /// metadata: it mutates no global option (notably not
 /// <c>ApiBehaviorOptions.InvalidModelStateResponseFactory</c>), so a host cannot clobber it by reconfiguring
-/// its own MVC pipeline and the OIDC endpoints cannot affect the host's. It is ordered just before the
-/// framework's <c>ModelStateInvalidFilter</c> (Order -2000) and short-circuits with the OAuth result, so the
-/// automatic ProblemDetails response is never produced here.
+/// its own MVC pipeline and the OIDC endpoints cannot affect the host's.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, Inherited = true)]
 internal sealed class ReturnsOidcInvalidRequestAttribute : Attribute, IActionFilter, IOrderedFilter
 {
-	// The framework's ModelStateInvalidFilter (the [ApiController] auto-400) runs at Order -2000; one step
-	// earlier lets this filter emit the OAuth error before that automatic ProblemDetails is set.
+	// One step ahead of the framework's ModelStateInvalidFilter (Order -2000), so the OAuth error stays first on any
+	// action that filter reaches.
 	private const int OrderBeforeApiControllerValidation = -2001;
 
 	/// <inheritdoc />
@@ -44,10 +41,12 @@ internal sealed class ReturnsOidcInvalidRequestAttribute : Attribute, IActionFil
 		if (context.ModelState.IsValid)
 			return;
 
+		// The first failure on a parameter is its cause: a refused repetition leaves the parameter unbound, and a
+		// required one then also reports its value missing, which says nothing the first message did not
 		var messages =
 			from entry in context.ModelState
-			from error in entry.Value.Errors
-			select error.ErrorMessage;
+			where entry.Value.Errors.Count > 0
+			select entry.Value.Errors[0].ErrorMessage;
 
 		context.Result = ErrorFactory.InvalidRequest(messages).Format(StatusCodes.Status400BadRequest);
 	}

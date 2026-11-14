@@ -16,7 +16,6 @@ using Abblix.SecurityEvents.Delivery;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
 using Abblix.SharedSignals.Infrastructure;
-using Abblix.SharedSignals.Receiver;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
 using Abblix.SharedSignals.Transmitter;
 using Abblix.SharedSignals.Events;
@@ -117,6 +116,10 @@ public class SharedSignalsServiceCollectionTests
             asStatusAnnouncement: true,
             cancellationToken);
 
+        // Queued unsigned, so the issuer is read off what the delivery signs.
+        var queued = Assert.Single(await provider.GetRequiredService<IEventOutbox>().PendingAsync(
+            stream.ReceiverId, stream.Configuration.StreamId, null, cancellationToken));
+        await provider.GetRequiredService<QueuedEventSigner>().SignAsync(queued, cancellationToken);
         var minted = Assert.Single(signer.Signed);
 
         // Against the stream's own issuer as well as the literal: these two are the pair a receiver
@@ -181,6 +184,24 @@ public class SharedSignalsServiceCollectionTests
             .BuildServiceProvider();
 
         Assert.Same(hostLease, provider.GetRequiredService<IDeliveryLease>());
+    }
+
+    /// <summary>
+    /// A transmitter with no issuer is refused before the stream management service exists, so before it writes a
+    /// status change or a verification throttle the receiver would never be told about. The options the host
+    /// registered first are the ones refused, since they are the ones every reader sees.
+    /// </summary>
+    [Fact]
+    public void AnEmptyIssuer_IsRefusedBeforeAnythingIsWritten()
+    {
+        var services = SecurityEventsBase();
+        services.AddSingleton(TransmitterOptions with { Issuer = string.Empty });
+        services.AddSharedSignalsTransmitter(TransmitterOptions);
+        using var provider = services.BuildServiceProvider();
+
+        var exception = Assert.Throws<ArgumentException>(() => provider.GetRequiredService<StreamManagementService>());
+
+        Assert.Equal("options", exception.ParamName);
     }
 
     [Fact]

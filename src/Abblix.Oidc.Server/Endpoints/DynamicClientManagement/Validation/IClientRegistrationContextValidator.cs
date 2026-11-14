@@ -7,11 +7,12 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// One step in the client-registration validation pipeline (RFC 7591 §2 / OIDC DCR 1.0).
+/// One step in the client-registration validation pipeline (RFC 7591 section 2 / OIDC DCR 1.0).
 /// Implementations check a specific aspect of the supplied metadata (redirect URIs,
 /// grant types, signing algorithms, sector identifier, software statement, etc.) and
 /// either clear it or surface an <see cref="OidcError"/> for the response.
@@ -24,7 +25,8 @@ public interface IClientRegistrationContextValidator
 	/// May mutate <see cref="ClientRegistrationValidationContext"/> with derived values
 	/// (for example the resolved sector identifier).
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="context">The shared validation context for the current request.</param>
 	/// <returns>An <see cref="OidcError"/> describing the rejection, or <c>null</c> when valid.</returns>
-	Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context);
+	Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context);
 }

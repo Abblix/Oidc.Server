@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Net.Http;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
@@ -14,6 +15,8 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
@@ -27,13 +30,17 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 /// Unit tests for <see cref="TokenRequestProcessor"/> verifying token issuance logic
 /// per OAuth 2.0 and OpenID Connect specifications.
 /// </summary>
-public class TokenRequestProcessorTests
+public partial class TokenRequestProcessorTests
 {
     private readonly Mock<IAccessTokenService> _accessTokenService;
     private readonly Mock<IRefreshTokenService> _refreshTokenService;
     private readonly Mock<IIdentityTokenService> _identityTokenService;
     private readonly Mock<ITokenAuthorizationContextEvaluator> _contextEvaluator;
+    private readonly Mock<IGrantIdGenerator> _grantIdGenerator;
     private readonly TokenRequestProcessor _processor;
+
+    private const string NewGrantId = "grant_new";
+    private const string ExistingGrantId = "grant_existing";
 
     public TokenRequestProcessorTests()
     {
@@ -41,11 +48,14 @@ public class TokenRequestProcessorTests
         _refreshTokenService = new Mock<IRefreshTokenService>(MockBehavior.Strict);
         _identityTokenService = new Mock<IIdentityTokenService>(MockBehavior.Strict);
         _contextEvaluator = new Mock<ITokenAuthorizationContextEvaluator>(MockBehavior.Strict);
+        _grantIdGenerator = new Mock<IGrantIdGenerator>(MockBehavior.Strict);
+        _grantIdGenerator.Setup(g => g.GenerateGrantId()).Returns(NewGrantId);
         _processor = new TokenRequestProcessor(
             _accessTokenService.Object,
             _refreshTokenService.Object,
             _identityTokenService.Object,
-            _contextEvaluator.Object);
+            _contextEvaluator.Object,
+            _grantIdGenerator.Object);
     }
 
     private static TokenRequest CreateTokenRequest() => new()
@@ -57,7 +67,7 @@ public class TokenRequestProcessorTests
     private static AuthSession CreateAuthSession() => new(
         "user_123",
         "session_123",
-        DateTimeOffset.UtcNow,
+        TimeProvider.System.GetUtcNow(),
         "local");
 
     private static AuthorizedGrant CreateAuthorizedGrant(string[] scopes) => new(
@@ -71,13 +81,27 @@ public class TokenRequestProcessorTests
         return new ValidTokenRequest(
             tokenRequest,
             authorizedGrant,
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
             [],
             []);
     }
 
-    private static EncodedJsonWebToken CreateAccessToken() => new(
-        new Jwt.JsonWebToken(),
+    private static readonly DateTimeOffset AccessTokenIssuedAt = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
+
+    private const string AccessTokenScope = "api.read";
+
+    private static EncodedJsonWebToken CreateAccessToken() => CreateAccessToken(TimeSpan.FromMinutes(10));
+
+    private static EncodedJsonWebToken CreateAccessToken(TimeSpan lifetime, string[]? scope = null) => new(
+        new Jwt.JsonWebToken
+        {
+            Payload =
+            {
+                IssuedAt = AccessTokenIssuedAt,
+                ExpiresAt = AccessTokenIssuedAt + lifetime,
+                Scope = scope ?? [AccessTokenScope],
+            },
+        },
         "access_token_jwt");
 
     private static EncodedJsonWebToken CreateRefreshToken() => new(
@@ -106,23 +130,75 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Same(accessToken, tokenIssued.AccessToken);
         _accessTokenService.Verify(
             s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo),
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()),
             Times.Once);
+    }
+
+    /// <summary>
+    /// RFC 8707 section 2: invalid_target answers a resource "invalid, missing, unknown, or malformed". One whose
+    /// published encryption key would have the token encrypted with an algorithm the profile forbids is answered so,
+    /// since the refusal is the resource's, not the server's.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_AnAudienceKeyTheProfileRefuses_IsInvalidTarget()
+    {
+        var request = CreateValidTokenRequest([]);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
+        _contextEvaluator.Setup(e => e.EvaluateAuthorizationContext(request)).Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, null,
+                It.IsAny<DateTimeOffset?>()))
+            .ThrowsAsync(new AudienceKeyRefusedException(
+                [new Uri("https://orders.example.com")],
+                new Abblix.Oidc.Server.Features.Tokens.Formatters.AlgorithmRefusedByProfileException(
+                    "refused", "RSA1_5", new Abblix.Jwt.RsaJsonWebKey())));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
+    }
+
+    /// <summary>
+    /// A completion of a CIBA request in push mode mints the ID token in a request the client's key set was not judged
+    /// in. Where its profile leaves nothing in that key set to encrypt to, the ID token service refuses, and the refusal
+    /// is answered as the processor's error rather than as a server error.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_AnIdTokenTheClientsKeySetCannotReceive_IsRefused()
+    {
+        var request = CreateValidTokenRequest([Scopes.OpenId]);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId], null);
+        _contextEvaluator.Setup(e => e.EvaluateAuthorizationContext(request)).Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, null,
+                It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(CreateAccessToken());
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, "access_token_jwt", null, null, authContext)))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidClient, "the client's key set"));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
     }
 
     /// <summary>
@@ -145,35 +221,23 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)))
             .ReturnsAsync(idToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Same(idToken, tokenIssued.IdToken);
         _identityTokenService.Verify(
-            s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt),
+            s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)),
             Times.Once);
     }
 
@@ -197,32 +261,36 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, NewGrantId, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
-                null))
+                null, NewGrantId))
             .ReturnsAsync(refreshToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Same(refreshToken, tokenIssued.RefreshToken);
         _refreshTokenService.Verify(
             s => s.CreateRefreshTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
-                null),
+                null, NewGrantId),
             Times.Once);
+
+        // One family, started once and shared: the access token setup above names the same identifier, and the
+        // strict mock refuses any other.
+        _grantIdGenerator.Verify(g => g.GenerateGrantId(), Times.Once);
     }
 
     /// <summary>
@@ -258,39 +326,31 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, NewGrantId, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
-                null))
+                null, NewGrantId))
             .ReturnsAsync(refreshToken);
 
         PushDeliveryBindings? captured = null;
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt,
-                It.IsAny<PushDeliveryBindings?>()))
-            .Callback((AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _,
-                PushDeliveryBindings? bindings) => captured = bindings)
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)))
+            .Callback((TenantDefinition _, IdentityTokenRequest issued) => captured = issued.PushBindings)
             .ReturnsAsync(idToken);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(captured);
-        Assert.Equal("the-auth-req-id", captured!.AuthenticationRequestId);
+        Assert.Equal("the-auth-req-id", captured.AuthenticationRequestId);
         Assert.Equal(refreshToken.EncodedJwt, captured.RefreshToken);
     }
 
@@ -298,16 +358,10 @@ public class TokenRequestProcessorTests
     /// Without a push delivery the token service is handed no bindings at all.
     /// </summary>
     /// <remarks>
-    /// The control for the row above: the same scopes and the same refresh token, and the only difference
+    /// The control for <see cref="ProcessAsync_ForAPushDelivery_BindsTheRefreshTokenThatWasJustMinted"/>: the
+    /// same scopes and the same refresh token, and the only difference
     /// is that nobody declared a push. Section 10.3.1 requires these claims in push mode, and a poll or
     /// ping client holds the identifier already.
-    /// <para>
-    /// It is not the only thing holding that property, and calling it "the control" without this would
-    /// overstate it. Building the bindings unconditionally turns four rows red: this one and three that
-    /// predate the branch, whose Moq setups name the six-argument call and so bake in a null binding.
-    /// What this row adds is saying the property out loud, where those three hold it as a side effect
-    /// of how they were arranged.
-    /// </para>
     /// </remarks>
     [Fact]
     public async Task ProcessAsync_WithoutAPushDelivery_PassesNoBindings()
@@ -326,35 +380,27 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, NewGrantId, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
-                null))
+                null, NewGrantId))
             .ReturnsAsync(refreshToken);
 
         var captured = new PushDeliveryBindings("not-set", null);
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt,
-                It.IsAny<PushDeliveryBindings?>()))
-            .Callback((AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _,
-                PushDeliveryBindings? bindings) => captured = bindings!)
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)))
+            .Callback((TenantDefinition _, IdentityTokenRequest issued) => captured = issued.PushBindings!)
             .ReturnsAsync(idToken);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert. Seeded with a non-null value first, so "nothing was passed" cannot be confused with
         // "the callback never ran".
@@ -382,31 +428,25 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, NewGrantId, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 request.ClientInfo,
-                null))
+                null, NewGrantId))
             .ReturnsAsync(refreshToken);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)))
             .ReturnsAsync(idToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
@@ -434,18 +474,57 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Null(tokenIssued.IdToken);
         _identityTokenService.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// A client not allowed offline access has offline_access ignored however its grant came to carry it, as a
+    /// password or jwt-bearer grant takes it from the token request: the access token is issued without it and no
+    /// refresh token is.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_OfflineAccessFromClientNotAllowedIt_IsIgnored()
+    {
+        const string ApiScope = "api.read";
+        var request = new ValidTokenRequest(
+            CreateTokenRequest(),
+            CreateAuthorizedGrant([ApiScope, Scopes.OfflineAccess]),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.Disabled },
+            [],
+            []);
+        var evaluated = new AuthorizationContext(TestConstants.DefaultClientId, [ApiScope, Scopes.OfflineAccess], null);
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(evaluated);
+
+        AuthorizationContext? issuedUnder = null;
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(),
+                It.IsAny<AuthorizationContext>(),
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .Callback((TenantDefinition _, AuthSession _, AuthorizationContext context, ClientInfo _, string? _, DateTimeOffset? _) =>
+                issuedUnder = context)
+            .ReturnsAsync(CreateAccessToken());
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetSuccess(out var tokenIssued));
+        Assert.Null(tokenIssued.RefreshToken);
+        Assert.NotNull(issuedUnder);
+        Assert.Equal([ApiScope], issuedUnder.Scope);
+        _refreshTokenService.VerifyNoOtherCalls();
     }
 
     /// <summary>
@@ -467,18 +546,135 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Null(tokenIssued.RefreshToken);
         _refreshTokenService.VerifyNoOtherCalls();
+        _grantIdGenerator.Verify(g => g.GenerateGrantId(), Times.Never);
+    }
+
+    /// <summary>
+    /// An exchange arrives with the family its subject_token belonged to and the subject_token's expiry, and the
+    /// access token it issues joins the family and expires no later than that token.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_TokenExchange_KeepsTheAccessTokenInTheSubjectTokensFamily()
+    {
+        var authSession = CreateAuthSession();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId], null);
+        var subjectExpiresAt = new DateTimeOffset(2024, 1, 15, 13, 0, 0, TimeSpan.Zero);
+        var request = new ValidTokenRequest(
+            new TokenRequest { GrantType = GrantTypes.TokenExchange },
+            new AuthorizedGrant(authSession, authContext) { GrantId = ExistingGrantId, ExpiresNoLaterThan = subjectExpiresAt },
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            [],
+            []);
+        var accessToken = CreateAccessToken();
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched,
+                authSession, authContext, request.ClientInfo, ExistingGrantId, subjectExpiresAt))
+            .ReturnsAsync(accessToken);
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetSuccess(out var tokenIssued));
+        Assert.Same(accessToken, tokenIssued.AccessToken);
+        Assert.Null(tokenIssued.RefreshToken);
+        _grantIdGenerator.Verify(g => g.GenerateGrantId(), Times.Never);
+    }
+
+    /// <summary>
+    /// A refresh token issued before tokens carried a family has none to continue, so rotating it starts one, and
+    /// the access token minted beside the new refresh token joins it.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_RotatingATokenWithoutAFamily_StartsOne()
+    {
+        var legacyRefreshToken = new Jwt.JsonWebToken();
+        var authSession = CreateAuthSession();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OfflineAccess], null);
+        var request = new ValidTokenRequest(
+            new TokenRequest { GrantType = GrantTypes.RefreshToken },
+            new RefreshTokenAuthorizedGrant(authSession, authContext, legacyRefreshToken),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            [],
+            []);
+        var newRefreshToken = CreateRefreshToken();
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, authSession, authContext, request.ClientInfo, NewGrantId, null))
+            .ReturnsAsync(CreateAccessToken());
+        _refreshTokenService
+            .Setup(s => s.TrySpendAsync(TestTenant.Matched, legacyRefreshToken, request.ClientInfo))
+            .ReturnsAsync(true);
+
+        _refreshTokenService
+            .Setup(s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
+                authSession, authContext, request.ClientInfo, legacyRefreshToken, NewGrantId))
+            .ReturnsAsync(newRefreshToken);
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetSuccess(out var tokenIssued));
+        Assert.Same(newRefreshToken, tokenIssued.RefreshToken);
+        _grantIdGenerator.Verify(g => g.GenerateGrantId(), Times.Once);
+    }
+
+    /// <summary>
+    /// A refresh whose narrowed scope drops offline_access issues no new refresh token, yet the access token it
+    /// mints still came from the presented one, so it stays in that token's family and dies with it.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_RefreshWithoutOfflineAccess_KeepsTheAccessTokenInThePresentedFamily()
+    {
+        var existingRefreshToken = new Jwt.JsonWebToken { Payload = { GrantId = ExistingGrantId } };
+        var authSession = CreateAuthSession();
+        var narrowedContext = new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId], null);
+        var request = new ValidTokenRequest(
+            new TokenRequest { GrantType = GrantTypes.RefreshToken },
+            new RefreshTokenAuthorizedGrant(
+                authSession,
+                new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId, Scopes.OfflineAccess], null),
+                existingRefreshToken),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            [],
+            []);
+        var accessToken = CreateAccessToken();
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(narrowedContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, authSession, narrowedContext, request.ClientInfo, ExistingGrantId, null))
+            .ReturnsAsync(accessToken);
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, authSession, narrowedContext)))
+            .ReturnsAsync(CreateIdToken());
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetSuccess(out var tokenIssued));
+        Assert.Same(accessToken, tokenIssued.AccessToken);
+        Assert.Null(tokenIssued.RefreshToken);
+        _refreshTokenService.VerifyNoOtherCalls();
+        _grantIdGenerator.Verify(g => g.GenerateGrantId(), Times.Never);
     }
 
     /// <summary>
@@ -499,13 +695,13 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
@@ -513,15 +709,17 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
-    /// Verifies expires_in is set from client configuration.
-    /// Per OAuth 2.0 Section 5.1, expires_in indicates token lifetime.
+    /// expires_in (RFC 6749 section 5.1) reports the lifetime of the token actually issued, which is shorter than
+    /// the client's configured lifetime when the token was cut short to the expiry of the token it came from.
     /// </summary>
-    [Fact]
-    public async Task ProcessAsync_ShouldSetExpiresInFromClientInfo()
+    [Theory]
+    [InlineData(600)]
+    [InlineData(30)]
+    public async Task ProcessAsync_ShouldSetExpiresInFromTheIssuedToken(int lifetimeSeconds)
     {
         // Arrange
         var request = CreateValidTokenRequest([]);
-        var accessToken = CreateAccessToken();
+        var accessToken = CreateAccessToken(TimeSpan.FromSeconds(lifetimeSeconds));
         var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
 
         _contextEvaluator
@@ -530,17 +728,74 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
-        Assert.Equal(request.ClientInfo.AccessTokenExpiresIn, tokenIssued.ExpiresIn);
+        Assert.Equal(TimeSpan.FromSeconds(lifetimeSeconds), tokenIssued.ExpiresIn);
+    }
+
+    /// <summary>
+    /// A token minted already expired, as one exchanged at the very end of its subject token's life is, is refused
+    /// with invalid_grant instead of being handed to the client.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task ProcessAsync_TokenMintedAlreadyExpired_RefusesTheGrant(int lifetimeSeconds)
+    {
+        var request = CreateValidTokenRequest([]);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(),
+                authContext,
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(CreateAccessToken(TimeSpan.FromSeconds(lifetimeSeconds)));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+    }
+
+    /// <summary>
+    /// An access token service that leaves the issue time or the expiry unset breaks its contract, and the request
+    /// fails rather than reporting a lifetime nobody computed.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task ProcessAsync_TokenWithoutIssueTimeOrExpiry_Throws(bool withIssuedAt, bool withExpiresAt)
+    {
+        var request = CreateValidTokenRequest([]);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
+        var accessToken = CreateAccessToken();
+        if (!withIssuedAt)
+            accessToken.Token.Payload.IssuedAt = null;
+        if (!withExpiresAt)
+            accessToken.Token.Payload.ExpiresAt = null;
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(),
+                authContext,
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(accessToken);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _processor.ProcessAsync(SingleIssuer.Tenant, request));
     }
 
     /// <summary>
@@ -561,13 +816,13 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         _contextEvaluator.Verify(
@@ -593,20 +848,22 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched,
                 request.AuthorizedGrant.AuthSession,
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null, null))
             .ReturnsAsync(accessToken);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         _accessTokenService.Verify(
             s => s.CreateAccessTokenAsync(
+                TestTenant.Matched,
                 request.AuthorizedGrant.AuthSession,
                 authContext,
-                request.ClientInfo),
+                request.ClientInfo, null, null),
             Times.Once);
     }
 
@@ -619,7 +876,7 @@ public class TokenRequestProcessorTests
     {
         // Arrange
         var scopes = new[] { Scopes.OfflineAccess };
-        var existingRefreshToken = new Jwt.JsonWebToken();
+        var existingRefreshToken = new Jwt.JsonWebToken { Payload = { GrantId = ExistingGrantId } };
         var authSession = CreateAuthSession();
         var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
         var refreshTokenGrant = new RefreshTokenAuthorizedGrant(
@@ -631,7 +888,7 @@ public class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             tokenRequest,
             refreshTokenGrant,
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
             [],
             []);
 
@@ -644,32 +901,156 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched,
                 authSession,
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, ExistingGrantId, null))
             .ReturnsAsync(accessToken);
 
         _refreshTokenService
+            .Setup(s => s.TrySpendAsync(TestTenant.Matched, existingRefreshToken, request.ClientInfo))
+            .ReturnsAsync(true);
+
+        _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
                 authSession,
                 authContext,
                 request.ClientInfo,
-                existingRefreshToken))
+                existingRefreshToken, ExistingGrantId))
             .ReturnsAsync(newRefreshToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Same(newRefreshToken, tokenIssued.RefreshToken);
         _refreshTokenService.Verify(
             s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
                 authSession,
                 authContext,
                 request.ClientInfo,
-                existingRefreshToken),
+                existingRefreshToken, ExistingGrantId),
             Times.Once);
+    }
+
+    /// <summary>
+    /// A request renewing a single-use token that another request has already spent is refused once its tokens are
+    /// issued, and hands none of them over.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WhenThePresentedTokenWasAlreadySpent_HandsNothingOver()
+    {
+        var scopes = new[] { Scopes.OfflineAccess };
+        var existingRefreshToken = new Jwt.JsonWebToken { Payload = { GrantId = ExistingGrantId } };
+        var authSession = CreateAuthSession();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
+        var request = new ValidTokenRequest(
+            CreateTokenRequest(),
+            new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            [],
+            []);
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, authSession, authContext, request.ClientInfo, ExistingGrantId, null))
+            .ReturnsAsync(CreateAccessToken());
+        _refreshTokenService
+            .Setup(s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
+                authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId))
+            .ReturnsAsync(CreateRefreshToken());
+        _refreshTokenService
+            .Setup(s => s.TrySpendAsync(TestTenant.Matched, existingRefreshToken, request.ClientInfo))
+            .ReturnsAsync(false);
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+    }
+
+    /// <summary>
+    /// The presented token is spent only after every token of the response is issued, so a failure to issue the ID
+    /// token, such as a client key set that cannot be fetched, leaves it unspent for the client's retry.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WhenTheIdentityTokenCannotBeIssued_SpendsNothing()
+    {
+        var scopes = new[] { Scopes.OpenId, Scopes.OfflineAccess };
+        var existingRefreshToken = new Jwt.JsonWebToken { Payload = { GrantId = ExistingGrantId } };
+        var authSession = CreateAuthSession();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
+        var request = new ValidTokenRequest(
+            CreateTokenRequest(),
+            new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            [],
+            []);
+        var accessToken = CreateAccessToken();
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, authSession, authContext, request.ClientInfo, ExistingGrantId, null))
+            .ReturnsAsync(accessToken);
+        _refreshTokenService
+            .Setup(s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
+                authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId))
+            .ReturnsAsync(CreateRefreshToken());
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)))
+            .ThrowsAsync(new HttpRequestException("The client key set could not be fetched."));
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => _processor.ProcessAsync(SingleIssuer.Tenant, request));
+
+        _refreshTokenService.Verify(
+            s => s.TrySpendAsync(TestTenant.Matched, It.IsAny<Jwt.JsonWebToken>(), It.IsAny<ClientInfo>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A renewal the expiry rules refuse issues no refresh token, so it spends nothing and the presented token stays
+    /// usable for as long as it is valid.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WhenNoRefreshTokenIsIssued_SpendsNothing()
+    {
+        var scopes = new[] { Scopes.OfflineAccess };
+        var existingRefreshToken = new Jwt.JsonWebToken { Payload = { GrantId = ExistingGrantId } };
+        var authSession = CreateAuthSession();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
+        var request = new ValidTokenRequest(
+            CreateTokenRequest(),
+            new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            [],
+            []);
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, authSession, authContext, request.ClientInfo, ExistingGrantId, null))
+            .ReturnsAsync(CreateAccessToken());
+        _refreshTokenService
+            .Setup(s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
+                authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId))
+            .ReturnsAsync((EncodedJsonWebToken?)null);
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetSuccess(out var issued));
+        Assert.Null(issued.RefreshToken);
+        _refreshTokenService.Verify(
+            s => s.TrySpendAsync(TestTenant.Matched, It.IsAny<Jwt.JsonWebToken>(), It.IsAny<ClientInfo>()), Times.Never);
     }
 
     /// <summary>
@@ -692,38 +1073,26 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)))
             .ReturnsAsync(idToken);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         _identityTokenService.Verify(
-            s => s.CreateIdentityTokenAsync(
-                It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt),
+            s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)),
             Times.Once);
     }
 
     /// <summary>
-    /// Verifies the RFC 9449 §7.1 token-type contract: an authorization context carrying a
+    /// Verifies the RFC 9449 section 7.1 token-type contract: an authorization context carrying a
     /// DPoP proof-key thumbprint produces <c>token_type: "DPoP"</c> (so the client sends a
     /// DPoP proof on every resource-server request); absent the thumbprint, the response
     /// advertises <c>token_type: "Bearer"</c>. The Bearer row is the regression guard for
@@ -748,11 +1117,11 @@ public class TokenRequestProcessorTests
             .Setup(e => e.EvaluateAuthorizationContext(request))
             .Returns(authContext);
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(It.IsAny<AuthSession>(), authContext, request.ClientInfo))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var tokenIssued));
@@ -760,7 +1129,7 @@ public class TokenRequestProcessorTests
     }
 
     /// <summary>
-    /// Verifies the RFC 9449 §5 split: a public client's refresh token inherits the
+    /// Verifies the RFC 9449 section 5 split: a public client's refresh token inherits the
     /// committed proof-key thumbprint (the binding survives rotation, so the client
     /// must keep presenting matching proofs); a confidential client's refresh token
     /// is stripped of the binding because client authentication already
@@ -787,6 +1156,7 @@ public class TokenRequestProcessorTests
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId)
         {
             TokenEndpointAuthMethod = tokenEndpointAuthMethod,
+            OfflineAccess = OfflineAccess.ConsentRequired,
         };
         var request = new ValidTokenRequest(tokenRequest, authorizedGrant, clientInfo, [], []);
 
@@ -798,29 +1168,29 @@ public class TokenRequestProcessorTests
             .Setup(e => e.EvaluateAuthorizationContext(request))
             .Returns(evaluatedContext);
         _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(It.IsAny<AuthSession>(), evaluatedContext, clientInfo))
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, It.IsAny<AuthSession>(), evaluatedContext, clientInfo, NewGrantId, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
         AuthorizationContext? capturedRefreshContext = null;
         _refreshTokenService
             .Setup(s => s.CreateRefreshTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 It.IsAny<AuthorizationContext>(),
                 clientInfo,
-                It.IsAny<Jwt.JsonWebToken?>()))
-            .Callback<AuthSession, AuthorizationContext, ClientInfo, Jwt.JsonWebToken?>(
-                (_, ctx, _, _) => capturedRefreshContext = ctx)
+                It.IsAny<Jwt.JsonWebToken?>(), It.IsAny<string>()))
+            .Callback<TenantDefinition, AuthSession, AuthorizationContext, ClientInfo, Jwt.JsonWebToken?, string>(
+                (_, _, ctx, _, _, _) => capturedRefreshContext = ctx)
             .ReturnsAsync(refreshToken);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(capturedRefreshContext);
         Assert.Equal(expectedRefreshContextThumbprint, capturedRefreshContext.ProofKeyThumbprint);
     }
     /// <summary>
-    /// RFC 6749 §4.4.3 and RFC 8693: neither the client_credentials grant nor a token exchange
+    /// RFC 6749 section 4.4.3 and RFC 8693: neither the client_credentials grant nor a token exchange
     /// may return a refresh token or an ID token, even when offline_access / openid end up in the
     /// granted scope. The strict mocks make an unexpected refresh/ID mint fail the test.
     /// </summary>
@@ -836,7 +1206,7 @@ public class TokenRequestProcessorTests
         var request = new ValidTokenRequest(
             tokenRequest,
             authorizedGrant,
-            new ClientInfo(TestConstants.DefaultClientId),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
             [],
             []);
         var accessToken = CreateAccessToken();
@@ -847,96 +1217,19 @@ public class TokenRequestProcessorTests
             .Returns(authContext);
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Null(tokenIssued.RefreshToken);
         Assert.Null(tokenIssued.IdToken);
         _refreshTokenService.VerifyNoOtherCalls();
         _identityTokenService.VerifyNoOtherCalls();
-    }
-
-    /// <summary>
-    /// RFC 6749 §5.2/§6: a refresh request whose scope is disjoint from the granted scope must be
-    /// rejected with invalid_scope rather than answered with a zero-scope access token.
-    /// </summary>
-    [Fact]
-    public async Task ProcessAsync_RequestedScopeDisjointFromGrant_ReturnsInvalidScope()
-    {
-        var tokenRequest = new TokenRequest { GrantType = GrantTypes.RefreshToken };
-        var authorizedGrant = CreateAuthorizedGrant([Scopes.OpenId, Scopes.Profile]);
-        var request = new ValidTokenRequest(
-            tokenRequest,
-            authorizedGrant,
-            new ClientInfo(TestConstants.DefaultClientId),
-            [new ScopeDefinition(TestConstants.EmailScope)],
-            []);
-        var emptyScopeContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
-
-        _contextEvaluator
-            .Setup(e => e.EvaluateAuthorizationContext(request))
-            .Returns(emptyScopeContext);
-        _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
-                emptyScopeContext,
-                request.ClientInfo))
-            .ReturnsAsync(CreateAccessToken());
-
-        var result = await _processor.ProcessAsync(request);
-
-        Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidScope, error.Error);
-        _accessTokenService.VerifyNoOtherCalls();
-    }
-
-    /// <summary>
-    /// RFC 8707 §2.2: a request for a resource the grant did carry but does not match (empty resource
-    /// intersection over a grant that HELD resources) must be rejected with invalid_target rather than
-    /// issuing a token whose audience silently falls back to the client id.
-    /// </summary>
-    [Fact]
-    public async Task ProcessAsync_RequestedResourceDisjointFromGrant_ReturnsInvalidTarget()
-    {
-        var tokenRequest = new TokenRequest { GrantType = GrantTypes.RefreshToken };
-        var grantContext = new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId], null)
-        {
-            Resources = [new Uri("https://api.example/a")],
-        };
-        var authorizedGrant = new AuthorizedGrant(CreateAuthSession(), grantContext);
-        var request = new ValidTokenRequest(
-            tokenRequest,
-            authorizedGrant,
-            new ClientInfo(TestConstants.DefaultClientId),
-            [],
-            [new ResourceDefinition(new Uri("https://api.example/b"))]);
-        // Empty scope so the pre-fix path issues a clean success (audience falls back to client_id),
-        // making the RED a real invalid_target assertion rather than an incidental id-token mint.
-        var evaluated = new AuthorizationContext(TestConstants.DefaultClientId, [], null)
-        {
-            Resources = null,
-        };
-
-        _contextEvaluator
-            .Setup(e => e.EvaluateAuthorizationContext(request))
-            .Returns(evaluated);
-        _accessTokenService
-            .Setup(s => s.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
-                evaluated,
-                request.ClientInfo))
-            .ReturnsAsync(CreateAccessToken());
-
-        var result = await _processor.ProcessAsync(request);
-
-        Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
-        _accessTokenService.VerifyNoOtherCalls();
+        _grantIdGenerator.Verify(g => g.GenerateGrantId(), Times.Never);
     }
 
     /// <summary>
@@ -959,7 +1252,7 @@ public class TokenRequestProcessorTests
         var request = CreateValidTokenRequest([]);
 
         var issued = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
-        var accessToken = new EncodedJsonWebToken(new Jwt.JsonWebToken(), "access_token_jwt");
+        var accessToken = CreateAccessToken();
         accessToken.Token.Payload.Json[Jwt.IanaClaimTypes.AuthorizationDetails] = issued;
 
         var granted = new JsonArray(
@@ -977,12 +1270,12 @@ public class TokenRequestProcessorTests
 
         _accessTokenService
             .Setup(svc => svc.CreateAccessTokenAsync(
-                It.IsAny<AuthSession>(),
+                TestTenant.Matched, It.IsAny<AuthSession>(),
                 authContext,
-                request.ClientInfo))
+                request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
             .ReturnsAsync(accessToken);
 
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.True(JsonNode.DeepEquals(tokenIssued.AuthorizationDetails, issued));

@@ -8,18 +8,16 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -38,11 +36,13 @@ public class UserCodeVerificationServiceTests
 {
     private const string CanonicalUserCode = "WDJBMJHT";
     private const string DeviceCode = "device-code-123";
+    private static readonly DeviceAuthorizationReference Reference = new("device:request:" + DeviceCode);
     private const string ClientId = "test-client";
 
     private static readonly DateTimeOffset Now = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     private readonly CapturingLogger<UserCodeVerificationService> _logs = new();
+    private readonly DeviceAuthorizationRequest _request;
     private readonly UserCodeVerificationService _service;
 
     public UserCodeVerificationServiceTests()
@@ -52,21 +52,22 @@ public class UserCodeVerificationServiceTests
         // checked, because verification then answers InvalidUserCode. They are not vacuous - they
         // measure canonicalization exactly as named - so an expired fixture would break them for a
         // reason having nothing to do with what they are for.
-        var request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var request = _request = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             ExpiresAt = Now.AddMinutes(5),
+            AuthorizationDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation", ["amount"] = "200" }),
         };
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
-            .Setup(s => s.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) =>
-                code == CanonicalUserCode ? (DeviceCode, request) : null);
+            .Setup(s => s.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string code) =>
+                code == CanonicalUserCode ? (Reference, request) : null);
 
         var rateLimiter = new Mock<IUserCodeRateLimiter>(MockBehavior.Loose);
         rateLimiter
-            .Setup(r => r.CheckAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((Result<bool, TimeSpan>)true);
+            .Setup(r => r.CheckAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((UserCodeRateLimited?)null);
 
         var normalizer = new UserCodeNormalizer(Options.Create(new OidcOptions
         {
@@ -97,10 +98,24 @@ public class UserCodeVerificationServiceTests
     [InlineData(" wdjb-mjht ")]
     public async Task Verify_AcceptsReadabilityVariantsOfStoredCode(string entered)
     {
-        var result = await _service.VerifyAsync(entered);
+        var result = await _service.VerifyAsync(SingleIssuer.Tenant, entered);
 
         var valid = Assert.IsType<ValidUserCode>(result);
         Assert.Equal(ClientId, valid.ClientId);
+    }
+
+    /// <summary>
+    /// The verification page is handed a copy of the requested entries: they are the baseline the granted ones
+    /// are held to at redemption, so a host narrowing what it was handed must not move it.
+    /// </summary>
+    [Fact]
+    public async Task Verify_HandsACopyOfTheRequestedAuthorizationDetails()
+    {
+        var valid = Assert.IsType<ValidUserCode>(await _service.VerifyAsync(SingleIssuer.Tenant, CanonicalUserCode));
+
+        valid.AuthorizationDetails![0]!["amount"] = "1";
+
+        Assert.Equal("200", _request.AuthorizationDetails![0]!["amount"]!.GetValue<string>());
     }
 
     [Fact]
@@ -113,7 +128,7 @@ public class UserCodeVerificationServiceTests
         var requestedDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" });
         var service = BuildService(requestedDetails, out var logs);
 
-        var approved = await service.ApproveAsync(CanonicalUserCode, GrantWith(null));
+        var approved = await service.ApproveAsync(SingleIssuer.Tenant, CanonicalUserCode, GrantWith(null));
 
         Assert.True(approved);
         var warning = Assert.Single(logs.Entries, entry => entry.Level == LogLevel.Warning);
@@ -133,7 +148,7 @@ public class UserCodeVerificationServiceTests
         // approval and take the real finding with it.
         var service = BuildService(requestedDetails: null, out var logs);
 
-        var approved = await service.ApproveAsync(CanonicalUserCode, GrantWith(null));
+        var approved = await service.ApproveAsync(SingleIssuer.Tenant, CanonicalUserCode, GrantWith(null));
 
         Assert.True(approved);
         Assert.DoesNotContain(logs.Entries, entry => entry.Level == LogLevel.Warning);
@@ -150,6 +165,7 @@ public class UserCodeVerificationServiceTests
             out var logs);
 
         var approved = await service.ApproveAsync(
+            SingleIssuer.Tenant,
             CanonicalUserCode,
             GrantWith(new JsonArray(
                 new JsonObject { ["type"] = "account_information" },
@@ -166,7 +182,8 @@ public class UserCodeVerificationServiceTests
         // A request carrying nothing is judged strictly rather than skipped, so every type in the grant
         // escapes. Pinned on its own because the strict reading is a decision and its opposite is one
         // early return away: skipping a null baseline would let a host attach any authority at all to a
-        // device that asked for none, which is the wider version of the case above rather than a
+        // device that asked for none, which is the wider version of
+        // Approve_WithATypeTheRequestNeverAskedFor_RefusesAndLeavesTheRequestPending rather than a
         // different one.
         //
         // CIBA takes the opposite reading deliberately, for a reason that does not hold here: its stored
@@ -175,6 +192,7 @@ public class UserCodeVerificationServiceTests
         var service = BuildService(requestedDetails: null, out var logs);
 
         var approved = await service.ApproveAsync(
+            SingleIssuer.Tenant,
             CanonicalUserCode,
             GrantWith(new JsonArray(new JsonObject { ["type"] = "admin_access" })));
 
@@ -190,6 +208,7 @@ public class UserCodeVerificationServiceTests
         var service = BuildService(requestedDetails, out var logs);
 
         var approved = await service.ApproveAsync(
+            SingleIssuer.Tenant,
             CanonicalUserCode,
             GrantWith((JsonArray)requestedDetails.DeepClone()));
 
@@ -200,7 +219,7 @@ public class UserCodeVerificationServiceTests
     private static AuthorizedGrant GrantWith(JsonArray? authorizationDetails)
         => new(
             new AuthSession("subject", "session", Now, "pwd"),
-            new AuthorizationContext(ClientId, ["openid"], null)
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null)
             {
                 AuthorizationDetails = authorizationDetails,
             });
@@ -224,30 +243,31 @@ public class UserCodeVerificationServiceTests
     [Fact]
     public async Task ApproveAsync_AppliesTheDecision_ToTheRecordItReadForTheWrite()
     {
-        var fromUserCode = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var fromUserCode = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             ExpiresAt = Now.AddMinutes(5),
         };
 
-        var fromDeviceCode = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var fromDeviceCode = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             ExpiresAt = Now.AddMinutes(5),
         };
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
-            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, fromUserCode) : null);
+            .Setup(store => store.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string code) => code == CanonicalUserCode ? (Reference, fromUserCode) : null);
 
         storage
-            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == DeviceCode ? fromDeviceCode : null);
+            .Setup(store => store.TryGetAsync(TestTenant.Matched, It.IsAny<DeviceAuthorizationReference>()))
+            .ReturnsAsync((TenantDefinition _, DeviceAuthorizationReference reference) => reference == Reference ? fromDeviceCode : null);
 
         DeviceAuthorizationRequest? written = null;
         storage
             .Setup(store => store.UpdateAsync(
-                It.IsAny<string>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()))
-            .Callback<string, DeviceAuthorizationRequest, TimeSpan>((_, r, _) => written = r)
+                TestTenant.Matched,
+                It.IsAny<DeviceAuthorizationReference>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()))
+            .Callback<TenantDefinition, DeviceAuthorizationReference, DeviceAuthorizationRequest, TimeSpan>((_, _, r, _) => written = r)
             .Returns(Task.CompletedTask);
 
         var service = new UserCodeVerificationService(
@@ -258,15 +278,53 @@ public class UserCodeVerificationServiceTests
             Mock.Of<IRequestInfoProvider>(),
             new FakeTimeProvider(Now));
 
-        Assert.True(await service.ApproveAsync(CanonicalUserCode, GrantWith(null)));
+        Assert.True(await service.ApproveAsync(SingleIssuer.Tenant, CanonicalUserCode, GrantWith(null)));
 
         // The object identity is the assertion. Both records carry the same fields, so comparing values
         // would pass on either one.
         Assert.Same(fromDeviceCode, written);
         Assert.Equal(DeviceAuthorizationStatus.Authorized, fromDeviceCode.Status);
 
+        // The approval is stamped with its moment, which a revocation at the client is measured against when the
+        // device redeems it; without it the grant would be measured against the session it came from.
+        Assert.Equal(Now, fromDeviceCode.AuthorizedGrant?.AuthorizedAt);
+
         // And the stale one was left alone, which is what a caller reading it back would rely on.
         Assert.Equal(DeviceAuthorizationStatus.Pending, fromUserCode.Status);
+    }
+
+    /// <summary>
+    /// Whether the client named a scope is a fact about the device request, not something the host's verification
+    /// page knows, so the approved grant carries the request's answer whatever context the host built.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ApproveAsync_CarriesWhetherTheClientNamedAScope_OntoTheHostsGrant(bool clientNamedNoScope)
+    {
+        var record = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
+        {
+            ExpiresAt = Now.AddMinutes(5),
+            ClientNamedNoScope = clientNamedNoScope,
+        };
+        var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
+        storage
+            .Setup(store => store.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((Reference, record));
+        storage
+            .Setup(store => store.TryGetAsync(TestTenant.Matched, It.IsAny<DeviceAuthorizationReference>()))
+            .ReturnsAsync(record);
+        var service = new UserCodeVerificationService(
+            new CapturingLogger<UserCodeVerificationService>(),
+            storage.Object,
+            Mock.Of<IUserCodeRateLimiter>(),
+            new UserCodeNormalizer(Options.Create(DeviceOptions())),
+            Mock.Of<IRequestInfoProvider>(),
+            new FakeTimeProvider(Now));
+
+        Assert.True(await service.ApproveAsync(SingleIssuer.Tenant, CanonicalUserCode, GrantWith(null)));
+
+        Assert.Equal(clientNamedNoScope, record.AuthorizedGrant?.Context.ClientNamedNoScope);
     }
 
     /// <summary>
@@ -292,20 +350,20 @@ public class UserCodeVerificationServiceTests
     [Fact]
     public async Task Verify_OnAPendingRecordPastItsLifetime_RefusesAndCountsAFailure()
     {
-        var expired = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var expired = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             ExpiresAt = Now.AddSeconds(-1),
         };
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
-            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, expired) : null);
+            .Setup(store => store.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string code) => code == CanonicalUserCode ? (Reference, expired) : null);
 
         var rateLimiter = new Mock<IUserCodeRateLimiter>(MockBehavior.Loose);
         rateLimiter
-            .Setup(limiter => limiter.CheckAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((Result<bool, TimeSpan>)true);
+            .Setup(limiter => limiter.CheckAsync(TestTenant.Matched, It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((UserCodeRateLimited?)null);
 
         var service = new UserCodeVerificationService(
             new CapturingLogger<UserCodeVerificationService>(),
@@ -315,15 +373,15 @@ public class UserCodeVerificationServiceTests
             Mock.Of<IRequestInfoProvider>(),
             new FakeTimeProvider(Now));
 
-        var result = await service.VerifyAsync(CanonicalUserCode);
+        var result = await service.VerifyAsync(SingleIssuer.Tenant, CanonicalUserCode);
 
         Assert.IsType<InvalidUserCode>(result);
 
         // Both halves, because a refusal that still reset the counter would satisfy the line above.
         rateLimiter.Verify(
-            limiter => limiter.RecordFailureAsync(CanonicalUserCode, It.IsAny<string>()), Times.Once);
+            limiter => limiter.RecordFailureAsync(TestTenant.Matched, CanonicalUserCode, It.IsAny<string>()), Times.Once);
         rateLimiter.Verify(
-            limiter => limiter.RecordSuccessAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            limiter => limiter.RecordSuccessAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -345,18 +403,18 @@ public class UserCodeVerificationServiceTests
     [InlineData(false)]
     public async Task ADecisionOnARecordAtItsExpiry_IsRefused(bool approving)
     {
-        var expired = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var expired = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             ExpiresAt = Now,
         };
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
-            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, expired) : null);
+            .Setup(store => store.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string code) => code == CanonicalUserCode ? (Reference, expired) : null);
         storage
-            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == DeviceCode ? expired : null);
+            .Setup(store => store.TryGetAsync(TestTenant.Matched, It.IsAny<DeviceAuthorizationReference>()))
+            .ReturnsAsync((TenantDefinition _, DeviceAuthorizationReference reference) => reference == Reference ? expired : null);
 
         var service = new UserCodeVerificationService(
             new CapturingLogger<UserCodeVerificationService>(),
@@ -367,8 +425,8 @@ public class UserCodeVerificationServiceTests
             new FakeTimeProvider(Now));
 
         var decided = approving
-            ? await service.ApproveAsync(CanonicalUserCode, GrantWith(null))
-            : await service.DenyAsync(CanonicalUserCode);
+            ? await service.ApproveAsync(SingleIssuer.Tenant, CanonicalUserCode, GrantWith(null))
+            : await service.DenyAsync(SingleIssuer.Tenant, CanonicalUserCode);
 
         Assert.False(decided);
 
@@ -377,7 +435,8 @@ public class UserCodeVerificationServiceTests
         Assert.Equal(DeviceAuthorizationStatus.Pending, expired.Status);
         storage.Verify(
             store => store.UpdateAsync(
-                It.IsAny<string>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+                It.IsAny<TenantDefinition>(),
+                It.IsAny<DeviceAuthorizationReference>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -385,7 +444,7 @@ public class UserCodeVerificationServiceTests
         JsonArray? requestedDetails,
         out CapturingLogger<UserCodeVerificationService> logs)
     {
-        var request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var request = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             AuthorizationDetails = requestedDetails,
             ExpiresAt = Now.AddMinutes(5),
@@ -393,15 +452,15 @@ public class UserCodeVerificationServiceTests
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
-            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, request) : null);
+            .Setup(store => store.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string code) => code == CanonicalUserCode ? (Reference, request) : null);
 
         // The decision is applied to the record as it stands at the write, so a fixture that answers the
         // user-code lookup and not this one is describing a record consumed in between - which is its own
         // row rather than the arrangement these tests want.
         storage
-            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == DeviceCode ? request : null);
+            .Setup(store => store.TryGetAsync(TestTenant.Matched, It.IsAny<DeviceAuthorizationReference>()))
+            .ReturnsAsync((TenantDefinition _, DeviceAuthorizationReference reference) => reference == Reference ? request : null);
 
         logs = new CapturingLogger<UserCodeVerificationService>();
         return new UserCodeVerificationService(
@@ -450,7 +509,7 @@ public class UserCodeVerificationServiceTests
     public async Task ADecisionOnARecordNoLongerPending_IsNotWrittenBack(
         bool approving, DeviceAuthorizationStatus? advancedTo)
     {
-        var request = new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+        var request = new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
         {
             ExpiresAt = Now.AddMinutes(5),
         };
@@ -459,7 +518,7 @@ public class UserCodeVerificationServiceTests
         // having landed first, on a record that is still there.
         var current = advancedTo is null
             ? null
-            : new DeviceAuthorizationRequest(ClientId, ["openid"], null, CanonicalUserCode)
+            : new DeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, CanonicalUserCode)
             {
                 ExpiresAt = Now.AddMinutes(5),
                 Status = advancedTo.Value,
@@ -467,11 +526,11 @@ public class UserCodeVerificationServiceTests
 
         var storage = new Mock<IDeviceAuthorizationStorage>(MockBehavior.Loose);
         storage
-            .Setup(store => store.TryGetByUserCodeAsync(It.IsAny<string>()))
-            .ReturnsAsync((string code) => code == CanonicalUserCode ? (DeviceCode, request) : null);
+            .Setup(store => store.TryGetByUserCodeAsync(TestTenant.Matched, It.IsAny<string>()))
+            .ReturnsAsync((TenantDefinition _, string code) => code == CanonicalUserCode ? (Reference, request) : null);
 
         storage
-            .Setup(store => store.TryGetByDeviceCodeAsync(It.IsAny<string>()))
+            .Setup(store => store.TryGetAsync(TestTenant.Matched, It.IsAny<DeviceAuthorizationReference>()))
             .ReturnsAsync(current);
 
         var service = new UserCodeVerificationService(
@@ -483,12 +542,12 @@ public class UserCodeVerificationServiceTests
             new FakeTimeProvider(Now));
 
         var decided = approving
-            ? await service.ApproveAsync(CanonicalUserCode, GrantWith(null))
-            : await service.DenyAsync(CanonicalUserCode);
+            ? await service.ApproveAsync(SingleIssuer.Tenant, CanonicalUserCode, GrantWith(null))
+            : await service.DenyAsync(SingleIssuer.Tenant, CanonicalUserCode);
 
         Assert.False(decided);
         storage.Verify(
-            store => store.UpdateAsync(It.IsAny<string>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            store => store.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<DeviceAuthorizationReference>(), It.IsAny<DeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 

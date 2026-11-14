@@ -21,8 +21,4 @@ public static class MinimalApiTestConstants
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test post-logout redirect URI; not a deployment URL.")]
     public const string PostLogoutRedirectUri = "https://client.example.com/logged-out";
-
-    /// <summary>Configuration key the host reads to mount all OIDC endpoints under a route prefix. The routing test
-    /// sets it through <c>WebApplicationFactory</c> to verify <c>MapOidcEndpoints(prefix)</c>.</summary>
-    public const string RoutePrefixConfigKey = "OidcRoutePrefix";
 }

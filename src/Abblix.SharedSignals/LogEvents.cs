@@ -18,11 +18,11 @@ namespace Abblix.SharedSignals;
 public static class LogEvents
 {
     /// <summary>
-    /// The transmitter role: 2000-2099.
+    /// The transmitter role: 15000-15099.
     /// </summary>
     public static class Transmitter
     {
-        private const int Base = 2000;
+        private const int Base = 15000;
 
         /// <summary>A delivery sweep failed as a whole, and will be attempted again.</summary>
         public const int PushSweepFailed = Base + 1;
@@ -59,5 +59,23 @@ public static class LogEvents
 
         /// <summary>A new stream covers no subject, while a conformant receiver adds none.</summary>
         public const int NoSubjectsIncludedByDefault = Base + 12;
+
+        /// <summary>The receiver answered with "Retry-After", so its stream is held until then.</summary>
+        public const int PushStreamHeld = Base + 13;
+
+        /// <summary>A queued SET could not be signed for delivery, so the stream's queue is held.</summary>
+        public const int SetSigningFailed = Base + 14;
+
+        /// <summary>A stream held at its receiver's request was passed by on this sweep.</summary>
+        public const int PushStreamHeldSkipped = Base + 15;
+
+        /// <summary>A queued item held nothing that could be sent, so it was dropped from the queue.</summary>
+        public const int UnsendableItemDropped = Base + 16;
+
+        /// <summary>A stream identifier a URL path cannot carry unchanged, so no poll address is published for it.</summary>
+        public const int NoPollAddress = Base + 17;
+
+        /// <summary>A stream named for a repeated dispatch could not be read, so the event was not queued for it.</summary>
+        public const int StreamNotRead = Base + 18;
     }
 }

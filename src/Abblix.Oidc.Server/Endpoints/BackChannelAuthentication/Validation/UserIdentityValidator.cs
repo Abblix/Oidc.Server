@@ -9,6 +9,7 @@
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Utils;
 
@@ -29,12 +30,14 @@ public class UserIdentityValidator(
     /// or ID token hint. It ensures that only one identity hint is present and attempts to process the hint
     /// to confirm the user's identity.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">Contains the backchannel authentication request and client information.</param>
     /// <returns>
     /// Returns a <see cref="OidcError"/> if the identity validation fails,
     /// or null if the identity is successfully validated.
     /// </returns>
     public async Task<OidcError?> ValidateAsync(
+        TenantDefinition tenant,
         BackChannelAuthenticationValidationContext context)
     {
         var request = context.Request;
@@ -68,10 +71,23 @@ public class UserIdentityValidator(
         // Validate the LoginHintToken if it is provided and the client is configured to parse it as a JWT
         if (request.LoginHintToken.HasValue() && context.ClientInfo.ParseLoginHintTokenAsJwt)
         {
-            var loginHintTokenResult = await clientJwtValidator.ValidateAsync(request.LoginHintToken);
+            // CIBA Core 1.0 Section 7.1 leaves the format of a login_hint_token to the deployment, so the type is
+            // judged below: a JWT declaring itself some other kind this server names is refused (RFC 8725 Section
+            // 3.11)
+            var loginHintTokenResult = await clientJwtValidator.ValidateAsync(
+                tenant,
+                context.ClientInfo,
+                request.LoginHintToken, TokenTypePolicy.CheckedByCaller);
 
             if (loginHintTokenResult.TryGetSuccess(out var validJwt))
             {
+                if (!JwtTypes.IsPermitted(validJwt.Token.Header.Type))
+                {
+                    return new OidcError(
+                        ErrorCodes.InvalidRequest,
+                        $"A token of type '{validJwt.Token.Header.Type}' cannot be used as a login_hint_token.");
+                }
+
                 // The token was issued for another client
                 if (validJwt.Client.ClientId != context.ClientInfo.ClientId)
                 {
@@ -97,7 +113,7 @@ public class UserIdentityValidator(
         // Validate the IdTokenHint if present
         if (request.IdTokenHint.HasValue())
         {
-            var idTokenResult = await ValidateIdTokenHint(context, request.IdTokenHint);
+            var idTokenResult = await ValidateIdTokenHint(tenant, context, request.IdTokenHint);
             if (idTokenResult.TryGetFailure(out var error))
             {
                 return new OidcError(error.Error, error.ErrorDescription);
@@ -112,6 +128,7 @@ public class UserIdentityValidator(
     /// <summary>
     /// Validates the ID token hint to ensure it is properly issued and valid.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing the client information.</param>
     /// <param name="idTokenHint">The ID token hint string to be validated.</param>
     /// <returns>
@@ -119,6 +136,7 @@ public class UserIdentityValidator(
     /// which can either be a successful token or an error.
     /// </returns>
     private async Task<Result<JsonWebToken, OidcError>> ValidateIdTokenHint(
+        TenantDefinition tenant,
         BackChannelAuthenticationValidationContext context,
         string idTokenHint)
     {
@@ -126,7 +144,7 @@ public class UserIdentityValidator(
         // part of it: the three endpoints accepting the parameter disagree about who must be in it. Here it
         // is the requesting client, because OpenID Connect Core 1.0 Section 2 says an ID token's aud "MUST
         // contain the OAuth 2.0 client_id of the Relying Party".
-        var result = await hintParser.ParseAsync(idTokenHint);
+        var result = await hintParser.ParseAsync(tenant, context.ClientInfo, idTokenHint);
         if (result.TryGetFailure(out var reason))
             return new OidcError(ErrorCodes.InvalidRequest, reason);
 

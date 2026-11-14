@@ -6,28 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Common.Interfaces;
-using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Oidc.Server.Mvc.Binders;
-using Abblix.Oidc.Server.Mvc.Configuration;
-using Abblix.Oidc.Server.Mvc.Conventions;
-using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
-using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
-using Abblix.Oidc.Server.Mvc.Features.SessionManagement;
-using Abblix.Oidc.Server.Mvc.Formatters;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
-using Abblix.Utils.Json;
-using Microsoft.AspNetCore.Cors.Infrastructure;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Formatters;
-using Microsoft.AspNetCore.Mvc.Routing;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
-using System.Text.Json.Serialization.Metadata;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Mvc;
 
@@ -43,18 +27,32 @@ public static class ServiceCollectionExtensions
 	/// This method allows for configuring OIDC options to tailor the authentication server to your specific needs.
 	/// </summary>
 	/// <remarks>
-	/// The request pipeline must call <c>app.UseCors()</c> after <c>app.UseRouting()</c>. The protocol
+	/// The endpoints are mapped by <see cref="EndpointRouteBuilderExtensions.MapOidcControllers"/>, which the
+	/// request pipeline calls in place of relying on <c>app.MapControllers()</c>: the library's controllers carry
+	/// no route of their own.
+	/// The request pipeline must call <c>app.UseCors()</c> after routing. <c>app.UseMultiTenancy()</c> adds the
+	/// routing itself; a pipeline without it calls <c>app.UseRouting()</c> first, or, in a <c>WebApplication</c>,
+	/// may leave routing to the application, which then routes at the head of the pipeline. The protocol
 	/// controllers carry CORS metadata, because browser-based clients read the discovery document, the
 	/// key set and the token endpoint cross-origin - and ASP.NET Core routing refuses to serve any
 	/// endpoint whose CORS metadata no middleware honours, so without that call every protocol endpoint
 	/// answers 500. The policy itself is registered here; only the middleware call belongs to the host,
 	/// since the framework accepts the middleware only when it runs after routing has selected an
 	/// endpoint - a place no library can insert it from.
+	/// The server serves the tenants <see cref="OidcOptions.Tenants"/> declares, a host serving one issuer
+	/// declaring one. The pipeline resolves each request to its tenant with <c>app.UseMultiTenancy()</c> before routing
+	/// and authentication; which hosts may leave the call out is said in the remarks of
+	/// <see cref="MultiTenancyExtensions.UseMultiTenancy"/>.
+	/// The server refuses a configuration it cannot serve while the host announces its start
+	/// (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartingAsync"/>), as the Generic Host and
+	/// <c>WebApplication</c> do. A host starting its services without that announcement, such as the obsolete
+	/// <c>WebHost</c>, is not supported: it would start the server without those checks.
+	/// A host that needs <c>app.UseMultiTenancy()</c> and leaves it out of its pipeline is refused only once the host has started (<see cref="Microsoft.Extensions.Hosting.IHostedLifecycleService.StartedAsync"/>), when both hosting models have built it, so a request arriving before then is answered.
 	/// </remarks>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
 	/// <param name="configureOptions">A delegate to configure the <see cref="OidcOptions"/>.</param>
-	/// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
-	public static IServiceCollection AddOidcServices(this IServiceCollection services, Action<OidcOptions> configureOptions)
+	/// <returns>The builder a feature built on the server, such as Shared Signals, is turned on by.</returns>
+	public static IOidcServerBuilder AddOidcServices(this IServiceCollection services, Action<OidcOptions> configureOptions)
 	{
 		return services.AddOidcServices((options, _) => configureOptions(options));
 	}
@@ -63,18 +61,18 @@ public static class ServiceCollectionExtensions
 	/// Adds OIDC server services to the specified <see cref="IServiceCollection"/> with provided configuration options and service provider.
 	/// </summary>
 	/// <remarks>
-	/// The request pipeline must call <c>app.UseCors()</c> after <c>app.UseRouting()</c>; see the
-	/// remarks on <see cref="AddOidcServices(IServiceCollection, Action{OidcOptions})"/> for why the
+	/// The request pipeline must call <c>app.UseCors()</c> after routing; see the remarks on
+	/// <see cref="AddOidcServices(IServiceCollection, Action{OidcOptions})"/> for where it goes and why the
 	/// protocol endpoints refuse to answer without it.
 	/// </remarks>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
 	/// <param name="configureOptions">A delegate to configure the <see cref="OidcOptions"/> with the service provider.</param>
-	/// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
-	public static IServiceCollection AddOidcServices(this IServiceCollection services, Action<OidcOptions, IServiceProvider> configureOptions)
+	/// <returns>The builder a feature built on the server, such as Shared Signals, is turned on by.</returns>
+	public static IOidcServerBuilder AddOidcServices(this IServiceCollection services, Action<OidcOptions, IServiceProvider> configureOptions)
 	{
-		return services
+		return new OidcServerBuilder(services
 			.AddOidcCore(configureOptions)
-			.AddOidcMvc();
+			.AddOidcMvc());
 	}
 
 	/// <summary>
@@ -95,156 +93,29 @@ public static class ServiceCollectionExtensions
 			TransportAdapterConflict.MinimalApiAdapterAssemblyName,
 			"Both OIDC transport adapters are registered in this application: the MVC adapter was added " +
 			"after the Minimal API adapter's own AddOidcServices()/AddOidcMinimalApi(). Only one of them may " +
-			"serve the OIDC endpoints - with both in place they claim the same paths and every OIDC request " +
-			"fails with AmbiguousMatchException. Keep one: remove either the Minimal API registration " +
+			"serve the OIDC endpoints, since both map the same paths. Keep one: remove either the Minimal API " +
+			"registration " +
 			"together with the Abblix.OIDC.Server.MinimalApi package reference, or this one together with " +
 			"the Abblix.OIDC.Server.MVC package reference.");
 
 		services
 			.AddOidcControllers()
-			.ConfigureRoutesFallback()
-			.AddHttpContextAccessor();
+			.AddTenantResolution()
+			.AddOidcMvcInfrastructure()
+			.AddOidcProtocolFormatters()
+			.AddOidcInteractionFormatters();
 
-		services.TryAddSingleton<IParameterValidator, ParameterValidator>();
-		services.TryAddSingleton<IParametersProvider, Abblix.Oidc.Server.Common.ParametersProvider>();
-		services.TryAddSingleton<IRequestInfoProvider, HttpRequestInfoProvider>();
-		services.TryAddScoped<IAuthSessionService, AuthenticationSchemeAdapter>();
-		services.TryAddSingleton<IUriResolver, UriResolver>();
-		services.TryAddScoped<IEndpointResolver, EndpointResolver>();
-
-		// Absolute URLs for the OIDC endpoints, under the contract the Minimal API adapter answers too, so
-		// host code that needs one survives a change of adapter unchanged.
-		services.TryAddScoped<IOidcEndpointResolver, Features.EndpointResolving.OidcEndpointResolver>();
-		services.TryAddSingleton<IUrlHelperFactory, UrlHelperFactory>();
-		services.TryAddScoped<IConfigurationResponseFormatter, ConfigurationResponseFormatter>();
-		services.TryAddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>();
-		services.TryAddScoped<IPushedAuthorizationResponseFormatter, PushedAuthorizationResponseFormatter>();
-		services.TryAddScoped<ITokenResponseFormatter, TokenResponseFormatter>();
-		services.TryAddScoped<IUserInfoResponseFormatter, UserInfoResponseFormatter>();
-
-		services.TryAddScoped<IEndSessionResponseFormatter, EndSessionResponseFormatter>();
-		services.Decorate<IEndSessionResponseFormatter, EndSessionResponseFormatterDecorator>();
-
-		services.TryAddScoped<IRevocationResponseFormatter, RevocationResponseFormatter>();
-		services.TryAddScoped<IIntrospectionResponseFormatter, IntrospectionResponseFormatter>();
-		services.TryAddScoped<IBackChannelAuthenticationResponseFormatter, BackChannelAuthenticationResponseFormatter>();
-		services.TryAddScoped<IDeviceAuthorizationResponseFormatter, DeviceAuthorizationResponseFormatter>();
-
-		services.TryAddScoped<ICheckSessionResponseFormatter, CheckSessionResponseFormatter>();
-		services.Decorate<ICheckSessionResponseFormatter, CheckSessionResponseCachingDecorator>();
-		services.TryAddSingleton<ICheckSessionResponseCache, CheckSessionResponseCache>();
-
-		services.TryAddScoped<IRegisterClientResponseFormatter, RegisterClientResponseFormatter>();
-		services.TryAddScoped<IReadClientResponseFormatter, ReadClientResponseFormatter>();
-		services.TryAddScoped<IUpdateClientResponseFormatter, UpdateClientResponseFormatter>();
-		services.TryAddScoped<IRemoveClientResponseFormatter, RemoveClientResponseFormatter>();
-
-		services.Configure<MvcOptions>(options =>
-		{
-			options.OutputFormatters.Add(new StringOutputFormatter());
-			options.ModelBinderProviders.Insert(0, new CultureInfoBinder());
-			options.ModelMetadataDetailsProviders.Add(new RequiredBindingMetadataProvider());
-		});
+		services.AddOptions<OidcRouteOptions>();
 
 		// AddOidcCors registers the shared, host-overridable default so the CORS policy the controllers
 		// reference with [EnableCors] resolves out of the box instead of only when the host defined it. Same
 		// policy and supplement/override contract as the Minimal API adapter. See AddOidcCors.
 		services.AddOidcCors();
 
+		// Beside the host's description providers, never in place of one: it describes the library's mapped
+		// endpoints and nothing else.
+		services.TryAddEnumerable(ServiceDescriptor.Transient<IApiDescriptionProvider, OidcApiDescriptionProvider>());
+
 	    return services;
     }
-
-	/// <summary>
-	/// Adds OIDC controllers to the MVC application. This method is used internally to ensure that the OIDC server's
-	/// controllers are available to handle authentication and authorization requests.
-	/// </summary>
-	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
-	/// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
-    public static IServiceCollection AddOidcControllers(this IServiceCollection services)
-    {
-        services
-            .AddControllers()
-            .AddApplicationPart(typeof(ServiceCollectionExtensions).Assembly)
-            .AddControllersAsServices();
-
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IPostConfigureOptions<MvcOptions>, ConfigureEndpointConventions>());
-
-        services
-            .PostConfigure<JsonOptions>(options =>
-            {
-                // WithAddedModifier attaches to the resolver already in place (set up by AddControllers),
-                // so the modifier runs within that resolver rather than in a separate chained one.
-                // A chained resolver would never be reached because the default resolver handles all types first.
-                options.JsonSerializerOptions.TypeInfoResolver =
-                    (options.JsonSerializerOptions.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver())
-                    .WithAddedModifier(JsonIgnoreNullsModifier.Apply);
-            });
-
-        return services;
-    }
-
-	/// <summary>
-	/// Configures the application's CORS policy according to the specified <see cref="CorsSettings"/>.
-	/// This method enables the customization of CORS policies for OIDC endpoints, allowing for the specification
-	/// of allowed origins, methods, and headers, as well as whether credentials are supported.
-	/// </summary>
-	/// <param name="options">The <see cref="CorsOptions"/> to configure.</param>
-	/// <param name="policyName">The name of the CORS policy, used to identify it.</param>
-	/// <param name="settings">The <see cref="CorsSettings"/> that define the CORS policy.</param>
-	public static void AppPolicy(this CorsOptions options, string policyName, CorsSettings settings)
-    {
-	    options.AddPolicy(policyName, policy =>
-	    {
-		    settings.AllowedOrigins.ApplyTo(policy.AllowAnyOrigin, policy.WithOrigins);
-		    settings.AllowedMethods.ApplyTo(policy.AllowAnyMethod, policy.WithMethods);
-		    settings.AllowedHeaders.ApplyTo(policy.AllowAnyHeader, policy.WithHeaders);
-
-		    if (settings.ExposeHeaders != null)
-			    policy.WithExposedHeaders(settings.ExposeHeaders);
-
-		    switch (settings.AllowCredentials)
-		    {
-			    case true:
-				    policy.AllowCredentials();
-				    break;
-
-			    case false:
-				    policy.DisallowCredentials();
-				    break;
-		    }
-
-		    if (settings.MaxAge.HasValue)
-			    policy.SetPreflightMaxAge(settings.MaxAge.Value);
-	    });
-    }
-
-	/// <summary>
-	/// Applies configuration based on the specified values to a <see cref="CorsPolicyBuilder"/>.
-	/// This method dynamically configures CORS policies based on the provided values. If a wildcard "*" is provided,
-	/// it configures the policy to allow any value (origin, method, or header). Otherwise, it applies the specific
-	/// values provided. This allows for flexible configuration of CORS policies.
-	/// </summary>
-	/// <param name="values">The array of values to be applied. Can be origins, methods, or headers.</param>
-	/// <param name="allowAnyValues">A function that configures the policy to allow any values for the setting.</param>
-	/// <param name="withValues">A function that applies specific values to the policy.</param>
-	private static void ApplyTo(
-		this string[]? values,
-		Func<CorsPolicyBuilder> allowAnyValues,
-		Func<string[], CorsPolicyBuilder> withValues)
-	{
-		switch (values)
-		{
-			case null:
-				break;
-
-			case ["*"]:
-				allowAnyValues();
-				break;
-
-			default:
-				withValues(values);
-				break;
-		}
-	}
 }

@@ -6,20 +6,22 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics.CodeAnalysis;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
@@ -30,8 +32,6 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// authorization details and the authentication of requests using these tokens. Utilizes issuer information,
 /// current time, unique token identifiers, and JWT formatting to generate secure and compliant access tokens.
 /// </summary>
-/// <param name="issuerProvider">The provider responsible for determining the issuer (iss) claim in the token,
-/// which identifies the authorization server that issued the token.</param>
 /// <param name="clock">The service used to obtain the current time, ensuring accurate token expiration and
 /// issuance timestamps.</param>
 /// <param name="tokenIdGenerator">The service responsible for generating unique identifiers (jti) for each token,
@@ -42,28 +42,40 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// or real) on issuance, and opens it back when authenticating the token.</param>
 /// <param name="options">OIDC configuration options, source of the access token's signing and encryption settings.
 /// </param>
+/// <param name="catalog">The catalog the tenant was resolved from, which the license counts it by.</param>
 /// <param name="audienceKeys">Answers which encryption key, if any, the token's audience published, so the
 /// token can be encrypted to the resource it is minted for.</param>
+/// <param name="scopeClaims">Names the claims the user-information endpoint asks the host's provider for, which
+/// decides whether the session's email address travels in the token.</param>
+/// <param name="logger">Records an access token not issued for the key its audience publishes.</param>
+[SuppressMessage("SonarQube", "S107:Methods should not have too many parameters",
+    Justification = "Every dependency is used: the token's clock, identifier, format and subject each come from their own service, the server's options carry the service-token and authorization-details policy, the catalog the license counts the tenant by, the audience keys the encryption target, and the scope claims whether the session's email address travels in the token.")]
 internal class AccessTokenService(
-	IIssuerProvider issuerProvider,
 	TimeProvider clock,
 	ITokenIdGenerator tokenIdGenerator,
 	IAuthServiceJwtFormatter serviceJwtFormatter,
 	ISubjectTypeConverter subjectTypeConverter,
 	IOptions<OidcOptions> options,
-	IAudienceKeyResolver audienceKeys) : IAccessTokenService
+	ITenantCatalog catalog,
+	IAudienceKeyResolver audienceKeys,
+	IScopeClaimsProvider scopeClaims,
+	ILogger<AccessTokenService> logger) : IAccessTokenService
 {
 	/// <summary>
 	/// Asynchronously generates a new access token incorporating the authentication session and authorization context
 	/// of the user, along with client-specific settings. This token is crafted using standard JWT practices,
 	/// ensuring it aligns with OAuth 2.0 and OpenID Connect requirements.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="authSession">Details of the user's current authentication session, including subject and
 	/// authentication time.</param>
 	/// <param name="authContext">Context providing authorization details such as requested scopes and permissions.
 	/// </param>
 	/// <param name="clientInfo">Client-specific information, including token expiration settings and required JWT
 	/// algorithms.</param>
+	/// <param name="grantId">The refresh token family this access token belongs to, or <c>null</c>.</param>
+	/// <param name="expiresNoLaterThan">The latest moment the token may expire, or <c>null</c> when only the client's
+	/// access token lifetime bounds it.</param>
 	/// <returns>A task that resolves to an <see cref="EncodedJsonWebToken"/>, representing the newly minted access
 	/// token.</returns>
 	/// <remarks>
@@ -72,9 +84,12 @@ internal class AccessTokenService(
 	/// leverages provided services to dynamically generate compliant tokens suited for various authorization needs.
 	/// </remarks>
 	public async Task<EncodedJsonWebToken> CreateAccessTokenAsync(
+		TenantDefinition tenant,
 		AuthSession authSession,
 		AuthorizationContext authContext,
-		ClientInfo clientInfo)
+		ClientInfo clientInfo,
+		string? grantId,
+		DateTimeOffset? expiresNoLaterThan)
 	{
 		// Four claims answer four different questions, and keeping them apart is what stops any one of them
 		// from being asked to carry two meanings at once:
@@ -111,95 +126,71 @@ internal class AccessTokenService(
 				JwtId = tokenIdGenerator.GenerateTokenId(),
 				IssuedAt = issuedAt,
 				NotBefore = issuedAt,
-				ExpiresAt = issuedAt + clientInfo.AccessTokenExpiresIn,
-				Issuer = LicenseChecker.CheckIssuer(issuerProvider.GetIssuer()),
+				ExpiresAt = expiresNoLaterThan is { } latest && latest < issuedAt + clientInfo.AccessTokenExpiresIn
+					? latest
+					: issuedAt + clientInfo.AccessTokenExpiresIn,
+				Issuer = LicenseChecker.CheckLicense(
+					tenant.Issuer.OriginalString,
+					tenant,
+					catalog,
+					authContext.ClientId),
+				GrantId = grantId,
 			},
 		};
 
 		authSession.ApplyTo(accessToken.Payload);
 
 		// The audience is settled once, before anything reads it, so the payload below and the encryption
-		// policy further down agree on who this token is for instead of each deriving its own answer.
-		var audienceContext = authContext.WithDefaultResource(options.Value.DefaultResourceIndicator);
+		// policy further down agree on who this token is for instead of each deriving its own answer. The scope
+		// follows it: the token carries the scopes of the resources it names (RFC 8707 section 2.2).
+		var audienceContext = authContext
+			.WithDefaultResource(tenant.DefaultResourceIndicator)
+			.NarrowedToItsResources(tenant);
+
+		// Every resource server the token reaches reads its claims, so the user's address travels in it only when
+		// the user-information endpoint would ask the host's provider for it, because of a scope or because the
+		// client named it for that endpoint. The endpoint rebuilds the session from this token and asks for the same
+		// claims, so it loses nothing.
+		if (!ReleasesEmail(tenant, audienceContext))
+		{
+			accessToken.Payload.Email = null;
+			accessToken.Payload.EmailVerified = null;
+		}
+
 		audienceContext.ApplyTo(accessToken.Payload);
 
 		if (options.Value.FilterAuthorizationDetailsByLocation)
-			NarrowAuthorizationDetailsToAudience(accessToken.Payload);
+			accessToken.Payload.NarrowAuthorizationDetailsToAudience();
 
 		// For a pairwise client, replace the real subject in 'sub' with the client's reversible per-sector
 		// pseudonym (the id_token carries the same value); a public client is left untouched. The pseudonym itself
 		// carries the real subject, which the server opens back at UserInfo, refresh and token exchange.
-		accessToken.Payload.Subject = subjectTypeConverter.Convert(authSession.Subject, clientInfo);
+		accessToken.Payload.Subject = subjectTypeConverter.Convert(tenant, authSession.Subject, clientInfo);
 
 		var encryption = await ServiceJwtEncryption.ForAccessToken(options.Value)
-			.WithAudienceKeyAsync(audienceContext, audienceKeys);
+			.WithAudienceKeyAsync(tenant, audienceContext, audienceKeys);
 
-		var encoded = await serviceJwtFormatter.FormatAsync(accessToken, encryption);
+		var encoded = await AudienceKeyRefusal.FormatAsync(
+			serviceJwtFormatter, tenant, accessToken, clientInfo, encryption, audienceContext.Resources ?? [], logger);
 
 		return new EncodedJsonWebToken(accessToken, encoded);
 	}
 
 	/// <summary>
-	/// Drops the <c>authorization_details</c> entries this token's audience has no business reading, when
-	/// the deployment has said its <c>locations</c> and its audiences are drawn from the same namespace.
+	/// Whether the user-information endpoint would ask the host's provider for the email address under
+	/// <paramref name="authContext"/>, decided by the same scopes and requested claims as there.
 	/// </summary>
-	/// <param name="payload">The access token payload, with its audience already settled.</param>
-	/// <remarks>
-	/// Off unless <see cref="OidcOptions.FilterAuthorizationDetailsByLocation"/> says otherwise, because
-	/// nothing here can check that the two members are comparable. RFC 9396 §2.2 says <c>locations</c>
-	/// "typically" holds URIs identifying resource servers, and §9.1's own example pairs a client-style
-	/// <c>aud</c> with a resource URI in <c>locations</c>, so a deployment where they do agree has decided
-	/// that, and one where they do not would lose every located entry. §7 leaves what the token carries to
-	/// this server where the client did not ask, and §13 asks for need-to-know as local policy determines.
-	///
-	/// Applied to the ACCESS token only, and here rather than in
-	/// <see cref="AuthorizationContextExtensions.ApplyTo"/>, which a refresh token goes through as well. A
-	/// refresh token is read by this server rather than by a resource server, and it is what a later refresh
-	/// for a DIFFERENT resource is rebuilt from, so narrowing it would protect nobody and would permanently
-	/// lose the entries that refresh needs.
-	///
-	/// An entry with no <c>locations</c> MEMBER survives. §2.2 makes it optional, and reading its absence
-	/// as "nowhere" would empty the claim for every deployment that does not use it. An entry whose
-	/// <c>locations</c> is PRESENT is dropped when none of the strings that member yields names an
-	/// audience - so an empty array and a null are dropped, absence and emptiness being different
-	/// statements of which only the first is silence.
-	///
-	/// The test is a match rather than a check of shape, and that has a consequence worth naming: the
-	/// reader accepts a bare string as well as an array and SKIPS elements that are not strings, so
-	/// <c>["https://orders.example.com", 7]</c> matches on its first element and the entry is kept. A
-	/// partly malformed member can therefore keep an entry alive, which is the opposite direction from
-	/// everything else here. Refusing it instead belongs with the five sibling call sites that refuse an
-	/// unreadable entry, not in a filter. The member is
-	/// REMOVED when nothing survives rather than written as an empty array or a null: §14.2 registers the
-	/// claim as a JSON array, so a null is a document no resource server owes us a reading of, and an empty
-	/// array would say the end user granted nothing.
-	///
-	/// Comparison is ordinal on the text, per §12: "No additional transformation or normalization is to be
-	/// done in evaluating equivalence of string values."
-	/// </remarks>
-	private static void NarrowAuthorizationDetailsToAudience(JsonWebTokenPayload payload)
-	{
-		if (payload.Json[IanaClaimTypes.AuthorizationDetails] is not JsonArray details)
-			return;
-
-		var addressed = payload.Audiences.ToHashSet(StringComparer.Ordinal);
-
-		var kept = details
-			.ToTypedArray()?
-			.Where(detail => detail.Locations is not { } locations ||
-			                 locations.Any(location => addressed.Contains(location)))
-			.ToRawJsonArray();
-
-		payload.Json.SetProperty(
-			IanaClaimTypes.AuthorizationDetails,
-			kept is { Count: > 0 } ? kept : null);
-	}
+	private bool ReleasesEmail(TenantDefinition tenant, AuthorizationContext authContext)
+		=> scopeClaims
+			.GetRequestedClaims(tenant, authContext.Scope, authContext.RequestedClaims?.UserInfo?.Select(claim => claim.Key))
+			.Contains(IanaClaimTypes.Email, StringComparer.Ordinal);
 
 	/// <summary>
 	/// Validates the provided access token and extracts the associated authentication session and authorization context.
 	/// This process authenticates the token bearer and retrieves their authorization details, enabling secure resource
 	/// access.
 	/// </summary>
+	/// <param name="tenant">The tenant the token is for.</param>
 	/// <param name="accessToken">The access token to be authenticated and analyzed.</param>
 	/// <param name="clientInfo">The client the token was issued for; its sector opens a pairwise subject back to
 	/// the real subject.</param>
@@ -212,6 +203,7 @@ internal class AccessTokenService(
 	/// authorization and authentication details, supporting secure and informed access control decisions.
 	/// </remarks>
 	public Task<Result<AuthorizedGrant, OidcError>> AuthenticateByAccessTokenAsync(
+		TenantDefinition tenant,
 		JsonWebToken accessToken,
 		ClientInfo clientInfo)
 	{
@@ -222,7 +214,7 @@ internal class AccessTokenService(
 		// the real subject (its sector comes from clientInfo). A public client's 'sub' is already the real subject.
 		// A pairwise 'sub' that does not open (a foreign-sector or pre-change token) yields null, so reject the token
 		// at the protocol level instead of faulting.
-		var result = subjectTypeConverter.ConvertBack(authSession.Subject, clientInfo)
+		var result = subjectTypeConverter.ConvertBack(tenant, authSession.Subject, clientInfo)
 			.FailIfNull(() => new OidcError(ErrorCodes.InvalidToken, "The access token subject could not be resolved for this client"))
 			.MapSuccess(recovered => new AuthorizedGrant(authSession with { Subject = recovered }, authorizationContext));
 

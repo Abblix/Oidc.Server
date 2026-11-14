@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -25,8 +27,8 @@ using Xunit;
 using JsonWebToken = Abblix.Jwt.JsonWebToken;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -40,11 +42,14 @@ public class ClientSecretJwtAuthenticatorTests
 {
     private const string ClientId = TestConstants.DefaultClientId;
     private const string ClientSecret = "test_secret_for_hmac_signing";
-    private const string RequestUri = "https://auth.example.com/token";
+    private const string IssuerIdentifier = "https://issuer.example.com";
+    private const string TokenEndpoint = IssuerIdentifier + "/connect/token";
+    private const string AnotherRecipient = "https://another.example.com";
+
+    private static readonly TenantDefinition Tenant = new TestIssuer { Issuer = new Uri(IssuerIdentifier) }.ToTenant();
 
     private readonly Mock<IJsonWebTokenValidator> _tokenValidator;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
-    private readonly Mock<IRequestInfoProvider> _requestInfoProvider;
     private readonly FakeTimeProvider _clock;
     private readonly Mock<IReplayCache> _replayCache;
     private readonly ClientSecretJwtAuthenticator _authenticator;
@@ -54,23 +59,16 @@ public class ClientSecretJwtAuthenticatorTests
         var logger = new Mock<ILogger<ClientSecretJwtAuthenticator>>();
         _tokenValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
-        _requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
         _clock = new FakeTimeProvider();
         _replayCache = new Mock<IReplayCache>(MockBehavior.Strict);
 
-        _requestInfoProvider
-            .Setup(p => p.RequestUri)
-            .Returns(RequestUri);
-
         _authenticator = new ClientSecretJwtAuthenticator(
             logger.Object,
-            _tokenValidator.Object,
+            new ProfiledJwtValidator(_tokenValidator.Object),
             _clientInfoProvider.Object,
-            _requestInfoProvider.Object,
             _clock,
             _replayCache.Object,
-            Mock.Of<IIssuerProvider>(p => p.GetIssuer() == "https://issuer.example.com"),
-            Options.Create(new OidcOptions()));
+            new ServiceCollection().BuildServiceProvider());
     }
 
     /// <summary>
@@ -88,7 +86,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -109,7 +107,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -130,7 +128,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -151,10 +149,125 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// RFC 10070 section 4: the issuer identifier is the sole audience a client authentication assertion may
+    /// carry, compared as written (RFC 3986 section 6.2.1), so the token endpoint, the issuer spelled in
+    /// another case, with its default port or a trailing slash, and the issuer beside another recipient are
+    /// all refused - before the assertion's identifier is reserved, which the strict replay cache would report.
+    /// </summary>
+    [Theory]
+    [InlineData(IssuerIdentifier + "/token")]
+    [InlineData("https://ISSUER.example.com")]
+    [InlineData("HTTPS://issuer.example.com")]
+    [InlineData("https://issuer.example.com:443")]
+    [InlineData(IssuerIdentifier + "/")]
+    [InlineData(IssuerIdentifier, "https://another.example.com")]
+    public async Task TryAuthenticateClientAsync_AnAudienceOtherThanTheIssuerAlone_IsRefused(params string[] audiences)
+    {
+        const string jwt = "valid.jwt.token";
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            ClientSecrets = [new ClientSecret { Value = ClientSecret }]
+        };
+
+        var token = CreateMockToken(ClientId, ClientId, [IssuerIdentifier], "jti", _clock.GetUtcNow().AddMinutes(5));
+        token.Payload.Audiences = audiences;
+
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
+            .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
+            {
+                await parameters.ResolveIssuerSigningKeys!(ClientId).ToArrayAsync();
+                return await parameters.ValidateIssuer!(ClientId)
+                    ? token
+                    : new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
+            }));
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .ReturnsAsync(clientInfo);
+
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = jwt,
+        });
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// The exception a host gives a client that still names the token endpoint, as OpenID Connect Core 1.0 section 9
+    /// recommends, holds for a client signing with its secret as for one signing with its key: the token endpoint URL
+    /// on the issuer's host is accepted for a client allowed it and refused for any other, and the same URL beside
+    /// another recipient is accepted only from a client allowed arrays too.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint, new[] { TokenEndpoint }, true)]
+    [InlineData(ClientAssertionAudiences.Issuer, new[] { TokenEndpoint }, false)]
+    [InlineData(ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint, new[] { AnotherRecipient, TokenEndpoint }, false)]
+    [InlineData(ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint | ClientAssertionAudiences.AllowArray, new[] { AnotherRecipient, TokenEndpoint }, true)]
+    public async Task TryAuthenticateClientAsync_TokenEndpointAudience_IsAcceptedInTheFormsTheClientIsAllowed(
+        ClientAssertionAudiences audiences, string[] audience, bool accepted)
+    {
+        const string jwt = "valid.jwt.token";
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            ClientSecrets = [new ClientSecret { Value = ClientSecret }],
+            ClientAssertionAudiences = audiences,
+        };
+
+        var token = CreateMockToken(ClientId, ClientId, audience, "jti-token-endpoint", _clock.GetUtcNow().AddMinutes(5));
+        token.Payload.Json[JwtClaimTypes.Audience] = audience is [var only]
+            ? only
+            : new JsonArray([.. audience.Select(member => (JsonNode?)member)]);
+
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
+            .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
+            {
+                await parameters.ResolveIssuerSigningKeys!(ClientId).ToArrayAsync();
+                return await parameters.ValidateIssuer!(ClientId)
+                    ? token
+                    : new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
+            }));
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
+            .ReturnsAsync(clientInfo);
+
+        _replayCache
+            .Setup(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
+        var endpointResolver = new Mock<IOidcEndpointResolver>();
+        endpointResolver.Setup(r => r.Resolve(OidcEndpoints.Token)).Returns(new Uri(TokenEndpoint));
+        var services = new ServiceCollection();
+        services.AddScoped<IOidcEndpointResolver>(_ => endpointResolver.Object);
+
+        var authenticator = new ClientSecretJwtAuthenticator(
+            Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
+            new ProfiledJwtValidator(_tokenValidator.Object),
+            _clientInfoProvider.Object,
+            _clock,
+            _replayCache.Object,
+            services.BuildServiceProvider(validateScopes: true));
+
+        var result = await authenticator.TryAuthenticateClientAsync(Tenant, new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = jwt,
+        });
+
+        Assert.Equal(accepted, result is not null);
     }
 
     /// <summary>
@@ -175,13 +288,16 @@ public class ClientSecretJwtAuthenticatorTests
             ClientSecrets = [new ClientSecret { Value = ClientSecret }]
         };
 
-        var token = CreateMockToken(ClientId, ClientId, [RequestUri], jwtId, expiresAt);
+        var token = CreateMockToken(ClientId, ClientId, [IssuerIdentifier], jwtId, expiresAt);
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
-                // Simulate JWT validator executing the callbacks
+                // In the order the JWT validator runs them: the signing keys, then the issuer
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                 if (parameters.ValidateIssuer != null)
                 {
                     var issuerValid = await parameters.ValidateIssuer(ClientId);
@@ -189,14 +305,11 @@ public class ClientSecretJwtAuthenticatorTests
                         return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
                 }
 
-                if (parameters.ResolveIssuerSigningKeys != null)
-                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
-
                 return token;
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         _replayCache
@@ -210,7 +323,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.NotNull(result);
@@ -221,7 +334,7 @@ public class ClientSecretJwtAuthenticatorTests
 
     /// <summary>
     /// Verifies authentication is rejected when the assertion's algorithm does not match the
-    /// client's registered token_endpoint_auth_signing_alg (OIDC Core §9 / RFC 7591): the client
+    /// client's registered token_endpoint_auth_signing_alg (OIDC Core section 9 / RFC 7591): the client
     /// registered HS384 but the assertion is signed with HS256.
     /// </summary>
     [Fact]
@@ -238,7 +351,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // CreateMockToken signs with HS256, which does not match the registered HS384.
-        var token = CreateMockToken(ClientId, ClientId, [RequestUri], "jti", _clock.GetUtcNow().AddMinutes(5));
+        var token = CreateMockToken(ClientId, ClientId, [IssuerIdentifier], "jti", _clock.GetUtcNow().AddMinutes(5));
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
@@ -252,7 +365,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -262,7 +375,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -289,7 +402,7 @@ public class ClientSecretJwtAuthenticatorTests
             ClientSecrets = [new ClientSecret { Value = ClientSecret }],
         };
 
-        var token = CreateMockToken(ClientId, ClientId, [RequestUri], jwtId, _clock.GetUtcNow().AddMinutes(5));
+        var token = CreateMockToken(ClientId, ClientId, [IssuerIdentifier], jwtId, _clock.GetUtcNow().AddMinutes(5));
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
@@ -303,7 +416,7 @@ public class ClientSecretJwtAuthenticatorTests
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         _replayCache
@@ -317,7 +430,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.NotNull(result);
@@ -345,7 +458,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -367,13 +480,16 @@ public class ClientSecretJwtAuthenticatorTests
             ClientSecrets = [new ClientSecret { Value = ClientSecret }]
         };
 
-        var token = CreateMockToken(ClientId, ClientId, [RequestUri], "jti", _clock.GetUtcNow().AddMinutes(5));
+        var token = CreateMockToken(ClientId, ClientId, [IssuerIdentifier], "jti", _clock.GetUtcNow().AddMinutes(5));
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
-                // Simulate JWT validator executing the callbacks
+                // In the order the JWT validator runs them: the signing keys, then the issuer
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                 if (parameters.ValidateIssuer != null)
                 {
                     var issuerValid = await parameters.ValidateIssuer(ClientId);
@@ -381,14 +497,11 @@ public class ClientSecretJwtAuthenticatorTests
                         return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
                 }
 
-                if (parameters.ResolveIssuerSigningKeys != null)
-                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
-
                 return token;
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -398,7 +511,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
@@ -420,13 +533,16 @@ public class ClientSecretJwtAuthenticatorTests
             ClientSecrets = [new ClientSecret { Value = ClientSecret }]
         };
 
-        var token = CreateMockToken(ClientId, "different-subject", [RequestUri], "jti", _clock.GetUtcNow().AddMinutes(5));
+        var token = CreateMockToken(ClientId, "different-subject", [IssuerIdentifier], "jti", _clock.GetUtcNow().AddMinutes(5));
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
-                // Simulate JWT validator executing the callbacks
+                // In the order the JWT validator runs them: the signing keys, then the issuer
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                 if (parameters.ValidateIssuer != null)
                 {
                     var issuerValid = await parameters.ValidateIssuer(ClientId);
@@ -434,14 +550,11 @@ public class ClientSecretJwtAuthenticatorTests
                         return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
                 }
 
-                if (parameters.ResolveIssuerSigningKeys != null)
-                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
-
                 return token;
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -451,14 +564,14 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);
     }
 
     /// <summary>
-    /// Verifies authentication is rejected when the assertion has no jti. OpenID Connect Core §9
+    /// Verifies authentication is rejected when the assertion has no jti. OpenID Connect Core section 9
     /// makes jti REQUIRED ("A unique identifier for the token, which can be used to prevent reuse
     /// of the token"); without it the assertion is replayable within its expiry window.
     /// </summary>
@@ -474,13 +587,16 @@ public class ClientSecretJwtAuthenticatorTests
             ClientSecrets = [new ClientSecret { Value = ClientSecret }]
         };
 
-        var token = CreateMockToken(ClientId, ClientId, [RequestUri], null, _clock.GetUtcNow().AddMinutes(5));
+        var token = CreateMockToken(ClientId, ClientId, [IssuerIdentifier], null, _clock.GetUtcNow().AddMinutes(5));
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(jwt, It.IsAny<ValidationParameters>()))
             .Returns(new Func<string, ValidationParameters, Task<Result<JsonWebToken, JwtValidationError>>>(async (_, parameters) =>
             {
-                // Simulate JWT validator executing the callbacks
+                // In the order the JWT validator runs them: the signing keys, then the issuer
+                if (parameters.ResolveIssuerSigningKeys != null)
+                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
+
                 if (parameters.ValidateIssuer != null)
                 {
                     var issuerValid = await parameters.ValidateIssuer(ClientId);
@@ -488,14 +604,11 @@ public class ClientSecretJwtAuthenticatorTests
                         return new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
                 }
 
-                if (parameters.ResolveIssuerSigningKeys != null)
-                    await parameters.ResolveIssuerSigningKeys(ClientId).ToArrayAsync();
-
                 return token;
             }));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(clientInfo);
 
         var request = new ClientRequest
@@ -505,7 +618,7 @@ public class ClientSecretJwtAuthenticatorTests
         };
 
         // Act
-        var result = await _authenticator.TryAuthenticateClientAsync(request);
+        var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
         Assert.Null(result);

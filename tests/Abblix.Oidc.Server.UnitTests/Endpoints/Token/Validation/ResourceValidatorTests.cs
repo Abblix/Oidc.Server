@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
@@ -14,6 +15,7 @@ using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 
@@ -32,8 +34,7 @@ public class ResourceValidatorTests
     private readonly ResourceValidator _validator;
 
     // Delegate for mocking out parameter behavior
-    private delegate bool TryGetCallback(
-        Uri resource,
+    private delegate bool TryGetCallback(TenantDefinition tenant, Uri resource,
         out ResourceDefinition? definition);
 
     public ResourceValidatorTests()
@@ -56,6 +57,33 @@ public class ResourceValidatorTests
     }
 
     /// <summary>
+    /// A client credentials request naming no resource and no scope, at a tenant inferring the resource from the
+    /// scope, is given the resource its client's default scope belongs to, as the same request naming the scope is.
+    /// </summary>
+    [Fact]
+    public async Task ARequestNamingNoScope_IsGivenTheResourceOfTheClientsDefault()
+    {
+        var tenant = new TestIssuer
+        {
+            InferResourceFromScope = true,
+            Resources = [new ResourceDefinition(Resource1, new ScopeDefinition("orders.read"))],
+        }.ToTenant();
+        var context = new TokenValidationContext(
+            new TokenRequest { GrantType = GrantTypes.ClientCredentials, Scope = [] },
+            new ClientRequest())
+        {
+            ClientInfo = new ClientInfo("test-client") { AllowedScopes = ["orders.read"], DefaultScope = ["orders.read"] },
+        };
+
+        var result = await new ResourceValidator(SingleIssuer.ResourceManager())
+            .ValidateAsync(tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Null(result);
+        Assert.Equal(Resource1, Assert.Single(context.Request.Resources ?? []));
+        Assert.Equal("orders.read", Assert.Single(Assert.Single(context.Resources).Scopes).Scope);
+    }
+
+    /// <summary>
     /// Verifies successful validation when no resources specified.
     /// Per RFC 8707, resources are optional.
     /// </summary>
@@ -66,7 +94,7 @@ public class ResourceValidatorTests
         var context = CreateContext(resources: null, scope: ["read"]);
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -84,7 +112,7 @@ public class ResourceValidatorTests
         var context = CreateContext(resources: [], scope: ["read"]);
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -105,15 +133,15 @@ public class ResourceValidatorTests
         var resourceDefinition = new ResourceDefinition(Resource1, new ScopeDefinition("read"));
 
         _resourceManager
-            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition?>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
+            .Setup(m => m.TryGet(TestTenant.Matched, Resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDefinition;
                 return true;
             }));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -135,15 +163,15 @@ public class ResourceValidatorTests
             scope: ["read"]);
 
         _resourceManager
-            .Setup(m => m.TryGet(UnknownResource, out It.Ref<ResourceDefinition?>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
+            .Setup(m => m.TryGet(TestTenant.Matched, UnknownResource, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = null;
                 return false;
             }));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -164,15 +192,15 @@ public class ResourceValidatorTests
             scope: ["read"]);
 
         _resourceManager
-            .Setup(m => m.TryGet(UnknownResource, out It.Ref<ResourceDefinition?>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
+            .Setup(m => m.TryGet(TestTenant.Matched, UnknownResource, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = null;
                 return false;
             }));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -191,15 +219,15 @@ public class ResourceValidatorTests
         var resourceDefinition = new ResourceDefinition(Resource1);
 
         _resourceManager
-            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition?>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
+            .Setup(m => m.TryGet(TestTenant.Matched, Resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDefinition;
                 return true;
             }));
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(new[] { resourceDefinition }, context.Resources);
@@ -220,22 +248,22 @@ public class ResourceValidatorTests
         var resourceDef2 = new ResourceDefinition(Resource2);
 
         _resourceManager
-            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition?>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
+            .Setup(m => m.TryGet(TestTenant.Matched, Resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDef1;
                 return true;
             }));
         _resourceManager
-            .Setup(m => m.TryGet(Resource2, out It.Ref<ResourceDefinition?>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
+            .Setup(m => m.TryGet(TestTenant.Matched, Resource2, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDef2;
                 return true;
             }));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -256,29 +284,29 @@ public class ResourceValidatorTests
         var resourceDef2 = new ResourceDefinition(Resource2);
 
         _resourceManager
-            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition?>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
+            .Setup(m => m.TryGet(TestTenant.Matched, Resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDef1;
                 return true;
             }));
         _resourceManager
-            .Setup(m => m.TryGet(Resource2, out It.Ref<ResourceDefinition?>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
+            .Setup(m => m.TryGet(TestTenant.Matched, Resource2, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDef2;
                 return true;
             }));
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         _resourceManager.Verify(
-            m => m.TryGet(Resource1, out It.Ref<ResourceDefinition?>.IsAny),
+            m => m.TryGet(TestTenant.Matched, Resource1, out It.Ref<ResourceDefinition?>.IsAny),
             Times.Once);
         _resourceManager.Verify(
-            m => m.TryGet(Resource2, out It.Ref<ResourceDefinition?>.IsAny),
+            m => m.TryGet(TestTenant.Matched, Resource2, out It.Ref<ResourceDefinition?>.IsAny),
             Times.Once);
     }
 
@@ -294,15 +322,15 @@ public class ResourceValidatorTests
         var resourceDefinition = new ResourceDefinition(Resource1);
 
         _resourceManager
-            .Setup(m => m.TryGet(Resource1, out It.Ref<ResourceDefinition?>.IsAny))
-            .Returns(new TryGetCallback((Uri r, out ResourceDefinition? def) =>
+            .Setup(m => m.TryGet(TestTenant.Matched, Resource1, out It.Ref<ResourceDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, Uri r, out ResourceDefinition? def) =>
             {
                 def = resourceDefinition;
                 return true;
             }));
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ScopeManagement;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -24,6 +25,7 @@ public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidat
     /// Validates the scopes specified in the token request context. This method ensures that all requested scopes
     /// are recognized by the scope manager and are permissible for the requesting client.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The context containing the token request information,
     /// including the scopes to be validated.</param>
     /// <returns>
@@ -31,10 +33,13 @@ public class ScopeValidator(IScopeManager scopeManager): SyncTokenContextValidat
     /// including an error code and a message describing the issue;
     /// otherwise, returns null indicating that all requested scopes are valid.
     /// </returns>
-    protected override OidcError? Validate(TokenValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, TokenValidationContext context)
     {
-        if (!scopeManager.Validate(
-                context.Request.Scope,
+        if (TokenRequestScope.ServedFor(context) is not { } scope)
+            return new OidcError(ErrorCodes.InvalidScope, ScopeRefusals.NoneNamed);
+
+        if (!scopeManager.Validate(tenant,
+                scope,
                 context.Resources,
                 context.ClientInfo.AllowedScopes,
                 out var scopeDefinitions,

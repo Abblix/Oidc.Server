@@ -7,13 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Model;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -21,7 +21,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// End-to-end proof of the OAuth 2.0 Security BCP refresh-token rotation model (RFC 9700 Section 4.14.2)
 /// against the real token endpoint and the real token registry: a replay of a superseded refresh token
 /// revokes the entire token family, so the currently active token of the same authorization grant dies
-/// with it. This is the reuse-detection behaviour that contains a stolen refresh token - a leaked token is
+/// with it. This is the reuse-detection behavior that contains a stolen refresh token - a leaked token is
 /// directly replayable for a public client, which is exactly why RFC 9700 Section 2.2.2 mandates rotation
 /// there. The mechanism is client-type independent; the confidential client is used here as the most
 /// heavily-exercised transport path.
@@ -35,9 +35,9 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         var discovery = await FetchDiscoveryAsync(client);
 
         // A legitimate auth-code flow with offline_access issues the first refresh token of a new family
-        // (rt1). The test client does not set AllowReuse, so it rotates by default (the secure default).
+        // (rt1). The test client authenticates with client_secret_post, so the default policy rotates its tokens.
         var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var rt1 = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var rt1 = initial[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
 
         // A normal refresh rotates rt1 -> rt2: rt1 becomes superseded (marked Used) and rt2 is now the
         // legitimately active token of the family. This also proves rotation works end-to-end.
@@ -55,6 +55,33 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         await AssertInvalidGrantAsync(afterCascade);
     }
 
+    /// <summary>
+    /// Two requests renewing one rotated token at once: exactly one is served, and the other is treated as the replay
+    /// it cannot be told from, so the family the two would have forked into is revoked - the token just issued to the
+    /// winner included. Whichever order the two take, the outcome is the same; two at once is the order in which
+    /// both used to be served.
+    /// </summary>
+    [Fact]
+    public async Task Concurrent_renewals_of_one_token_serve_exactly_one()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+            var rt1 = initial[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+
+            var responses = await Task.WhenAll(RefreshAsync(client, discovery, rt1), RefreshAsync(client, discovery, rt1));
+
+            var served = Assert.Single(responses, response => response.IsSuccessStatusCode);
+            await AssertInvalidGrantAsync(Assert.Single(responses, response => !response.IsSuccessStatusCode));
+
+            var winnersToken = (await ReadJsonAsync(served))[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+            await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, winnersToken));
+        }
+    }
+
     [Fact]
     public async Task Replaying_the_oldest_token_revokes_a_multi_generation_family()
     {
@@ -64,7 +91,7 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         // Build a three-generation lineage rt1 -> rt2 -> rt3. Each rotation supersedes its predecessor and
         // carries the same grant_id forward, so rt1, rt2 and rt3 all belong to one family; rt3 is active.
         var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var rt1 = initial[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var rt1 = initial[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
         var rt2 = await RotateAsync(client, discovery, rt1);
         var rt3 = await RotateAsync(client, discovery, rt2);
         Assert.NotEqual(rt1, rt2);
@@ -79,6 +106,103 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         // rt3 - the token an attacker who had rotated forward would be holding.
         await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt2));
         await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt3));
+    }
+
+    [Fact]
+    public async Task Revoking_the_family_also_refuses_its_access_tokens()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        // The first access token is issued together with rt1, the second one at the rotation that replaces it,
+        // so between them they cover both ways the token endpoint issues an access token of this grant.
+        var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var rt1 = initial[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+        var firstAccessToken = initial[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+
+        var rotation = await RefreshAsync(client, discovery, rt1);
+        var rotated = await ReadJsonAsync(rotation);
+        Assert.True(rotation.IsSuccessStatusCode, $"refresh should rotate, got {(int)rotation.StatusCode}: {rotated}");
+        var rotatedAccessToken = rotated[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+
+        // Both are accepted before the family is revoked, so a refusal below is the revocation speaking and not
+        // a token UserInfo would have refused anyway.
+        Assert.Equal(HttpStatusCode.OK, (await SendUserInfoAsync(client, discovery, firstAccessToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await SendUserInfoAsync(client, discovery, rotatedAccessToken)).StatusCode);
+
+        await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt1));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendUserInfoAsync(client, discovery, firstAccessToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendUserInfoAsync(client, discovery, rotatedAccessToken)).StatusCode);
+    }
+
+    /// <summary>
+    /// A token exchanged from a token of the family is authority derived from that grant, so revoking the family
+    /// refuses it as well. Without this the delegated token outlives the breach that killed everything it came from.
+    /// </summary>
+    [Fact]
+    public async Task Revoking_the_family_also_refuses_a_token_exchanged_from_it()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var rt1 = initial[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+        var accessToken = initial[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+
+        var exchange = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
+            [TokenRequest.Parameters.SubjectToken] = accessToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+        var exchangeBody = await ReadJsonAsync(exchange);
+        Assert.True(exchange.IsSuccessStatusCode, $"exchange should succeed, got {(int)exchange.StatusCode}: {exchangeBody}");
+        var delegated = exchangeBody[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+
+        Assert.Equal(HttpStatusCode.OK, (await SendUserInfoAsync(client, discovery, delegated)).StatusCode);
+
+        // Rotate, then replay the superseded token: that is what revokes the family.
+        await RotateAsync(client, discovery, rt1);
+        await AssertInvalidGrantAsync(await RefreshAsync(client, discovery, rt1));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendUserInfoAsync(client, discovery, delegated)).StatusCode);
+    }
+
+    /// <summary>
+    /// Revoking a refresh token at the revocation endpoint revokes its grant, so an access token of the same grant is
+    /// refused too (RFC 7009 section 2.1).
+    /// </summary>
+    [Fact]
+    public async Task Revoking_a_refresh_token_refuses_the_access_tokens_of_its_grant()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var initial = await ObtainConfidentialOfflineTokensAsync(client, discovery);
+        var refreshToken = initial[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
+        var accessToken = initial[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+        Assert.Equal(HttpStatusCode.OK, (await SendUserInfoAsync(client, discovery, accessToken)).StatusCode);
+
+        var revoked = await FormPostHelpers.PostFormAsync(client, discovery.RevocationEndpoint!, new Dictionary<string, string>
+        {
+            [RevocationRequest.Parameters.Token] = refreshToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        Assert.Equal(HttpStatusCode.OK, revoked.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendUserInfoAsync(client, discovery, accessToken)).StatusCode);
+    }
+
+    private static async Task<HttpResponseMessage> SendUserInfoAsync(
+        HttpClient client, DiscoveryDocument discovery, string accessToken)
+    {
+        Assert.NotNull(discovery.UserInfoEndpoint);
+        using var request = new HttpRequestMessage(HttpMethod.Get, discovery.UserInfoEndpoint);
+        request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
+        return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 
     private static async Task<HttpResponseMessage> RefreshAsync(
@@ -100,7 +224,7 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
         var response = await RefreshAsync(client, discovery, refreshToken);
         var body = await ReadJsonAsync(response);
         Assert.True(response.IsSuccessStatusCode, $"refresh should rotate, got {(int)response.StatusCode}: {body}");
-        return body[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        return body[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
     }
 
     private static async Task<JsonObject> ReadJsonAsync(HttpResponseMessage response) =>
@@ -110,6 +234,6 @@ public class RefreshTokenFamilyRevocationTests(TestFactory factory) : TestBase(f
     {
         var body = await ReadJsonAsync(response);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidGrant, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidGrant, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 }

@@ -9,9 +9,11 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
 
@@ -27,12 +29,12 @@ public partial class ClientValidator(
     IClientInfoProvider clientInfoProvider) : IEndSessionContextValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, EndSessionValidationContext context)
     {
         if (!context.ClientId.HasValue())
             return null;
 
-        var clientInfo = await clientInfoProvider.TryFindClientAsync(context.ClientId).WithLicenseCheck();
+        var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, context.ClientId);
         if (clientInfo == null)
         {
             LogClientNotFound(context.ClientId);

@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
 
@@ -19,6 +18,10 @@
         <PackageReference Include="Microsoft.Extensions.Configuration" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+        <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
+        <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
         <PackageReference Include="xunit.v3.mtp-v2" />
         <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
         <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
@@ -38,10 +41,12 @@
         <ProjectReference Include="..\..\src\Abblix.Jwt\Abblix.Jwt.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Jwt.Azure\Abblix.Jwt.Azure.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Jwt.Vault\Abblix.Jwt.Vault.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Oidc\Abblix.Oidc.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Oidc.Server\Abblix.Oidc.Server.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Oidc.Server.MinimalApi\Abblix.Oidc.Server.MinimalApi.csproj" />
         <ProjectReference Include="..\..\src\Abblix.Oidc.Server.Mvc\Abblix.Oidc.Server.Mvc.csproj" />
+        <ProjectReference Include="..\..\src\Abblix.Oidc.Server.SharedSignals\Abblix.Oidc.Server.SharedSignals.csproj" />
         <ProjectReference Include="..\..\src\Abblix.SecurityEvents\Abblix.SecurityEvents.csproj" />
         <ProjectReference Include="..\..\src\Abblix.SecurityEvents.CAEP\Abblix.SecurityEvents.CAEP.csproj" />
         <ProjectReference Include="..\..\src\Abblix.SecurityEvents.MinimalApi\Abblix.SecurityEvents.MinimalApi.csproj" />
@@ -52,15 +57,36 @@
         <ProjectReference Include="..\..\src\Abblix.Utils\Abblix.Utils.csproj" />
     </ItemGroup>
 
+    <!-- The web template's implicit usings, computed by the SDK rather than written down. Kept out of
+         the reference list below on purpose: that list is read by rows asserting every referenced
+         project put its documentation beside the output, and this one is not a library and documents
+         nothing.
+
+         Ordinary metadata, NOT AdditionalProperties. Those are the global properties the referenced
+         project is BUILT with, so a reference carrying them asks for a second instance of that project:
+         measured on a solution build, the companion was produced twice into the same bin/Debug, with
+         nothing sequencing the two writers. The line that answers this is the one naming a finished
+         assembly ("<project> -> <path>"), one per built instance and target framework; the "is building"
+         lines count REQUESTS and stay at one id however many instances there are.
+
+         Metadata also puts the name where somebody can find its reader: the filter below matches on it,
+         while a filter keyed on AdditionalProperties being non-empty would work whatever the name
+         said. -->
+    <ItemGroup>
+        <ProjectReference Include="..\Abblix.DocSamples.WebTemplate\Abblix.DocSamples.WebTemplate.csproj"
+                          ExcludeFromReferenceList="true" />
+    </ItemGroup>
+
     <!-- The reference list, written by MSBuild rather than recovered from a copy of this file: a
          test asserts every referenced project put its documentation beside the output, and hand-
          parsing Include paths meant splitting them on a separator. The previous attempt did that
          with Path.GetFileNameWithoutExtension, which does not treat a backslash as one on Linux -
-         green here, red on the Ubuntu runner CI actually uses. -->
+         green here, red on the Ubuntu runner CI actually uses. The analyzer reference every project gets
+         from Directory.Build.props is left out too: it loads into the compiler and documents nothing. -->
     <ItemGroup>
         <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
             <_Parameter1>ReferencedProjects</_Parameter1>
-            <_Parameter2>@(ProjectReference->'%(Filename)')</_Parameter2>
+            <_Parameter2>@(ProjectReference->WithMetadataValue('ExcludeFromReferenceList', '')->WithMetadataValue('OutputItemType', '')->'%(Filename)')</_Parameter2>
         </AssemblyAttribute>
     </ItemGroup>
 

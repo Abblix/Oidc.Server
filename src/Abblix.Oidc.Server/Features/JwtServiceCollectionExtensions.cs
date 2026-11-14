@@ -1,0 +1,103 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using Abblix.Jwt.ExternalKeys;
+using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Implementation;
+using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.ExternalKeys;
+using Abblix.Oidc.Server.Features.ResponseObject;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Oidc.Server.Features.Tokens.Validation;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
+
+namespace Abblix.Oidc.Server.Features;
+
+/// <summary>
+/// Provides extension methods to <see cref="IServiceCollection"/> for configuring
+/// formatting and validating the JWTs this server and its clients sign.
+/// </summary>
+public static class JwtServiceCollectionExtensions
+{
+    /// <summary>
+    /// Registers JWT formatting and validation services for authentication within the specified <see cref="IServiceCollection"/>.
+    /// </summary>
+    /// <remarks>
+    /// The validator of this server's tokens refuses one revoked, rotated or cut off, so the records of revocation
+    /// come with it. Reading them needs the entity storage, the client information and the subject type converter,
+    /// which the server's registration brings; a host composing these registrations one by one registers those too.
+    /// </remarks>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add the JWT authentication services to.</param>
+    /// <returns>The <see cref="IServiceCollection"/> for chaining further service registrations.</returns>
+    public static IServiceCollection AddAuthServiceJwt(this IServiceCollection services)
+    {
+        // Which provider serves this server's keys follows from where the host put the private halves, and that
+        // choice is made by a call in Abblix.Jwt which may run either side of this one. So it is read at resolve
+        // rather than acted on at registration: nothing here has to be ordered against the placement call, and a
+        // host that never wires a custodian simply lands on the static-configuration provider.
+        //
+        // TryAdd, so a host that registered its own key provider keeps it whichever placement it then chooses -
+        // which is how the custodian's key listing gets cached in production, since the provider below does not
+        // cache. The placement decides what the LIBRARY would install, never that one must be installed.
+        services.TryAddSingleton(serviceProvider => new KeyProviderRegistration(
+            services,
+            serviceProvider.GetRequiredService<IOptions<KeyPlacementChoice>>()));
+        services.TryAdd(
+            ServiceDescriptor.Singleton(typeof(IAuthServiceKeysProvider), KeyProviderRegistration.LibraryProvider));
+
+        // The write-role counterpart to the reader above. The default is the read-only static
+        // configuration that fails loud if asked to persist a generated key; a persistent store (shipped
+        // with key generation and rotation) replaces it host-first via TryAdd. It is segregated from the
+        // reader (ISP), so read-only consumers never depend on persistence.
+        services.TryAddSingleton<IAuthServiceKeysStore, ReadOnlyAuthServiceKeysStore>();
+
+        // The JWKS endpoint is cached for OidcOptions.KeyRolloverPropagation, so a key the ring mints waits that
+        // window before it signs. Set after the ring's own configuration, the host's included: a ring window of its own
+        // would let a client with a warm cache meet a key it has never seen.
+        services.AddOptions<KeyRingOptions>().PostConfigure<IOptions<OidcOptions>>(
+            (ring, oidc) => ring.KeyRolloverPropagation = oidc.Value.KeyRolloverPropagation);
+
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, KeyRolloverPropagationValidator>());
+
+        services.TryAddSingleton<IAuthServiceJwtFormatter, AuthServiceJwtFormatter>();
+        // The validator refuses a token revoked, rotated or cut off, so what records those comes with it
+        services.AddTokenRevocation();
+        services.TryAddSingleton<IAuthServiceJwtValidator, AuthServiceJwtValidator>();
+        services.TryAddSingleton<IIdTokenHintParser, IdTokenHintParser>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers services for validating and formatting JWTs used in client authentication scenarios within
+    /// the specified <see cref="IServiceCollection"/>.
+    /// </summary>
+    /// <remarks>
+    /// This method adds services to the <see cref="IServiceCollection"/> that are responsible for validating and
+    /// formatting JWTs used specifically in client authentication.
+    /// These services ensure that JWTs conform to the required standards,
+    /// include all necessary claims, and are properly validated for client authentication processes.
+    /// </remarks>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add the client JWT validation and
+    /// formatting services to.</param>
+    /// <returns>The <see cref="IServiceCollection"/> for chaining further service registrations.</returns>
+    public static IServiceCollection AddClientJwt(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IClientJwtValidator, ClientJwtValidator>();
+
+        // The validator judges a client JWT's timestamps against this clock. Registered here rather
+        // than relied upon from elsewhere: this method is public and a host may call it on a
+        // collection that has nothing else of ours in it.
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IClientJwtFormatter, ClientJwtFormatter>();
+        services.TryAddSingleton<IResponseJwtBuilder, ResponseJwtBuilder>();
+        return services;
+    }
+}

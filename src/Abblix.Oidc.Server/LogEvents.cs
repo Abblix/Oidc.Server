@@ -21,6 +21,14 @@ namespace Abblix.Oidc.Server;
 /// Read the neighbours before taking a number. Several windows are narrower than they look, because
 /// something that is not theirs sits inside them, and an id already in a deployment's alerts cannot move -
 /// so a class needing one more takes a second window rather than displacing anybody.
+///
+/// The library's packages log into one process, so their numbers come from one space, and each package
+/// keeps its own window: Abblix.Jwt 1000-1199; this assembly 2000-11099, less the two windows below;
+/// Abblix.Oidc.Server.AspNetCore 10500-10599; Abblix.Oidc.Server.SharedSignals 10800-10899;
+/// Abblix.Jwt.Vault 12000-12299; Abblix.Jwt.Azure 13000-13199; Abblix.SecurityEvents 14000-14199;
+/// Abblix.SharedSignals 15000-15099. A new package takes the next free thousand. A package's window moves only in a
+/// major version and only when it overlaps another package's, and the release notes give the old and the new
+/// numbers, since every alert keyed on the old ones stops firing.
 /// </remarks>
 internal static class LogEvents
 {
@@ -32,8 +40,8 @@ internal static class LogEvents
     public static class Endpoints
     {
         /// <summary>
-        /// <c>Endpoints/Token/Grants/JwtBearerGrantHandler.cs</c> - RFC 7523
-        /// JWT Bearer grant validation pipeline (sub-range 2000-2019).
+        /// <c>Endpoints/Token/Grants/JwtBearerGrantHandler.cs</c> and the parts it is built from, such as
+        /// <c>JwtBearerIssuerValidator.cs</c> - RFC 7523 JWT Bearer grant validation pipeline (sub-range 2000-2019).
         /// </summary>
         public static class JwtBearer
         {
@@ -55,6 +63,8 @@ internal static class LogEvents
             public const int AudienceFailedStrict = Base + 14;
             public const int AudienceFailedPermissive = Base + 15;
             public const int MissingExpiration = Base + 16;
+            public const int TokenOfAnotherKind = Base + 17;
+            public const int IssuerIsServedTenant = Base + 18;
         }
 
         /// <summary>
@@ -78,6 +88,7 @@ internal static class LogEvents
             private const int Base = 2040;
 
             public const int ClientNotFound = Base + 1;
+            public const int ClientCannotSatisfyProfile = Base + 2;
         }
 
         /// <summary>
@@ -122,6 +133,11 @@ internal static class LogEvents
         /// <c>Endpoints/EndSession/EndSessionRequestProcessor.cs</c> - processes RP-Initiated
         /// Logout requests per OpenID Connect RP-Initiated Logout 1.0 (sub-range 2070-2074).
         /// </summary>
+        /// <remarks>
+        /// <see cref="ClientNotificationFailed"/> is raised by
+        /// <c>Features/LogoutNotification/SessionLogoutNotifier.cs</c>, which notifies the clients on the end
+        /// session's behalf, and keeps this id because an operator may already alert on it.
+        /// </remarks>
         public static class EndSessionRequestProcessor
         {
             private const int Base = 2070;
@@ -151,6 +167,7 @@ internal static class LogEvents
             private const int Base = 2080;
 
             public const int InvalidPostLogoutRedirectUri = Base + 1;
+            public const int RedirectWithoutClientIgnored = Base + 2;
         }
 
         /// <summary>
@@ -163,6 +180,7 @@ internal static class LogEvents
 
             public const int InvalidJwt = Base + 1;
             public const int PublicClientRejected = Base + 2;
+            public const int CallerRateLimited = Base + 3;
         }
 
         /// <summary>
@@ -175,6 +193,8 @@ internal static class LogEvents
 
             public const int TokenIssuedToAnotherClient = Base + 1;
             public const int TokenValidationFailed = Base + 2;
+            public const int CallerRateLimited = Base + 3;
+            public const int CallerAndSourceRateLimited = Base + 4;
         }
     }
 
@@ -203,9 +223,11 @@ internal static class LogEvents
             public const int MissingExpiration = Base + 9;
             public const int ReplayDetected = Base + 10;
             public const int OtherKindPresentedAsAssertion = Base + 11;
-            public const int AudienceIsNotTheIssuerAlone = Base + 12;
+            public const int AudienceIsNotOneTheClientMayName = Base + 12;
             public const int TimestampsOutsideTheClientsProfile = Base + 13;
             public const int TimestampUnreadable = Base + 14;
+            public const int TokenEndpointAudienceAccepted = Base + 15;
+            public const int BackChannelAuthenticationEndpointAudienceAccepted = Base + 16;
         }
 
         /// <summary>
@@ -234,7 +256,6 @@ internal static class LogEvents
         {
             private const int Base = 3040;
 
-            public const int AudienceValidationFailed = Base + 1;
             public const int WrongAuthMethod = Base + 2;
             public const int NoSecretsConfigured = Base + 3;
             public const int SecretWithoutRawValue = Base + 4;
@@ -296,6 +317,7 @@ internal static class LogEvents
             /// of a field - and so that this record goes on naming one shape per number.
             /// </summary>
             public const int RegistrationCannotSatisfyDeploymentProfile = Base + 3;
+            public const int ClientIdentifiersMismatch = Base + 4;
         }
     }
 
@@ -307,7 +329,7 @@ internal static class LogEvents
         /// <summary>
         /// <c>Endpoints/DynamicClientManagement/Validation/ClientIdValidator.cs</c> -
         /// cross-checks supplied <c>client_id</c> against register/update operation type
-        /// per RFC 7591 §3 / RFC 7592 §2.2 (sub-range 4000-4019).
+        /// per RFC 7591 section 3 / RFC 7592 section 2.2 (sub-range 4000-4019).
         /// </summary>
         public static class ClientIdValidator
         {
@@ -319,7 +341,7 @@ internal static class LogEvents
 
         /// <summary>
         /// <c>Endpoints/DynamicClientManagement/Validation/SoftwareStatementValidator.cs</c> -
-        /// validates the <c>software_statement</c> JWT parameter per RFC 7591 §2.3
+        /// validates the <c>software_statement</c> JWT parameter per RFC 7591 section 2.3
         /// (sub-range 4020-4039).
         /// </summary>
         public static class SoftwareStatementValidator
@@ -328,11 +350,12 @@ internal static class LogEvents
 
             public const int ValidationFailed = Base + 1;
             public const int IssuerNotTrusted = Base + 2;
+            public const int IssuerIsServedTenant = Base + 3;
         }
 
         /// <summary>
         /// <c>Endpoints/DynamicClientManagement/Validation/SubjectTypeValidator.cs</c> -
-        /// validates OIDC Core §8 <c>subject_type</c> metadata and pairwise sector
+        /// validates OIDC Core section 8 <c>subject_type</c> metadata and pairwise sector
         /// identifier resolution (sub-range 4040-4059).
         /// </summary>
         public static class SubjectTypeValidator
@@ -340,6 +363,17 @@ internal static class LogEvents
             private const int Base = 4040;
 
             public const int SectorIdentifierMissingUris = Base + 1;
+        }
+
+        /// <summary>
+        /// <c>Endpoints/DynamicClientManagement/RegisterClientRequestProcessor.cs</c> - a registration the client
+        /// store did not keep (sub-range 4060-4079).
+        /// </summary>
+        public static class RegisterClientRequestProcessor
+        {
+            private const int Base = 4060;
+
+            public const int RegistrationNotKept = Base + 1;
         }
     }
 
@@ -366,6 +400,7 @@ internal static class LogEvents
             public const int AudienceValidationFailed = Base + 5;
             public const int TimestampsOutsideTheClientsProfile = Base + 6;
             public const int TimestampUnreadable = Base + 7;
+            public const int AlgorithmOutsideTheClientsProfile = Base + 8;
         }
 
         /// <summary>
@@ -381,16 +416,16 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Features/ReplayPrevention/DistributedJwtReplayCache.cs</c> - JWT replay
-        /// protection via <c>IDistributedCache</c> per RFC 7523 Section 3 and
-        /// RFC 9449 §11.1 (sub-range 5040-5059).
+        /// <c>Features/ReplayPrevention/ConfiguredReplayCache.cs</c> - JWT replay
+        /// protection per RFC 7523 Section 3 and RFC 9449 section 11.1 (sub-range 5040-5059).
         /// </summary>
-        public static class DistributedJwtReplayCache
+        public static class ConfiguredReplayCache
         {
             private const int Base = 5040;
 
             public const int ReplayDetected = Base + 1;
             public const int MarkedAsUsed = Base + 2;
+            public const int Released = Base + 3;
         }
 
         /// <summary>
@@ -410,7 +445,7 @@ internal static class LogEvents
         /// <summary>
         /// <c>Features/Nonces/RollingHmacNonceService.cs</c> - generic
         /// stateless-nonce issuance and validation. DPoP-Nonce per RFC 9449
-        /// §8 / §9 is the current consumer (sub-range 5080-5099).
+        /// section 8 / section 9 is the current consumer (sub-range 5080-5099).
         /// </summary>
         public static class RollingHmacNonceService
         {
@@ -500,10 +535,12 @@ internal static class LogEvents
             private const int Base = 7000;
 
             public const int UserCodeRateLimited = Base + 1;
-            public const int IpRateLimited = Base + 2;
+            public const int AddressCapReached = Base + 2;
             public const int UserCodeBlocked = Base + 3;
             public const int BruteForceDetected = Base + 4;
             public const int UserCodeVerified = Base + 5;
+            public const int UserCodeAttemptsSpent = Base + 6;
+            public const int FailedAttemptBudgetSpent = Base + 7;
         }
 
         /// <summary>
@@ -518,6 +555,8 @@ internal static class LogEvents
             public const int AuthenticatedUserNotTheOneRequested = Base + 2;
             public const int GrantedAuthorizationDetailsExceedTheRequest = Base + 3;
             public const int NotPendingOnCompletion = Base + 4;
+            public const int AuthenticationLevelNotTheOneRequired = Base + 5;
+            public const int GrantNamesAnotherClient = Base + 6;
         }
 
         /// <summary>
@@ -529,6 +568,7 @@ internal static class LogEvents
             private const int Base = 7020;
 
             public const int ClientNotFound = Base + 1;
+            public const int NothingStored = Base + 2;
         }
 
         /// <summary>
@@ -566,6 +606,10 @@ internal static class LogEvents
             public const int TokenGenerationFailed = Base + 3;
             public const int PushDeliveryFailed = Base + 4;
             public const int GrantedAuthorizationDetailsRefused = Base + 5;
+            public const int GrantedAuthorizationDetailsFaulted = Base + 6;
+            public const int TokenIssuanceFaulted = Base + 7;
+            public const int GrantRevoked = Base + 8;
+            public const int RevocationCheckFaulted = Base + 9;
         }
 
         /// <summary>
@@ -679,7 +723,7 @@ internal static class LogEvents
 
             public const int ClientLimitExceededByMargin = Base + 1;
             public const int ClientLimitExceeded = Base + 2;
-            public const int IssuerNotInWhitelist = Base + 3;
+            public const int IssuerNotAllowed = Base + 3;
             public const int IssuerLimitExceeded = Base + 4;
         }
 
@@ -699,7 +743,8 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 9000-9099: misc - Discovery, Storage, Issuer, Session, RandomGenerator.
+    /// Range 9000-9119: misc - Discovery, Storage, Issuer, Session, RandomGenerator, and the stand-in provider of
+    /// user information.
     /// </summary>
     public static class Misc
     {
@@ -715,6 +760,7 @@ internal static class LogEvents
             public const int InvalidToken = Base + 1;
             public const int SigningAlgorithmMismatch = Base + 2;
             public const int ParametersOutsideRequestObjectIgnored = Base + 3;
+            public const int RefusedByProfile = Base + 4;
         }
 
         /// <summary>
@@ -738,7 +784,6 @@ internal static class LogEvents
             private const int Base = 9040;
 
             public const int UserClaimsNotFound = Base + 1;
-            public const int MissingClaims = Base + 2;
         }
 
         /// <summary>
@@ -752,6 +797,28 @@ internal static class LogEvents
 
             public const int PrivateKeyStrippedFromPublishedSet = Base + 1;
         }
+
+        /// <summary>
+        /// <c>Features/ExternalKeys/ExternalKeysProvider.cs</c> - what the published key set does when the
+        /// custodian cannot be asked for it (sub-range 9080-9099).
+        /// </summary>
+        public static class ExternalKeysProvider
+        {
+            private const int Base = 9080;
+
+            public const int ServingLastKnownKeys = Base + 1;
+        }
+
+        /// <summary>
+        /// <c>Features/UserInfo/NoUserInfoProvider.cs</c> - the stand-in for a host that registered no provider of
+        /// user information (sub-range 9100-9119).
+        /// </summary>
+        public static class NoUserInfoProvider
+        {
+            private const int Base = 9100;
+
+            public const int NoProviderRegistered = Base + 1;
+        }
     }
 
     /// <summary>
@@ -761,7 +828,7 @@ internal static class LogEvents
     public static class DPoP
     {
         /// <summary>
-        /// <c>Endpoints/UserInfo/Validation/DPoPUserInfoValidator.cs</c> - RFC 9449 §7
+        /// <c>Endpoints/UserInfo/Validation/DPoPUserInfoValidator.cs</c> - RFC 9449 section 7
         /// resource-server enforcement on the UserInfo endpoint (sub-range 10000-10019).
         /// </summary>
         public static class DPoPUserInfoValidator
@@ -776,8 +843,10 @@ internal static class LogEvents
         }
 
         /// <summary>
-        /// <c>Endpoints/Token/Validation/DPoPTokenEndpointValidator.cs</c> - RFC 9449 §5
-        /// token-endpoint binding (sub-range 10020-10039).
+        /// <c>Endpoints/Token/Validation/DPoPTokenEndpointValidator.cs</c> and
+        /// <c>DPoPBindingValidator.cs</c> beside it - RFC 9449 section 5 token-endpoint proof and binding
+        /// (sub-range 10020-10039). The two report under one range because they are one check split
+        /// around grant resolution.
         /// </summary>
         public static class DPoPTokenEndpointValidator
         {
@@ -822,6 +891,7 @@ internal static class LogEvents
             public const int TokenRefusedByCutoff = Base + 1;
             public const int SubjectCouldNotBeResolved = Base + 2;
             public const int SessionRefusedByCutoff = Base + 3;
+            public const int GrantRefusedByCutoff = Base + 4;
         }
     }
 
@@ -846,6 +916,195 @@ internal static class LogEvents
         public static class BackChannelAuthenticationGrantHandler
         {
             private const int Base = 10200;
+
+            public const int GrantedAuthorizationDetailsRefused = Base;
+        }
+    }
+
+    /// <summary>
+    /// Range 10300-10399: <c>Features/LogoutNotification</c> and the storage it reads - which clients a
+    /// session is known to have, and telling them when it ends.
+    /// </summary>
+    public static class LogoutNotification
+    {
+        /// <summary>
+        /// <c>Features/Storages/SessionClientRegistry.cs</c> - a client the session could not record
+        /// (sub-range 10300-10319).
+        /// </summary>
+        public static class SessionClientRegistry
+        {
+            private const int Base = 10300;
+
+            public const int SessionClientsExhausted = Base;
+        }
+
+        /// <summary>
+        /// <c>Features/LogoutNotification/BackChannelLogoutNotifier.cs</c> - a notification not sent
+        /// (sub-range 10320-10339).
+        /// </summary>
+        public static class BackChannelLogoutNotifier
+        {
+            private const int Base = 10320;
+
+            public const int LogoutTokenNotIssued = Base;
+        }
+    }
+
+    /// <summary>
+    /// Range 10400-10499: <c>Features/RateLimiting</c> - what a budget refuses. A window of its own rather
+    /// than a number inside <see cref="ClientAuth"/>, whose range is allocated to its last id.
+    /// </summary>
+    public static class RateLimiting
+    {
+        /// <summary>
+        /// <c>Features/ClientAuthentication/ThrottledClientAuthenticator.cs</c> - a source whose failed
+        /// authentications are over budget (sub-range 10400-10419).
+        /// </summary>
+        public static class ThrottledClientAuthenticator
+        {
+            private const int Base = 10400;
+
+            public const int SourceRefused = Base;
+        }
+
+        /// <summary>
+        /// <c>Features/RateLimiting/UnnamedSourceNotice.cs</c> - a budget counted per address that is on
+        /// while the server sees no address (sub-range 10420-10439).
+        /// </summary>
+        public static class UnnamedSourceNotice
+        {
+            private const int Base = 10420;
+
+            public const int BudgetLeavesUncharged = Base;
+        }
+    }
+
+    // Range 10500-10599 is taken by Abblix.Oidc.Server.AspNetCore's own LogEvents (multi-tenancy), and 10800-10899
+    // by Abblix.Oidc.Server.SharedSignals' (the transmitter per tenant): the assemblies log into one process, so an
+    // id here must not repeat one there.
+
+    /// <summary>
+    /// Range 10600-10699: <c>Features/ClientInformation</c> - what the client stores do on their own.
+    /// </summary>
+    public static class ClientInformation
+    {
+        /// <summary>
+        /// <c>Features/ClientInformation/ReloadableClientInfoStorage.cs</c> - a registration dropped because the
+        /// settings came to configure its client id (sub-range 10600-10619).
+        /// </summary>
+        public static class ReloadableClientInfoStorage
+        {
+            private const int Base = 10600;
+
+            public const int RegistrationEvicted = Base;
+        }
+    }
+
+    /// <summary>
+    /// Range 10700-10799: <c>Features/MultiTenancy</c> - what the server does with the tenants it reads and the
+    /// changes of them it writes.
+    /// </summary>
+    public static class MultiTenancy
+    {
+        /// <summary>
+        /// <c>Features/MultiTenancy/StoreTenantCatalog.cs</c> and <c>TenantCreations.cs</c>, logging under the
+        /// catalog - tenants a reading leaves out, refused by the checks of the tenant list or not readied to be
+        /// served, tenants gone from the store whose release failed, and released tenants whose closing failed
+        /// (sub-range 10700-10719).
+        /// </summary>
+        public static class StoreTenantCatalog
+        {
+            private const int Base = 10700;
+
+            public const int TenantsLeftOut = Base;
+            public const int TenantNotOpened = Base + 1;
+            public const int TenantNotReleased = Base + 2;
+            public const int TenantNotClosed = Base + 3;
+        }
+
+        /// <summary>
+        /// <c>Features/MultiTenancy/TenantManager.cs</c> - a change of the tenants written that this instance does
+        /// not serve yet, and a change refused for a conflict told without the other tenants (sub-range
+        /// 10720-10739).
+        /// </summary>
+        public static class TenantManager
+        {
+            private const int Base = 10720;
+
+            public const int ChangeNotServedYet = Base;
+            public const int ConflictToldWithoutTheOthers = Base + 1;
+        }
+
+        /// <summary>
+        /// <c>Features/MultiTenancy/TenantCatalogRefreshService.cs</c> - a reading of the store of tenants that failed
+        /// after startup (sub-range 10740-10759).
+        /// </summary>
+        public static class TenantCatalogRefreshService
+        {
+            private const int Base = 10740;
+
+            public const int RefreshFailed = Base;
+        }
+
+        /// <summary>
+        /// <c>Features/MultiTenancy/TrustedTenantIssuersWarning.cs</c> - a trusted issuer of the JWT bearer grant or
+        /// of software statements that is a tenant this server serves (sub-range 10760-10779).
+        /// </summary>
+        public static class TrustedTenantIssuersWarning
+        {
+            private const int Base = 10760;
+
+            public const int TrustedIssuerIsServedTenant = Base;
+            public const int TrustedIssuersNotChecked = Base + 1;
+        }
+    }
+
+    /// <summary>
+    /// Range 10900-10999: <c>Features/Telemetry</c> - what the server records about the requests it serves.
+    /// </summary>
+    public static class Telemetry
+    {
+        /// <summary>
+        /// <c>Features/Telemetry/OidcInstruments.cs</c> - a request an endpoint refused (sub-range 10900-10919).
+        /// </summary>
+        public static class OidcInstruments
+        {
+            private const int Base = 10900;
+
+            public const int RequestRefused = Base;
+        }
+    }
+
+    /// <summary>
+    /// Range 11100-11199: <c>Features/Tokens</c>, a second window, because 5000-5099 is fully allocated.
+    /// </summary>
+    public static class TokenIssuance
+    {
+        /// <summary>
+        /// <c>Features/Tokens/AccessTokenService.cs</c> - an access token not issued for what its audience
+        /// publishes (sub-range 11100-11109).
+        /// </summary>
+        public static class AccessTokenService
+        {
+            private const int Base = 11100;
+
+            public const int AudienceKeyRefused = Base;
+        }
+    }
+
+    /// <summary>
+    /// Range 11000-11099: <c>Endpoints/Authorization</c>, a second window, because 2000-2099 is fully
+    /// allocated.
+    /// </summary>
+    public static class AuthorizationConsent
+    {
+        /// <summary>
+        /// <c>Endpoints/Authorization/ConsentConstraintEnforcer.cs</c> - what the consent backstop refuses as
+        /// a protocol answer rather than a host defect (sub-range 11000-11009).
+        /// </summary>
+        public static class ConsentConstraintEnforcer
+        {
+            private const int Base = 11000;
 
             public const int GrantedAuthorizationDetailsRefused = Base;
         }

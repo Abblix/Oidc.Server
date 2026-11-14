@@ -17,10 +17,10 @@ using Abblix.Oidc.Server.Features.Licensing;
 namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 /// <summary>
-/// Installs the generated test licence for the whole assembly, and names the terms every test lives inside.
+/// Installs the generated test license for the whole assembly, and names the terms every test lives inside.
 /// </summary>
 /// <remarks>
-/// The suite runs under a real licence loaded the way a deployment loads one, not under lifted limits. A test
+/// The suite runs under a real license loaded the way a deployment loads one, not under lifted limits. A test
 /// that removes a limit proves the product works without that limit, which is not the product that ships, and
 /// it leaves the limit's own code unreachable so defects can live there indefinitely.
 ///
@@ -32,22 +32,17 @@ namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 internal static class TestLicense
 {
     /// <summary>
-    /// The only issuer the test licence recognises. A test that needs an issuer uses this one; any other value
-    /// is refused by the licence, which is the correct behaviour and not something to work around.
+    /// The issuer the test license recognizes, beside its http form the end-to-end suites serve. A test that needs
+    /// an issuer uses this one; any other value is refused by the license, which is the correct behavior and not
+    /// something to work around.
     /// </summary>
     public const string Issuer = "https://auth.example.com";
-
-    /// <summary>
-    /// How many distinct issuers the licence allows. Named here because a test that exercises the limit needs
-    /// to know where it sits, and reading it from the JWT at runtime would hide the number from the reader.
-    /// </summary>
-    public const int IssuerLimit = 1;
 
     private const string ResourceName = "Abblix.Oidc.Server.UnitTests.Resources.test-license.jwt";
 
     /// <summary>
     /// Brings <see cref="LicenseChecker"/> back to the state it holds at process start, then reinstalls the
-    /// test licence.
+    /// test license.
     /// </summary>
     /// <remarks>
     /// Everything the checker knows lives in process-wide statics that accumulate and are never released. That
@@ -57,7 +52,7 @@ internal static class TestLicense
     ///
     /// The reach-in lives here rather than behind a hook in the product, because a reset exists only for tests
     /// and test-only code does not belong in a shipped assembly. Note what this does and does not do: it
-    /// restores a known starting point and puts the real licence back. It never removes a limit.
+    /// restores a known starting point and puts the real license back. It never removes a limit.
     /// </remarks>
     internal static void ResetChecker()
     {
@@ -66,10 +61,10 @@ internal static class TestLicense
     }
 
     /// <summary>
-    /// Empties the checker without installing any licence, so a test can supply terms of its own.
+    /// Empties the checker without installing any license, so a test can supply terms of its own.
     /// </summary>
     /// <remarks>
-    /// Needed because licences accumulate rather than replace one another: adding a licence while the
+    /// Needed because licenses accumulate rather than replace one another: adding a license while the
     /// assembly's is still in place merges the two, and a whitelist from either of them then applies. A test
     /// that wants to reach the issuer-count limit has to arrive with no whitelist at all, since the whitelist
     /// is consulted first and refuses an unknown issuer before any counting happens.
@@ -81,16 +76,62 @@ internal static class TestLicense
 
         checker.GetField("_knownClientIds", Statics)!.SetValue(null, null);
         checker.GetField("_knownIssuers", Statics)!.SetValue(null, null);
+        ClearLicenses();
+    }
 
-        // The manager itself is readonly, so its contents are emptied rather than the instance replaced.
-        var manager = checker.GetField("LicenseManager", Statics)!.GetValue(null)!;
-        var managerType = manager.GetType();
+    /// <summary>
+    /// Takes every license off the checker, leaving what it has counted.
+    /// </summary>
+    private static void ClearLicenses()
+    {
+        const BindingFlags Statics = BindingFlags.NonPublic | BindingFlags.Static;
         const BindingFlags Instances = BindingFlags.NonPublic | BindingFlags.Instance;
 
+        // The manager itself is readonly, so its contents are emptied rather than the instance replaced.
+        var manager = typeof(LicenseChecker).GetField("LicenseManager", Statics)!.GetValue(null)!;
+        var managerType = manager.GetType();
         if (managerType.GetField("_licenses", Instances)!.GetValue(manager) is IList licenses)
             licenses.Clear();
 
         managerType.GetField("_currentLicense", Instances)!.SetValue(manager, null);
+    }
+
+    /// <summary>
+    /// Empties the checker and installs a license that caps the number of issuers at <paramref name="issuerLimit"/>
+    /// and names none of them, which is the only arrangement under which that count is ever consulted.
+    /// </summary>
+    /// <remarks>
+    /// A license that names its issuers refuses an unknown one on the name, before anything is counted, and
+    /// licenses accumulate rather than replace one another - so the assembly's license and its whitelist have
+    /// to go before this one is added.
+    ///
+    /// The period is stated as fixed instants rather than read from the clock: the checker reads the clock itself
+    /// and cannot be driven from here, so the license is simply made wide enough to cover any run.
+    /// </remarks>
+    internal static void InstallWithIssuerLimit(int issuerLimit)
+    {
+        ClearChecker();
+        LicenseChecker.AddLicense(new License
+        {
+            IssuerLimit = issuerLimit,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+    }
+
+    /// <summary>
+    /// Puts the checker on a license capping the issuers at <paramref name="issuerLimit"/> in place of the one in
+    /// force, keeping what it has counted, as when the license a running server holds narrows or expires.
+    /// </summary>
+    internal static void ReplaceWithIssuerLimit(int issuerLimit)
+    {
+        ClearLicenses();
+        LicenseChecker.AddLicense(new License
+        {
+            IssuerLimit = issuerLimit,
+            NotBefore = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            ExpiresAt = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
     }
 
     /// <summary>
@@ -131,7 +172,7 @@ internal static class TestLicense
         using var reader = new StreamReader(stream, Encoding.UTF8);
 
         // Blocking on purpose: a module initializer cannot await, and nothing may observe LicenseChecker before
-        // the licence is in place - a check that runs first would be answered by the free licence instead.
+        // the license is in place - a check that runs first would be answered by the free license instead.
         LicenseLoader.LoadAsync(reader.ReadToEnd()).GetAwaiter().GetResult();
     }
 }

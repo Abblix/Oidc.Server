@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Configuration;
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -17,40 +18,44 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
 /// <summary>
 /// Verifies RFC 7592 client-update behavior: the update (a full replacement) re-persists the
 /// per-client scope set, and it rotates the registration access token's jti so previously issued
-/// tokens are invalidated (RFC 7592 §5).
+/// tokens are invalidated (RFC 7592 section 5).
 /// </summary>
 public class UpdateClientRequestProcessorTests
 {
     private static (UpdateClientRequestProcessor processor, Mock<IClientInfoManager> manager,
-        Mock<IRegistrationAccessTokenService> tokenService, Mock<IRegistrationAccessTokenStore> tokenStore,
-        Mock<ITokenIdGenerator> idGenerator)
-        CreateProcessor(Action<ClientInfo> onSave)
+        Mock<IRegistrationAccessTokenService> tokenService, Mock<ITokenIdGenerator> idGenerator)
+        CreateProcessor(
+            Action<RegisteredClient> onSave,
+            bool registrationHeld = true,
+            NewClientOptions? newClients = null)
     {
         var clientInfoManager = new Mock<IClientInfoManager>(MockBehavior.Strict);
         clientInfoManager
-            .Setup(m => m.UpdateClientAsync(It.IsAny<ClientInfo>()))
-            .Callback(onSave)
-            .Returns(Task.CompletedTask);
+            .Setup(m => m.TryUpdateClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient _, RegisteredClient updated) => onSave(updated))
+            .ReturnsAsync(registrationHeld);
 
         var tokenService = new Mock<IRegistrationAccessTokenService>(MockBehavior.Loose);
         tokenService
             .Setup(s => s.IssueTokenAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), It.IsAny<string>()))
             .ReturnsAsync("registration-access-token");
 
-        var tokenStore = new Mock<IRegistrationAccessTokenStore>(MockBehavior.Loose);
         var idGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
 
         var processor = new UpdateClientRequestProcessor(
-            clientInfoManager.Object, tokenService.Object, tokenStore.Object, idGenerator.Object, TimeProvider.System);
+            clientInfoManager.Object, tokenService.Object, idGenerator.Object, TimeProvider.System,
+            newClients ?? new NewClientOptions());
 
-        return (processor, clientInfoManager, tokenService, tokenStore, idGenerator);
+        return (processor, clientInfoManager, tokenService, idGenerator);
     }
 
     [Fact]
@@ -58,7 +63,7 @@ public class UpdateClientRequestProcessorTests
     {
         // Arrange
         ClientInfo? saved = null;
-        var (processor, _, _, _, idGenerator) = CreateProcessor(c => saved = c);
+        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c.ClientInfo);
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
 
         var model = new ClientRegistrationRequest
@@ -66,12 +71,11 @@ public class UpdateClientRequestProcessorTests
             RedirectUris = [new Uri("https://client.example.com/cb")],
             Scope = [Scopes.OpenId, Scopes.Profile],
         };
-        var existing = new ClientInfo("client-1");
         var request = new ValidUpdateClientRequest(
-            new UpdateClientRequest(new ClientRequest(), model), existing, model);
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
-        await processor.ProcessAsync(request);
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(saved);
@@ -79,17 +83,87 @@ public class UpdateClientRequestProcessorTests
     }
 
     /// <summary>
+    /// An update omitting the scope member replaces the metadata whole, so the client takes the host's default set
+    /// again rather than any scope (RFC 7591 section 2, RFC 7592 section 2.2).
+    /// </summary>
+    [Fact]
+    public async Task AnUpdateWithoutScope_TakesTheHostsDefaultSet()
+    {
+        ClientInfo? saved = null;
+        var (processor, _, _, idGenerator) = CreateProcessor(
+            c => saved = c.ClientInfo, newClients: new NewClientOptions { Scope = [Scopes.Profile] });
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+        var model = new ClientRegistrationRequest { RedirectUris = [new Uri("https://client.example.com/cb")] };
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
+
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.Equal((string[])[Scopes.Profile], saved!.AllowedScopes);
+    }
+
+    /// <summary>
+    /// An update builds the client anew, so it takes the assertion audiences the host grants new clients again, the
+    /// issuer alone at a tenant held to FAPI 2.0.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None, ClientAssertionAudiences.Issuer | ClientAssertionAudiences.AllowArray)]
+    [InlineData(ClientSecurityProfile.Fapi2, ClientAssertionAudiences.Issuer)]
+    public async Task AnUpdate_TakesTheAssertionAudiencesTheHostGrantsNewClients(
+        ClientSecurityProfile profile, ClientAssertionAudiences taken)
+    {
+        ClientInfo? saved = null;
+        var (processor, _, _, idGenerator) = CreateProcessor(
+            c => saved = c.ClientInfo,
+            newClients: new NewClientOptions
+            {
+                ClientAssertionAudiences = ClientAssertionAudiences.Issuer | ClientAssertionAudiences.AllowArray,
+            });
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+        var model = new ClientRegistrationRequest { RedirectUris = [new Uri("https://client.example.com/cb")] };
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
+
+        await processor.ProcessAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant(), request);
+
+        Assert.Equal(taken, saved!.ClientAssertionAudiences);
+    }
+
+    /// <summary>
+    /// An update builds the client anew, so it takes the host's grant of offline access beside an access token
+    /// carried through the user agent from the settings for new clients, whatever the stored client held.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AnUpdate_TakesTheHostsGrantOfOfflineAccessBesideAUserAgentAccessToken(bool granted)
+    {
+        ClientInfo? saved = null;
+        var (processor, _, _, idGenerator) = CreateProcessor(
+            c => saved = c.ClientInfo,
+            newClients: new NewClientOptions { AllowOfflineAccessWithUserAgentAccessToken = granted });
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+        var model = new ClientRegistrationRequest { RedirectUris = [new Uri("https://client.example.com/cb")] };
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
+
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.Equal(granted, saved!.AllowOfflineAccessWithUserAgentAccessToken);
+    }
+
+    /// <summary>
     /// #27 regression: the update (a full replacement) must map the signed/encrypted response algorithms
     /// the register path maps, otherwise a resubmitted metadata set is silently reset to ClientInfo defaults
     /// (id_token → RS256, userinfo/introspection → none). A client registered with a non-default signing
-    /// algorithm would have its subsequent ID tokens fail signature validation after any update (RFC 7592 §2.2).
+    /// algorithm would have its subsequent ID tokens fail signature validation after any update (RFC 7592 section 2.2).
     /// </summary>
     [Fact]
     public async Task Update_PreservesSignedAndIntrospectionResponseAlgorithms()
     {
         // Arrange
         ClientInfo? saved = null;
-        var (processor, _, _, _, idGenerator) = CreateProcessor(c => saved = c);
+        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c.ClientInfo);
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
 
         var model = new ClientRegistrationRequest
@@ -101,12 +175,11 @@ public class UpdateClientRequestProcessorTests
             IntrospectionEncryptedResponseAlg = "RSA-OAEP",
             IntrospectionEncryptedResponseEnc = "A128CBC-HS256",
         };
-        var existing = new ClientInfo("client-1");
         var request = new ValidUpdateClientRequest(
-            new UpdateClientRequest(new ClientRequest(), model), existing, model);
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
-        await processor.ProcessAsync(request);
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(saved);
@@ -119,36 +192,96 @@ public class UpdateClientRequestProcessorTests
 
     /// <summary>
     /// Verifies the update rotates the registration access token jti: a freshly generated id is
-    /// recorded in the binding store and embedded in the issued token. Because the validator binds
-    /// the token to the stored jti, this invalidates every token issued before the update (RFC 7592 §5).
+    /// recorded on the stored client and embedded in the issued token. Because the validator binds
+    /// the token to the client's jti, this invalidates every token issued before the update (RFC 7592 section 5).
     /// </summary>
     [Fact]
     public async Task Update_RotatesRegistrationAccessTokenId()
     {
         // Arrange
-        var (processor, _, tokenService, tokenStore, idGenerator) = CreateProcessor(_ => { });
+        RegisteredClient? saved = null;
+        var (processor, _, tokenService, idGenerator) = CreateProcessor(client => saved = client);
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("rotated-jti");
 
         var model = new ClientRegistrationRequest
         {
             RedirectUris = [new Uri("https://client.example.com/cb")],
         };
-        var existing = new ClientInfo("client-1");
         var request = new ValidUpdateClientRequest(
-            new UpdateClientRequest(new ClientRequest(), model), existing, model);
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
-        await processor.ProcessAsync(request);
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        tokenStore.Verify(s => s.SetTokenIdAsync("client-1", "rotated-jti"), Times.Once);
+        Assert.Equal("rotated-jti", saved?.RegistrationAccessTokenId);
         tokenService.Verify(
-            s => s.IssueTokenAsync("client-1", It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), "rotated-jti"),
+            s => s.IssueTokenAsync(TestTenant.Matched, "client-1", It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), "rotated-jti"),
             Times.Once);
     }
 
     /// <summary>
-    /// Verifies the update response carries grant_types, response_types and scope per RFC 7592 §3:
+    /// An update decided on a registration the store no longer holds - rotated by another update, or removed - is
+    /// refused as the token it was decided with, and answers with no token.
+    /// </summary>
+    [Fact]
+    public async Task Update_OfARegistrationNoLongerHeld_ReturnsInvalidToken()
+    {
+        // Arrange
+        var (processor, _, _, idGenerator) = CreateProcessor(_ => { }, registrationHeld: false);
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("rotated-jti");
+
+        var model = new ClientRegistrationRequest
+        {
+            RedirectUris = [new Uri("https://client.example.com/cb")],
+        };
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
+
+        // Act
+        var result = await processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
+    }
+
+    /// <summary>
+    /// A token that cannot be issued leaves the registration as it was, so the token the client holds keeps working
+    /// rather than being rotated away for one never delivered.
+    /// </summary>
+    [Fact]
+    public async Task Update_WhoseTokenCannotBeIssued_LeavesTheRegistrationAsItWas()
+    {
+        // Arrange
+        var (processor, manager, tokenService, idGenerator) = CreateProcessor(_ => { });
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("rotated-jti");
+        tokenService
+            .Setup(s => s.IssueTokenAsync(
+                TestTenant.Matched,
+                It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan?>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("no signing key"));
+
+        var model = new ClientRegistrationRequest
+        {
+            RedirectUris = [new Uri("https://client.example.com/cb")],
+        };
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
+
+        // Act
+        await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ProcessAsync(SingleIssuer.Tenant, request));
+
+        // Assert
+        manager.Verify(
+            m => m.TryUpdateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<RegisteredClient>(), It.IsAny<RegisteredClient>()),
+            Times.Never);
+    }
+
+    private static RegisteredClient Existing() => new(new ClientInfo("client-1"), "jti-current");
+
+    /// <summary>
+    /// Verifies the update response carries grant_types, response_types and scope per RFC 7592 section 3:
     /// the response must contain the full registered metadata (including DTO defaults), otherwise
     /// the client cannot confirm the result of the full-replacement update.
     /// </summary>
@@ -156,7 +289,7 @@ public class UpdateClientRequestProcessorTests
     public async Task Update_ResponseEchoesGrantResponseTypesAndScope()
     {
         // Arrange
-        var (processor, _, _, _, idGenerator) = CreateProcessor(_ => { });
+        var (processor, _, _, idGenerator) = CreateProcessor(_ => { });
         idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
 
         var model = new ClientRegistrationRequest
@@ -166,12 +299,11 @@ public class UpdateClientRequestProcessorTests
             ResponseTypes = [[ResponseTypes.Code]],
             Scope = [Scopes.OpenId, Scopes.Profile],
         };
-        var existing = new ClientInfo("client-1");
         var request = new ValidUpdateClientRequest(
-            new UpdateClientRequest(new ClientRequest(), model), existing, model);
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
 
         // Act
-        var result = await processor.ProcessAsync(request);
+        var result = await processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));

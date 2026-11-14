@@ -9,7 +9,9 @@ needs the token rules and nothing about streams. See the wiring below, and
 [Abblix.SecurityEvents.MinimalAPI](https://www.nuget.org/packages/Abblix.SecurityEvents.MinimalAPI)
 for the endpoint that receives it.
 
-[Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) is the map this package sits on: why the envelope came before the streams, and why nothing here has a stream concept even though it carries both delivery methods.
+[A map of the Shared Signals layers and back-channel logout](https://www.abblix.com/en/docs/shared-signals-framework) is what this package sits on: why the envelope came before the streams, and why nothing here has a stream concept even though it carries both delivery methods.
+
+[A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) carries a token from one host to another, so the rules in this package can be read against something that runs.
 
 ## Install
 
@@ -26,7 +28,7 @@ cannot be written.
 
 RFC 8417 Section 2.2 rates `exp` NOT RECOMMENDED for a token that records
 history, and Sections 4.1 and 4.2 make omitting it one of the layers that keep a SET from being
-passed off as an ID or access token - defence in depth alongside explicit typing and a distinct
+passed off as an ID or access token - defense in depth alongside explicit typing and a distinct
 audience, all of which this package applies.
 
 ```csharp

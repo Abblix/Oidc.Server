@@ -6,10 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
@@ -18,7 +20,7 @@ using Abblix.Utils;
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 
 /// <summary>
-/// <see cref="IAuthorizationGrantHandler"/> for <c>grant_type=refresh_token</c> (RFC 6749 §6).
+/// <see cref="IAuthorizationGrantHandler"/> for <c>grant_type=refresh_token</c> (RFC 6749 section 6).
 /// Verifies the refresh token's signature and lifetime, requires the JWT <c>typ</c> header to be
 /// <c>rt+jwt</c>, recovers the original <see cref="AuthorizedGrant"/>, and rejects the request with
 /// <c>invalid_grant</c> when the refreshing client differs from the client that received the token.
@@ -44,6 +46,7 @@ public class RefreshTokenGrantHandler(
 	/// This method validates the refresh token, ensures that the token is associated with the correct client,
 	/// and generates new tokens if the request is valid.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The token request, containing the refresh token and other required parameters.</param>
 	/// <param name="clientInfo">
 	/// The client information, used to verify the request is coming from an authorized client.</param>
@@ -52,17 +55,23 @@ public class RefreshTokenGrantHandler(
 	/// access token or an error if the request is invalid or the refresh token is unauthorized.
 	/// </returns>
 	/// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+	public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
 	{
-		// RFC 6749 §5.2: a missing required parameter is the caller's protocol error (invalid_request),
+		// RFC 6749 section 5.2: a missing required parameter is the caller's protocol error (invalid_request),
 		// not a server fault - the previous throw-on-access surfaced it as HTTP 500.
 		if (!request.RefreshToken.HasValue())
 		{
 			return ErrorFactory.MissingParameter(TokenRequest.Parameters.RefreshToken);
 		}
 
-		// Validate the refresh token's JWT structure and authenticity using the JWT validator service.
-		var jwtValidationResult = await jwtValidator.ValidateAsync(request.RefreshToken);
+		// Validate the refresh token's JWT structure and authenticity using the JWT validator service. Its audience
+		// holds the resources of the grant it continues (RefreshTokenService), so it need not name this server.
+		var jwtValidationResult = await jwtValidator.ValidateAsync(
+			tenant,
+			clientInfo,
+			request.RefreshToken,
+			TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
+			ServiceTokenValidation.AnyAudience);
 
 		if (jwtValidationResult.TryGetFailure(out var error))
 		{
@@ -71,18 +80,10 @@ public class RefreshTokenGrantHandler(
 
 		var token = jwtValidationResult.GetSuccess();
 
-		// If the token type is invalid, return an error indicating the issue.
-		if (token.Header.Type is var tokenType && tokenType != JwtTypes.RefreshToken)
-		{
-			return new OidcError(
-				ErrorCodes.InvalidGrant,
-				$"Invalid token type: {tokenType}");
-		}
-
 		// Authorize the request based on the refresh token and check if the token belongs to the correct client.
 		// The authenticated client is the one the refresh token was issued to (verified below), so its sector opens
 		// a pairwise subject back to the real subject.
-		var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(token, clientInfo);
+		var result = await refreshTokenService.AuthorizeByRefreshTokenAsync(tenant, token, clientInfo);
 		if (result.TryGetFailure(out var authError))
 		{
 			return authError;
@@ -95,6 +96,15 @@ public class RefreshTokenGrantHandler(
 			return new OidcError(
 				ErrorCodes.InvalidGrant,
 				"The specified grant belongs to another client");
+		}
+
+		// A refresh token exists only for offline access, so withdrawing the permission ends the ones already issued;
+		// renewing without a new refresh token would leave the presented one unspent and reusable until it expires
+		if (!clientInfo.OfflineAccess.IsAllowed())
+		{
+			return new OidcError(
+				ErrorCodes.InvalidGrant,
+				"This client is not allowed offline access");
 		}
 
 		// If everything is valid, return the authorized result.

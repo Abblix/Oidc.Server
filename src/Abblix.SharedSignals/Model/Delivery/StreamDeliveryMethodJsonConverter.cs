@@ -61,7 +61,7 @@ public sealed class StreamDeliveryMethodJsonConverter : JsonConverter<StreamDeli
         catch (ArgumentException exception)
         {
             // The subtype constructors enforce the member rules; here their verdict is only
-            // re-labelled for the wire, where "this document is invalid" is a JsonException by
+            // re-labeled for the wire, where "this document is invalid" is a JsonException by
             // the serializer's own convention - so a transmitter mapping parse failures to a
             // 400 answers 400, never 500, whatever the malformation.
             throw new JsonException(exception.Message, exception);

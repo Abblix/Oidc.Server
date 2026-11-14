@@ -13,7 +13,6 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Model;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -39,13 +38,13 @@ public class TokenRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
 
         // Proving it works first: otherwise a test that only checks the token fails afterwards would pass
         // just as happily against a token that never worked at all.
         var beforeRevocation = await RefreshAsync(client, discovery, refreshToken);
         Assert.True(beforeRevocation.IsSuccessStatusCode);
-        var rotated = (await ReadJsonAsync(beforeRevocation))[TokenRequest.Parameters.RefreshToken]!
+        var rotated = (await ReadJsonAsync(beforeRevocation))[TokenResponse.Parameters.RefreshToken]!
             .GetValue<string>();
 
         var revocation = await RevokeAsync(client, discovery, rotated);
@@ -58,7 +57,7 @@ public class TokenRevocationTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task Revoking_a_token_that_was_never_issued_still_answers_success()
     {
-        // RFC 7009 Section 2.2 requires 200 for a token the server does not recognise. The reason is not
+        // RFC 7009 Section 2.2 requires 200 for a token the server does not recognize. The reason is not
         // politeness: a distinguishable answer turns the endpoint into an oracle that tells an attacker
         // whether a guessed token exists, which is the one thing this endpoint must never reveal.
         var client = CreateClient();
@@ -78,7 +77,7 @@ public class TokenRevocationTests(TestFactory factory) : TestBase(factory)
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
 
         var response = await FormPostHelpers.PostFormAsync(
             client,
@@ -129,6 +128,6 @@ public class TokenRevocationTests(TestFactory factory) : TestBase(factory)
     {
         var body = await ReadJsonAsync(response);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(ErrorCodes.InvalidGrant, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidGrant, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 }

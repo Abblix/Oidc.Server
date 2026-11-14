@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 
@@ -37,11 +38,13 @@ public static class SubjectTypeConverterExtensions
     /// </para>
     /// </remarks>
     /// <param name="converter">Seals the session's subject the way this client sees it.</param>
+    /// <param name="tenant">The tenant the client is served at, whose pairwise key seals the subject.</param>
     /// <param name="session">The session to judge.</param>
     /// <param name="subjects">The end users the request will accept. Empty accepts nobody.</param>
     /// <param name="clientInfo">The client whose spelling of a subject is in force.</param>
     public static bool Names(
         this ISubjectTypeConverter converter,
+        TenantDefinition tenant,
         AuthSession session,
         IReadOnlyCollection<string> subjects,
         ClientInfo clientInfo)
@@ -50,7 +53,7 @@ public static class SubjectTypeConverterExtensions
         {
             // Ordinal: a subject is an opaque identifier compared octet for octet, and two that differ only
             // in case are two different end users.
-            return subjects.Contains(converter.Convert(session.Subject, clientInfo), StringComparer.Ordinal);
+            return subjects.Contains(converter.Convert(tenant, session.Subject, clientInfo), StringComparer.Ordinal);
         }
         catch (InvalidOperationException)
         {

@@ -26,6 +26,11 @@ public static class TestConstants
     public const string Issuer = "https://auth.example.com";
 
     /// <summary>
+    /// <see cref="Issuer"/> as the server's options take it.
+    /// </summary>
+    public static readonly Uri IssuerUri = new(Issuer);
+
+    /// <summary>
     /// Pre-seeded confidential client with RAR enabled
     /// (<c>authorization_details_types = ["payment_initiation"]</c>),
     /// id_token RAR-emission toggle off (default). Baseline RAR scenarios.
@@ -44,26 +49,52 @@ public static class TestConstants
     public const string UnrestrictedClientId = "e2e-unrestricted";
 
     /// <summary>Client with <c>RequireDPoP = true</c> - every token request MUST carry a
-    /// valid DPoP proof or the AS rejects with <c>invalid_dpop_proof</c>. RFC 9449 §5.2
+    /// valid DPoP proof or the AS rejects with <c>invalid_dpop_proof</c>. RFC 9449 section 5.2
     /// mandatory-binding posture.</summary>
     public const string DPoPRequiredClientId = "e2e-dpop-required";
 
     /// <summary>Client with <c>RequireDPoP = false</c> - token requests may carry a proof
     /// (and the AS opportunistically binds the issued access token) or omit it (Bearer
-    /// issued). RFC 9449 §5.2 opportunistic-binding posture.</summary>
+    /// issued). RFC 9449 section 5.2 opportunistic-binding posture.</summary>
     public const string DPoPOpportunisticClientId = "e2e-dpop-opportunistic";
 
     /// <summary>Public DPoP client (no client secret, <c>token_endpoint_auth_method = none</c>).
-    /// RFC 9449 §5 mandates same-key binding on refresh for public clients - sender
+    /// RFC 9449 section 5 mandates same-key binding on refresh for public clients - sender
     /// constraint comes from DPoP alone, not from client authentication.</summary>
     public const string DPoPPublicClientId = "e2e-dpop-public";
 
-    /// <summary>Pre-seeded client restricted to the client_credentials grant (RFC 6749 §4.4),
+    /// <summary>Pre-seeded client restricted to the client_credentials grant (RFC 6749 section 4.4),
     /// used to verify RFC 8707 resource indicators reach the issued access token's audience.</summary>
     public const string ClientCredentialsClientId = "e2e-client-credentials";
 
+    /// <summary>Client restricted to the client_credentials grant whose requests naming no scope are served with its
+    /// default scope (RFC 6749 section 3.3).</summary>
+    public const string DefaultScopeClientId = "e2e-default-scope";
+
+    /// <summary>Client restricted to the client_credentials grant whose requests naming no scope are refused with
+    /// <c>invalid_scope</c> (RFC 6749 section 3.3).</summary>
+    public const string ScopeRequiredClientId = "e2e-scope-required";
+
+    /// <summary>Client of the client_credentials and device authorization grants whose default scope is one only
+    /// <see cref="ApiResource"/> declares, and whose allowed scopes are wider than its default.</summary>
+    public const string DefaultResourceScopeClientId = "e2e-default-resource-scope";
+
+    /// <summary>Client restricted to the client_credentials grant that authenticates with HTTP Basic
+    /// (<c>client_secret_basic</c>, RFC 6749 section 2.3.1), so a test can see the token endpoint read the
+    /// Authorization header.</summary>
+    public const string ClientSecretBasicClientId = "e2e-client-secret-basic";
+
+    /// <summary>Client restricted to the client_credentials grant that authenticates with a JWT signed by its
+    /// secret (<c>client_secret_jwt</c>, OpenID Connect Core 1.0 section 9), so a test can see the token endpoint
+    /// judge the assertion's audience as RFC 10070 section 4 requires.</summary>
+    public const string ClientSecretJwtClientId = "e2e-client-secret-jwt";
+
+    /// <summary>The secret of <see cref="ClientSecretJwtClientId"/>, long enough to be an HS256 key (RFC 7518
+    /// section 3.2), which <see cref="ConfidentialClientSecret"/> is not.</summary>
+    public const string ClientSecretJwtSecret = "e2e-client-secret-jwt-0123456789abcdefghij";
+
     /// <summary>Client restricted to the OAuth 2.0 <c>none</c> response type (OAuth 2.0 Multiple
-    /// Response Type Encoding Practices §4): the authorization endpoint authorizes the request but
+    /// Response Type Encoding Practices section 4): the authorization endpoint authorizes the request but
     /// returns no code or token - only state and iss.</summary>
     public const string NoneResponseTypeClientId = "e2e-none-response-type";
 
@@ -82,15 +113,41 @@ public static class TestConstants
         Justification = "Canonical test resource indicator shared by resource-indicator scenarios; not a deployment URL.")]
     public const string ApiResource = "https://api.example.com/orders";
 
+    /// <summary>A scope only <see cref="ApiResource"/> declares, so a request asking for it names that
+    /// resource too.</summary>
+    public const string ApiScope = "orders.read";
+
+    /// <summary>A second registered RFC 8707 resource indicator, so a request can name two resources.</summary>
+    [SuppressMessage("Minor Code Smell", "S1075",
+        Justification = "Canonical test resource indicator shared by resource-indicator scenarios; not a deployment URL.")]
+    public const string OtherApiResource = "https://api.example.com/payments";
+
+    /// <summary>A scope only <see cref="OtherApiResource"/> declares.</summary>
+    public const string OtherApiScope = "payments.read";
+
+    /// <summary>The token exchange audience the host grants a dynamically registered client.</summary>
+    public const string ExchangeAudience = "https://api.example.com";
+
+    /// <summary>Client restricted to the client_credentials grant that may get access tokens for
+    /// <see cref="ApiResource"/> alone.</summary>
+    public const string AllowedResourceClientId = "e2e-allowed-resource";
+
+    /// <summary>Confidential authorization code client whose access tokens each name one resource.</summary>
+    public const string SingleResourceClientId = "e2e-single-resource";
+
+    /// <summary>Confidential authorization code client whose default scope is one only <see cref="ApiResource"/>
+    /// declares, and which receives offline access only when the request asks for consent.</summary>
+    public const string DefaultScopeCodeClientId = "e2e-default-scope-code";
+
     /// <summary>The single canonical redirect_uri.</summary>
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri shared by every pre-seeded client; not a deployment URL.")]
     public const string RedirectUri = "https://client.example.com/cb";
 
-    /// <summary>RFC 9396 §2.2 type for PSD2-style payment initiation.</summary>
+    /// <summary>RFC 9396 section 2.2 type for PSD2-style payment initiation.</summary>
     public const string PaymentInitiationType = "payment_initiation";
 
-    /// <summary>RFC 9396 §2.2 type used for negative tests (no registered validator).</summary>
+    /// <summary>RFC 9396 section 2.2 type used for negative tests (no registered validator).</summary>
     public const string AccountInformationType = "account_information";
 
     /// <summary>Path of the test-only probe that reports what <c>IOidcEndpointResolver</c> answers for an
@@ -98,4 +155,9 @@ public static class TestConstants
     /// can only be exercised from inside one. Both test hosts mount it here, which is what lets the suites
     /// compare what the two adapters answer.</summary>
     public const string EndpointResolverProbePath = "/test/oidc-endpoint";
+
+    /// <summary>Configuration key both hosts read to mount all OIDC endpoints under a route prefix. The routing
+    /// tests set it through <c>WebApplicationFactory</c> to verify the prefix of <c>MapOidcControllers</c> and
+    /// <c>MapOidcEndpoints</c>.</summary>
+    public const string RoutePrefixConfigKey = "OidcRoutePrefix";
 }

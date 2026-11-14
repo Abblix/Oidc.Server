@@ -68,19 +68,52 @@ public class ExactMatchUriValidatorTests
     }
 
     /// <summary>
-    /// Verifies that URI fragments are ignored by default (per OAuth 2.0 spec).
-    /// Fragments are never sent to the server, so they don't affect security.
+    /// A candidate carrying a fragment or user information the registered URI lacks is refused: RFC 6749 section
+    /// 3.1.2 forbids a fragment in a redirection endpoint, and <see cref="Uri"/> equality would ignore both.
     /// </summary>
-    [Fact]
-    public void ExactMatch_WithFragment_Default_ReturnsTrue()
+    [Theory]
+    [InlineData("https://example.com/callback#fragment")]
+    [InlineData("https://example.com/callback#")]
+    [InlineData("https://user@example.com/callback")]
+    public void ExactMatch_WithFragmentOrUserInfo_Default_ReturnsFalse(string candidate)
     {
-        var validUri = TestConstants.DefaultRedirectUri;
-        var validator = new ExactMatchUriValidator(validUri);
+        var validator = new ExactMatchUriValidator(TestConstants.DefaultRedirectUri);
 
-        var testUri = new Uri("https://example.com/callback#fragment");
-        var result = validator.IsValid(testUri);
+        Assert.False(validator.IsValid(new Uri(candidate)));
+    }
 
-        Assert.True(result);
+    /// <summary>
+    /// A request URI is registered with the hash of the file it names as its fragment, which changes whenever the
+    /// file does (OpenID Connect Dynamic Client Registration 1.0 section 2, <c>request_uris</c>), so the fragment
+    /// takes no part in matching it, on either side.
+    /// </summary>
+    [Theory]
+    [InlineData("https://rp.example.com/request.jwt#GkurKxf5T0Y")]
+    [InlineData("https://rp.example.com/request.jwt#AnotherHash")]
+    [InlineData("https://rp.example.com/request.jwt")]
+    public void ExactMatch_RegisteredFragment_IgnoreEnabled_ReturnsTrue(string candidate)
+    {
+        var validator = new ExactMatchUriValidator(
+            new Uri("https://rp.example.com/request.jwt#GkurKxf5T0Y"),
+            ignoreQueryAndFragment: true);
+
+        Assert.True(validator.IsValid(new Uri(candidate)));
+    }
+
+    /// <summary>
+    /// Leaving the query and fragment out of a request URI match still refuses user information the registered URI
+    /// lacks, with or without the registered hash.
+    /// </summary>
+    [Theory]
+    [InlineData("https://user@rp.example.com/request.jwt")]
+    [InlineData("https://user@rp.example.com/request.jwt#GkurKxf5T0Y")]
+    public void ExactMatch_WithUserInfo_IgnoreEnabled_ReturnsFalse(string candidate)
+    {
+        var validator = new ExactMatchUriValidator(
+            new Uri("https://rp.example.com/request.jwt#GkurKxf5T0Y"),
+            ignoreQueryAndFragment: true);
+
+        Assert.False(validator.IsValid(new Uri(candidate)));
     }
 
     /// <summary>

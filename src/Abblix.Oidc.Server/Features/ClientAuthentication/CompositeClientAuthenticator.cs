@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -20,8 +21,8 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// This is intentionally a try-each composite rather than keyed-name DI by
 /// <c>token_endpoint_auth_method</c>: that method is not a discriminator present in the token
 /// request (it is the client's registered metadata), so it cannot be keyed on directly - each
-/// authenticator instead self-selects by recognising its own credential form. See the rationale
-/// at <see cref="ServiceCollectionExtensions.AddClientAuthentication"/>.
+/// authenticator instead self-selects by recognizing its own credential form. See the rationale
+/// at <see cref="ClientAuthenticationServiceCollectionExtensions.AddClientAuthentication"/>.
 /// </remarks>
 internal class CompositeClientAuthenticator(params IClientAuthenticator[] clientAuthenticators)
 	: IClientAuthenticator
@@ -39,6 +40,7 @@ internal class CompositeClientAuthenticator(params IClientAuthenticator[] client
 	/// Attempts to authenticate a client request by sequentially invoking each registered authenticator
 	/// until one succeeds or all fail.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at, handed to each authenticator.</param>
 	/// <param name="request">The <see cref="ClientRequest"/> to authenticate. This object contains details
 	/// about the request that may be used by authenticators to determine the client's identity.</param>
 	/// <returns>
@@ -50,11 +52,11 @@ internal class CompositeClientAuthenticator(params IClientAuthenticator[] client
 	/// of supporting multiple authentication mechanisms. It iterates through the provided authenticators
 	/// and returns the first successful authentication result, or <c>null</c> if no authenticator succeeds.
 	/// </remarks>
-	public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
+	public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
 		foreach (var clientAuthenticator in clientAuthenticators)
 		{
-			var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(request);
+			var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, request);
 			if (clientInfo != null)
 				return clientInfo;
 		}

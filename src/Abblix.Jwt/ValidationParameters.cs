@@ -33,6 +33,17 @@ public record ValidationParameters
 	public ResolveIssuerSigningKeysDelegate? ResolveIssuerSigningKeys { get; set; }
 
 	/// <summary>
+	/// Delegate that reads the issuer's signing keys again from their source, past any copy held of them, used once
+	/// when the keys <see cref="ResolveIssuerSigningKeys"/> returned hold none with the <c>kid</c> the token names.
+	/// </summary>
+	/// <remarks>
+	/// OpenID Connect Core 1.0 section 10.1.1: "The verifier knows to go back to the jwks_uri location to re-retrieve
+	/// the keys when it sees an unfamiliar kid value", which is how a signer's rotated key reaches a verifier holding a
+	/// cached set. Unset, a token naming an unfamiliar key is refused on the set first returned.
+	/// </remarks>
+	public ResolveIssuerSigningKeysDelegate? RefetchIssuerSigningKeys { get; set; }
+
+	/// <summary>
 	/// Delegate that resolves decryption keys for a given issuer, used during token decryption.
 	/// </summary>
 	public ResolveTokenDecryptionKeysDelegate? ResolveTokenDecryptionKeys { get; set; }
@@ -44,26 +55,13 @@ public record ValidationParameters
 	public ClockSkew ClockSkew { get; set; } = ClockSkew.None;
 
 	/// <summary>
-	/// Token-type values (per RFC 7515 section 4.1.9 <c>typ</c> header) that the JWT MUST match.
-	/// When non-null and non-empty the validator pins <c>typ</c> per RFC 8725 section 3.11 to
-	/// prevent token-type confusion: a JWS signed for one type (id_token, logout_token,
-	/// request_object, DPoP proof, JARM response, OAuth access_token) cannot be replayed
-	/// as another by relying parties that trust the same issuer for several classes.
+	/// Which <c>typ</c> header values the token may carry, RFC 8725 section 3.11.
 	/// </summary>
 	/// <remarks>
-	/// Matching is case-insensitive and accepts either spelling of the <c>application/</c>
-	/// prefix on either side, so <c>at+jwt</c> and <c>application/AT+JWT</c> name the same
-	/// class. A <c>typ</c> is a media type, and RFC 7515 section 4.1.9 adopts RFC 2045 section 5.1 for it:
-	/// "Matching of media type and subtype is ALWAYS case-insensitive". The general
-	/// string-comparison rules of RFC 7515 section 5.3 do not govern this parameter; that section
-	/// ends by exempting it by name.
-	/// The comparer carried by the set is NOT what produces this behaviour and is not consulted
-	/// for matching - the validator compares explicitly, so that its rules cannot be widened or
-	/// narrowed by how a host happened to construct the collection. Supply any comparer, or none.
-	/// When this property is null or empty the validator skips the check, preserving
-	/// historical behaviour for callers that have not opted in.
+	/// Required: every validation states the types it accepts, or states that its caller judges the type, as
+	/// <see cref="TokenTypePolicy"/> explains.
 	/// </remarks>
-	public IReadOnlySet<string>? ExpectedTokenTypes { get; init; }
+	public required TokenTypePolicy TokenTypes { get; init; }
 
 	/// <summary>
 	/// JWS signing algorithms (per RFC 7518) that the validator MUST accept; any other
@@ -79,6 +77,17 @@ public record ValidationParameters
 	/// Comparison is byte-exact per RFC 7515 section 5.3.
 	/// </remarks>
 	public IReadOnlySet<string>? AllowedSigningAlgorithms { get; init; }
+
+	/// <summary>
+	/// Judges the key management algorithm (the <c>alg</c> of the protected header) of each JWE layer before the layer
+	/// is decrypted, a JWE carried inside another included; a layer it answers <c>false</c> for is refused. When
+	/// <c>null</c> every algorithm a registered key-management encryptor serves is accepted.
+	/// </summary>
+	/// <remarks>
+	/// A delegate rather than a set, so a caller that learns which policy applies only from the token itself - the
+	/// client the inner JWS names - can record each layer's algorithm and judge it once it knows.
+	/// </remarks>
+	public Func<string, bool>? ValidateKeyManagementAlgorithm { get; init; }
 
 	/// <summary>
 	/// Resolves signing keys (JWKs) asynchronously for a specified issuer.

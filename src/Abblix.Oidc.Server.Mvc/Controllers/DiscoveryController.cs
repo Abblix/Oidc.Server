@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using JsonWebKeySet = Abblix.Jwt.JsonWebKeySet;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 
 namespace Abblix.Oidc.Server.Mvc.Controllers;
@@ -39,15 +40,19 @@ namespace Abblix.Oidc.Server.Mvc.Controllers;
 /// For more details, refer to the OpenID Connect Discovery specification:
 /// <see href="https://openid.net/specs/openid-connect-discovery-1_0.html"/>.
 /// </remarks>
-[ApiController]
 // Discovery and JWKS are public, unauthenticated metadata, but they are still gated on HTTPS like the credential-
 // bearing controllers: over cleartext a man-in-the-middle could rewrite the advertised endpoints or jwks_uri and
 // steer clients onto attacker infrastructure. A host needing an ungated route (a health probe) adds its own.
-[RequireHttps]
+[RequireHttpsUnlessHttpIssuer]
+[RequireHost]
+[AwaitTenantLoad]
+[RequireTenant]
 [ReturnsOidcInvalidRequest]
+[ReturnsLibraryRefusalStatus]
 [SkipStatusCodePages]
 [EnableCors(OidcConstants.CorsPolicyName)]
-[SuppressMessage("SonarLint", "S6934:Route attributes should be specified on the controller", Justification = "All action methods have explicit route templates; class-level route is redundant")]
+[OidcRouteValue]
+[SuppressMessage("SonarLint", "S6967:ModelState.IsValid should be checked in controller actions", Justification = "ReturnsOidcInvalidRequest answers an invalid model state before any action runs")]
 public sealed class DiscoveryController : ControllerBase
 {
 	/// <summary>
@@ -62,19 +67,20 @@ public sealed class DiscoveryController : ControllerBase
 	/// </remarks>
 	/// <param name="handler">The service responsible for building discovery metadata.</param>
 	/// <param name="formatter">The service responsible for enriching the response with endpoint URLs.</param>
+	/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 	/// <returns>A task that results in an action result containing the provider's configuration details
 	/// in JSON format.</returns>
-	[HttpGet(Path.Configuration)]
-	[HttpGet(Path.OAuthAuthorizationServer)]
+	[HttpGet]
+	[ActionName(nameof(ConfigurationAsync))]
 	[Produces(MediaTypeNames.Application.Json)]
 	[ProducesResponseType(StatusCodes.Status200OK)]
-	[EnabledBy(OidcEndpoints.Configuration)]
 	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 	public async Task<ActionResult<Abblix.Oidc.Server.Model.ConfigurationResponse>> ConfigurationAsync(
 		[FromServices] IConfigurationHandler handler,
-		[FromServices] IConfigurationResponseFormatter formatter)
+		[FromServices] IConfigurationResponseFormatter formatter,
+		[FromServices] ITenantAccessor tenantAccessor)
 	{
-		var response = await handler.HandleAsync();
+		var response = await handler.HandleAsync(tenantAccessor.CurrentTenant());
 		return await formatter.FormatResponseAsync(response);
 	}
 
@@ -84,6 +90,7 @@ public sealed class DiscoveryController : ControllerBase
 	/// Clients can use these keys to verify the authenticity of identity tokens and access tokens issued by the provider.
 	/// </summary>
 	/// <param name="serviceKeysProvider">Provider for retrieving the service's public key information.</param>
+	/// <param name="tenantAccessor">Names the tenant whose keys are published.</param>
 	/// <param name="options">OIDC options; supplies the key-rollover propagation window used as the JWKS cache lifetime.</param>
 	/// <param name="logger">Logger used to warn if a key still carrying private material is stripped before publication.</param>
 	/// <returns>
@@ -91,14 +98,15 @@ public sealed class DiscoveryController : ControllerBase
 	/// containing the public keys used by the provider. The response conforms to the application/json media type.
 	/// If the Keys endpoint is disabled, a 404 Not Found response is returned.
 	/// </returns>
-	[HttpGet(Path.Keys)]
-	[EnabledBy(OidcEndpoints.Keys)]
+	[HttpGet]
+	[ActionName(nameof(KeysAsync))]
 	public async Task<ActionResult<JsonWebKeySet>> KeysAsync(
 		[FromServices] IAuthServiceKeysProvider serviceKeysProvider,
+		[FromServices] ITenantAccessor tenantAccessor,
 		[FromServices] IOptions<OidcOptions> options,
 		[FromServices] ILogger<IAuthServiceKeysProvider> logger)
 	{
-		var keys = await serviceKeysProvider.GetPublishedKeysAsync(logger);
+		var keys = await serviceKeysProvider.GetPublishedKeysAsync(tenantAccessor.CurrentTenant(), logger);
 
 		// The JWKS is public, cacheable metadata: advertise a lifetime equal to the key-rollover propagation
 		// window (the deliberate exception to this controller's otherwise no-store metadata policy).

@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
@@ -45,8 +46,36 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     public static StubAuthorizationDetailsPolicy Capping(string member, string value) =>
         new() { _cap = (member, value) };
 
+    /// <summary>
+    /// Answers with every entry removed - the shape the contract forbids, which a host implementation
+    /// can still produce and which reads as "nothing to forward" wherever it is not refused.
+    /// </summary>
+    public static StubAuthorizationDetailsPolicy Emptying => new() { _empty = true };
+
+    /// <summary>
+    /// Answers with every entry removed, having removed them from the array it was handed - which is how
+    /// every narrowing validator in this repository edits, so it is the likelier of the two shapes.
+    /// </summary>
+    public static StubAuthorizationDetailsPolicy ClearingInPlace => new() { _empty = true, _clear = true };
+
+    /// <summary>
+    /// Accepts, but gives up the way a validator making a remote call does once the token it was handed is
+    /// cancelled - which is what a host's validator is entitled to do with it.
+    /// </summary>
+    public static StubAuthorizationDetailsPolicy HonouringCancellation => new() { _honourCancellation = true };
+
+    /// <summary>
+    /// Throws from the granted-phase question, the way a validator answers an entry no end user could have
+    /// produced.
+    /// </summary>
+    public static StubAuthorizationDetailsPolicy Throwing(string reason) => new() { _fault = reason };
+
     private string? _refusal;
+    private string? _fault;
+    private bool _honourCancellation;
     private (string Member, string Value)? _cap;
+    private bool _empty;
+    private bool _clear;
 
     /// <summary>What the last call was handed, so a test can see whether it was the live array.</summary>
     public JsonArray? LastSeen { get; private set; }
@@ -54,12 +83,25 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
     /// <summary>How many times the granted-phase question was asked.</summary>
     public int GrantedCalls { get; private set; }
 
-    public Task<Result<JsonArray?, OidcError>> ApplyAsync(
+    /// <summary>The requested set the last granted-phase question was handed.</summary>
+    public JsonArray? LastRequested { get; private set; }
+
+    public Task<Result<JsonArray, OidcError>> ApplyAsync(
+        TenantDefinition tenant,
         JsonArray? raw,
         ClientInfo client,
         CancellationToken token)
     {
         LastSeen = raw;
+
+        // Asked at a tenant other than the one the tests serve, it refuses, so a caller handing it the wrong tenant
+        // fails the test that drives it
+        if (tenant.Id != SingleIssuer.Tenant.Id)
+        {
+            return Task.FromResult<Result<JsonArray, OidcError>>(
+                new OidcError(ErrorCodes.InvalidAuthorizationDetails, "asked at a tenant the test does not serve"));
+        }
+
         if (_refusal is null)
         {
             if (_cap is { } cap && raw is not null)
@@ -68,19 +110,32 @@ internal sealed class StubAuthorizationDetailsPolicy : IAuthorizationDetailsPoli
                     entry[cap.Member] = cap.Value;
             }
 
-            return Task.FromResult<Result<JsonArray?, OidcError>>(raw);
+            if (_clear)
+                raw?.Clear();
+
+            return Task.FromResult<Result<JsonArray, OidcError>>(
+                _empty ? new JsonArray() : raw ?? new JsonArray());
         }
 
-        return Task.FromResult<Result<JsonArray?, OidcError>>(
+        return Task.FromResult<Result<JsonArray, OidcError>>(
             new OidcError(ErrorCodes.InvalidAuthorizationDetails, _refusal));
     }
 
-    public Task<Result<JsonArray?, OidcError>> ApplyGrantedAsync(
+    public Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
+        TenantDefinition tenant,
         JsonArray? granted,
+        JsonArray? requested,
         ClientInfo client,
         CancellationToken token)
     {
         GrantedCalls++;
-        return ApplyAsync(granted, client, token);
+        LastRequested = requested;
+        if (_fault is not null)
+            throw new InvalidOperationException(_fault);
+
+        if (_honourCancellation)
+            token.ThrowIfCancellationRequested();
+
+        return ApplyAsync(tenant, granted, client, token);
     }
 }

@@ -32,7 +32,7 @@ public class DiProbeTests
     public void CustodianIsSharedAcrossConsumers()
     {
         var services = Configure();
-        services.AddVaultCustodian(options => options.Address = "https://vault.test:8200");
+        services.AddVaultCustodian(options => options.Address = new Uri("https://vault.test:8200"));
 
         using var provider = services.BuildServiceProvider();
 
@@ -45,7 +45,7 @@ public class DiProbeTests
     public void CustodianAndKeyRingShareOneTransport()
     {
         var services = Configure();
-        services.AddVaultCustodian(options => options.Address = "https://vault.test:8200");
+        services.AddVaultCustodian(options => options.Address = new Uri("https://vault.test:8200"));
 
         // Reached through the JWT layer's ring registration rather than the server's placement call: this
         // package no longer depends on the server, and this is the path any other consumer takes.
@@ -65,9 +65,11 @@ public class DiProbeTests
 
     private sealed class HostCustodian : IKeyCustodian
     {
+        public bool ServesKeyManagement(string algorithm) => true;
+
         public Task<byte[]> SignAsync(string keyId, string algorithm, byte[] data, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<byte[]?> UnwrapKeyAsync(string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<byte[]> AgreeKeyAsync(string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<byte[]?> AgreeKeyAsync(string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken) => throw new NotSupportedException();
         public IAsyncEnumerable<KeyVersion> GetKeyVersionsAsync(string keyName, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
@@ -77,7 +79,7 @@ public class DiProbeTests
         IKeyCustodian custodian = new HostCustodian();
         var services = Configure();
         services.AddSingleton(custodian);
-        services.AddVaultCustodian(options => options.Address = "https://vault.test:8200");
+        services.AddVaultCustodian(options => options.Address = new Uri("https://vault.test:8200"));
 
         using var provider = services.BuildServiceProvider();
 

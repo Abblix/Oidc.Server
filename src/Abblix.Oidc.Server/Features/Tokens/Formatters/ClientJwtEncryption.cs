@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="DefaultContentEncryptionAlgorithm">The content-encryption algorithm to use when the client did not
 /// register one.</param>
 /// <param name="RequireRegisteredAlgorithm">When <c>true</c> the JWT is encrypted only if the client registered a
-/// key-management algorithm (and the client's encryption keys are not even resolved otherwise) - the JARM §2.2 / §3
+/// key-management algorithm (and the client's encryption keys are not even resolved otherwise) - the JARM section 2.2 / section 3
 /// opt-in rule. When <c>false</c> the JWT is encrypted whenever the client published encryption keys.</param>
 public sealed record ClientJwtEncryption(
 	string? KeyManagementAlgorithm,
@@ -33,7 +33,7 @@ public sealed record ClientJwtEncryption(
 	bool RequireRegisteredAlgorithm)
 {
 	/// <summary>
-	/// Policy for a signed/encrypted UserInfo response (OIDC Core §5.3.2): encrypts whenever the client published
+	/// Policy for a signed/encrypted UserInfo response (OIDC Core section 5.3.2): encrypts whenever the client published
 	/// encryption keys, using its <c>userinfo_encrypted_response_*</c> metadata.
 	/// </summary>
 	public static ClientJwtEncryption ForUserInfo(ClientInfo clientInfo, OidcOptions options) => new(
@@ -64,7 +64,7 @@ public sealed record ClientJwtEncryption(
 
 	/// <summary>
 	/// Policy for a JARM authorization response JWT: encrypts only when the client registered
-	/// <c>authorization_encrypted_response_alg</c> (JARM §2.2 / §3 opt-in), falling back to
+	/// <c>authorization_encrypted_response_alg</c> (JARM section 2.2 / section 3 opt-in), falling back to
 	/// <see cref="OidcOptions.DefaultAuthorizationResponseEncryptionAlgorithm"/> when
 	/// <c>authorization_encrypted_response_enc</c> is omitted.
 	/// </summary>
