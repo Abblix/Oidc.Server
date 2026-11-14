@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -28,8 +29,8 @@ internal static class TokenResponseIdentityToken
     public static IdentityTokenRequest For(
         ValidTokenRequest request,
         AuthorizationContext authContext,
-        string accessToken,
-        string? refreshToken)
+        [Credential] string accessToken,
+        [Credential] string? refreshToken)
     {
         // The bindings exist only when the caller says it IS the push path. The mode could be read
         // off clientInfo instead, and is not, so that this method does not have to know CIBA's
