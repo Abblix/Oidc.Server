@@ -232,6 +232,31 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
     }
 
     /// <summary>
+    /// RFC 6749 section 3.1: an unrecognized parameter "MUST be ignored", so a form field that happens to share a name
+    /// with the host's model leaves the Authorization header where it is.
+    /// </summary>
+    [Fact]
+    public async Task Token_endpoint_with_one_basic_line_and_an_unrecognized_field_is_answered()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.TokenEndpoint)
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+                ["clientRequest"] = "1",
+            }),
+        };
+        AddAuthorizationLines(request, $"{TokenTypes.Basic} {BasicCredentials}");
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>
     /// One Authorization line beside the same credentials in the body is still served, as it was before the lines were
     /// counted. RFC 6749 section 2.3 says "The client MUST NOT use more than one authentication method in each
     /// request", and the server does not refuse this pair today; the row pins that answer, so changing it is a decision
