@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
+using Abblix.Jwt;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,20 +23,19 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// The prefix every entry this server writes carries. A stable literal on purpose: it was
-    /// derived from a namespace that has since moved twice, and each move would have silently
-    /// orphaned the entries of a running deployment, leaving a rolling upgrade with no replay
-    /// protection for the length of its retention window. It is text now so that cannot happen
-    /// again.
-    /// </summary>
-    private const string CacheKeyPrefix = "Abblix.Oidc.Server.Features.ReplayPrevention:";
-
-    /// <summary>
     /// Registers the replay cache and decorates it with this server's clock skew and log events.
     /// </summary>
     /// <remarks>
-    /// Idempotent and TryAdd throughout, because three unrelated feature registrations call it
-    /// and a host may have decided any part of it beforehand.
+    /// <para>
+    /// The store is the one <see cref="ReplayCacheServiceCollectionExtensions.AddDistributedReplayCache"/>
+    /// registers, which a receiver of security event tokens registers too, so the server and a receiver beside it
+    /// share one store under one prefix in either order of their registrations. The server moves whatever store is
+    /// registered by then under <see cref="TenantServiceKeys.Shared"/>, unless the host registered one there, which
+    /// then serves instead, in any order.
+    /// </para>
+    /// <para>
+    /// Idempotent, because three unrelated feature registrations call it.
+    /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>
     public static IServiceCollection AddReplayPrevention(this IServiceCollection services)
@@ -51,13 +51,13 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(AlreadyRegistered.Instance);
 
-        // The store is the one registered under the shared key, which a host substitutes in any order, or one some
-        // other package registered first - a host running both this server and a Security Event Token receiver
-        // shares one replay store - which the forwarding below then leaves in place
-        services.TryAddKeyedSingleton<IReplayCache>(
-            TenantServiceKeys.Shared,
-            (provider, _) => provider.CreateService<DistributedReplayCache>(Dependency.Override(CacheKeyPrefix)));
-        services.TryAddSingleton<IReplayCache>(
+        // The store registered by now, a receiver's, the host's or the one registered here, is the shared one, unless
+        // the host registered its own under the shared key. A receiver registering after this finds the unkeyed
+        // registration below and adds nothing, so either order ends with this one store.
+        services.AddDistributedReplayCache();
+        var registered = Abblix.DependencyInjection.ServiceCollectionExtensions.RemoveAll<IReplayCache>(services)[^1];
+        services.TryAdd(AsShared(registered));
+        services.AddSingleton<IReplayCache>(
             provider => provider.GetRequiredKeyedService<IReplayCache>(TenantServiceKeys.Shared));
 
         // Decorated rather than composed in one factory, so this server's policy also reaches a store some other
@@ -69,6 +69,30 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// <paramref name="registration"/>, an unkeyed registration of the store, as the registration under
+    /// <see cref="TenantServiceKeys.Shared"/>, built the same way and kept for as long.
+    /// </summary>
+    private static ServiceDescriptor AsShared(ServiceDescriptor registration) => registration switch
+    {
+        { ImplementationInstance: { } instance }
+            => ServiceDescriptor.KeyedSingleton(typeof(IReplayCache), TenantServiceKeys.Shared, instance),
+
+        { ImplementationFactory: { } factory }
+            => ServiceDescriptor.DescribeKeyed(
+                typeof(IReplayCache),
+                TenantServiceKeys.Shared,
+                (provider, _) => factory(provider),
+                registration.Lifetime),
+
+        { ImplementationType: { } type }
+            => ServiceDescriptor.DescribeKeyed(
+                typeof(IReplayCache), TenantServiceKeys.Shared, type, registration.Lifetime),
+
+        _ => throw new InvalidOperationException(
+            $"The registration of {nameof(IReplayCache)} names neither an instance, a factory nor a type."),
+    };
 
     /// <summary>
     /// The record that <see cref="AddReplayPrevention"/> has already run on this collection.
