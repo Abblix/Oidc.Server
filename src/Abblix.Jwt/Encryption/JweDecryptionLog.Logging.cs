@@ -23,9 +23,10 @@ partial class JweDecryptionLog
     [LoggerMessage(
         EventId = LogEvents.Jwt.DecryptionKeysForAnotherAlgorithm,
         Level = LogLevel.Warning,
-        Message = "JWE decryption failed: {KeyCount} key(s) the token could name declare another algorithm than "
-                  + "alg='{Algorithm}' (enc='{EncryptionAlgorithm}', kid='{KeyId}'), and a key is used only with the "
-                  + "algorithm it declares. The sender chose an algorithm this server's key is not published for.")]
+        Message = "JWE decryption failed: {KeyCount} key(s) the token could name cannot be used with "
+                  + "alg='{Algorithm}' (enc='{EncryptionAlgorithm}', kid='{KeyId}'): a key is used only with the "
+                  + "algorithm it declares, or, declaring none, with one its type performs. The sender chose an "
+                  + "algorithm this server's key is not published for.")]
     private partial void LogKeysForAnotherAlgorithm(
         Sanitized Algorithm, Sanitized EncryptionAlgorithm, Sanitized KeyId, int KeyCount);
 

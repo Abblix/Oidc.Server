@@ -43,6 +43,7 @@ public class ClientJwtValidatorTests
     private readonly Mock<IClientKeysProvider> _clientKeysProvider;
     private readonly Mock<IAuthServiceKeysProvider> _serviceKeysProvider;
     private readonly JsonWebKey _serverDecryptionKey;
+    private readonly JsonWebKey _serverSymmetricKey;
     private readonly ClientJwtValidator _validator;
 
     public ClientJwtValidatorTests()
@@ -54,10 +55,11 @@ public class ClientJwtValidatorTests
         _clientKeysProvider = new Mock<IClientKeysProvider>(MockBehavior.Strict);
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
-        _serverDecryptionKey = new RsaJsonWebKey { KeyId = "server-enc" };
+        _serverDecryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { KeyId = "server-enc" };
+        _serverSymmetricKey = new OctetJsonWebKey { KeyId = "service-tokens", KeyValue = new byte[32] };
         _serviceKeysProvider
             .Setup(p => p.GetEncryptionKeys(TestTenant.Matched, true))
-            .Returns(new[] { _serverDecryptionKey }.ToAsyncEnumerable());
+            .Returns(new[] { _serverDecryptionKey, _serverSymmetricKey }.ToAsyncEnumerable());
 
         requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri(RequestUri));
 
@@ -726,6 +728,10 @@ public class ClientJwtValidatorTests
         var decryptionKeys = await capturedParams.ResolveTokenDecryptionKeys(string.Empty)
             .ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Contains(_serverDecryptionKey, decryptionKeys);
+
+        // A symmetric server key is published to no client (OpenID Connect Discovery 1.0 section 3, jwks_uri), so
+        // nothing a client encrypts is opened with it and discovery lists no algorithm for it
+        Assert.DoesNotContain(_serverSymmetricKey, decryptionKeys);
     }
 
     /// <summary>

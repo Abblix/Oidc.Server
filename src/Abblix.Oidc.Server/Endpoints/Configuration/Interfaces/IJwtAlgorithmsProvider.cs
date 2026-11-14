@@ -51,8 +51,9 @@ public interface IJwtAlgorithmsProvider
 
 	/// <summary>
 	/// Lists the JWE key-management algorithms (the <c>alg</c> values) the authorization server
-	/// accepts when a client encrypts a request object to the server (RFC 9101 section 6.1),
-	/// advertised via <c>request_object_encryption_alg_values_supported</c>.
+	/// accepts when a client encrypts a request object to the server (RFC 9101 section 6.1). The discovery
+	/// document lists, as <c>request_object_encryption_alg_values_supported</c>, those of them a tenant's own
+	/// published encryption keys open.
 	/// </summary>
 	IEnumerable<string> RequestObjectEncryptionAlgValuesSupported { get; }
 

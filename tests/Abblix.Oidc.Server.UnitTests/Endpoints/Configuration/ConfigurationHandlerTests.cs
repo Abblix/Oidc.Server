@@ -9,8 +9,12 @@
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Jwt;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -54,6 +58,7 @@ public class ConfigurationHandlerTests
             Mock.Of<IAuthorizationMetadataProvider>(),
             scopesAndClaims.Object,
             Mock.Of<IJwtAlgorithmsProvider>(),
+            Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
             [],
             acr.Object,
             Mock.Of<IAuthorizationDetailsMetadataProvider>());
@@ -96,6 +101,8 @@ public class ConfigurationHandlerTests
         options.Setup(o => o.Value).Returns(new OidcOptions());
         var clientAuthenticator = new Mock<IClientAuthenticator>();
         clientAuthenticator.Setup(a => a.ClientAuthenticationMethodsSupported).Returns([]);
+        // A key declaring no algorithm, whose material performs every RSA key management algorithm
+        var keys = KeysProviderOf(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption));
         var handler = new ConfigurationHandler(
             options.Object,
             SingleIssuer.LicensedCatalog,
@@ -104,6 +111,7 @@ public class ConfigurationHandlerTests
             metadata.Object,
             Mock.Of<IScopesAndClaimsProvider>(),
             algorithms.Object,
+            keys,
             [],
             Mock.Of<IAcrMetadataProvider>(),
             Mock.Of<IAuthorizationDetailsMetadataProvider>());
@@ -124,5 +132,127 @@ public class ConfigurationHandlerTests
         Assert.Equal(encryption, document.RequestObjectEncryptionAlgValuesSupported);
         Assert.Equal(encryption, document.AuthorizationEncryptionAlgValuesSupported);
         Assert.Equal(encryption, document.IntrospectionEncryptionAlgValuesSupported);
+    }
+
+    private const string RsaDeclaringOaep256 = nameof(RsaDeclaringOaep256);
+    private const string RsaDeclaringNone = nameof(RsaDeclaringNone);
+    private const string EllipticCurveDeclaringNone = nameof(EllipticCurveDeclaringNone);
+    private const string SymmetricOnly = nameof(SymmetricOnly);
+    private const string NoKey = nameof(NoKey);
+
+    private static readonly Dictionary<string, Func<JsonWebKey[]>> KeySets = new()
+    {
+        [RsaDeclaringOaep256] = () =>
+            [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption, EncryptionAlgorithms.KeyManagement.RsaOaep256)],
+        [RsaDeclaringNone] = () => [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption)],
+        [EllipticCurveDeclaringNone] = () =>
+        [
+            JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, EncryptionAlgorithms.KeyManagement.EcdhEs)
+                with { Algorithm = null },
+        ],
+        [SymmetricOnly] = () =>
+        [
+            new OctetJsonWebKey { KeyId = "service-tokens", KeyValue = new byte[32], Usage = PublicKeyUsages.Encryption },
+        ],
+        [NoKey] = () => [],
+    };
+
+    /// <summary>
+    /// The key management algorithms listed for request objects are those the tenant's own published encryption keys
+    /// open: a key declaring its algorithm opens only that one (RFC 8725 section 3.1), a key declaring none what its
+    /// material performs, and a symmetric key, which the JWK set may not carry (OpenID Connect Discovery 1.0 section 3,
+    /// jwks_uri), none a client could use. With no such key both lists are omitted, as section 4.2 requires of a claim
+    /// with zero elements.
+    /// </summary>
+    [Theory]
+    [InlineData(RsaDeclaringOaep256, new[] { EncryptionAlgorithms.KeyManagement.RsaOaep256 })]
+    [InlineData(
+        RsaDeclaringNone,
+        new[]
+        {
+            EncryptionAlgorithms.KeyManagement.Rsa1_5,
+            EncryptionAlgorithms.KeyManagement.RsaOaep,
+            EncryptionAlgorithms.KeyManagement.RsaOaep256,
+        })]
+    [InlineData(EllipticCurveDeclaringNone, new[] { EncryptionAlgorithms.KeyManagement.EcdhEs })]
+    [InlineData(SymmetricOnly, null)]
+    [InlineData(NoKey, null)]
+    public async Task TheDocument_ListsTheRequestObjectAlgorithmsTheTenantsKeysOpen(string keys, string[]? expected)
+    {
+        var handler = HandlerFor(KeysProviderOf(KeySets[keys]()));
+
+        var document = await handler.HandleAsync(SingleIssuer.Tenant);
+
+        Assert.Equal(expected, document.RequestObjectEncryptionAlgValuesSupported);
+        Assert.Equal(
+            expected is null ? null : [EncryptionAlgorithms.ContentEncryption.Aes256Gcm],
+            document.RequestObjectEncryptionEncValuesSupported);
+    }
+
+    /// <summary>
+    /// A server that accepts no request object lists no algorithm to encrypt one with, and asks for no key.
+    /// </summary>
+    [Fact]
+    public async Task TheDocument_ListsNoRequestObjectEncryption_WhenRequestObjectsAreNotAccepted()
+    {
+        var handler = HandlerFor(
+            Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
+            requestParameterSupported: false);
+
+        var document = await handler.HandleAsync(SingleIssuer.Tenant);
+
+        Assert.Null(document.RequestObjectEncryptionAlgValuesSupported);
+        Assert.Null(document.RequestObjectEncryptionEncValuesSupported);
+    }
+
+    /// <summary>
+    /// A key provider answering <paramref name="keys"/> for the test's tenant alone, so a handler asking for another
+    /// tenant's keys fails its test.
+    /// </summary>
+    private static IAuthServiceKeysProvider KeysProviderOf(params JsonWebKey[] keys)
+    {
+        var provider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
+        provider
+            .Setup(p => p.GetEncryptionKeys(TestTenant.Matched, false))
+            .Returns(() => keys.ToAsyncEnumerable());
+        return provider.Object;
+    }
+
+    /// <summary>
+    /// A handler over a server registering a fixed set of request object encryption algorithms.
+    /// </summary>
+    private static ConfigurationHandler HandlerFor(IAuthServiceKeysProvider keys, bool requestParameterSupported = true)
+    {
+        var algorithms = new Mock<IJwtAlgorithmsProvider>();
+        algorithms.Setup(a => a.RequestObjectEncryptionAlgValuesSupported).Returns(
+        [
+            EncryptionAlgorithms.KeyManagement.Rsa1_5,
+            EncryptionAlgorithms.KeyManagement.RsaOaep,
+            EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            EncryptionAlgorithms.KeyManagement.EcdhEs,
+            EncryptionAlgorithms.KeyManagement.Aes256KW,
+            EncryptionAlgorithms.KeyManagement.Dir,
+        ]);
+        algorithms.Setup(a => a.RequestObjectEncryptionEncValuesSupported)
+            .Returns([EncryptionAlgorithms.ContentEncryption.Aes256Gcm]);
+        var metadata = new Mock<IAuthorizationMetadataProvider>();
+        metadata.Setup(m => m.RequestParameterSupported).Returns(requestParameterSupported);
+        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
+        options.Setup(o => o.Value).Returns(new OidcOptions());
+        var clientAuthenticator = new Mock<IClientAuthenticator>();
+        clientAuthenticator.Setup(a => a.ClientAuthenticationMethodsSupported).Returns([]);
+
+        return new ConfigurationHandler(
+            options.Object,
+            SingleIssuer.LicensedCatalog,
+            Mock.Of<ILogoutNotifier>(),
+            clientAuthenticator.Object,
+            metadata.Object,
+            Mock.Of<IScopesAndClaimsProvider>(),
+            algorithms.Object,
+            keys,
+            [],
+            Mock.Of<IAcrMetadataProvider>(),
+            Mock.Of<IAuthorizationDetailsMetadataProvider>());
     }
 }

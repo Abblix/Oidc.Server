@@ -11,6 +11,7 @@ using Abblix.Jwt;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -37,6 +38,7 @@ public sealed class ConfigurationHandler(
 	IAuthorizationMetadataProvider authorizationMetadata,
 	IScopesAndClaimsProvider scopesAndClaims,
 	IJwtAlgorithmsProvider jwtAlgorithms,
+	IAuthServiceKeysProvider serviceKeys,
 	IEnumerable<IAuthenticationCompletionHandler> cibaCompletionHandlers,
 	IAcrMetadataProvider acrMetadata,
 	Features.RichAuthorizationRequests.IAuthorizationDetailsMetadataProvider authorizationDetailsMetadata) : IConfigurationHandler
@@ -51,89 +53,116 @@ public sealed class ConfigurationHandler(
 	/// Handles the configuration request by building discovery metadata.
 	/// </summary>
 	/// <returns>Configuration response with metadata but without resolved endpoint URLs.</returns>
-	public Task<ConfigurationResponse> HandleAsync(TenantDefinition tenant) => Task.FromResult(new ConfigurationResponse
+	public async Task<ConfigurationResponse> HandleAsync(TenantDefinition tenant)
 	{
-		Issuer = Licensed(tenant),
+		var requestObjectEncryption = await RequestObjectEncryptionAsync(tenant);
 
-		FrontChannelLogoutSupported = logoutNotifier.FrontChannelLogoutSupported,
-		FrontChannelLogoutSessionSupported = logoutNotifier.FrontChannelLogoutSessionSupported,
-		BackChannelLogoutSupported = logoutNotifier.BackChannelLogoutSupported,
-		BackChannelLogoutSessionSupported = logoutNotifier.BackChannelLogoutSessionSupported,
+		return new ConfigurationResponse
+		{
+			Issuer = Licensed(tenant),
 
-		ScopesSupported = scopesAndClaims.ScopesSupported(tenant),
-		ClaimsSupported = scopesAndClaims.ClaimsSupported(tenant),
-		GrantTypesSupported = scopesAndClaims.GrantTypesSupported,
-		SubjectTypesSupported = scopesAndClaims.SubjectTypesSupported(tenant),
+			FrontChannelLogoutSupported = logoutNotifier.FrontChannelLogoutSupported,
+			FrontChannelLogoutSessionSupported = logoutNotifier.FrontChannelLogoutSessionSupported,
+			BackChannelLogoutSupported = logoutNotifier.BackChannelLogoutSupported,
+			BackChannelLogoutSessionSupported = logoutNotifier.BackChannelLogoutSessionSupported,
 
-		ClaimsParameterSupported = authorizationMetadata.ClaimsParameterSupported,
-		ResponseTypesSupported = authorizationMetadata.ResponseTypesSupported,
-		ResponseModesSupported = authorizationMetadata.ResponseModesSupported,
+			ScopesSupported = scopesAndClaims.ScopesSupported(tenant),
+			ClaimsSupported = scopesAndClaims.ClaimsSupported(tenant),
+			GrantTypesSupported = scopesAndClaims.GrantTypesSupported,
+			SubjectTypesSupported = scopesAndClaims.SubjectTypesSupported(tenant),
 
-		PromptValuesSupported = authorizationMetadata.PromptValuesSupported,
-		CodeChallengeMethodsSupported = authorizationMetadata.CodeChallengeMethodsSupported,
-		RequestParameterSupported = authorizationMetadata.RequestParameterSupported,
-		RequestObjectSigningAlgValuesSupported = authorizationMetadata.RequestParameterSupported
-			? Signing(tenant, jwtAlgorithms.SigningAlgorithmsSupported)
-			: null,
-		RequestObjectEncryptionAlgValuesSupported = authorizationMetadata.RequestParameterSupported
-			? KeyManagement(tenant, jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported)
-			: null,
-		RequestObjectEncryptionEncValuesSupported = authorizationMetadata.RequestParameterSupported
-			? jwtAlgorithms.RequestObjectEncryptionEncValuesSupported
-			: null,
+			ClaimsParameterSupported = authorizationMetadata.ClaimsParameterSupported,
+			ResponseTypesSupported = authorizationMetadata.ResponseTypesSupported,
+			ResponseModesSupported = authorizationMetadata.ResponseModesSupported,
 
-		// JARM (JWT Secured Authorization Response Mode) is always available - a client opts in per request
-		// by selecting a *.jwt response mode - so the supported algorithms are advertised unconditionally.
-		AuthorizationSigningAlgValuesSupported = Signing(tenant, jwtAlgorithms.AuthorizationSigningAlgValuesSupported),
-		AuthorizationEncryptionAlgValuesSupported =
-			KeyManagement(tenant, jwtAlgorithms.AuthorizationEncryptionAlgValuesSupported),
-		AuthorizationEncryptionEncValuesSupported = jwtAlgorithms.AuthorizationEncryptionEncValuesSupported,
+			PromptValuesSupported = authorizationMetadata.PromptValuesSupported,
+			CodeChallengeMethodsSupported = authorizationMetadata.CodeChallengeMethodsSupported,
+			RequestParameterSupported = authorizationMetadata.RequestParameterSupported,
+			RequestObjectSigningAlgValuesSupported = authorizationMetadata.RequestParameterSupported
+				? Signing(tenant, jwtAlgorithms.SigningAlgorithmsSupported)
+				: null,
+			// A content encryption algorithm is of no use to a client with no key management algorithm to pair it with
+			RequestObjectEncryptionAlgValuesSupported = requestObjectEncryption,
+			RequestObjectEncryptionEncValuesSupported = requestObjectEncryption is null
+				? null
+				: jwtAlgorithms.RequestObjectEncryptionEncValuesSupported,
 
-		// RFC 9701 JWT introspection responses are always available - a client opts in per request via Accept and
-		// its registered introspection_signed_response_alg - so the supported algorithms are advertised unconditionally.
-		IntrospectionSigningAlgValuesSupported =
-			SigningOrPlain(tenant, jwtAlgorithms.IntrospectionSigningAlgValuesSupported),
-		IntrospectionEncryptionAlgValuesSupported =
-			KeyManagement(tenant, jwtAlgorithms.IntrospectionEncryptionAlgValuesSupported),
-		IntrospectionEncryptionEncValuesSupported = jwtAlgorithms.IntrospectionEncryptionEncValuesSupported,
+			// JARM (JWT Secured Authorization Response Mode) is always available - a client opts in per request
+			// by selecting a *.jwt response mode - so the supported algorithms are advertised unconditionally.
+			AuthorizationSigningAlgValuesSupported = Signing(tenant, jwtAlgorithms.AuthorizationSigningAlgValuesSupported),
+			AuthorizationEncryptionAlgValuesSupported =
+				KeyManagement(tenant, jwtAlgorithms.AuthorizationEncryptionAlgValuesSupported),
+			AuthorizationEncryptionEncValuesSupported = jwtAlgorithms.AuthorizationEncryptionEncValuesSupported,
 
-		RequirePushedAuthorizationRequests = options.Value.RequirePushedAuthorizationRequests,
-		RequireSignedRequestObject = options.Value.RequireSignedRequestObject,
+			// RFC 9701 JWT introspection responses are always available - a client opts in per request via Accept and
+			// its registered introspection_signed_response_alg - so the supported algorithms are advertised unconditionally.
+			IntrospectionSigningAlgValuesSupported =
+				SigningOrPlain(tenant, jwtAlgorithms.IntrospectionSigningAlgValuesSupported),
+			IntrospectionEncryptionAlgValuesSupported =
+				KeyManagement(tenant, jwtAlgorithms.IntrospectionEncryptionAlgValuesSupported),
+			IntrospectionEncryptionEncValuesSupported = jwtAlgorithms.IntrospectionEncryptionEncValuesSupported,
 
-		TokenEndpointAuthMethodsSupported = clientAuthenticator.ClientAuthenticationMethodsSupported,
+			RequirePushedAuthorizationRequests = options.Value.RequirePushedAuthorizationRequests,
+			RequireSignedRequestObject = options.Value.RequireSignedRequestObject,
 
-		// RFC 8705 section 3.3: advertise certificate-bound access tokens only when a mutual-TLS client
-		// authentication method is available - the server then both issues bound tokens and
-		// enforces the binding at its protected resources (MtlsUserInfoValidator).
-		TlsClientCertificateBoundAccessTokens = clientAuthenticator.ClientAuthenticationMethodsSupported.Any(
-			method => method is ClientAuthenticationMethods.TlsClientAuth
-				or ClientAuthenticationMethods.SelfSignedTlsClientAuth)
-			? true
-			: null,
+			TokenEndpointAuthMethodsSupported = clientAuthenticator.ClientAuthenticationMethodsSupported,
 
-		TokenEndpointAuthSigningAlgValuesSupported =
-			Signing(tenant, jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported),
-		IdTokenSigningAlgValuesSupported = Signing(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
-		UserInfoSigningAlgValuesSupported = SigningOrPlain(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
-		// RFC 9449 section 5.1: the metadata is there "to signal support for DPoP in general", so a tenant whose
-		// profile refuses DPoP (FAPI 1.0 Part 2 section 8.2) does not carry it
-		DpopSigningAlgValuesSupported = SecurityProfileRequirements.For(tenant, client: null).RequireCertificateBoundTokens
-			? null
-			: Signing(tenant, jwtAlgorithms.DpopSigningAlgorithmsSupported),
+			// RFC 8705 section 3.3: advertise certificate-bound access tokens only when a mutual-TLS client
+			// authentication method is available - the server then both issues bound tokens and
+			// enforces the binding at its protected resources (MtlsUserInfoValidator).
+			TlsClientCertificateBoundAccessTokens = clientAuthenticator.ClientAuthenticationMethodsSupported.Any(
+				method => method is ClientAuthenticationMethods.TlsClientAuth
+					or ClientAuthenticationMethods.SelfSignedTlsClientAuth)
+				? true
+				: null,
 
-		BackChannelAuthenticationRequestSigningAlgValuesSupported = cibaCompletionHandler is null
-			? null
-			: Signing(tenant, jwtAlgorithms.BackChannelAuthenticationRequestSigningAlgValuesSupported),
-		BackChannelTokenDeliveryModesSupported = cibaCompletionHandler?.TokenDeliveryModesSupported,
-		BackChannelUserCodeParameterSupported =
-			cibaCompletionHandler is null ? null : options.Value.BackChannelAuthentication.UserCodeParameterSupported,
+			TokenEndpointAuthSigningAlgValuesSupported =
+				Signing(tenant, jwtAlgorithms.TokenEndpointAuthSigningAlgValuesSupported),
+			IdTokenSigningAlgValuesSupported = Signing(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
+			UserInfoSigningAlgValuesSupported = SigningOrPlain(tenant, jwtAlgorithms.SignedResponseAlgorithmsSupported),
+			// RFC 9449 section 5.1: the metadata is there "to signal support for DPoP in general", so a tenant whose
+			// profile refuses DPoP (FAPI 1.0 Part 2 section 8.2) does not carry it
+			DpopSigningAlgValuesSupported = SecurityProfileRequirements.For(tenant, client: null).RequireCertificateBoundTokens
+				? null
+				: Signing(tenant, jwtAlgorithms.DpopSigningAlgorithmsSupported),
 
-		AcrValuesSupported = acrMetadata.AcrValuesSupported(tenant),
+			BackChannelAuthenticationRequestSigningAlgValuesSupported = cibaCompletionHandler is null
+				? null
+				: Signing(tenant, jwtAlgorithms.BackChannelAuthenticationRequestSigningAlgValuesSupported),
+			BackChannelTokenDeliveryModesSupported = cibaCompletionHandler?.TokenDeliveryModesSupported,
+			BackChannelUserCodeParameterSupported =
+				cibaCompletionHandler is null ? null : options.Value.BackChannelAuthentication.UserCodeParameterSupported,
 
-		AuthorizationResponseIssParameterSupported = authorizationMetadata.AuthorizationResponseIssParameterSupported,
+			AcrValuesSupported = acrMetadata.AcrValuesSupported(tenant),
 
-		AuthorizationDetailsTypesSupported = authorizationDetailsMetadata.SupportedTypes,
-	});
+			AuthorizationResponseIssParameterSupported = authorizationMetadata.AuthorizationResponseIssParameterSupported,
+
+			AuthorizationDetailsTypesSupported = authorizationDetailsMetadata.SupportedTypes,
+		};
+	}
+
+	/// <summary>
+	/// The key management algorithms a client can encrypt a request object to <paramref name="tenant"/> under: those
+	/// the tenant's profile admits that one of its own published encryption keys can be used with. A key declaring
+	/// its algorithm opens only that one (RFC 8725 section 3.1), so the registered algorithms alone would promise a
+	/// client algorithms its request object is refused under. Null when there is none, or no request object is
+	/// accepted at all: OpenID Connect Discovery 1.0 section 4.2, "Claims with zero elements MUST be omitted from the
+	/// response".
+	/// </summary>
+	private async Task<string[]?> RequestObjectEncryptionAsync(TenantDefinition tenant)
+	{
+		if (!authorizationMetadata.RequestParameterSupported)
+			return null;
+
+		var algorithms = KeyManagement(
+				tenant,
+				await serviceKeys.GetInboundKeyManagementAlgorithmsAsync(
+					tenant,
+					jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported))
+			.ToArray();
+
+		return algorithms.Length > 0 ? algorithms : null;
+	}
 
 	/// <summary>
 	/// The signature algorithms of <paramref name="algorithms"/> the tenant's profile admits: FAPI 1.0 Part 2 section
