@@ -52,7 +52,9 @@ public interface IClientAuthenticator
     /// (<see cref="ClientAuthenticationFailures.InvalidCredential"/> or another <c>invalid_client</c>); or no
     /// credential of that form presented at all (<see cref="UnauthenticatedCallerError"/>, as
     /// <see cref="ClientAuthenticationFailures.NoCredential"/>). An authenticator decides what counts as presented from
-    /// what it itself reads, a client_id alone being an identifier rather than a credential.
+    /// what it itself reads, a client_id alone being an identifier rather than a credential. An authenticator composing
+    /// others answers a fourth: <see cref="ClientAuthenticationFailures.MoreThanOneMethod"/>, for a request in which
+    /// they find credentials in more than one place (<see cref="FindPresentedCredentialsAsync"/>).
     /// </summary>
     /// <remarks>
     /// The two failures are answered differently where a specification tells them apart: RFC 9701 section 5 has the

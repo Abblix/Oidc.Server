@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
@@ -14,6 +16,7 @@ using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
+using Microsoft.AspNetCore.Http;
 using Xunit;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 
@@ -105,6 +108,48 @@ public class MoreThanOneClientAuthenticationMethodTests(TestFactory factory) : T
         using var served = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, alone);
         var raw = await served.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(served.StatusCode == HttpStatusCode.OK, $"{(int)served.StatusCode}: {raw}");
+    }
+
+    /// <summary>
+    /// RFC 8705 section 4 has mutual-TLS client authentication and certificate-bound tokens "used independently of each
+    /// other", and section 2 leaves which clients authenticate by mutual TLS to their configuration: a certificate on
+    /// the connection of a client registered for client_secret_basic binds its tokens and is not a second method beside
+    /// the Basic header, client_id in the body included.
+    /// </summary>
+    [Fact]
+    public async Task Certificate_of_a_client_authenticating_otherwise_is_not_a_second_method()
+    {
+        var discovery = await FetchDiscoveryAsync(CreateClient());
+        using var key = RSA.Create(2048);
+        using var certificate = new CertificateRequest(
+                "CN=" + TestConstants.ClientSecretBasicClientId, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+            .CreateSelfSigned(TimeProvider.System.GetUtcNow().AddDays(-1), TimeProvider.System.GetUtcNow().AddDays(1));
+        var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes(
+            $"{TestConstants.ClientSecretBasicClientId}:{TestConstants.ConfidentialClientSecret}"));
+        var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ClientSecretBasicClientId,
+        });
+        var body = await form.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
+
+        var context = await Factory.Server.SendAsync(
+            http =>
+            {
+                http.Connection.ClientCertificate = certificate;
+                http.Request.Method = HttpMethods.Post;
+                http.Request.Scheme = discovery.TokenEndpoint.Scheme;
+                http.Request.Host = new HostString(discovery.TokenEndpoint.Authority);
+                http.Request.Path = discovery.TokenEndpoint.AbsolutePath;
+                http.Request.Headers[HttpRequestHeaders.Authorization] = $"{TokenTypes.Basic} {credentials}";
+                http.Request.ContentType = form.Headers.ContentType!.ToString();
+                http.Request.Body = new MemoryStream(body);
+            },
+            TestContext.Current.CancellationToken);
+
+        using var reader = new StreamReader(context.Response.Body);
+        var raw = await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
+        Assert.True(context.Response.StatusCode == StatusCodes.Status200OK, $"{context.Response.StatusCode}: {raw}");
     }
 
     private static async Task<HttpRequestMessage> RequestAsync(Uri endpoint, DiscoveryDocument discovery, MethodPair pair)
