@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.MinimalApi.UnitTests;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using Xunit;
+using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -181,6 +182,37 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
                 new Dictionary<string, string> { [UserInfoRequest.Parameters.AccessToken] = "TOKEN" }),
         };
         request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.DPoP, "TOKEN");
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var (dpop, bearer) = Challenges(response);
+        Assert.Equal(ErrorCodes.InvalidRequest, dpop.Parameters[Error]);
+        Assert.Equal(ErrorCodes.InvalidRequest, bearer.Parameters[Error]);
+    }
+
+    /// <summary>
+    /// RFC 9449 Figure 19: the Authorization header sent twice leaves the mechanism ambiguous, so both challenges
+    /// carry the invalid_request, whatever the lines name and whether a token parameter is sent beside them.
+    /// </summary>
+    [Theory]
+    [InlineData(TokenTypes.Bearer, TokenTypes.DPoP, false)]
+    [InlineData(TokenTypes.Bearer, TokenTypes.Bearer, false)]
+    [InlineData(TokenTypes.Bearer, TokenTypes.DPoP, true)]
+    [InlineData(TokenTypes.Bearer, TokenTypes.Bearer, true)]
+    public async Task Two_authorization_lines_carry_the_error_on_both_challenges(
+        string first, string second, bool tokenInBody)
+    {
+        var (client, discovery) = await EndpointAsync();
+
+        using var request = new HttpRequestMessage(tokenInBody ? HttpMethod.Post : HttpMethod.Get, discovery.UserInfoEndpoint);
+        if (tokenInBody)
+        {
+            request.Content = new FormUrlEncodedContent(
+                new Dictionary<string, string> { [UserInfoRequest.Parameters.AccessToken] = "TOKEN" });
+        }
+
+        Assert.True(request.Headers.TryAddWithoutValidation(
+            HttpRequestHeaders.Authorization, [$"{first} TOKEN", $"{second} TOKEN"]));
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
