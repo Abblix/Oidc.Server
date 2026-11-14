@@ -151,7 +151,9 @@ public static class WwwAuthenticate
     /// characters outside the set %x21 / %x23-5B / %x5D-7E for representing scope values and %x20 for delimiters
     /// between scope values. Values for the "error" and "error_description" attributes (specified in Appendixes A.7
     /// and A.8 of [RFC6749]) MUST NOT include characters outside the set %x20-21 / %x23-5B / %x5D-7E." RFC 9449
-    /// Section 7.1 gives the DPoP challenge the same three attributes "as defined in [RFC6750], Section 3".
+    /// Section 7.1 gives the DPoP challenge the same attributes: "A scope authentication parameter MAY be included as
+    /// defined in [RFC6750], Section 3", "An error parameter ([RFC6750], Section 3) SHOULD be included", "An
+    /// error_description parameter ([RFC6750], Section 3) MAY be included".
     /// <para>
     /// The section says what may not be emitted and not what to do instead, so the handling is chosen here, by what
     /// the value is. A description is prose for a developer and often quotes what a client sent, so a character

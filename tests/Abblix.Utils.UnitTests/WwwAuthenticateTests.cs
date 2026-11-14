@@ -138,6 +138,7 @@ public class WwwAuthenticateTests
     [InlineData("non-ASCII \u00e9", "non-ASCII ?")]
     [InlineData("first obs-text \u0080", "first obs-text ?")]
     [InlineData("del\u007f", "del?")]
+    [InlineData("unit\u001fseparator", "unit?separator")]
     [InlineData("bang ! hash # bracket [ close ] tilde ~", "bang ! hash # bracket [ close ] tilde ~")]
     public void Challenge_ErrorDescription_KeepsToTheRfc6750Set(string value, string expected)
     {
@@ -155,9 +156,13 @@ public class WwwAuthenticateTests
     [InlineData("error", "a\\b")]
     [InlineData("error", "caf\u00e9")]
     [InlineData("error", "a\tb")]
+    [InlineData("error", "a\u001fb")]
+    [InlineData("error", "a\u007fb")]
     [InlineData("scope", "openid\u00e9")]
     [InlineData("scope", "a\"b")]
     [InlineData("scope", "a\u007fb")]
+    [InlineData("scope", "a\u001fb")]
+    [InlineData("scope", "a\\b")]
     public void Challenge_ErrorOrScopeOutsideTheRfc6750Set_IsRefused(string attribute, string value)
         => Assert.Throws<ArgumentException>(() => WwwAuthenticate.Challenge("Bearer", (attribute, value)));
 

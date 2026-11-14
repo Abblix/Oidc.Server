@@ -28,7 +28,8 @@ public static class AccessTokenPresentation
     /// parameter, each one of the "three methods of sending bearer access tokens" of RFC 6750 section 2, so the header
     /// and a parameter together still name one scheme; <see cref="AccessTokenScheme.DPoP"/> for the
     /// <c>Authorization: DPoP</c> header alone; null for that header beside a parameter, two schemes at once
-    /// (section 7.2, Figure 19), and for a request presenting no token in a scheme the endpoint speaks.
+    /// (answered as section 7.2 answers two Authorization headers in Figure 19), and for a request presenting no
+    /// token in a scheme the endpoint speaks.
     /// </returns>
     public static AccessTokenScheme? SchemeOf(UserInfoRequest request, ClientRequest clientRequest)
     {

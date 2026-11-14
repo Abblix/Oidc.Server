@@ -166,7 +166,8 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
     }
 
     /// <summary>
-    /// RFC 9449 section 7.2, Figure 19: a DPoP header beside an <c>access_token</c> parameter names two schemes at
+    /// RFC 9449 section 7.2, answered as Figure 19 answers two Authorization headers: a DPoP header beside an
+    /// <c>access_token</c> parameter names two schemes at
     /// once, so the mechanism cannot be established and both challenges carry the invalid_request.
     /// </summary>
     [Fact]
