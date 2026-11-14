@@ -126,6 +126,17 @@ public class IntrospectionResponseFormatterTests
         Assert.IsNotType<BadRequestObjectResult>(failed);
     }
 
+    /// <summary>
+    /// RFC 9110 section 15.5.7: a JWT the server cannot sign is answered 406 Not Acceptable.
+    /// </summary>
+    [Fact]
+    public async Task FormatResponseAsync_AJwtNoKeyProduces_Is406()
+    {
+        var result = await FormatFailureAsync(new NotAcceptableError("no key"));
+
+        Assert.Equal(StatusCodes.Status406NotAcceptable, Assert.IsType<ObjectResult>(result).StatusCode);
+    }
+
     private async Task<ActionResult> FormatFailureAsync(OidcError error)
     {
         var tenantAccessor = Mock.Of<ITenantAccessor>(accessor => accessor.Current == new TenantContext

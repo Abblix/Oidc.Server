@@ -56,6 +56,12 @@ public class IntrospectionResponseFormatter(
         // RFC 9701 section 5: "return an HTTP status code 400", without the Basic challenge of a failed credential
         UnauthenticatedCallerError => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
 
+        // RFC 9110 section 15.5.7: the JWT the Accept header names is a representation this server cannot produce
+        NotAcceptableError => new ObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))
+        {
+            StatusCode = StatusCodes.Status406NotAcceptable,
+        },
+
         _ => error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().Issuer.OriginalString),
     };
 
@@ -76,11 +82,10 @@ public class IntrospectionResponseFormatter(
             return new JsonResult(introspectionResponse);
         }
 
-        return new ContentResult
-        {
-            ContentType = MediaTypes.TokenIntrospectionJwt,
-            Content = await jwtBuilder.BuildAsync(tenantAccessor.CurrentTenant(), success.ClientInfo, introspectionResponse),
-        };
+        var jwt = await jwtBuilder.BuildAsync(tenantAccessor.CurrentTenant(), success.ClientInfo, introspectionResponse);
+        return jwt.Match(
+            onSuccess: content => new ContentResult { ContentType = MediaTypes.TokenIntrospectionJwt, Content = content },
+            onFailure: FormatFailure);
     }
 
     private bool AcceptsTokenIntrospectionJwt()

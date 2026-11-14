@@ -11,6 +11,7 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -76,18 +77,30 @@ public class IntrospectionResponseJwtBuilderTests
     }
 
     /// <summary>
-    /// A tenant whose keys cannot produce the RS256 default, holding a P-256 key alone, signs with ES256 rather than
-    /// failing the request; a tenant whose keys produce none of the fallbacks fails loudly.
+    /// Without a profile the default is RS256 alone: a tenant whose keys cannot produce it, holding a P-256 key, signs
+    /// with nothing else and answers that the JWT is not available.
     /// </summary>
     [Fact]
-    public async Task WithoutAProfile_ATenantWithoutAnRsaKey_SignsWithItsP256Key()
+    public async Task WithoutAProfile_ATenantWithoutAnRsaKey_IsNotAcceptable()
     {
-        await Builder(Ec()).BuildAsync(Tenant(ClientSecurityProfile.None), Client(), new JsonObject());
+        var result = await Builder(Ec()).BuildAsync(Tenant(ClientSecurityProfile.None), Client(), new JsonObject());
 
-        Assert.Equal(SigningAlgorithms.ES256, _signed?.Header.Algorithm);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => Builder(
-                JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P384, SigningAlgorithms.ES384))
-            .BuildAsync(Tenant(ClientSecurityProfile.None), Client(), new JsonObject()));
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsType<NotAcceptableError>(error);
+        Assert.Null(_signed);
+    }
+
+    /// <summary>
+    /// Under a profile, a tenant whose keys produce none of the algorithms it admits answers the same way.
+    /// </summary>
+    [Fact]
+    public async Task UnderAFapiProfile_ATenantWithoutAKeyForAnAdmittedAlgorithm_IsNotAcceptable()
+    {
+        var result = await Builder(JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P384, SigningAlgorithms.ES384))
+            .BuildAsync(Tenant(ClientSecurityProfile.Fapi2), Client(), new JsonObject());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsType<NotAcceptableError>(error);
     }
 
     /// <summary>

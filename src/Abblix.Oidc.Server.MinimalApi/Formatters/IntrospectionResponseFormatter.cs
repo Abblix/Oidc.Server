@@ -48,6 +48,10 @@ public class IntrospectionResponseFormatter(
         UnauthenticatedCallerError => Results.Json(
             new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status400BadRequest),
 
+        // RFC 9110 section 15.5.7: the JWT the Accept header names is a representation this server cannot produce
+        NotAcceptableError => Results.Json(
+            new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status406NotAcceptable),
+
         _ => error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().Issuer.OriginalString),
     };
 
@@ -64,7 +68,9 @@ public class IntrospectionResponseFormatter(
             return Results.Json(introspectionResponse);
 
         var jwt = await jwtBuilder.BuildAsync(tenantAccessor.CurrentTenant(), success.ClientInfo, introspectionResponse);
-        return Results.Content(jwt, MediaTypes.TokenIntrospectionJwt);
+        return jwt.Match(
+            onSuccess: content => Results.Content(content, MediaTypes.TokenIntrospectionJwt),
+            onFailure: FormatFailure);
     }
 
     private bool AcceptsTokenIntrospectionJwt()

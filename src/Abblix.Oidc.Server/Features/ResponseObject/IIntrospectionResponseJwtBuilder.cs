@@ -7,8 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.ResponseObject;
 
@@ -28,6 +30,7 @@ public interface IIntrospectionResponseJwtBuilder
     /// its introspection metadata name the algorithms.</param>
     /// <param name="introspectionResponse">The members of the RFC 7662 section 2.2 response, carried as the
     /// <c>token_introspection</c> claim.</param>
-    /// <returns>A task that returns the encoded JWT.</returns>
-    Task<string> BuildAsync(TenantDefinition tenant, ClientInfo client, JsonObject introspectionResponse);
+    /// <returns>A task that returns the encoded JWT, or a <see cref="Common.NotAcceptableError"/> where no signing key of
+    /// the tenant produces the algorithm the response is to be signed with.</returns>
+    Task<Result<string, OidcError>> BuildAsync(TenantDefinition tenant, ClientInfo client, JsonObject introspectionResponse);
 }

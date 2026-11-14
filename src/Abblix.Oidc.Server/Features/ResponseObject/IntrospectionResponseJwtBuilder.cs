@@ -8,11 +8,13 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Utils;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.ResponseObject;
@@ -34,15 +36,25 @@ public class IntrospectionResponseJwtBuilder(
     IAuthServiceKeysProvider serviceKeysProvider) : IIntrospectionResponseJwtBuilder
 {
     /// <inheritdoc />
-    public async Task<string> BuildAsync(TenantDefinition tenant, ClientInfo client, JsonObject introspectionResponse)
+    public async Task<Result<string, OidcError>> BuildAsync(
+        TenantDefinition tenant,
+        ClientInfo client,
+        JsonObject introspectionResponse)
     {
+        if (await SigningAlgorithmAsync(tenant, client) is not { } algorithm)
+        {
+            return new NotAcceptableError(
+                $"No signing key of this server produces the algorithm a JWT introspection response for the client " +
+                $"{client.ClientId} is signed with; the response is available as {System.Net.Mime.MediaTypeNames.Application.Json}");
+        }
+
         var token = new JsonWebToken
         {
             Header =
             {
                 // RFC 9701 section 5: the JWT typ "token-introspection+jwt"
                 Type = JsonWebTokenTypes.TokenIntrospection,
-                Algorithm = await SigningAlgorithmAsync(tenant, client),
+                Algorithm = algorithm,
             },
             Payload =
             {
@@ -67,36 +79,26 @@ public class IntrospectionResponseJwtBuilder(
     }
 
     /// <summary>
-    /// The algorithm the response is signed with: the client's <c>introspection_signed_response_alg</c>, or where it
-    /// registered none, RFC 9701 section 6: "The default, if omitted, is RS256".
+    /// The algorithm the response is signed with, or null where no signing key of the tenant produces it: the client's
+    /// <c>introspection_signed_response_alg</c>, or where it registered none, RFC 9701 section 6: "The default, if
+    /// omitted, is RS256".
     /// </summary>
     /// <remarks>
-    /// The default is taken only where a signing key of the tenant produces it and the client's security profile
-    /// admits it. Otherwise, our choice rather than the specification's, the first of <see cref="Fallbacks"/> that
-    /// both hold for: a profile not admitting RS256 (FAPI 2.0 section 5.4.1, FAPI 1.0 Part 2 section 8.6) gets PS256 or
-    /// ES256 as a registration naming no ID token algorithm is given, and a tenant without an RSA key signs with its
-    /// P-256 key rather than failing the request.
+    /// A security profile not admitting RS256 (FAPI 2.0 section 5.4.1, FAPI 1.0 Part 2 section 8.6) would refuse to
+    /// sign with the default, so for a client held to one the default is the first algorithm the profile admits that a
+    /// signing key of the tenant produces, as a registration naming no ID token algorithm is given. Without such a
+    /// profile the default is RS256 alone: a tenant whose keys cannot produce it does not sign with another.
     /// </remarks>
-    private async Task<string> SigningAlgorithmAsync(TenantDefinition tenant, ClientInfo client)
+    private async Task<string?> SigningAlgorithmAsync(TenantDefinition tenant, ClientInfo client)
     {
         if (client.IntrospectionSignedResponseAlgorithm != SigningAlgorithms.None)
             return client.IntrospectionSignedResponseAlgorithm;
 
-        var profile = SecurityProfileRequirements.For(tenant, client);
         var signingKeys = await serviceKeysProvider.GetSigningKeys(tenant).ToArrayAsync();
 
-        return Array.Find(
-                   Fallbacks,
-                   algorithm => profile.PermitsSigningAlgorithm(algorithm) &&
-                                Array.Exists(signingKeys, key => key.CanPerform(algorithm)))
-               ?? throw new InvalidOperationException(
-                   $"No signing key of the tenant {tenant.Id} produces {string.Join(", ", Fallbacks)} under the " +
-                   $"security profile of the client {client.ClientId}");
-    }
+        if (SecurityProfileRequirements.For(tenant, client).PermitsSigningAlgorithm(SigningAlgorithms.RS256))
+            return Array.Exists(signingKeys, key => key.CanPerform(SigningAlgorithms.RS256)) ? SigningAlgorithms.RS256 : null;
 
-    /// <summary>
-    /// The default of RFC 9701 section 6 first, then the algorithms the FAPI profiles admit, in their order.
-    /// </summary>
-    private static readonly string[] Fallbacks =
-        [SigningAlgorithms.RS256, ..SecurityProfileRequirements.FapiSigningAlgorithms];
+        return SecurityProfileRequirements.FapiSigningAlgorithmProducedBy(signingKeys);
+    }
 }
