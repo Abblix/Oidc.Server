@@ -64,28 +64,45 @@ public class IntrospectionResponseFormatter(
 
         // RFC 9701 section 4: the caller requests a JWT response with the Accept header; otherwise the plain RFC 7662
         // JSON document is returned
-        if (!AcceptsTokenIntrospectionJwt())
+        var representation = IntrospectionRepresentation.Negotiate(AcceptedMediaTypes());
+        if (!representation.Jwt)
             return Results.Json(introspectionResponse);
 
         var jwt = await jwtBuilder.BuildAsync(tenantAccessor.CurrentTenant(), success.ClientInfo, introspectionResponse);
         return jwt.Match(
             onSuccess: content => Results.Content(content, MediaTypes.TokenIntrospectionJwt),
-            onFailure: FormatFailure);
+            onFailure: error => FormatJwtFailure(error, representation, introspectionResponse));
     }
 
-    private bool AcceptsTokenIntrospectionJwt()
+    /// <summary>
+    /// The answer where the JWT cannot be produced: the JSON document where the caller accepts it too (RFC 9110 content
+    /// negotiation), the refusal otherwise.
+    /// </summary>
+    private IResult FormatJwtFailure(
+        OidcError error,
+        IntrospectionRepresentation representation,
+        JsonObject introspectionResponse)
+    {
+        if (error is NotAcceptableError && representation.JsonAcceptable)
+            return Results.Json(introspectionResponse);
+
+        return FormatFailure(error);
+    }
+
+    /// <summary>
+    /// The media types of the request's <c>Accept</c> header with their qualities, none where it carries none.
+    /// </summary>
+    private (string MediaType, double? Quality)[] AcceptedMediaTypes()
     {
         var request = httpContextAccessor.HttpContext?.Request;
         if (request == null)
-            return false;
+            return [];
 
-        // A quality of zero marks the media type "not acceptable" (RFC 9110 section 12.4.2)
-        return request.GetTypedHeaders().Accept.Any(
-            mediaType => mediaType.MediaType.HasValue &&
-                         mediaType.Quality is not 0 &&
-                         string.Equals(
-                             mediaType.MediaType.Value,
-                             MediaTypes.TokenIntrospectionJwt,
-                             StringComparison.OrdinalIgnoreCase));
+        return
+        [
+            ..from mediaType in request.GetTypedHeaders().Accept
+              where mediaType.MediaType.HasValue
+              select (mediaType.MediaType.Value!, mediaType.Quality),
+        ];
     }
 }

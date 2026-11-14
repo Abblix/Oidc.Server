@@ -40,6 +40,8 @@ public sealed class IntrospectionDefaultAlgorithmTests
     private const string Acme = "/tenants/acme";
     private const string ClientId = "resource-server";
     private const string ClientSecret = "resource-server-secret";
+    private const string Jwt = MediaTypes.TokenIntrospectionJwt;
+    private const string Json = System.Net.Mime.MediaTypeNames.Application.Json;
 
     private static async Task<WebApplication> StartAsync(
         JsonWebKey signingKey,
@@ -98,7 +100,9 @@ public sealed class IntrospectionDefaultAlgorithmTests
         return app;
     }
 
-    private static async Task<HttpResponseMessage> IntrospectAsync(WebApplication app)
+    private static async Task<HttpResponseMessage> IntrospectAsync(
+        WebApplication app,
+        string accept = MediaTypes.TokenIntrospectionJwt)
     {
         using var http = app.GetTestClient();
         http.BaseAddress = new Uri(Host);
@@ -112,7 +116,8 @@ public sealed class IntrospectionDefaultAlgorithmTests
                 [ClientRequest.Parameters.ClientSecret] = ClientSecret,
             }),
         };
-        request.Headers.Accept.Add(MediaTypeWithQualityHeaderValue.Parse(MediaTypes.TokenIntrospectionJwt));
+        foreach (var mediaType in accept.Split(','))
+            request.Headers.Accept.Add(MediaTypeWithQualityHeaderValue.Parse(mediaType.Trim()));
 
         return await http.SendAsync(request, TestContext.Current.CancellationToken);
     }
@@ -185,6 +190,42 @@ public sealed class IntrospectionDefaultAlgorithmTests
         Assert.Equal(
             EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
             header[JwtClaimTypes.EncryptionAlgorithm]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// RFC 9110 content negotiation: where the JWT cannot be signed and the caller named JSON as acceptable too, JSON is
+    /// a representation it accepts and is served; 406 is left for a caller accepting the JWT alone.
+    /// </summary>
+    [Fact]
+    public async Task ATenantWithoutAKeyForRs256_ServesJsonWhereTheCallerAcceptsIt()
+    {
+        await using var app = await StartAsync(
+            JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256),
+            SigningAlgorithms.ES256);
+
+        var response = await IntrospectAsync(
+            app, $"{MediaTypes.TokenIntrospectionJwt}, {System.Net.Mime.MediaTypeNames.Application.Json}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(System.Net.Mime.MediaTypeNames.Application.Json, response.Content.Headers.ContentType?.MediaType);
+    }
+
+    /// <summary>
+    /// RFC 9110 section 12.4.2: the quality value is a relative weight, so the representation the caller weights higher
+    /// is served, and the JWT where the two weigh the same.
+    /// </summary>
+    [Theory]
+    [InlineData(Json + ";q=1, " + Jwt + ";q=0.1", Json)]
+    [InlineData(Jwt + ";q=1, " + Json + ";q=0.5", Jwt)]
+    [InlineData(Jwt + ";q=0.5, " + Json + ";q=0.5", Jwt)]
+    public async Task TheRepresentation_IsTheOneTheCallerWeightsHigher(string accept, string expected)
+    {
+        await using var app = await StartAsync(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature), SigningAlgorithms.RS256);
+
+        var response = await IntrospectAsync(app, accept);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(expected, response.Content.Headers.ContentType?.MediaType);
     }
 
     /// <summary>
