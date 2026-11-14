@@ -141,13 +141,22 @@ public partial class FlowTypeValidator(
         // Authorization Response Mode", any of its modes. A response nothing signs is refused, with the
         // unsupported_response_type RFC 6749 section 4.1.2.1 has for a method the server will not use here
         if (profile.SignedAuthorizationResponseModes is { } signedModes && !IsSignedResponse(request, signedModes))
-        {
-            return (ErrorCodes.UnsupportedResponseType,
-                "The security profile requires the code id_token response type, or code with the response mode " +
-                string.Join(" or ", signedModes.Order(StringComparer.Ordinal)));
-        }
+            return (ErrorCodes.UnsupportedResponseType, SignedResponseRequired(profile, signedModes));
 
         return null;
+    }
+
+    /// <summary>
+    /// The reason a response nothing signs is refused, naming code id_token only where the profile admits it.
+    /// </summary>
+    private static string SignedResponseRequired(SecurityProfileRequirements profile, IReadOnlySet<string> signedModes)
+    {
+        var modes = string.Join(" or ", signedModes.Order(StringComparer.Ordinal));
+
+        if (profile.RequireCodeResponseTypeOnly)
+            return $"The security profile requires the code response type with the response mode {modes}";
+
+        return $"The security profile requires the code id_token response type, or code with the response mode {modes}";
     }
 
     /// <summary>
