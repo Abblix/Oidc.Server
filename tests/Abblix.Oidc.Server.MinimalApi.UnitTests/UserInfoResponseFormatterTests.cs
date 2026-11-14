@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Moq;
 using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -42,23 +43,6 @@ public class UserInfoResponseFormatterTests
     private sealed class ServedBy(TenantDefinition tenant) : ITenantAccessor
     {
         public TenantContext Current { get; } = new() { Tenant = tenant };
-    }
-
-    /// <summary>Refuses every token, as the formatter does for a key set the profile leaves nothing in.</summary>
-    private sealed class RefusingFormatter : IClientJwtFormatter
-    {
-        public Task<Result<string, OidcError>> FormatAsync(
-            TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption)
-            => Task.FromResult<Result<string, OidcError>>(
-                new OidcError(ErrorCodes.InvalidClient, "the client's key set"));
-    }
-
-    /// <summary>The server's options as configured by default.</summary>
-    private sealed class DefaultOptions : IOptionsSnapshot<OidcOptions>
-    {
-        public OidcOptions Value { get; } = new();
-
-        public OidcOptions Get(string? name) => Value;
     }
 
     private static async Task<HttpResultRunner.Response> FormatErrorAsync(string errorCode)
@@ -101,8 +85,15 @@ public class UserInfoResponseFormatterTests
     public async Task A_response_the_clients_key_set_cannot_receive_is_an_invalid_token()
     {
         var client = new ClientInfo("client") { UserInfoSignedResponseAlgorithm = "PS256" };
+        // The formatter refuses the token, as it does for a key set the profile leaves nothing in
+        var clientJwtFormatter = new Mock<IClientJwtFormatter>();
+        clientJwtFormatter
+            .Setup(f => f.FormatAsync(Served, It.IsAny<JsonWebToken>(), client, It.IsAny<ClientJwtEncryption>()))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidClient, "the client's key set"));
+        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
+        options.Setup(o => o.Value).Returns(new OidcOptions());
         var formatter = new UserInfoResponseFormatter(
-            TimeProvider.System, new RefusingFormatter(), new ServedBy(Served), new DefaultOptions());
+            TimeProvider.System, clientJwtFormatter.Object, new ServedBy(Served), options.Object);
         Result<UserInfoFoundResponse, OidcError> found =
             new UserInfoFoundResponse(new JsonObject(), client, Served.Issuer.OriginalString);
 
