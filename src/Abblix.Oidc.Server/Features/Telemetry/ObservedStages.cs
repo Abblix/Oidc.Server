@@ -49,5 +49,5 @@ using Abblix.Oidc.Server.Features.Telemetry;
 [assembly: ObservedStage(typeof(IUpdateClientRequestValidator), TelemetryStages.Validation)]
 [assembly: ObservedStage(typeof(IUpdateClientRequestProcessor), TelemetryStages.Processing)]
 [assembly: ObservedStage(typeof(IRemoveClientRequestProcessor), TelemetryStages.Processing)]
-[assembly: ObservedStage(typeof(IClientAuthenticator), TelemetryStages.ClientAuthentication, RefusesWithNull = true)]
+[assembly: ObservedStage(typeof(IClientAuthenticator), TelemetryStages.ClientAuthentication)]
 [assembly: ObservedStage(typeof(IAuthorizationGrantHandler), TelemetryStages.Grant)]

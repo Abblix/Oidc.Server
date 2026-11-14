@@ -66,7 +66,7 @@ public class SecurityProfileTests
         // The request object rules of FAPI 2.0 Message Signing section 5.3.1 belong to that profile
         Assert.Null(requirements.MaxRequestObjectLifetime);
         Assert.False(requirements.RequireSignedRequestObject);
-        Assert.False(requirements.RequireSignedAuthorizationResponse);
+        Assert.Null(requirements.SignedAuthorizationResponseModes);
         Assert.False(requirements.RequireIssuerAudienceInRequestObject);
         Assert.False(requirements.RequireNonceWithOpenIdScope);
         Assert.False(requirements.RequireStateWithoutOpenIdScope);
@@ -90,7 +90,7 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireSenderConstrainedTokens);
         Assert.True(requirements.RequireConfidentialClient);
         Assert.True(requirements.RequireKeyBasedClientAuthentication);
-        Assert.True(requirements.RequireSignedAuthorizationResponse);
+        Assert.Same(SecurityProfileRequirements.LiteralJwtResponseMode, requirements.SignedAuthorizationResponseModes);
         Assert.True(requirements.RequireIssuerAudienceInRequestObject);
         Assert.True(requirements.RequireNonceWithOpenIdScope);
         Assert.True(requirements.RequireStateWithoutOpenIdScope);
@@ -152,7 +152,7 @@ public class SecurityProfileTests
 
         Assert.True(requirements.RequireSignedRequestObject);
         Assert.True(requirements.RequireCodeResponseTypeOnly);
-        Assert.True(requirements.RequireSignedAuthorizationResponse);
+        Assert.Same(SecurityProfileRequirements.LiteralJwtResponseMode, requirements.SignedAuthorizationResponseModes);
         Assert.True(requirements.RequireIssuerAudienceInRequestObject);
         Assert.True(requirements.RequireNonceWithOpenIdScope);
         Assert.True(requirements.RequireFapiSigningAlgorithms);

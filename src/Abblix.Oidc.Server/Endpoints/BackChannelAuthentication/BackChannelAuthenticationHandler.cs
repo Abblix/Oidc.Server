@@ -60,8 +60,8 @@ public class BackChannelAuthenticationHandler(
         if (clientRequest.HasMoreThanOneAuthorizationHeader)
             return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
-        if (clientInfo == null)
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+        if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             // CIBA Core 1.0 section 13 lists invalid_client under HTTP 401: "Client authentication failed"
             return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");

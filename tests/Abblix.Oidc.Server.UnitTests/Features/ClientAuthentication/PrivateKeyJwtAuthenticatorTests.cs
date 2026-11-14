@@ -27,6 +27,8 @@ using Xunit;
 using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Common.Configuration;
 using System.Globalization;
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -96,8 +98,8 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ClientId, result.ClientId);
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(ClientId, result.GetSuccess().ClientId);
     }
 
     /// <summary>
@@ -139,7 +141,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -179,8 +181,8 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ClientId, result.ClientId);
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(ClientId, result.GetSuccess().ClientId);
     }
 
     /// <summary>
@@ -201,7 +203,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -222,7 +224,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -244,7 +246,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -271,7 +273,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -301,7 +303,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -331,7 +333,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -361,7 +363,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -393,7 +395,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -427,7 +429,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
         mocks.ReplayCache.Verify(
             r => r.TryReserveAsync(
                 It.Is<string>(id => id == jti),
@@ -470,7 +472,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -502,7 +504,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
         // A rejected assertion is never recorded in the replay cache.
         mocks.ReplayCache.Verify(
             r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()),
@@ -538,7 +540,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -559,7 +561,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -609,7 +611,7 @@ public class PrivateKeyJwtAuthenticatorTests
             ClientAssertion = JwtAssertion,
         });
 
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
         AssertRefusedForItsAudience(mocks);
     }
 
@@ -670,7 +672,7 @@ public class PrivateKeyJwtAuthenticatorTests
             ClientAssertion = JwtAssertion,
         });
 
-        Assert.Equal(accepted, result is not null);
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
             AssertRefusedForItsAudience(mocks);
     }
@@ -701,7 +703,7 @@ public class PrivateKeyJwtAuthenticatorTests
             ClientAssertion = JwtAssertion,
         });
 
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -734,7 +736,7 @@ public class PrivateKeyJwtAuthenticatorTests
             ClientAssertion = JwtAssertion,
         });
 
-        Assert.Equal(accepted, result is not null);
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
             AssertRefusedForItsAudience(mocks);
     }
@@ -785,7 +787,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var (authenticator, mocks) = CreateAuthenticator(new Uri("https://other-as.example/connect/token"));
         var result = await AuthenticateFlaggedClient(authenticator, mocks, ClientSecurityProfile.None, audience);
 
-        Assert.Equal(accepted, result is not null);
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
             AssertRefusedForItsAudience(mocks);
     }
@@ -824,7 +826,7 @@ public class PrivateKeyJwtAuthenticatorTests
             ClientAssertion = JwtAssertion,
         });
 
-        Assert.Equal(accepted, result is not null);
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
             AssertRefusedForItsAudience(mocks);
     }
@@ -862,7 +864,7 @@ public class PrivateKeyJwtAuthenticatorTests
             ClientAssertion = JwtAssertion,
         });
 
-        Assert.Equal(accepted, result is not null);
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
             AssertRefusedForItsAudience(mocks);
     }
@@ -906,7 +908,7 @@ public class PrivateKeyJwtAuthenticatorTests
             ClientAssertion = JwtAssertion,
         });
 
-        Assert.Equal(accepted, result is not null);
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
             AssertRefusedForItsAudience(mocks);
     }
@@ -951,7 +953,7 @@ public class PrivateKeyJwtAuthenticatorTests
             ClientAssertion = JwtAssertion,
         });
 
-        Assert.Equal(accepted, result is not null);
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
         if (!accepted)
             AssertRefusedForItsAudience(mocks);
     }
@@ -1028,7 +1030,7 @@ public class PrivateKeyJwtAuthenticatorTests
                 ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint | ClientAssertionAudiences.AllowArray)
             : await AuthenticateFlaggedClient(authenticator, mocks, ClientSecurityProfile.Fapi2, TokenEndpoint);
 
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
         AssertRefusedForItsAudience(mocks);
         mocks.ReplayCache.Verify(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()), Times.Never);
     }
@@ -1045,7 +1047,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var (authenticator, mocks) = CreateAuthenticator(tokenEndpoint: null, resolverRegistered);
         var result = await AuthenticateFlaggedClient(authenticator, mocks, ClientSecurityProfile.None, TokenEndpoint);
 
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
         AssertRefusedForItsAudience(mocks);
     }
 
@@ -1053,7 +1055,7 @@ public class PrivateKeyJwtAuthenticatorTests
     /// A client allowed <paramref name="audiences"/>, the token endpoint URL by default, authenticating with an
     /// assertion whose audience is <paramref name="audience"/> at a tenant held to <paramref name="profile"/>.
     /// </summary>
-    private async Task<ClientInfo?> AuthenticateFlaggedClient(
+    private async Task<Result<ClientInfo, OidcError>> AuthenticateFlaggedClient(
         PrivateKeyJwtAuthenticator authenticator,
         Mocks mocks,
         ClientSecurityProfile profile,
@@ -1271,5 +1273,39 @@ public class PrivateKeyJwtAuthenticatorTests
         public Mock<ILogger<PrivateKeyJwtAuthenticator>> Logger { get; init; } = null!;
         public Mock<IReplayCache> ReplayCache { get; init; } = null!;
         public Mock<IClientJwtValidator> ClientJwtValidator { get; init; } = null!;
+    }
+
+    /// <summary>
+    /// A client_assertion_type without an assertion presents nothing: the assertion is the credential, its type only
+    /// says how to read it.
+    /// </summary>
+    [Fact]
+    public async Task AnAssertionTypeWithoutAnAssertion_PresentsNoCredential()
+    {
+        var (authenticator, _) = CreateAuthenticator();
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant,
+            new ClientRequest { ClientId = ClientId, ClientAssertionType = ClientAssertionTypes.JwtBearer });
+
+        Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
+    }
+
+    /// <summary>
+    /// No assertion at all is no credential presented; an assertion of another type is one presented and refused.
+    /// </summary>
+    [Fact]
+    public async Task TheAssertion_DecidesWhetherACredentialWasPresented()
+    {
+        var (authenticator, _) = CreateAuthenticator();
+
+        var none = await authenticator.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant, new ClientRequest { ClientId = ClientId });
+        var otherType = await authenticator.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant,
+            new ClientRequest { ClientAssertionType = "urn:example:other", ClientAssertion = "assertion" });
+
+        Assert.IsType<UnauthenticatedCallerError>(none.GetFailure());
+        Assert.IsNotType<UnauthenticatedCallerError>(otherType.GetFailure());
     }
 }

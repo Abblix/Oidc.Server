@@ -48,9 +48,9 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator)
         if (clientRequest.HasMoreThanOneAuthorizationHeader)
             return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(
             tenant, clientRequest);
-        if (clientInfo == null)
+        if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
         }

@@ -67,8 +67,8 @@ public class PushedAuthorizationHandler(
                 authorizationRequest,
                 ErrorFactory.InvalidRequest(Common.Validation.ErrorFactory.MoreThanOneAuthorizationHeader.ErrorDescription));
 
-        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
-        if (clientInfo == null)
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+        if (!authenticated.TryGetSuccess(out var clientInfo))
             return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidClient("The client is not authorized"));
 
         // The object is read for the client the request names, which has to be the one that authenticated

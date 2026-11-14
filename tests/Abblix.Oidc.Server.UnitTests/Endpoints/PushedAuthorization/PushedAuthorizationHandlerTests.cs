@@ -25,6 +25,7 @@ using Abblix.Utils;
 using Moq;
 
 using Xunit;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.PushedAuthorization;
 
@@ -40,9 +41,13 @@ public class PushedAuthorizationHandlerTests
     private static IClientAuthenticator Authenticating(ClientInfo? client)
     {
         var authenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
+        Result<ClientInfo, OidcError> result = ClientAuthenticationFailures.InvalidCredential;
+        if (client is not null)
+            result = client;
+
         authenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .ReturnsAsync(client);
+            .ReturnsAsync(result);
         return authenticator.Object;
     }
 

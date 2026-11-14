@@ -61,6 +61,8 @@ public sealed class SecurityProfileCheck : ITenantsCheck
                     .Concat(SecurityProfileConsistency.FindAlgorithmViolations(client, requirements))
                     .Concat(SecurityProfileConsistency.FindRedirectUriViolations(client.RedirectUris, requirements))
                     .Concat(SecurityProfileConsistency.FindJwksUriViolations(client.JwksUri, requirements))
+                    .Concat(SecurityProfileConsistency.FindResponseModeViolations(
+                        client.AllowedResponseModes, client.EffectiveResponseTypes, requirements))
                     .Concat(SecurityProfileConsistency.FindTokenBindingViolations(
                         client.TokenEndpointAuthMethod,
                         client.TlsClientCertificateBoundAccessTokens,

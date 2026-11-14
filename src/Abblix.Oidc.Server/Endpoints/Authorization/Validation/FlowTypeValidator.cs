@@ -137,27 +137,40 @@ public partial class FlowTypeValidator(
         }
 
         // FAPI 1.0 Part 2 section 5.2.2: "code id_token", whose ID token signs the response, or "code" with the
-        // response mode "jwt", which wraps it in a signed JWT. A response nothing signs is refused, with the
+        // response mode "jwt"; FAPI 2.0 Message Signing section 5.4.1: signed responses "via JWT Secured
+        // Authorization Response Mode", any of its modes. A response nothing signs is refused, with the
         // unsupported_response_type RFC 6749 section 4.1.2.1 has for a method the server will not use here
-        if (profile.RequireSignedAuthorizationResponse && !IsSignedResponse(request))
-        {
-            return (ErrorCodes.UnsupportedResponseType,
-                "The security profile requires the code id_token response type, or code with the jwt response mode");
-        }
+        if (profile.SignedAuthorizationResponseModes is { } signedModes && !IsSignedResponse(request, signedModes))
+            return (ErrorCodes.UnsupportedResponseType, SignedResponseRequired(profile, signedModes));
 
         return null;
     }
 
     /// <summary>
-    /// Whether the response the request asks for is one the server signs: <c>code id_token</c> in either order, or
-    /// <c>code</c> alone with the response mode <c>jwt</c>.
+    /// The reason a response nothing signs is refused, naming code id_token only where the profile admits it.
     /// </summary>
-    private static bool IsSignedResponse(Model.AuthorizationRequest request) => request.ResponseType switch
+    private static string SignedResponseRequired(SecurityProfileRequirements profile, IReadOnlySet<string> signedModes)
     {
-        { Length: 2 } both when both.HasFlag(ResponseTypes.Code) && both.HasFlag(ResponseTypes.IdToken) => true,
-        { Length: 1 } one when one.HasFlag(ResponseTypes.Code) => request.ResponseMode == ResponseModes.Jwt,
-        _ => false,
-    };
+        var modes = string.Join(" or ", signedModes.Order(StringComparer.Ordinal));
+
+        if (profile.RequireCodeResponseTypeOnly)
+            return $"The security profile requires the code response type with the response mode {modes}";
+
+        return $"The security profile requires the code id_token response type, or code with the response mode {modes}";
+    }
+
+    /// <summary>
+    /// Whether the response the request asks for is one the server signs: <c>code id_token</c> in either order, or
+    /// <c>code</c> alone with one of <paramref name="signedModes"/>.
+    /// </summary>
+    private static bool IsSignedResponse(Model.AuthorizationRequest request, IReadOnlySet<string> signedModes)
+        => request.ResponseType switch
+        {
+            { Length: 2 } both when both.HasFlag(ResponseTypes.Code) && both.HasFlag(ResponseTypes.IdToken) => true,
+            { Length: 1 } one when one.HasFlag(ResponseTypes.Code) =>
+                request.ResponseMode is { } mode && signedModes.Contains(mode),
+            _ => false,
+        };
 
     /// <summary>
     /// Validates whether the requested response type in an authorization request matches any of the allowed response

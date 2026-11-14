@@ -28,6 +28,7 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using System.Linq;
 using Xunit;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -76,7 +77,7 @@ public class ClientAssertionMayTightenItselfTests
             ClientSecurityProfile.Fapi2,
             issuedAt: Now + BeyondEveryProfileButNone);
 
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
 
         // The refusal lands before the identifier is reserved: this path never gives a reservation
         // back, so burning it on an assertion this pass rejects would refuse the client's next
@@ -98,7 +99,7 @@ public class ClientAssertionMayTightenItselfTests
             clientProfile: null,
             issuedAt: Now + BeyondEveryProfileButNone);
 
-        Assert.NotNull(result);
+        Assert.True((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -113,7 +114,7 @@ public class ClientAssertionMayTightenItselfTests
             issuedAt: Now + BeyondEveryProfileButNone,
             tenantProfile: ClientSecurityProfile.Fapi2);
 
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -129,7 +130,7 @@ public class ClientAssertionMayTightenItselfTests
             issuedAt: Now.AddSeconds(5),
             tenantProfile: ClientSecurityProfile.Fapi2);
 
-        Assert.NotNull(result);
+        Assert.True((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -143,7 +144,7 @@ public class ClientAssertionMayTightenItselfTests
             ClientSecurityProfile.Fapi2,
             expiresAt: Now.AddSeconds(-1));
 
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -158,7 +159,7 @@ public class ClientAssertionMayTightenItselfTests
             clientProfile: null,
             expiresAt: Now.AddSeconds(-1));
 
-        Assert.NotNull(result);
+        Assert.True((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -172,7 +173,7 @@ public class ClientAssertionMayTightenItselfTests
             ClientSecurityProfile.Fapi2,
             notBefore: Now + BeyondEveryProfileButNone);
 
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -185,7 +186,7 @@ public class ClientAssertionMayTightenItselfTests
             clientProfile: null,
             notBefore: Now + BeyondEveryProfileButNone);
 
-        Assert.NotNull(result);
+        Assert.True((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -199,7 +200,7 @@ public class ClientAssertionMayTightenItselfTests
             ClientSecurityProfile.None,
             issuedAt: Now + BeyondEveryProfileButNone);
 
-        Assert.NotNull(result);
+        Assert.True((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -216,7 +217,7 @@ public class ClientAssertionMayTightenItselfTests
             ClientSecurityProfile.Fapi2,
             issuedAt: Now.AddSeconds(5));
 
-        Assert.NotNull(result);
+        Assert.True((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -231,10 +232,10 @@ public class ClientAssertionMayTightenItselfTests
             ClientSecurityProfile.Fapi2,
             notBefore: Now.AddSeconds(5));
 
-        Assert.NotNull(result);
+        Assert.True((result).TryGetSuccess(out _));
     }
 
-    private async Task<ClientInfo?> Authenticate(
+    private async Task<Result<ClientInfo, OidcError>> Authenticate(
         ClientSecurityProfile? clientProfile,
         DateTimeOffset? issuedAt = null,
         DateTimeOffset? expiresAt = null,

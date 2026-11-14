@@ -68,9 +68,16 @@ public partial class IntrospectionRequestValidator(
 		if (clientRequest.HasMoreThanOneAuthorizationHeader)
 			return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
-		if (clientInfo == null)
+		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+		if (!authenticated.TryGetSuccess(out var clientInfo))
 		{
+			// RFC 9701 section 5: "An AS compliant with this specification MUST refuse to serve introspection
+			// requests that don't authenticate the caller and return an HTTP status code 400", where no
+			// authenticator, a host's own included, found a credential in the request
+			if (authenticated.GetFailure() is UnauthenticatedCallerError noCredential)
+				return noCredential;
+
+			// RFC 7662 section 2.3: a credential presented and invalid is answered 401, as RFC 6749 section 5.2 has it
 			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
 		}
 
@@ -80,7 +87,7 @@ public partial class IntrospectionRequestValidator(
 		if (clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.None)
 		{
 			LogPublicClientRejected(clientInfo.ClientId);
-			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
+			return new UnauthenticatedCallerError("The client is not authorized");
 		}
 
 		// Charged after the caller has proven which client it is and before the token is read, which is where

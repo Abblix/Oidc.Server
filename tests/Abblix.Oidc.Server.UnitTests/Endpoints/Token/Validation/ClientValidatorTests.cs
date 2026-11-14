@@ -15,6 +15,8 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 
@@ -76,7 +78,7 @@ public class ClientValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .ReturnsAsync((ClientInfo?)null);
+            .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
         // Act
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
@@ -170,7 +172,7 @@ public class ClientValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .ReturnsAsync((ClientInfo?)null);
+            .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
         // Act
         var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
@@ -226,7 +228,7 @@ public class ClientValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .ReturnsAsync((ClientInfo?)null);
+            .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
         // Act
         await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);

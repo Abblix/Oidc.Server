@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -53,20 +54,25 @@ public class ClientSecretBasicAuthenticator(
 	/// </param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield the authenticated
-	/// <see cref="ClientInfo"/> or null if authentication fails.
-	/// If the 'Authorization' header is missing, malformed, or does not follow the Basic authentication scheme,
-	/// the method returns null.
+	/// <see cref="ClientInfo"/>, or why it is not one: no Authorization header presented, or one presented that is
+	/// malformed, of another scheme or not a client's credentials.
 	/// </returns>
-	public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
+		// Any Authorization header line is an attempt to authenticate through it, whatever its scheme and whether or not
+		// it parses: RFC 6749 section 5.2 answers a client that "attempted to authenticate via the Authorization
+		// request header field" with 401
+		if (request.AuthorizationHeaderLines is not { Count: > 0 })
+			return ClientAuthenticationFailures.NoCredential;
+
 		if (request.AuthorizationHeader is not { Parameter: { } parameter } header || !header.HasScheme(TokenTypes.Basic))
-			return null;
+			return ClientAuthenticationFailures.InvalidCredential;
 
 		// Credentials that are not base64 leave the client unauthenticated here, so the caller answers invalid_client
 		// (RFC 6749 section 5.2)
 		var decoded = new byte[parameter.Length];
 		if (!Convert.TryFromBase64String(parameter, decoded, out var length))
-			return null;
+			return ClientAuthenticationFailures.InvalidCredential;
 
 		var value = Encoding.UTF8.GetString(decoded, 0, length);
 
@@ -76,7 +82,7 @@ public class ClientSecretBasicAuthenticator(
 		// User-ids containing colons cannot be encoded in user-pass strings.
 		var colonIndex = value.IndexOf(':');
 		if (colonIndex < 0)
-			return null;
+			return ClientAuthenticationFailures.InvalidCredential;
 
 		return await TryAuthenticateAsync(
 			tenant,

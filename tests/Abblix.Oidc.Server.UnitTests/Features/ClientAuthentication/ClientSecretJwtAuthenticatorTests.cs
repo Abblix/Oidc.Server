@@ -29,6 +29,7 @@ using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -89,7 +90,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -110,7 +111,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -131,7 +132,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -152,7 +153,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -200,7 +201,7 @@ public class ClientSecretJwtAuthenticatorTests
             ClientAssertion = jwt,
         });
 
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -267,7 +268,7 @@ public class ClientSecretJwtAuthenticatorTests
             ClientAssertion = jwt,
         });
 
-        Assert.Equal(accepted, result is not null);
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -326,8 +327,8 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ClientId, result.ClientId);
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(ClientId, result.GetSuccess().ClientId);
 
         _replayCache.Verify(r => r.TryReserveAsync(jwtId, It.IsAny<DateTimeOffset>()), Times.Once);
     }
@@ -378,7 +379,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
         _replayCache.Verify(
             r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()),
             Times.Never);
@@ -433,8 +434,8 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ClientId, result.ClientId);
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(ClientId, result.GetSuccess().ClientId);
     }
 
     /// <summary>
@@ -461,7 +462,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -514,7 +515,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -567,7 +568,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -621,7 +622,7 @@ public class ClientSecretJwtAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
 
         // A rejected assertion is never recorded in the replay cache.
         _replayCache.Verify(r => r.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>()), Times.Never);

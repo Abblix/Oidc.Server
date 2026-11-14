@@ -356,6 +356,46 @@ public static class SecurityProfileConsistency
             : [];
 
     /// <summary>
+    /// Names a list of response modes under which the client can send no request its profile admits, or nothing: where
+    /// the profile requires a signed authorization response
+    /// (<see cref="SecurityProfileRequirements.SignedAuthorizationResponseModes"/>), a client restricted to response
+    /// modes none of which the profile admits, and not registered for <c>code id_token</c>, has every authorization
+    /// request refused.
+    /// </summary>
+    /// <param name="allowedResponseModes">The response modes the client is restricted to
+    /// (<see cref="ClientInfo.AllowedResponseModes"/>, the <c>response_modes</c> of FAPI 2.0 Message Signing section
+    /// 5.3.3), or null or empty where it is not.</param>
+    /// <param name="allowedResponseTypes">The response-type combinations the client is registered for.</param>
+    /// <param name="requirements">The control bundle the client is held to, floor included.</param>
+    public static IReadOnlyList<string> FindResponseModeViolations(
+        IReadOnlyCollection<string>? allowedResponseModes,
+        IReadOnlyList<string[]> allowedResponseTypes,
+        SecurityProfileRequirements requirements)
+    {
+        if (requirements.SignedAuthorizationResponseModes is not { } admitted ||
+            allowedResponseModes is not { Count: > 0 } ||
+            allowedResponseModes.Any(admitted.Contains))
+        {
+            return [];
+        }
+
+        // Code id_token is signed by its ID token, in whatever mode it travels (FAPI 1.0 Part 2 section 5.2.2)
+        if (allowedResponseTypes.Any(responseType => responseType is { Length: 2 } &&
+                                                     responseType.HasFlag(ResponseTypes.Code) &&
+                                                     responseType.HasFlag(ResponseTypes.IdToken)))
+        {
+            return [];
+        }
+
+        return
+        [
+            "the client's security profile requires a signed authorization response in the response mode " +
+            $"{string.Join(" or ", admitted.Order(StringComparer.Ordinal))}, but the client may use only " +
+            string.Join(", ", allowedResponseModes),
+        ];
+    }
+
+    /// <summary>
     /// Names a jwks_uri the profile does not admit, or nothing: FAPI 1.0 Part 2 section 8.9 "requires that jwks_uri
     /// endpoints shall be served over TLS".
     /// </summary>

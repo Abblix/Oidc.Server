@@ -27,6 +27,7 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -64,7 +65,7 @@ public class UnreadableAssertionTimestampTests
             ClientAssertion = JwtAssertion,
         });
 
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
 
         // Refused before anything irreversible: the identifier of an assertion that could not even
         // be read is not spent.
@@ -89,7 +90,7 @@ public class UnreadableAssertionTimestampTests
             ClientAssertion = JwtAssertion,
         });
 
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     private static (ClientSecretJwtAuthenticator, Mock<IReplayCache>) Build(Action<JsonObject> corrupt)

@@ -122,6 +122,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     {
         clientInfo.TokenEndpointAuthMethod = model.TokenEndpointAuthMethod;
         clientInfo.AllowedResponseTypes = model.ResponseTypes;
+        clientInfo.AllowedResponseModes = model.ResponseModes;
         clientInfo.AllowedGrantTypes = model.GrantTypes;
 
         // A client that registers none has none: the flows that redirect are the ones that require

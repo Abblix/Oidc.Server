@@ -52,8 +52,8 @@ public class ClientSecretJwtThroughTheValidatorTests
 
         // Each assertion names the issuer of the tenant it is presented at, so the client lookup alone
         // decides the second one
-        Assert.NotNull(await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, [Globex.Issuer.OriginalString])));
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(Acme, await RequestAsync(jwt, [Acme.Issuer.OriginalString])));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, [Globex.Issuer.OriginalString]))).TryGetSuccess(out _));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(Acme, await RequestAsync(jwt, [Acme.Issuer.OriginalString]))).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -71,7 +71,7 @@ public class ClientSecretJwtThroughTheValidatorTests
         var authenticator = Authenticator(jwt);
 
         string[] audiences = audience is null ? [] : [audience];
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, audiences)));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(Globex, await RequestAsync(jwt, audiences))).TryGetSuccess(out _));
     }
 
     private static ServiceProvider JsonWebTokenServices()

@@ -58,7 +58,7 @@ public class BackChannelAuthenticationHandlerTests
     {
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest))
-            .ReturnsAsync((ClientInfo?)null);
+            .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
         var result = await Handler().HandleAsync(SingleIssuer.Tenant, _request, _clientRequest);
 

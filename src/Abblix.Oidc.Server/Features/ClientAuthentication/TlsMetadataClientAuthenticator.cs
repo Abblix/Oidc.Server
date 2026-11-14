@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -53,9 +54,8 @@ public partial class TlsMetadataClientAuthenticator(
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the certificate and client ID to authenticate.</param>
     /// <returns>
-    /// A task that returns the authenticated <see cref="ClientInfo"/> if successful; otherwise, null.
-    /// Returns null if no certificate is provided, client not found, authentication method doesn't match,
-    /// or certificate validation fails.
+    /// A task that returns the authenticated <see cref="ClientInfo"/>, or why it is not one: no certificate presented,
+    /// or one presented whose client is not found, does not use this method, or whose certificate does not match.
     /// </returns>
     /// <remarks>
     /// This method implements RFC 8705 tls_client_auth by:
@@ -65,35 +65,35 @@ public partial class TlsMetadataClientAuthenticator(
     /// 4. Validating certificate Subject DN (if configured)
     /// 5. Validating certificate SAN entries (if configured)
     /// </remarks>
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
         var certificate = request.ClientCertificate;
         if (certificate == null)
-            return null;
+            return ClientAuthenticationFailures.NoCredential;
 
         var clientId = request.ClientId;
         if (!clientId.NotNullOrWhiteSpace())
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
 
         var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         if (client == null)
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
 
         if (client.TokenEndpointAuthMethod != ClientAuthenticationMethods.TlsClientAuth)
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
 
         var options = client.TlsClientAuth;
         if (options == null)
         {
             LogNoTlsMetadataConfigured(client.ClientId);
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
         }
 
         if (!MatchSubjectDn(options.SubjectDn, certificate))
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
 
         if (!MatchSans(options, certificate))
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
 
         LogAuthenticated(client.ClientId);
         return client;

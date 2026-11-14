@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Model;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -39,22 +40,12 @@ public class ProfileSigningKeysValidator(IAuthServiceKeysProvider keys) : IClien
         var signingKeys = await keys.GetSigningKeys(tenant).ToArrayAsync();
         bool Produces(string algorithm) => Array.Exists(signingKeys, key => key.CanPerform(algorithm));
 
-        var request = context.Request;
-        if (request.IdTokenSignedResponseAlg is null || request.AuthorizationSignedResponseAlg is null)
+        if (WithUnnamedAlgorithmsGiven(context.Request, signingKeys) is not { } request)
         {
-            if (Array.Find(SecurityProfileRequirements.FapiSigningAlgorithms, Produces) is not { } given)
-            {
-                return ErrorFactory.InvalidClientMetadata(
-                    "No signing key of this server produces " +
-                    $"{string.Join(" or ", SecurityProfileRequirements.FapiSigningAlgorithms)}, which its security " +
-                    "profile admits alone");
-            }
-
-            request = request with
-            {
-                IdTokenSignedResponseAlg = request.IdTokenSignedResponseAlg ?? given,
-                AuthorizationSignedResponseAlg = request.AuthorizationSignedResponseAlg ?? given,
-            };
+            return ErrorFactory.InvalidClientMetadata(
+                "No signing key of this server produces " +
+                $"{string.Join(" or ", SecurityProfileRequirements.FapiSigningAlgorithms)}, which its security " +
+                "profile admits alone");
         }
 
         var unproduced = new[]
@@ -74,5 +65,33 @@ public class ProfileSigningKeysValidator(IAuthServiceKeysProvider keys) : IClien
 
         context.Request = request;
         return null;
+    }
+
+    /// <summary>
+    /// <paramref name="request"/> with each algorithm the server signs with for the client and it named none for given
+    /// the first admitted one <paramref name="signingKeys"/> produce, or null where it named none and no key produces
+    /// one. The introspection algorithm is among them: RFC 9701 section 6 makes RS256 the default of an omitted one,
+    /// which the profile refuses, so the registration says which algorithm the server signs with instead.
+    /// </summary>
+    private static ClientRegistrationRequest? WithUnnamedAlgorithmsGiven(
+        ClientRegistrationRequest request,
+        JsonWebKey[] signingKeys)
+    {
+        var introspectionAlgorithm = SecurityProfileConsistency.SignedOrNull(request.IntrospectionSignedResponseAlg);
+        if (request is { IdTokenSignedResponseAlg: not null, AuthorizationSignedResponseAlg: not null } &&
+            introspectionAlgorithm is not null)
+        {
+            return request;
+        }
+
+        if (SecurityProfileRequirements.FapiSigningAlgorithmProducedBy(signingKeys) is not { } given)
+            return null;
+
+        return request with
+        {
+            IdTokenSignedResponseAlg = request.IdTokenSignedResponseAlg ?? given,
+            AuthorizationSignedResponseAlg = request.AuthorizationSignedResponseAlg ?? given,
+            IntrospectionSignedResponseAlg = introspectionAlgorithm ?? given,
+        };
     }
 }

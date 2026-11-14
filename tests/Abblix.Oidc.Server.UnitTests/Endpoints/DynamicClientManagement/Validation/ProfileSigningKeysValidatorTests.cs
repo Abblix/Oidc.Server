@@ -72,6 +72,32 @@ public class ProfileSigningKeysValidatorTests
         Assert.Equal(SigningAlgorithms.PS256, rsaTenant.Request.AuthorizationSignedResponseAlg);
         Assert.Equal(SigningAlgorithms.ES256, ecTenant.Request.IdTokenSignedResponseAlg);
         Assert.Equal(SigningAlgorithms.ES256, ecTenant.Request.AuthorizationSignedResponseAlg);
+
+        // RFC 9701 section 6 would default an omitted introspection algorithm to RS256, which the profile refuses
+        Assert.Equal(SigningAlgorithms.PS256, rsaTenant.Request.IntrospectionSignedResponseAlg);
+        Assert.Equal(SigningAlgorithms.ES256, ecTenant.Request.IntrospectionSignedResponseAlg);
+    }
+
+    /// <summary>
+    /// A registration naming its ID token and authorization algorithms but no introspection algorithm is given one for
+    /// introspection too, and a named introspection algorithm is kept as named.
+    /// </summary>
+    [Theory]
+    [InlineData(null, SigningAlgorithms.PS256)]
+    [InlineData(SigningAlgorithms.ES256, SigningAlgorithms.ES256)]
+    public async Task TheIntrospectionAlgorithm_IsGivenWhereUnnamed(string? named, string expected)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            IdTokenSignedResponseAlg = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlg = SigningAlgorithms.PS256,
+            IntrospectionSignedResponseAlg = named,
+        });
+
+        Assert.Null(await Validator(Rsa(), Ec()).ValidateAsync(Tenant(ClientSecurityProfile.Fapi2MessageSigning), context));
+
+        Assert.Equal(expected, context.Request.IntrospectionSignedResponseAlg);
     }
 
     /// <summary>

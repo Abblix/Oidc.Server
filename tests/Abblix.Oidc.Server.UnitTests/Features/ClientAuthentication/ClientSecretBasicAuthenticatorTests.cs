@@ -18,6 +18,8 @@ using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -77,8 +79,8 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
-        Assert.NotNull(result);
-        Assert.Equal(ClientId, result.ClientId);
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(ClientId, result.GetSuccess().ClientId);
     }
 
     protected override ClientRequest PrepareMissingPrimaryCredentialRequest()
@@ -101,7 +103,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     protected override ClientRequest PrepareWrongFormatRequest()
@@ -169,7 +171,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -195,6 +197,25 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// An Authorization header of another scheme, or one that does not parse, is still an attempt to authenticate
+    /// through the header, which RFC 6749 section 5.2 answers with 401: a credential presented and refused.
+    /// </summary>
+    [Theory]
+    [InlineData("Bearer abc")]
+    [InlineData("Basic ,")]
+    public async Task AnAuthorizationHeaderThisMethodCannotRead_IsAPresentedCredentialRefused(string line)
+    {
+        var authenticator = CreateAuthenticator(new Mock<IClientInfoProvider>(MockBehavior.Strict));
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant, new ClientRequest { AuthorizationHeaderLines = [line] });
+
+        Assert.True(result.TryGetFailure(out var failure));
+        Assert.IsNotType<UnauthenticatedCallerError>(failure);
+        Assert.Equal(ErrorCodes.InvalidClient, failure.Error);
     }
 }

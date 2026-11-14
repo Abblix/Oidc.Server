@@ -150,6 +150,7 @@ public class RegisteredClientMetadataTests
         PostLogoutRedirectUris = [new Uri("https://client.example.com/signed-out")],
         GrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken, GrantTypes.Ciba],
         ResponseTypes = [[ResponseTypes.Code]],
+        ResponseModes = [ResponseModes.QueryJwt, ResponseModes.FormPostJwt],
         Scope = [Scopes.OpenId, Scopes.Profile],
         ApplicationType = ApplicationTypes.Native,
         Contacts = ["ops@client.example.com"],

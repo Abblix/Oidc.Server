@@ -20,6 +20,8 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -107,8 +109,8 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ClientId, result.ClientId);
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(ClientId, result.GetSuccess().ClientId);
     }
 
     /// <summary>
@@ -127,8 +129,8 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var authenticator = CreateAuthenticator(clientInfoProvider);
         var request = PrepareValidRequest(ClientId, ClientSecret);
 
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(acme, request));
-        Assert.NotNull(await authenticator.TryAuthenticateClientAsync(globex, request));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(acme, request)).TryGetSuccess(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(globex, request)).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -146,7 +148,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -164,7 +166,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -190,7 +192,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -213,7 +215,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -239,7 +241,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -268,7 +270,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -307,7 +309,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -334,8 +336,8 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(specialClientId, result.ClientId);
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(specialClientId, result.GetSuccess().ClientId);
     }
 
     /// <summary>
@@ -379,8 +381,8 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ClientId, result.ClientId);
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(ClientId, result.GetSuccess().ClientId);
     }
 
     /// <summary>
@@ -398,7 +400,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -422,7 +424,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -440,7 +442,7 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -497,5 +499,20 @@ public abstract class ClientAuthenticatorTestsBase<TAuthenticator>
             ClientAuthenticationMethods.ClientSecretJwt => ClientAuthenticationMethods.ClientSecretBasic,
             _ => ClientAuthenticationMethods.None
         };
+    }
+
+    /// <summary>
+    /// A request naming a client and carrying nothing this authenticator reads presents no credential to it, which is
+    /// the third answer of the authenticator and not a refusal of a credential.
+    /// </summary>
+    [Fact]
+    public async Task ARequestWithOnlyAClientId_PresentsNoCredential()
+    {
+        var authenticator = CreateAuthenticator(new Mock<IClientInfoProvider>(MockBehavior.Strict));
+
+        var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest { ClientId = ClientId });
+
+        Assert.True(result.TryGetFailure(out var failure));
+        Assert.IsType<UnauthenticatedCallerError>(failure);
     }
 }

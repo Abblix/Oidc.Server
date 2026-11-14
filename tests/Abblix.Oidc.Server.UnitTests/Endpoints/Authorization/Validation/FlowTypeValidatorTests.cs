@@ -845,4 +845,52 @@ public class FlowTypeValidatorTests
 
         Assert.Null(await _validator.ValidateAsync(fapi2Tenant, context));
     }
+
+    /// <summary>
+    /// FAPI 2.0 Message Signing section 5.4.1: the server shall "support, require use of, and issue signed
+    /// authorization responses via JWT Secured Authorization Response Mode for OAuth 2.0 [JARM]". Code in any JARM
+    /// mode passes; code in a plain mode, or with no mode, is refused; and code id_token, which the Security Profile
+    /// refuses, stays refused.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ResponseModes.Jwt, null)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ResponseModes.QueryJwt, null)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ResponseModes.FragmentJwt, null)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ResponseModes.FormPostJwt, null)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, null, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ResponseModes.Query, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ResponseModes.FormPost, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, ResponseModes.FormPostJwt, null)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, ResponseModes.Query, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests, ResponseModes.Query, null)]
+    public async Task ValidateAsync_MessageSigning_AdmitsCodeInAnyJarmMode(
+        ClientSecurityProfile profile, string? responseMode, string? expectedError)
+    {
+        var context = CreateContext(
+            [ResponseTypes.Code],
+            [[ResponseTypes.Code]],
+            responseMode,
+            securityProfile: profile);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
+    /// Code id_token is refused under the signed-response profile, by the Security Profile it keeps.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_SignedAuthorizationResponses_RefusesCodeIdToken()
+    {
+        var context = CreateContext(
+            [ResponseTypes.Code, ResponseTypes.IdToken],
+            [[ResponseTypes.Code, ResponseTypes.IdToken]],
+            ResponseModes.FragmentJwt,
+            securityProfile: ClientSecurityProfile.Fapi2SignedAuthorizationResponses);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.UnauthorizedClient, result?.Error);
+    }
 }

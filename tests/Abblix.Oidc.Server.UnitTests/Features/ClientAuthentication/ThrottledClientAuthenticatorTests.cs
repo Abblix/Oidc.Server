@@ -22,6 +22,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -81,10 +83,10 @@ public class ThrottledClientAuthenticatorTests
         var authenticator = CreateAuthenticator(permitLimit: 1);
         _inner
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(null));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
 
         // Act
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest()));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest())).TryGetSuccess(out _));
         var refusal = await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
             () => authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest()));
 
@@ -108,17 +110,17 @@ public class ThrottledClientAuthenticatorTests
         var authenticator = CreateAuthenticator(permitLimit: 1);
         _inner
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(null));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
 
         // Act
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest()));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest())).TryGetSuccess(out _));
         await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
             () => authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest()));
 
         _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(AnotherSource);
 
         // Assert
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest()));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest())).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -134,10 +136,10 @@ public class ThrottledClientAuthenticatorTests
         _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(IPAddress.Parse($"::ffff:{Source}"));
         _inner
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(null));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
 
         // Act
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest()));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest())).TryGetSuccess(out _));
 
         _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(Source);
 
@@ -159,10 +161,10 @@ public class ThrottledClientAuthenticatorTests
         _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(IPAddress.Parse($"::ffff:{Source}%5"));
         _inner
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(null));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
 
         // Act
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest()));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest())).TryGetSuccess(out _));
 
         _requestInfoProvider.Setup(p => p.RemoteIpAddress).Returns(Source);
 
@@ -183,11 +185,11 @@ public class ThrottledClientAuthenticatorTests
         var clientInfo = new ClientInfo(TestConstants.DefaultClientId);
         _inner
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         // Act, Assert
         for (var attempt = 0; attempt < RequestsWellPastTheBudget; attempt++)
-            Assert.Same(clientInfo, await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest()));
+            Assert.Same(clientInfo, (await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest())).GetSuccess());
     }
 
     /// <summary>
@@ -203,11 +205,11 @@ public class ThrottledClientAuthenticatorTests
         var authenticator = CreateAuthenticator(permitLimit: 1);
         _inner
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(null));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
 
         // Act, Assert
         for (var attempt = 0; attempt < RequestsWellPastTheBudget; attempt++)
-            Assert.Null(await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest()));
+            Assert.False((await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest())).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -227,7 +229,7 @@ public class ThrottledClientAuthenticatorTests
         var authenticator = CreateAuthenticator(permitLimit: 1, recorded);
         _inner
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(new ClientInfo(TestConstants.DefaultClientId)));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(TestConstants.DefaultClientId)));
 
         // Act
         await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest());
@@ -250,11 +252,11 @@ public class ThrottledClientAuthenticatorTests
         var authenticator = CreateAuthenticator(new AuthenticationFailureLimitOptions().PermitLimit);
         _inner
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(null));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
 
         // Act, Assert
         for (var attempt = 0; attempt < RequestsWellPastTheBudget; attempt++)
-            Assert.Null(await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest()));
+            Assert.False((await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest())).TryGetSuccess(out _));
     }
 
     /// <summary>

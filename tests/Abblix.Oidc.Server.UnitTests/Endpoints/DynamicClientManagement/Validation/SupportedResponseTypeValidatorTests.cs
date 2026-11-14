@@ -9,6 +9,8 @@
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Configuration;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -50,13 +52,66 @@ public class SupportedResponseTypeValidatorTests
     }
 
     /// <summary>
+    /// FAPI 2.0 Message Signing section 5.3.3, response_modes: "If omitted, the default is that the client may use any
+    /// of the response modes supported by the authorization server". Omitted, or listing supported modes, it passes; a
+    /// mode the server does not support, or an empty list admitting none, is refused.
+    /// </summary>
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(new[] { ResponseModes.QueryJwt, ResponseModes.FormPost }, null)]
+    [InlineData(new[] { ResponseModes.Jwt, "web_message" }, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(new string[0], ErrorCodes.InvalidClientMetadata)]
+    public async Task ValidateAsync_ResponseModes_AreThoseTheServerSupports(string[]? responseModes, string? expected)
+    {
+        var validator = Validator(CodeOnly);
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseModes = responseModes,
+        });
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(expected, result?.Error);
+    }
+
+    /// <summary>
+    /// The response modes are judged against the list discovery publishes, which a host may replace: under a host
+    /// whose metadata provider advertises only query, query.jwt is refused and query admitted.
+    /// </summary>
+    [Theory]
+    [InlineData(ResponseModes.QueryJwt, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ResponseModes.Query, null)]
+    public async Task ValidateAsync_ResponseModes_AreThoseTheReplacedProviderPublishes(string responseMode, string? expected)
+    {
+        var metadata = Mock.Of<IAuthorizationMetadataProvider>(
+            provider => provider.ResponseModesSupported == new[] { ResponseModes.Query });
+        var validator = new SupportedResponseTypeValidator(CodeOnly, metadata);
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseModes = [responseMode],
+        });
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(expected, result?.Error);
+    }
+
+    /// <summary>
+    /// The validator over the metadata discovery publishes by default for <paramref name="processors"/>.
+    /// </summary>
+    private static SupportedResponseTypeValidator Validator(IAuthorizationResponseBuilder[] processors)
+        => new(processors, new AuthorizationMetadataProvider(processors));
+
+    /// <summary>
     /// Default registration (no <c>EnableImplicitFlow()</c>) advertises only the Code Flow.
     /// A client registering exactly that combination must pass.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_CodeOnlyServer_AcceptsCodeRegistration()
     {
-        var validator = new SupportedResponseTypeValidator(CodeOnly);
+        var validator = Validator(CodeOnly);
 
         var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([[ResponseTypes.Code]]));
 
@@ -72,7 +127,7 @@ public class SupportedResponseTypeValidatorTests
     [InlineData(ResponseTypes.IdToken)]
     public async Task ValidateAsync_CodeOnlyServer_RejectsImplicitResponseType(string unsupportedPart)
     {
-        var validator = new SupportedResponseTypeValidator(CodeOnly);
+        var validator = Validator(CodeOnly);
 
         var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([[unsupportedPart]]));
 
@@ -88,7 +143,7 @@ public class SupportedResponseTypeValidatorTests
     [Fact]
     public async Task ValidateAsync_CodeOnlyServer_RejectsHybridContainingUnsupportedPart()
     {
-        var validator = new SupportedResponseTypeValidator(CodeOnly);
+        var validator = Validator(CodeOnly);
 
         var result = await validator.ValidateAsync(
             SingleIssuer.Tenant,
@@ -109,7 +164,7 @@ public class SupportedResponseTypeValidatorTests
     [InlineData(ResponseTypes.IdToken)]
     public async Task ValidateAsync_FullServer_AcceptsAnySingleResponseType(string responseType)
     {
-        var validator = new SupportedResponseTypeValidator(CodeTokenIdToken);
+        var validator = Validator(CodeTokenIdToken);
 
         var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([[responseType]]));
 
@@ -123,7 +178,7 @@ public class SupportedResponseTypeValidatorTests
     [Fact]
     public async Task ValidateAsync_CodeOnlyServer_RejectsMultiCombinationContainingUnsupported()
     {
-        var validator = new SupportedResponseTypeValidator(CodeOnly);
+        var validator = Validator(CodeOnly);
 
         var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([
             [ResponseTypes.Code],
@@ -142,7 +197,7 @@ public class SupportedResponseTypeValidatorTests
     [Fact]
     public async Task ValidateAsync_EmptyResponseType_IsRefusedAsInvalidClientMetadata()
     {
-        var validator = new SupportedResponseTypeValidator(CodeTokenIdToken);
+        var validator = Validator(CodeTokenIdToken);
 
         var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([[ResponseTypes.Code], []]));
 
@@ -158,7 +213,7 @@ public class SupportedResponseTypeValidatorTests
     [Fact]
     public async Task ValidateAsync_EmptyResponseTypes_Passes()
     {
-        var validator = new SupportedResponseTypeValidator(CodeTokenIdToken);
+        var validator = Validator(CodeTokenIdToken);
 
         var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([]));
 

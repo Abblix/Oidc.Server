@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -31,10 +32,12 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// checker is the one the configuration paths use, rather than a second reading of the same
 /// requirements that could drift from it.
 ///
-/// A refusal is a null result, indistinguishable to the caller from a credential that did not
-/// verify. That is deliberate: which of the two it was tells an unauthenticated caller something
-/// about a client registration, and every endpoint here already answers an unauthenticated client
-/// the same way.
+/// A refusal is the answer the client's own credential would have had had it failed:
+/// <see cref="ClientAuthenticationFailures.NoCredential"/> for a public client, which presented
+/// none, and <see cref="ClientAuthenticationFailures.InvalidCredential"/> for any other, so the
+/// caller cannot tell it from a credential that did not verify. That is deliberate: which of the two
+/// it was tells an unauthenticated caller something about a client registration, and every endpoint
+/// here already answers an unauthenticated client the same way.
 /// </remarks>
 internal partial class SecurityProfileClientAuthenticator(
     IClientAuthenticator inner,
@@ -45,11 +48,11 @@ internal partial class SecurityProfileClientAuthenticator(
     public IEnumerable<string> ClientAuthenticationMethodsSupported
         => inner.ClientAuthenticationMethodsSupported;
 
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
-        var clientInfo = await inner.TryAuthenticateClientAsync(tenant, request);
-        if (clientInfo == null)
-            return null;
+        var result = await inner.TryAuthenticateClientAsync(tenant, request);
+        if (!result.TryGetSuccess(out var clientInfo))
+            return result;
 
         // The raw value, because the question below is whether this server DEFINES it - not what
         // it demands. What the client is held to comes from the combination further down, which
@@ -82,7 +85,7 @@ internal partial class SecurityProfileClientAuthenticator(
             !string.Equals(namedClientId, clientInfo.ClientId, StringComparison.Ordinal))
         {
             LogClientIdentifiersMismatch(clientInfo.ClientId, Sanitized.Value(namedClientId));
-            return null;
+            return Refused(clientInfo);
         }
         IReadOnlyList<string> violations =
         [
@@ -93,6 +96,8 @@ internal partial class SecurityProfileClientAuthenticator(
                 requirements),
             ..SecurityProfileConsistency.FindAlgorithmViolations(clientInfo, requirements),
             ..SecurityProfileConsistency.FindJwksUriViolations(clientInfo.JwksUri, requirements),
+            ..SecurityProfileConsistency.FindResponseModeViolations(
+                clientInfo.AllowedResponseModes, clientInfo.EffectiveResponseTypes, requirements),
             ..SecurityProfileConsistency.FindTokenBindingViolations(
                 clientInfo.TokenEndpointAuthMethod,
                 clientInfo.TlsClientCertificateBoundAccessTokens,
@@ -116,6 +121,18 @@ internal partial class SecurityProfileClientAuthenticator(
         else
             LogRegistrationCannotSatisfyDeploymentProfile(
                 clientInfo.ClientId, tenant.DefaultSecurityProfile, violations);
-        return null;
+        return Refused(clientInfo);
+    }
+
+    /// <summary>
+    /// The refusal of a client the profile does not admit, in the outcome its own credential had: a public client
+    /// presented none, and is refused as a caller that presented none; any other presented one and had it refused.
+    /// </summary>
+    private static OidcError Refused(ClientInfo clientInfo)
+    {
+        if (clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.None)
+            return ClientAuthenticationFailures.NoCredential;
+
+        return ClientAuthenticationFailures.InvalidCredential;
     }
 }

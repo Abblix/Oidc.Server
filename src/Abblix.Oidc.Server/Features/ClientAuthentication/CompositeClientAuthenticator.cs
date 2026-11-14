@@ -6,7 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
@@ -43,24 +45,22 @@ internal class CompositeClientAuthenticator(params IClientAuthenticator[] client
 	/// <param name="tenant">The tenant the request is served at, handed to each authenticator.</param>
 	/// <param name="request">The <see cref="ClientRequest"/> to authenticate. This object contains details
 	/// about the request that may be used by authenticators to determine the client's identity.</param>
-	/// <returns>
-	/// A <see cref="Task"/> representing the asynchronous operation. The task result is a <see cref="ClientInfo"/>
-	/// object representing the authenticated client if authentication is successful; otherwise, <c>null</c>.
+	/// <returns>The client the first authenticator to succeed proves; otherwise the refusal of the first one a
+	/// credential was presented to, or, where none was presented to any, <see cref="ClientAuthenticationFailures.NoCredential"/>.
 	/// </returns>
-	/// <remarks>
-	/// This method provides a unified interface for client authentication, simplifying the process
-	/// of supporting multiple authentication mechanisms. It iterates through the provided authenticators
-	/// and returns the first successful authentication result, or <c>null</c> if no authenticator succeeds.
-	/// </remarks>
-	public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
+		OidcError? refused = null;
 		foreach (var clientAuthenticator in clientAuthenticators)
 		{
-			var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, request);
-			if (clientInfo != null)
+			var result = await clientAuthenticator.TryAuthenticateClientAsync(tenant, request);
+			if (result.TryGetSuccess(out var clientInfo))
 				return clientInfo;
+
+			if (result.GetFailure() is not UnauthenticatedCallerError)
+				refused ??= result.GetFailure();
 		}
 
-		return null;
+		return refused ?? ClientAuthenticationFailures.NoCredential;
 	}
 }
