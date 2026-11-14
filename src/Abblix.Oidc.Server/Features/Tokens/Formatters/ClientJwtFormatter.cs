@@ -23,11 +23,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// This class handles the signing of JWTs and, if configured, their encryption, based on the needs of each client.
 /// </summary>
 /// <param name="issuer">Issues the JWT once the client's profile admits its algorithms.</param>
-/// <param name="clientKeysProvider">Provider for client encryption keys.</param>
+/// <param name="encryptionKeyResolver">Chooses the key the JWT is encrypted to under the algorithm the client
+/// registered.</param>
 /// <param name="serviceKeysProvider">Provider for service signing keys.</param>
 public class ClientJwtFormatter(
     ProfiledJwtIssuer issuer,
-    IClientKeysProvider clientKeysProvider,
+    ClientEncryptionKeyResolver encryptionKeyResolver,
     IAuthServiceKeysProvider serviceKeysProvider) : IClientJwtFormatter
 {
     /// <summary>
@@ -38,8 +39,8 @@ public class ClientJwtFormatter(
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="token">The JSON Web Token (JWT) to be formatted for the client.</param>
     /// <param name="clientInfo">Information about the client to which the JWT is issued.</param>
-    /// <param name="encryption">The encryption policy: which registered client metadata governs encryption, the
-    /// content-encryption default, and whether encryption requires a registered key-management algorithm.</param>
+    /// <param name="encryption">The encryption policy: the key management and content encryption algorithms the
+    /// client registered for this JWT, and the content-encryption default.</param>
     /// <returns>A task that returns a JWT string formatted and ready for use by the client.</returns>
     public async Task<Result<string, OidcError>> FormatAsync(
         TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption)
@@ -55,27 +56,21 @@ public class ClientJwtFormatter(
         if (encryption.KeyManagementAlgorithm is not { } keyEncryptionAlgorithm)
             return await issuer.IssueAsync(profile, token, signingCredentials);
 
-        // A key qualifies when it declares the registered algorithm or none, its material carries it out, the host
-        // performs it and the profile admits it (FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and
-        // authorization servers shall not use the RSA1_5 algorithm"); the keys sit at a jwks_uri the client can change
-        // after registration, so this is decided here, where the key is chosen
-        var encryptingCredentials = await clientKeysProvider.GetEncryptionKeys(clientInfo)
-            .FirstOrDefaultAsync(key =>
-                (key.Algorithm ?? keyEncryptionAlgorithm) == keyEncryptionAlgorithm &&
-                issuer.EncryptionAlgorithmFor(profile, key, keyEncryptionAlgorithm) is not null);
+        // The key is chosen here, where the token is issued, because the keys sit at a jwks_uri the client can change
+        // after registration and a client secret can expire in between
+        var contentEncryptionAlgorithm = encryption.ContentEncryptionAlgorithmInUse;
+        var encryptingCredentials = await encryptionKeyResolver.ResolveAsync(
+            profile, clientInfo, keyEncryptionAlgorithm, contentEncryptionAlgorithm);
 
         // A client that registered an algorithm expects what is issued to it encrypted, so a token is not sent in the
-        // clear because no key it publishes (or none it could be read from) is one that algorithm can be used with
+        // clear because the client has no key (or none could be read) that algorithm can encrypt to
         if (encryptingCredentials == null)
         {
             return new OidcError(
                 ErrorCodes.InvalidClient,
-                $"The key set of the client {clientInfo.ClientId} holds no encryption key for its registered " +
-                $"{keyEncryptionAlgorithm} the server can use under its security profile");
+                $"The client {clientInfo.ClientId} has no key its registered {keyEncryptionAlgorithm} can encrypt to " +
+                "under its security profile");
         }
-
-        var contentEncryptionAlgorithm = encryption.ContentEncryptionAlgorithm
-            ?? encryption.DefaultContentEncryptionAlgorithm;
 
         return await issuer.IssueAsync(
             profile,

@@ -15,6 +15,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
@@ -55,8 +56,23 @@ public class ClientValidatorTests
         => new(
             new Mock<ILogger<ClientValidator>>(MockBehavior.Loose).Object,
             _clientInfoProvider.Object,
-            _clientKeys.Object,
+            new ClientEncryptionKeyResolver(new ProfiledJwtIssuer(EncryptingWithRsa()), _clientKeys.Object, TimeProvider.System),
             Options.Create(options));
+
+    /// <summary>A creator performing the RSA key management algorithms, which are all a key below declares.</summary>
+    private static IJsonWebTokenCreator EncryptingWithRsa()
+    {
+        var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
+        creator
+            .Setup(c => c.EncryptedResponseAlgorithmsSupported)
+            .Returns(
+            [
+                EncryptionAlgorithms.KeyManagement.Rsa1_5,
+                EncryptionAlgorithms.KeyManagement.RsaOaep,
+                EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            ]);
+        return creator.Object;
+    }
 
     private static OidcOptions SignedWith(string algorithm)
     {
@@ -428,21 +444,27 @@ public class ClientValidatorTests
 
     /// <summary>
     /// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
-    /// algorithm". A client that publishes encryption keys has what is issued to it encrypted, so one whose key set
-    /// holds only RSA1_5 keys is refused here, naming its key set; a key set with an RSA-OAEP-256 key, or none at all,
-    /// passes.
+    /// algorithm". A client that registered RSA-OAEP-256 for its ID tokens is refused here when it has no key that
+    /// algorithm encrypts to - a key set of RSA1_5 keys or none at all - and passes with one; a client that registered
+    /// no encryption algorithm is sent nothing encrypted, and its key set is not judged.
     /// </summary>
     [Theory]
-    [InlineData(new[] { EncryptionAlgorithms.KeyManagement.Rsa1_5 }, false)]
-    [InlineData(new[] { EncryptionAlgorithms.KeyManagement.Rsa1_5, EncryptionAlgorithms.KeyManagement.RsaOaep256 }, true)]
-    [InlineData(new string[0], true)]
-    public async Task ValidateAsync_AKeySetLeavingNothingToEncryptTo_IsRefused(string[] declared, bool accepted)
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, new[] { EncryptionAlgorithms.KeyManagement.Rsa1_5 }, false)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, new string[0], false)]
+    [InlineData(
+        EncryptionAlgorithms.KeyManagement.RsaOaep256,
+        new[] { EncryptionAlgorithms.KeyManagement.Rsa1_5, EncryptionAlgorithms.KeyManagement.RsaOaep256 },
+        true)]
+    [InlineData(null, new[] { EncryptionAlgorithms.KeyManagement.Rsa1_5 }, true)]
+    public async Task ValidateAsync_ARegisteredAlgorithmWithNoKeyToEncryptTo_IsRefused(
+        string? registered, string[] declared, bool accepted)
     {
         var clientInfo = new ClientInfo(ValidClientId)
         {
             SecurityProfile = ClientSecurityProfile.Fapi1Advanced,
             IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            IdentityTokenEncryptedResponseAlgorithm = registered,
         };
         _clientInfoProvider
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))

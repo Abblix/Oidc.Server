@@ -107,8 +107,9 @@ public class UserInfoResponseFormatter(
             ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value));
 
         // RFC 6750 section 3.1, invalid_token: "The access token provided is expired, revoked, malformed, or invalid
-        // for other reasons". The token's client has a key set its profile leaves nothing in to encrypt to, so the token
-        // cannot be answered, and a response sent in the clear would be one the profile forbids
+        // for other reasons". The token's client registered userinfo_encrypted_response_alg and has no key it can be
+        // encrypted to under it, so the token cannot be answered, and a response sent in the clear would ignore what the
+        // client registered
         if (formatted.TryGetFailure(out var refusal))
         {
             return FormatError(new OidcError(ErrorCodes.InvalidToken, refusal.ErrorDescription)

@@ -69,7 +69,8 @@ public class ClientJwtFormatterTests
 
         _formatter = new ClientJwtFormatter(
             new ProfiledJwtIssuer(_jwtCreator.Object),
-            _clientKeysProvider.Object,
+            new ClientEncryptionKeyResolver(
+                new ProfiledJwtIssuer(_jwtCreator.Object), _clientKeysProvider.Object, TimeProvider.System),
             _serviceKeysProvider.Object);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };

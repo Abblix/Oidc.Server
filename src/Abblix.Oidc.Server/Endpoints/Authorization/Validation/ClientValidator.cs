@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Microsoft.Extensions.Logging;
@@ -28,14 +29,14 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// </summary>
 /// <param name="logger">The logger to be used for recording validation activities and outcomes.</param>
 /// <param name="clientInfoProvider">The provider used to retrieve information about clients.</param>
-/// <param name="clientKeysProvider">Supplies the encryption keys the client publishes, judged against its profile.
-/// </param>
+/// <param name="encryptionKeyResolver">Chooses the key a JWT for the client is encrypted to, judged against its
+/// profile.</param>
 /// <param name="options">Supplies the service token settings the client's access and refresh tokens are issued with.
 /// </param>
 public partial class ClientValidator(
     ILogger<ClientValidator> logger,
     IClientInfoProvider clientInfoProvider,
-    IClientKeysProvider clientKeysProvider,
+    ClientEncryptionKeyResolver encryptionKeyResolver,
     IOptions<OidcOptions> options) : IAuthorizationContextValidator
 {
     /// <summary>
@@ -70,7 +71,7 @@ public partial class ClientValidator(
         // a JWT authorization response. A client the startup check never saw, added to the store afterwards, is
         // refused here before anything is signed for it
         // So are the access and refresh tokens it would be issued, signed and encrypted with what the deployment
-        // configures, and the key set it publishes, where its profile leaves nothing in it to encrypt to
+        // configures, and each JWT it registered an encryption algorithm for that it has no key to be encrypted to under
         var requirements = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile);
         IReadOnlyList<string> violations =
         [
@@ -78,7 +79,7 @@ public partial class ClientValidator(
             ..SecurityProfileConsistency.FindServiceTokenViolations(
                 SecurityProfileConsistency.IssuedToAClient(options.Value.ServiceTokens), requirements),
             ..await SecurityProfileConsistency.FindEncryptionKeyViolationsAsync(
-                clientKeysProvider, clientInfo, requirements),
+                encryptionKeyResolver, clientInfo, options.Value, requirements),
         ];
         if (violations.Count > 0)
         {

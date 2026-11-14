@@ -31,6 +31,11 @@ public sealed record ClientJwtEncryption(
 	string DefaultContentEncryptionAlgorithm)
 {
 	/// <summary>
+	/// The content-encryption algorithm the JWT is encrypted with: the registered one, else the default.
+	/// </summary>
+	public string ContentEncryptionAlgorithmInUse => ContentEncryptionAlgorithm ?? DefaultContentEncryptionAlgorithm;
+
+	/// <summary>
 	/// Policy for a signed/encrypted UserInfo response (OIDC Core section 5.3.2): encrypts when the client registered
 	/// <c>userinfo_encrypted_response_alg</c>, using its <c>userinfo_encrypted_response_*</c> metadata.
 	/// </summary>

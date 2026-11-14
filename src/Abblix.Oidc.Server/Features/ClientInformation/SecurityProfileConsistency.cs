@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
@@ -146,37 +147,55 @@ public static class SecurityProfileConsistency
     }
 
     /// <summary>
-    /// Names a client key set the profile leaves nothing to encrypt to, or an empty list: FAPI 1.0 Part 2 section
-    /// 8.6.1, "For JWE, both clients and authorization servers shall not use the RSA1_5 algorithm". A client that
-    /// publishes encryption keys has what is issued to it encrypted, and is not sent it in the clear because every key
-    /// declares an algorithm its profile forbids.
+    /// Names each JWT the client registered an encryption algorithm for that it has no key to be encrypted to under,
+    /// or an empty list: FAPI 1.0 Part 2 section 8.6.1, "For JWE, both clients and authorization servers shall not use
+    /// the RSA1_5 algorithm", so a client held to it is refused before anything is issued to it rather than when a
+    /// token would have to be sent in the clear. A client that registered no encryption algorithm is sent nothing
+    /// encrypted and is not judged.
     /// </summary>
-    /// <param name="clientKeysProvider">Supplies the encryption keys the client publishes.</param>
+    /// <remarks>
+    /// The key is the one <see cref="ClientEncryptionKeyResolver"/> chooses where the JWT is encrypted, so the two
+    /// answers cannot differ. Asked only where the profile restricts key management; elsewhere the refusal is the
+    /// formatter's, where the JWT is issued.
+    /// </remarks>
+    /// <param name="encryptionKeyResolver">Chooses the key a JWT for the client is encrypted to.</param>
     /// <param name="client">The client.</param>
+    /// <param name="options">Supplies the content encryption algorithm a client that registered none is sent.</param>
     /// <param name="requirements">The control bundle the client is held to.</param>
     public static async Task<IReadOnlyList<string>> FindEncryptionKeyViolationsAsync(
-        IClientKeysProvider clientKeysProvider,
+        ClientEncryptionKeyResolver encryptionKeyResolver,
         ClientInfo client,
+        OidcOptions options,
         SecurityProfileRequirements requirements)
     {
-        // Fetched only where the profile forbids an algorithm a key may declare
         if (!requirements.ForbidRsa1_5KeyManagement)
             return [];
 
-        var keys = await clientKeysProvider.GetEncryptionKeys(client).ToArrayAsync();
+        (string Name, ClientJwtEncryption Encryption)[] encrypted =
+        [
+            (nameof(ClientInfo.IdentityTokenEncryptedResponseAlgorithm), ClientJwtEncryption.ForIdentityToken(client, options)),
+            (nameof(ClientInfo.UserInfoEncryptedResponseAlgorithm), ClientJwtEncryption.ForUserInfo(client, options)),
+            (nameof(ClientInfo.IntrospectionEncryptedResponseAlgorithm), ClientJwtEncryption.ForIntrospection(client, options)),
+            (nameof(ClientInfo.AuthorizationEncryptedResponseAlgorithm), ClientJwtEncryption.ForJarm(client, options)),
+        ];
 
-        // A key declaring no algorithm can be used with any the profile admits
-        if (keys.Length == 0 || keys.Any(key => key.Algorithm is not { } declared ||
-                                               requirements.PermitsKeyManagementAlgorithm(declared)))
+        var violations = new List<string>();
+        foreach (var (name, encryption) in encrypted)
         {
-            return [];
+            if (encryption.KeyManagementAlgorithm is not { } algorithm)
+                continue;
+
+            var key = await encryptionKeyResolver.ResolveAsync(
+                requirements, client, algorithm, encryption.ContentEncryptionAlgorithmInUse);
+            if (key is null)
+            {
+                violations.Add(
+                    $"the client registers {name} {algorithm}, but has no key that algorithm can encrypt to under its " +
+                    "security profile");
+            }
         }
 
-        return
-        [
-            "the client's key set publishes only encryption keys declaring an algorithm its security profile " +
-            $"forbids ({string.Join(", ", keys.Select(key => key.Algorithm).Distinct())})",
-        ];
+        return violations;
     }
 
     /// <summary>

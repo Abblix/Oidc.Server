@@ -9,6 +9,7 @@
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
@@ -42,7 +43,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 internal partial class SecurityProfileClientAuthenticator(
     IClientAuthenticator inner,
     ILogger<SecurityProfileClientAuthenticator> logger,
-    IClientKeysProvider clientKeysProvider,
+    ClientEncryptionKeyResolver encryptionKeyResolver,
     IOptions<OidcOptions> options) : IClientAuthenticator
 {
     public IEnumerable<string> ClientAuthenticationMethodsSupported
@@ -106,7 +107,7 @@ internal partial class SecurityProfileClientAuthenticator(
             ..SecurityProfileConsistency.FindServiceTokenViolations(
                 SecurityProfileConsistency.IssuedToAClient(options.Value.ServiceTokens), requirements),
             ..await SecurityProfileConsistency.FindEncryptionKeyViolationsAsync(
-                clientKeysProvider, clientInfo, requirements),
+                encryptionKeyResolver, clientInfo, options.Value, requirements),
         ];
 
         if (violations.Count == 0)

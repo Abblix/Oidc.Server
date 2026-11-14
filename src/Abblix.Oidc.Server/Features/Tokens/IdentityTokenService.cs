@@ -157,7 +157,7 @@ internal class IdentityTokenService(ITenantCatalog catalog,
 			state,
 			pushBindings);
 
-		// A client whose key set its profile leaves nothing in to encrypt to is refused by the caller, in its protocol
+		// A client with no key its registered encryption algorithm can encrypt to is refused by the caller, in its protocol
 		var jwt = await jwtFormatter.FormatAsync(
 			tenant,
 			identityToken,

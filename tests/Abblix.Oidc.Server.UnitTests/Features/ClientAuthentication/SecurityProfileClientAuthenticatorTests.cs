@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using System.Linq;
 using Abblix.Jwt;
 using System;
@@ -68,10 +69,14 @@ public class SecurityProfileClientAuthenticatorTests
         options.ServiceTokens.RefreshToken.Signing.Algorithm = serviceTokenAlgorithm;
         var keys = new Mock<IClientKeysProvider>();
         keys.Setup(k => k.GetEncryptionKeys(It.IsAny<ClientInfo>())).Returns(encryptionKeys.ToAsyncEnumerable());
+        var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
+        creator
+            .Setup(c => c.EncryptedResponseAlgorithmsSupported)
+            .Returns([EncryptionAlgorithms.KeyManagement.Rsa1_5, EncryptionAlgorithms.KeyManagement.RsaOaep256]);
         var authenticator = new SecurityProfileClientAuthenticator(
             inner.Object,
             logger,
-            keys.Object,
+            new ClientEncryptionKeyResolver(new ProfiledJwtIssuer(creator.Object), keys.Object, TimeProvider.System),
             Options.Create(options));
 
         return (authenticator, inner);
@@ -104,13 +109,16 @@ public class SecurityProfileClientAuthenticatorTests
 
     /// <summary>
     /// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
-    /// algorithm". A client publishing only RSA1_5 encryption keys has nothing left to be encrypted to, and does not
-    /// authenticate; one also publishing an RSA-OAEP-256 key does.
+    /// algorithm". A client that registered RSA-OAEP-256 for its ID tokens and publishes only RSA1_5 encryption keys has
+    /// nothing to be encrypted to, and does not authenticate; one also publishing an RSA-OAEP-256 key does, and so does
+    /// one that registered no encryption algorithm, which is sent nothing encrypted.
     /// </summary>
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, true)]
-    public async Task AKeySetLeavingNothingToEncryptTo_DoesNotAuthenticate(bool withOaep, bool authenticated)
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, false, false)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, true, true)]
+    [InlineData(null, false, true)]
+    public async Task ARegisteredAlgorithmWithNoKeyToEncryptTo_DoesNotAuthenticate(
+        string? registered, bool withOaep, bool authenticated)
     {
         JsonWebKey[] keys = withOaep
             ?
@@ -127,6 +135,7 @@ public class SecurityProfileClientAuthenticatorTests
             IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
             TlsClientCertificateBoundAccessTokens = true,
+            IdentityTokenEncryptedResponseAlgorithm = registered,
         });
 
         var result = await authenticator.TryAuthenticateClientAsync(
