@@ -40,7 +40,7 @@ public class InitialAccessTokenValidator(
         // RFC 7591 section 3.2.2 answers an error "appropriate to the OAuth 2.0 token type", and RFC 6750 section 3.1
         // names a request that "uses more than one method for including an access token" an invalid_request
         if (context.Request.HasMoreThanOneAuthorizationHeader)
-            return Common.Validation.ErrorFactory.MoreThanOneAuthorizationHeader;
+            return Common.Validation.ErrorFactory.MoreThanOneBearerAuthorizationHeader;
 
         var header = context.Request.AuthorizationHeader;
         if (header?.Parameter == null)

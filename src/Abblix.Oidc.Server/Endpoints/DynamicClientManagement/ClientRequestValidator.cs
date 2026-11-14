@@ -36,7 +36,7 @@ public class ClientRequestValidator(
         // RFC 7592 section 2.1 answers a token "not valid" as RFC 6750 does, whose section 3.1 names a request that
         // "uses more than one method for including an access token" an invalid_request
         if (request.HasMoreThanOneAuthorizationHeader)
-            return Common.Validation.ErrorFactory.MoreThanOneAuthorizationHeader;
+            return Common.Validation.ErrorFactory.MoreThanOneBearerAuthorizationHeader;
 
         // The token is judged before anything is looked up, so a caller without one learns nothing about which
         // ids are registered: every id it names gets the same answer

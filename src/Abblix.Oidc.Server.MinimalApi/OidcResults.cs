@@ -25,8 +25,9 @@ public static class OidcResults
     /// Formats an <see cref="OidcError"/> as an HTTP error response per RFC 6750 section 3 / RFC 6749 section 5.2:
     /// <c>invalid_token</c> returns 401 with a <c>WWW-Authenticate</c> Bearer challenge and no body;
     /// <c>insufficient_scope</c> returns 403 with the header; <c>invalid_client</c> returns 401 with a Basic challenge
-    /// and the JSON error body; <c>invalid_request</c> returns 400 with the JSON body whatever the fallback; everything
-    /// else uses the fallback status code with a JSON body.
+    /// and the JSON error body; <c>invalid_request</c> returns 400 with the JSON body whatever the fallback, a
+    /// <see cref="BearerRequestError"/> with a Bearer challenge carrying it too; everything else uses the fallback
+    /// status code with a JSON body.
     /// </summary>
     public static IResult Format(this OidcError error, int fallbackStatusCode, string? realm = null)
     {
@@ -50,6 +51,12 @@ public static class OidcResults
             (ErrorCodes.InvalidClient, _) => Results
                 .Json(new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status401Unauthorized)
                 .WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBasicChallenge(realm)),
+
+            // RFC 6750 section 3: a Bearer-protected endpoint refusing how the token was included "MUST include the
+            // HTTP "WWW-Authenticate" response header field", and the Bearer challenge carries the error
+            (_, _) when error is BearerRequestError => Results
+                .Json(new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status400BadRequest)
+                .WithHeader(HeaderNames.WWWAuthenticate, challenge),
 
             // RFC 6749 section 5.2 answers its errors with 400 "unless specified otherwise", and RFC 6750 section 3.1 has
             // invalid_request answered with 400 too, so an endpoint whose other errors take another status does not

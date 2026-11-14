@@ -8,7 +8,6 @@
 
 using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Oidc.Server.Mvc.Attributes;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Primitives;
 
@@ -25,30 +24,26 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 public class AuthenticationHeaderBinder : ModelBinderBase
 {
     /// <summary>
-    /// Asynchronously binds an authentication header model.
+    /// Binds every line of the header the model is named after, an empty line included.
     /// </summary>
     /// <param name="bindingContext">The <see cref="ModelBindingContext"/> for the binding operation.</param>
     /// <remarks>
-    /// The method extracts authentication header data from the request and tries to bind it to the model.
+    /// Reads the request's headers itself rather than through <see cref="ModelBinderBase.BindModelAsync"/>, which
+    /// treats a parameter whose first value is empty as omitted (RFC 6749 section 3.1). That rule is about a parameter
+    /// sent without a value; an empty Authorization line is still a line, and skipping it would drop the lines behind
+    /// it, so a request repeating the field would read as carrying it once or not at all.
     /// </remarks>
-    public override async Task BindModelAsync(ModelBindingContext bindingContext)
+    public override Task BindModelAsync(ModelBindingContext bindingContext)
     {
-        var headerValueProvider = new HeaderValueProvider(bindingContext.HttpContext.Request.Headers);
+        if (bindingContext.HttpContext.Request.Headers.TryGetValue(bindingContext.ModelName, out var values) &&
+            values.Count > 0)
+        {
+            bindingContext.Result = TryParse(bindingContext.ModelType, values, out var lines)
+                ? ModelBindingResult.Success(lines)
+                : ModelBindingResult.Failed();
+        }
 
-        var bindingInfo = BindingInfo.GetBindingInfo(
-            bindingContext.ModelType.GetCustomAttributes(false),
-            bindingContext.ModelMetadata);
-
-        var childBindingContext = DefaultModelBindingContext.CreateBindingContext(
-            bindingContext.ActionContext,
-            headerValueProvider,
-            bindingContext.ModelMetadata,
-            bindingInfo,
-            bindingContext.ModelName);
-
-        await base.BindModelAsync(childBindingContext);
-
-        bindingContext.Result = childBindingContext.Result;
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -67,20 +62,5 @@ public class AuthenticationHeaderBinder : ModelBinderBase
     {
         result = values.ToArray();
         return true;
-    }
-
-    /// <summary>
-    /// Provides values from HTTP headers.
-    /// </summary>
-    /// <param name="headers">The HTTP header dictionary to provide values from.</param>
-    private sealed class HeaderValueProvider(IHeaderDictionary headers) : IValueProvider
-    {
-        /// <inheritdoc />
-        public bool ContainsPrefix(string prefix)
-            => headers.ContainsKey(prefix);
-
-        /// <inheritdoc />
-        public ValueProviderResult GetValue(string key)
-            => headers.TryGetValue(key, out var values) ? new ValueProviderResult(values) : ValueProviderResult.None;
     }
 }

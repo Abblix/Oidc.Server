@@ -60,7 +60,17 @@ public static class ErrorFactory
     /// with 400.
     /// </summary>
     public static OidcError MoreThanOneAuthorizationHeader { get; } =
-        new(ErrorCodes.InvalidRequest, "The Authorization header is included more than once");
+        new(ErrorCodes.InvalidRequest, MoreThanOneAuthorizationHeaderDescription);
+
+    /// <summary>
+    /// <see cref="MoreThanOneAuthorizationHeader"/> at an endpoint protected by a Bearer token alone, whose answer
+    /// carries the error on a Bearer challenge as RFC 6750 section 3 requires.
+    /// </summary>
+    public static OidcError MoreThanOneBearerAuthorizationHeader { get; } =
+        new BearerRequestError(MoreThanOneAuthorizationHeaderDescription);
+
+    private const string MoreThanOneAuthorizationHeaderDescription =
+        "The Authorization header is included more than once";
 
     /// <summary>
     /// The validation message for a request whose host is missing or cannot be part of a URI, so that no address of

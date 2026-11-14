@@ -187,6 +187,7 @@ public class ModelBinderRefusalTests
     [InlineData("=bad")]
     [InlineData("Bearer some-token", "DPoP some-token")]
     [InlineData("Basic a", "Basic b", "Basic c")]
+    [InlineData("", "Bearer some-token")]
     public async Task The_authorization_header_binder_binds_every_line_apart(params string[] lines)
     {
         var outcome = await ModelBinderRunner.BindHeaderAsync(
