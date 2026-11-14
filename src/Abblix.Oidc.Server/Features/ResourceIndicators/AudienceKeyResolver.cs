@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -24,11 +25,13 @@ namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 public interface IAudienceKeyResolver
 {
     /// <summary>
-    /// The encryption key published by the audience named in <paramref name="resources"/>, or <c>null</c>
-    /// when none of them publishes one.
+    /// The encryption key published by the audience named in <paramref name="resources"/>, with the key management
+    /// algorithm to encrypt to it under, or <c>null</c> when none of them publishes one.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="resources">The resources the token is minted for.</param>
+    /// <param name="profile">The controls in force for the token, which the algorithm must satisfy.</param>
+    /// <param name="defaultAlgorithm">The algorithm used for a key that declares none.</param>
     /// <remarks>
     /// A resource that publishes no key contributes nothing, which is how it says a signed JWS is what it
     /// expects. Several resources each publishing a key have no correct answer: compact JWE serialization
@@ -39,26 +42,34 @@ public interface IAudienceKeyResolver
     /// <exception cref="InvalidOperationException">
     /// Several of the named resources each publish an encryption key.</exception>
     /// <exception cref="AudienceKeyRefusedException">A named resource publishes encryption keys, none of which this
-    /// server can encrypt to.</exception>
-    Task<JsonWebKey?> FindEncryptionKeyAsync(TenantDefinition tenant, IReadOnlyCollection<Uri> resources);
+    /// server can encrypt to under <paramref name="profile"/>.</exception>
+    Task<AudienceEncryptionKey?> FindEncryptionKeyAsync(
+        TenantDefinition tenant,
+        IReadOnlyCollection<Uri> resources,
+        SecurityProfileRequirements profile,
+        string defaultAlgorithm);
 }
 
 /// <summary>
-/// Answers from the resource registry, taking per resource the first published key that declares no algorithm or one
-/// this server can encrypt under (<see cref="ProfiledJwtIssuer.CanEncryptTo"/>).
+/// Answers from the resource registry, taking per resource the first published key a token can be encrypted to, with
+/// its algorithm (<see cref="ProfiledJwtIssuer.EncryptionAlgorithmFor"/>).
 /// </summary>
 /// <param name="resourceManager">Resolves a requested resource URI to its registered definition.</param>
 /// <param name="resourceKeysProvider">Supplies that resource's published encryption keys.</param>
-/// <param name="issuer">Says which of them a token can be encrypted to.</param>
+/// <param name="issuer">Says which of them a token can be encrypted to, and under which algorithm.</param>
 public class AudienceKeyResolver(
     IResourceManager resourceManager,
     IResourceKeysProvider resourceKeysProvider,
     ProfiledJwtIssuer issuer) : IAudienceKeyResolver
 {
     /// <inheritdoc />
-    public async Task<JsonWebKey?> FindEncryptionKeyAsync(TenantDefinition tenant, IReadOnlyCollection<Uri> resources)
+    public async Task<AudienceEncryptionKey?> FindEncryptionKeyAsync(
+        TenantDefinition tenant,
+        IReadOnlyCollection<Uri> resources,
+        SecurityProfileRequirements profile,
+        string defaultAlgorithm)
     {
-        JsonWebKey? audienceKey = null;
+        AudienceEncryptionKey? audienceKey = null;
         Uri? keyOwner = null;
 
         foreach (var resource in resources)
@@ -70,13 +81,18 @@ public class AudienceKeyResolver(
             if (keys.Length == 0)
                 continue;
 
-            // A set may also hold keys declaring a signing algorithm, or one the host did not register, which no
-            // token can be encrypted to; a resource holding only such keys still asks for encryption, so it is refused
-            var key = Array.Find(keys, issuer.CanEncryptTo)
+            // A set may also hold keys no token can be encrypted to (declaring a signing algorithm, one the host did
+            // not register or the profile forbids, or of a type the default algorithm does not fit), and the next one
+            // is taken; a resource holding only such keys still asks for encryption, so it is refused
+            var key = keys
+                    .Select(candidate => issuer.EncryptionAlgorithmFor(profile, candidate, defaultAlgorithm) is { } algorithm
+                        ? new AudienceEncryptionKey(candidate, algorithm)
+                        : null)
+                    .FirstOrDefault(candidate => candidate is not null)
                 ?? throw new AudienceKeyRefusedException(
                     [resource],
                     $"The resource '{resource}' publishes no encryption key this server can encrypt an access " +
-                    "token to");
+                    "token to under the security profile in force");
 
             if (audienceKey is not null)
             {

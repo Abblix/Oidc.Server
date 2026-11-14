@@ -167,11 +167,10 @@ internal class AccessTokenService(
 		// carries the real subject, which the server opens back at UserInfo, refresh and token exchange.
 		accessToken.Payload.Subject = subjectTypeConverter.Convert(tenant, authSession.Subject, clientInfo);
 
-		var encryption = await ServiceJwtEncryption.ForAccessToken(options.Value)
-			.WithAudienceKeyAsync(tenant, audienceContext, audienceKeys);
+		var encryption = await AudienceKeyRefusal.WithAudienceKeyAsync(
+			ServiceJwtEncryption.ForAccessToken(options.Value), tenant, clientInfo, audienceContext, audienceKeys, logger);
 
-		var encoded = await AudienceKeyRefusal.FormatAsync(
-			serviceJwtFormatter, tenant, accessToken, clientInfo, encryption, audienceContext.Resources ?? [], logger);
+		var encoded = await serviceJwtFormatter.FormatAsync(tenant, accessToken, clientInfo, encryption);
 
 		return new EncodedJsonWebToken(accessToken, encoded);
 	}

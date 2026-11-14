@@ -343,21 +343,10 @@ public class TokenRequestProcessor(
 	}
 
 	/// <summary>
-	/// RFC 8707 section 2: the resource the request named is unusable, since the key it publishes would have the token
-	/// encrypted with an algorithm the profile in force forbids, or none of its keys is one this server can encrypt to.
-	/// The resource's configuration is at fault, not this server's, so the request is answered rather than failed.
+	/// RFC 8707 section 2: the resource the request named is unusable, since none of the keys it publishes is one a
+	/// token can be encrypted to. The resource's configuration is at fault, not this server's, so the request is
+	/// answered rather than failed, naming the resource the request itself named.
 	/// </summary>
 	private static OidcError UnusableResource(AudienceKeyRefusedException refused)
-	{
-		if (refused.Algorithm is null)
-		{
-			return new OidcError(
-				ErrorCodes.InvalidTarget,
-				"The requested resource publishes no encryption key this server can encrypt to.");
-		}
-
-		return new OidcError(
-			ErrorCodes.InvalidTarget,
-			"The requested resource publishes an encryption key the security profile in force does not admit.");
-	}
+		=> new(ErrorCodes.InvalidTarget, refused.Message);
 }

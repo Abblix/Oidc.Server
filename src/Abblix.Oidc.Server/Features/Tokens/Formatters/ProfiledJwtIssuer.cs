@@ -76,14 +76,23 @@ public sealed class ProfiledJwtIssuer(IJsonWebTokenCreator creator)
     }
 
     /// <summary>
-    /// Whether <paramref name="key"/>, a key another party publishes, declares an algorithm a token can be encrypted
-    /// under: a key management algorithm this server performs with a key of its type. RFC 8725 section 3.1 binds the
-    /// key to what it declares, so a key published for signing, or for an algorithm the host did not register, is
-    /// passed over. A key declaring no algorithm is not judged here and is accepted, since the issuing path chooses
-    /// its algorithm.
+    /// The key management algorithm a token would be encrypted to <paramref name="key"/> under, a key another party
+    /// publishes, or null when it cannot be: the algorithm the key declares, else <paramref name="defaultAlgorithm"/>,
+    /// provided this server performs it, the key's material can carry it out, and <paramref name="profile"/> admits
+    /// it. RFC 8725 section 3.1 binds a key to the algorithm it declares, so a key published for signing, for an
+    /// algorithm the host did not register, or of a type the default algorithm does not fit is passed over, as is one
+    /// the profile forbids.
     /// </summary>
-    public bool CanEncryptTo(JsonWebKey key)
-        => key.Algorithm is not { } algorithm
-           || creator.EncryptedResponseAlgorithmsSupported.Contains(algorithm, StringComparer.Ordinal) &&
-           key.SupportsAlgorithm(algorithm);
+    /// <param name="profile">The controls in force for what is issued.</param>
+    /// <param name="key">The published key.</param>
+    /// <param name="defaultAlgorithm">The algorithm used for a key that declares none.</param>
+    public string? EncryptionAlgorithmFor(SecurityProfileRequirements profile, JsonWebKey key, string defaultAlgorithm)
+    {
+        var algorithm = key.Algorithm ?? defaultAlgorithm;
+        return creator.EncryptedResponseAlgorithmsSupported.Contains(algorithm, StringComparer.Ordinal) &&
+               key.SupportsAlgorithm(algorithm) &&
+               profile.PermitsKeyManagementAlgorithm(algorithm)
+            ? algorithm
+            : null;
+    }
 }

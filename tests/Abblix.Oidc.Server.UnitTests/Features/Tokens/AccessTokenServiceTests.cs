@@ -25,6 +25,7 @@ using System.Collections.Generic;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -1155,9 +1156,77 @@ public class AccessTokenServiceTests
         catch (AudienceKeyRefusedException refused) when (!issued)
         {
             Assert.Equal([OrdersApi], refused.Resources);
-            Assert.Equal(EncryptionAlgorithms.KeyManagement.Rsa1_5, refused.Algorithm);
         }
 
         Assert.Equal(issued ? EncryptionAlgorithms.KeyManagement.Rsa1_5 : null, keyManagement);
+    }
+
+    /// <summary>
+    /// The key and its algorithm are chosen together, so a key no token can be encrypted to under the tenant's
+    /// profile is passed over for the next one in the set: an RSA1_5 key at a FAPI 1.0 Advanced tenant, or a key
+    /// declaring no algorithm whose material does not fit the default RSA-OAEP-256 (an EC or a symmetric key).
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "rsa1_5")]
+    [InlineData(ClientSecurityProfile.None, "ec")]
+    [InlineData(ClientSecurityProfile.None, "oct")]
+    public async Task CreateAccessToken_AKeyNothingCanBeEncryptedToUnderTheProfile_IsPassedOverForTheNext(
+        ClientSecurityProfile profile, string firstKey)
+    {
+        JsonWebKey unusable = firstKey switch
+        {
+            "rsa1_5" => new RsaJsonWebKey { KeyId = "first", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 },
+            "ec" => JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256)
+                .Sanitize(includePrivateKeys: false) with { KeyId = "first", Algorithm = null, Usage = null },
+            "oct" => new OctetJsonWebKey { KeyId = "first", KeyValue = new byte[16] },
+            _ => throw new ArgumentOutOfRangeException(nameof(firstKey), firstKey, null),
+        };
+        var oaep = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption)
+            .Sanitize(includePrivateKeys: false) with { KeyId = "oaep", Algorithm = null };
+        var definition = new ResourceDefinition(OrdersApi);
+        var captured = definition;
+        var manager = new Mock<IResourceManager>(MockBehavior.Strict);
+        manager.Setup(m => m.TryGet(TestTenant.Matched, OrdersApi, out captured)).Returns(true);
+        var resourceKeys = new Mock<IResourceKeysProvider>(MockBehavior.Strict);
+        resourceKeys.Setup(k => k.GetEncryptionKeys(definition))
+            .Returns(new[] { unusable, oaep }.ToAsyncEnumerable());
+
+        var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.PS256);
+        var serviceKeys = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
+        serviceKeys
+            .Setup(k => k.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new JsonWebKey[] { signingKey }.ToAsyncEnumerable());
+        var options = new OidcOptions();
+        options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+
+        // The real creator, registering RSA1_5 as a host may, so the profile alone passes that key over
+        var services = new ServiceCollection();
+        services.AddSingleton(TimeProvider.System);
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddRsaPkcs1KeyManagement();
+        var creator = services.BuildServiceProvider().GetRequiredService<IJsonWebTokenCreator>();
+
+        var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
+        tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
+        var service = new AccessTokenService(
+            new FakeTimeProvider(_currentTime),
+            tokenIdGenerator.Object,
+            new AuthServiceJwtFormatter(new ProfiledJwtIssuer(creator), serviceKeys.Object),
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
+            Options.Create(options),
+            SingleIssuer.LicensedCatalog,
+            new AudienceKeyResolver(manager.Object, resourceKeys.Object, new ProfiledJwtIssuer(creator)),
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+
+        var issued = await service.CreateAccessTokenAsync(
+            tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
+
+        var header = System.Text.Json.Nodes.JsonNode.Parse(
+            System.Buffers.Text.Base64Url.DecodeFromChars(issued.EncodedJwt.Split('.')[0]))!;
+        Assert.Equal("oaep", header[JwtClaimTypes.KeyId]?.GetValue<string>());
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, header[JwtClaimTypes.Algorithm]?.GetValue<string>());
     }
 }

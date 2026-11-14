@@ -11,9 +11,9 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
-/// An access token was not issued because of the encryption keys its audience publishes: none of them is one this
-/// server can encrypt to, or the one it can would have the token encrypted with a key management algorithm the
-/// security profile in force forbids.
+/// An access token was not issued because none of the encryption keys its audience publishes is one a token can be
+/// encrypted to: under an algorithm this server performs, that the key's material carries out, and that the security
+/// profile in force admits.
 /// </summary>
 /// <remarks>
 /// The refusal belongs to the resource the request named rather than to the server, so the token endpoint answers it
@@ -22,19 +22,7 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 public sealed class AudienceKeyRefusedException : InvalidOperationException
 {
     /// <summary>
-    /// Creates the refusal from the one <see cref="ProfiledJwtIssuer"/> raised.
-    /// </summary>
-    /// <param name="resources">The resources the access token was for.</param>
-    /// <param name="refusal">The issuer's refusal of the key management algorithm.</param>
-    public AudienceKeyRefusedException(IReadOnlyCollection<Uri> resources, AlgorithmRefusedByProfileException refusal)
-        : base(refusal.Message, refusal)
-    {
-        Resources = resources;
-        Algorithm = refusal.Algorithm;
-    }
-
-    /// <summary>
-    /// Creates the refusal of a resource that publishes encryption keys, none of which this server can encrypt to.
+    /// Creates the refusal of a resource that publishes encryption keys, none of which a token can be encrypted to.
     /// </summary>
     /// <param name="resources">The resources the access token was for.</param>
     /// <param name="message">What was refused, naming the resource.</param>
@@ -48,9 +36,4 @@ public sealed class AudienceKeyRefusedException : InvalidOperationException
     /// The resources the access token was for, one of which publishes the key.
     /// </summary>
     public IReadOnlyCollection<Uri> Resources { get; }
-
-    /// <summary>
-    /// The key management algorithm the profile forbids, or null when no published key could be encrypted to.
-    /// </summary>
-    public string? Algorithm { get; }
 }

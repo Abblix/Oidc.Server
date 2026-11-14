@@ -420,6 +420,45 @@ public class ClientJwtFormatterTests
     }
 
     /// <summary>
+    /// A key declaring no algorithm is judged by the algorithm it would be used under, the default RSA-OAEP-256 here,
+    /// so an EC or a symmetric key ahead of the RSA key is passed over rather than failing the issuance.
+    /// </summary>
+    [Theory]
+    [InlineData("ec")]
+    [InlineData("oct")]
+    public async Task FormatAsync_AKeyDeclaringNoAlgorithmTheDefaultDoesNotFit_IsPassedOver(string firstKey)
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.PS256 },
+            Payload = { Subject = "user123", Audiences = [ClientId] },
+        };
+        JsonWebKey unusable = firstKey == "ec"
+            ? new EllipticCurveJsonWebKey { KeyId = "first", Curve = EllipticCurveTypes.P256 }
+            : new OctetJsonWebKey { KeyId = "first" };
+        var rsa = new RsaJsonWebKey { KeyId = "rsa" };
+        JsonWebKey? usedKey = null;
+        string? usedAlgorithm = null;
+
+        _serviceKeysProvider
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new[] { new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }.ToAsyncEnumerable());
+        _clientKeysProvider
+            .Setup(p => p.GetEncryptionKeys(_clientInfo))
+            .Returns(new[] { unusable, rsa }.ToAsyncEnumerable());
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>(
+                (_, _, key, algorithm, _) => (usedKey, usedAlgorithm) = (key, algorithm))
+            .ReturnsAsync(EncodedJwt);
+
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, UserInfoPolicy(_clientInfo));
+
+        Assert.Same(rsa, usedKey);
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, usedAlgorithm);
+    }
+
+    /// <summary>
     /// A client held to FAPI 1.0 Advanced whose only published encryption key declares RSA1_5 is not answered with a
     /// token encrypted against the profile, nor with one left unencrypted although it publishes a key: the token is not
     /// issued.

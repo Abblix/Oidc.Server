@@ -7,7 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
@@ -16,54 +18,49 @@ using Microsoft.Extensions.Logging;
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
-/// Tells a refusal the issuing guard made of the key an access token's audience publishes from one of the server's own.
+/// Records the refusal of an audience whose published keys a token cannot be encrypted to.
 /// </summary>
 /// <remarks>
-/// The decision stays with <see cref="ProfiledJwtIssuer"/>; this only names whose it is. A key management algorithm
-/// the profile forbids, taken from the key the audience publishes, is that resource's to answer for, so it becomes
-/// <see cref="AudienceKeyRefusedException"/> and is recorded as a warning; any other refusal is the server's and goes on
-/// as it was raised.
+/// The refusal is the resource's to answer for rather than the server's, so it is recorded as a warning and goes on as
+/// <see cref="AudienceKeyRefusedException"/>, which the endpoint answers as an unusable resource.
 /// </remarks>
 internal static partial class AudienceKeyRefusal
 {
     /// <summary>
-    /// Formats <paramref name="token"/> as <see cref="IAuthServiceJwtFormatter.FormatAsync"/> does, a refusal of the
-    /// audience's key raised as <see cref="AudienceKeyRefusedException"/>.
+    /// Points <paramref name="encryption"/> at the audience's key as
+    /// <see cref="ServiceJwtEncryptionExtensions.WithAudienceKeyAsync"/> does, recording a refusal of the audience's
+    /// keys.
     /// </summary>
-    /// <param name="formatter">Formats the token through the issuing guard.</param>
+    /// <param name="encryption">The policy projected from the server's own settings.</param>
     /// <param name="tenant">The tenant the token is issued at.</param>
-    /// <param name="token">The access token.</param>
     /// <param name="client">The client the token is issued to.</param>
-    /// <param name="encryption">The policy, which names the audience's key where it publishes one.</param>
-    /// <param name="resources">The resources the token is for.</param>
+    /// <param name="context">The authorization context naming the token's audience.</param>
+    /// <param name="audienceKeys">Answers which key, if any, the named audience published.</param>
     /// <param name="logger">Records the refusal.</param>
-    /// <exception cref="AudienceKeyRefusedException">The profile forbids the key management algorithm the audience's
-    /// key yields.</exception>
-    public static async Task<string> FormatAsync(
-        IAuthServiceJwtFormatter formatter,
-        TenantDefinition tenant,
-        JsonWebToken token,
-        ClientInfo client,
+    /// <exception cref="AudienceKeyRefusedException">The audience publishes keys, none of which a token can be
+    /// encrypted to.</exception>
+    public static async Task<ServiceJwtEncryption> WithAudienceKeyAsync(
         ServiceJwtEncryption encryption,
-        IReadOnlyCollection<Uri> resources,
+        TenantDefinition tenant,
+        ClientInfo client,
+        AuthorizationContext context,
+        IAudienceKeyResolver audienceKeys,
         ILogger logger)
     {
         try
         {
-            return await formatter.FormatAsync(tenant, token, client, encryption);
+            return await encryption.WithAudienceKeyAsync(tenant, client, context, audienceKeys);
         }
-        catch (AlgorithmRefusedByProfileException refused)
-            when (encryption.Key is { } audienceKey && ReferenceEquals(refused.EncryptionKey, audienceKey))
+        catch (AudienceKeyRefusedException refused)
         {
-            LogAudienceKeyRefused(
-                logger, Sanitized.Value(string.Join(" ", resources)), Sanitized.Value(refused.Algorithm));
-            throw new AudienceKeyRefusedException(resources, refused);
+            LogAudienceKeyRefused(logger, Sanitized.Value(string.Join(" ", refused.Resources)));
+            throw;
         }
     }
 
     [LoggerMessage(
         EventId = LogEvents.TokenIssuance.AccessTokenService.AudienceKeyRefused,
         Level = LogLevel.Warning,
-        Message = "No access token issued for {Resources}: its encryption key would have it encrypted with {Algorithm}, which the security profile in force forbids")]
-    private static partial void LogAudienceKeyRefused(ILogger logger, Sanitized resources, Sanitized algorithm);
+        Message = "No access token issued for {Resources}: none of the encryption keys it publishes is one a token can be encrypted to under the security profile in force")]
+    private static partial void LogAudienceKeyRefused(ILogger logger, Sanitized resources);
 }
