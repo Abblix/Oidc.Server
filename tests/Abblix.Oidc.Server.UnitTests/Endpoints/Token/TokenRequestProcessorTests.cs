@@ -190,12 +190,12 @@ public partial class TokenRequestProcessorTests
             .ReturnsAsync(CreateAccessToken());
         _identityTokenService
             .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, "access_token_jwt", null, null, authContext)))
-            .ReturnsAsync(new OidcError(ErrorCodes.InvalidClient, "the client's key set"));
+            .ReturnsAsync(new OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to"));
 
         var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
     }
 
     /// <summary>

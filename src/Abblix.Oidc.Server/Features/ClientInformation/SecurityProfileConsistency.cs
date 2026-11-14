@@ -281,9 +281,8 @@ public static class SecurityProfileConsistency
                 (nameof(ClientInfo.IdentityTokenSignedResponseAlgorithm), client.IdentityTokenSignedResponseAlgorithm),
                 (nameof(ClientInfo.AuthorizationSignedResponseAlgorithm), client.AuthorizationSignedResponseAlgorithm),
                 (nameof(ClientInfo.LogoutTokenSignedResponseAlgorithm), client.LogoutTokenSignedResponseAlgorithm),
-                (nameof(ClientInfo.UserInfoSignedResponseAlgorithm), client.UserInfoEncryptedResponseAlgorithm is null
-                    ? SignedOrNull(client.UserInfoSignedResponseAlgorithm)
-                    : client.UserInfoSignedResponseAlgorithm),
+                (nameof(ClientInfo.UserInfoSignedResponseAlgorithm), UserInfoSignature(
+                    client.UserInfoSignedResponseAlgorithm, client.UserInfoEncryptedResponseAlgorithm)),
                 (nameof(ClientInfo.IntrospectionSignedResponseAlgorithm),
                     SignedOrNull(client.IntrospectionSignedResponseAlgorithm)),
                 (nameof(ClientInfo.RequestObjectSigningAlgorithm), client.RequestObjectSigningAlgorithm),
@@ -435,6 +434,16 @@ public static class SecurityProfileConsistency
     /// <param name="algorithm">The algorithm the client is configured for.</param>
     public static string? SignedOrNull(string? algorithm)
         => algorithm == SigningAlgorithms.None ? null : algorithm;
+
+    /// <summary>
+    /// The signature algorithm a userinfo response is judged by, or null where it is plain JSON: OpenID Connect Core
+    /// 1.0 section 5.3.2, "If the UserInfo Response is signed and/or encrypted, then the Claims are returned in a JWT",
+    /// so a response registered for encryption is a JWT even when signed with none, and none is then judged.
+    /// </summary>
+    /// <param name="signedResponseAlgorithm">The registered <c>userinfo_signed_response_alg</c>.</param>
+    /// <param name="encryptedResponseAlgorithm">The registered <c>userinfo_encrypted_response_alg</c>.</param>
+    public static string? UserInfoSignature(string? signedResponseAlgorithm, string? encryptedResponseAlgorithm)
+        => encryptedResponseAlgorithm is null ? SignedOrNull(signedResponseAlgorithm) : signedResponseAlgorithm;
 
     /// <summary>
     /// The client authentication methods that prove possession of a key rather than of a shared

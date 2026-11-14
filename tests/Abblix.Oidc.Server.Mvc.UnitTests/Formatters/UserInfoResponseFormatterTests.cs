@@ -62,7 +62,7 @@ public class UserInfoResponseFormatterTests
         clientJwtFormatter
             .Setup(f => f.FormatAsync(
                 It.IsAny<TenantDefinition>(), It.IsAny<Abblix.Jwt.JsonWebToken>(), client, It.IsAny<ClientJwtEncryption>()))
-            .ReturnsAsync(new OidcError(ErrorCodes.InvalidClient, "the client's key set"));
+            .ReturnsAsync(new OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to"));
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
         options.Setup(o => o.Value).Returns(new OidcOptions());
         var formatter = new UserInfoResponseFormatter(

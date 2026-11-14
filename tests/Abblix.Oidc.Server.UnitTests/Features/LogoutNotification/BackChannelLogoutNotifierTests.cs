@@ -52,7 +52,7 @@ public class BackChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
         _logoutTokenService
             .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
-            .ReturnsAsync(new Abblix.Oidc.Server.Common.OidcError(ErrorCodes.InvalidClient, "the client's key set"));
+            .ReturnsAsync(new Abblix.Oidc.Server.Common.OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to"));
 
         await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
