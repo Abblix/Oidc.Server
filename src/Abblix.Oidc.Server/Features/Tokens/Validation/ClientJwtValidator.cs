@@ -90,10 +90,11 @@ public partial class ClientJwtValidator(
                 ResolveIssuerSigningKeys = issuer => context.ResolveIssuerSigningKeys(issuer),
                 RefetchIssuerSigningKeys = issuer => context.ResolveIssuerSigningKeys(issuer, refetch: true),
                 // RFC 9101 section 6.1: a request object may be JWE-encrypted to the server. Decrypt it with
-                // the server's own private keys; the inner JWS is then verified with the client's key
-                // via ResolveIssuerSigningKeys. Harmless for plain JWS client assertions (the JWE path
-                // only runs for an actual JWE token).
-                ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetEncryptionKeys(tenant, true),
+                // the server's own private keys a client can encrypt to, the keys discovery derives its
+                // request_object_encryption_alg_values_supported from; the inner JWS is then verified with the
+                // client's key via ResolveIssuerSigningKeys. Harmless for plain JWS client assertions (the JWE
+                // path only runs for an actual JWE token).
+                ResolveTokenDecryptionKeys = _ => serviceKeysProvider.GetInboundEncryptionKeys(tenant, true),
                 // The tolerance belongs to the profile this deployment is held to, ceiling
                 // included.
                 ClockSkew = deployment.ClockSkewOrDefault(),

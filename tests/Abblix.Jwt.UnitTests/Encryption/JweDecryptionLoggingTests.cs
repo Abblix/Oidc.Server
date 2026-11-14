@@ -70,7 +70,7 @@ public class JweDecryptionLoggingTests
         var keyId = "line\r\nforged record " + new string('k', LongerThanAnyRecordKeeps);
         jwtParts[0] = EncodeHeader("unknown-alg", EncryptionAlgorithms.ContentEncryption.Aes128Gcm, keyId);
 
-        // A key declaring no algorithm is a candidate for the unknown one, so the token reaches the keys
+        // No key performs the unknown algorithm, so the key the token names is recorded as one for another algorithm
         var result = await _encryptor.DecryptAsync(
             jwtParts,
             (NewKey(keyId) with { Algorithm = null }).ToAsync(),
@@ -78,7 +78,7 @@ public class JweDecryptionLoggingTests
 
         Assert.True(result.TryGetFailure(out _));
         var entry = Assert.Single(_logger.Entries);
-        Assert.Equal(LogEvents.Jwt.NoDecryptionKeyOpened, entry.EventId);
+        Assert.Equal(LogEvents.Jwt.DecryptionKeysForAnotherAlgorithm, entry.EventId);
         Assert.NotEqual("unknown-alg", entry.Value("Algorithm")?.ToString());
         var recorded = Assert.IsType<Sanitized>(entry.Value("KeyId")).ToString();
         Assert.DoesNotContain(recorded, char.IsControl);
@@ -130,6 +130,30 @@ public class JweDecryptionLoggingTests
             jwtParts,
             (NewKey("sender-key") with { Algorithm = EncryptionAlgorithms.KeyManagement.Aes256KW }).ToAsync(),
             TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        var entry = Assert.Single(_logger.Entries);
+        Assert.Equal(LogEvents.Jwt.DecryptionKeysForAnotherAlgorithm, entry.EventId);
+        Assert.Equal(1, entry.Value("KeyCount"));
+    }
+
+    /// <summary>
+    /// A key declaring no algorithm is a candidate only for an algorithm its material performs: an RSA key the token
+    /// names is not tried for an AES key wrap, and is recorded as a key for another algorithm, as discovery leaves
+    /// that algorithm out for it.
+    /// </summary>
+    [Fact]
+    public async Task TokenWhoseUndeclaredKeyIsOfAnotherType_IsRecordedAsAKeyForAnotherAlgorithm()
+    {
+        var jwtParts = await EncryptTo(NewKey("sender-key"));
+        var rsaKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with
+        {
+            KeyId = "sender-key",
+            Algorithm = null,
+        };
+
+        var result = await _encryptor.DecryptAsync(jwtParts, rsaKey.ToAsync(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);

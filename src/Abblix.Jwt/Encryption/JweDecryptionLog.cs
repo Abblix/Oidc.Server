@@ -40,7 +40,7 @@ internal sealed partial class JweDecryptionLog(
         => LogNoDecryptionKey(Algorithm(envelope), envelope.EncryptionAlgorithm, envelope.Header.KeyId);
 
     /// <summary>
-    /// Every key the token could name declares another key management algorithm than the token's.
+    /// No key the token could name can be used with the token's key management algorithm.
     /// </summary>
     public void KeysForAnotherAlgorithm(JweEnvelope envelope, int keyCount)
         => LogKeysForAnotherAlgorithm(

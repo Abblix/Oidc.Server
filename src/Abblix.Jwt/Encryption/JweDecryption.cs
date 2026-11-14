@@ -62,8 +62,9 @@ internal sealed class JweDecryption(
         {
             // RFC 8725 section 3.1: "each key MUST be used with exactly one algorithm, and this MUST be checked when
             // the cryptographic operation is performed". A key declaring its 'alg' opens only that algorithm, as on
-            // the JWS side; one declaring none stays a candidate, since RFC 7517 section 4.4 makes it optional.
-            if (key.Algorithm != null && key.Algorithm != algorithm)
+            // the JWS side; one declaring none, which RFC 7517 section 4.4 permits, opens what its material can
+            // perform. Discovery asks the same question of the same keys to say which algorithms it accepts.
+            if (!key.CanPerform(algorithm))
             {
                 keysForAnotherAlgorithm++;
                 continue;
@@ -80,7 +81,7 @@ internal sealed class JweDecryption(
             log.KeysForAnotherAlgorithm(envelope, keysForAnotherAlgorithm);
             return new JwtValidationError(
                 JwtError.InvalidToken,
-                "No decryption key is declared for the JWE's key management algorithm");
+                "No decryption key can be used with the JWE's key management algorithm");
         }
 
         if (keysTried == 0)
