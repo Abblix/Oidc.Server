@@ -54,9 +54,8 @@ public partial class TlsMetadataClientAuthenticator(
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the certificate and client ID to authenticate.</param>
     /// <returns>
-    /// A task that returns the authenticated <see cref="ClientInfo"/> if successful; otherwise, null.
-    /// Returns null if no certificate is provided, client not found, authentication method doesn't match,
-    /// or certificate validation fails.
+    /// A task that returns the authenticated <see cref="ClientInfo"/>, or why it is not one: no certificate presented,
+    /// or one presented whose client is not found, does not use this method, or whose certificate does not match.
     /// </returns>
     /// <remarks>
     /// This method implements RFC 8705 tls_client_auth by:

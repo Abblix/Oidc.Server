@@ -83,7 +83,7 @@ internal partial class SecurityProfileClientAuthenticator(
             !string.Equals(namedClientId, clientInfo.ClientId, StringComparison.Ordinal))
         {
             LogClientIdentifiersMismatch(clientInfo.ClientId, Sanitized.Value(namedClientId));
-            return ClientAuthenticationFailures.InvalidCredential;
+            return Refused(clientInfo);
         }
         IReadOnlyList<string> violations =
         [
@@ -119,6 +119,18 @@ internal partial class SecurityProfileClientAuthenticator(
         else
             LogRegistrationCannotSatisfyDeploymentProfile(
                 clientInfo.ClientId, tenant.DefaultSecurityProfile, violations);
+        return Refused(clientInfo);
+    }
+
+    /// <summary>
+    /// The refusal of a client the profile does not admit, in the outcome its own credential had: a public client
+    /// presented none, and is refused as a caller that presented none; any other presented one and had it refused.
+    /// </summary>
+    private static OidcError Refused(ClientInfo clientInfo)
+    {
+        if (clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.None)
+            return ClientAuthenticationFailures.NoCredential;
+
         return ClientAuthenticationFailures.InvalidCredential;
     }
 }

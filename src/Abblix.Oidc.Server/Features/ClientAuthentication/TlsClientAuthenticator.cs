@@ -52,9 +52,9 @@ public partial class TlsClientAuthenticator(
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the certificate and client ID to authenticate.</param>
     /// <returns>
-    /// A task that returns the authenticated <see cref="ClientInfo"/> if successful; otherwise, null.
-    /// Returns null if no certificate is provided, client not found, authentication method doesn't match,
-    /// or certificate public key doesn't match any key in the client's JWKS.
+    /// A task that returns the authenticated <see cref="ClientInfo"/>, or why it is not one: no certificate presented,
+    /// or one presented whose client is not found, does not use this method, or whose public key matches no key in
+    /// the client's JWKS.
     /// </returns>
     /// <remarks>
     /// This method implements RFC 8705 self_signed_tls_client_auth by:

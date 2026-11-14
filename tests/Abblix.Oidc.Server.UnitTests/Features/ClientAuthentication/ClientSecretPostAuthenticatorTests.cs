@@ -98,6 +98,21 @@ public class ClientSecretPostAuthenticatorTests : ClientAuthenticatorTestsBase<C
     }
 
     /// <summary>
+    /// A secret of whitespace alone is still a secret presented, and refused.
+    /// </summary>
+    [Fact]
+    public async Task AWhitespaceSecret_IsAPresentedCredentialRefused()
+    {
+        var authenticator = CreateAuthenticator(new Mock<IClientInfoProvider>(MockBehavior.Strict));
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant, new ClientRequest { ClientId = ClientId, ClientSecret = "   " });
+
+        Assert.True(result.TryGetFailure(out var failure));
+        Assert.IsNotType<UnauthenticatedCallerError>(failure);
+    }
+
+    /// <summary>
     /// A secret in the body without a client_id is a credential presented that names no client.
     /// </summary>
     [Fact]

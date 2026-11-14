@@ -220,7 +220,8 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// presented and refused.</returns>
     public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
-        if (request is { ClientAssertionType: null, ClientAssertion: null or "" })
+        // The assertion is the credential; its type only says how to read it
+        if (!request.ClientAssertion.HasValue())
             return ClientAuthenticationFailures.NoCredential;
 
         if (!TryGetJwtBearerAssertion(request, out var assertion))

@@ -54,9 +54,8 @@ public class ClientSecretBasicAuthenticator(
 	/// </param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield the authenticated
-	/// <see cref="ClientInfo"/> or null if authentication fails.
-	/// If the 'Authorization' header is missing, malformed, or does not follow the Basic authentication scheme,
-	/// the method returns null.
+	/// <see cref="ClientInfo"/>, or why it is not one: no Authorization header presented, or one presented that is
+	/// malformed, of another scheme or not a client's credentials.
 	/// </returns>
 	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{

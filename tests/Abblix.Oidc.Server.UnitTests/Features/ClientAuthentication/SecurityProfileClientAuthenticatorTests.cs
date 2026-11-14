@@ -349,6 +349,10 @@ public class SecurityProfileClientAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
         Assert.False(result.TryGetSuccess(out _));
+
+        // A public client presented no credential, so it is refused as one that presented none (RFC 9701 section 5
+        // answers that 400 at introspection), and a client whose shared secret verified as one whose credential failed
+        Assert.Equal(method == ClientAuthenticationMethods.None, result.GetFailure() is UnauthenticatedCallerError);
     }
 
     /// <summary>

@@ -1276,6 +1276,22 @@ public class PrivateKeyJwtAuthenticatorTests
     }
 
     /// <summary>
+    /// A client_assertion_type without an assertion presents nothing: the assertion is the credential, its type only
+    /// says how to read it.
+    /// </summary>
+    [Fact]
+    public async Task AnAssertionTypeWithoutAnAssertion_PresentsNoCredential()
+    {
+        var (authenticator, _) = CreateAuthenticator();
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant,
+            new ClientRequest { ClientId = ClientId, ClientAssertionType = ClientAssertionTypes.JwtBearer });
+
+        Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
+    }
+
+    /// <summary>
     /// No assertion at all is no credential presented; an assertion of another type is one presented and refused.
     /// </summary>
     [Fact]

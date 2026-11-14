@@ -52,11 +52,11 @@ public class ClientSecretPostAuthenticator(
 	/// <param name="request">The client request containing the client_id and client_secret for authentication.</param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield the authenticated
-	/// <see cref="ClientInfo"/> or null if authentication fails.
+	/// <see cref="ClientInfo"/>, or why it is not one: no client_secret presented, or one presented and refused.
 	/// </returns>
 	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
-		if (!request.ClientSecret.NotNullOrWhiteSpace())
+		if (!request.ClientSecret.HasValue())
 			return ClientAuthenticationFailures.NoCredential;
 
 		if (!request.ClientId.NotNullOrWhiteSpace())
