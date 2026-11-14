@@ -243,7 +243,7 @@ public partial class AuthorizationRequestProcessorTests
         var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         var error = Assert.IsType<AuthorizationError>(result);
-        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
         Assert.Equal(request.Model.RedirectUri, error.RedirectUri);
     }
 

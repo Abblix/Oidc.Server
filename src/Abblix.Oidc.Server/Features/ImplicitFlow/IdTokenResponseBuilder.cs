@@ -71,7 +71,9 @@ public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
         {
             return new AuthorizationError(
                 request.Model,
-                refusal.Error,
+                // An authorization error response knows no invalid_client (RFC 6749 section 4.1.2.1); a key set the
+                // client cannot be issued to is unauthorized_client here, as ClientValidator answers it
+                ErrorCodes.UnauthorizedClient,
                 refusal.ErrorDescription,
                 request.ResponseMode,
                 request.Model.RedirectUri);
