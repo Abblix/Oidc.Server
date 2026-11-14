@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -246,13 +247,15 @@ public partial class JarRichAuthorizationRequestsTests
 
     /// <summary>
     /// A request object signed with <paramref name="signer"/>'s key and issued by it, carrying a code flow request
-    /// whose client_id claim is <paramref name="claimClientId"/>, or none where that is null.
+    /// whose client_id claim is <paramref name="claimClientId"/>, or none where that is null, with whatever
+    /// <paramref name="amend"/> adds to its claims.
     /// </summary>
     private static async Task<string> SignNamingAsync(
         DiscoveryDocument discovery,
         SigningClient signer,
         string? claimClientId,
-        string challenge)
+        string challenge,
+        Action<JsonObject>? amend = null)
     {
         var now = TimeProvider.System.GetUtcNow();
         var requestJwt = new JsonWebToken
@@ -275,6 +278,7 @@ public partial class JarRichAuthorizationRequestsTests
         else
             requestJwt.Payload.Json[AuthorizationRequest.Parameters.ClientId] = claimClientId;
 
+        amend?.Invoke(requestJwt.Payload.Json);
         return await JwtServices.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(requestJwt, signer.Key);
     }
 }
