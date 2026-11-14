@@ -269,6 +269,56 @@ public class RequestObjectFetcherTests
     }
 
     /// <summary>
+    /// A member is refused only where the caller names it forbidden, whatever its value, and before the object is
+    /// bound; a caller naming none, as the backchannel authentication endpoint does, binds the same object.
+    /// </summary>
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task FetchAsync_WithAForbiddenMember_IsAnInvalidRequestObjectOnlyWhereTheCallerForbidsIt(
+        bool forbidden,
+        bool withValue)
+    {
+        var fetcher = CreateFetcher();
+        var originalRequest = new TestRequest(TestConstants.DefaultClientId, TestConstants.DefaultRedirectUri.OriginalString, null);
+        const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
+        var payload = new JsonObject
+        {
+            [RequestParameters.ClientId] = TestConstants.DefaultClientId,
+            [RequestParameters.RequestUri] = withValue ? "https://client.example.com/request.jwt" : null,
+        };
+        var token = new JsonWebToken
+        {
+            Header = new JsonWebTokenHeader(new JsonObject()),
+            Payload = new JsonWebTokenPayload(payload),
+        };
+
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, jwt, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, new ClientInfo("test-client")));
+        _jsonObjectBinder
+            .Setup(b => b.BindModelAsync(payload, originalRequest))
+            .ReturnsAsync(originalRequest);
+
+        var result = await fetcher.FetchAsync(
+            SingleIssuer.Tenant, null, originalRequest, jwt,
+            forbiddenMembers: forbidden ? [RequestParameters.Request, RequestParameters.RequestUri] : null);
+
+        if (forbidden)
+        {
+            Assert.True(result.TryGetFailure(out var error));
+            Assert.Equal(ErrorCodes.InvalidRequestObject, error.Error);
+            _jsonObjectBinder.Verify(
+                b => b.BindModelAsync(It.IsAny<JsonObject>(), It.IsAny<TestRequest>()), Times.Never);
+        }
+        else
+        {
+            Assert.True(result.TryGetSuccess(out _));
+        }
+    }
+
+    /// <summary>
     /// Verifies error when binding fails (returns null).
     /// Binding failures should result in InvalidRequestObject error.
     /// </summary>

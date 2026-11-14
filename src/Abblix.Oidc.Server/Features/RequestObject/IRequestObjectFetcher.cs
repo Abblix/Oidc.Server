@@ -33,6 +33,9 @@ public interface IRequestObjectFetcher
     /// client registered for this kind of request object (e.g. <c>request_object_signing_alg</c> for
     /// authorization requests or <c>backchannel_authentication_request_signing_alg</c> for CIBA). When
     /// it returns a non-empty value, a request object whose <c>alg</c> differs is rejected.</param>
+    /// <param name="forbiddenMembers">Parameters the request object must not include, such as <c>request</c> and
+    /// <c>request_uri</c> for an authorization request (RFC 9101 section 4). An object carrying any of them, whatever
+    /// its value, is refused with <c>invalid_request_object</c> before its parameters are used.</param>
     /// <returns>
     /// A task representing the asynchronous operation. The task result contains a <see cref="Result{T, AuthError}"/> object,
     /// which either represents a successfully processed request or an error indicating issues with the JWT validation.
@@ -47,6 +50,7 @@ public interface IRequestObjectFetcher
         ClientInfo? client,
         T request,
         string? requestObject,
-        Func<ClientInfo, string?>? requiredSigningAlgorithm = null)
+        Func<ClientInfo, string?>? requiredSigningAlgorithm = null,
+        string[]? forbiddenMembers = null)
         where T : class;
 }
