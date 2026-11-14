@@ -72,8 +72,12 @@ public class RequestObjectFetchAdapter(
             namedClient = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         }
 
+        // A client_id taken from authentication rather than sent is one the object itself has to name (RFC 9126 section
+        // 3, "the "client_id" claim in the Request Object"), so it is left out of what the object is merged over, and
+        // the comparison below refuses an object naming none as one naming another
+        var mergedOver = request.ClientIdFromAuthentication ? request with { ClientId = null } : request;
         var fetchResult = await requestObjectFetcher.FetchAsync(tenant,
-            namedClient, request, request.Request, client => client.RequestObjectSigningAlgorithm);
+            namedClient, mergedOver, request.Request, client => client.RequestObjectSigningAlgorithm);
 
         // Strict processing (RFC 9101 section 6.3) rebuilds the request from the object alone, which drops the request
         // parameter carrying that object, so the validated object is carried on: without it a client required to sign

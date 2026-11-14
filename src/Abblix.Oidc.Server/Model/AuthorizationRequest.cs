@@ -243,6 +243,14 @@ public record AuthorizationRequest
 	public Uri? PushedRequestUri { get; init; }
 
 	/// <summary>
+	/// Whether <see cref="ClientId"/> was taken from the client that authenticated a pushed request carrying a request
+	/// object alone (RFC 9126 section 3), so the object itself has to name that client.
+	/// </summary>
+	[JsonIgnore]
+	[NotStored("Set by the pushed authorization endpoint before the request object is read, which the stored request already reflects")]
+	public bool ClientIdFromAuthentication { get; init; }
+
+	/// <summary>
 	/// When the server last sent the end user to the page of each <c>prompt</c> value the request asks for, set by the
 	/// server and kept with the request it stores for that page. The page is answered by what the host wrote since:
 	/// a session authenticated since then for <c>login</c> and <c>create</c>, a session signed in since then for

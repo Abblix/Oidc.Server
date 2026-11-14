@@ -196,6 +196,32 @@ public partial class JarRichAuthorizationRequestsTests
     }
 
     /// <summary>
+    /// RFC 9126 section 3 has the server check "the "client_id" claim in the Request Object" against the client that
+    /// authenticated, and RFC 9101 section 5 the client_id outside the object against the object's. Where the form
+    /// carries the object alone the client_id is the authenticated client's, so under the merging (non-strict)
+    /// processing too the object must name it: an object naming no client, or another client, is refused with
+    /// invalid_request_object.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PushedObjectAlone_NamingNoClientOrAnother_IsAnInvalidRequestObject(bool namesAnother)
+    {
+        var client = CreateClientFor(Factory);
+        var discovery = await FetchDiscoveryAsync(client);
+        var poster = await RegisterBasicSigningClientAsync(client, discovery, requireSignedRequestObject: false);
+        var other = await RegisterBasicSigningClientAsync(client, discovery, requireSignedRequestObject: false);
+
+        var requestObject = namesAnother
+            ? await SignRequestObjectAsync(discovery, other, GeneratePkcePair().Challenge)
+            : await SignRequestObjectAsync(discovery, poster, GeneratePkcePair().Challenge, namesItsClient: false);
+        var response = await PushObjectAloneAsync(client, discovery, poster, requestObject);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidRequestObject, await ErrorResponseReader.ErrorCodeOf(response));
+    }
+
+    /// <summary>
     /// RFC 9126 section 2.1: the client_id "is similarly required in a pushed authorization request". Only a form
     /// carrying a request object may leave it out (section 3), so a pushed request of plain parameters naming no
     /// client_id is refused, as the authorization endpoint refuses one, with unauthorized_client.
@@ -325,7 +351,8 @@ public partial class JarRichAuthorizationRequestsTests
     private static async Task<string> SignRequestObjectAsync(
         DiscoveryDocument discovery,
         SigningClient signing,
-        string challenge)
+        string challenge,
+        bool namesItsClient = true)
     {
         var now = TimeProvider.System.GetUtcNow();
         var requestJwt = new JsonWebToken
@@ -342,6 +369,9 @@ public partial class JarRichAuthorizationRequestsTests
         };
         foreach (var (name, value) in CodeFlowParameters(signing.ClientId, challenge))
             requestJwt.Payload.Json[name] = value;
+
+        if (!namesItsClient)
+            requestJwt.Payload.Json.Remove(AuthorizationRequest.Parameters.ClientId);
 
         return await JwtServices.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(requestJwt, signing.Key);
     }
