@@ -16,7 +16,6 @@ namespace Abblix.Jwt.Signing;
 /// Uses constant-time comparison to prevent timing attacks during verification.
 /// </summary>
 /// <remarks>
-/// HMAC instances are created per operation to avoid shared state.
 /// Per RFC 7518 Section 3.2, the HMAC key must be at least as long as the hash output:
 /// - HS256: minimum 256 bits (32 bytes) with SHA-256
 /// - HS384: minimum 384 bits (48 bytes) with SHA-384
@@ -41,8 +40,7 @@ internal sealed class HmacSigner(string algorithm) : ISignatureAlgorithm<OctetJs
 				$"per RFC 7518 section 3.2; got {keyValue.Length} bytes.",
 				nameof(octetKey));
 
-		using var hmac = HmacAlgorithms.Create(algorithm, keyValue);
-		return hmac.ComputeHash(data);
+		return HmacAlgorithms.Compute(algorithm, keyValue, data);
 	}
 
 	/// <inheritdoc />
@@ -58,8 +56,7 @@ internal sealed class HmacSigner(string algorithm) : ISignatureAlgorithm<OctetJs
 		if (keyValue.Length < GetMinimumKeyLengthBytes())
 			return false;
 
-		using var hmac = HmacAlgorithms.Create(algorithm, keyValue);
-		var computedSignature = hmac.ComputeHash(data);
+		var computedSignature = HmacAlgorithms.Compute(algorithm, keyValue, data);
 		return CryptographicOperations.FixedTimeEquals(signature, computedSignature);
 	}
 
