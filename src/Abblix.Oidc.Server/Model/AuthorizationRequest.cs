@@ -248,7 +248,7 @@ public record AuthorizationRequest
 	/// </summary>
 	[JsonIgnore]
 	[NotStored("Set by the pushed authorization endpoint before the request object is read, which the stored request already reflects")]
-	public bool ClientIdFromAuthentication { get; init; }
+	public bool ClientIdFromAuthentication { get; internal init; }
 
 	/// <summary>
 	/// When the server last sent the end user to the page of each <c>prompt</c> value the request asks for, set by the
