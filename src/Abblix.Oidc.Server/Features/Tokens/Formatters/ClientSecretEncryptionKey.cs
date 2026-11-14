@@ -45,6 +45,19 @@ internal static class ClientSecretEncryptionKey
     public static bool IsSymmetric(string keyManagementAlgorithm) => OctetKeyType.SupportsAlgorithm(keyManagementAlgorithm);
 
     /// <summary>
+    /// Whether a JWT can be encrypted to a client under the key management algorithm at all: an asymmetric one to a key
+    /// the client publishes, a symmetric one only where section 10.2 derives a key for it from the client secret.
+    /// </summary>
+    /// <remarks>
+    /// <c>dir</c> is asked with A128CBC-HS256, the content encryption default OpenID Connect Dynamic Client Registration
+    /// 1.0 section 2 names ("the default id_token_encrypted_response_enc value is A128CBC-HS256"), so it counts as
+    /// servable.
+    /// </remarks>
+    public static bool CanBeServed(string keyManagementAlgorithm)
+        => !IsSymmetric(keyManagementAlgorithm) ||
+           SizeInBytes(keyManagementAlgorithm, ContentEncryption.Aes128CbcHmacSha256) is not null;
+
+    /// <summary>
     /// The length of the key section 10.2 derives for the algorithm, or null where it derives none: section 10.2 covers
     /// "the AES key wrapping or direct encryption algorithm used", so a password-based algorithm, or one a host added,
     /// has no key derived for it. Under <c>dir</c> the key is the content encryption key, so its length is that of
