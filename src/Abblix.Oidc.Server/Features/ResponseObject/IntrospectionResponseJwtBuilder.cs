@@ -10,7 +10,6 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -69,22 +68,13 @@ public class IntrospectionResponseJwtBuilder(
             },
         };
 
-        var formatted = await clientJwtFormatter.FormatAsync(
+        // A client that registered introspection_encrypted_response_alg and has no key it can be encrypted to under it
+        // is refused by the formatter, which the adapter answers
+        return await clientJwtFormatter.FormatAsync(
             tenant,
             token,
             client,
             ClientJwtEncryption.ForIntrospection(client, options.Value));
-
-        // The client registered introspection_encrypted_response_alg and has no key it can be encrypted to under it.
-        // It authenticated, so the formatter's invalid_client would tell it its credential failed (RFC 6749 section
-        // 5.2: "Client authentication failed"); what it is refused is this response, so it is answered
-        // unauthorized_client ("The authenticated client is not authorized to use this authorization grant type", read
-        // for the response it asked for), the answer a client the server cannot encrypt to has at the authorization
-        // endpoint too
-        if (formatted.TryGetFailure(out var refusal))
-            return new OidcError(ErrorCodes.UnauthorizedClient, refusal.ErrorDescription);
-
-        return formatted;
     }
 
     /// <summary>

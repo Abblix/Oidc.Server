@@ -50,7 +50,7 @@ public class ClientJwtFormatter(
             .FirstByAlgorithmAsync(token.Header.Algorithm);
 
         // OpenID Connect Dynamic Client Registration 1.0 section 2, id_token_encrypted_response_alg: "JWE alg algorithm
-        // REQUIRED for encrypting the ID Token issued to this Client" and "The default, if omitted, is that no encryption
+        // [JWA] REQUIRED for encrypting the ID Token issued to this Client" and "The default, if omitted, is that no encryption
         // is performed"; JARM section 3 and the userinfo and introspection members say the same. Only a registered
         // algorithm asks for encryption, and the token is encrypted under exactly that algorithm
         if (encryption.KeyManagementAlgorithm is not { } keyEncryptionAlgorithm)
@@ -66,8 +66,10 @@ public class ClientJwtFormatter(
         // clear because the client has no key (or none could be read) that algorithm can encrypt to
         if (encryptingCredentials == null)
         {
+            // unauthorized_client rather than invalid_client: the client is who it says, and it is the JWT it asked
+            // for that cannot be issued (RFC 6749 section 5.2)
             return new OidcError(
-                ErrorCodes.InvalidClient,
+                ErrorCodes.UnauthorizedClient,
                 $"The client {clientInfo.ClientId} has no key its registered {keyEncryptionAlgorithm} can encrypt to " +
                 "under its security profile");
         }

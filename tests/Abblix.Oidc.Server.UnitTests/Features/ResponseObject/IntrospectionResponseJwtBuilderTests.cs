@@ -130,19 +130,19 @@ public class IntrospectionResponseJwtBuilderTests
 
     /// <summary>
     /// A refusal of the client JWT formatter - a client with no key its registered encryption algorithm can encrypt
-    /// to - is the builder's answer, not an exception, as unauthorized_client: the client authenticated, so the
-    /// formatter's invalid_client would tell it its credential failed (RFC 6749 section 5.2).
+    /// to - is the builder's answer as it stands, for the adapter to map, and not an exception.
     /// </summary>
     [Fact]
-    public async Task AFormatterRefusal_IsUnauthorizedClient()
+    public async Task AFormatterRefusal_IsTheBuildersResult()
     {
-        _formatted = new OidcError(ErrorCodes.InvalidClient, "no key to encrypt to");
+        var refusal = new OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to");
+        _formatted = refusal;
 
         var result = await Builder(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature))
             .BuildAsync(Tenant(ClientSecurityProfile.None), Client(), new JsonObject());
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
+        Assert.Same(refusal, error);
     }
 
     /// <summary>

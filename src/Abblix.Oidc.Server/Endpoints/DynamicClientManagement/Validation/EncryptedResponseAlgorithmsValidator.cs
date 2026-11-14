@@ -36,8 +36,9 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// (<see cref="ClientSecretEncryptionKey"/>), so the server must hold the secret itself rather than its hash, and the
 /// client must be confidential ("Symmetric encryption MUST NOT be used by public (non-confidential) Clients"); section
 /// 10.2 derives a key only for AES key wrapping and direct encryption, so a password-based algorithm has none.
-/// Whether a key published at the <c>jwks_uri</c> carries the algorithm is not judged here: the client can change that
-/// document after registration, so it is decided where the JWT is encrypted.
+/// A key set passed by value is judged here, as it changes only by a registration; whether a key published at the
+/// <c>jwks_uri</c> carries the algorithm is not, since the client can change that document after registration, so it is
+/// decided where the JWT is encrypted.
 /// </remarks>
 /// <param name="jwtValidator">Source of the JWE algorithms the server supports (the registered encryptors).</param>
 /// <param name="options">Supplies the content encryption algorithm a client that registered none is sent, which fixes
@@ -111,12 +112,17 @@ public class EncryptedResponseAlgorithmsValidator(
     {
         if (!ClientSecretEncryptionKey.IsSymmetric(algorithm))
         {
-            if (context.Request is { Jwks.Keys.Length: > 0 } or { JwksUri: not null })
+            if (context.Request.JwksUri is not null || Array.Exists(
+                    context.Request.Jwks?.Keys ?? [],
+                    key => key.Usage is (null or PublicKeyUsages.Encryption) &&
+                           ClientEncryptionKeyResolver.Carries(key, algorithm)))
+            {
                 return null;
+            }
 
             return ErrorFactory.InvalidClientMetadata(
                 $"The {name} {algorithm} encrypts to a key the client publishes, but it registers neither " +
-                $"{Parameters.Jwks} nor {Parameters.JwksUri}");
+                $"{Parameters.JwksUri} nor {Parameters.Jwks} holding an encryption key for it");
         }
 
         if (ClientSecretEncryptionKey.SizeInBytes(algorithm, contentEncryption) is null)

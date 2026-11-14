@@ -48,8 +48,8 @@ public class IntrospectionResponseFormatterTests
 
     /// <summary>
     /// A client that registered introspection_encrypted_response_alg and has no key it can be encrypted to under it is
-    /// refused the JWT as unauthorized_client with HTTP 400 (RFC 6749 section 5.2), not invalid_client, since it did
-    /// authenticate; and the plain document is not sent in its place, though the caller accepts it too.
+    /// refused the JWT as unauthorized_client with HTTP 400 (RFC 6749 section 5.2), and the plain document is not
+    /// sent in its place, though the caller accepts it too.
     /// </summary>
     [Theory]
     [InlineData(MediaTypes.TokenIntrospectionJwt)]
@@ -60,7 +60,7 @@ public class IntrospectionResponseFormatterTests
         clientJwtFormatter
             .Setup(f => f.FormatAsync(
                 It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
-            .ReturnsAsync(new OidcError(ErrorCodes.InvalidClient, "no key to encrypt to"));
+            .ReturnsAsync(new OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to"));
         var signingKeys = Mock.Of<IAuthServiceKeysProvider>(provider =>
             provider.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()) ==
             new JsonWebKey[] { JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, null, 2048) }.ToAsyncEnumerable());

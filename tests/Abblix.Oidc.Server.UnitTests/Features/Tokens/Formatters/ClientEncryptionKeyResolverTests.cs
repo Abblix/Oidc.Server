@@ -179,6 +179,26 @@ public class ClientEncryptionKeyResolverTests
     }
 
     /// <summary>
+    /// Of two secrets the server can read, the one expiring last is derived from, one that never expires before any
+    /// other: a client rotating its secret holds the newer one.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task OfSeveralSecrets_TheOneExpiringLastIsUsed(bool newerNeverExpires)
+    {
+        var clientInfo = ClientHolding(
+            new ClientSecret { Value = "the-older-secret", ExpiresAt = Now.AddDays(1) },
+            new ClientSecret { Value = ClientSecret, ExpiresAt = newerNeverExpires ? null : Now.AddDays(30) });
+
+        var key = await Resolver().ResolveAsync(
+            NoProfile, clientInfo, KeyManagement.Aes128KW, ContentEncryption.Aes128CbcHmacSha256);
+
+        Assert.Equal(
+            Convert.FromHexString("EE295520A9FF3D46618AF0828E11935E"), Assert.IsType<OctetJsonWebKey>(key).KeyValue);
+    }
+
+    /// <summary>
     /// Section 10.2 derives a key for AES key wrapping and direct encryption alone, so a password-based algorithm has
     /// none, and neither has dir under a content encryption algorithm whose key length is not known here.
     /// </summary>

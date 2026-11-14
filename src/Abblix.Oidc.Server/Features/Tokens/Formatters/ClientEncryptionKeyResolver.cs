@@ -17,9 +17,9 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// client ahead of it ask.
 /// </summary>
 /// <remarks>
-/// OpenID Connect Core 1.0 section 10.2 names the key by the algorithm's family. An asymmetric algorithm encrypts "to a
-/// public key used for encryption published by the recipient in its JWK Set document"; a symmetric one to the key
-/// "derived from the client_secret value" (<see cref="ClientSecretEncryptionKey"/>), and to nothing else.
+/// OpenID Connect Core 1.0 section 10.2 names the key by the algorithm's family. An asymmetric algorithm encrypts to
+/// what "MUST be a public key used for encryption published by the recipient in its JWK Set document"; a symmetric one
+/// to the key "derived from the client_secret value" (<see cref="ClientSecretEncryptionKey"/>), and to nothing else.
 /// <para>
 /// Public, though nothing outside this library needs it, because the formatter that takes it is a public type with a
 /// public constructor, which the container requires.
@@ -53,7 +53,7 @@ public sealed class ClientEncryptionKeyResolver(
         if (!ClientSecretEncryptionKey.IsSymmetric(keyManagementAlgorithm))
         {
             return await clientKeysProvider.GetEncryptionKeys(client).FirstOrDefaultAsync(key =>
-                (key.Algorithm ?? keyManagementAlgorithm) == keyManagementAlgorithm && Usable(profile, key, keyManagementAlgorithm));
+                Carries(key, keyManagementAlgorithm) && Usable(profile, key, keyManagementAlgorithm));
         }
 
         if (ClientSecretEncryptionKey.SizeInBytes(keyManagementAlgorithm, contentEncryptionAlgorithm) is not { } size ||
@@ -65,6 +65,14 @@ public sealed class ClientEncryptionKeyResolver(
         var derived = ClientSecretEncryptionKey.Derive(secret, keyManagementAlgorithm, size);
         return Usable(profile, derived, keyManagementAlgorithm) ? derived : null;
     }
+
+    /// <summary>
+    /// Whether a key the client publishes carries <paramref name="keyManagementAlgorithm"/>: it declares the algorithm
+    /// or none, and its material carries it out.
+    /// </summary>
+    internal static bool Carries(JsonWebKey key, string keyManagementAlgorithm)
+        => (key.Algorithm ?? keyManagementAlgorithm) == keyManagementAlgorithm &&
+           key.SupportsAlgorithm(keyManagementAlgorithm);
 
     private bool Usable(SecurityProfileRequirements profile, JsonWebKey key, string keyManagementAlgorithm)
         => issuer.EncryptionAlgorithmFor(profile, key, keyManagementAlgorithm) is not null;

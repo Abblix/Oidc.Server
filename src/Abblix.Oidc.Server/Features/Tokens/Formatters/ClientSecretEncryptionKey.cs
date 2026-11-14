@@ -83,8 +83,8 @@ internal static class ClientSecretEncryptionKey
     /// <summary>
     /// The client secret a key is derived from, or null where the client has none the server can read: a public client
     /// is refused outright (section 10.2: "Symmetric encryption MUST NOT be used by public (non-confidential)
-    /// Clients"), and a secret stored only as a hash, or expired, is passed over. Of several, the first in the order the
-    /// client holds them.
+    /// Clients"), and a secret stored only as a hash, or expired, is passed over. Of several, the one expiring last (one
+    /// that never expires before any other), as a client rotating its secret holds the newer one.
     /// </summary>
     /// <param name="client">The client.</param>
     /// <param name="now">The current time, against which a secret's expiry is judged.</param>
@@ -94,7 +94,8 @@ internal static class ClientSecretEncryptionKey
             return null;
 
         return client.ClientSecrets?
-            .FirstOrDefault(secret => !(secret.ExpiresAt < now) && !string.IsNullOrEmpty(secret.Value))?
+            .Where(secret => !(secret.ExpiresAt < now) && !string.IsNullOrEmpty(secret.Value))
+            .MaxBy(secret => secret.ExpiresAt ?? DateTimeOffset.MaxValue)?
             .Value;
     }
 

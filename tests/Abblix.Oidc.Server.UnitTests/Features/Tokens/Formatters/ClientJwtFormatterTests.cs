@@ -564,7 +564,7 @@ public class ClientJwtFormatterTests
         var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, LogoutTokenPolicy(_clientInfo));
 
         Assert.True(result.TryGetFailure(out var refusal));
-        Assert.Equal(ErrorCodes.InvalidClient, refusal.Error);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
     }
 
     /// <summary>

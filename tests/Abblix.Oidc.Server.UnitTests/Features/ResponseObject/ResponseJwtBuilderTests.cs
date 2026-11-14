@@ -197,7 +197,7 @@ public class ResponseJwtBuilderTests
         var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.True(result.TryGetFailure(out var refusal));
-        Assert.Equal(ErrorCodes.InvalidClient, refusal.Error);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
     }
 
     /// <summary>
@@ -286,7 +286,7 @@ public class ResponseJwtBuilderTests
         var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.True(result.TryGetFailure(out var refusal));
-        Assert.Equal(ErrorCodes.InvalidClient, refusal.Error);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
     }
 
     /// <summary>

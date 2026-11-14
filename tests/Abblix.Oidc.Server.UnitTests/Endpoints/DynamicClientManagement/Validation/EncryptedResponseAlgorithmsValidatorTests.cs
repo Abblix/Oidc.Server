@@ -164,17 +164,33 @@ public class EncryptedResponseAlgorithmsValidatorTests
     }
 
     /// <summary>
-    /// A key set passed by value serves an asymmetric algorithm as one at a jwks_uri does, and an empty one serves none.
+    /// A key set passed by value changes only by a registration, so it is judged here: it serves the algorithm when it
+    /// holds an encryption key that carries it, and not when it is empty, holds signing keys alone, or keys of another
+    /// type or algorithm.
     /// </summary>
     [Theory]
-    [InlineData(true, null)]
-    [InlineData(false, ErrorCodes.InvalidClientMetadata)]
-    public async Task ValidateAsync_AnAsymmetricAlgorithmWithAKeySetByValue_IsAccepted(bool withKey, string? expected)
+    [InlineData("rsa encryption", null)]
+    [InlineData("rsa for the algorithm", null)]
+    [InlineData("empty", ErrorCodes.InvalidClientMetadata)]
+    [InlineData("rsa signature", ErrorCodes.InvalidClientMetadata)]
+    [InlineData("ec encryption", ErrorCodes.InvalidClientMetadata)]
+    [InlineData("rsa for another algorithm", ErrorCodes.InvalidClientMetadata)]
+    public async Task ValidateAsync_AnAsymmetricAlgorithmWithAKeySetByValue_IsJudgedByItsKeys(string keys, string? expected)
     {
+        JsonWebKey[] set = keys switch
+        {
+            "rsa encryption" => [new RsaJsonWebKey { Usage = PublicKeyUsages.Encryption }],
+            "rsa for the algorithm" => [new RsaJsonWebKey { Algorithm = SupportedAlg }],
+            "empty" => [],
+            "rsa signature" => [new RsaJsonWebKey { Usage = PublicKeyUsages.Signature }],
+            "ec encryption" => [new EllipticCurveJsonWebKey { Usage = PublicKeyUsages.Encryption }],
+            "rsa for another algorithm" => [new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep }],
+            _ => throw new ArgumentOutOfRangeException(nameof(keys), keys, null),
+        };
         var request = Request() with
         {
             JwksUri = null,
-            Jwks = new JsonWebKeySet(withKey ? [new RsaJsonWebKey { Usage = PublicKeyUsages.Encryption }] : []),
+            Jwks = new JsonWebKeySet(set),
             IdTokenEncryptedResponseAlg = SupportedAlg,
         };
 
