@@ -92,17 +92,24 @@ public class AuthServiceJwtFormatter(
 			return await issuer.IssueAsync(profile, token, signingCredentials);
 		}
 
-		// Derive the key-management alg from the policy, else the key's declared alg (RFC 7517 section 4.4), else the default.
-		var keyEncryptionAlgorithm = encryption.KeyManagementAlgorithm
-			?? encryptingCredentials.Algorithm
-			?? EncryptionAlgorithms.KeyManagement.RsaOaep256;
-
 		return await issuer.IssueAsync(
 			profile,
 			token,
 			signingCredentials,
 			encryptingCredentials,
-			keyEncryptionAlgorithm,
+			KeyEncryptionAlgorithm(encryption, encryptingCredentials),
 			encryption.ContentEncryptionAlgorithm);
 	}
+
+	/// <summary>
+	/// The key-management algorithm a token is encrypted under. A key the policy carries is another party's, so the
+	/// algorithm that party declares for it comes first: RFC 8725 section 3.1 binds each key to one algorithm. Then the
+	/// policy's, which selected a server key able to perform it, else the key's declared alg (RFC 7517 section 4.4),
+	/// else the default.
+	/// </summary>
+	private static string KeyEncryptionAlgorithm(ServiceJwtEncryption encryption, JsonWebKey encryptingCredentials)
+		=> encryption.Key?.Algorithm
+			?? encryption.KeyManagementAlgorithm
+			?? encryptingCredentials.Algorithm
+			?? EncryptionAlgorithms.KeyManagement.RsaOaep256;
 }
