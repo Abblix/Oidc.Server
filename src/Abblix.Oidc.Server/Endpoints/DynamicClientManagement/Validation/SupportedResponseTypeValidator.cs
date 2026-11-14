@@ -37,7 +37,6 @@ public class SupportedResponseTypeValidator(
         .Select(p => p.ResponseType)
         .ToHashSet(StringComparer.Ordinal);
 
-
     /// <inheritdoc />
     protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {

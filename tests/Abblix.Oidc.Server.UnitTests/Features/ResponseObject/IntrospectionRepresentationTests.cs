@@ -22,6 +22,8 @@ public class IntrospectionRepresentationTests
 {
     private const string Jwt = MediaTypes.TokenIntrospectionJwt;
     private const string Json = System.Net.Mime.MediaTypeNames.Application.Json;
+    private const string AnyApplicationType = "application/*";
+    private const string AnyType = "*/*";
 
     /// <summary>
     /// Each row is one Accept header, its media types separated by commas and a weight after a semicolon.
@@ -36,9 +38,15 @@ public class IntrospectionRepresentationTests
     [InlineData(Jwt + ";0.5, " + Json + ";0.5", true, true)]
     [InlineData(Jwt + ";0, " + Json, false, true)]
     [InlineData(Jwt + ";0", false, false)]
-    [InlineData(Jwt + ", */*;0.5", true, true)]
-    [InlineData(Jwt + ";0.4, application/*;0.5", false, true)]
+    [InlineData(Jwt + ", " + AnyType + ";0.5", true, true)]
+    [InlineData(Jwt + ";0.4, " + AnyApplicationType + ";0.5", false, true)]
     [InlineData("text/html", false, false)]
+    // RFC 9110 section 12.5.1: the most specific range matching a type gives its weight, so an explicit zero for JSON
+    // is not lifted by a wildcard, and a wildcard does not outweigh JSON's own lower weight
+    [InlineData(Jwt + ", " + Json + ";0, " + AnyType + ";0.1", true, false)]
+    [InlineData(Jwt + ";0.5, " + Json + ";0.2, " + AnyType, true, true)]
+    [InlineData(Jwt + ";0.5, " + AnyApplicationType + ";0, " + AnyType, true, false)]
+    [InlineData(Jwt + ";0.5, " + AnyApplicationType + ";0.6, " + AnyType + ";0.1", false, true)]
     public void Negotiate_SelectsByWeight(string accept, bool jwt, bool jsonAcceptable)
     {
         var accepted = accept
