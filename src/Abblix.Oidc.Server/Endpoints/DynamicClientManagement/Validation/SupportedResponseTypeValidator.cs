@@ -7,7 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Endpoints.Authorization;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -24,19 +24,19 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// the same way, against the <c>response_modes_supported</c> discovery advertises.
 /// </summary>
 /// <param name="processors">Registered per-response-type processors. Same source of truth
-/// used by <c>FlowTypeValidator</c> at the authorization endpoint and by discovery, so registration and
+/// used by <c>FlowTypeValidator</c> at the authorization endpoint, so registration and
 /// run-time gating cannot drift.</param>
-public class SupportedResponseTypeValidator(IEnumerable<IAuthorizationResponseBuilder> processors)
+/// <param name="metadata">The authorization endpoint metadata discovery publishes, a host's replacement included,
+/// whose <c>response_modes_supported</c> the registered response modes are judged against.</param>
+public class SupportedResponseTypeValidator(
+    IEnumerable<IAuthorizationResponseBuilder> processors,
+    IAuthorizationMetadataProvider metadata)
     : SyncClientRegistrationContextValidator
 {
     private readonly IReadOnlySet<string> _supportedResponseTypeParts = processors
         .Select(p => p.ResponseType)
         .ToHashSet(StringComparer.Ordinal);
 
-    private readonly IReadOnlySet<string> _supportedResponseModes = AuthorizationEndpointMetadataFactory
-        .Create(processors)
-        .ResponseModesSupported
-        .ToHashSet(StringComparer.Ordinal);
 
     /// <inheritdoc />
     protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
@@ -76,8 +76,9 @@ public class SupportedResponseTypeValidator(IEnumerable<IAuthorizationResponseBu
         if (responseModes.Length == 0)
             return ErrorFactory.InvalidClientMetadata("The response modes name no response mode");
 
+        var supported = metadata.ResponseModesSupported.ToHashSet(StringComparer.Ordinal);
         var unsupported = responseModes
-            .Where(mode => !_supportedResponseModes.Contains(mode))
+            .Where(mode => !supported.Contains(mode))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
