@@ -57,6 +57,11 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
     private static readonly RsaJsonWebKey ClientKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 
     /// <summary>
+    /// A symmetric key the clients also publish, which an HS256 request object verifies with.
+    /// </summary>
+    private static readonly OctetJsonWebKey SharedKey = JsonWebKeyFactory.CreateHmac(SigningAlgorithms.HS256);
+
+    /// <summary>
     /// The tenant's key a client encrypts its request objects to.
     /// </summary>
     private static readonly RsaJsonWebKey EncryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
@@ -90,7 +95,7 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
     {
         SecurityProfile = profile,
         TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
-        Jwks = new JsonWebKeySet([ClientKey.Sanitize(includePrivateKeys: false)]),
+        Jwks = new JsonWebKeySet([ClientKey.Sanitize(includePrivateKeys: false), SharedKey]),
         AllowedGrantTypes = [GrantTypes.Ciba],
         AllowedResponseTypes = [],
         BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
@@ -295,6 +300,41 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
         var requestObject = await SignedRequestAsync(PlainClientId, token => token.Payload.Audiences = audiences);
 
         using var response = await PostAsync(PlainClientId, requestObject);
+
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.True(expectedStatus == response.StatusCode, $"{response.StatusCode}: {body}");
+        Assert.Equal(expectedError, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// CIBA Core 1.0 section 7.1.1: "The JWT MUST be secured with an asymmetric signature". An unsigned object and one
+    /// signed HS256 with a key the client publishes are refused, for a client held to no profile and one held to FAPI
+    /// 1.0 Advanced; the same object signed RS256 by the first, or PS256 by either, is accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(PlainClientId, SigningAlgorithms.None, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(PlainClientId, SigningAlgorithms.HS256, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(PlainClientId, SigningAlgorithms.RS256, HttpStatusCode.OK, null)]
+    [InlineData(PlainClientId, SigningAlgorithms.PS256, HttpStatusCode.OK, null)]
+    [InlineData(FapiClientId, SigningAlgorithms.None, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(FapiClientId, SigningAlgorithms.HS256, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(FapiClientId, SigningAlgorithms.PS256, HttpStatusCode.OK, null)]
+    public async Task ARequestObject_MustCarryAnAsymmetricSignature(
+        string clientId, string algorithm, HttpStatusCode expectedStatus, string? expectedError)
+    {
+        var token = RequestToken(clientId);
+        JsonWebKey? key = algorithm switch
+        {
+            SigningAlgorithms.None => null,
+            SigningAlgorithms.HS256 => SharedKey,
+            SigningAlgorithms.RS256 or SigningAlgorithms.PS256 => ClientKey,
+            _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, null),
+        };
+        token.Header.Algorithm = algorithm;
+        token.Header.KeyId = key?.KeyId;
+        var requestObject = await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, key);
+
+        using var response = await PostAsync(clientId, requestObject);
 
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
         Assert.True(expectedStatus == response.StatusCode, $"{response.StatusCode}: {body}");

@@ -8,7 +8,7 @@
 
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using System;
-using System.Text.Json.Nodes;
+using Abblix.Jwt;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
@@ -55,7 +55,7 @@ public class RequestObjectFetchAdapterTests
         _requestObjectFetcher.Verify(
             f => f.FetchAsync(
                 TestTenant.Matched, _namedClient, It.IsAny<AuthorizationRequest>(), RequestJwt,
-                It.IsAny<Func<ClientInfo, string?>?>(), It.IsAny<string[]>(), It.IsAny<Func<JsonObject, string?>>()),
+                It.IsAny<Func<ClientInfo, string?>?>(), It.IsAny<string[]>(), It.IsAny<Func<JsonWebToken, string?>>()),
             Times.Once);
     }
 
@@ -75,7 +75,7 @@ public class RequestObjectFetchAdapterTests
         _requestObjectFetcher.Verify(
             f => f.FetchAsync(
                 TestTenant.Matched, _namedClient, It.Is<AuthorizationRequest>(r => r.ClientId == null), RequestJwt,
-                It.IsAny<Func<ClientInfo, string?>?>(), It.IsAny<string[]>(), It.IsAny<Func<JsonObject, string?>>()),
+                It.IsAny<Func<ClientInfo, string?>?>(), It.IsAny<string[]>(), It.IsAny<Func<JsonWebToken, string?>>()),
             Times.Once);
     }
 
@@ -93,7 +93,7 @@ public class RequestObjectFetchAdapterTests
         _requestObjectFetcher
             .Setup(f => f.FetchAsync(
                 TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<AuthorizationRequest>(), RequestJwt,
-                It.IsAny<Func<ClientInfo, string?>?>(), It.IsAny<string[]>(), It.IsAny<Func<JsonObject, string?>>()))
+                It.IsAny<Func<ClientInfo, string?>?>(), It.IsAny<string[]>(), It.IsAny<Func<JsonWebToken, string?>>()))
             .ReturnsAsync(merged);
 
     /// <summary>
@@ -112,7 +112,7 @@ public class RequestObjectFetchAdapterTests
         _requestObjectFetcher.Verify(
             f => f.FetchAsync(
                 It.IsAny<TenantDefinition>(), It.IsAny<ClientInfo?>(), It.IsAny<AuthorizationRequest>(),
-                It.IsAny<string?>(), It.IsAny<Func<ClientInfo, string?>?>(), It.IsAny<string[]>(), It.IsAny<Func<JsonObject, string?>>()),
+                It.IsAny<string?>(), It.IsAny<Func<ClientInfo, string?>?>(), It.IsAny<string[]>(), It.IsAny<Func<JsonWebToken, string?>>()),
             Times.Never);
     }
 

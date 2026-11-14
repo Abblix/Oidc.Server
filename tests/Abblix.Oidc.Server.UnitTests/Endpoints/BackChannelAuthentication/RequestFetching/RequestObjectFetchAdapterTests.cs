@@ -7,12 +7,12 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
-using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Model;
@@ -52,10 +52,10 @@ public class RequestObjectFetchAdapterTests
                 RequestJwt,
                 It.Is<Func<ClientInfo, string?>>(alg => alg(signingClient) == SigningAlgorithms.PS256),
                 It.Is<string[]>(members => members.Length == 0),
-                It.IsAny<Func<JsonObject, string?>>()))
+                It.IsAny<Func<JsonWebToken, string?>>()))
             .ReturnsAsync(merged);
 
-        var result = await new RequestObjectFetchAdapter(fetcher.Object).FetchAsync(SingleIssuer.Tenant, signingClient, outer);
+        var result = await new RequestObjectFetchAdapter(fetcher.Object, Mock.Of<IJwtAlgorithmsProvider>()).FetchAsync(SingleIssuer.Tenant, signingClient, outer);
 
         Assert.True(result.TryGetSuccess(out var value));
         Assert.Same(merged, value);
@@ -75,10 +75,10 @@ public class RequestObjectFetchAdapterTests
         fetcher
             .Setup(f => f.FetchAsync(
                 TestTenant.Matched, client, outer, RequestJwt,
-                It.IsAny<Func<ClientInfo, string?>>(), It.IsAny<string[]>(), It.IsAny<Func<JsonObject, string?>>()))
+                It.IsAny<Func<ClientInfo, string?>>(), It.IsAny<string[]>(), It.IsAny<Func<JsonWebToken, string?>>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidRequestObject, "The request object is invalid."));
 
-        var result = await new RequestObjectFetchAdapter(fetcher.Object).FetchAsync(SingleIssuer.Tenant, client, outer);
+        var result = await new RequestObjectFetchAdapter(fetcher.Object, Mock.Of<IJwtAlgorithmsProvider>()).FetchAsync(SingleIssuer.Tenant, client, outer);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);

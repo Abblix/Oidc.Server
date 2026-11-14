@@ -52,7 +52,7 @@ public partial class RequestObjectFetcher(
     /// <param name="requiredSigningAlgorithm">An optional selector returning the signing algorithm the
     /// request object must use for a given client, or <c>null</c> to impose no per-client requirement.</param>
     /// <param name="forbiddenMembers">Parameters the request object must not include.</param>
-    /// <param name="whyRefused">The request kind's own rule on the validated claims: why it refuses them, or null.</param>
+    /// <param name="whyRefused">The request kind's own rule on the validated token: why it refuses it, or null.</param>
     /// <returns>
     /// A task representing the asynchronous operation. The task result contains an <see cref="Result{T, AuthError}"/>
     /// which either represents a successfully processed request or an error indicating issues with the JWT validation.
@@ -68,7 +68,7 @@ public partial class RequestObjectFetcher(
         string? requestObject,
         Func<ClientInfo, string?>? requiredSigningAlgorithm,
         string[] forbiddenMembers,
-        Func<JsonObject, string?> whyRefused)
+        Func<JsonWebToken, string?> whyRefused)
         where T : class
     {
         if (!requestObject.HasValue())
@@ -78,7 +78,8 @@ public partial class RequestObjectFetcher(
         return await validationResult.BindAsync<T>(
             async validated =>
             {
-                var (payload, issuer) = validated;
+                var (token, issuer) = validated;
+                var payload = token.Payload.Json;
 
                 if (IssuedByAnotherClient(client, issuer) is { } issuerRefusal)
                     return issuerRefusal;
@@ -88,7 +89,7 @@ public partial class RequestObjectFetcher(
                 if (forbiddenMembers.FirstOrDefault(payload.ContainsKey) is { } included)
                     return InvalidRequestObject($"The request object must not include the {included} parameter");
 
-                if (whyRefused(payload) is { } refusal)
+                if (whyRefused(token) is { } refusal)
                     return InvalidRequestObject(refusal);
 
                 // Strict RFC 9101 section 6.3 processing - only the request object's parameters are used and anything
@@ -117,50 +118,19 @@ public partial class RequestObjectFetcher(
                     return InvalidRequestObject("Unable to bind request object");
 
                 if (strict)
-                    WarnAboutIgnoredOutsideParameters(request, requestObject, payload);
+                {
+                    // In strict mode (RFC 9101 section 6.3) parameters passed outside the request object are silently
+                    // dropped, so they are surfaced for an operator to see a client sending parameters that never
+                    // take effect
+                    var ignored = IgnoredOutsideParameters.Of(request, requestObject, payload);
+                    if (ignored.Count > 0)
+                        LogParametersOutsideRequestObjectIgnored(string.Join(", ", ignored));
+                }
 
                 return updatedRequest;
             }
         );
     }
-
-    /// <summary>
-    /// In strict mode (RFC 9101 section 6.3) parameters passed outside the request object are silently dropped.
-    /// This surfaces them as a warning so an operator can see a client sending parameters that never take
-    /// effect. A parameter is reported only when it is absent from the object, is not the parameter that
-    /// carries the object itself, and differs from the request model's default (so it was actually supplied).
-    /// </summary>
-    private void WarnAboutIgnoredOutsideParameters<T>(T request, string? requestObject, JsonObject payload)
-        where T : class
-    {
-        var outer = JsonSerializer.SerializeToNode(request)?.AsObject();
-        if (outer is null)
-            return;
-
-        var defaults = JsonSerializer.SerializeToNode(Activator.CreateInstance<T>())?.AsObject();
-
-        var ignored = outer
-            .Where(parameter => !payload.ContainsKey(parameter.Key) &&
-                                !CarriesRequestObject(parameter.Value, requestObject) &&
-                                !IsLeftAtDefault(parameter.Key, parameter.Value, defaults))
-            .Select(parameter => parameter.Key)
-            .ToList();
-
-        if (ignored.Count > 0)
-            LogParametersOutsideRequestObjectIgnored(string.Join(", ", ignored));
-    }
-
-    /// <summary>
-    /// Whether this outside parameter is the one carrying the request object, which is expected to be outside it.
-    /// </summary>
-    private static bool CarriesRequestObject(JsonNode? value, string? requestObject)
-        => value?.GetValueKind() == JsonValueKind.String && value.GetValue<string>() == requestObject;
-
-    /// <summary>
-    /// Whether this outside parameter is left at its type default, so the client did not actually supply it.
-    /// </summary>
-    private static bool IsLeftAtDefault(string name, JsonNode? value, JsonObject? defaults)
-        => JsonNode.DeepEquals(value, defaults?[name]);
 
     /// <summary>
     /// Validates the JWT request object to ensure it complies with the required signing algorithm
@@ -179,7 +149,7 @@ public partial class RequestObjectFetcher(
     /// This method uses the configured OIDC options to determine whether the JWT must be signed and validates
     /// it accordingly. It retrieves a validator service from the DI container to perform the validation.
     /// </remarks>
-    private async Task<Result<(JsonObject Payload, ClientInfo Client), OidcError>> ValidateAsync(
+    private async Task<Result<(JsonWebToken Token, ClientInfo Client), OidcError>> ValidateAsync(
         TenantDefinition tenant,
         ClientInfo? namedClient,
         string requestObject,
@@ -209,7 +179,7 @@ public partial class RequestObjectFetcher(
         var result = await tokenValidator.ValidateAsync(
             tenant, namedClient, requestObject, TokenTypePolicy.CheckedByCaller, validationOptions);
 
-        return result.Match<Result<(JsonObject Payload, ClientInfo Client), OidcError>>(
+        return result.Match<Result<(JsonWebToken Token, ClientInfo Client), OidcError>>(
             validJwt =>
             {
                 // A request object carries authorization request parameters; it is not a token. RFC 9101 section 4
@@ -269,7 +239,7 @@ public partial class RequestObjectFetcher(
                     return InvalidRequestObject(profileRefusal);
                 }
 
-                return (validJwt.Token.Payload.Json, validJwt.Client);
+                return (validJwt.Token, validJwt.Client);
             },
             error => InvalidRequestObject(error));
     }

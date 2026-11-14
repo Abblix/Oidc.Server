@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RequestObject;
@@ -23,7 +24,11 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching
 /// </summary>
 /// <param name="requestObjectFetcher">Validates the JWT Request Object and merges its claims into the
 /// outer request model.</param>
-public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetcher) : IBackChannelAuthenticationRequestFetcher
+/// <param name="jwtAlgorithms">The signing algorithms the server advertises for a backchannel authentication
+/// request, which are the asymmetric ones.</param>
+public class RequestObjectFetchAdapter(
+    IRequestObjectFetcher requestObjectFetcher,
+    IJwtAlgorithmsProvider jwtAlgorithms) : IBackChannelAuthenticationRequestFetcher
 {
     /// <summary>
     /// Delegates to the underlying request-object fetcher, passing <c>request.Request</c> as the JWT to
@@ -38,7 +43,8 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
         // forbids no member of its own
         var result = await requestObjectFetcher.FetchAsync(tenant,
             client, request, request.Request, signer => signer.BackChannelAuthenticationRequestSigningAlg, [],
-            claims => SignedAuthenticationRequestClaims.WhyRefused(claims, tenant.Issuer));
+            token => SignedAuthenticationRequestRules.WhyRefused(
+                token, tenant.Issuer, jwtAlgorithms.BackChannelAuthenticationRequestSigningAlgValuesSupported));
 
         // CIBA Core 1.0 section 13: the error is "A single ASCII error code from one present in the list below", which
         // does not hold invalid_request_object, and lists invalid_request for a request that "includes an invalid

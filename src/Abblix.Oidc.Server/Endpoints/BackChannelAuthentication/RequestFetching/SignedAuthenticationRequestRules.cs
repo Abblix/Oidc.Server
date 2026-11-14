@@ -14,11 +14,11 @@ using Abblix.Jwt;
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 
 /// <summary>
-/// The registered claims CIBA Core 1.0 section 7.1.1 requires of a signed authentication request: "The JWT MUST also
-/// contain the following [RFC7519] registered claims", aud, iss, exp, iat, nbf and jti, with "The Audience claim MUST
-/// contain the value of the Issuer Identifier for the OP".
+/// What CIBA Core 1.0 section 7.1.1 requires of a signed authentication request: "The JWT MUST be secured with an
+/// asymmetric signature", and "The JWT MUST also contain the following [RFC7519] registered claims", aud, iss, exp, iat,
+/// nbf and jti, with "The Audience claim MUST contain the value of the Issuer Identifier for the OP".
 /// </summary>
-internal static class SignedAuthenticationRequestClaims
+internal static class SignedAuthenticationRequestRules
 {
     /// <summary>
     /// The claims whose value is a string, which an empty one does not carry.
@@ -33,13 +33,19 @@ internal static class SignedAuthenticationRequestClaims
         [JwtClaimTypes.ExpiresAt, JwtClaimTypes.IssuedAt, JwtClaimTypes.NotBefore];
 
     /// <summary>
-    /// Why the signed authentication request's claims fall short of section 7.1.1, or null when they do not.
+    /// Why the signed authentication request falls short of section 7.1.1, or null when it does not.
     /// </summary>
-    /// <param name="claims">The validated claims of the request object.</param>
+    /// <param name="token">The validated request object.</param>
     /// <param name="issuer">The issuer identifier of the tenant the request reached, compared as it is written, the
     /// way the request object's validator compares it.</param>
-    public static string? WhyRefused(JsonObject claims, Uri issuer)
+    /// <param name="asymmetricAlgorithms">The asymmetric signing algorithms the server advertises for this request,
+    /// the only ones its signature may use.</param>
+    public static string? WhyRefused(JsonWebToken token, Uri issuer, IEnumerable<string> asymmetricAlgorithms)
     {
+        if (!asymmetricAlgorithms.Contains(token.Header.Algorithm, StringComparer.Ordinal))
+            return "The signed authentication request must be secured with an asymmetric signature";
+
+        var claims = token.Payload.Json;
         var missing =
             Strings.FirstOrDefault(claim => claims[claim] is not JsonValue value ||
                                             !value.TryGetValue<string>(out var text) || text.Length == 0) ??
@@ -48,7 +54,7 @@ internal static class SignedAuthenticationRequestClaims
         if (missing != null)
             return $"The signed authentication request must carry the {missing} claim";
 
-        return new JsonWebTokenPayload(claims).Audiences.Contains(issuer.OriginalString, StringComparer.Ordinal)
+        return token.Payload.Audiences.Contains(issuer.OriginalString, StringComparer.Ordinal)
             ? null
             : "The signed authentication request must name the issuer identifier as its audience";
     }
