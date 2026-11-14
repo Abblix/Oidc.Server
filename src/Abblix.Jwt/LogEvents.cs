@@ -28,6 +28,7 @@ internal static class LogEvents
         public const int NoDecryptionKey = Base + 5;
         public const int NoDecryptionKeyOpened = Base + 6;
         public const int UnimportableKey = Base + 7;
+        public const int DecryptionKeysForAnotherAlgorithm = Base + 8;
     }
 
     /// <summary>

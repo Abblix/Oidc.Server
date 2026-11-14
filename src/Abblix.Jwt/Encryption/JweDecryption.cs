@@ -44,12 +44,8 @@ internal sealed class JweDecryption(
         var keyId = envelope.Header.KeyId;
         var algorithm = envelope.Algorithm;
 
-        // RFC 8725 section 3.1: "each key MUST be used with exactly one algorithm, and this MUST be checked when the
-        // cryptographic operation is performed". A key declaring its 'alg' opens only that algorithm, as on the JWS
-        // side; one declaring none stays a candidate, since RFC 7517 section 4.4 makes the member optional.
-        decryptionKeys = decryptionKeys.Where(key =>
-            (key.Algorithm == null || key.Algorithm == algorithm) &&
-            (!keyId.HasValue() || string.Equals(key.KeyId, keyId, StringComparison.Ordinal)));
+        if (keyId.HasValue())
+            decryptionKeys = decryptionKeys.Where(key => string.Equals(key.KeyId, keyId, StringComparison.Ordinal));
 
         // Resolve the content decryptor by 'enc'. The registered set is the allow-list of content
         // encryption algorithms for incoming JWE - an unregistered 'enc' yields no decryptor and is
@@ -60,22 +56,40 @@ internal sealed class JweDecryption(
             return new JwtValidationError(JwtError.InvalidToken, "Unsupported 'enc' content encryption algorithm in JWE");
 
         var keysTried = 0;
+        var keysForAnotherAlgorithm = 0;
         await foreach (var key in decryptionKeys.WithCancellation(cancellationToken))
         {
+            // RFC 8725 section 3.1: "each key MUST be used with exactly one algorithm, and this MUST be checked when
+            // the cryptographic operation is performed". A key declaring its 'alg' opens only that algorithm, as on
+            // the JWS side; one declaring none stays a candidate, since RFC 7517 section 4.4 makes it optional.
+            if (key.Algorithm != null && key.Algorithm != algorithm)
+            {
+                keysForAnotherAlgorithm++;
+                continue;
+            }
+
             keysTried++;
 
             if (await keyAttempt.TryOpenAsync(envelope, contentDecryptor, key, cancellationToken) is { } plaintext)
                 return plaintext;
         }
 
-        // Logged once, after every key, so the record says nothing about which key failed or why: the sender's
-        // answer stays the same whatever the cause, as RFC 7516 section 11.5 requires.
+        if (keysTried == 0 && keysForAnotherAlgorithm > 0)
+        {
+            log.KeysForAnotherAlgorithm(envelope, keysForAnotherAlgorithm);
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                "No decryption key is declared for the JWE's key management algorithm");
+        }
+
         if (keysTried == 0)
         {
             log.NoDecryptionKey(envelope);
             return new JwtValidationError(JwtError.InvalidToken, "No decryption keys found");
         }
 
+        // Logged once, after every key, so the record says nothing about which key failed or why: the sender's
+        // answer stays the same whatever the cause, as RFC 7516 section 11.5 requires.
         log.NoKeyOpened(envelope, keysTried);
         return new JwtValidationError(JwtError.InvalidToken, "Failed to decrypt JWE with any available key");
     }
