@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Security.Cryptography.X509Certificates;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -52,9 +53,9 @@ public partial class TlsClientAuthenticator(
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the certificate and client ID to authenticate.</param>
     /// <returns>
-    /// A task that returns the authenticated <see cref="ClientInfo"/>, or why it is not one: no certificate presented,
-    /// or one presented whose client is not found, does not use this method, or whose public key matches no key in
-    /// the client's JWKS.
+    /// A task that returns the authenticated <see cref="ClientInfo"/>, or why it is not one: no certificate presented
+    /// as a credential (none at all, no client_id, or a client_id naming no client registered for this method), or one
+    /// whose public key matches no key in the client's JWKS.
     /// </returns>
     /// <remarks>
     /// This method implements RFC 8705 self_signed_tls_client_auth by:
@@ -67,27 +68,8 @@ public partial class TlsClientAuthenticator(
     /// </remarks>
     public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
-        // Require client certificate and client_id
-        var certificate = request.ClientCertificate;
-        if (certificate == null)
+        if (await FindClientAuthenticatingByCertificateAsync(tenant, request) is not (var client, var certificate))
             return ClientAuthenticationFailures.NoCredential;
-
-        var clientId = request.ClientId;
-        if (!clientId.NotNullOrWhiteSpace())
-            return ClientAuthenticationFailures.InvalidCredential;
-
-        var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        if (client == null)
-        {
-            LogClientNotFound(clientId);
-            return ClientAuthenticationFailures.InvalidCredential;
-        }
-
-        if (!ClientAuthenticationMethods.SelfSignedTlsClientAuth.Equals(client.TokenEndpointAuthMethod, StringComparison.Ordinal))
-        {
-            // We currently only support self-signed mTLS in this authenticator
-            return ClientAuthenticationFailures.InvalidCredential;
-        }
 
         // Compute certificate public key and compare against client's JWKS signing keys
         var certJwk = certificate.ToJsonWebKey();
@@ -99,6 +81,41 @@ public partial class TlsClientAuthenticator(
 
         LogAuthenticated(client.ClientId);
         return client;
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+        => await FindClientAuthenticatingByCertificateAsync(tenant, request) is not null
+            ? [nameof(ClientRequest.ClientCertificate)]
+            : [];
+
+    /// <summary>
+    /// The client the request's TLS certificate is a credential of, with the certificate: the client its client_id
+    /// names, registered for self_signed_tls_client_auth. RFC 8705 section 2 has the requirement of mutual TLS for
+    /// client authentication "determined by the authorization server, based on policy or configuration for the given
+    /// client", and section 4 has mutual-TLS client authentication and certificate-bound tokens "used independently of
+    /// each other", so the certificate of a client registered for another method binds its tokens and is not a second
+    /// credential beside that method. Section 2 also has the client include client_id in every request using mutual-TLS
+    /// client authentication, so without one the certificate authenticates nobody.
+    /// </summary>
+    private async Task<(ClientInfo Client, X509Certificate2 Certificate)?> FindClientAuthenticatingByCertificateAsync(
+        TenantDefinition tenant, ClientRequest request)
+    {
+        if (request is not { ClientCertificate: { } certificate, ClientId: var clientId } || !clientId.NotNullOrWhiteSpace())
+            return null;
+
+        var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
+        if (client == null)
+        {
+            LogClientNotFound(clientId);
+            return null;
+        }
+
+        // Only the self-signed variant is served here; tls_client_auth has its own authenticator
+        if (!ClientAuthenticationMethods.SelfSignedTlsClientAuth.Equals(client.TokenEndpointAuthMethod, StringComparison.Ordinal))
+            return null;
+
+        return (client, certificate);
     }
 
     /// <summary>

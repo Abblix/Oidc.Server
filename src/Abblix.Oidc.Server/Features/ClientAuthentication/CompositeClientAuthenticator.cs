@@ -45,11 +45,18 @@ internal class CompositeClientAuthenticator(params IClientAuthenticator[] client
 	/// <param name="tenant">The tenant the request is served at, handed to each authenticator.</param>
 	/// <param name="request">The <see cref="ClientRequest"/> to authenticate. This object contains details
 	/// about the request that may be used by authenticators to determine the client's identity.</param>
-	/// <returns>The client the first authenticator to succeed proves; otherwise the refusal of the first one a
-	/// credential was presented to, or, where none was presented to any, <see cref="ClientAuthenticationFailures.NoCredential"/>.
+	/// <returns><see cref="ClientAuthenticationFailures.MoreThanOneMethod"/> for a request presenting credentials in
+	/// more than one place, before any authenticator checks one; otherwise the client the first authenticator to
+	/// succeed proves; otherwise the refusal of the first one a credential was presented to, or, where none was
+	/// presented to any, <see cref="ClientAuthenticationFailures.NoCredential"/>.
 	/// </returns>
 	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
+		// RFC 6749 section 2.3: "The client MUST NOT use more than one authentication method in each request". Asked
+		// before any authenticator runs, so a request refused for it has no secret compared and no assertion spent
+		if ((await FindPresentedCredentialsAsync(tenant, request)).Count() > 1)
+			return ClientAuthenticationFailures.MoreThanOneMethod;
+
 		OidcError? refused = null;
 		foreach (var clientAuthenticator in clientAuthenticators)
 		{
@@ -62,5 +69,18 @@ internal class CompositeClientAuthenticator(params IClientAuthenticator[] client
 		}
 
 		return refused ?? ClientAuthenticationFailures.NoCredential;
+	}
+
+	/// <summary>
+	/// Every place a credential is presented in that any authenticator reads, each named once, so a credential two
+	/// authenticators read counts as one.
+	/// </summary>
+	public async Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+	{
+		var presented = new HashSet<string>(StringComparer.Ordinal);
+		foreach (var clientAuthenticator in clientAuthenticators)
+			presented.UnionWith(await clientAuthenticator.FindPresentedCredentialsAsync(tenant, request));
+
+		return presented;
 	}
 }

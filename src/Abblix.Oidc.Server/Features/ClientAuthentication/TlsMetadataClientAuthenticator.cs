@@ -54,8 +54,9 @@ public partial class TlsMetadataClientAuthenticator(
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the certificate and client ID to authenticate.</param>
     /// <returns>
-    /// A task that returns the authenticated <see cref="ClientInfo"/>, or why it is not one: no certificate presented,
-    /// or one presented whose client is not found, does not use this method, or whose certificate does not match.
+    /// A task that returns the authenticated <see cref="ClientInfo"/>, or why it is not one: no certificate presented
+    /// as a credential (none at all, no client_id, or a client_id naming no client registered for this method), or one
+    /// that does not match the client's metadata.
     /// </returns>
     /// <remarks>
     /// This method implements RFC 8705 tls_client_auth by:
@@ -67,20 +68,8 @@ public partial class TlsMetadataClientAuthenticator(
     /// </remarks>
     public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
-        var certificate = request.ClientCertificate;
-        if (certificate == null)
+        if (await FindClientAuthenticatingByCertificateAsync(tenant, request) is not (var client, var certificate))
             return ClientAuthenticationFailures.NoCredential;
-
-        var clientId = request.ClientId;
-        if (!clientId.NotNullOrWhiteSpace())
-            return ClientAuthenticationFailures.InvalidCredential;
-
-        var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        if (client == null)
-            return ClientAuthenticationFailures.InvalidCredential;
-
-        if (client.TokenEndpointAuthMethod != ClientAuthenticationMethods.TlsClientAuth)
-            return ClientAuthenticationFailures.InvalidCredential;
 
         var options = client.TlsClientAuth;
         if (options == null)
@@ -97,6 +86,34 @@ public partial class TlsMetadataClientAuthenticator(
 
         LogAuthenticated(client.ClientId);
         return client;
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+        => await FindClientAuthenticatingByCertificateAsync(tenant, request) is not null
+            ? [nameof(ClientRequest.ClientCertificate)]
+            : [];
+
+    /// <summary>
+    /// The client the request's TLS certificate is a credential of, with the certificate: the client its client_id
+    /// names, registered for tls_client_auth. RFC 8705 section 2 has the requirement of mutual TLS for client
+    /// authentication "determined by the authorization server, based on policy or configuration for the given client",
+    /// and section 4 has mutual-TLS client authentication and certificate-bound tokens "used independently of each
+    /// other", so the certificate of a client registered for another method binds its tokens and is not a second
+    /// credential beside that method. Section 2 also has the client include client_id in every request using mutual-TLS
+    /// client authentication, so without one the certificate authenticates nobody.
+    /// </summary>
+    private async Task<(ClientInfo Client, X509Certificate2 Certificate)?> FindClientAuthenticatingByCertificateAsync(
+        TenantDefinition tenant, ClientRequest request)
+    {
+        if (request is not { ClientCertificate: { } certificate, ClientId: var clientId } || !clientId.NotNullOrWhiteSpace())
+            return null;
+
+        var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
+        if (client is not { TokenEndpointAuthMethod: ClientAuthenticationMethods.TlsClientAuth })
+            return null;
+
+        return (client, certificate);
     }
 
     /// <summary>

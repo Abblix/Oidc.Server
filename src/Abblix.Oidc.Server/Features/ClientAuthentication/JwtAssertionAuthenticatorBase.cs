@@ -220,8 +220,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// presented and refused.</returns>
     public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
-        // The assertion is the credential; its type only says how to read it
-        if (!request.ClientAssertion.HasValue())
+        if (!IsPresented(request))
             return ClientAuthenticationFailures.NoCredential;
 
         if (!TryGetJwtBearerAssertion(request, out var assertion))
@@ -268,6 +267,15 @@ public abstract partial class JwtAssertionAuthenticatorBase(
 
         return clientInfo;
     }
+
+    /// <inheritdoc />
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+        => Task.FromResult<IEnumerable<string>>(IsPresented(request) ? [nameof(ClientRequest.ClientAssertion)] : []);
+
+    /// <summary>
+    /// The assertion is the credential; its type only says how to read it.
+    /// </summary>
+    private static bool IsPresented(ClientRequest request) => request.ClientAssertion.HasValue();
 
     /// <summary>
     /// Finds the JWT bearer assertion the request carries, logging a request that names another assertion type

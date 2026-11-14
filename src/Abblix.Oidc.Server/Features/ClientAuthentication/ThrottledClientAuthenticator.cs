@@ -46,6 +46,10 @@ internal sealed partial class ThrottledClientAuthenticator(
     public IEnumerable<string> ClientAuthenticationMethodsSupported => inner.ClientAuthenticationMethodsSupported;
 
     /// <inheritdoc />
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+        => inner.FindPresentedCredentialsAsync(tenant, request);
+
+    /// <inheritdoc />
     public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
         var source = budget.Source;
