@@ -179,9 +179,14 @@ public class UserInfoRequestValidator(
 	{
 		if (!grant.Context.Scope.Contains(Scopes.OpenId, StringComparer.Ordinal))
 		{
+			// RFC 6750 section 3.1: insufficient_scope "MAY include the "scope" attribute with the scope necessary to
+			// access the protected resource"
 			return new OidcError(
 				ErrorCodes.InsufficientScope,
-				$"The access token was not granted the '{Scopes.OpenId}' scope");
+				$"The access token was not granted the '{Scopes.OpenId}' scope")
+			{
+				RequiredScope = Scopes.OpenId,
+			};
 		}
 
 		return new ValidUserInfoRequest(userInfoRequest, grant.AuthSession, grant.Context, clientInfo);

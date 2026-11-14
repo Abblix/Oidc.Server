@@ -34,4 +34,17 @@ public record OidcError(string Error, string ErrorDescription)
     /// that profile refuses DPoP, null where the client is not known.
     /// </summary>
     public IReadOnlyCollection<string>? DPoPAlgorithmsAdmitted { get; init; }
+
+    /// <summary>
+    /// The scheme the refused request presented its access token with, whose challenge carries the error where the
+    /// response advertises both DPoP and Bearer (RFC 9449 section 7.2); null where it could not be established, and
+    /// then both challenges carry it.
+    /// </summary>
+    public AccessTokenScheme? PresentedScheme { get; init; }
+
+    /// <summary>
+    /// The scope the request needs, which a challenge answering an <c>insufficient_scope</c> refusal names in its
+    /// <c>scope</c> attribute (RFC 6750 section 3.1); null where the refusal names none.
+    /// </summary>
+    public string? RequiredScope { get; init; }
 }
