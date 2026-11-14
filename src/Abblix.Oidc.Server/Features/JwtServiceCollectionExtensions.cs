@@ -98,6 +98,7 @@ public static class JwtServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IClientJwtFormatter, ClientJwtFormatter>();
         services.TryAddSingleton<IResponseJwtBuilder, ResponseJwtBuilder>();
+        services.TryAddSingleton<IIntrospectionResponseJwtBuilder, IntrospectionResponseJwtBuilder>();
         return services;
     }
 }

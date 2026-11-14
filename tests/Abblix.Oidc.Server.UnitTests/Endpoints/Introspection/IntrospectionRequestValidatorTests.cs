@@ -80,6 +80,7 @@ public class IntrospectionRequestValidatorTests
         return new ClientRequest
         {
             ClientId = clientId,
+            ClientSecret = "secret",
         };
     }
 
@@ -174,8 +175,47 @@ public class IntrospectionRequestValidatorTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
+        Assert.IsType<UnauthenticatedCallerError>(error);
         Assert.Equal(ErrorCodes.InvalidClient, error.Error);
         _jwtValidator.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// RFC 9701 section 5: the server "MUST refuse to serve introspection requests that don't authenticate the caller
+    /// and return an HTTP status code 400". A request carrying a client_id and no credential is refused as such before
+    /// anything is authenticated or read.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithNoCredential_IsAnUnauthenticatedCaller()
+    {
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant,
+            CreateIntrospectionRequest(),
+            new ClientRequest { ClientId = TestConstants.DefaultClientId });
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsType<UnauthenticatedCallerError>(error);
+        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
+        _clientAuthenticator.VerifyNoOtherCalls();
+        _jwtValidator.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// RFC 7662 section 2.3: a caller whose credential "is invalid" is answered 401, as RFC 6749 section 5.2 has it, so
+    /// a failed credential is a plain invalid_client and not the unauthenticated caller of RFC 9701.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithAFailedCredential_IsAPlainInvalidClient()
+    {
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(null));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateIntrospectionRequest(), CreateClientRequest());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsNotType<UnauthenticatedCallerError>(error);
+        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
     }
 
     /// <summary>

@@ -53,14 +53,15 @@ public sealed record ClientJwtEncryption(
 		RequireRegisteredAlgorithm: false);
 
 	/// <summary>
-	/// Policy for a signed/encrypted token introspection response (RFC 9701): encrypts whenever the client published
-	/// encryption keys, using its <c>introspection_encrypted_response_*</c> metadata.
+	/// Policy for a signed/encrypted token introspection response (RFC 9701): encrypts only when the client registered
+	/// <c>introspection_encrypted_response_alg</c>, since RFC 9701 section 6 has "The default, if omitted, is that no
+	/// encryption is performed", whatever keys the client publishes.
 	/// </summary>
 	public static ClientJwtEncryption ForIntrospection(ClientInfo clientInfo, OidcOptions options) => new(
 		clientInfo.IntrospectionEncryptedResponseAlgorithm,
 		clientInfo.IntrospectionEncryptedResponseEncryption,
 		options.DefaultContentEncryptionAlgorithm,
-		RequireRegisteredAlgorithm: false);
+		RequireRegisteredAlgorithm: true);
 
 	/// <summary>
 	/// Policy for a JARM authorization response JWT: encrypts only when the client registered

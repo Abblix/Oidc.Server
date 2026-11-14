@@ -9,14 +9,13 @@
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Oidc.Server.Features.ResponseObject;
+using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
 using IntrospectionRequest = Abblix.Oidc.Server.Model.IntrospectionRequest;
 
 using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
@@ -24,23 +23,37 @@ using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>
-/// Formats introspection results as <see cref="IResult"/>: a plain RFC 7662 JSON document, or, when the client
-/// registered <c>introspection_signed_response_alg</c> and requests it via
-/// <c>Accept: application/token-introspection+jwt</c>, a signed/encrypted JWT (RFC 9701); the OAuth error otherwise.
+/// Formats introspection results as <see cref="IResult"/>: a plain RFC 7662 JSON document, or, when the caller
+/// requests it via <c>Accept: application/token-introspection+jwt</c>, a signed/encrypted JWT (RFC 9701); the OAuth
+/// error otherwise, with the HTTP 400 RFC 9701 section 5 has for a caller that authenticated with nothing.
 /// </summary>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+/// <param name="jwtBuilder">Builds the RFC 9701 JWT.</param>
+/// <param name="httpContextAccessor">Provides the current request so the formatter can honor the <c>Accept</c>
+/// header negotiation defined by RFC 9701 section 4.</param>
 public class IntrospectionResponseFormatter(
     ITenantAccessor tenantAccessor,
-    IClientJwtFormatter clientJwtFormatter,
-    TimeProvider clock,
-    IOptionsSnapshot<OidcOptions> options,
+    IIntrospectionResponseJwtBuilder jwtBuilder,
     IHttpContextAccessor httpContextAccessor) : IIntrospectionResponseFormatter
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(IntrospectionRequest request, Result<IntrospectionSuccess, OidcError> response)
         => response.MatchAsync(
             onSuccess: FormatSuccessAsync,
-            onFailure: error => Task.FromResult(
-                error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().Issuer.OriginalString)));
+            onFailure: error => Task.FromResult(FormatFailure(error)));
+
+    private IResult FormatFailure(OidcError error) => error switch
+    {
+        // RFC 9701 section 5: "return an HTTP status code 400", without the Basic challenge of a failed credential
+        UnauthenticatedCallerError => Results.Json(
+            new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status400BadRequest),
+
+        // RFC 9110 section 15.5.7: the JWT the Accept header names is a representation this server cannot produce
+        NotAcceptableError => Results.Json(
+            new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status406NotAcceptable),
+
+        _ => error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().Issuer.OriginalString),
+    };
 
     private async Task<IResult> FormatSuccessAsync(IntrospectionSuccess success)
     {
@@ -49,42 +62,15 @@ public class IntrospectionResponseFormatter(
         // RFC 7662 section 2.2: active is the only REQUIRED member and is a JSON boolean.
         introspectionResponse.SetProperty(IntrospectionSuccess.Parameters.Active, JsonValue.Create(success.Active));
 
-        var clientInfo = success.ClientInfo;
-
-        // RFC 9701 section 4: a JWT response is returned only when the client registered a signing algorithm AND requested
-        // the JWT media type via Accept; otherwise the plain RFC 7662 JSON document is returned.
-        if (clientInfo.IntrospectionSignedResponseAlgorithm == SigningAlgorithms.None || !AcceptsTokenIntrospectionJwt())
+        // RFC 9701 section 4: the caller requests a JWT response with the Accept header; otherwise the plain RFC 7662
+        // JSON document is returned
+        if (!AcceptsTokenIntrospectionJwt())
             return Results.Json(introspectionResponse);
 
-        var now = clock.GetUtcNow();
-        var token = new JsonWebToken
-        {
-            Header =
-            {
-                Type = JsonWebTokenTypes.TokenIntrospection,
-                Algorithm = clientInfo.IntrospectionSignedResponseAlgorithm,
-            },
-            Payload =
-            {
-                IssuedAt = now,
-                Issuer = tenantAccessor.CurrentTenant().Issuer.OriginalString,
-                Audiences = [clientInfo.ClientId],
-
-                // RFC 9701 section 5: the introspection response object is carried as the token_introspection claim. The
-                // object is cloned because it is otherwise still parented to the introspected token's payload.
-                [IanaClaimTypes.TokenIntrospection] = introspectionResponse.DeepClone(),
-            },
-        };
-
-        // The client's key set was judged against its profile where the client was resolved in this request, so a refusal here
-        // is a key set changed in between
-        var jwt = (await clientJwtFormatter.FormatAsync(
-            tenantAccessor.CurrentTenant(),
-            token,
-            clientInfo,
-            ClientJwtEncryption.ForIntrospection(clientInfo, options.Value))).GetSuccess();
-
-        return Results.Content(jwt, MediaTypes.TokenIntrospectionJwt);
+        var jwt = await jwtBuilder.BuildAsync(tenantAccessor.CurrentTenant(), success.ClientInfo, introspectionResponse);
+        return jwt.Match(
+            onSuccess: content => Results.Content(content, MediaTypes.TokenIntrospectionJwt),
+            onFailure: FormatFailure);
     }
 
     private bool AcceptsTokenIntrospectionJwt()
@@ -93,8 +79,10 @@ public class IntrospectionResponseFormatter(
         if (request == null)
             return false;
 
+        // A quality of zero marks the media type "not acceptable" (RFC 9110 section 12.4.2)
         return request.GetTypedHeaders().Accept.Any(
             mediaType => mediaType.MediaType.HasValue &&
+                         mediaType.Quality is not 0 &&
                          string.Equals(
                              mediaType.MediaType.Value,
                              MediaTypes.TokenIntrospectionJwt,
