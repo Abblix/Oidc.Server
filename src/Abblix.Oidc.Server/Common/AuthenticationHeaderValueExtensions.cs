@@ -26,4 +26,18 @@ internal static class AuthenticationHeaderValueExtensions
     /// <param name="scheme">The scheme to look for.</param>
     public static bool HasScheme(this AuthenticationHeaderValue? header, string scheme)
         => string.Equals(header?.Scheme, scheme, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The credentials of a request that carries the Authorization field on exactly one line.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9110 section 11.6.2 defines the field as <c>Authorization = credentials</c>, which is not a list, so
+    /// section 5.3 forbids a sender to generate it on more than one line, and lines that were sent cannot be joined
+    /// into one value. More than one line therefore names no credentials here; the endpoint refuses such a request
+    /// on its own terms.
+    /// </remarks>
+    /// <param name="lines">The field lines as received, or null when the request carries none.</param>
+    /// <returns>The parsed credentials, or null for no line, more than one line, or a line that does not parse.</returns>
+    public static AuthenticationHeaderValue? FromSingleLine(IReadOnlyList<string>? lines)
+        => lines is [var line] && AuthenticationHeaderValue.TryParse(line, out var header) ? header : null;
 }

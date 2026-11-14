@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -44,5 +45,33 @@ public class RequestUriFetcherTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// A request object a client serves as a file may end in a line break, which is not part of the token: it is
+    /// passed on without it.
+    /// </summary>
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public async Task AFetchedRequestObjectEndingInALineBreak_IsPassedOnWithoutIt(string ending)
+    {
+        var requestUri = new Uri("https://client.example.com/request.jwt");
+        var clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        clients
+            .Setup(provider => provider.TryFindClientAsync(It.IsAny<TenantDefinition>(), "client"))
+            .ReturnsAsync(new ClientInfo("client") { RequestUris = [requestUri] });
+        var http = new Mock<ISecureHttpFetcher>(MockBehavior.Strict);
+        http
+            .Setup(fetcher => fetcher.FetchAsync<string>(requestUri, false))
+            .ReturnsAsync("header.payload.signature" + ending);
+        var fetcher = new RequestUriFetcher(NullLogger<RequestUriFetcher>.Instance, clients.Object, http.Object);
+
+        var result = await fetcher.FetchAsync(
+            SingleIssuer.Tenant,
+            new AuthorizationRequest { ClientId = "client", RequestUri = requestUri });
+
+        Assert.True(result.TryGetSuccess(out var request));
+        Assert.Equal("header.payload.signature", request.Request);
     }
 }

@@ -36,6 +36,15 @@ internal sealed class LocalKeyEncryptor(IServiceProvider serviceProvider)
                 "in process, and wrapping is never routed to an external custodian; failing closed.");
         }
 
+        // RFC 8725 section 3.1: "each key MUST be used with exactly one algorithm, and this MUST be checked when the
+        // cryptographic operation is performed", as the decrypting side checks it too
+        if (key.Algorithm != null && key.Algorithm != algorithm)
+        {
+            throw new InvalidOperationException(
+                $"Algorithm mismatch: the JWE is to be encrypted with '{algorithm}' but the encryption key " +
+                $"(kid={key.KeyId}) specifies '{key.Algorithm}'.");
+        }
+
         return key switch
         {
             RsaJsonWebKey rsaKey => EncryptBy(rsaKey),

@@ -40,7 +40,7 @@ public class AuthorizationCodeBuilder(
     }
 
     /// <inheritdoc />
-    public async Task BuildResponseAsync(
+    public async Task<AuthorizationError?> BuildResponseAsync(
         TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
@@ -59,5 +59,7 @@ public class AuthorizationCodeBuilder(
             await reuseDetector.RecordAsync(tenant, context.ClientId, AuthorizationRequest.Parameters.CodeChallenge, codeChallenge);
         if (context.Nonce is { } nonce)
             await reuseDetector.RecordAsync(tenant, context.ClientId, AuthorizationRequest.Parameters.Nonce, nonce);
+
+        return null;
     }
 }

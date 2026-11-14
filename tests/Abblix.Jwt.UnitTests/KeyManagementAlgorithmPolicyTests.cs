@@ -101,6 +101,7 @@ public class KeyManagementAlgorithmPolicyTests
             Encoding.UTF8.GetBytes(inner),
             EncryptionKey,
             tokenType: null,
+            contentType: null,
             EncryptionAlgorithms.KeyManagement.RsaOaep256,
             EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512,
             TestContext.Current.CancellationToken);

@@ -59,7 +59,14 @@ public class PushedAuthorizationHandler(
     {
         // RFC 9126 section 2.1: "The authorization server MUST process the request as follows: 1. Authenticate the client
         // in the same way as at the token endpoint". Done before the request object is read, so the object is held to
-        // the authenticated client's security profile before any layer of it is decrypted
+        // the authenticated client's security profile before any layer of it is decrypted. Section 2.3 answers errors as
+        // RFC 6749 section 5.2 does, which names a request that "includes multiple credentials, utilizes more than one
+        // mechanism for authenticating the client" an invalid_request, decided before the authenticator
+        if (clientRequest.HasMoreThanOneAuthorizationHeader)
+            return new AuthorizationError(
+                authorizationRequest,
+                ErrorFactory.InvalidRequest(Common.Validation.ErrorFactory.MoreThanOneAuthorizationHeader.ErrorDescription));
+
         var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
         if (clientInfo == null)
             return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidClient("The client is not authorized"));

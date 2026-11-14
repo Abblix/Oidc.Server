@@ -71,7 +71,10 @@ public sealed class IssuerSpellingTests : IDisposable
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
             SingleIssuer.HostCatalog,
-            new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>()),
+            new AudienceKeyResolver(
+                Mock.Of<IResourceManager>(),
+                Mock.Of<IResourceKeysProvider>(),
+                new ProfiledJwtIssuer(Mock.Of<IJsonWebTokenCreator>())),
             ScopeClaims.Of(),
             NullLogger<AccessTokenService>.Instance);
 

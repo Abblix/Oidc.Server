@@ -42,6 +42,16 @@ public class JsonWebTokenHeader(JsonObject json)
     }
 
     /// <summary>
+    /// The media type of what the token secures (RFC 7515 section 4.1.10, RFC 7516 section 4.1.12): <c>JWT</c> for a
+    /// Nested JWT (RFC 7519 section 5.2).
+    /// </summary>
+    public string? ContentType
+    {
+        get => Json.GetProperty<string>(JwtClaimTypes.ContentType);
+        set => Json.SetProperty(JwtClaimTypes.ContentType, value);
+    }
+
+    /// <summary>
     /// The algorithm used to sign the JWT, indicating how the token is secured.
     /// </summary>
     /// <remarks>

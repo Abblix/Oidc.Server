@@ -20,13 +20,14 @@ internal static class JsonWebKeySubtypes
     /// <see cref="EllipticCurveJsonWebKey"/> or <see cref="OctetJsonWebKey"/>.
     /// </summary>
     /// <exception cref="JsonException">The key type is not one of the three.</exception>
-    public static JsonWebKey? Deserialize(string keyType, string json, JsonSerializerOptions options) => keyType switch
-    {
-        JsonWebKeyTypes.Rsa => JsonSerializer.Deserialize<RsaJsonWebKey>(json, options),
-        JsonWebKeyTypes.EllipticCurve => JsonSerializer.Deserialize<EllipticCurveJsonWebKey>(json, options),
-        JsonWebKeyTypes.Octet => JsonSerializer.Deserialize<OctetJsonWebKey>(json, options),
-        _ => throw new JsonException($"Unknown key type: {keyType}"),
-    };
+    public static JsonWebKey? Deserialize(string keyType, JsonElement json, JsonSerializerOptions options)
+        => keyType switch
+        {
+            JsonWebKeyTypes.Rsa => json.Deserialize<RsaJsonWebKey>(options),
+            JsonWebKeyTypes.EllipticCurve => json.Deserialize<EllipticCurveJsonWebKey>(options),
+            JsonWebKeyTypes.Octet => json.Deserialize<OctetJsonWebKey>(options),
+            _ => throw new JsonException($"Unknown key type: {keyType}"),
+        };
 
     /// <summary>Writes <paramref name="value"/> in its concrete subtype's shape.</summary>
     public static void Serialize(Utf8JsonWriter writer, JsonWebKey value, JsonSerializerOptions options)

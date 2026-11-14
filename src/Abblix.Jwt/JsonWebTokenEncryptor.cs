@@ -23,11 +23,18 @@ internal sealed class JsonWebTokenEncryptor(JweEncryption encryption, JweDecrypt
         byte[] plaintext,
         JsonWebKey encryptionKey,
         string? tokenType,
+        string? contentType,
         string keyEncryptionAlgorithm,
         string contentEncryptionAlgorithm,
         CancellationToken cancellationToken = default)
         => encryption.EncryptAsync(
-            plaintext, encryptionKey, tokenType, keyEncryptionAlgorithm, contentEncryptionAlgorithm, cancellationToken);
+            plaintext,
+            encryptionKey,
+            tokenType,
+            contentType,
+            keyEncryptionAlgorithm,
+            contentEncryptionAlgorithm,
+            cancellationToken);
 
     /// <inheritdoc />
     public Task<Result<byte[], JwtValidationError>> DecryptAsync(

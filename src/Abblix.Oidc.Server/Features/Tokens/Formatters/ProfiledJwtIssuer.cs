@@ -74,4 +74,25 @@ public sealed class ProfiledJwtIssuer(IJsonWebTokenCreator creator)
             ? creator.IssueAsync(token, signingKey, encryptionKey, keyManagement)
             : creator.IssueAsync(token, signingKey, encryptionKey, keyManagement, contentEncryptionAlgorithm);
     }
+
+    /// <summary>
+    /// The key management algorithm a token would be encrypted to <paramref name="key"/> under, a key another party
+    /// publishes, or null when it cannot be: the algorithm the key declares, else <paramref name="defaultAlgorithm"/>,
+    /// provided this server performs it, the key's material can carry it out, and <paramref name="profile"/> admits
+    /// it. RFC 8725 section 3.1 binds a key to the algorithm it declares, so a key published for signing, for an
+    /// algorithm the host did not register, or of a type the default algorithm does not fit is passed over, as is one
+    /// the profile forbids.
+    /// </summary>
+    /// <param name="profile">The controls in force for what is issued.</param>
+    /// <param name="key">The published key.</param>
+    /// <param name="defaultAlgorithm">The algorithm used for a key that declares none.</param>
+    public string? EncryptionAlgorithmFor(SecurityProfileRequirements profile, JsonWebKey key, string defaultAlgorithm)
+    {
+        var algorithm = key.Algorithm ?? defaultAlgorithm;
+        return creator.EncryptedResponseAlgorithmsSupported.Contains(algorithm, StringComparer.Ordinal) &&
+               key.SupportsAlgorithm(algorithm) &&
+               profile.PermitsKeyManagementAlgorithm(algorithm)
+            ? algorithm
+            : null;
+    }
 }

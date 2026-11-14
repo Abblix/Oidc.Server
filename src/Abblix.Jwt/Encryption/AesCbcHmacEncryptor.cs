@@ -23,6 +23,9 @@ namespace Abblix.Jwt.Encryption;
 /// </remarks>
 internal sealed class AesCbcHmacEncryptor(string algorithm) : IContentEncryptionAlgorithm
 {
+	// AES block size is always 128 bits, and CBC takes an IV of one block
+	private const int IvSizeInBytes = 128 / 8;
+
 	private readonly AesCbcHmacKey _key = new(algorithm);
 
 	/// <inheritdoc />
@@ -43,15 +46,11 @@ internal sealed class AesCbcHmacEncryptor(string algorithm) : IContentEncryption
 
 		var (macKey, encryptionKey) = _key.Split(contentEncryptionKey);
 
-		// AES block size is always 128 bits
-		var initializationVector = CryptoRandom.GetRandomBytes(16);
+		var initializationVector = CryptoRandom.GetRandomBytes(IvSizeInBytes);
 
 		byte[] ciphertext;
-		using (var aes = CbcWith(encryptionKey, initializationVector))
-		{
-			using var encryptor = aes.CreateEncryptor();
-			ciphertext = encryptor.TransformFinalBlock(plaintext, 0, plaintext.Length);
-		}
+		using (var aes = AesWith(encryptionKey))
+			ciphertext = aes.EncryptCbc(plaintext, initializationVector, PaddingMode.PKCS7);
 
 		var authenticationTag = _key.TagOf(macKey, additionalAuthenticatedData, initializationVector, ciphertext);
 		return new EncryptedData(initializationVector, ciphertext, authenticationTag);
@@ -80,11 +79,14 @@ internal sealed class AesCbcHmacEncryptor(string algorithm) : IContentEncryption
 		if (!CryptographicOperations.FixedTimeEquals(encryptedData.AuthenticationTag, computedTag))
 			return false;
 
+		// The IV comes from the token: DecryptCbc throws ArgumentException on any other size
+		if (encryptedData.InitializationVector.Length != IvSizeInBytes)
+			return false;
+
 		try
 		{
-			using var aes = CbcWith(encryptionKey, encryptedData.InitializationVector);
-			using var decryptor = aes.CreateDecryptor();
-			plaintext = decryptor.TransformFinalBlock(encryptedData.Ciphertext, 0, encryptedData.Ciphertext.Length);
+			using var aes = AesWith(encryptionKey);
+			plaintext = aes.DecryptCbc(encryptedData.Ciphertext, encryptedData.InitializationVector, PaddingMode.PKCS7);
 			return true;
 		}
 		catch (CryptographicException)
@@ -94,13 +96,10 @@ internal sealed class AesCbcHmacEncryptor(string algorithm) : IContentEncryption
 		}
 	}
 
-	private static Aes CbcWith(byte[] key, byte[] initializationVector)
+	private static Aes AesWith(byte[] key)
 	{
 		var aes = Aes.Create();
 		aes.Key = key;
-		aes.IV = initializationVector;
-		aes.Mode = CipherMode.CBC;
-		aes.Padding = PaddingMode.PKCS7;
 		return aes;
 	}
 }

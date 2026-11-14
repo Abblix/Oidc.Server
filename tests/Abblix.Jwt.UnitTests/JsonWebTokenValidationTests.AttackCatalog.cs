@@ -8,6 +8,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -72,7 +73,8 @@ public partial class JsonWebTokenValidationTests
     public async Task EmbeddedJwkHeaderKey_IgnoredInDefaultTrustMode_Rejected()
     {
         var token = CreateValidToken();
-        token.Header.SetVerificationKey(WrongSigningKey); // attacker advertises their own key in the header
+        // attacker advertises their own key in the header
+        token.Header.SetVerificationKey(WrongSigningKey.Sanitize(includePrivateKeys: false));
         var forged = await IssueToken(token, WrongSigningKey);
 
         // Default model: verify against the host's issuer keys, not the header. The offered key is refused.
@@ -91,6 +93,48 @@ public partial class JsonWebTokenValidationTests
         Assert.True(accepted.TryGetSuccess(out _),
             "The embedded-key opt-in must trust the header jwk - otherwise the default rejection proves nothing.");
     }
+
+    /// <summary>
+    /// RFC 7515 section 4.1.3: "The "jwk" (JSON Web Key) Header Parameter is the public key that corresponds to the
+    /// key used to digitally sign the JWS." A symmetric key there is the secret that makes the MAC, and a private
+    /// member there is not the public key, so the embedded-key model refuses both before verifying.
+    /// </summary>
+    [Fact]
+    public async Task EmbeddedJwk_CarryingPrivateMembers_IsRefused()
+    {
+        var token = CreateValidToken();
+        token.Header.SetVerificationKey(WrongSigningKey);
+        var signed = await IssueToken(token, WrongSigningKey);
+
+        var result = await ValidateEmbeddedAsync(signed);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidHeader, error.Error);
+    }
+
+    [Fact]
+    public async Task EmbeddedJwk_ThatIsASymmetricKey_IsRefused()
+    {
+        var secret = JsonWebKeyFactory.CreateHmac(SigningAlgorithms.HS256);
+        var token = CreateValidToken();
+        token.Header.Algorithm = SigningAlgorithms.HS256;
+        token.Header.SetVerificationKey(secret);
+        var signed = await IssueToken(token, secret);
+
+        var result = await ValidateEmbeddedAsync(signed);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidHeader, error.Error);
+    }
+
+    private static Task<Result<JsonWebToken, JwtValidationError>> ValidateEmbeddedAsync(string jwt)
+        => ServiceProvider.GetRequiredService<IJsonWebTokenValidator>().ValidateAsync(jwt, new ValidationParameters
+        {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
+            Options = ValidationOptions.Default | ValidationOptions.UseEmbeddedVerificationKey,
+            ValidateIssuer = _ => Task.FromResult(true),
+            ValidateAudience = _ => Task.FromResult(true),
+        });
 
     /// <summary>
     /// URL-based key-source header injection (OWASP WSTG-SESS-10): a token that points <c>jku</c> (JWK Set URL)

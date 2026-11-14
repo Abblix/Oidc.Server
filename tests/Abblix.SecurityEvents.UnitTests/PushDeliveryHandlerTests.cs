@@ -35,11 +35,14 @@ public class PushDeliveryHandlerTests
     {
         public int Calls { get; private set; }
 
+        public string? CompactToken { get; private set; }
+
         public ValueTask<SecurityEventTokenValidationError?> ValidateAsync(
             SecurityEventTokenValidationContext context,
             CancellationToken cancellationToken)
         {
             Calls++;
+            CompactToken = context.CompactToken;
             context.Token = token;
             return ValueTask.FromResult(error);
         }
@@ -151,6 +154,24 @@ public class PushDeliveryHandlerTests
 
         Assert.Equal(PushDeliveryResult.Accepted, result);
         Assert.Same(token, Assert.Single(sink.Consumed).Token);
+    }
+
+    /// <summary>
+    /// A line break a transmitter ends the body with is not part of the SET, so the token is validated without it.
+    /// </summary>
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public async Task ABodyEndingInALineBreak_IsValidatedWithoutIt(string ending)
+    {
+        var validator = new StubValidator(error: null, token: BuildToken());
+        var handler = new PushDeliveryHandler(validator, new SecurityEventTokenValidationOptions(), new RecordingSink());
+
+        var result = await handler.HandleAsync(
+            SetMediaType, "a.b.c" + ending, TestContext.Current.CancellationToken);
+
+        Assert.Equal(PushDeliveryResult.Accepted, result);
+        Assert.Equal("a.b.c", validator.CompactToken);
     }
 
     [Fact]
