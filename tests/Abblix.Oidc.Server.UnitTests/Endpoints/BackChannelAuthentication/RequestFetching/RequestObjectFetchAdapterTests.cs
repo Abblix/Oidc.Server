@@ -28,11 +28,12 @@ public class RequestObjectFetchAdapterTests
     private const string RequestJwt = "header.payload.signature";
 
     /// <summary>
-    /// The request object is validated and merged at the tenant the request is served at, so a client of that tenant
-    /// is the one whose keys and signing algorithm judge it.
+    /// The request object is validated and merged at the tenant the request is served at, under the client that
+    /// authenticated the request, so that client's security profile bounds every layer of the object before it is read,
+    /// and a client of that tenant is the one whose keys and signing algorithm judge it.
     /// </summary>
     [Fact]
-    public async Task FetchAsync_HandsTheServingTenantAndTheBackChannelSigningAlgorithm()
+    public async Task FetchAsync_HandsTheServingTenantTheAuthenticatedClientAndTheBackChannelSigningAlgorithm()
     {
         var outer = new BackChannelAuthenticationRequest { Scope = [Scopes.OpenId], Request = RequestJwt };
         var merged = outer with { LoginHint = "end-user" };
@@ -45,13 +46,13 @@ public class RequestObjectFetchAdapterTests
         fetcher
             .Setup(f => f.FetchAsync(
                 TestTenant.Matched,
-                null, outer,
+                signingClient, outer,
                 RequestJwt,
                 It.Is<Func<ClientInfo, string?>>(alg => alg(signingClient) == SigningAlgorithms.PS256),
                 It.Is<string[]>(members => members.Length == 0)))
             .ReturnsAsync(merged);
 
-        var result = await new RequestObjectFetchAdapter(fetcher.Object).FetchAsync(SingleIssuer.Tenant, outer);
+        var result = await new RequestObjectFetchAdapter(fetcher.Object).FetchAsync(SingleIssuer.Tenant, signingClient, outer);
 
         Assert.True(result.TryGetSuccess(out var value));
         Assert.Same(merged, value);

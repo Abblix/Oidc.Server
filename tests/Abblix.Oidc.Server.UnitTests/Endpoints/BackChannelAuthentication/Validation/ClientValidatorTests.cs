@@ -9,11 +9,9 @@
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
-using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
-using Moq;
 using Abblix.Oidc;
 using Abblix.Oidc.Server.Common;
 using Xunit;
@@ -27,14 +25,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication.Valid
 /// </summary>
 public class ClientValidatorTests
 {
-    private readonly Mock<IClientAuthenticator> _clientAuthenticator;
-    private readonly ClientValidator _validator;
-
-    public ClientValidatorTests()
-    {
-        _clientAuthenticator = new Mock<IClientAuthenticator>(MockBehavior.Strict);
-        _validator = new ClientValidator(_clientAuthenticator.Object);
-    }
+    private readonly ClientValidator _validator = new();
 
     private BackChannelAuthenticationValidationContext CreateContext()
     {
@@ -66,16 +57,13 @@ public class ClientValidatorTests
             BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll
         };
 
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
-            .ReturnsAsync(clientInfo);
+        context.ClientInfo = clientInfo;
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
-        Assert.Same(clientInfo, context.ClientInfo);
     }
 
     /// <summary>
@@ -93,38 +81,13 @@ public class ClientValidatorTests
             BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll
         };
 
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
-            .ReturnsAsync(clientInfo);
+        context.ClientInfo = clientInfo;
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
-    }
-
-    /// <summary>
-    /// Verifies error when client authentication fails: CIBA Core 1.0 section 13 lists invalid_client,
-    /// "Client authentication failed", under HTTP 401.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithUnauthenticatedClient_ShouldReturnInvalidClient()
-    {
-        // Arrange
-        var context = CreateContext();
-
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
-            .ReturnsAsync((ClientInfo?)null);
-
-        // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidClient, result.Error);
-        Assert.Equal("The client is not authorized", result.ErrorDescription);
     }
 
     /// <summary>
@@ -142,9 +105,7 @@ public class ClientValidatorTests
             BackChannelTokenDeliveryMode = null,
         };
 
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
-            .ReturnsAsync(clientInfo);
+        context.ClientInfo = clientInfo;
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -167,9 +128,7 @@ public class ClientValidatorTests
             AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken]
         };
 
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
-            .ReturnsAsync(clientInfo);
+        context.ClientInfo = clientInfo;
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -194,9 +153,7 @@ public class ClientValidatorTests
             AllowedGrantTypes = []
         };
 
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
-            .ReturnsAsync(clientInfo);
+        context.ClientInfo = clientInfo;
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -204,63 +161,6 @@ public class ClientValidatorTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnauthorizedClient, result.Error);
-    }
-
-    /// <summary>
-    /// Verifies ClientInfo is set on context upon successful validation.
-    /// Per validation pattern, context must be populated for downstream validators.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_OnSuccess_ShouldSetClientInfoOnContext()
-    {
-        // Arrange
-        var context = CreateContext();
-        var clientInfo = new ClientInfo("test-client")
-        {
-            AllowedGrantTypes = [GrantTypes.Ciba],
-            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
-            ClientName = "Test Client"
-        };
-
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
-            .ReturnsAsync(clientInfo);
-
-        // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
-
-        // Assert
-        Assert.Same(clientInfo, context.ClientInfo);
-        Assert.Equal("Test Client", context.ClientInfo.ClientName);
-    }
-
-    /// <summary>
-    /// Verifies client authenticator is called with correct client request.
-    /// Ensures proper delegation to authentication service.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_ShouldCallClientAuthenticatorWithCorrectRequest()
-    {
-        // Arrange
-        var context = CreateContext();
-        var clientInfo = new ClientInfo("test-client")
-        {
-            AllowedGrantTypes = [GrantTypes.Ciba],
-            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll
-        };
-
-        ClientRequest? capturedRequest = null;
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Callback<TenantDefinition, ClientRequest>((_, r) => capturedRequest = r)
-            .ReturnsAsync(clientInfo);
-
-        // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
-
-        // Assert
-        Assert.NotNull(capturedRequest);
-        Assert.Same(context.ClientRequest, capturedRequest);
     }
 
     /// <summary>
@@ -281,9 +181,7 @@ public class ClientValidatorTests
             BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll
         };
 
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
-            .ReturnsAsync(clientInfo);
+        context.ClientInfo = clientInfo;
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -306,9 +204,7 @@ public class ClientValidatorTests
             AllowedGrantTypes = ["urn:openid:params:grant-type:CIBA"] // Wrong case
         };
 
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
-            .ReturnsAsync(clientInfo);
+        context.ClientInfo = clientInfo;
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
@@ -332,9 +228,7 @@ public class ClientValidatorTests
             BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
             TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
         };
-        _clientAuthenticator
-            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, context.ClientRequest))
-            .ReturnsAsync(clientInfo);
+        context.ClientInfo = clientInfo;
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 

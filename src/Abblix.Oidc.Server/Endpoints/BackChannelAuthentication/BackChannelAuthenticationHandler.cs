@@ -7,8 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -17,15 +19,17 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 
 /// <summary>
 /// Default <see cref="IBackChannelAuthenticationHandler"/> implementation that drives the CIBA endpoint
-/// pipeline as fetch (request object resolution) -&gt; validation -&gt; processing, short-circuiting on the
-/// first error so that subsequent stages never see invalid input.
+/// pipeline as client authentication -&gt; fetch (request object resolution) -&gt; validation -&gt; processing,
+/// short-circuiting on the first error so that subsequent stages never see invalid input.
 /// </summary>
+/// <param name="clientAuthenticator">Authenticates the client before anything it sent is read.</param>
 /// <param name="fetcher">Resolves the effective request, in particular substituting parameters carried in
 /// a signed Request Object per CIBA Core 1.0 section 7.1.1.</param>
 /// <param name="validator">Validates the resolved request against client metadata and protocol rules.</param>
 /// <param name="processor">Persists the authentication request and produces the
 /// <c>auth_req_id</c>/<c>expires_in</c>/<c>interval</c> response.</param>
 public class BackChannelAuthenticationHandler(
+    IClientAuthenticator clientAuthenticator,
     IBackChannelAuthenticationRequestFetcher fetcher,
     IBackChannelAuthenticationRequestValidator validator,
     IBackChannelAuthenticationRequestProcessor processor) : IBackChannelAuthenticationHandler
@@ -42,7 +46,19 @@ public class BackChannelAuthenticationHandler(
         BackChannelAuthenticationRequest request,
         ClientRequest clientRequest)
     {
-        var fetchResult = await fetcher.FetchAsync(tenant, request);
+        // CIBA Core 1.0 section 7.2: the server "MUST validate the request received as follows: Authenticate the
+        // Client per the authentication method registered or configured for its client_id", then "If the
+        // authentication request is signed, validate the JWT sent with the request parameter". Done before the request
+        // object is read, so the object is held to the authenticated client's security profile before any layer of it
+        // is decrypted, and a caller that does not authenticate has nothing of its own decrypted
+        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+        if (clientInfo == null)
+        {
+            // CIBA Core 1.0 section 13 lists invalid_client under HTTP 401: "Client authentication failed"
+            return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
+        }
+
+        var fetchResult = await fetcher.FetchAsync(tenant, clientInfo, request);
         if (fetchResult.TryGetSuccess(out var fetchedRequest))
         {
             request = fetchedRequest;
@@ -52,7 +68,7 @@ public class BackChannelAuthenticationHandler(
             return new OidcError(error.Error, error.ErrorDescription);
         }
 
-        var validationResult = await validator.ValidateAsync(tenant, request, clientRequest);
+        var validationResult = await validator.ValidateAsync(tenant, clientInfo, request, clientRequest);
         return await validationResult.BindAsync(valid => processor.ProcessAsync(tenant, valid));
     }
 }
