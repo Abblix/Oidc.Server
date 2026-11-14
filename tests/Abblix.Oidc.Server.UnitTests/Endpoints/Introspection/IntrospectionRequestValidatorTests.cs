@@ -10,6 +10,7 @@ using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection;
@@ -198,6 +199,47 @@ public class IntrospectionRequestValidatorTests
         Assert.Equal(ErrorCodes.InvalidClient, error.Error);
         _clientAuthenticator.VerifyNoOtherCalls();
         _jwtValidator.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// The Authorization header on two lines is the request RFC 6749 section 5.2 names invalid_request, decided before
+    /// the absence of a credential is: two lines are not read as none.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithTwoAuthorizationHeaders_IsInvalidRequestNotAnUnauthenticatedCaller()
+    {
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant,
+            CreateIntrospectionRequest(),
+            new ClientRequest
+            {
+                ClientId = TestConstants.DefaultClientId,
+                AuthorizationHeaderLines = ["Basic Y2xpZW50OnNlY3JldA==", "Basic Y2xpZW50OnNlY3JldA=="],
+            });
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Same(ErrorFactory.MoreThanOneAuthorizationHeader, error);
+    }
+
+    /// <summary>
+    /// An Authorization header that does not parse is still an attempt to authenticate through it, which RFC 6749
+    /// section 5.2 answers 401: it goes to the authenticators and is not the caller that presented nothing.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithAnUnparsableAuthorizationHeader_IsNotAnUnauthenticatedCaller()
+    {
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<ClientInfo?>(null));
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant,
+            CreateIntrospectionRequest(),
+            new ClientRequest { ClientId = TestConstants.DefaultClientId, AuthorizationHeaderLines = ["Basic ,"] });
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsNotType<UnauthenticatedCallerError>(error);
+        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
     }
 
     /// <summary>

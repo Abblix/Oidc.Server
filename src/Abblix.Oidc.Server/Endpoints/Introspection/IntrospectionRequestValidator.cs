@@ -148,13 +148,15 @@ public partial class IntrospectionRequestValidator(
 	}
 
 	/// <summary>
-	/// Whether the request carries none of the credentials a client authenticates with: an Authorization header
-	/// (RFC 6749 section 2.3.1), a client secret in the body, a client assertion (RFC 7521 section 4.2) or a TLS
-	/// client certificate (RFC 8705 section 2). A client_id alone is an identifier, not a credential.
+	/// Whether the request carries none of the credentials a client authenticates with: an Authorization header line
+	/// (RFC 6749 section 2.3.1), parsed or not, since one that does not parse is still an attempt to authenticate
+	/// through the header, which RFC 6749 section 5.2 answers 401; a client secret in the body, a client assertion
+	/// (RFC 7521 section 4.2) or a TLS client certificate (RFC 8705 section 2). A client_id alone is an identifier, not a
+	/// credential.
 	/// </summary>
 	private static bool CarriesNoCredential(ClientRequest request) => request is
 	{
-		AuthorizationHeader: null,
+		AuthorizationHeaderLines: null or { Count: 0 },
 		ClientSecret: null or "",
 		ClientAssertion: null or "",
 		ClientCertificate: null,
