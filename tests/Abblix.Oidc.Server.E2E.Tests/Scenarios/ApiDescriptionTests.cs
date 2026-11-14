@@ -82,6 +82,8 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
             parameter.Name == HeaderNames.Authorization);
         Assert.Equal(BindingSource.Header, parameter.Source);
         Assert.Equal(typeof(string), parameter.Type);
+        // Open registration takes no initial access token, so a generated client must be free to omit the header
+        Assert.False(parameter.IsRequired);
     }
 
     [Fact]
