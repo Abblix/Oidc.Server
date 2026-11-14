@@ -249,6 +249,40 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A registered claim section 7.1.1 requires is not carried by a member with no value of its kind: an exp, iat or nbf
+    /// that is null names no time (an object with a null exp would never expire), and an iss or jti that is null or
+    /// empty names no client and no request.
+    /// </summary>
+    [Theory]
+    [InlineData(JwtClaimTypes.Issuer, null)]
+    [InlineData(JwtClaimTypes.Issuer, "")]
+    [InlineData(JwtClaimTypes.Audience, null)]
+    [InlineData(JwtClaimTypes.ExpiresAt, null)]
+    [InlineData(JwtClaimTypes.IssuedAt, null)]
+    [InlineData(JwtClaimTypes.NotBefore, null)]
+    [InlineData(JwtClaimTypes.JwtId, null)]
+    [InlineData(JwtClaimTypes.JwtId, "")]
+    public async Task ARegisteredClaimWithoutAValue_IsRefused(string claim, string? value)
+    {
+        var requestObject = await SignedRequestAsync(PlainClientId, token =>
+        {
+            token.Payload.Json[claim] = value is null ? null : JsonValue.Create(value);
+            // An object with no usable iss still names its client, so it is refused for the claim and not for an
+            // unknown signer
+            if (claim == JwtClaimTypes.Issuer)
+                token.Payload.Json[IanaClaimTypes.ClientId] = PlainClientId;
+        });
+
+        Assert.True(PayloadOf(requestObject).ContainsKey(claim), $"the object no longer carries {claim}");
+
+        using var response = await PostAsync(PlainClientId, requestObject);
+
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.True(HttpStatusCode.BadRequest == response.StatusCode, $"{response.StatusCode}: {body}");
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
     /// CIBA Core 1.0 section 7.1.1: "The Audience claim MUST contain the value of the Issuer Identifier for the OP". An
     /// object addressed to the backchannel authentication endpoint alone is refused; one whose audience contains the
     /// issuer beside another value is accepted.

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 
@@ -19,15 +20,17 @@ namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching
 /// </summary>
 internal static class SignedAuthenticationRequestClaims
 {
-    private static readonly string[] Required =
-    [
-        JwtClaimTypes.Audience,
-        JwtClaimTypes.Issuer,
-        JwtClaimTypes.ExpiresAt,
-        JwtClaimTypes.IssuedAt,
-        JwtClaimTypes.NotBefore,
-        JwtClaimTypes.JwtId,
-    ];
+    /// <summary>
+    /// The claims whose value is a string, which an empty one does not carry.
+    /// </summary>
+    private static readonly string[] Strings = [JwtClaimTypes.Issuer, JwtClaimTypes.JwtId];
+
+    /// <summary>
+    /// The claims whose value is a NumericDate (RFC 7519 section 2), which a null names no time with: an object with a
+    /// null exp would never expire.
+    /// </summary>
+    private static readonly string[] NumericDates =
+        [JwtClaimTypes.ExpiresAt, JwtClaimTypes.IssuedAt, JwtClaimTypes.NotBefore];
 
     /// <summary>
     /// Why the signed authentication request's claims fall short of section 7.1.1, or null when they do not.
@@ -37,7 +40,12 @@ internal static class SignedAuthenticationRequestClaims
     /// way the request object's validator compares it.</param>
     public static string? WhyRefused(JsonObject claims, Uri issuer)
     {
-        if (Required.FirstOrDefault(claim => !claims.ContainsKey(claim)) is { } missing)
+        var missing =
+            Strings.FirstOrDefault(claim => claims[claim] is not JsonValue value ||
+                                            !value.TryGetValue<string>(out var text) || text.Length == 0) ??
+            NumericDates.FirstOrDefault(claim => claims[claim]?.GetValueKind() != JsonValueKind.Number);
+
+        if (missing != null)
             return $"The signed authentication request must carry the {missing} claim";
 
         return new JsonWebTokenPayload(claims).Audiences.Contains(issuer.OriginalString, StringComparer.Ordinal)
