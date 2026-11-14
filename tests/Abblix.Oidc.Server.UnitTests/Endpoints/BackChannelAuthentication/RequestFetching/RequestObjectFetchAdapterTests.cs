@@ -10,6 +10,7 @@ using System;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -58,5 +59,28 @@ public class RequestObjectFetchAdapterTests
 
         Assert.True(result.TryGetSuccess(out var value));
         Assert.Same(merged, value);
+    }
+
+    /// <summary>
+    /// CIBA Core 1.0 section 13 answers with "A single ASCII error code from one present in the list below", so a
+    /// request object the fetcher refuses is answered invalid_request.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_ARefusedRequestObject_IsAnsweredInvalidRequest()
+    {
+        var outer = new BackChannelAuthenticationRequest { Scope = [Scopes.OpenId], Request = RequestJwt };
+        var client = new ClientInfo("client-1");
+
+        var fetcher = new Mock<IRequestObjectFetcher>(MockBehavior.Strict);
+        fetcher
+            .Setup(f => f.FetchAsync(
+                TestTenant.Matched, client, outer, RequestJwt,
+                It.IsAny<Func<ClientInfo, string?>>(), It.IsAny<string[]>(), It.IsAny<Func<JsonObject, string?>>()))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidRequestObject, "The request object is invalid."));
+
+        var result = await new RequestObjectFetchAdapter(fetcher.Object).FetchAsync(SingleIssuer.Tenant, client, outer);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 }

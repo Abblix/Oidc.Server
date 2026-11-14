@@ -149,7 +149,7 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
     /// RSA-OAEP-256 is decrypted and accepted, so its refusal is the refusal of the layer and not of the client.
     /// </summary>
     [Theory]
-    [InlineData(FapiClientId, EncryptionAlgorithms.KeyManagement.Rsa1_5, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject, false)]
+    [InlineData(FapiClientId, EncryptionAlgorithms.KeyManagement.Rsa1_5, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest, false)]
     [InlineData(FapiClientId, EncryptionAlgorithms.KeyManagement.RsaOaep256, HttpStatusCode.OK, null, true)]
     [InlineData(PlainClientId, EncryptionAlgorithms.KeyManagement.Rsa1_5, HttpStatusCode.OK, null, true)]
     public async Task ARequestObjectLayer_IsJudgedUnderTheAuthenticatedClientsProfile(
@@ -208,7 +208,7 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
 
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
         Assert.True(HttpStatusCode.BadRequest == response.StatusCode, $"{response.StatusCode}: {body}");
-        Assert.Equal(ErrorCodes.InvalidRequestObject, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
     }
 
     /// <summary>
@@ -218,12 +218,12 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
     /// </summary>
     [Theory]
     [InlineData(null, HttpStatusCode.OK, null)]
-    [InlineData(JwtClaimTypes.Issuer, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
-    [InlineData(JwtClaimTypes.Audience, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
-    [InlineData(JwtClaimTypes.ExpiresAt, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
-    [InlineData(JwtClaimTypes.IssuedAt, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
-    [InlineData(JwtClaimTypes.NotBefore, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
-    [InlineData(JwtClaimTypes.JwtId, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
+    [InlineData(JwtClaimTypes.Issuer, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(JwtClaimTypes.Audience, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(JwtClaimTypes.ExpiresAt, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(JwtClaimTypes.IssuedAt, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(JwtClaimTypes.NotBefore, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(JwtClaimTypes.JwtId, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
     public async Task ASignedRequestLackingARegisteredClaim_IsRefused(
         string? omitted, HttpStatusCode expectedStatus, string? expectedError)
     {
@@ -254,7 +254,7 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
     /// issuer beside another value is accepted.
     /// </summary>
     [Theory]
-    [InlineData(new[] { Host + Acme + AuthorizePath }, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
+    [InlineData(new[] { Host + Acme + AuthorizePath }, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
     [InlineData(new[] { "https://elsewhere.example.com", Host + Acme }, HttpStatusCode.OK, null)]
     public async Task TheAudience_MustContainTheIssuer(
         string[] audiences, HttpStatusCode expectedStatus, string? expectedError)

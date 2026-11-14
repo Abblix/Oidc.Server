@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RequestObject;
@@ -28,13 +29,21 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// Delegates to the underlying request-object fetcher, passing <c>request.Request</c> as the JWT to
     /// be validated and merged into the outer model.
     /// </summary>
-    public Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(
+    public async Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(
         TenantDefinition tenant,
         ClientInfo client,
         BackChannelAuthenticationRequest request)
+    {
         // RFC 9101 section 4 forbids request and request_uri inside an authorization request's object; this endpoint
         // forbids no member of its own
-        => requestObjectFetcher.FetchAsync(tenant,
+        var result = await requestObjectFetcher.FetchAsync(tenant,
             client, request, request.Request, signer => signer.BackChannelAuthenticationRequestSigningAlg, [],
             claims => SignedAuthenticationRequestClaims.WhyRefused(claims, tenant.Issuer));
+
+        // CIBA Core 1.0 section 13: the error is "A single ASCII error code from one present in the list below", which
+        // does not hold invalid_request_object, and lists invalid_request for a request that "includes an invalid
+        // parameter value ... or is otherwise malformed", which a request parameter carrying an unacceptable signed
+        // authentication request is
+        return result.MapFailure(error => new OidcError(ErrorCodes.InvalidRequest, error.ErrorDescription));
+    }
 }
