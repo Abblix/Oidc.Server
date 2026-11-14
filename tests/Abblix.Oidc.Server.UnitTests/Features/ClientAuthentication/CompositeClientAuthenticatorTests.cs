@@ -14,6 +14,8 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Features.Hashing;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 using Abblix.Utils;
@@ -449,5 +451,40 @@ public class CompositeClientAuthenticatorTests
         Assert.Equal(
             [nameof(ClientRequest.ClientAssertion)],
             await composite.FindPresentedCredentialsAsync(SingleIssuer.Tenant, new ClientRequest()));
+    }
+
+    /// <summary>
+    /// A client registered for tls_client_auth presenting its certificate and a body secret uses two methods (RFC 8705
+    /// section 2 makes the certificate its credential), and is refused before the secret is hashed: the strict hash
+    /// service would throw if it were asked.
+    /// </summary>
+    [Fact]
+    public async Task CertificateOfAMutualTlsClientBesideABodySecret_IsMoreThanOneMethod()
+    {
+        var clients = new Mock<IClientInfoProvider>();
+        clients
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "tls-client"))
+            .ReturnsAsync(new ClientInfo("tls-client") { TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth });
+        using var key = System.Security.Cryptography.RSA.Create(2048);
+        using var certificate = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+                "CN=tls-client",
+                key,
+                System.Security.Cryptography.HashAlgorithmName.SHA256,
+                System.Security.Cryptography.RSASignaturePadding.Pkcs1)
+            .CreateSelfSigned(TimeProvider.System.GetUtcNow().AddDays(-1), TimeProvider.System.GetUtcNow().AddDays(1));
+
+        var composite = CreateCompositeAuthenticator(
+            new ClientSecretPostAuthenticator(
+                NullLogger<ClientSecretPostAuthenticator>.Instance,
+                clients.Object,
+                TimeProvider.System,
+                new Mock<IHashService>(MockBehavior.Strict).Object),
+            new TlsMetadataClientAuthenticator(NullLogger<TlsMetadataClientAuthenticator>.Instance, clients.Object));
+
+        var result = await composite.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant,
+            new ClientRequest { ClientId = "tls-client", ClientSecret = "secret", ClientCertificate = certificate });
+
+        Assert.Same(ClientAuthenticationFailures.MoreThanOneMethod, result.GetFailure());
     }
 }

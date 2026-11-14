@@ -103,7 +103,7 @@ public class TlsClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.False(result.TryGetSuccess(out _));
+        Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
     }
 
     /// <summary>
@@ -128,7 +128,7 @@ public class TlsClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.False(result.TryGetSuccess(out _));
+        Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
     }
 
     /// <summary>
@@ -163,7 +163,7 @@ public class TlsClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.False(result.TryGetSuccess(out _));
+        Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
     }
 
     /// <summary>
@@ -571,6 +571,20 @@ public class TlsClientAuthenticatorTests
     public async Task CertificateWithoutClientId_IsNotPresented()
     {
         var request = new ClientRequest { ClientCertificate = CreateRsaCertificate() };
+
+        Assert.Empty(await _authenticator.FindPresentedCredentialsAsync(SingleIssuer.Tenant, request));
+    }
+
+    /// <summary>
+    /// A certificate beside a client_id naming no client presents no credential, so it is not counted as a method.
+    /// </summary>
+    [Fact]
+    public async Task CertificateOfAnUnknownClient_IsNotPresented()
+    {
+        var request = new ClientRequest { ClientId = "unknown-client", ClientCertificate = CreateRsaCertificate() };
+        _clientInfoProviderMock
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "unknown-client"))
+            .ReturnsAsync((ClientInfo?)null);
 
         Assert.Empty(await _authenticator.FindPresentedCredentialsAsync(SingleIssuer.Tenant, request));
     }

@@ -120,36 +120,73 @@ public class MoreThanOneClientAuthenticationMethodTests(TestFactory factory) : T
     public async Task Certificate_of_a_client_authenticating_otherwise_is_not_a_second_method()
     {
         var discovery = await FetchDiscoveryAsync(CreateClient());
-        using var key = RSA.Create(2048);
-        using var certificate = new CertificateRequest(
-                "CN=" + TestConstants.ClientSecretBasicClientId, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
-            .CreateSelfSigned(TimeProvider.System.GetUtcNow().AddDays(-1), TimeProvider.System.GetUtcNow().AddDays(1));
         var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes(
             $"{TestConstants.ClientSecretBasicClientId}:{TestConstants.ConfidentialClientSecret}"));
-        var form = new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
-            [ClientRequest.Parameters.ClientId] = TestConstants.ClientSecretBasicClientId,
-        });
-        var body = await form.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
+
+        var (status, raw) = await SendWithCertificateAsync(
+            discovery.TokenEndpoint,
+            new Dictionary<string, string>
+            {
+                [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+                [ClientRequest.Parameters.ClientId] = TestConstants.ClientSecretBasicClientId,
+            },
+            $"{TokenTypes.Basic} {credentials}");
+
+        Assert.True(status == StatusCodes.Status200OK, $"{status}: {raw}");
+    }
+
+    /// <summary>
+    /// A certificate beside a client_id naming no client is not a credential (RFC 8705 section 2 binds the certificate
+    /// to the client the client_id names), so the introspection request authenticates no caller and is refused with
+    /// 400 as RFC 9701 section 5 has it, not with the 401 of a credential presented and refused.
+    /// </summary>
+    [Fact]
+    public async Task Introspection_with_only_a_certificate_of_an_unknown_client_authenticates_no_caller()
+    {
+        var discovery = await FetchDiscoveryAsync(CreateClient());
+        Assert.NotNull(discovery.IntrospectionEndpoint);
+
+        var (status, raw) = await SendWithCertificateAsync(
+            discovery.IntrospectionEndpoint,
+            new Dictionary<string, string>
+            {
+                [IntrospectionRequest.Parameters.Token] = "any",
+                [ClientRequest.Parameters.ClientId] = "no-such-client",
+            });
+
+        Assert.True(status == StatusCodes.Status400BadRequest, $"{status}: {raw}");
+    }
+
+    /// <summary>
+    /// Posts <paramref name="form"/> over a connection carrying a fresh self-signed TLS client certificate, which an
+    /// HTTP client of the test server cannot present.
+    /// </summary>
+    private async Task<(int Status, string Body)> SendWithCertificateAsync(
+        Uri endpoint, Dictionary<string, string> form, string? authorization = null)
+    {
+        using var key = RSA.Create(2048);
+        using var certificate = new CertificateRequest("CN=client", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+            .CreateSelfSigned(TimeProvider.System.GetUtcNow().AddDays(-1), TimeProvider.System.GetUtcNow().AddDays(1));
+        using var content = new FormUrlEncodedContent(form);
+        var body = await content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken);
 
         var context = await Factory.Server.SendAsync(
             http =>
             {
                 http.Connection.ClientCertificate = certificate;
                 http.Request.Method = HttpMethods.Post;
-                http.Request.Scheme = discovery.TokenEndpoint.Scheme;
-                http.Request.Host = new HostString(discovery.TokenEndpoint.Authority);
-                http.Request.Path = discovery.TokenEndpoint.AbsolutePath;
-                http.Request.Headers[HttpRequestHeaders.Authorization] = $"{TokenTypes.Basic} {credentials}";
-                http.Request.ContentType = form.Headers.ContentType!.ToString();
+                http.Request.Scheme = endpoint.Scheme;
+                http.Request.Host = new HostString(endpoint.Authority);
+                http.Request.Path = endpoint.AbsolutePath;
+                if (authorization is not null)
+                    http.Request.Headers[HttpRequestHeaders.Authorization] = authorization;
+                http.Request.ContentType = content.Headers.ContentType!.ToString();
                 http.Request.Body = new MemoryStream(body);
             },
             TestContext.Current.CancellationToken);
 
         using var reader = new StreamReader(context.Response.Body);
-        var raw = await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
-        Assert.True(context.Response.StatusCode == StatusCodes.Status200OK, $"{context.Response.StatusCode}: {raw}");
+        return (context.Response.StatusCode, await reader.ReadToEndAsync(TestContext.Current.CancellationToken));
     }
 
     private static async Task<HttpRequestMessage> RequestAsync(Uri endpoint, DiscoveryDocument discovery, MethodPair pair)
