@@ -7,7 +7,6 @@
 
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using Abblix.Utils;
 
 namespace Abblix.Jwt.Encryption;
 
@@ -46,11 +45,14 @@ internal sealed class AesCbcHmacKey(string algorithm)
 	/// </summary>
 	public byte[] TagOf(byte[] macKey, byte[] additionalAuthenticatedData, byte[] initializationVector, byte[] ciphertext)
 	{
-		var al = new byte[sizeof(long)];
+		Span<byte> al = stackalloc byte[sizeof(long)];
 		BinaryPrimitives.WriteInt64BigEndian(al, (long)additionalAuthenticatedData.Length * 8);
 
-		var macInput = ArrayExtensions.Concat(additionalAuthenticatedData, initializationVector, ciphertext, al);
-
-		return CryptographicOperations.HmacData(_parameters.Hash, macKey, macInput)[..HalfSize];
+		using var hmac = IncrementalHash.CreateHMAC(_parameters.Hash, macKey);
+		hmac.AppendData(additionalAuthenticatedData);
+		hmac.AppendData(initializationVector);
+		hmac.AppendData(ciphertext);
+		hmac.AppendData(al);
+		return hmac.GetHashAndReset()[..HalfSize];
 	}
 }
