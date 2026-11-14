@@ -96,7 +96,10 @@ public class RequestObjectFetchAdapter(
     /// <summary>
     /// RFC 9101 section 4: ""request" and "request_uri" parameters MUST NOT be included in Request Objects", and
     /// section 7 has "invalid_request_object The request parameter contains an invalid Request Object". Refused for
-    /// an object by value and for one fetched from a request_uri alike, at this endpoint and the pushed one.
+    /// an object by value and for one fetched from a request_uri alike. The pushed authorization request endpoint
+    /// reads its object through this adapter too, since RFC 9126 section 2.1 step 3 has the server "Validate the pushed
+    /// request as it would an authorization request sent to the authorization endpoint" and section 3 has "The rules
+    /// for processing, signing, and encryption of the Request Object as defined in JAR [RFC9101] apply".
     /// </summary>
     private static readonly string[] ForbiddenMembers =
     [

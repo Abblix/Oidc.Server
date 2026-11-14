@@ -23,7 +23,10 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// <remarks>
 /// RFC 9101 section 4: ""request" and "request_uri" parameters MUST NOT be included in Request Objects." Section 7
 /// names the error for an object that breaks it: "invalid_request_object The request parameter contains an invalid
-/// Request Object."
+/// Request Object." At the pushed authorization request endpoint the rule applies through RFC 9126 section 2.1 step 3,
+/// "Validate the pushed request as it would an authorization request sent to the authorization endpoint", and
+/// section 3, "The rules for processing, signing, and encryption of the Request Object as defined in JAR [RFC9101]
+/// apply".
 /// </remarks>
 public partial class JarRichAuthorizationRequestsTests
 {
@@ -36,7 +39,8 @@ public partial class JarRichAuthorizationRequestsTests
         /// <summary>At the authorization endpoint, fetched from the request_uri.</summary>
         AuthorizeByReference,
 
-        /// <summary>At the pushed authorization request endpoint, in the request parameter.</summary>
+        /// <summary>At the pushed authorization request endpoint, in the request parameter, validated as at the
+        /// authorization endpoint (RFC 9126 section 2.1 step 3).</summary>
         Pushed,
     }
 
@@ -148,6 +152,37 @@ public partial class JarRichAuthorizationRequestsTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(ErrorCodes.InvalidRequest, await ErrorResponseReader.ErrorCodeOf(response));
+    }
+
+    /// <summary>
+    /// An object fetched from a request_uri whose signature does not verify is answered with the same code as one
+    /// including a forbidden member: both are an invalid Request Object (RFC 9101 sections 6.2 and 7), whichever way
+    /// the object arrived.
+    /// </summary>
+    [Fact]
+    public async Task ARequestObjectFetchedByReferenceWithABrokenSignature_IsAnInvalidRequestObject()
+    {
+        var served = new ServedRequestObject();
+        await using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.Replace(ServiceDescriptor.Singleton<ISecureHttpFetcher>(served))));
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var poster = await RegisterBasicSigningClientAsync(
+            client, discovery, requireSignedRequestObject: false, requestUri: ServedRequestObject.Address);
+
+        var signed = await SignNamingAsync(discovery, poster, poster.ClientId, GeneratePkcePair().Challenge);
+        var signatureStart = signed.LastIndexOf('.') + 1;
+        served.Content = signed[..signatureStart] + (signed[signatureStart] == 'A' ? 'B' : 'A') + signed[(signatureStart + 1)..];
+
+        using var response = await SendAsync(client, discovery, poster, Arrival.AuthorizeByReference,
+            new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.ClientId] = poster.ClientId,
+                [AuthorizationRequest.Parameters.RequestUri] = ServedRequestObject.Address,
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidRequestObject, await ErrorResponseReader.ErrorCodeOf(response));
     }
 
     private static void Include(JsonObject claims, NestedMember member)
