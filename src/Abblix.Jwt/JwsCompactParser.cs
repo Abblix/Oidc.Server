@@ -5,7 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Buffers.Text;
 using Abblix.Utils;
 
 namespace Abblix.Jwt;
@@ -23,8 +22,8 @@ internal static class JwsCompactParser
         byte[] headerPart, payloadPart;
         try
         {
-            headerPart = Base64Url.DecodeFromChars(jwtParts[0]);
-            payloadPart = Base64Url.DecodeFromChars(jwtParts[1]);
+            headerPart = JoseBase64Url.Decode(jwtParts[0]);
+            payloadPart = JoseBase64Url.Decode(jwtParts[1]);
         }
         catch
         {

@@ -165,4 +165,86 @@ public partial class JsonWebTokenValidationTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidSignature, error.Error);
     }
+    /// <summary>
+    /// RFC 7515 section 2 defines base64url "with all trailing '=' characters omitted ... and without the inclusion
+    /// of any line breaks, whitespace, or other additional characters", and section 5.2 decodes each part of a JWS
+    /// "following the restriction that no line breaks, whitespace, or other additional characters have been used".
+    /// A part carrying padding or whitespace is refused as malformed, even where a lenient decoder would read the
+    /// very octets that were signed.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExtraCharacters))]
+    public async Task SignedJws_WithAPartCarryingExtraCharacters_IsMalformed(int part, string extra)
+    {
+        var parts = (await IssueToken(CreateValidToken(), SigningKey)).Split('.');
+        parts[part] = WithExtra(parts[part], extra);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var result = await validator.ValidateAsync(string.Join('.', parts), CreateValidationParameters(SigningKey));
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.MalformedToken, error.Error);
+    }
+
+    /// <summary>
+    /// RFC 7516 section 5.2, step 2 decodes every part of a JWE "following the restriction that no line breaks,
+    /// whitespace, or other additional characters have been used". The part is refused as it is decoded, so no
+    /// decryption key is read for it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ExtraCharactersInJwe))]
+    public async Task EncryptedJwe_WithAPartCarryingExtraCharacters_IsRefused(int part, string extra)
+    {
+        var parts = (await IssueToken(CreateValidToken(), SigningKey, encryptionKey)).Split('.');
+        parts[part] = WithExtra(parts[part], extra);
+        var keysRead = 0;
+        var parameters = CreateValidationParameters(SigningKey, encryptionKey);
+        parameters.ResolveTokenDecryptionKeys = _ => new[] { encryptionKey }.ToAsyncEnumerable().Select(key =>
+        {
+            keysRead++;
+            return key;
+        });
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var result = await validator.ValidateAsync(string.Join('.', parts), parameters);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(0, keysRead);
+    }
+
+    [Fact]
+    public async Task EncryptedJwe_WithEveryPartInTheBase64UrlAlphabet_Validates()
+    {
+        var jwt = await IssueToken(CreateValidToken(), SigningKey, encryptionKey);
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var result = await validator.ValidateAsync(jwt, CreateValidationParameters(SigningKey, encryptionKey));
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    private static readonly string[] Extras = ["=", "==", " ", "\t", "\n", "\r\n", "+", "/"];
+
+    public static TheoryData<int, string> ExtraCharacters => Combine(3);
+
+    public static TheoryData<int, string> ExtraCharactersInJwe => Combine(5);
+
+    private static TheoryData<int, string> Combine(int partCount)
+    {
+        var data = new TheoryData<int, string>();
+        for (var part = 0; part < partCount; part++)
+        {
+            foreach (var extra in Extras)
+                data.Add(part, extra);
+        }
+        return data;
+    }
+
+    /// <summary>
+    /// Padding goes at the end, where a padded encoder puts it; anything else goes in the middle, where a decoder
+    /// that skips whitespace would join the halves back together.
+    /// </summary>
+    private static string WithExtra(string part, string extra)
+        => extra.StartsWith('=') ? part + extra : part.Insert(part.Length / 2, extra);
 }
