@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Frozen;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -177,18 +178,44 @@ public sealed record SecurityProfileRequirements
     public bool RequireHttpsJwksUri { get; init; }
 
     /// <summary>
-    /// The profile admits only an authorization response the server signs: the response type <c>code id_token</c>,
-    /// whose ID token is the response's detached signature, or the response type <c>code</c> with the response mode
-    /// <c>jwt</c> (JARM). FAPI 1.0 Part 2 section 5.2.2 has the server "require the response_type value code
-    /// id_token, or the response_type value code in conjunction with the response_mode value jwt". Enforced by
-    /// <c>Endpoints.Authorization.Validation.FlowTypeValidator</c>.
+    /// The JARM response modes in which the profile admits an authorization response, or null where it does not
+    /// require the server to sign the response. Where set, the profile admits the response type <c>code</c> only with
+    /// one of these modes, and the response type <c>code id_token</c>, whose ID token is the response's detached
+    /// signature. Enforced by <c>Endpoints.Authorization.Validation.FlowTypeValidator</c>, and held in the client's
+    /// <see cref="ClientInfo.AllowedResponseModes"/> by <see cref="SecurityProfileConsistency"/>.
     /// </summary>
     /// <remarks>
-    /// The response mode is the one the clause names, <c>jwt</c>, and not the other JARM modes: the clause names one
-    /// value, and the others are what it leaves out. Held together with <see cref="RequireCodeResponseTypeOnly"/>,
-    /// code with the response mode <c>jwt</c> is what both admit.
+    /// <para>
+    /// A set rather than a flag, because the two profiles demanding a signed response name different modes, and a
+    /// flag would answer for both at once. FAPI 1.0 Part 2 section 5.2.2 has the server "require the response_type
+    /// value code id_token, or the response_type value code in conjunction with the response_mode value jwt": the
+    /// clause names one value, <see cref="LiteralJwtResponseMode"/>, and the other JARM modes are what it leaves out.
+    /// FAPI 2.0 Message Signing section 5.4.1 has the server "support, require use of, and issue signed authorization
+    /// responses via JWT Secured Authorization Response Mode for OAuth 2.0 [JARM]", which names the mechanism and no
+    /// mode, so every JARM mode is admitted, <see cref="EveryJwtResponseMode"/>. The client's side of that
+    /// specification, section 5.4.2, has the client "set the response_mode to jwt"; that is what the client sends, not
+    /// what the server is to refuse.
+    /// </para>
+    /// <para>
+    /// <c>code id_token</c> is admitted for FAPI 1.0 Advanced, which names it. A profile from the FAPI 2.0 family
+    /// carries <see cref="RequireCodeResponseTypeOnly"/> as well, which refuses it before this control is asked.
+    /// </para>
     /// </remarks>
-    public bool RequireSignedAuthorizationResponse { get; init; }
+    public IReadOnlySet<string>? SignedAuthorizationResponseModes { get; init; }
+
+    /// <summary>
+    /// The JARM response mode FAPI 1.0 Part 2 section 5.2.2 names, alone.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> LiteralJwtResponseMode =
+        new[] { ResponseModes.Jwt }.ToFrozenSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Every JARM response mode (JARM section 2.3).
+    /// </summary>
+    internal static readonly IReadOnlySet<string> EveryJwtResponseMode = new[]
+    {
+        ResponseModes.Jwt, ResponseModes.QueryJwt, ResponseModes.FragmentJwt, ResponseModes.FormPostJwt,
+    }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
     /// The profile requires strict RFC 9101 section 6.3 request-object processing: only the parameters inside the
@@ -203,8 +230,10 @@ public sealed record SecurityProfileRequirements
     /// reference, as <see cref="ClientInfo.RequireSignedRequestObject"/> does for one client: plain parameters and an
     /// unsigned (<c>none</c>) object are refused. FAPI 1.0 Part 2 section 5.2.2 has the server "require a JWS signed
     /// JWT request object passed by value with the request parameter or by reference with the request_uri
-    /// parameter". Enforced by <c>Endpoints.Authorization.Validation.SignedRequestObjectRequirementValidator</c> and
-    /// <c>Features.RequestObject.RequestObjectFetcher</c>.
+    /// parameter", and FAPI 2.0 Message Signing section 5.3.1 has it "support, require use of, and verify signed
+    /// request objects according to JAR [RFC9101] at the PAR endpoint [RFC9126]". Enforced by
+    /// <c>Endpoints.Authorization.Validation.SignedRequestObjectRequirementValidator</c>, which the pushed
+    /// authorization request runs through as well, and <c>Features.RequestObject.RequestObjectFetcher</c>.
     /// </summary>
     /// <remarks>
     /// Without it strict processing has nothing to apply to: a client sending plain parameters carries no request
@@ -231,7 +260,8 @@ public sealed record SecurityProfileRequirements
     /// <summary>
     /// The profile requires a request object to name the issuer identifier as its audience, as a string or inside an
     /// array. FAPI 1.0 Part 2 section 5.2.2 has the server "require the aud claim in the request object to be, or to
-    /// be an array containing, the OP's Issuer Identifier URL". Enforced by
+    /// be an array containing, the OP's Issuer Identifier URL", and FAPI 2.0 Message Signing section 5.3.1 the same
+    /// of "the authorization server's issuer identifier URL". Enforced by
     /// <c>Features.RequestObject.RequestObjectFetcher</c>.
     /// </summary>
     /// <remarks>
@@ -401,7 +431,7 @@ public sealed record SecurityProfileRequirements
         RequireStrictRequestObjectProcessing = true,
 
         // The audience and lifetime of a request object are FAPI 2.0 Message Signing section 5.3.1, a profile of its
-        // own, and not the Security Profile's
+        // own (Fapi2SignedAuthorizationRequestsRequirements below), and not the Security Profile's
 
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
@@ -439,7 +469,7 @@ public sealed record SecurityProfileRequirements
         RequireSignedRequestObject = true,
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
         RequireIssuerAudienceInRequestObject = true,
-        RequireSignedAuthorizationResponse = true,
+        SignedAuthorizationResponseModes = LiteralJwtResponseMode,
         RequireNonceWithOpenIdScope = true,
         RequireStateWithoutOpenIdScope = true,
         RequirePkceWithPushedRequests = true,
@@ -453,6 +483,54 @@ public sealed record SecurityProfileRequirements
         RequireFapiSigningAlgorithms = true,
         ForbidRsa1_5KeyManagement = true,
     };
+
+    /// <summary>
+    /// FAPI 2.0 Message Signing section 5.3.1, over the Security Profile its section 5 keeps whole: "All provisions of
+    /// the [FAPI2_Security_Profile] apply to the Message Signing Profile as well, with the extensions described in the
+    /// following."
+    /// </summary>
+    /// <remarks>
+    /// The section's fifth clause, "shall accept request objects with typ header parameter with a value
+    /// oauth-authz-req+jwt", needs no control: <c>Features.RequestObject.RequestObjectFetcher</c> accepts that type for
+    /// every client.
+    /// </remarks>
+    private static readonly SecurityProfileRequirements Fapi2SignedAuthorizationRequestsRequirements = Fapi2Requirements with
+    {
+        // "shall support, require use of, and verify signed request objects according to JAR [RFC9101] at the PAR
+        // endpoint [RFC9126]": the Security Profile already sends every request through the PAR endpoint
+        RequireSignedRequestObject = true,
+
+        // "shall require the aud claim in the request object to be, or to be an array containing, the authorization
+        // server's issuer identifier URL"
+        RequireIssuerAudienceInRequestObject = true,
+
+        // "shall require the request object to contain an nbf claim that is no longer than 60 minutes in the past"
+        // and "shall require the request object to contain an exp claim that has a lifetime of no longer than 60
+        // minutes after the nbf claim"
+        MaxRequestObjectLifetime = FapiRequestObjectLifetime,
+    };
+
+    /// <summary>
+    /// FAPI 2.0 Message Signing section 5.4.1, over the Security Profile its section 5 keeps whole.
+    /// </summary>
+    /// <remarks>
+    /// The note under that section, that the server "should only include the iss authorization response parameter
+    /// defined by [RFC9207] inside the JWT", needs no control: a JARM response carries every response parameter inside
+    /// the JWT for every client.
+    /// </remarks>
+    private static readonly SecurityProfileRequirements Fapi2SignedAuthorizationResponsesRequirements = Fapi2Requirements with
+    {
+        // "shall support, require use of, and issue signed authorization responses via JWT Secured Authorization
+        // Response Mode for OAuth 2.0 [JARM]"
+        SignedAuthorizationResponseModes = EveryJwtResponseMode,
+    };
+
+    /// <summary>
+    /// FAPI 2.0 Message Signing whole: both bundles above. Section 5.5.1, signing introspection responses issued in JWT
+    /// format, holds for every client and needs no control; section 5.6.1 has "No additional requirements".
+    /// </summary>
+    private static readonly SecurityProfileRequirements Fapi2MessageSigningRequirements =
+        Fapi2SignedAuthorizationRequestsRequirements.TightenedBy(Fapi2SignedAuthorizationResponsesRequirements);
 
     /// <summary>
     /// Names every profile that removes a control without carrying the controls that stand in for
@@ -560,6 +638,9 @@ public sealed record SecurityProfileRequirements
         ClientSecurityProfile.None => NoneRequirements,
         ClientSecurityProfile.Fapi2 => Fapi2Requirements,
         ClientSecurityProfile.Fapi1Advanced => Fapi1AdvancedRequirements,
+        ClientSecurityProfile.Fapi2SignedAuthorizationRequests => Fapi2SignedAuthorizationRequestsRequirements,
+        ClientSecurityProfile.Fapi2SignedAuthorizationResponses => Fapi2SignedAuthorizationResponsesRequirements,
+        ClientSecurityProfile.Fapi2MessageSigning => Fapi2MessageSigningRequirements,
         _ => null,
     };
 
@@ -592,7 +673,7 @@ public sealed record SecurityProfileRequirements
         MaxClockSkew = ClockSkew.Fapi2Ceiling,
         DefaultClockSkew = ClockSkew.Fapi2,
         RequireCodeResponseTypeOnly = true,
-        RequireSignedAuthorizationResponse = true,
+        SignedAuthorizationResponseModes = LiteralJwtResponseMode,
         RequireStrictRequestObjectProcessing = true,
         RequireSignedRequestObject = true,
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
@@ -697,8 +778,8 @@ public sealed record SecurityProfileRequirements
         RequirePushedAuthorizationRequests =
             RequirePushedAuthorizationRequests || other.RequirePushedAuthorizationRequests,
         RequireCodeResponseTypeOnly = RequireCodeResponseTypeOnly || other.RequireCodeResponseTypeOnly,
-        RequireSignedAuthorizationResponse =
-            RequireSignedAuthorizationResponse || other.RequireSignedAuthorizationResponse,
+        SignedAuthorizationResponseModes =
+            Narrower(SignedAuthorizationResponseModes, other.SignedAuthorizationResponseModes),
         RequireNonceWithOpenIdScope = RequireNonceWithOpenIdScope || other.RequireNonceWithOpenIdScope,
         RequireStateWithoutOpenIdScope = RequireStateWithoutOpenIdScope || other.RequireStateWithoutOpenIdScope,
         RequirePkceWithPushedRequests = RequirePkceWithPushedRequests || other.RequirePkceWithPushedRequests,
@@ -775,6 +856,21 @@ public sealed record SecurityProfileRequirements
         (null, { } b) => b,
         _ => null,
     };
+
+    /// <summary>
+    /// What two admitted sets both admit, where absence means no restriction and therefore concedes. A set admitting
+    /// all the other does is the answer as it stands.
+    /// </summary>
+    private static IReadOnlySet<string>? Narrower(IReadOnlySet<string>? left, IReadOnlySet<string>? right)
+        => (left, right) switch
+        {
+            ({ } a, { } b) when a.IsSubsetOf(b) => a,
+            ({ } a, { } b) when b.IsSubsetOf(a) => b,
+            ({ } a, { } b) => a.Intersect(b).ToFrozenSet(StringComparer.Ordinal),
+            ({ } a, null) => a,
+            (null, { } b) => b,
+            _ => null,
+        };
 
     /// <summary>
     /// The shorter of two windows, which is the one granting less.
