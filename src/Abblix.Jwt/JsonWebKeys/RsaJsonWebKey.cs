@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
@@ -152,9 +153,12 @@ public sealed record RsaJsonWebKey : JsonWebKey
     /// <inheritdoc/>
     /// <remarks>
     /// Required RSA members per RFC 7638 section 3.2 in lexicographic order: <c>e</c>,
-    /// <c>kty</c>, <c>n</c>. Both base64url-encoded values contain only characters that
-    /// need no JSON escaping.
+    /// <c>kty</c>, <c>n</c>.
     /// </remarks>
-    protected override string CanonicalJson()
-        => $$"""{"e":"{{Encode(JsonWebKeyPropertyNames.Exponent, Exponent)}}","kty":"{{KeyType}}","n":"{{Encode(JsonWebKeyPropertyNames.Modulus, Modulus)}}"}""";
+    protected override void WriteCanonicalMembers(Utf8JsonWriter writer)
+    {
+        writer.WriteString(JsonWebKeyPropertyNames.Exponent, Encode(JsonWebKeyPropertyNames.Exponent, Exponent));
+        writer.WriteString(JsonWebKeyPropertyNames.KeyType, KeyType);
+        writer.WriteString(JsonWebKeyPropertyNames.Modulus, Encode(JsonWebKeyPropertyNames.Modulus, Modulus));
+    }
 }
