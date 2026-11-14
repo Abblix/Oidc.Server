@@ -52,7 +52,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials).ToString()]
         };
     }
 
@@ -70,9 +70,9 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         var valid = PrepareValidRequest(ClientId, ClientSecret);
         var request = valid with
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(
                 TokenTypes.Basic.ToLowerInvariant(),
-                valid.AuthorizationHeader!.Parameter),
+                valid.AuthorizationHeader!.Parameter).ToString()],
         };
 
         var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
@@ -96,7 +96,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         var clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         var request = new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, "not*base64!"),
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic, "not*base64!").ToString()],
         };
 
         var result = await CreateAuthenticator(clientInfoProvider).TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
@@ -111,7 +111,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, base64Credentials)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Bearer, base64Credentials).ToString()]
         };
     }
 
@@ -122,7 +122,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials).ToString()]
         };
     }
 
@@ -133,7 +133,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials).ToString()]
         };
     }
 
@@ -144,7 +144,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         return new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials).ToString()]
         };
     }
 
@@ -162,7 +162,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
         var authenticator = CreateAuthenticator(clientInfoProvider);
         var request = new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic).ToString()]
         };
 
         // Act
@@ -188,7 +188,7 @@ public class ClientSecretBasicAuthenticatorTests : ClientAuthenticatorTestsBase<
 
         var request = new ClientRequest
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials)
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Basic, base64Credentials).ToString()]
         };
 
         // Act

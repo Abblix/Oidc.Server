@@ -74,7 +74,7 @@ public class UserInfoHandlerTests
         var userInfoRequest = new UserInfoRequest();
         var clientRequest = new ClientRequest
         {
-            AuthorizationHeader = new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.DPoP, "token"),
+            AuthorizationHeaderLines = [$"{TokenTypes.DPoP} token"],
         };
         _validator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest))

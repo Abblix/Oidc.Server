@@ -45,7 +45,7 @@ public class AccessTokenPresentationTests
         };
         var clientRequest = new ClientRequest
         {
-            AuthorizationHeader = headerScheme is null ? null : new AuthenticationHeaderValue(headerScheme, "token"),
+            AuthorizationHeaderLines = headerScheme is null ? null : [$"{headerScheme} token"],
         };
 
         Assert.Equal(expected, AccessTokenPresentation.SchemeOf(request, clientRequest));

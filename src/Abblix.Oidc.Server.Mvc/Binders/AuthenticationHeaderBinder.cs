@@ -6,10 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Net.Http.Headers;
 using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Oidc.Server.Mvc.Attributes;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Primitives;
 
@@ -26,63 +24,45 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 public class AuthenticationHeaderBinder : ModelBinderBase
 {
     /// <summary>
-    /// Asynchronously binds an authentication header model.
+    /// Binds every line of the header the field is named after, an empty line included.
     /// </summary>
     /// <param name="bindingContext">The <see cref="ModelBindingContext"/> for the binding operation.</param>
     /// <remarks>
-    /// The method extracts authentication header data from the request and tries to bind it to the model.
+    /// Reads the request's headers itself rather than through <see cref="ModelBinderBase.BindModelAsync"/>, which
+    /// treats a parameter whose first value is empty as omitted (RFC 6749 section 3.1). That rule is about a parameter
+    /// sent without a value; an empty Authorization line is still a line, and skipping it would drop the lines behind
+    /// it, so a request repeating the field would read as carrying it once or not at all.
+    /// The header is looked up by the field name: the model name carries the prefix MVC gives a model, which is the
+    /// action parameter's name whenever the form happens to hold a field of that name.
     /// </remarks>
-    public override async Task BindModelAsync(ModelBindingContext bindingContext)
+    public override Task BindModelAsync(ModelBindingContext bindingContext)
     {
-        var headerValueProvider = new HeaderValueProvider(bindingContext.HttpContext.Request.Headers);
-
-        var bindingInfo = BindingInfo.GetBindingInfo(
-            bindingContext.ModelType.GetCustomAttributes(false),
-            bindingContext.ModelMetadata);
-
-        var childBindingContext = DefaultModelBindingContext.CreateBindingContext(
-            bindingContext.ActionContext,
-            headerValueProvider,
-            bindingContext.ModelMetadata,
-            bindingInfo,
-            bindingContext.ModelName);
-
-        await base.BindModelAsync(childBindingContext);
-
-        bindingContext.Result = childBindingContext.Result;
-    }
-
-    /// <summary>
-    /// Tries to parse the authentication header from the provided string values.
-    /// </summary>
-    /// <param name="type">The type of the model to bind to.</param>
-    /// <param name="values">The header values to parse.</param>
-    /// <param name="result">The resulting parsed object if successful.</param>
-    /// <returns>True if parsing is successful, otherwise false.</returns>
-    protected override bool TryParse(Type type, StringValues values, out object? result)
-    {
-        if (!AuthenticationHeaderValue.TryParse(values, out var headerValue))
+        if (bindingContext.HttpContext.Request.Headers.TryGetValue(bindingContext.FieldName, out var values) &&
+            values.Count > 0)
         {
-            result = null;
-            return false;
+            bindingContext.Result = TryParse(bindingContext.ModelType, values, out var lines)
+                ? ModelBindingResult.Success(lines)
+                : ModelBindingResult.Failed();
         }
 
-        result = headerValue;
-        return true;
+        return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Provides values from HTTP headers.
+    /// Binds every line of the header field as received, never joined into one value.
     /// </summary>
-    /// <param name="headers">The HTTP header dictionary to provide values from.</param>
-    private sealed class HeaderValueProvider(IHeaderDictionary headers) : IValueProvider
+    /// <remarks>
+    /// RFC 9110 section 11.6.2 defines the field as <c>Authorization = credentials</c>, which is not a list, so the
+    /// lines cannot be recombined (section 5.3): each is the credentials of a method of its own, and which of them a
+    /// request may carry is the endpoint's question, not the binder's.
+    /// </remarks>
+    /// <param name="type">The type of the model to bind to.</param>
+    /// <param name="values">The header field lines.</param>
+    /// <param name="result">The lines as an array.</param>
+    /// <returns>Always true: a line is kept whether or not it parses as credentials.</returns>
+    protected override bool TryParse(Type type, StringValues values, out object? result)
     {
-        /// <inheritdoc />
-        public bool ContainsPrefix(string prefix)
-            => headers.ContainsKey(prefix);
-
-        /// <inheritdoc />
-        public ValueProviderResult GetValue(string key)
-            => headers.TryGetValue(key, out var values) ? new ValueProviderResult(values) : ValueProviderResult.None;
+        result = values.ToArray();
+        return true;
     }
 }

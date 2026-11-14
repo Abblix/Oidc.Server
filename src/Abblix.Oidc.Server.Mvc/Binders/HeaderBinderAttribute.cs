@@ -20,7 +20,7 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 /// </remarks>
 /// <param name="binderType">The model binder that reads the header.</param>
 /// <param name="name">The header's name.</param>
-[AttributeUsage(AttributeTargets.Property)]
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Parameter)]
 internal sealed class HeaderBinderAttribute(Type binderType, string name)
     : Attribute, IBinderTypeProviderMetadata, IModelNameProvider
 {

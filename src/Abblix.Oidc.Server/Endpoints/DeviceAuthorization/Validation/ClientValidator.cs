@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
@@ -23,6 +24,12 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator)
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
     {
+        // RFC 8628 section 3.2 answers an error the way the token endpoint does, and RFC 6749 section 5.2 names a
+        // request that "includes multiple credentials, utilizes more than one mechanism for authenticating the
+        // client" an invalid_request. Decided before the authenticator, which would count a failed attempt
+        if (context.ClientRequest.HasMoreThanOneAuthorizationHeader)
+            return ErrorFactory.MoreThanOneAuthorizationHeader;
+
         var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
             tenant, context.ClientRequest);
         if (clientInfo == null)

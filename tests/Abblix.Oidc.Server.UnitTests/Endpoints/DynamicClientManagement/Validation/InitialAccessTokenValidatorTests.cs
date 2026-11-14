@@ -55,7 +55,7 @@ public class InitialAccessTokenValidatorTests
         var request = new ClientRegistrationRequest
         {
             RedirectUris = [TestConstants.DefaultRedirectUri],
-            AuthorizationHeader = authHeader,
+            AuthorizationHeaderLines = authHeader is { } header ? [header.ToString()] : null,
         };
 
         return new ClientRegistrationValidationContext(request) { Operation = operation };

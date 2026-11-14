@@ -204,7 +204,12 @@ public class UserInfoRequestValidator(
 		ClientRequest clientRequest)
 	{
 		// RFC 6750 section 3.1 names a request that "uses more than one method for including an access token" an
-		// invalid_request. The query and the body are told apart only so a profile can refuse one of them
+		// invalid_request, and RFC 9449 Figure 19 answers one carrying the Authorization field twice with it. Decided
+		// first, so a token sent beside the repeated field is not read instead
+		if (clientRequest.HasMoreThanOneAuthorizationHeader)
+			return Common.Validation.ErrorFactory.MoreThanOneAuthorizationHeader;
+
+		// The query and the body are told apart only so a profile can refuse one of them
 		if (userInfoRequest is { AccessTokenInForm: not null, AccessTokenInQuery: not null })
 			return new OidcError(
 				ErrorCodes.InvalidRequest,

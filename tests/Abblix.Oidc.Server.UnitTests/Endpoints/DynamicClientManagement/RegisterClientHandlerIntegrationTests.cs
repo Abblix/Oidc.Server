@@ -126,7 +126,7 @@ public class RegisterClientHandlerIntegrationTests
         var handler = provider.GetRequiredService<IRegisterClientHandler>();
         ClientRegistrationRequest Presenting() => CreateRequest() with
         {
-            AuthorizationHeader = new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.Bearer, issued.EncodedJwt),
+            AuthorizationHeaderLines = [new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.Bearer, issued.EncodedJwt).ToString()],
         };
 
         Assert.True((await handler.HandleAsync(tenant, Presenting())).TryGetSuccess(out _));
@@ -442,7 +442,7 @@ public class RegisterClientHandlerIntegrationTests
 
         var request = CreateRequest() with
         {
-            AuthorizationHeader = new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.Bearer, token.EncodedJwt),
+            AuthorizationHeaderLines = [new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.Bearer, token.EncodedJwt).ToString()],
         };
 
         var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);

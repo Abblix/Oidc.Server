@@ -32,22 +32,34 @@ internal sealed class WireFieldDescriber(IModelMetadataProvider metadataProvider
     /// </remarks>
     public void Describe(ApiDescription description)
     {
-        var bound = description.ActionDescriptor.Parameters
-            .Where(parameter => parameter.BindingInfo?.BindingSource is { IsFromRequest: true })
-            .SelectMany(parameter => metadataProvider.GetMetadataForType(parameter.ParameterType).Properties)
-            .Where(property => property.BinderType != null);
+        // A model the action takes without naming its source is bound from the request as well, and an action
+        // parameter read by a binder of the library's own is a field of its own, like a property of a model
+        var fromRequest = description.ActionDescriptor.Parameters
+            .Where(parameter => parameter.BindingInfo?.BindingSource is null or { IsFromRequest: true })
+            .ToList();
 
-        foreach (var property in bound)
-            DescribeOnce(description, property);
+        var properties = fromRequest
+            .SelectMany(parameter => metadataProvider.GetMetadataForType(parameter.ParameterType).Properties)
+            .Where(property => property.BinderType != null)
+            .Select(property => (property.BinderModelName ?? property.Name!, property.BinderType!, property.IsBindingRequired));
+
+        var parameters = fromRequest
+            .Where(parameter => parameter.BindingInfo?.BinderType != null)
+            .Select(parameter => (
+                parameter.BindingInfo!.BinderModelName ?? parameter.Name,
+                parameter.BindingInfo.BinderType!,
+                false));
+
+        foreach (var (name, binderType, isRequired) in properties.Concat(parameters))
+            DescribeOnce(description, name, binderType, isRequired);
     }
 
     /// <summary>
     /// Replaces what the platform described for the field with one description of it, or with none for a value that
     /// does not come from the request.
     /// </summary>
-    private void DescribeOnce(ApiDescription description, ModelMetadata property)
+    private void DescribeOnce(ApiDescription description, string name, Type binderType, bool isRequired)
     {
-        var name = property.BinderModelName ?? property.Name!;
         var described = description.ParameterDescriptions
             .Where(parameter => parameter.Name == name || parameter.Name.StartsWith(name + ".", StringComparison.Ordinal))
             .ToList();
@@ -61,7 +73,7 @@ internal sealed class WireFieldDescriber(IModelMetadataProvider metadataProvider
         if (described[0].Source == BindingSource.Custom)
             return;
 
-        var wireType = WireTypeOf(property.BinderType!);
+        var wireType = WireTypeOf(binderType);
         var platforms = described.FirstOrDefault(parameter => parameter.Name == name);
         if (wireType == null && platforms != null)
         {
@@ -78,7 +90,7 @@ internal sealed class WireFieldDescriber(IModelMetadataProvider metadataProvider
             Source = described[0].Source,
             Type = type,
             ModelMetadata = metadataProvider.GetMetadataForType(type),
-            IsRequired = property.IsBindingRequired,
+            IsRequired = isRequired,
             ParameterDescriptor = new ParameterDescriptor
             {
                 Name = name,

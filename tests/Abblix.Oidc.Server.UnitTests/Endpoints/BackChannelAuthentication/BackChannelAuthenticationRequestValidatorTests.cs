@@ -27,6 +27,11 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication;
 /// </summary>
 public class BackChannelAuthenticationRequestValidatorTests
 {
+    /// <summary>
+    /// The client the handler authenticated before the request reached the validator.
+    /// </summary>
+    private static readonly ClientInfo AuthenticatedClient = new("test-client");
+
     private readonly Mock<IBackChannelAuthenticationContextValidator> _contextValidator;
     private readonly BackChannelAuthenticationRequestValidator _validator;
 
@@ -56,7 +61,6 @@ public class BackChannelAuthenticationRequestValidatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, ctx) =>
             {
-                ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
                 ctx.Scope = [new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>())];
                 ctx.Resources = [];
@@ -64,7 +68,7 @@ public class BackChannelAuthenticationRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, AuthenticatedClient, request, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -98,7 +102,7 @@ public class BackChannelAuthenticationRequestValidatorTests
             .ReturnsAsync(error);
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, AuthenticatedClient, request, clientRequest);
 
         // Assert
         Assert.True(result.TryGetFailure(out var actualError));
@@ -133,7 +137,6 @@ public class BackChannelAuthenticationRequestValidatorTests
             .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, ctx) =>
             {
                 capturedContext = ctx;
-                ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
                 ctx.Scope = [];
                 ctx.Resources = [];
@@ -141,12 +144,13 @@ public class BackChannelAuthenticationRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, request, clientRequest);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, AuthenticatedClient, request, clientRequest);
 
         // Assert
         Assert.NotNull(capturedContext);
         Assert.Same(request, capturedContext.Request);
         Assert.Same(clientRequest, capturedContext.ClientRequest);
+        Assert.Same(AuthenticatedClient, capturedContext.ClientInfo);
         Assert.Equal("test-client", capturedContext.ClientRequest.ClientId);
         Assert.Equal("secret", capturedContext.ClientRequest.ClientSecret);
     }
@@ -173,7 +177,6 @@ public class BackChannelAuthenticationRequestValidatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, ctx) =>
             {
-                ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
                 ctx.LoginHintToken = loginHintToken;
                 ctx.Scope = [];
@@ -182,7 +185,7 @@ public class BackChannelAuthenticationRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, AuthenticatedClient, request, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -212,7 +215,6 @@ public class BackChannelAuthenticationRequestValidatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, ctx) =>
             {
-                ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
                 ctx.IdToken = idToken;
                 ctx.Scope = [];
@@ -221,7 +223,7 @@ public class BackChannelAuthenticationRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, AuthenticatedClient, request, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -256,7 +258,6 @@ public class BackChannelAuthenticationRequestValidatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, ctx) =>
             {
-                ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
                 ctx.Scope = scopeDefinitions;
                 ctx.Resources = [];
@@ -264,7 +265,7 @@ public class BackChannelAuthenticationRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, AuthenticatedClient, request, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -301,7 +302,6 @@ public class BackChannelAuthenticationRequestValidatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, ctx) =>
             {
-                ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
                 ctx.Scope = [];
                 ctx.Resources = resourceDefinitions;
@@ -309,7 +309,7 @@ public class BackChannelAuthenticationRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, AuthenticatedClient, request, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -339,7 +339,6 @@ public class BackChannelAuthenticationRequestValidatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, ctx) =>
             {
-                ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromSeconds(300);
                 ctx.Scope = [];
                 ctx.Resources = [];
@@ -347,7 +346,7 @@ public class BackChannelAuthenticationRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, clientRequest);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, AuthenticatedClient, request, clientRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validRequest));
@@ -374,7 +373,6 @@ public class BackChannelAuthenticationRequestValidatorTests
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()))
             .Callback(new Action<TenantDefinition, BackChannelAuthenticationValidationContext>((_, ctx) =>
             {
-                ctx.ClientInfo = new ClientInfo("test-client");
                 ctx.ExpiresIn = TimeSpan.FromMinutes(5);
                 ctx.Scope = [];
                 ctx.Resources = [];
@@ -382,7 +380,7 @@ public class BackChannelAuthenticationRequestValidatorTests
             .ReturnsAsync((OidcError?)null);
 
         // Act
-        await _validator.ValidateAsync(SingleIssuer.Tenant, request, clientRequest);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, AuthenticatedClient, request, clientRequest);
 
         // Assert
         _contextValidator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<BackChannelAuthenticationValidationContext>()), Times.Once);
@@ -421,7 +419,7 @@ public class BackChannelAuthenticationRequestValidatorTests
                 .ReturnsAsync(error);
 
             // Act
-            var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, clientRequest);
+            var result = await _validator.ValidateAsync(SingleIssuer.Tenant, AuthenticatedClient, request, clientRequest);
 
             // Assert
             Assert.True(result.TryGetFailure(out var actualError));
