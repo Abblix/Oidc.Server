@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.Formatters;
@@ -45,9 +46,6 @@ public class IntrospectionResponseFormatterTests
             Tenant = new TenantDefinition { Id = "main", Issuer = new Uri(Issuer) },
         });
 
-        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
-        options.Setup(o => o.Value).Returns(new OidcOptions());
-
         var httpContext = new DefaultHttpContext();
         if (acceptHeader != null)
             httpContext.Request.Headers.Accept = acceptHeader;
@@ -57,9 +55,8 @@ public class IntrospectionResponseFormatterTests
 
         var formatter = new IntrospectionResponseFormatter(
             tenantAccessor,
-            _clientJwtFormatter.Object,
-            TimeProvider.System,
-            options.Object,
+            new IntrospectionResponseJwtBuilder(
+                _clientJwtFormatter.Object, TimeProvider.System, Options.Create(new OidcOptions())),
             httpContextAccessor.Object);
 
         Result<IntrospectionSuccess, OidcError> response = success;
