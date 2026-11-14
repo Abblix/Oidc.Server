@@ -63,8 +63,8 @@ internal sealed partial class TransitCustodian(
 
         var signature = response.Body(path).RootElement.GetProperty("data").GetProperty("signature").GetString()!;
 
-        // Transit returns "vault:v<version>:<base64(signature)>"; the wire signature is the last segment.
-        return Convert.FromBase64String(signature[(signature.LastIndexOf(':') + 1)..]);
+        // Transit returns "vault:v<version>:<encoded signature>"; the wire signature is the last segment.
+        return TransitSignRequests.DecodeSignature(request, signature[(signature.LastIndexOf(':') + 1)..]);
     }
 
     /// <summary>

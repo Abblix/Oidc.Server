@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Buffers.Text;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -132,9 +133,11 @@ public sealed class VaultTransitClientTests : IDisposable
     [Fact]
     public async Task SignAsync_Es256_UsesJwsMarshalingSoNoAsn1Conversion()
     {
-        var signature = new byte[] { 5, 6, 7, 8 };
+        // Transit encodes a jws-marshaled signature as unpadded base64url, and these octets spell differently in
+        // the two alphabets.
+        var signature = new byte[] { 0xFB, 0xFF, 0xBF, 0xFE };
         var handler = new StubHttpMessageHandler((_, _) => StubHttpMessageHandler.Json(
-            HttpStatusCode.OK, new { data = new { signature = $"vault:v1:{Convert.ToBase64String(signature)}" } }));
+            HttpStatusCode.OK, new { data = new { signature = $"vault:v1:{Base64Url.EncodeToString(signature)}" } }));
         var client = ClientOver(handler);
 
         var result = await client.SignAsync("oidc-sign:4", SigningAlgorithms.ES256, [1], TestContext.Current.CancellationToken);

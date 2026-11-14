@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Buffers.Text;
 using System.Collections.Frozen;
 
 namespace Abblix.Jwt.Vault;
@@ -59,6 +60,20 @@ internal static class TransitSignRequests
             KeyVersion = version,
         };
     }
+
+    /// <summary>
+    /// The signature octets in Transit's answer to <paramref name="request"/>, without the version prefix. Transit
+    /// encodes a <c>jws</c>-marshaled signature as unpadded base64url and one under its default ASN.1 marshaling,
+    /// which the RSA requests leave in place, as standard base64.
+    /// </summary>
+    public static byte[] DecodeSignature(SignRequest request, string encodedSignature)
+        => request.MarshalingAlgorithm switch
+        {
+            MarshalingAlgorithms.Jws => Base64Url.DecodeFromChars(encodedSignature),
+            null => Convert.FromBase64String(encodedSignature),
+            _ => throw new InvalidOperationException(
+                $"Unexpected {nameof(request.MarshalingAlgorithm)}: {request.MarshalingAlgorithm}"),
+        };
 
     private sealed record SignatureForm(string HashAlgorithm, string? SignatureAlgorithm, string? MarshalingAlgorithm)
     {
