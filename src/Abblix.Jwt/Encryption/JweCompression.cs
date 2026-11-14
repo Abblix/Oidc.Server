@@ -23,9 +23,10 @@ internal static class JweCompression
     public const string Deflate = "DEF";
 
     /// <summary>
-    /// The most octets a compressed plaintext may inflate to. A few hundred octets of DEFLATE can stand for gigabytes,
-    /// and the plaintext of a JWE this library reads is a token or a key, which every channel carrying it holds far
-    /// below this size; so inflation stops here rather than growing with whatever a sender compressed.
+    /// The most octets a compressed plaintext may inflate to. DEFLATE packs a long run about a thousand to one, so a
+    /// small token can stand for a plaintext far larger than itself, and the plaintext of a JWE this library reads is
+    /// a token or a key, which every channel carrying it holds far below this size; so inflation stops here rather
+    /// than growing with whatever a sender compressed.
     /// </summary>
     public const int MaxUncompressedSize = 1024 * 1024;
 

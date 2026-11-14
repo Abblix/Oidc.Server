@@ -62,6 +62,7 @@ public class ClientJwtFormatterTests
                 EncryptionAlgorithms.KeyManagement.Rsa1_5,
                 EncryptionAlgorithms.KeyManagement.RsaOaep,
                 EncryptionAlgorithms.KeyManagement.RsaOaep256,
+                EncryptionAlgorithms.KeyManagement.EcdhEs,
             ]);
         _clientKeysProvider = new Mock<IClientKeysProvider>(MockBehavior.Strict);
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);

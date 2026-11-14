@@ -93,14 +93,9 @@ public class TokenRequestProcessor(
 				grantId,
 				request.AuthorizedGrant.ExpiresNoLaterThan);
 		}
-		catch (AudienceKeyRefusedException)
+		catch (AudienceKeyRefusedException refused)
 		{
-			// RFC 8707 section 2: the resource the request named is unusable, since no key it publishes can have the
-			// token encrypted to it, under this server's algorithms and the profile in force. The resource's
-			// configuration is at fault, not this server's, so the request is answered rather than failed
-			return new OidcError(
-				ErrorCodes.InvalidTarget,
-				"The requested resource publishes no encryption key this server can use under the security profile in force.");
+			return UnusableResource(refused);
 		}
 
 		// A token exchanged at the very end of its subject token's life is minted already expired, because the
@@ -345,5 +340,24 @@ public class TokenRequestProcessor(
 
 		response.IdToken = created?.GetSuccess();
 		return null;
+	}
+
+	/// <summary>
+	/// RFC 8707 section 2: the resource the request named is unusable, since the key it publishes would have the token
+	/// encrypted with an algorithm the profile in force forbids, or none of its keys is one this server can encrypt to.
+	/// The resource's configuration is at fault, not this server's, so the request is answered rather than failed.
+	/// </summary>
+	private static OidcError UnusableResource(AudienceKeyRefusedException refused)
+	{
+		if (refused.Algorithm is null)
+		{
+			return new OidcError(
+				ErrorCodes.InvalidTarget,
+				"The requested resource publishes no encryption key this server can encrypt to.");
+		}
+
+		return new OidcError(
+			ErrorCodes.InvalidTarget,
+			"The requested resource publishes an encryption key the security profile in force does not admit.");
 	}
 }

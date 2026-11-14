@@ -29,7 +29,8 @@ public static class ServiceJwtEncryptionExtensions
     /// <remarks>
     /// An audience that publishes no key leaves the policy untouched, which is how it says a signed JWS is
     /// what it expects. What makes a set of resources publish one key or none is
-    /// <see cref="IAudienceKeyResolver"/>'s question.
+    /// <see cref="IAudienceKeyResolver"/>'s question, which is not asked of a policy that turns encryption off: such a
+    /// token is issued as a signed JWS whatever its audience publishes.
     /// </remarks>
     public static async Task<ServiceJwtEncryption> WithAudienceKeyAsync(
         this ServiceJwtEncryption encryption,
@@ -37,7 +38,7 @@ public static class ServiceJwtEncryptionExtensions
         AuthorizationContext context,
         IAudienceKeyResolver audienceKeys)
     {
-        if (context.Resources is not { Length: > 0 } resources)
+        if (encryption.Encrypt == false || context.Resources is not { Length: > 0 } resources)
             return encryption;
 
         return await audienceKeys.FindEncryptionKeyAsync(tenant, resources) is { } audienceKey

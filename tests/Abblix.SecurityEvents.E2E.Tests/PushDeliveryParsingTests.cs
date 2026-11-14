@@ -26,7 +26,8 @@ namespace Abblix.SecurityEvents.E2E.Tests;
 /// A pushed SET is read as JWS compact serialization is everywhere else: RFC 7515 section 5.2 decodes each part
 /// "following the restriction that no line breaks, whitespace, or other additional characters have been used", and
 /// section 4 has the JOSE header's member names unique. A SET breaking either is a malformed transmission, which
-/// RFC 8935 section 2.3 answers with 400 and "invalid_request".
+/// RFC 8935 section 2.3 answers with 400 and section 2.4 names "invalid_request": "The request body cannot be parsed as
+/// a SET".
 /// </summary>
 public sealed class PushDeliveryParsingTests : IAsyncLifetime
 {
@@ -52,7 +53,7 @@ public sealed class PushDeliveryParsingTests : IAsyncLifetime
     {
         $"{Part("""{"alg":"RS256","alg":"none"}""")}.{Part("""{"iss":"https://transmitter.example.com"}""")}.sig",
         $"{Part("""{"alg":"RS256"}""")}.{Part("""{"iss":"a","iss":"b"}""")}.sig",
-        $"{Part("""{"alg":"RS256"}""")}=.{Part("""{"iss":"https://transmitter.example.com"}""")}.sig",
+        $"{Part("""{"alg":"RS256"}""")}.{Part("""{"iss":"https://transmitter.example.com/a"}""")}==.sig",
         $"{Part("""{"alg":"RS256"}""")}.{Part("""{"iss":"https://transmitter.example.com"}""")} .sig",
     };
 

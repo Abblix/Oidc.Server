@@ -44,7 +44,8 @@ public interface IAudienceKeyResolver
 }
 
 /// <summary>
-/// Answers from the resource registry, taking per resource the first published key this server can encrypt to.
+/// Answers from the resource registry, taking per resource the first published key that declares no algorithm or one
+/// this server can encrypt under (<see cref="ProfiledJwtIssuer.CanEncryptTo"/>).
 /// </summary>
 /// <param name="resourceManager">Resolves a requested resource URI to its registered definition.</param>
 /// <param name="resourceKeysProvider">Supplies that resource's published encryption keys.</param>

@@ -784,7 +784,8 @@ public class AccessTokenServiceTests
     /// </summary>
     private AccessTokenService CreateServiceWithResources(
         Dictionary<Uri, JsonWebKey[]> resources,
-        bool filterByLocation = false)
+        bool filterByLocation = false,
+        OidcOptions? options = null)
     {
         var manager = new Mock<IResourceManager>(MockBehavior.Strict);
         var keys = new Mock<IResourceKeysProvider>(MockBehavior.Strict);
@@ -805,7 +806,7 @@ public class AccessTokenServiceTests
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
-            Options.Create(new OidcOptions { FilterAuthorizationDetailsByLocation = filterByLocation }),
+            Options.Create(options ?? new OidcOptions { FilterAuthorizationDetailsByLocation = filterByLocation }),
             SingleIssuer.LicensedCatalog,
             new AudienceKeyResolver(manager.Object, keys.Object, Encrypting()),
             ScopeClaims.Of(),
@@ -871,6 +872,33 @@ public class AccessTokenServiceTests
             SingleIssuer.Tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null));
 
         Assert.Equal([OrdersApi], refused.Resources);
+    }
+
+    /// <summary>
+    /// A host that turned access token encryption off issues a signed JWS whatever the resource publishes, so a
+    /// resource whose keys nothing can be encrypted to is not refused for them.
+    /// </summary>
+    [Fact]
+    public async Task CreateAccessToken_EncryptionTurnedOff_IgnoresTheResourceKeys()
+    {
+        var signingOnly = new RsaJsonWebKey { KeyId = "orders-sig", Algorithm = SigningAlgorithms.RS256 };
+        var options = new OidcOptions();
+        options.ServiceTokens.AccessToken.Encrypt = false;
+        var service = CreateServiceWithResources(new() { [OrdersApi] = [signingOnly] }, options: options);
+
+        ServiceJwtEncryption? capturedPolicy = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(
+                TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>(
+                (_, _, _, policy) => capturedPolicy = policy)
+            .ReturnsAsync(EncodedToken);
+
+        await service.CreateAccessTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
+
+        Assert.NotNull(capturedPolicy);
+        Assert.Null(capturedPolicy.Key);
     }
 
     private static AuthorizationContext ContextFor(params Uri[] resources) =>
