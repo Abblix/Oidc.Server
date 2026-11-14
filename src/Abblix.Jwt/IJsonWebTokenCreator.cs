@@ -28,7 +28,8 @@ public interface IJsonWebTokenCreator
 	/// Issues a new JWT based on the specified JsonWebToken object, signing key, and optional encrypting key.
 	/// </summary>
 	/// <param name="token">The JsonWebToken object containing the payload of the JWT.</param>
-	/// <param name="signingKey">The JsonWebKey used to sign the JWT.</param>
+	/// <param name="signingKey">The JsonWebKey used to sign the JWT, or null for an unsigned one: encrypted, it is a JWE whose
+	/// plaintext is the claims set itself (RFC 7519 section 3), not a nested JWT.</param>
 	/// <param name="encryptionKey">Optional JsonWebKey used to encrypt the JWT. If null, the JWT is not encrypted.</param>
 	/// <param name="keyEncryptionAlgorithm">
 	/// JWE key management algorithm ("alg") that protects the Content Encryption Key with the
