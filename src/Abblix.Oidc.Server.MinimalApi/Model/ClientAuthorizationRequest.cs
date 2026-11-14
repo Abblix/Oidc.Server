@@ -7,9 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.AspNetCore;
-using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Http;
 using Core = Abblix.Oidc.Server.Model;
+using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 
 namespace Abblix.Oidc.Server.MinimalApi.Model;
 
@@ -22,8 +22,8 @@ public sealed record ClientAuthorizationRequest
     /// <summary>The client identifier from the <c>{clientId}</c> route parameter.</summary>
     public required string ClientId { get; init; }
 
-    /// <summary>The registration access token from the <c>Authorization</c> header.</summary>
-    public AuthenticationHeaderValue? AuthorizationHeader { get; init; }
+    /// <summary>Every line of the <c>Authorization</c> header, carrying the registration access token.</summary>
+    public IReadOnlyList<string>? AuthorizationHeaderLines { get; init; }
 
     /// <summary>Binds the model from the route value and the <c>Authorization</c> header.</summary>
     public static ValueTask<ClientAuthorizationRequest?> BindAsync(HttpContext context)
@@ -32,15 +32,10 @@ public sealed record ClientAuthorizationRequest
             ? value?.ToString() ?? string.Empty
             : string.Empty;
 
-        AuthenticationHeaderValue? authorizationHeader = null;
-        var rawAuthorization = context.Request.Headers.Authorization.ToString();
-        if (!string.IsNullOrEmpty(rawAuthorization))
-            AuthenticationHeaderValue.TryParse(rawAuthorization, out authorizationHeader);
-
         return ValueTask.FromResult<ClientAuthorizationRequest?>(new ClientAuthorizationRequest
         {
             ClientId = clientId,
-            AuthorizationHeader = authorizationHeader,
+            AuthorizationHeaderLines = FormValues.HeaderLines(context.Request, HttpRequestHeaders.Authorization),
         });
     }
 
@@ -48,6 +43,6 @@ public sealed record ClientAuthorizationRequest
     public static implicit operator Core.ClientRequest(ClientAuthorizationRequest request) => new()
     {
         ClientId = request.ClientId,
-        AuthorizationHeader = request.AuthorizationHeader,
+        AuthorizationHeaderLines = request.AuthorizationHeaderLines,
     };
 }

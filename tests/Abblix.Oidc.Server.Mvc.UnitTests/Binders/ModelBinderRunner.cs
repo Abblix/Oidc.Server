@@ -57,16 +57,17 @@ internal static class ModelBinderRunner
     /// bind, so a test written that way reports a refusal it never exercised.
     /// </summary>
     internal static async Task<Outcome> BindHeaderAsync(
-        IModelBinder binder, Type modelType, string headerName, string headerValue)
+        IModelBinder binder, Type modelType, string headerName, params string[] headerValues)
     {
         var httpContext = new DefaultHttpContext();
-        httpContext.Request.Headers[headerName] = headerValue;
+        httpContext.Request.Headers[headerName] = new StringValues(headerValues);
 
         var context = new DefaultModelBindingContext
         {
             ActionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor()),
             ModelMetadata = new EmptyModelMetadataProvider().GetMetadataForType(modelType),
             ModelName = headerName,
+            FieldName = headerName,
             ModelState = new ModelStateDictionary(),
             ValueProvider = new SingleEntryValueProvider(headerName, []),
         };

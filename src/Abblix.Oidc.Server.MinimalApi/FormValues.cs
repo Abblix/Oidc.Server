@@ -218,6 +218,21 @@ internal static class FormValues
     public static string? Header(HttpRequest request, string name)
         => request.Headers.TryGetValue(name, out var values) && values.Count > 0 ? values.ToString() : null;
 
+    /// <summary>
+    /// Every line of a header field that is not a list, as received, or null when the request carries none.
+    /// </summary>
+    /// <remarks>
+    /// RFC 9110 section 5.3 lets a recipient join repeated lines with a comma only for a field defined as a list, and
+    /// <c>Authorization = credentials</c> (section 11.6.2) is not one, so its lines are kept apart for the endpoint to
+    /// judge a request that repeats it.
+    /// </remarks>
+    /// <param name="request">The request to read.</param>
+    /// <param name="name">The header's name.</param>
+    public static IReadOnlyList<string>? HeaderLines(HttpRequest request, string name)
+        => request.Headers.TryGetValue(name, out var values) && values.Count > 0
+            ? [.. values.Select(static value => value ?? string.Empty)]
+            : null;
+
     private static StringValues Get(IFormCollection form, string name)
         => form.TryGetValue(name, out var values) ? values : StringValues.Empty;
 

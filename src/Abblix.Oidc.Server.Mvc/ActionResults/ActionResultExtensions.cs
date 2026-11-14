@@ -113,7 +113,9 @@ public static class ActionResultExtensions
 	/// and no response body. Scope errors (<c>insufficient_scope</c>) return HTTP 403 with the header.
 	/// Client authentication failures (<c>invalid_client</c>) return HTTP 401 with a Basic challenge
 	/// and the JSON error body per RFC 6749 Section 5.2.
-	/// All other errors use the specified fallback status code with a JSON body.
+	/// <c>invalid_request</c> returns HTTP 400 with the JSON body whatever the fallback (RFC 6749 Section 5.2,
+	/// RFC 6750 Section 3.1), and a <see cref="BearerRequestError"/> adds a Bearer challenge carrying it. All other
+	/// errors use the specified fallback status code with a JSON body.
 	/// </summary>
 	/// <param name="error">The OIDC error to format.</param>
 	/// <param name="fallbackStatusCode">The HTTP status code to use for non-token errors.</param>
@@ -143,7 +145,16 @@ public static class ActionResultExtensions
 				=> new UnauthorizedObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))
 					.WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBasicChallenge(realm)),
 
-			(_, StatusCodes.Status400BadRequest)
+			// RFC 6750 section 3: a Bearer-protected endpoint refusing how the token was included "MUST include the
+			// HTTP "WWW-Authenticate" response header field", and the Bearer challenge carries the error
+			(_, _) when error is BearerRequestError
+				=> new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))
+					.WithHeader(HeaderNames.WWWAuthenticate, challenge),
+
+			// RFC 6749 section 5.2 answers its errors with 400 "unless specified otherwise", and RFC 6750 section 3.1
+			// has invalid_request answered with 400 too, so an endpoint whose other errors take another status does
+			// not lend it to a malformed request
+			(ErrorCodes.InvalidRequest, _) or (_, StatusCodes.Status400BadRequest)
 				=> new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
 
 			(_, StatusCodes.Status401Unauthorized)
