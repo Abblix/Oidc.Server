@@ -11,6 +11,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -56,7 +57,10 @@ public class IntrospectionResponseFormatterTests
         var formatter = new IntrospectionResponseFormatter(
             tenantAccessor,
             new IntrospectionResponseJwtBuilder(
-                _clientJwtFormatter.Object, TimeProvider.System, Options.Create(new OidcOptions())),
+                _clientJwtFormatter.Object,
+                TimeProvider.System,
+                Options.Create(new OidcOptions()),
+                Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict)),
             httpContextAccessor.Object);
 
         Result<IntrospectionSuccess, OidcError> response = success;
@@ -68,12 +72,34 @@ public class IntrospectionResponseFormatterTests
         new JsonObject { [IanaClaimTypes.Sub] = "user_123" },
         new ClientInfo(ClientId) { IntrospectionSignedResponseAlgorithm = signedResponseAlgorithm });
 
+    /// <summary>
+    /// RFC 9701 section 6: "The default, if omitted, is RS256", so a client that registered no algorithm and asks for
+    /// the JWT media type is answered with a JWT signed RS256 rather than the plain document.
+    /// </summary>
     [Fact]
-    public async Task FormatResponseAsync_WhenClientHasNoSignedAlgorithm_ReturnsPlainJson()
+    public async Task FormatResponseAsync_WhenClientHasNoSignedAlgorithm_SignsWithRs256()
     {
+        JsonWebToken? capturedToken = null;
+        _clientJwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, token, _, _) => capturedToken = token)
+            .ReturnsAsync(EncodedJwt);
+
         var result = await FormatAsync(ActiveResponse(SigningAlgorithms.None), MediaTypes.TokenIntrospectionJwt);
 
-        // RFC 7662 section 2.2: active is a JSON boolean, not the string "true".
+        Assert.Equal(EncodedJwt, Assert.IsType<ContentResult>(result).Content);
+        Assert.Equal(SigningAlgorithms.RS256, capturedToken?.Header.Algorithm);
+    }
+
+    /// <summary>
+    /// Without the JWT media type the plain document is returned, its active member a JSON boolean (RFC 7662 section
+    /// 2.2), whatever the client registered.
+    /// </summary>
+    [Fact]
+    public async Task FormatResponseAsync_WhenClientHasNoSignedAlgorithmAndAsksForJson_ReturnsPlainJson()
+    {
+        var result = await FormatAsync(ActiveResponse(SigningAlgorithms.None), "application/json");
+
         var json = Assert.IsType<JsonResult>(result);
         var introspection = Assert.IsType<JsonObject>(json.Value);
         Assert.True(introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
@@ -81,6 +107,34 @@ public class IntrospectionResponseFormatterTests
         _clientJwtFormatter.Verify(
             f => f.FormatAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()),
             Times.Never);
+    }
+
+    /// <summary>
+    /// RFC 9701 section 5: a caller that authenticated with nothing is refused with HTTP 400, and RFC 7662 section 2.3:
+    /// one whose credential is invalid with HTTP 401, as RFC 6749 section 5.2 has it.
+    /// </summary>
+    [Fact]
+    public async Task FormatResponseAsync_AnUnauthenticatedCaller_Is400AndAFailedCredentialIsNot()
+    {
+        var unauthenticated = await FormatFailureAsync(new UnauthenticatedCallerError("no credential"));
+        var failed = await FormatFailureAsync(new OidcError(ErrorCodes.InvalidClient, "wrong credential"));
+
+        Assert.Equal(StatusCodes.Status400BadRequest, Assert.IsType<BadRequestObjectResult>(unauthenticated).StatusCode);
+        Assert.IsNotType<BadRequestObjectResult>(failed);
+    }
+
+    private async Task<ActionResult> FormatFailureAsync(OidcError error)
+    {
+        var tenantAccessor = Mock.Of<ITenantAccessor>(accessor => accessor.Current == new TenantContext
+        {
+            Tenant = new TenantDefinition { Id = "main", Issuer = new Uri(Issuer) },
+        });
+        var formatter = new IntrospectionResponseFormatter(
+            tenantAccessor,
+            Mock.Of<IIntrospectionResponseJwtBuilder>(MockBehavior.Strict),
+            Mock.Of<IHttpContextAccessor>());
+
+        return await formatter.FormatResponseAsync(new IntrospectionRequest { Token = "token" }, error);
     }
 
     [Fact]

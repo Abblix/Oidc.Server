@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResponseObject;
+using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using IntrospectionRequest = Abblix.Oidc.Server.Model.IntrospectionRequest;
@@ -22,9 +23,9 @@ using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>
-/// Formats introspection results as <see cref="IResult"/>: a plain RFC 7662 JSON document, or, when the client
-/// registered <c>introspection_signed_response_alg</c> and requests it via
-/// <c>Accept: application/token-introspection+jwt</c>, a signed/encrypted JWT (RFC 9701); the OAuth error otherwise.
+/// Formats introspection results as <see cref="IResult"/>: a plain RFC 7662 JSON document, or, when the caller
+/// requests it via <c>Accept: application/token-introspection+jwt</c>, a signed/encrypted JWT (RFC 9701); the OAuth
+/// error otherwise, with the HTTP 400 RFC 9701 section 5 has for a caller that authenticated with nothing.
 /// </summary>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 /// <param name="jwtBuilder">Builds the RFC 9701 JWT.</param>
@@ -39,8 +40,16 @@ public class IntrospectionResponseFormatter(
     public Task<IResult> FormatResponseAsync(IntrospectionRequest request, Result<IntrospectionSuccess, OidcError> response)
         => response.MatchAsync(
             onSuccess: FormatSuccessAsync,
-            onFailure: error => Task.FromResult(
-                error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().Issuer.OriginalString)));
+            onFailure: error => Task.FromResult(FormatFailure(error)));
+
+    private IResult FormatFailure(OidcError error) => error switch
+    {
+        // RFC 9701 section 5: "return an HTTP status code 400", without the Basic challenge of a failed credential
+        UnauthenticatedCallerError => Results.Json(
+            new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status400BadRequest),
+
+        _ => error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().Issuer.OriginalString),
+    };
 
     private async Task<IResult> FormatSuccessAsync(IntrospectionSuccess success)
     {
@@ -49,9 +58,9 @@ public class IntrospectionResponseFormatter(
         // RFC 7662 section 2.2: active is the only REQUIRED member and is a JSON boolean.
         introspectionResponse.SetProperty(IntrospectionSuccess.Parameters.Active, JsonValue.Create(success.Active));
 
-        // RFC 9701 section 4: a JWT response is returned only when the client registered a signing algorithm AND requested
-        // the JWT media type via Accept; otherwise the plain RFC 7662 JSON document is returned.
-        if (success.ClientInfo.IntrospectionSignedResponseAlgorithm == SigningAlgorithms.None || !AcceptsTokenIntrospectionJwt())
+        // RFC 9701 section 4: the caller requests a JWT response with the Accept header; otherwise the plain RFC 7662
+        // JSON document is returned
+        if (!AcceptsTokenIntrospectionJwt())
             return Results.Json(introspectionResponse);
 
         var jwt = await jwtBuilder.BuildAsync(tenantAccessor.CurrentTenant(), success.ClientInfo, introspectionResponse);

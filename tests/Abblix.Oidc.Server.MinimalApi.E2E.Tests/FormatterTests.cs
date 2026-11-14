@@ -6,10 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Buffers.Text;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Net.Mime;
+using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Abblix.Jwt;
@@ -204,6 +206,73 @@ public sealed class FormatterTests(TestFactory factory) : IClassFixture<TestFact
         var body = JsonNode.Parse(
             await json.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
         Assert.True(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
+    }
+
+    /// <summary>
+    /// RFC 9701 section 6: introspection_signed_response_alg is OPTIONAL and "The default, if omitted, is RS256". A
+    /// client that registered none and Accepts the +jwt media type gets a JWT signed RS256.
+    /// </summary>
+    [Fact]
+    public async Task Introspection_signs_with_rs256_for_a_client_that_registered_no_algorithm()
+    {
+        var client = CreateClient();
+        var discovery = await client.FetchDiscoveryAsync();
+
+        var registerResponse = await client.PostAsync(
+            OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.RegistrationEndpoint),
+            JsonContent.Create(new JsonObject
+            {
+                [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
+                [ClientRegistrationRequest.Parameters.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+                [ClientRegistrationRequest.Parameters.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+                [ClientRegistrationRequest.Parameters.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
+            }),
+            TestContext.Current.CancellationToken);
+        var registered = JsonNode.Parse(
+            await registerResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>();
+
+        var accessToken = (await client.AuthCodeTokensViaParAsync(discovery, clientId, clientSecret))
+            [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+        var introspectionEndpoint = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.IntrospectionEndpoint);
+
+        var response = await IntrospectWithAcceptAsync(
+            client, introspectionEndpoint, clientId, clientSecret, accessToken, MediaTypes.TokenIntrospectionJwt);
+
+        Assert.Equal(MediaTypes.TokenIntrospectionJwt, response.Content.Headers.ContentType?.MediaType);
+        var jwt = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var header = JsonNode.Parse(Encoding.UTF8.GetString(Base64Url.DecodeFromChars(jwt.Split('.')[0])))!;
+        Assert.Equal(SigningAlgorithms.RS256, header[JwtClaimTypes.Algorithm]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// RFC 9701 section 5: the server "MUST refuse to serve introspection requests that don't authenticate the caller
+    /// and return an HTTP status code 400". A request naming a client and carrying no credential of it is answered
+    /// 400 with invalid_client, which RFC 6749 section 5.2 defines for "no client authentication included".
+    /// </summary>
+    [Fact]
+    public async Task Introspection_without_client_authentication_is_answered_400()
+    {
+        var client = CreateClient();
+        var discovery = await client.FetchDiscoveryAsync();
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post, OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.IntrospectionEndpoint))
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [IntrospectionRequest.Parameters.Token] = "any-token",
+                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            }),
+        };
+        request.Headers.Accept.Add(MediaTypeWithQualityHeaderValue.Parse(MediaTypes.TokenIntrospectionJwt));
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(ErrorCodes.InvalidClient, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     private static async Task<HttpResponseMessage> IntrospectWithAcceptAsync(

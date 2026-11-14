@@ -42,7 +42,7 @@ public class ProfileSigningKeysValidator(IAuthServiceKeysProvider keys) : IClien
         var request = context.Request;
         if (request.IdTokenSignedResponseAlg is null || request.AuthorizationSignedResponseAlg is null)
         {
-            if (Array.Find(SecurityProfileRequirements.FapiSigningAlgorithms, Produces) is not { } given)
+            if (SecurityProfileRequirements.FapiSigningAlgorithmProducedBy(signingKeys) is not { } given)
             {
                 return ErrorFactory.InvalidClientMetadata(
                     "No signing key of this server produces " +

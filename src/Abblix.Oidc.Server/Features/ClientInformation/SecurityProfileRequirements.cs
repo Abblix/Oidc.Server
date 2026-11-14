@@ -340,6 +340,15 @@ public sealed record SecurityProfileRequirements
     internal static readonly string[] FapiSigningAlgorithms = [SigningAlgorithms.PS256, SigningAlgorithms.ES256];
 
     /// <summary>
+    /// The first algorithm of <see cref="FapiSigningAlgorithms"/> one of <paramref name="signingKeys"/> produces, or null
+    /// where none does: what this server signs with for a client its profile holds to those algorithms and that names
+    /// none of its own.
+    /// </summary>
+    /// <param name="signingKeys">The tenant's signing keys.</param>
+    internal static string? FapiSigningAlgorithmProducedBy(IReadOnlyCollection<JsonWebKey> signingKeys)
+        => Array.Find(FapiSigningAlgorithms, algorithm => signingKeys.Any(key => key.CanPerform(algorithm)));
+
+    /// <summary>
     /// Whether a JWS signed with <paramref name="algorithm"/> is one this profile admits.
     /// </summary>
     /// <param name="algorithm">The <c>alg</c> of the JWS, or null where it names none.</param>

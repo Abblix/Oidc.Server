@@ -24,8 +24,8 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 
 /// <summary>
 /// Provides a response formatter for introspection responses, returning either a plain JSON document (RFC 7662) or,
-/// when the client registered <c>introspection_signed_response_alg</c> and requests it via
-/// <c>Accept: application/token-introspection+jwt</c>, a signed/encrypted JWT (RFC 9701).
+/// when the caller requests it via <c>Accept: application/token-introspection+jwt</c>, a signed/encrypted JWT
+/// (RFC 9701); a caller that authenticated with nothing is answered with the HTTP 400 RFC 9701 section 5 has.
 /// </summary>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 /// <param name="jwtBuilder">Builds the RFC 9701 JWT.</param>
@@ -48,9 +48,16 @@ public class IntrospectionResponseFormatter(
     {
         return response.MatchAsync(
             onSuccess: FormatSuccessAsync,
-            onFailure: error => Task.FromResult(
-                error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().Issuer.OriginalString)));
+            onFailure: error => Task.FromResult(FormatFailure(error)));
     }
+
+    private ActionResult FormatFailure(OidcError error) => error switch
+    {
+        // RFC 9701 section 5: "return an HTTP status code 400", without the Basic challenge of a failed credential
+        UnauthenticatedCallerError => new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
+
+        _ => error.Format(StatusCodes.Status401Unauthorized, tenantAccessor.CurrentTenant().Issuer.OriginalString),
+    };
 
     private async Task<ActionResult> FormatSuccessAsync(IntrospectionSuccess success)
     {
@@ -62,9 +69,9 @@ public class IntrospectionResponseFormatter(
         // treated as active by the resource server.
         introspectionResponse.SetProperty(IntrospectionSuccess.Parameters.Active, JsonValue.Create(success.Active));
 
-        // RFC 9701 section 4: a JWT response is returned only when the client registered a signing algorithm AND requested
-        // the JWT media type via Accept; otherwise the plain RFC 7662 JSON document is returned.
-        if (success.ClientInfo.IntrospectionSignedResponseAlgorithm == SigningAlgorithms.None || !AcceptsTokenIntrospectionJwt())
+        // RFC 9701 section 4: the caller requests a JWT response with the Accept header; otherwise the plain RFC 7662
+        // JSON document is returned
+        if (!AcceptsTokenIntrospectionJwt())
         {
             return new JsonResult(introspectionResponse);
         }

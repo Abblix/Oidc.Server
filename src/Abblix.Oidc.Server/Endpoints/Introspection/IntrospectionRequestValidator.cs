@@ -61,6 +61,13 @@ public partial class IntrospectionRequestValidator(
 		IntrospectionRequest introspectionRequest,
 		ClientRequest clientRequest)
 	{
+		// RFC 9701 section 5: "An AS compliant with this specification MUST refuse to serve introspection requests
+		// that don't authenticate the caller and return an HTTP status code 400". Decided before authentication,
+		// since a request carrying no credential has nothing to authenticate
+		if (CarriesNoCredential(clientRequest))
+			return new UnauthenticatedCallerError("The caller presented no client credential");
+
+		// RFC 7662 section 2.3: a credential presented and invalid is answered 401, as RFC 6749 section 5.2 has it
 		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
 		if (clientInfo == null)
 		{
@@ -73,7 +80,7 @@ public partial class IntrospectionRequestValidator(
 		if (clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.None)
 		{
 			LogPublicClientRejected(clientInfo.ClientId);
-			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
+			return new UnauthenticatedCallerError("The client is not authorized");
 		}
 
 		// Charged after the caller has proven which client it is and before the token is read, which is where
@@ -132,4 +139,17 @@ public partial class IntrospectionRequestValidator(
 				return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 			});
 	}
+
+	/// <summary>
+	/// Whether the request carries none of the credentials a client authenticates with: an Authorization header
+	/// (RFC 6749 section 2.3.1), a client secret in the body, a client assertion (RFC 7521 section 4.2) or a TLS
+	/// client certificate (RFC 8705 section 2). A client_id alone is an identifier, not a credential.
+	/// </summary>
+	private static bool CarriesNoCredential(ClientRequest request) => request is
+	{
+		AuthorizationHeader: null,
+		ClientSecret: null or "",
+		ClientAssertion: null or "",
+		ClientCertificate: null,
+	};
 }
