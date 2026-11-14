@@ -196,6 +196,32 @@ public partial class JarRichAuthorizationRequestsTests
     }
 
     /// <summary>
+    /// RFC 9126 section 2.1: the client_id "is similarly required in a pushed authorization request". Only a form
+    /// carrying a request object may leave it out (section 3), so a pushed request of plain parameters naming no
+    /// client_id is refused, as the authorization endpoint refuses one, with unauthorized_client.
+    /// </summary>
+    [Fact]
+    public async Task PushedPlainParameters_WithoutAClientId_AreRefused()
+    {
+        var client = CreateClientFor(Factory);
+        var discovery = await FetchDiscoveryAsync(client);
+        var poster = await RegisterBasicSigningClientAsync(client, discovery, requireSignedRequestObject: false);
+
+        var form = CodeFlowParameters(poster.ClientId, GeneratePkcePair().Challenge);
+        form.Remove(AuthorizationRequest.Parameters.ClientId);
+        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.PushedAuthorizationRequestEndpoint!)
+        {
+            Content = new FormUrlEncodedContent(form),
+        };
+        request.Headers.Authorization = BasicAuthenticationOf(poster);
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, await ErrorResponseReader.ErrorCodeOf(response));
+    }
+
+    /// <summary>
     /// Pushes <paramref name="requestObject"/> as the only form parameter, <paramref name="poster"/> authenticating
     /// with HTTP Basic.
     /// </summary>
@@ -212,18 +238,27 @@ public partial class JarRichAuthorizationRequestsTests
                 [AuthorizationRequest.Parameters.Request] = requestObject,
             }),
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue(
-            TokenTypes.Basic,
-            Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                Uri.EscapeDataString(poster.ClientId) + ":" + Uri.EscapeDataString(poster.ClientSecret))));
+        request.Headers.Authorization = BasicAuthenticationOf(poster);
 
         return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 
     /// <summary>
+    /// HTTP Basic client authentication (RFC 6749 section 2.3.1) as <paramref name="poster"/>.
+    /// </summary>
+    private static AuthenticationHeaderValue BasicAuthenticationOf(SigningClient poster)
+        => new(
+            TokenTypes.Basic,
+            Convert.ToBase64String(Encoding.UTF8.GetBytes(
+                Uri.EscapeDataString(poster.ClientId) + ":" + Uri.EscapeDataString(poster.ClientSecret))));
+
+    /// <summary>
     /// A client that must sign its request objects and authenticates with client_secret_basic.
     /// </summary>
-    private static async Task<SigningClient> RegisterBasicSigningClientAsync(HttpClient client, DiscoveryDocument discovery)
+    private static async Task<SigningClient> RegisterBasicSigningClientAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        bool requireSignedRequestObject = true)
     {
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
         var registered = await RegisterClientAsync(client, discovery, new JsonObject
@@ -233,7 +268,7 @@ public partial class JarRichAuthorizationRequestsTests
             [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
             [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretBasic,
             [RegistrationMembers.Jwks] = JsonSerializer.SerializeToNode(PublicJwksFor(key)),
-            [RegistrationMembers.RequireSignedRequestObject] = true,
+            [RegistrationMembers.RequireSignedRequestObject] = requireSignedRequestObject,
         });
 
         return new SigningClient(
