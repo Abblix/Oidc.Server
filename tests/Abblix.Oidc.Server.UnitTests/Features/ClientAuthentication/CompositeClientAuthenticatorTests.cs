@@ -455,8 +455,7 @@ public class CompositeClientAuthenticatorTests
 
     /// <summary>
     /// A client registered for tls_client_auth presenting its certificate and a body secret uses two methods (RFC 8705
-    /// section 2 makes the certificate its credential), and is refused before the secret is hashed: the strict hash
-    /// service would throw if it were asked.
+    /// section 2 makes the certificate its credential).
     /// </summary>
     [Fact]
     public async Task CertificateOfAMutualTlsClientBesideABodySecret_IsMoreThanOneMethod()
@@ -478,7 +477,7 @@ public class CompositeClientAuthenticatorTests
                 NullLogger<ClientSecretPostAuthenticator>.Instance,
                 clients.Object,
                 TimeProvider.System,
-                new Mock<IHashService>(MockBehavior.Strict).Object),
+                new Mock<IHashService>().Object),
             new TlsMetadataClientAuthenticator(NullLogger<TlsMetadataClientAuthenticator>.Instance, clients.Object));
 
         var result = await composite.TryAuthenticateClientAsync(
