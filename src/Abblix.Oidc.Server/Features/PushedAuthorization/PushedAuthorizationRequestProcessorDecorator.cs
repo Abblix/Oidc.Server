@@ -22,8 +22,9 @@ namespace Abblix.Oidc.Server.Features.PushedAuthorization;
 /// its remaining time-to-live. Interactive continuations (login, consent, account selection) leave it in
 /// place so the user agent can re-enter the authorization endpoint with the same <c>request_uri</c>, except
 /// the one a request came back with from the login or account-creation page, which it is done with. A success
-/// also ends the flow, under the <c>request_uri</c> it began with, so the other pages of the flow are refused while
-/// they could still be presented, and a page whose flow another page ended first is answered with an error.
+/// also ends the flow, under the <c>request_uri</c> it began with, for as long as a page stored then can be
+/// presented, so the other pages of the flow are refused, and a page whose flow another page ended first is answered
+/// with an error.
 /// </summary>
 /// <param name="inner">The authorization request processor being decorated.</param>
 /// <param name="authorizationRequestStorage">The storage backing pushed authorization requests, from which
@@ -66,8 +67,8 @@ public class PushedAuthorizationRequestProcessorDecorator(
 
         // The URN the request was first fetched under - usually the one the client pushed - outlives the pages the
         // request went through, and is done with once a code or token is issued. So are the pages it led to that the
-        // code did not come by, as a refresh of one made: each carries this URN, and the record of the ended flow
-        // refuses them above while a page can still be presented.
+        // code did not come by, as a refresh of one made: each carries this URN, and PushedRequestFetcher refuses
+        // them by the record of the ended flow.
         if (response is SuccessfullyAuthenticated &&
             request.Model.OriginRequestUri is { } originRequestUri &&
             originRequestUri != request.RequestUri)
