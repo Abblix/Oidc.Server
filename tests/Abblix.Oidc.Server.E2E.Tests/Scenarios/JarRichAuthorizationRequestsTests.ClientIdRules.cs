@@ -219,7 +219,7 @@ public partial class JarRichAuthorizationRequestsTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(ErrorCodes.InvalidRequestObject, await ErrorResponseReader.ErrorCodeOf(response));
-        Assert.Equal(byReference ? new Uri(ServedRequestObject.Address) : null, served.Fetched);
+        Assert.Equal(byReference ? (new Uri(ServedRequestObject.Address), false) : null, served.Fetched);
     }
 
     /// <summary>
@@ -232,12 +232,14 @@ public partial class JarRichAuthorizationRequestsTests
 
         public string? Content { get; set; }
 
-        /// <summary>The address the server last fetched a request object from.</summary>
-        public Uri? Fetched { get; private set; }
+        /// <summary>
+        /// The address the server last fetched a request object from, and whether it asked past a cached copy.
+        /// </summary>
+        public (Uri Uri, bool Refetch)? Fetched { get; private set; }
 
         public Task<Result<T, OidcError>> FetchAsync<T>(Uri uri, bool refetch = false)
         {
-            Fetched = uri;
+            Fetched = (uri, refetch);
             return Task.FromResult<Result<T, OidcError>>((T)(object)Content!);
         }
     }
