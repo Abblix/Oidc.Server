@@ -11,6 +11,7 @@ using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -182,5 +183,141 @@ public partial class MultiTenancyRegistrationTests
         var globex = tenants.Single(tenant => tenant.Id == "globex");
         Assert.Equal(acme.SigningKeys.Single().KeyId, await KeyIdAtAsync(acme));
         Assert.Equal(globex.SigningKeys.Single().KeyId, await KeyIdAtAsync(globex));
+    }
+
+    /// <summary>
+    /// A tenant held to a FAPI profile signs with its first key of an algorithm both the deployment allows and the
+    /// profile permits, passing over an earlier key the profile does not: FAPI 1.0 Part 2 section 8.6, "For JWS, both
+    /// clients and authorization servers shall use PS256 or ES256 algorithms", and FAPI 2.0 section 5.4.1. A tenant
+    /// held to no profile, given the same keys, signs with the first as before.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.PS256)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.PS256)]
+    [InlineData(ClientSecurityProfile.None, SigningAlgorithms.RS256)]
+    public async Task TheTenantsSigner_SignsWithAnAlgorithmTheTenantsProfilePermits(
+        ClientSecurityProfile profile,
+        string expected)
+    {
+        using var provider = SigningUnder(
+            profile,
+            [SigningAlgorithms.RS256, SigningAlgorithms.PS256],
+            SigningAlgorithms.RS256,
+            SigningAlgorithms.PS256);
+        var acme = Entered(provider);
+
+        var signed = await provider.GetRequiredService<ISecurityEventTokenSigner>()
+            .SignAsync(new SecurityEventToken(new JsonWebToken()), TestContext.Current.CancellationToken);
+
+        var header = JsonNode.Parse(Base64Url.DecodeFromChars(signed.Split('.')[0]))!;
+        Assert.Equal(expected, header[JwtClaimTypes.Algorithm]?.GetValue<string>());
+        Assert.Equal(
+            acme.SigningKeys.Single(key => key.Algorithm == expected).KeyId,
+            header[JwtClaimTypes.KeyId]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Where the deployment sets no allowlist, a tenant held to a FAPI profile signs with an algorithm the profile
+    /// permits rather than with the RS256 the unset allowlist stands for, and a tenant held to no profile signs RS256 as
+    /// before.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.PS256)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.ES256)]
+    [InlineData(ClientSecurityProfile.None, SigningAlgorithms.RS256)]
+    public async Task WithNoAllowlistSet_TheTenantsSigner_SignsWithWhatTheTenantsProfilePermits(
+        ClientSecurityProfile profile,
+        string expected)
+    {
+        using var provider = SigningUnder(
+            profile,
+            null,
+            SigningAlgorithms.RS256,
+            expected == SigningAlgorithms.RS256 ? SigningAlgorithms.PS256 : expected);
+
+        var signed = await provider.GetRequiredService<ISecurityEventTokenSigner>()
+            .SignAsync(new SecurityEventToken(new JsonWebToken()), TestContext.Current.CancellationToken);
+
+        var header = JsonNode.Parse(Base64Url.DecodeFromChars(signed.Split('.')[0]))!;
+        Assert.Equal(expected, header[JwtClaimTypes.Algorithm]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A key declaring no algorithm, as one taken from a certificate, signs with the first algorithm the tenant may
+    /// sign with that its material performs: PS256 at a tenant held to FAPI 2.0, RS256 at one held to no profile.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.PS256)]
+    [InlineData(ClientSecurityProfile.None, SigningAlgorithms.RS256)]
+    public async Task AKeyDeclaringNoAlgorithm_SignsWithOneItsMaterialPerforms(
+        ClientSecurityProfile profile,
+        string expected)
+    {
+        using var provider = SigningUnder(profile, null, (string?)null);
+
+        var signed = await provider.GetRequiredService<ISecurityEventTokenSigner>()
+            .SignAsync(new SecurityEventToken(new JsonWebToken()), TestContext.Current.CancellationToken);
+
+        var header = JsonNode.Parse(Base64Url.DecodeFromChars(signed.Split('.')[0]))!;
+        Assert.Equal(expected, header[JwtClaimTypes.Algorithm]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A tenant held to a FAPI profile refuses to sign where no algorithm can be produced that both the deployment
+    /// allows and the profile permits: the deployment allows only what the profile does not, or the tenant has no key
+    /// of what both do. Nothing signed with RS256 leaves it.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { SigningAlgorithms.RS256 }, SigningAlgorithms.PS256)]
+    [InlineData(new[] { SigningAlgorithms.RS256, SigningAlgorithms.PS256 }, SigningAlgorithms.RS256)]
+    [InlineData(new[] { SigningAlgorithms.RS256, SigningAlgorithms.ES256 }, SigningAlgorithms.PS256)]
+    [InlineData(null, SigningAlgorithms.RS256)]
+    public async Task AtAFapiTenant_TheTenantsSigner_RefusesWithoutAPermittedAlgorithm(
+        string[]? allowed,
+        string keyAlgorithm)
+    {
+        using var provider = SigningUnder(
+            ClientSecurityProfile.Fapi2,
+            allowed,
+            SigningAlgorithms.RS256,
+            keyAlgorithm);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => provider
+            .GetRequiredService<ISecurityEventTokenSigner>()
+            .SignAsync(new SecurityEventToken(new JsonWebToken()), TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A container whose tenants' signer signs for acme, held to <paramref name="profile"/> with a key of each
+    /// algorithm given, in that order, the request served there; <paramref name="allowed"/> null sets no allowlist.
+    /// </summary>
+    private static ServiceProvider SigningUnder(
+        ClientSecurityProfile profile,
+        string[]? allowed,
+        params string?[] keyAlgorithms)
+    {
+        var provider = SigningEvents(
+            options =>
+            {
+                if (allowed is not null)
+                    options.AllowedSigningAlgorithms = allowed;
+            },
+            UseTenantSigner,
+            id => new TenantDefinition
+            {
+                Id = id,
+                Issuer = new Uri("https://auth.example.com/tenants/" + id),
+                DefaultSecurityProfile = profile,
+                SigningKeys =
+                [
+                    .. keyAlgorithms.Select<string?, JsonWebKey>(algorithm => algorithm == SigningAlgorithms.ES256
+                        ? JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, algorithm)
+                        : JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, algorithm)),
+                ],
+            });
+        var acme = provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants
+            .Single(tenant => tenant.Id == "acme");
+        EnterTenant(provider, acme);
+        return provider;
     }
 }
