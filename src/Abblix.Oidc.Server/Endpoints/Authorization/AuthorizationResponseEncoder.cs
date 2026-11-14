@@ -84,7 +84,10 @@ public class AuthorizationResponseEncoder(
 	/// JARM says nothing of a response JWT the server cannot produce; when the client asked for its responses
 	/// encrypted and publishes no key one can be encrypted to, the response goes to the redirect URI in the plain mode
 	/// the JARM mode delivers through, as the error response of RFC 6749 section 4.1.2.1: an error stays the error it
-	/// was, and a success becomes unauthorized_client, which is what the client cannot be issued to.
+	/// was, and a success becomes unauthorized_client, which is what the client cannot be issued to. This plain-mode
+	/// error is outside JARM: section 2.1 wants an error response inside the JWT, and a strict JARM client, which
+	/// processes nothing before the JWT checks of section 2.4 succeed, discards it; it only spares the request a server
+	/// error.
 	/// </remarks>
 	private async Task<AuthorizationResponse> PackJwtAsync(
 		TenantDefinition tenant,
