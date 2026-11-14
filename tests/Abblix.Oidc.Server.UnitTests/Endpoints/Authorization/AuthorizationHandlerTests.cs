@@ -10,6 +10,7 @@ using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -41,7 +42,8 @@ public class AuthorizationHandlerTests
         _validator = new Mock<IAuthorizationRequestValidator>(MockBehavior.Strict);
         _processor = new Mock<IAuthorizationRequestProcessor>(MockBehavior.Strict);
         _encoder = new Mock<IAuthorizationResponseEncoder>(MockBehavior.Strict);
-        _encoder.Setup(e => e.EncodeAsync(TestTenant.Matched, It.IsAny<Core.AuthorizationResponse>())).Returns(Task.CompletedTask);
+        _encoder.Setup(e => e.EncodeAsync(TestTenant.Matched, It.IsAny<Core.AuthorizationResponse>()))
+            .Returns<TenantDefinition, Core.AuthorizationResponse>((_, response) => Task.FromResult(response));
         _handler = new AuthorizationHandler(
             _fetcher.Object,
             _validator.Object,

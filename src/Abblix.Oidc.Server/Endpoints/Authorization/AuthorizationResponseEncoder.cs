@@ -19,7 +19,8 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 /// Default <see cref="IAuthorizationResponseEncoder"/>. Applies the <c>iss</c> (RFC 9207) and
 /// implicit/hybrid <c>scope</c> gating, and - for a JARM (<c>*.jwt</c>) response mode - packs the
 /// response parameters into a signed/encrypted <c>response</c> JWT and resolves the delivery mode.
-/// Mutates the response in place; the transport layer only maps the encoded response onto the wire.
+/// Mutates the response, or replaces it with an error when its JWT cannot be produced, and returns the one to
+/// deliver; the transport layer only maps the encoded response onto the wire.
 /// </summary>
 /// <param name="authorizationMetadata">Tells whether <c>iss</c> is advertised/emitted.</param>
 /// <param name="responseJwtBuilder">Builds the JARM <c>response</c> JWT.</param>
@@ -28,7 +29,7 @@ public class AuthorizationResponseEncoder(
 	IResponseJwtBuilder responseJwtBuilder) : IAuthorizationResponseEncoder
 {
 	/// <inheritdoc />
-	public async Task EncodeAsync(TenantDefinition tenant, AuthorizationResponse response)
+	public async Task<AuthorizationResponse> EncodeAsync(TenantDefinition tenant, AuthorizationResponse response)
 	{
 		switch (response)
 		{
@@ -44,8 +45,7 @@ public class AuthorizationResponseEncoder(
 				success.Issuer = IssuerOf(tenant);
 				success.Scope = carriesTokens ? string.Join(' ', success.GrantedScopes) : null;
 
-				await PackJwtAsync(tenant, success, carriesTokens, SuccessParameters(success));
-				break;
+				return await PackJwtAsync(tenant, success, carriesTokens, SuccessParameters(success));
 			}
 
 			// Errors are JARM-packed only when delivered to a redirect URI; non-redirectable errors
@@ -58,12 +58,13 @@ public class AuthorizationResponseEncoder(
 
 				error.Issuer = IssuerOf(tenant);
 
-				await PackJwtAsync(tenant, error, carriesTokens, ErrorParameters(error));
-				break;
+				return await PackJwtAsync(tenant, error, carriesTokens, ErrorParameters(error));
 			}
 
 			// Interaction responses (login/consent/account-selection) redirect to the AS's own UI,
 			// not the client, so JARM does not apply - leave them untouched.
+			default:
+				return response;
 		}
 	}
 
@@ -79,17 +80,42 @@ public class AuthorizationResponseEncoder(
 	/// When the response mode is a JARM <c>*.jwt</c> mode, packs the supplied parameters into the
 	/// <c>response</c> JWT and resolves the plaintext delivery mode; otherwise a no-op.
 	/// </summary>
-	private async Task PackJwtAsync(
+	/// <remarks>
+	/// JARM says nothing of a response JWT the server cannot produce; when the client asked for its responses
+	/// encrypted and publishes no key one can be encrypted to, the response goes to the redirect URI in the plain mode
+	/// the JARM mode delivers through, as the error response of RFC 6749 section 4.1.2.1: an error stays the error it
+	/// was, and a success becomes unauthorized_client, which is what the client cannot be issued to.
+	/// </remarks>
+	private async Task<AuthorizationResponse> PackJwtAsync(
 		TenantDefinition tenant,
 		ClientDeliveredResponse response,
 		bool carriesTokens,
 		IReadOnlyList<(string name, string? value)> parameters)
 	{
 		if (!response.ResponseMode.IsJwtMode())
-			return;
+			return response;
 
-		response.ResponseJwt = await responseJwtBuilder.BuildAsync(tenant, response.Model.ClientId, parameters);
-		response.ResponseMode = response.ResponseMode.ToDeliveryMode(carriesTokens);
+		var deliveryMode = response.ResponseMode.ToDeliveryMode(carriesTokens);
+		var built = await responseJwtBuilder.BuildAsync(tenant, response.Model.ClientId, parameters);
+		if (built.TryGetFailure(out var refusal))
+		{
+			if (response is AuthorizationError error)
+			{
+				error.ResponseMode = deliveryMode;
+				return error;
+			}
+
+			return new AuthorizationError(
+				response.Model,
+				ErrorCodes.UnauthorizedClient,
+				refusal.ErrorDescription,
+				deliveryMode,
+				response.Model.RedirectUri) { Issuer = response.Issuer };
+		}
+
+		response.ResponseJwt = built.GetSuccess();
+		response.ResponseMode = deliveryMode;
+		return response;
 	}
 
 	private static IReadOnlyList<(string name, string? value)> SuccessParameters(SuccessfullyAuthenticated success) =>

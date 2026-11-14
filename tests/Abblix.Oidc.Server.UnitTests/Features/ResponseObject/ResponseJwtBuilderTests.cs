@@ -178,6 +178,28 @@ public class ResponseJwtBuilderTests
     }
 
     /// <summary>
+    /// A client that asked for its responses encrypted and publishes no key one can be encrypted to (here an EC key
+    /// declaring no algorithm, which the RSA-OAEP-256 it registered does not fit) gets the formatter's refusal back
+    /// rather than an exception, for the caller to answer.
+    /// </summary>
+    [Fact]
+    public async Task BuildAsync_ForAClientWhoseKeysNothingCanBeEncryptedTo_ReturnsTheRefusal()
+    {
+        _clientKeys
+            .Setup(p => p.GetEncryptionKeys(It.IsAny<ClientInfo>()))
+            .Returns(new JsonWebKey[]
+            {
+                new EllipticCurveJsonWebKey { KeyId = "ec", Curve = EllipticCurveTypes.P256 },
+            }.ToAsyncEnumerable());
+        _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+
+        var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+
+        Assert.True(result.TryGetFailure(out var refusal));
+        Assert.Equal(ErrorCodes.InvalidClient, refusal.Error);
+    }
+
+    /// <summary>
     /// The JARM fallback is a setting, so a deployment whose clients all understand a stronger algorithm can
     /// raise it.
     /// </summary>

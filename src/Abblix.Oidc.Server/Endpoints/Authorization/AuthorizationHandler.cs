@@ -57,8 +57,7 @@ public class AuthorizationHandler(
         // JARM request - pack the parameters into the response JWT. Encoding happens here, at the single
         // convergence point for success and every error variant, after session_state is finalised.
         var response = await ProduceResponseAsync(tenant, request);
-        await responseEncoder.EncodeAsync(tenant, response);
-        return response;
+        return await responseEncoder.EncodeAsync(tenant, response);
     }
 
     private async Task<AuthorizationResponse> ProduceResponseAsync(TenantDefinition tenant, Model.AuthorizationRequest request)
