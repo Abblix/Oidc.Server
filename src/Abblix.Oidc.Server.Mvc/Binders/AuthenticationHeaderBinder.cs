@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 public class AuthenticationHeaderBinder : ModelBinderBase
 {
     /// <summary>
-    /// Binds every line of the header the model is named after, an empty line included.
+    /// Binds every line of the header the field is named after, an empty line included.
     /// </summary>
     /// <param name="bindingContext">The <see cref="ModelBindingContext"/> for the binding operation.</param>
     /// <remarks>
@@ -32,10 +32,12 @@ public class AuthenticationHeaderBinder : ModelBinderBase
     /// treats a parameter whose first value is empty as omitted (RFC 6749 section 3.1). That rule is about a parameter
     /// sent without a value; an empty Authorization line is still a line, and skipping it would drop the lines behind
     /// it, so a request repeating the field would read as carrying it once or not at all.
+    /// The header is looked up by the field name: the model name carries the prefix MVC gives a model, which is the
+    /// action parameter's name whenever the form happens to hold a field of that name.
     /// </remarks>
     public override Task BindModelAsync(ModelBindingContext bindingContext)
     {
-        if (bindingContext.HttpContext.Request.Headers.TryGetValue(bindingContext.ModelName, out var values) &&
+        if (bindingContext.HttpContext.Request.Headers.TryGetValue(bindingContext.FieldName, out var values) &&
             values.Count > 0)
         {
             bindingContext.Result = TryParse(bindingContext.ModelType, values, out var lines)

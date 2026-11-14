@@ -67,6 +67,7 @@ internal static class ModelBinderRunner
             ActionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor()),
             ModelMetadata = new EmptyModelMetadataProvider().GetMetadataForType(modelType),
             ModelName = headerName,
+            FieldName = headerName,
             ModelState = new ModelStateDictionary(),
             ValueProvider = new SingleEntryValueProvider(headerName, []),
         };
