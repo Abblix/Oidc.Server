@@ -30,9 +30,9 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator)
         if (context.ClientRequest.HasMoreThanOneAuthorizationHeader)
             return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
+        var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(
             tenant, context.ClientRequest);
-        if (clientInfo == null)
+        if (!authenticated.TryGetSuccess(out var clientInfo))
         {
             // RFC 8628 section 3.2 answers an error the way the token endpoint does, and RFC 6749 section 5.2 names
             // a failed client authentication invalid_client.

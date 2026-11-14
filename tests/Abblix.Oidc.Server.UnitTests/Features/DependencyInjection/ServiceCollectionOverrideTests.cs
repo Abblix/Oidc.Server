@@ -48,6 +48,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 
 using Xunit;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.DependencyInjection;
 
@@ -212,7 +213,7 @@ public class ServiceCollectionOverrideTests
             fapi2.ToTenant(),
             new ClientRequest { ClientId = TestConstants.DefaultClientId });
 
-        Assert.Null(authenticated);
+        Assert.False(authenticated.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -251,8 +252,8 @@ public class ServiceCollectionOverrideTests
         var authenticator = services.BuildServiceProvider().GetRequiredService<IClientAuthenticator>();
         var request = new ClientRequest { ClientId = TestConstants.DefaultClientId };
 
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(acme, request));
-        Assert.NotNull(await authenticator.TryAuthenticateClientAsync(globex, request));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(acme, request)).TryGetSuccess(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(globex, request)).TryGetSuccess(out _));
     }
 
     [Fact]

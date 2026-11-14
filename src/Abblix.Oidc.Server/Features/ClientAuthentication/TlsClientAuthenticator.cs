@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -64,28 +65,28 @@ public partial class TlsClientAuthenticator(
     /// 5. Comparing it against all keys in the client's JWKS (jwks or jwks_uri)
     /// Supports both RSA and ECDSA certificates.
     /// </remarks>
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
         // Require client certificate and client_id
         var certificate = request.ClientCertificate;
         if (certificate == null)
-            return null;
+            return ClientAuthenticationFailures.NoCredential;
 
         var clientId = request.ClientId;
         if (!clientId.NotNullOrWhiteSpace())
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
 
         var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         if (client == null)
         {
             LogClientNotFound(clientId);
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
         }
 
         if (!ClientAuthenticationMethods.SelfSignedTlsClientAuth.Equals(client.TokenEndpointAuthMethod, StringComparison.Ordinal))
         {
             // We currently only support self-signed mTLS in this authenticator
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
         }
 
         // Compute certificate public key and compare against client's JWKS signing keys
@@ -93,7 +94,7 @@ public partial class TlsClientAuthenticator(
         if (!await clientKeysProvider.GetSigningKeys(client).AnyAsync(PublicKeysMatch(certJwk)))
         {
             LogNoMatchingPublicKey(client.ClientId);
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
         }
 
         LogAuthenticated(client.ClientId);

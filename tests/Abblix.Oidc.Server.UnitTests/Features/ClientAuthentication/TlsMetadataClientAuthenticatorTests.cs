@@ -19,6 +19,8 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -72,7 +74,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -95,7 +97,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -119,7 +121,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -151,7 +153,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -181,7 +183,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -217,7 +219,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(client, result);
     }
 
@@ -253,7 +255,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -290,7 +292,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(client, result);
     }
 
@@ -328,7 +330,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -365,7 +367,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -402,7 +404,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(client, result);
     }
 
@@ -440,7 +442,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(client, result);
     }
 
@@ -478,7 +480,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -515,7 +517,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(client, result);
     }
 
@@ -553,7 +555,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -598,7 +600,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(client, result);
     }
 
@@ -634,7 +636,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -672,7 +674,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -710,7 +712,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -778,5 +780,17 @@ public class TlsMetadataClientAuthenticatorTests
         return request.CreateSelfSigned(
             TimeProvider.System.GetUtcNow().AddDays(-1),
             TimeProvider.System.GetUtcNow().AddDays(365));
+    }
+
+    /// <summary>
+    /// Without a certificate the request presents no credential to this authenticator.
+    /// </summary>
+    [Fact]
+    public async Task NoCertificate_PresentsNoCredential()
+    {
+        var result = await _authenticator.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant, new ClientRequest { ClientId = "client" });
+
+        Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
     }
 }

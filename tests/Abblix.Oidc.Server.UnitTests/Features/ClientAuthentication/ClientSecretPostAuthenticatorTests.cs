@@ -14,6 +14,11 @@ using Abblix.Oidc.Server.Features.Hashing;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
+using System.Threading.Tasks;
+using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -90,5 +95,20 @@ public class ClientSecretPostAuthenticatorTests : ClientAuthenticatorTestsBase<C
             ClientId = "   ",
             ClientSecret = ClientSecret
         };
+    }
+
+    /// <summary>
+    /// A secret in the body without a client_id is a credential presented that names no client.
+    /// </summary>
+    [Fact]
+    public async Task ASecretWithoutAClientId_IsAPresentedCredentialRefused()
+    {
+        var authenticator = CreateAuthenticator(new Mock<IClientInfoProvider>(MockBehavior.Strict));
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant, new ClientRequest { ClientSecret = ClientSecret });
+
+        Assert.True(result.TryGetFailure(out var failure));
+        Assert.IsNotType<UnauthenticatedCallerError>(failure);
     }
 }

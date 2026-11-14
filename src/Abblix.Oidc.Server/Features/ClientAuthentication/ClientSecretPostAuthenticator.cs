@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -53,10 +54,13 @@ public class ClientSecretPostAuthenticator(
 	/// A <see cref="Task"/> representing the asynchronous operation, which upon completion will yield the authenticated
 	/// <see cref="ClientInfo"/> or null if authentication fails.
 	/// </returns>
-	public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
-		if (!request.ClientId.NotNullOrWhiteSpace() || !request.ClientSecret.NotNullOrWhiteSpace())
-			return null;
+		if (!request.ClientSecret.NotNullOrWhiteSpace())
+			return ClientAuthenticationFailures.NoCredential;
+
+		if (!request.ClientId.NotNullOrWhiteSpace())
+			return ClientAuthenticationFailures.InvalidCredential;
 
 		return await TryAuthenticateAsync(
 			tenant,

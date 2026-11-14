@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -38,9 +39,9 @@ public abstract partial class ClientSecretAuthenticator(
 	/// <param name="secret">Client secret for verification.</param>
 	/// <param name="authenticationMethod">Authentication method used, ensuring compatibility with client configuration.</param>
 	/// <returns>
-	/// Authenticated client information if successful; otherwise, null.
+	/// Authenticated client information if successful; otherwise, the refusal of a credential presented and not valid.
 	/// </returns>
-	protected async Task<ClientInfo?> TryAuthenticateAsync(
+	protected async Task<Result<ClientInfo, OidcError>> TryAuthenticateAsync(
 		TenantDefinition tenant,
 		string? clientId,
 		[Credential] string? secret,
@@ -48,30 +49,30 @@ public abstract partial class ClientSecretAuthenticator(
 	{
 		if (!clientId.NotNullOrWhiteSpace() || !secret.NotNullOrWhiteSpace())
 		{
-			return null;
+			return ClientAuthenticationFailures.InvalidCredential;
 		}
 
 		var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
 		if (client == null)
 		{
 			LogClientNotFound(clientId);
-			return null;
+			return ClientAuthenticationFailures.InvalidCredential;
 		}
 
 		if (!authenticationMethod.Equals(client.TokenEndpointAuthMethod, StringComparison.Ordinal)) {
 			LogWrongAuthMethod(clientId);
-			return null;
+			return ClientAuthenticationFailures.InvalidCredential;
 		}
 
 		if (client is not { ClientSecrets.Length: > 0 })
 		{
 			LogNoSecretsConfigured(clientId);
-			return null;
+			return ClientAuthenticationFailures.InvalidCredential;
 		}
 
 		if (!TryValidateClientSecret(client, secret))
 		{
-			return null;
+			return ClientAuthenticationFailures.InvalidCredential;
 		}
 
 		return client;

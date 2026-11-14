@@ -68,16 +68,16 @@ public partial class IntrospectionRequestValidator(
 		if (clientRequest.HasMoreThanOneAuthorizationHeader)
 			return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-		// RFC 9701 section 5: "An AS compliant with this specification MUST refuse to serve introspection requests
-		// that don't authenticate the caller and return an HTTP status code 400". Decided before authentication,
-		// since a request carrying no credential has nothing to authenticate
-		if (CarriesNoCredential(clientRequest))
-			return new UnauthenticatedCallerError("The caller presented no client credential");
-
-		// RFC 7662 section 2.3: a credential presented and invalid is answered 401, as RFC 6749 section 5.2 has it
-		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
-		if (clientInfo == null)
+		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+		if (!authenticated.TryGetSuccess(out var clientInfo))
 		{
+			// RFC 9701 section 5: "An AS compliant with this specification MUST refuse to serve introspection
+			// requests that don't authenticate the caller and return an HTTP status code 400", where no
+			// authenticator, a host's own included, found a credential in the request
+			if (authenticated.GetFailure() is UnauthenticatedCallerError noCredential)
+				return noCredential;
+
+			// RFC 7662 section 2.3: a credential presented and invalid is answered 401, as RFC 6749 section 5.2 has it
 			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
 		}
 
@@ -146,19 +146,4 @@ public partial class IntrospectionRequestValidator(
 				return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 			});
 	}
-
-	/// <summary>
-	/// Whether the request carries none of the credentials a client authenticates with: an Authorization header line
-	/// (RFC 6749 section 2.3.1), parsed or not, since one that does not parse is still an attempt to authenticate
-	/// through the header, which RFC 6749 section 5.2 answers 401; a client secret in the body, a client assertion
-	/// (RFC 7521 section 4.2) or a TLS client certificate (RFC 8705 section 2). A client_id alone is an identifier, not a
-	/// credential.
-	/// </summary>
-	private static bool CarriesNoCredential(ClientRequest request) => request is
-	{
-		AuthorizationHeaderLines: null or { Count: 0 },
-		ClientSecret: null or "",
-		ClientAssertion: null or "",
-		ClientCertificate: null,
-	};
 }

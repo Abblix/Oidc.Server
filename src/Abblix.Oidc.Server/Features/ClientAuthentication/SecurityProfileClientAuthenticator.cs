@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -45,11 +46,11 @@ internal partial class SecurityProfileClientAuthenticator(
     public IEnumerable<string> ClientAuthenticationMethodsSupported
         => inner.ClientAuthenticationMethodsSupported;
 
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
-        var clientInfo = await inner.TryAuthenticateClientAsync(tenant, request);
-        if (clientInfo == null)
-            return null;
+        var result = await inner.TryAuthenticateClientAsync(tenant, request);
+        if (!result.TryGetSuccess(out var clientInfo))
+            return result;
 
         // The raw value, because the question below is whether this server DEFINES it - not what
         // it demands. What the client is held to comes from the combination further down, which
@@ -82,7 +83,7 @@ internal partial class SecurityProfileClientAuthenticator(
             !string.Equals(namedClientId, clientInfo.ClientId, StringComparison.Ordinal))
         {
             LogClientIdentifiersMismatch(clientInfo.ClientId, Sanitized.Value(namedClientId));
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
         }
         IReadOnlyList<string> violations =
         [
@@ -118,6 +119,6 @@ internal partial class SecurityProfileClientAuthenticator(
         else
             LogRegistrationCannotSatisfyDeploymentProfile(
                 clientInfo.ClientId, tenant.DefaultSecurityProfile, violations);
-        return null;
+        return ClientAuthenticationFailures.InvalidCredential;
     }
 }

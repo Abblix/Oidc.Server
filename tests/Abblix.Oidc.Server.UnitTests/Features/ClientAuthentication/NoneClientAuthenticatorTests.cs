@@ -17,6 +17,8 @@ using Moq;
 using System;
 using Xunit;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -60,9 +62,9 @@ public class NoneClientAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(PublicClientId, result.ClientId);
-        Assert.Equal(ClientType.Public, result.ClientType);
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(PublicClientId, result.GetSuccess().ClientId);
+        Assert.Equal(ClientType.Public, result.GetSuccess().ClientType);
     }
 
     /// <summary>
@@ -81,8 +83,8 @@ public class NoneClientAuthenticatorTests
                 tenant.Id == globex.Id ? CreatePublicClientInfo(PublicClientId) : null);
         var request = new ClientRequest { ClientId = PublicClientId };
 
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(acme, request));
-        Assert.NotNull(await authenticator.TryAuthenticateClientAsync(globex, request));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(acme, request)).TryGetSuccess(out _));
+        Assert.True((await authenticator.TryAuthenticateClientAsync(globex, request)).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -100,7 +102,7 @@ public class NoneClientAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -121,7 +123,7 @@ public class NoneClientAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -142,7 +144,7 @@ public class NoneClientAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -168,7 +170,7 @@ public class NoneClientAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -198,7 +200,7 @@ public class NoneClientAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -226,8 +228,8 @@ public class NoneClientAuthenticatorTests
         var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(PublicClientId, result.ClientId);
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(PublicClientId, result.GetSuccess().ClientId);
     }
 
     /// <summary>
@@ -290,5 +292,23 @@ public class NoneClientAuthenticatorTests
     {
         public Mock<ILogger<NoneClientAuthenticator>> Logger { get; init; } = null!;
         public Mock<IClientInfoProvider> ClientInfoProvider { get; init; } = null!;
+    }
+
+    /// <summary>
+    /// The method presents no credential, so a request it does not authenticate presented none to it: a confidential
+    /// client named by its client_id alone.
+    /// </summary>
+    [Fact]
+    public async Task AConfidentialClientNamedAlone_PresentsNoCredential()
+    {
+        var (authenticator, mocks) = CreateAuthenticator();
+        mocks.ClientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "confidential"))
+            .ReturnsAsync(new ClientInfo("confidential") { TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost });
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant, new ClientRequest { ClientId = "confidential" });
+
+        Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
     }
 }

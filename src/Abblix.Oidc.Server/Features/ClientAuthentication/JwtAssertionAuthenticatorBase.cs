@@ -19,6 +19,7 @@ using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -215,12 +216,16 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// </summary>
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the JWT to authenticate.</param>
-    /// <returns>The authenticated <see cref="ClientInfo"/>, or null if authentication fails.</returns>
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+    /// <returns>The authenticated <see cref="ClientInfo"/>, or why it is not one: no assertion presented, or one
+    /// presented and refused.</returns>
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
+        if (request is { ClientAssertionType: null, ClientAssertion: null or "" })
+            return ClientAuthenticationFailures.NoCredential;
+
         if (!TryGetJwtBearerAssertion(request, out var assertion))
         {
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
         }
 
         var validationResult = await ValidateJwtAsync(tenant, assertion);
@@ -228,7 +233,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         {
             var error = validationResult.GetFailure();
             LogJwtValidationError(Sanitized.Value(error));
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
         }
 
         var token = validJwt.Token;
@@ -236,7 +241,7 @@ public abstract partial class JwtAssertionAuthenticatorBase(
 
         if (!AssertionLinks.All(link => link(this, tenant, token, clientInfo)))
         {
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
         }
 
         // Read once for both consumers below, and refused rather than thrown where the payload
@@ -245,19 +250,19 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         if (!token.Payload.TryReadTimestamps(out var notBefore, out var expiresAt, out var issuedAt, out var whyUnreadable))
         {
             LogTimestampUnreadable(clientInfo.ClientId, whyUnreadable);
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
         }
 
         var timestamps = new AssertionTimestamps(notBefore, expiresAt, issuedAt);
 
         if (!TimestampsSatisfyTheClientsOwnProfile(tenant, timestamps, clientInfo))
         {
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
         }
 
         if (!await ReserveTheAssertionAsync(token, timestamps, clientInfo))
         {
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
         }
 
         return clientInfo;

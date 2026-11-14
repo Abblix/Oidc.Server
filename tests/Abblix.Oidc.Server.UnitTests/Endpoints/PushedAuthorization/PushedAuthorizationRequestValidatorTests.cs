@@ -27,6 +27,7 @@ using Abblix.Utils;
 using Moq;
 
 using Xunit;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.PushedAuthorization;
 
@@ -83,7 +84,7 @@ public class PushedAuthorizationRequestValidatorTests
         ClientRequest clientRequest)
     {
         var client = await _clientAuthenticator.Object.TryAuthenticateClientAsync(SingleIssuer.Tenant, clientRequest);
-        return await _validator.ValidateAsync(SingleIssuer.Tenant, client!, request, clientRequest);
+        return await _validator.ValidateAsync(SingleIssuer.Tenant, client.GetSuccess(), request, clientRequest);
     }
 
     private AuthorizationRequest? _capturedRequest;

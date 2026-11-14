@@ -100,8 +100,8 @@ public partial class RevocationRequestValidator(
 		if (clientRequest.HasMoreThanOneAuthorizationHeader)
 			return ErrorFactory.MoreThanOneAuthorizationHeader;
 
-		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
-		if (clientInfo == null)
+		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
+		if (!authenticated.TryGetSuccess(out var clientInfo))
 		{
 			return new OidcError(
 				ErrorCodes.InvalidClient,

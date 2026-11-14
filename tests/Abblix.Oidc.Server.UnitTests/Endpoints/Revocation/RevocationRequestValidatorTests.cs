@@ -28,6 +28,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Revocation;
 
@@ -158,7 +159,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -188,7 +189,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(null));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
 
         // Act
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
@@ -222,7 +223,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(publicClient));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(publicClient));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -254,7 +255,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -285,7 +286,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
@@ -314,7 +315,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -349,7 +350,7 @@ public class RevocationRequestValidatorTests
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
             .Callback(new Action<TenantDefinition, ClientRequest>((_, _) => callOrder.Add("authenticate")))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -378,7 +379,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(null));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
 
         // Act
         await _validator.ValidateAsync(SingleIssuer.Tenant, revocationRequest, clientRequest);
@@ -404,7 +405,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -432,7 +433,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -461,7 +462,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -490,7 +491,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -519,7 +520,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(clientInfo));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(clientInfo));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -552,7 +553,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(PublicClient));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(PublicClient));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -584,7 +585,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(PublicClient));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(PublicClient));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -616,7 +617,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(PublicClient));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(PublicClient));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -628,7 +629,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(AnotherPublicClient));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(AnotherPublicClient));
 
         var neighbor = await validator.ValidateAsync(
             SingleIssuer.Tenant,
@@ -660,7 +661,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(
                 isPublic ? PublicClientNamed(TestConstants.DefaultClientId) : new ClientInfo(TestConstants.DefaultClientId)));
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -698,7 +699,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(new ClientInfo(TestConstants.DefaultClientId)));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(TestConstants.DefaultClientId)));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -710,7 +711,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(AnotherPublicClient));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(AnotherPublicClient));
 
         await validator.ValidateAsync(
             SingleIssuer.Tenant,
@@ -758,7 +759,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(new ClientInfo($"{NamedClientId}@{Source}")));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo($"{NamedClientId}@{Source}")));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -769,7 +770,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(PublicClientNamed(NamedClientId)));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(PublicClientNamed(NamedClientId)));
 
         var impersonated = await validator.ValidateAsync(
             SingleIssuer.Tenant,
@@ -798,7 +799,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(PublicClient));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(PublicClient));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -831,7 +832,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(new ClientInfo(TestConstants.DefaultClientId)));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(TestConstants.DefaultClientId)));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -868,7 +869,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(PublicClient));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(PublicClient));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -897,7 +898,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(new ClientInfo(TestConstants.DefaultClientId)));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(TestConstants.DefaultClientId)));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
@@ -931,7 +932,7 @@ public class RevocationRequestValidatorTests
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
-            .Returns(Task.FromResult<ClientInfo?>(new ClientInfo(TestConstants.DefaultClientId)));
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(new ClientInfo(TestConstants.DefaultClientId)));
 
         // The second request is made from inside the first one's token validation, which is the only moment
         // that tells a budget held across the work from one released as soon as it was taken.

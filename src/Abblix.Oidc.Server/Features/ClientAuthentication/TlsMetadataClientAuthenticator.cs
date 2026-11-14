@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -65,35 +66,35 @@ public partial class TlsMetadataClientAuthenticator(
     /// 4. Validating certificate Subject DN (if configured)
     /// 5. Validating certificate SAN entries (if configured)
     /// </remarks>
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
         var certificate = request.ClientCertificate;
         if (certificate == null)
-            return null;
+            return ClientAuthenticationFailures.NoCredential;
 
         var clientId = request.ClientId;
         if (!clientId.NotNullOrWhiteSpace())
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
 
         var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         if (client == null)
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
 
         if (client.TokenEndpointAuthMethod != ClientAuthenticationMethods.TlsClientAuth)
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
 
         var options = client.TlsClientAuth;
         if (options == null)
         {
             LogNoTlsMetadataConfigured(client.ClientId);
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
         }
 
         if (!MatchSubjectDn(options.SubjectDn, certificate))
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
 
         if (!MatchSans(options, certificate))
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
 
         LogAuthenticated(client.ClientId);
         return client;
