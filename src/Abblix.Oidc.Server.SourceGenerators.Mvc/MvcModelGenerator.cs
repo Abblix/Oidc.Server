@@ -54,6 +54,7 @@ public class MvcModelGenerator : IIncrementalGenerator
 	private const string DisplayAttributeName = "global::System.ComponentModel.DataAnnotations.Display";
 	private const string RequiredAttributeName = "System.ComponentModel.DataAnnotations.RequiredAttribute";
 	private const string BindRequiredAttributeName = "global::Microsoft.AspNetCore.Mvc.ModelBinding.BindRequired";
+	private const string BindAttributeName = "global::Microsoft.AspNetCore.Mvc.Bind";
 	private const string RequestParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.RequestParameterBinder";
 	private const string SplitSourceParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.SplitSourceParameterBinder";
 	private const string CustomParameterBinderName = "global::Abblix.Oidc.Server.Mvc.Binders.CustomParameterBinder";
@@ -247,6 +248,11 @@ public class MvcModelGenerator : IIncrementalGenerator
 			// living in a coverage settings file, which is both tool-independent and the only route that
 			// works here - dotnet test refuses to run at all when handed --coverage-settings.
 			_writer.AppendLine($"[{ExcludeFromCoverageAttribute}]");
+			// The model's fields are read under their own names. Without a model name of its own, MVC reads them
+			// under the action parameter's name as a prefix whenever the request carries a field of that name, so
+			// an unrecognized field "tokenRequest" would hide grant_type, which RFC 6749 section 3.2 forbids:
+			// "The authorization server MUST ignore unrecognized request parameters".
+			_writer.AppendLine($"[{BindAttributeName}(Prefix = \"\")]");
 			_writer.AppendLine($"public partial record {stub.Name}");
 			_writer.AppendLine("{");
 

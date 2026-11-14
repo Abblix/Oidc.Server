@@ -44,6 +44,43 @@ public abstract class TestBase(TestFactory factory)
     }
 
     /// <summary>
+    /// Sends the request as it stands, which must be answered <paramref name="expected"/>, and then with
+    /// <paramref name="field"/> added, which must be answered the same, with the same error code where there is one.
+    /// </summary>
+    protected static async Task AssertAnsweredAsWithoutAsync(
+        Func<IEnumerable<KeyValuePair<string, string>>, Task<HttpResponseMessage>> send,
+        Dictionary<string, string> parameters,
+        string field,
+        HttpStatusCode expected)
+    {
+        var (plainStatus, plainError, plainBody) = await AnswerOfAsync(send(parameters));
+        Assert.True(plainStatus == expected, $"without {field}: {(int)plainStatus} {plainBody}");
+
+        var (status, error, body) = await AnswerOfAsync(
+            send(new Dictionary<string, string>(parameters) { [field] = "1" }));
+        Assert.True(status == expected, $"with {field}: {(int)status} {body}");
+        Assert.Equal(plainError, error);
+    }
+
+    private static async Task<(HttpStatusCode Status, string? Error, string Body)> AnswerOfAsync(
+        Task<HttpResponseMessage> sending)
+    {
+        using var response = await sending;
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var error = response.Content.Headers.ContentType?.MediaType switch
+        {
+            System.Net.Mime.MediaTypeNames.Application.Json
+                => JsonNode.Parse(body)?[ErrorResponse.Parameters.Error]?.GetValue<string>(),
+
+            // A redirect or an empty answer carries no body to name an error in
+            null => null,
+
+            var other => throw new InvalidOperationException($"No error is read from an answer of type {other}."),
+        };
+        return (response.StatusCode, error, body);
+    }
+
+    /// <summary>
     /// The shared test host factory, exposed for tests that need to build an isolated host variant
     /// (for example to turn on an opt-in option) via <see cref="Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory{TEntryPoint}.WithWebHostBuilder"/>.
     /// </summary>

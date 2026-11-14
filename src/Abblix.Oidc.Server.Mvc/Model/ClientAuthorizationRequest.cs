@@ -23,7 +23,11 @@ namespace Abblix.Oidc.Server.Mvc.Model;
 /// client request but a narrow projection of it specific to the management endpoints, where the
 /// client identifier travels in the URL path - a routing concept the core deliberately
 /// does not know about.
+/// <para>Its fields are read under their own names, as the generated models' are: a query field named after the
+/// action parameter is an unrecognized parameter, not a prefix the client identifier would then be looked up under.
+/// </para>
 /// </remarks>
+[Bind(Prefix = "")]
 public record ClientAuthorizationRequest
 {
     /// <summary>
