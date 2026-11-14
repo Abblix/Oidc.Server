@@ -77,6 +77,17 @@ internal sealed record JweEnvelope(
                 $"Unknown critical header parameter in JWE header: {crit[0]}");
         }
 
+        // RFC 7516 section 4.1.3: "zip" "MUST be understood and processed by implementations", and RFC 8725
+        // section 3.6: "Compression of data SHOULD NOT be done before encryption". This library decompresses
+        // nothing, so a compressed plaintext is refused here, ahead of the keys, as RFC 7516 section 5.2 step 5 has
+        // a parameter the implementation cannot process refused.
+        if (header.Json.ContainsKey(JwtClaimTypes.CompressionAlgorithm))
+        {
+            return new JwtValidationError(
+                JwtError.InvalidHeader,
+                "Compression ('zip') in a JWE header is not supported");
+        }
+
         return new JweEnvelope(decodedParts, header, algorithm, encryptionAlgorithm, encodedHeader);
     }
 }
