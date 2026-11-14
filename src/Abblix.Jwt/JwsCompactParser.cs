@@ -6,10 +6,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Buffers.Text;
-using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Abblix.Utils;
 
 namespace Abblix.Jwt;
@@ -37,14 +33,14 @@ internal static class JwsCompactParser
                 "Invalid JWT format: base64url decoding failed");
         }
 
-        if (!TryParseJsonObject(headerPart, out var headerObject))
+        if (!JoseJson.TryParseObject(headerPart, out var headerObject))
         {
             return new JwtValidationError(
                 JwtError.MalformedToken,
                 "Invalid JWS header: must be a JSON object");
         }
 
-        if (!TryParseJsonObject(payloadPart, out var payloadObject))
+        if (!JoseJson.TryParseObject(payloadPart, out var payloadObject))
         {
             return new JwtValidationError(
                 JwtError.MalformedToken,
@@ -59,28 +55,4 @@ internal static class JwsCompactParser
 
         return token;
     }
-
-    private static bool TryParseJsonObject(byte[] jwtPart, [NotNullWhen(true)] out JsonObject? jsonObject)
-    {
-        try
-        {
-            var json = Encoding.UTF8.GetString(jwtPart);
-            jsonObject = JsonNode.Parse(json, documentOptions: RejectRepeatedMemberNames) as JsonObject;
-        }
-        catch (JsonException)
-        {
-            jsonObject = null;
-        }
-        return jsonObject is not null;
-    }
-
-    /// <summary>
-    /// Makes the parser itself reject a repeated member name, which is the first of the two options
-    /// RFC 7519 Section 4 and RFC 7515 Section 4 allow a recipient. It reports the repetition as a
-    /// <see cref="JsonException"/> at parse time, alongside every other malformed-JSON verdict.
-    /// </summary>
-    private static readonly JsonDocumentOptions RejectRepeatedMemberNames = new()
-    {
-        AllowDuplicateProperties = false,
-    };
 }

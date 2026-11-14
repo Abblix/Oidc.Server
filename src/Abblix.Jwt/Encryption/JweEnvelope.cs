@@ -5,9 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Abblix.Utils;
 
 namespace Abblix.Jwt.Encryption;
@@ -37,22 +34,12 @@ internal sealed record JweEnvelope(
 
     private static Result<JweEnvelope, JwtValidationError> ReadEnvelope(byte[][] decodedParts, string encodedHeader)
     {
-        // Decode header JSON to get algorithms and key ID. A base64url-valid but non-JSON header (e.g. a
-        // truncated object) makes JsonNode.Parse throw JsonException; catch it and map to a typed validation
-        // error so an attacker-crafted JWE fails as invalid_token rather than surfacing as an unhandled 500.
-        var headerJson = Encoding.UTF8.GetString(decodedParts[0]);
-        JsonNode? headerNode;
-        try
-        {
-            headerNode = JsonNode.Parse(headerJson);
-        }
-        catch (JsonException)
-        {
-            return new JwtValidationError(JwtError.InvalidToken, "Invalid JWE header: not valid JSON");
-        }
-
-        if (headerNode is not JsonObject headerObject)
-            return new JwtValidationError(JwtError.InvalidToken, "Invalid JWE header: must be a JSON object");
+        // RFC 7516 section 5.2, steps 3 and 4: the header is a completely valid JSON object, and the recipient
+        // verifies "that the resulting JOSE Header does not contain duplicate Header Parameter names".
+        if (!JoseJson.TryParseObject(decodedParts[0], out var headerObject))
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                "Invalid JWE header: must be a JSON object without repeated member names");
 
         var header = new JsonWebTokenHeader(headerObject);
 
