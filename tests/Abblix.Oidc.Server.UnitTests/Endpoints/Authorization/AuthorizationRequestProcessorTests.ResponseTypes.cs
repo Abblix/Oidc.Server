@@ -90,7 +90,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(CreateConsents());
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, session, It.IsAny<AuthorizationContext>(), request.ClientInfo, null, It.IsAny<DateTimeOffset?>()))
-            .ThrowsAsync(new AudienceKeyRefusedException([new Uri("https://orders.example.com")], "refused"));
+            .ThrowsAsync(new AudienceKeyRefusedException([new Uri("https://orders.example.com")], "RSA-OAEP-256", "refused"));
 
         var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
@@ -218,6 +218,33 @@ public partial class AuthorizationRequestProcessorTests
         Assert.Null(success.Code);
         Assert.Null(success.AccessToken);
         Assert.Same(expectedIdToken, success.IdToken);
+    }
+
+    /// <summary>
+    /// An ID token the client's key set cannot receive is refused by the identity token service; the authorization
+    /// endpoint answers the refusal on its error response rather than failing as a server error.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WithResponseTypeIdToken_TheClientsKeySetCannotReceive_IsAnsweredWithTheRefusal()
+    {
+        var request = CreateRequest(responseType: [ResponseTypes.IdToken]);
+        var session = CreateAuthSession();
+
+        _authSessionService
+            .Setup(s => s.GetAvailableAuthSessions())
+            .Returns(new[] { session }.ToAsyncEnumerable());
+        _consentsProvider
+            .Setup(p => p.GetUserConsentsAsync(TestTenant.Matched, request, session))
+            .ReturnsAsync(CreateConsents());
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, true, null, null, null, session, null)))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidClient, "no usable key"));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        var error = Assert.IsType<AuthorizationError>(result);
+        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
+        Assert.Equal(request.Model.RedirectUri, error.RedirectUri);
     }
 
     /// <summary>

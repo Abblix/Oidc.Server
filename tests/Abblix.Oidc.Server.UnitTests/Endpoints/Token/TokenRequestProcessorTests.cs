@@ -164,7 +164,7 @@ public partial class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(
                 TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, null,
                 It.IsAny<DateTimeOffset?>()))
-            .ThrowsAsync(new AudienceKeyRefusedException([new Uri("https://orders.example.com")], "refused"));
+            .ThrowsAsync(new AudienceKeyRefusedException([new Uri("https://orders.example.com")], "RSA-OAEP-256", "refused"));
 
         var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 

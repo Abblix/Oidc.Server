@@ -55,8 +55,8 @@ public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
         var responseType = request.Model.ResponseType;
         var standalone = !responseType.HasFlag(ResponseTypes.Code) && !responseType.HasFlag(ResponseTypes.Token);
 
-        // The client's key set was judged against its profile by the authorization endpoint's ClientValidator in this
-        // very request, so a refusal here is one changed in between
+        // A key set nothing can be encrypted to is refused by the formatter, which the authorization endpoint answers as
+        // the client's error rather than as a server one
         var created = await identityTokenService.CreateIdentityTokenAsync(
             tenant,
             new IdentityTokenRequest(
@@ -67,6 +67,16 @@ public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
                 result.Code,
                 result.AccessToken?.EncodedJwt,
                 result.Model.State));
+        if (created is { } issued && issued.TryGetFailure(out var refusal))
+        {
+            return new AuthorizationError(
+                request.Model,
+                refusal.Error,
+                refusal.ErrorDescription,
+                request.ResponseMode,
+                request.Model.RedirectUri);
+        }
+
         result.IdToken = created?.GetSuccess();
         return null;
     }

@@ -53,7 +53,8 @@ internal static partial class AudienceKeyRefusal
         }
         catch (AudienceKeyRefusedException refused)
         {
-            LogAudienceKeyRefused(logger, Sanitized.Value(string.Join(" ", refused.Resources)));
+            LogAudienceKeyRefused(
+                logger, Sanitized.Value(string.Join(" ", refused.Resources)), Sanitized.Value(refused.DefaultAlgorithm));
             throw;
         }
     }
@@ -61,6 +62,6 @@ internal static partial class AudienceKeyRefusal
     [LoggerMessage(
         EventId = LogEvents.TokenIssuance.AccessTokenService.AudienceKeyRefused,
         Level = LogLevel.Warning,
-        Message = "No access token issued for {Resources}: none of the encryption keys it publishes is one a token can be encrypted to under the security profile in force")]
-    private static partial void LogAudienceKeyRefused(ILogger logger, Sanitized resources);
+        Message = "No access token issued for {Resources}: none of the encryption keys it publishes is one a token can be encrypted to under the security profile in force, a key declaring no algorithm taken under {DefaultAlgorithm}, the access token's own encryption setting or the default")]
+    private static partial void LogAudienceKeyRefused(ILogger logger, Sanitized resources, Sanitized defaultAlgorithm);
 }

@@ -85,14 +85,17 @@ public class AudienceKeyResolver(
             // not register or the profile forbids, or of a type the default algorithm does not fit), and the next one
             // is taken; a resource holding only such keys still asks for encryption, so it is refused
             var key = keys
-                    .Select(candidate => issuer.EncryptionAlgorithmFor(profile, candidate, defaultAlgorithm) is { } algorithm
-                        ? new AudienceEncryptionKey(candidate, algorithm)
-                        : null)
-                    .FirstOrDefault(candidate => candidate is not null)
+                    .Select(candidate => (Key: candidate,
+                        Algorithm: issuer.EncryptionAlgorithmFor(profile, candidate, defaultAlgorithm)))
+                    .Where(candidate => candidate.Algorithm is not null)
+                    .Select(candidate => new AudienceEncryptionKey(candidate.Key, candidate.Algorithm!))
+                    .FirstOrDefault()
                 ?? throw new AudienceKeyRefusedException(
                     [resource],
+                    defaultAlgorithm,
                     $"The resource '{resource}' publishes no encryption key this server can encrypt an access " +
-                    "token to under the security profile in force");
+                    $"token to under the security profile in force, a key declaring no algorithm taken under " +
+                    $"{defaultAlgorithm}");
 
             if (audienceKey is not null)
             {
