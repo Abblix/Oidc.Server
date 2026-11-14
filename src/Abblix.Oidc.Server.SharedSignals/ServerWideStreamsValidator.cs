@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.SharedSignals;
@@ -25,6 +26,12 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// <param name="services">Tells whether streams are declared for the whole server.</param>
 internal sealed class ServerWideStreamsValidator(IServiceProviderIsService services) : IValidateOptions<OidcOptions>
 {
+    /// <summary>Registers it beside the other validators of the server's settings.</summary>
+    /// <param name="services">The service collection.</param>
+    public static void Register(IServiceCollection services)
+        => services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ServerWideStreamsValidator>());
+
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, OidcOptions options)
         => services.IsService(typeof(IReadOnlyList<ConfiguredStream>))

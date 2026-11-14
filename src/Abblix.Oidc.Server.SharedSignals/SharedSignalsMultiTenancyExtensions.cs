@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.SecurityEvents.Abstractions;
@@ -15,7 +14,6 @@ using Abblix.SharedSignals.Transmitter;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.SharedSignals;
 
@@ -96,8 +94,8 @@ public static class SharedSignalsMultiTenancyExtensions
         services.Replace(ServiceDescriptor.Singleton<IPushDeliverySweep, TenantPushDeliverySweep>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITenantClosing, TenantStreamsClosing>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, TenantSharedSignalsStartupCheck>());
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, ServerWideStreamsValidator>());
+        SecurityEventSigningKeysCheck.Register(services);
+        ServerWideStreamsValidator.Register(services);
 
         return builder;
     }

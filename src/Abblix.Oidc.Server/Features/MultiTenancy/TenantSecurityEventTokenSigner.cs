@@ -22,8 +22,9 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// tenant transmits with that tenant's published keys alone.
 /// </summary>
 /// <remarks>
-/// The key is the tenant's first signing key of an algorithm the deployment allows
-/// (<see cref="SecurityEventsOptions.AllowedSigningAlgorithms"/>) and the tenant's security profile permits: FAPI 1.0
+/// The key is the tenant's first signing key of an algorithm <see cref="AlgorithmsFor"/> names: one the deployment
+/// allows (<see cref="SecurityEventsOptions.AllowedSigningAlgorithms"/>) and the tenant's security profile permits, or,
+/// where the deployment sets no allowlist, one the profile admits in place of the RS256 that stands for: FAPI 1.0
 /// Part 2 section 8.6, "For JWS, both clients and authorization servers shall use PS256 or ES256 algorithms", and FAPI
 /// 2.0 section 5.4.1, "Authorization servers, clients, and resource servers when creating or processing JWTs shall ...
 /// use PS256, ES256, or EdDSA (using the Ed25519 variant) algorithms". The profile is the tenant's own: a stream names
@@ -61,13 +62,10 @@ public sealed class TenantSecurityEventTokenSigner(
         CancellationToken cancellationToken)
     {
         var profile = SecurityProfileRequirements.For(tenant, null);
-        var permitted = (options.Value.AllowedSigningAlgorithms ?? [.. SecurityEventsOptions.DefaultSigningAlgorithms])
-            .Where(profile.PermitsSigningAlgorithm)
-            .ToArray();
+        var permitted = AlgorithmsFor(profile, options.Value);
 
         var signingKey = await keys.GetSigningKeys(tenant, true).FirstOrDefaultAsync(
-                             key => key.Algorithm is { } algorithm &&
-                                    permitted.Contains(algorithm, StringComparer.Ordinal),
+                             key => SignsWith(key, permitted),
                              cancellationToken)
                          ?? throw new InvalidOperationException(
                              $"A security event token cannot be signed: the tenant '{tenant.Id}' has no signing key " +
@@ -78,4 +76,28 @@ public sealed class TenantSecurityEventTokenSigner(
         token.Token.Header.Algorithm = signingKey.Algorithm;
         return await issuer.IssueAsync(profile, token.Token, signingKey);
     }
+
+    /// <summary>
+    /// The algorithms a tenant held to <paramref name="profile"/> signs a security event token with: those the
+    /// deployment allows that the profile permits, or, where the deployment sets no allowlist, those the profile admits,
+    /// the default RS256 where it admits any.
+    /// </summary>
+    /// <remarks>
+    /// The default stands for no choice of the deployment's, so a profile that refuses it is not overruled by it. It
+    /// stays the set the deployment's verifier accepts: what this server signs does not widen what it accepts.
+    /// </remarks>
+    /// <param name="profile">The tenant's security profile.</param>
+    /// <param name="options">What the deployment allows to sign with.</param>
+    internal static string[] AlgorithmsFor(SecurityProfileRequirements profile, SecurityEventsOptions options)
+        => options.AllowedSigningAlgorithms is { } allowed
+            ? [.. allowed.Where(profile.PermitsSigningAlgorithm)]
+            : [.. (IEnumerable<string>?)profile.SigningAlgorithmsAdmitted()
+                  ?? SecurityEventsOptions.DefaultSigningAlgorithms];
+
+    /// <summary>
+    /// Whether <paramref name="key"/> declares one of <paramref name="algorithms"/>: a key declaring none is not taken,
+    /// since the token would then state no algorithm it was signed with.
+    /// </summary>
+    internal static bool SignsWith(JsonWebKey key, string[] algorithms)
+        => key.Algorithm is { } algorithm && algorithms.Contains(algorithm, StringComparer.Ordinal);
 }

@@ -78,39 +78,29 @@ public sealed class SharedSignalsTenantIsolationTests
     /// A tenant held to FAPI 2.0 signs its events with an algorithm the profile permits, and a receiver verifies them
     /// against the keys the tenant publishes: FAPI 2.0 section 5.4.1, "Authorization servers, clients, and resource
     /// servers when creating or processing JWTs shall ... use PS256, ES256, or EdDSA (using the Ed25519 variant)
-    /// algorithms". The tenant held to no profile, with keys of the same algorithms and the same allowlist, signs with
-    /// its first key, RS256, as before.
+    /// algorithms". So it does whether the deployment names the algorithms it allows or leaves them unset, which stands
+    /// for RS256 alone. The tenant held to no profile, with keys of the same algorithms and the same allowlist, signs
+    /// with its first key, RS256, as before.
     /// </summary>
-    [Fact]
-    public async Task AFapiTenantsEvents_AreSignedWithAnAlgorithmItsProfilePermits()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AFapiTenantsEvents_AreSignedWithAnAlgorithmItsProfilePermits(bool allowlistSet)
     {
         var ct = TestContext.Current.CancellationToken;
         ConfiguredStream[] declared =
             [new ConfiguredStream { ReceiverId = ReceiverId, StreamId = StreamId, EventsRequested = [MembershipChanged] }];
         await using var app = await StartAsync(
-            // FAPI 2.0 section 5.4.1 holds the tokens the server signs for itself to the same algorithms
-            beforeMultiTenancy: services => services.Configure<OidcOptions>(options =>
-            {
-                options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
-                options.ServiceTokens.RefreshToken.Signing.Algorithm = SigningAlgorithms.PS256;
-                options.ServiceTokens.RegistrationAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
-                options.ServiceTokens.InitialAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
-            }),
+            beforeMultiTenancy: services => services.Configure<OidcOptions>(SignServiceTokensWithPs256),
             declare: server => server
                 .AddConfiguredStreams("acme", declared)
                 .AddConfiguredStreams("globex", declared),
-            tenantAt: (id, path) => new TenantDefinition
+            tenantAt: (id, path) => FapiAtAcme(id, path, SigningAlgorithms.RS256, SigningAlgorithms.PS256),
+            events: options =>
             {
-                Id = id,
-                Issuer = new Uri(Host + path),
-                DefaultSecurityProfile = id == "acme" ? ClientSecurityProfile.Fapi2 : ClientSecurityProfile.None,
-                SigningKeys =
-                [
-                    JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256),
-                    JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.PS256),
-                ],
-            },
-            events: options => options.AllowedSigningAlgorithms = [SigningAlgorithms.RS256, SigningAlgorithms.PS256]);
+                if (allowlistSet)
+                    options.AllowedSigningAlgorithms = [SigningAlgorithms.RS256, SigningAlgorithms.PS256];
+            });
         Assert.Equal(1, await DispatchAsync(app, "acme", ct));
         Assert.Equal(1, await DispatchAsync(app, "globex", ct));
 
@@ -123,6 +113,54 @@ public sealed class SharedSignalsTenantIsolationTests
         var unprofiled = Assert.Single(await PollAsync(globex, Globex, ct));
         Assert.Equal(SigningAlgorithms.RS256, AlgorithmOf(unprofiled));
         Assert.True(VerifiesAgainst(unprofiled, await KeySetOfAsync(globex, Globex, ct)));
+    }
+
+    /// <summary>
+    /// A tenant held to FAPI 2.0 whose keys and the deployment's allowlist produce no algorithm the profile permits
+    /// would sign none of its events, so the server does not start: the tenant has no key of PS256 or ES256, or the
+    /// allowlist the deployment names holds neither.
+    /// </summary>
+    [Theory]
+    [InlineData(false, SigningAlgorithms.RS256)]
+    [InlineData(true, SigningAlgorithms.PS256)]
+    public async Task AFapiTenantWithoutAPermittedSigningAlgorithm_StopsTheServer(bool allowlistSet, string keyAlgorithm)
+    {
+        var refusal = await Assert.ThrowsAsync<OptionsValidationException>(() => StartAsync(
+            beforeMultiTenancy: services => services.Configure<OidcOptions>(SignServiceTokensWithPs256),
+            tenantAt: (id, path) => id == "acme" ? FapiAtAcme(id, path, keyAlgorithm) : TenantAt(id, path),
+            events: options =>
+            {
+                if (allowlistSet)
+                    options.AllowedSigningAlgorithms = [SigningAlgorithms.RS256];
+            }));
+
+        Assert.Single(refusal.Failures);
+    }
+
+    /// <summary>
+    /// The tenant <paramref name="id"/> at <paramref name="path"/>, held to FAPI 2.0 when it is acme and to no profile
+    /// otherwise, with an RSA signing key of each algorithm given.
+    /// </summary>
+    private static TenantDefinition FapiAtAcme(string id, string path, params string[] keyAlgorithms) => new()
+    {
+        Id = id,
+        Issuer = new Uri(Host + path),
+        DefaultSecurityProfile = id == "acme" ? ClientSecurityProfile.Fapi2 : ClientSecurityProfile.None,
+        SigningKeys =
+        [
+            .. keyAlgorithms.Select(algorithm => JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, algorithm)),
+        ],
+    };
+
+    /// <summary>
+    /// FAPI 2.0 section 5.4.1 holds the tokens the server signs for itself to the same algorithms.
+    /// </summary>
+    private static void SignServiceTokensWithPs256(OidcOptions options)
+    {
+        options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+        options.ServiceTokens.RefreshToken.Signing.Algorithm = SigningAlgorithms.PS256;
+        options.ServiceTokens.RegistrationAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+        options.ServiceTokens.InitialAccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
     }
 
     /// <summary>

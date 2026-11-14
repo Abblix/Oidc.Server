@@ -217,6 +217,32 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// Where the deployment sets no allowlist, a tenant held to a FAPI profile signs with an algorithm the profile
+    /// permits rather than with the RS256 the unset allowlist stands for, and a tenant held to no profile signs RS256 as
+    /// before.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.PS256)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.ES256)]
+    [InlineData(ClientSecurityProfile.None, SigningAlgorithms.RS256)]
+    public async Task WithNoAllowlistSet_TheTenantsSigner_SignsWithWhatTheTenantsProfilePermits(
+        ClientSecurityProfile profile,
+        string expected)
+    {
+        using var provider = SigningUnder(
+            profile,
+            null,
+            SigningAlgorithms.RS256,
+            expected == SigningAlgorithms.RS256 ? SigningAlgorithms.PS256 : expected);
+
+        var signed = await provider.GetRequiredService<ISecurityEventTokenSigner>()
+            .SignAsync(new SecurityEventToken(new JsonWebToken()), TestContext.Current.CancellationToken);
+
+        var header = JsonNode.Parse(Base64Url.DecodeFromChars(signed.Split('.')[0]))!;
+        Assert.Equal(expected, header[JwtClaimTypes.Algorithm]?.GetValue<string>());
+    }
+
+    /// <summary>
     /// A tenant held to a FAPI profile refuses to sign where no algorithm can be produced that both the deployment
     /// allows and the profile permits: the deployment allows only what the profile does not, or the tenant has no key
     /// of what both do. Nothing signed with RS256 leaves it.
@@ -225,8 +251,9 @@ public partial class MultiTenancyRegistrationTests
     [InlineData(new[] { SigningAlgorithms.RS256 }, SigningAlgorithms.PS256)]
     [InlineData(new[] { SigningAlgorithms.RS256, SigningAlgorithms.PS256 }, SigningAlgorithms.RS256)]
     [InlineData(new[] { SigningAlgorithms.RS256, SigningAlgorithms.ES256 }, SigningAlgorithms.PS256)]
+    [InlineData(null, SigningAlgorithms.RS256)]
     public async Task AtAFapiTenant_TheTenantsSigner_RefusesWithoutAPermittedAlgorithm(
-        string[] allowed,
+        string[]? allowed,
         string keyAlgorithm)
     {
         using var provider = SigningUnder(
@@ -241,16 +268,20 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
-    /// A container whose tenants' signer signs for acme, held to <paramref name="profile"/> with an RSA key of each
-    /// algorithm given, in that order, the request served there.
+    /// A container whose tenants' signer signs for acme, held to <paramref name="profile"/> with a key of each
+    /// algorithm given, in that order, the request served there; <paramref name="allowed"/> null sets no allowlist.
     /// </summary>
     private static ServiceProvider SigningUnder(
         ClientSecurityProfile profile,
-        string[] allowed,
+        string[]? allowed,
         params string[] keyAlgorithms)
     {
         var provider = SigningEvents(
-            options => options.AllowedSigningAlgorithms = allowed,
+            options =>
+            {
+                if (allowed is not null)
+                    options.AllowedSigningAlgorithms = allowed;
+            },
             UseTenantSigner,
             id => new TenantDefinition
             {
@@ -259,8 +290,9 @@ public partial class MultiTenancyRegistrationTests
                 DefaultSecurityProfile = profile,
                 SigningKeys =
                 [
-                    .. keyAlgorithms.Select(algorithm =>
-                        JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, algorithm)),
+                    .. keyAlgorithms.Select<string, JsonWebKey>(algorithm => algorithm == SigningAlgorithms.ES256
+                        ? JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, algorithm)
+                        : JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, algorithm)),
                 ],
             });
         var acme = provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants
