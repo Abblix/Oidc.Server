@@ -195,7 +195,10 @@ public class LogoutConfirmationStoreTests
             .ReturnsAsync(false);
         var store = new LogoutConfirmationStore(storage.Object, new EntityStorageKeyFactory(), Options.Create(_options));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.IssueAsync(SingleIssuer.Tenant, SessionId));
+        // On a thread of its own and with a deadline, so an issuing that never ends fails the test instead of the run
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Task.Run(() => store.IssueAsync(SingleIssuer.Tenant, SessionId), TestContext.Current.CancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
     }
 
     /// <summary>
