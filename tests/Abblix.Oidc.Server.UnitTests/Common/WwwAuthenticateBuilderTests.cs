@@ -17,9 +17,7 @@ namespace Abblix.Oidc.Server.UnitTests.Common;
 /// Unit tests for <see cref="WwwAuthenticateBuilder"/>: covers Bearer-only emission per
 /// RFC 6750 section 3, DPoP-only emission per RFC 9449 section 7.1 (including the <c>algs</c>
 /// attribute), the dual-scheme ordering rule (DPoP first, Bearer second when both are
-/// advertised), and the «Bearer line carries no error attributes when the failure was
-/// DPoP-specific» exception that prevents the Bearer line from misrepresenting the
-/// failure.
+/// advertised), and which of the two carries the error (RFC 9449 section 7.2).
 /// </summary>
 public class WwwAuthenticateBuilderTests
 {
@@ -27,6 +25,9 @@ public class WwwAuthenticateBuilderTests
 
     private static readonly OidcError InvalidToken = new(ErrorCodes.InvalidToken, "Token expired");
     private static readonly OidcError InvalidDPoPProof = new InvalidDPoPProofError("DPoP proof rejected");
+
+    private static readonly OidcError InsufficientScope =
+        new(ErrorCodes.InsufficientScope, "Needs openid") { RequiredScope = Scopes.OpenId };
 
     private static readonly string[] DPoPAlgs = ["RS256", "ES256"];
 
@@ -164,17 +165,142 @@ public class WwwAuthenticateBuilderTests
         Assert.StartsWith("Bearer ", challenges[1]);
     }
 
+    /// <summary>
+    /// RFC 9449 section 7.2: "If the mechanism used to attempt authentication could be established unambiguously,
+    /// then the corresponding challenge SHOULD be used to deliver error information". A DPoP failure puts the error
+    /// on the DPoP challenge and leaves the Bearer one bare.
+    /// </summary>
     [Fact]
-    public void BuildChallenges_DualScheme_BearerCarriesNoErrorAttributes()
+    public void BuildChallenges_DPoPPresented_ErrorOnDPoPOnly()
     {
-        // RFC 9449 section 7.1: «the Bearer scheme didn't fail; the client used the DPoP scheme».
-        // Attaching error="invalid_dpop_proof" to the Bearer line would misrepresent the
-        // failure - the Bearer line carries only the realm.
         var challenges = WwwAuthenticateBuilder.BuildChallenges(
-            InvalidDPoPProof, Realm, DPoPAlgs, advertiseBearer: true);
+            InvalidDPoPProof with { PresentedScheme = AccessTokenScheme.DPoP }, Realm, DPoPAlgs, advertiseBearer: true);
 
-        Assert.Equal($"Bearer realm=\"{Realm}\"", challenges[1]);
+        Assert.Equal(
+            [
+                $"DPoP realm=\"{Realm}\", error=\"{ErrorCodes.InvalidDPoPProof}\", " +
+                $"error_description=\"DPoP proof rejected\", algs=\"RS256 ES256\"",
+                $"Bearer realm=\"{Realm}\"",
+            ],
+            challenges);
     }
+
+    /// <summary>
+    /// RFC 9449 section 7.2, Figure 18: a request carrying <c>Authorization: Bearer INVALID_TOKEN</c> is answered
+    /// with the error on the Bearer challenge, and the DPoP challenge keeps only its <c>algs</c>.
+    /// </summary>
+    [Fact]
+    public void BuildChallenges_BearerPresented_ErrorOnBearerOnly()
+    {
+        var challenges = WwwAuthenticateBuilder.BuildChallenges(
+            InvalidToken with { PresentedScheme = AccessTokenScheme.Bearer }, Realm, DPoPAlgs, advertiseBearer: true);
+
+        Assert.Equal(
+            [
+                $"DPoP realm=\"{Realm}\", algs=\"RS256 ES256\"",
+                $"Bearer realm=\"{Realm}\", error=\"{ErrorCodes.InvalidToken}\", error_description=\"Token expired\"",
+            ],
+            challenges);
+    }
+
+    /// <summary>
+    /// RFC 9449 section 7.2: where the mechanism cannot be established, "both Bearer and DPoP challenges MAY be used
+    /// to deliver error information" (Figure 19).
+    /// </summary>
+    [Fact]
+    public void BuildChallenges_SchemeNotEstablished_ErrorOnBoth()
+    {
+        var challenges = WwwAuthenticateBuilder.BuildChallenges(InvalidToken, Realm, DPoPAlgs, advertiseBearer: true);
+
+        Assert.Equal(
+            [
+                $"DPoP realm=\"{Realm}\", error=\"{ErrorCodes.InvalidToken}\", error_description=\"Token expired\", " +
+                "algs=\"RS256 ES256\"",
+                $"Bearer realm=\"{Realm}\", error=\"{ErrorCodes.InvalidToken}\", error_description=\"Token expired\"",
+            ],
+            challenges);
+    }
+
+    /// <summary>
+    /// RFC 9449 section 7.2: "If no authentication information has been included with the request, then the challenges
+    /// SHOULD NOT include an error code or other error information", whatever scheme is recorded.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(AccessTokenScheme.Bearer)]
+    [InlineData(AccessTokenScheme.DPoP)]
+    public void BuildChallenges_MissingAuthentication_BareWhateverTheScheme(AccessTokenScheme? scheme)
+    {
+        var challenges = WwwAuthenticateBuilder.BuildChallenges(
+            new MissingAuthenticationError("No access token provided") { PresentedScheme = scheme },
+            Realm, DPoPAlgs, advertiseBearer: true);
+
+        Assert.Equal([$"DPoP realm=\"{Realm}\", algs=\"RS256 ES256\"", $"Bearer realm=\"{Realm}\""], challenges);
+    }
+
+    /// <summary>
+    /// A sole challenge carries the error whichever scheme was used: with no algorithm to advertise DPoP is not
+    /// offered, and the client that used it still learns why it was refused.
+    /// </summary>
+    [Fact]
+    public void BuildChallenges_DPoPPresentedButNotOffered_ErrorOnTheSoleBearerChallenge()
+    {
+        var challenges = WwwAuthenticateBuilder.BuildChallenges(
+            InvalidToken with { PresentedScheme = AccessTokenScheme.DPoP }, Realm, [], advertiseBearer: true);
+
+        Assert.Equal(
+            [$"Bearer realm=\"{Realm}\", error=\"{ErrorCodes.InvalidToken}\", error_description=\"Token expired\""],
+            challenges);
+    }
+
+    /// <summary>
+    /// The same for a resource advertising DPoP alone, answering a client that used Bearer.
+    /// </summary>
+    [Fact]
+    public void BuildChallenges_BearerPresentedButNotOffered_ErrorOnTheSoleDPoPChallenge()
+    {
+        var challenges = WwwAuthenticateBuilder.BuildChallenges(
+            InvalidToken with { PresentedScheme = AccessTokenScheme.Bearer }, Realm, DPoPAlgs, advertiseBearer: false);
+
+        Assert.Equal(
+            [
+                $"DPoP realm=\"{Realm}\", error=\"{ErrorCodes.InvalidToken}\", error_description=\"Token expired\", " +
+                "algs=\"RS256 ES256\"",
+            ],
+            challenges);
+    }
+
+    /// <summary>
+    /// RFC 6750 section 3.1: insufficient_scope "MAY include the "scope" attribute with the scope necessary to access
+    /// the protected resource", and RFC 9449 section 7.1 lets the DPoP challenge carry it "as defined in [RFC6750],
+    /// Section 3". It rides the challenge carrying the error and only that one.
+    /// </summary>
+    [Fact]
+    public void BuildChallenges_InsufficientScopeOverBearer_NamesTheScopeOnBearer()
+        => Assert.Equal(
+            [
+                $"DPoP realm=\"{Realm}\", algs=\"RS256 ES256\"",
+                $"Bearer realm=\"{Realm}\", error=\"{ErrorCodes.InsufficientScope}\", " +
+                $"error_description=\"Needs openid\", scope=\"{Scopes.OpenId}\"",
+            ],
+            WwwAuthenticateBuilder.BuildChallenges(
+                InsufficientScope with { PresentedScheme = AccessTokenScheme.Bearer },
+                Realm, DPoPAlgs, advertiseBearer: true));
+
+    /// <summary>
+    /// The same refusal over DPoP names the scope on the DPoP challenge, before its <c>algs</c>.
+    /// </summary>
+    [Fact]
+    public void BuildChallenges_InsufficientScopeOverDPoP_NamesTheScopeOnDPoP()
+        => Assert.Equal(
+            [
+                $"DPoP realm=\"{Realm}\", error=\"{ErrorCodes.InsufficientScope}\", " +
+                $"error_description=\"Needs openid\", scope=\"{Scopes.OpenId}\", algs=\"RS256 ES256\"",
+                $"Bearer realm=\"{Realm}\"",
+            ],
+            WwwAuthenticateBuilder.BuildChallenges(
+                InsufficientScope with { PresentedScheme = AccessTokenScheme.DPoP },
+                Realm, DPoPAlgs, advertiseBearer: true));
 
     [Fact]
     public void BuildChallenges_BearerNotAdvertised_ReturnsDPoPOnly()

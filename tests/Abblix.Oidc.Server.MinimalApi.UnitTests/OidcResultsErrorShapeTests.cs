@@ -150,14 +150,17 @@ public class OidcResultsErrorShapeTests
     }
 
     /// <summary>
-    /// RFC 9449 section 7.1: when both schemes are advertised the DPoP line comes first, and the Bearer line
-    /// carries only the realm - the Bearer scheme did not fail, so attaching the DPoP error to it would name the
-    /// wrong culprit.
+    /// When both schemes are advertised the DPoP line comes first, and a failure over DPoP leaves the Bearer line
+    /// bare: RFC 9449 section 7.2, "If the mechanism used to attempt authentication could be established
+    /// unambiguously, then the corresponding challenge SHOULD be used to deliver error information".
     /// </summary>
     [Fact]
     public async Task Advertising_both_schemes_puts_dpop_first_and_leaves_the_bearer_line_bare()
     {
-        var error = new InvalidDPoPProofError("The proof is missing the htm claim");
+        var error = new InvalidDPoPProofError("The proof is missing the htm claim")
+        {
+            PresentedScheme = AccessTokenScheme.DPoP,
+        };
 
         var response = await HttpResultRunner.RunAsync(
             error.Format(StatusCodes.Status400BadRequest, Realm, DPoPAlgs, advertiseBearer: true));

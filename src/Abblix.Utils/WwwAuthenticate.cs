@@ -67,7 +67,7 @@ public static class WwwAuthenticate
         var first = true;
 
         foreach (var (name, value) in parameters)
-            Append(name, value);
+            Append(name, WithinTheAttributeSet(name, value));
 
         return builder.ToString();
 
@@ -132,4 +132,56 @@ public static class WwwAuthenticate
             first = false;
         }
     }
+
+    /// <summary>The attribute naming why the presented credentials did not suffice (RFC 6750 Section 3).</summary>
+    private const string ErrorAttribute = "error";
+
+    /// <summary>The attribute explaining the error to a developer (RFC 6750 Section 3).</summary>
+    private const string ErrorDescriptionAttribute = "error_description";
+
+    /// <summary>The attribute naming the scope a request needs (RFC 6750 Section 3).</summary>
+    private const string ScopeAttribute = "scope";
+
+    /// <summary>
+    /// <paramref name="value"/> held to the narrower character set RFC 6750 Section 3 gives the attribute it is the
+    /// value of, which the quoted-string grammar above would otherwise let through.
+    /// </summary>
+    /// <remarks>
+    /// RFC 6750 Section 3: "Values for the "scope" attribute (specified in Appendix A.4 of [RFC6749]) MUST NOT include
+    /// characters outside the set %x21 / %x23-5B / %x5D-7E for representing scope values and %x20 for delimiters
+    /// between scope values. Values for the "error" and "error_description" attributes (specified in Appendixes A.7
+    /// and A.8 of [RFC6749]) MUST NOT include characters outside the set %x20-21 / %x23-5B / %x5D-7E." RFC 9449
+    /// Section 7.1 gives the DPoP challenge the same three attributes "as defined in [RFC6750], Section 3".
+    /// <para>
+    /// The section says what may not be emitted and not what to do instead, so the handling is chosen here, by what
+    /// the value is. A description is prose for a developer and often quotes what a client sent, so a character
+    /// outside the set is replaced, as <see cref="OAuthErrorDescription"/> replaces it in a response body. An error
+    /// code and a scope are identifiers a client compares: one character replaced names a code or a scope nobody
+    /// defined, so such a value is refused, and since both come from the code that builds the challenge, the refusal
+    /// lands on that code.
+    /// </para>
+    /// </remarks>
+    private static string? WithinTheAttributeSet(string name, string? value)
+    {
+        switch (name)
+        {
+            case ErrorDescriptionAttribute when value is not null:
+                return OAuthErrorDescription.Sanitize(value);
+
+            case ErrorAttribute or ScopeAttribute when value is not null && !value.All(IsAdmittedInAnIdentifier):
+                throw new ArgumentException(
+                    $"The {name} '{value}' has a character RFC 6750 Section 3 keeps out of that attribute",
+                    nameof(value));
+
+            default:
+                return value;
+        }
+    }
+
+    /// <summary>
+    /// %x20-21 / %x23-5B / %x5D-7E: NQSCHAR of an error code (RFC 6749 Appendix A.7), which is also the NQCHAR of a
+    /// scope token together with the space delimiting two of them (Appendix A.4).
+    /// </summary>
+    private static bool IsAdmittedInAnIdentifier(char character)
+        => character is (>= ' ' and <= '!') or (>= '#' and <= '[') or (>= ']' and <= '~');
 }

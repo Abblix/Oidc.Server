@@ -115,6 +115,7 @@ public class UserInfoResponseFormatter(
             {
                 DPoPAlgorithmsAdmitted =
                     DPoPAlgorithms.AdmittedBy(SecurityProfileRequirements.For(tenant, found.ClientInfo)),
+                PresentedScheme = found.PresentedScheme,
             });
         }
 

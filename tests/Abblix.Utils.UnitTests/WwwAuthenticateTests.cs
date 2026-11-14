@@ -121,8 +121,54 @@ public class WwwAuthenticateTests
     [InlineData("keeps \u0080 the first obs-text", "keeps \u0080 the first obs-text")]
     public void Challenge_EmitsOnlyWhatTheGrammarAdmits(string value, string expected)
     {
-        var header = WwwAuthenticate.Challenge("DPoP", ("error_description", value));
+        var header = WwwAuthenticate.Challenge("DPoP", ("realm", value));
 
-        Assert.Equal($"DPoP error_description=\"{expected}\"", header);
+        Assert.Equal($"DPoP realm=\"{expected}\"", header);
     }
+
+    /// <summary>
+    /// RFC 6750 Section 3: the error_description value "MUST NOT include characters outside the set %x20-21 /
+    /// %x23-5B / %x5D-7E", narrower than the quoted-string a realm may be. A character outside it is replaced; each
+    /// end of each range is a row, so a bound moved by one fails one.
+    /// </summary>
+    [Theory]
+    [InlineData("quote \" inside", "quote ? inside")]
+    [InlineData("back \\ slash", "back ? slash")]
+    [InlineData("tab\there", "tab?here")]
+    [InlineData("non-ASCII \u00e9", "non-ASCII ?")]
+    [InlineData("first obs-text \u0080", "first obs-text ?")]
+    [InlineData("del\u007f", "del?")]
+    [InlineData("bang ! hash # bracket [ close ] tilde ~", "bang ! hash # bracket [ close ] tilde ~")]
+    public void Challenge_ErrorDescription_KeepsToTheRfc6750Set(string value, string expected)
+    {
+        var header = WwwAuthenticate.Challenge("Bearer", ("error", "invalid_token"), ("error_description", value));
+
+        Assert.Equal($"Bearer error=\"invalid_token\", error_description=\"{expected}\"", header);
+    }
+
+    /// <summary>
+    /// RFC 6750 Section 3 holds the error and scope attributes to the same set. They are identifiers a client
+    /// compares, so a value outside the set is refused rather than emitted with a character changed.
+    /// </summary>
+    [Theory]
+    [InlineData("error", "a\"b")]
+    [InlineData("error", "a\\b")]
+    [InlineData("error", "caf\u00e9")]
+    [InlineData("error", "a\tb")]
+    [InlineData("scope", "openid\u00e9")]
+    [InlineData("scope", "a\"b")]
+    [InlineData("scope", "a\u007fb")]
+    public void Challenge_ErrorOrScopeOutsideTheRfc6750Set_IsRefused(string attribute, string value)
+        => Assert.Throws<ArgumentException>(() => WwwAuthenticate.Challenge("Bearer", (attribute, value)));
+
+    /// <summary>
+    /// The ends of the admitted ranges pass unchanged in an error code and a scope, the space included.
+    /// </summary>
+    [Theory]
+    [InlineData("error", "a !#[]~ b")]
+    [InlineData("scope", "openid profile urn:example:channel=HBO&urn:example:rating=G,PG-13")]
+    public void Challenge_ErrorOrScopeWithinTheRfc6750Set_IsEmittedAsItStands(string attribute, string value)
+        => Assert.Equal(
+            $"Bearer {attribute}=\"{value}\"",
+            WwwAuthenticate.Challenge("Bearer", (attribute, value)));
 }

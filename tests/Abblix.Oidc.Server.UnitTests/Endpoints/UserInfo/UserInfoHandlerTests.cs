@@ -64,6 +64,28 @@ public class UserInfoHandlerTests
         Assert.Equal(["ES256", "PS256"], error.DPoPAlgorithmsAdmitted!.Order(StringComparer.Ordinal));
     }
 
+    /// <summary>
+    /// RFC 9449 section 7.2: the challenge of the scheme the token was presented with carries the error. A refusal of
+    /// the validator's, made before any token is trusted, is stamped with that scheme as the processor's is.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AValidatorRefusal_CarriesTheSchemeTheTokenWasPresentedWith()
+    {
+        var userInfoRequest = new UserInfoRequest();
+        var clientRequest = new ClientRequest
+        {
+            AuthorizationHeader = new System.Net.Http.Headers.AuthenticationHeaderValue(TokenTypes.DPoP, "token"),
+        };
+        _validator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidToken, "The token is expired"));
+
+        var result = await _handler.HandleAsync(SingleIssuer.Tenant, userInfoRequest, clientRequest);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(AccessTokenScheme.DPoP, error.PresentedScheme);
+    }
+
     private static UserInfoRequest CreateUserInfoRequest() => new()
     {
         AccessTokenInForm = "access_token_value",
@@ -133,7 +155,7 @@ public class UserInfoHandlerTests
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.Same(userInfoFound, response);
+        Assert.Equal(userInfoFound with { PresentedScheme = AccessTokenScheme.Bearer }, response);
         _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest), Times.Once);
         _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }
@@ -161,7 +183,7 @@ public class UserInfoHandlerTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
-        Assert.Equal(error, failure);
+        Assert.Equal(error with { PresentedScheme = AccessTokenScheme.Bearer }, failure);
         _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest), Times.Once);
         _processor.VerifyNoOtherCalls();
     }
@@ -194,7 +216,7 @@ public class UserInfoHandlerTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
-        Assert.Equal(error, failure with { DPoPAlgorithmsAdmitted = null });
+        Assert.Equal(error with { PresentedScheme = AccessTokenScheme.Bearer }, failure with { DPoPAlgorithmsAdmitted = null });
         _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest), Times.Once);
         _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }

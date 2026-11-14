@@ -68,14 +68,22 @@ public class UserInfoResponseFormatterTests
         var formatter = new UserInfoResponseFormatter(
             TimeProvider.System, clientJwtFormatter.Object, tenantAccessor, options.Object);
         Result<UserInfoFoundResponse, OidcError> found =
-            new UserInfoFoundResponse(new System.Text.Json.Nodes.JsonObject(), client, tenant.Issuer.OriginalString);
+            new UserInfoFoundResponse(new System.Text.Json.Nodes.JsonObject(), client, tenant.Issuer.OriginalString)
+            {
+                PresentedScheme = AccessTokenScheme.Bearer,
+            };
 
         var response = await ActionResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), found));
 
         Assert.Equal(StatusCodes.Status401Unauthorized, response.StatusCode);
-        var challenge = Abblix.Oidc.Server.MinimalApi.UnitTests.ChallengeReader.Parse(
-            response.Headers[Microsoft.Net.Http.Headers.HeaderNames.WWWAuthenticate][0]);
-        Assert.Equal(ErrorCodes.InvalidToken, challenge.Parameters["error"]);
+        // RFC 9449 section 7.2: the refusal is answered on the challenge of the scheme the token was presented with
+        var challenges = response.Headers[Microsoft.Net.Http.Headers.HeaderNames.WWWAuthenticate]
+            .Select(Abblix.Oidc.Server.MinimalApi.UnitTests.ChallengeReader.Parse)
+            .ToArray();
+        var bearer = Assert.Single(challenges, challenge => challenge.Scheme == TokenTypes.Bearer);
+        var dpop = Assert.Single(challenges, challenge => challenge.Scheme == TokenTypes.DPoP);
+        Assert.Equal(ErrorCodes.InvalidToken, bearer.Parameters["error"]);
+        Assert.DoesNotContain("error", dpop.Parameters.Keys);
     }
 
     /// <summary>

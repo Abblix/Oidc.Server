@@ -95,13 +95,20 @@ public class UserInfoResponseFormatterTests
         var formatter = new UserInfoResponseFormatter(
             TimeProvider.System, clientJwtFormatter.Object, new ServedBy(Served), options.Object);
         Result<UserInfoFoundResponse, OidcError> found =
-            new UserInfoFoundResponse(new JsonObject(), client, Served.Issuer.OriginalString);
+            new UserInfoFoundResponse(new JsonObject(), client, Served.Issuer.OriginalString)
+            {
+                PresentedScheme = AccessTokenScheme.Bearer,
+            };
 
         var response = await HttpResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), found));
 
         Assert.Equal(StatusCodes.Status401Unauthorized, response.StatusCode);
-        var challenge = ChallengeReader.Parse(response.Headers[HeaderNames.WWWAuthenticate][0]);
-        Assert.Equal(ErrorCodes.InvalidToken, challenge.Parameters["error"]);
+        // RFC 9449 section 7.2: the refusal is answered on the challenge of the scheme the token was presented with
+        var challenges = response.Headers[HeaderNames.WWWAuthenticate].Select(ChallengeReader.Parse).ToArray();
+        var bearer = Assert.Single(challenges, challenge => challenge.Scheme == TokenTypes.Bearer);
+        var dpop = Assert.Single(challenges, challenge => challenge.Scheme == TokenTypes.DPoP);
+        Assert.Equal(ErrorCodes.InvalidToken, bearer.Parameters["error"]);
+        Assert.DoesNotContain("error", dpop.Parameters.Keys);
     }
 
     /// <summary>
