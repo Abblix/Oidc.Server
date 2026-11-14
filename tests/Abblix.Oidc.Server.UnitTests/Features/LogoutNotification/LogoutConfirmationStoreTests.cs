@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Storages.Proto;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -150,25 +151,51 @@ public class LogoutConfirmationStoreTests
 
     /// <summary>
     /// Two first requests for one session that overlap are asked the same question, so the end user's answer to
-    /// the page either of them rendered ends the session. Both read before either writes, which is the overlap
-    /// that issuing by a read and then a write lets each of them answer with a value of its own, the later write
-    /// voiding the earlier one.
+    /// the page either of them rendered ends the session. The other request runs whole inside this one's read,
+    /// which is the overlap where issuing by a read and then a write lets each of them answer with a value of its
+    /// own, the later write voiding the earlier one.
     /// </summary>
     [Fact]
     public async Task TwoOverlappingFirstRequests_AreAskedTheSameQuestion()
     {
-        var storage = new DistributedCacheStorage(
-            new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
-            new ProtobufSerializer());
-        var overlapping = new ReadsMeetFirst(storage, readers: 2);
-        var store = new LogoutConfirmationStore(overlapping, new EntityStorageKeyFactory(), Options.Create(_options));
+        var keyFactory = new EntityStorageKeyFactory();
+        var overlapping = new LetsAnotherCallerIn(
+            new DistributedCacheStorage(
+                new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
+                new ProtobufSerializer()),
+            keyFactory.LogoutConfirmationKey(SingleIssuer.Tenant, SessionId));
+        var store = new LogoutConfirmationStore(overlapping.Storage, keyFactory, Options.Create(_options));
 
-        var issued = await Task.WhenAll(
-            Task.Run(() => store.IssueAsync(SingleIssuer.Tenant, SessionId), TestContext.Current.CancellationToken),
-            Task.Run(() => store.IssueAsync(SingleIssuer.Tenant, SessionId), TestContext.Current.CancellationToken));
+        string? other = null;
+        overlapping.OnNextReadOf(async () => other = await store.IssueAsync(SingleIssuer.Tenant, SessionId));
 
-        Assert.Equal(issued[0], issued[1]);
-        Assert.True(await store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, issued[0]));
+        var mine = await store.IssueAsync(SingleIssuer.Tenant, SessionId);
+
+        Assert.Equal(other, mine);
+        Assert.True(await store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, mine));
+    }
+
+    /// <summary>
+    /// A storage that refuses every write and reads nothing back, as one whose write still counts an expired entry
+    /// while its read does not, fails the request with the cause rather than keeping it, and a thread, busy for good.
+    /// </summary>
+    [Fact]
+    public async Task AStorageThatNeverTakesTheQuestion_FailsTheRequest()
+    {
+        var storage = new Mock<IEntityStorage>(MockBehavior.Strict);
+        storage
+            .Setup(s => s.GetAsync<LogoutConfirmation>(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken?>()))
+            .ReturnsAsync((LogoutConfirmation?)null);
+        storage
+            .Setup(s => s.TrySetIfAbsentAsync(
+                It.IsAny<string>(),
+                It.IsAny<LogoutConfirmation>(),
+                It.IsAny<StorageOptions>(),
+                It.IsAny<CancellationToken?>()))
+            .ReturnsAsync(false);
+        var store = new LogoutConfirmationStore(storage.Object, new EntityStorageKeyFactory(), Options.Create(_options));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.IssueAsync(SingleIssuer.Tenant, SessionId));
     }
 
     /// <summary>
@@ -238,45 +265,6 @@ public class LogoutConfirmationStoreTests
         _options.LogoutConfirmationLifetime = TimeSpan.Zero;
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => _store.IssueAsync(SingleIssuer.Tenant, SessionId));
-    }
-
-    /// <summary>
-    /// The real storage, except that its first reads are answered only once that many callers are reading, so the
-    /// callers have all read before any of them writes. Later reads pass straight through.
-    /// </summary>
-    private sealed class ReadsMeetFirst(IEntityStorage inner, int readers) : IEntityStorage
-    {
-        private readonly TaskCompletionSource _allReading = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private int _arrived;
-
-        public async Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
-        {
-            var value = await inner.GetAsync<T>(key, removeOnRetrieval, token);
-            var arrived = Interlocked.Increment(ref _arrived);
-            if (arrived == readers)
-                _allReading.SetResult();
-
-            if (arrived <= readers)
-                await _allReading.Task.WaitAsync(TimeSpan.FromSeconds(10), token ?? CancellationToken.None);
-
-            return value;
-        }
-
-        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.SetAsync(key, value, options, token);
-
-        public Task<bool> TrySetIfAbsentAsync<T>(
-            string key, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TrySetIfAbsentAsync(key, value, options, token);
-
-        public Task<bool> TryReplaceAsync<T>(
-            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
-            => inner.TryReplaceAsync(key, expected, value, options, token);
-
-        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
-            => inner.TryExtendAsync(key, options, token);
-
-        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
     }
 
     /// <summary>
