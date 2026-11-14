@@ -76,7 +76,10 @@ public partial class RequestObjectFetcher(
         return await validationResult.BindAsync<T>(
             async validated =>
             {
-                var (payload, client) = validated;
+                var (payload, issuer) = validated;
+
+                if (IssuedByAnotherClient(client, issuer) is { } issuerRefusal)
+                    return issuerRefusal;
 
                 // Judged on the members the object carries rather than on the bound model, which cannot tell one
                 // included with a null value, and whose merge carries an outer parameter of the same name the object lacks
@@ -89,7 +92,7 @@ public partial class RequestObjectFetcher(
                 // semantics bind the payload over the outer request. The OAuth-syntax client_id/response_type
                 // duplicates are cross-checked against the result by the authorization-endpoint adapter in both.
                 var strict = options.Value.IgnoreParametersOutsideRequestObject
-                    || SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile)
+                    || SecurityProfileRequirements.For(issuer, tenant.DefaultSecurityProfile)
                         .RequireStrictRequestObjectProcessing;
                 var target = strict ? Activator.CreateInstance<T>() : request;
 
@@ -265,6 +268,17 @@ public partial class RequestObjectFetcher(
             },
             error => InvalidRequestObject(error));
     }
+
+    /// <summary>
+    /// The object is held to the profile of the client the request names outside it, which is that client's object
+    /// only when that client issued it. CIBA Core 1.0 section 7.1.1: "The Issuer claim MUST be the client_id of the
+    /// OAuth Client"; RFC 9101 section 6.3: "The client ID values in the "client_id" request parameter and in the
+    /// Request Object "client_id" claim MUST be identical".
+    /// </summary>
+    private static OidcError? IssuedByAnotherClient(ClientInfo? namedClient, ClientInfo issuer)
+        => namedClient != null && !string.Equals(issuer.ClientId, namedClient.ClientId, StringComparison.Ordinal)
+            ? InvalidRequestObject("The request object is issued by a client other than the one the request names")
+            : null;
 
     private OidcError InvalidRequestObject(JwtValidationError error)
     {

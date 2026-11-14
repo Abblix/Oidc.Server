@@ -169,15 +169,32 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// CIBA Core 1.0 section 7.1.1: the request object's "Issuer claim MUST be the client_id of the OAuth Client". An
+    /// object another client issued, sent by a client that authenticated as itself, is refused.
+    /// </summary>
+    [Fact]
+    public async Task ARequestObjectIssuedByAnotherClient_IsRefused()
+    {
+        using var response = await InitiateAsync(
+            PlainClientId, EncryptionAlgorithms.KeyManagement.RsaOaep256, authenticated: true, signedBy: FapiClientId);
+
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.True(HttpStatusCode.BadRequest == response.StatusCode, $"{response.StatusCode}: {body}");
+        Assert.Equal(ErrorCodes.InvalidRequestObject, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
     /// Posts a signed authentication request (CIBA Core 1.0 section 7.1.1) of <paramref name="clientId"/>, encrypted to
     /// the tenant with <paramref name="keyManagement"/>, beside that client's private_key_jwt assertion or, when not
-    /// <paramref name="authenticated"/>, beside its client_id alone.
+    /// <paramref name="authenticated"/>, beside its client_id alone; the object is issued by
+    /// <paramref name="signedBy"/> where it is named.
     /// </summary>
-    private async Task<HttpResponseMessage> InitiateAsync(string clientId, string keyManagement, bool authenticated)
+    private async Task<HttpResponseMessage> InitiateAsync(
+        string clientId, string keyManagement, bool authenticated, string? signedBy = null)
     {
         var form = new Dictionary<string, string>
         {
-            [CibaParameters.Request] = await RequestObjectAsync(clientId, keyManagement),
+            [CibaParameters.Request] = await RequestObjectAsync(signedBy ?? clientId, keyManagement),
         };
         if (authenticated)
         {
