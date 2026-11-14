@@ -27,6 +27,7 @@ internal static class LogEvents
         public const int KeyBelowTheFloor = Base + 4;
         public const int NoDecryptionKey = Base + 5;
         public const int NoDecryptionKeyOpened = Base + 6;
+        public const int UnimportableKey = Base + 7;
     }
 
     /// <summary>

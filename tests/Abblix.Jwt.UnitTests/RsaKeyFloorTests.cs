@@ -267,7 +267,9 @@ public class RsaKeyFloorTests
 
         return new JsonWebTokenSigner(
             new JwsTokenSigner(NoSigning.Instance),
-            new JwsSignatureVerifier(log, new KeyedSignatureCheck(services.BuildServiceProvider())));
+            new JwsSignatureVerifier(
+                log,
+                new KeyedSignatureCheck(NullLogger<KeyedSignatureCheck>.Instance, services.BuildServiceProvider())));
     }
 
     /// <summary>The signing seam, which the verify path never reaches.</summary>
