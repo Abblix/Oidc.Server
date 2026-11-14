@@ -42,11 +42,14 @@ internal sealed class JweDecryption(
         CancellationToken cancellationToken)
     {
         var keyId = envelope.Header.KeyId;
+        var algorithm = envelope.Algorithm;
 
-        // Per RFC 7517 Section 4.4, 'alg' parameter in JWK is OPTIONAL
-        // Filter only by kid when present - algorithm compatibility is validated during decryption attempt
-        if (keyId.HasValue())
-            decryptionKeys = decryptionKeys.Where(key => string.Equals(key.KeyId, keyId, StringComparison.Ordinal));
+        // RFC 8725 section 3.1: "each key MUST be used with exactly one algorithm, and this MUST be checked when the
+        // cryptographic operation is performed". A key declaring its 'alg' opens only that algorithm, as on the JWS
+        // side; one declaring none stays a candidate, since RFC 7517 section 4.4 makes the member optional.
+        decryptionKeys = decryptionKeys.Where(key =>
+            (key.Algorithm == null || key.Algorithm == algorithm) &&
+            (!keyId.HasValue() || string.Equals(key.KeyId, keyId, StringComparison.Ordinal)));
 
         // Resolve the content decryptor by 'enc'. The registered set is the allow-list of content
         // encryption algorithms for incoming JWE - an unregistered 'enc' yields no decryptor and is

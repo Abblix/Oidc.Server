@@ -70,9 +70,10 @@ public class JweDecryptionLoggingTests
         var keyId = "line\r\nforged record " + new string('k', LongerThanAnyRecordKeeps);
         jwtParts[0] = EncodeHeader("unknown-alg", EncryptionAlgorithms.ContentEncryption.Aes128Gcm, keyId);
 
+        // A key declaring no algorithm is a candidate for the unknown one, so the token reaches the keys
         var result = await _encryptor.DecryptAsync(
             jwtParts,
-            NewKey(keyId).ToAsync(),
+            (NewKey(keyId) with { Algorithm = null }).ToAsync(),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out _));

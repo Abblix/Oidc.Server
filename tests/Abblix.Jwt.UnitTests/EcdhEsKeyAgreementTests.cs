@@ -287,13 +287,8 @@ public class EcdhEsKeyAgreementTests
 		string contentEncryption,
 		bool emptyEncryptedKey)
 	{
-		// Arrange
-		var recipientKey = JsonWebKeyFactory.CreateEllipticCurve(curve, curve switch
-		{
-			EllipticCurveTypes.P256 => SigningAlgorithms.ES256,
-			EllipticCurveTypes.P384 => SigningAlgorithms.ES384,
-			_ => SigningAlgorithms.ES512,
-		});
+		// Arrange: the recipient key declares the key management algorithm it opens, as RFC 8725 section 3.1 binds it
+		var recipientKey = JsonWebKeyFactory.CreateEllipticCurve(curve, keyManagementAlgorithm);
 		var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
 		var token = CreateTestToken();
 
