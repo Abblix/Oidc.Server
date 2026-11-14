@@ -51,21 +51,32 @@ internal sealed class SecurityEventSigningKeysCheck(
 
     private IEnumerable<string> Failures(TenantDefinition tenant)
     {
-        var permitted = TenantSecurityEventTokenSigner.AlgorithmsFor(
-            SecurityProfileRequirements.For(tenant, null),
-            securityEvents.Value);
+        var profile = SecurityProfileRequirements.For(tenant, null);
+        var permitted = TenantSecurityEventTokenSigner.AlgorithmsFor(profile, securityEvents.Value);
 
         if (tenant.SigningKeys.Any(key => TenantSecurityEventTokenSigner.AlgorithmOf(key, permitted) is not null))
             return [];
 
+        if (permitted.Length > 0)
+        {
+            return
+            [
+                "none of its signing keys performs an algorithm its security events may be signed with " +
+                $"({string.Join(", ", permitted)}), so none of them could be signed. Add a signing key that performs " +
+                $"one of them, or name in {AllowedSigningAlgorithms} an algorithm one of its keys performs and its " +
+                "security profile permits.",
+            ];
+        }
+
         return
         [
-            permitted.Length > 0
-                ? $"no signing key performs an algorithm its security events may be signed with " +
-                  $"({string.Join(", ", permitted)}); add one."
-                : $"its security profile permits none of the algorithms " +
-                  $"{nameof(SecurityEventsOptions)}.{nameof(SecurityEventsOptions.AllowedSigningAlgorithms)} " +
-                  "allows, so none of its security events could be signed; name one it permits there.",
+            $"its security profile permits none of the algorithms {AllowedSigningAlgorithms} names, so none of its " +
+            "security events could be signed. Name there an algorithm the profile permits " +
+            $"({string.Join(", ", (IEnumerable<string>?)profile.SigningAlgorithmsAdmitted() ?? [])}), and give the " +
+            "tenant a signing key that performs it.",
         ];
     }
+
+    private const string AllowedSigningAlgorithms =
+        $"{nameof(SecurityEventsOptions)}.{nameof(SecurityEventsOptions.AllowedSigningAlgorithms)}";
 }
