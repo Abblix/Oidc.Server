@@ -25,7 +25,8 @@ public static class OidcResults
     /// Formats an <see cref="OidcError"/> as an HTTP error response per RFC 6750 section 3 / RFC 6749 section 5.2:
     /// <c>invalid_token</c> returns 401 with a <c>WWW-Authenticate</c> Bearer challenge and no body;
     /// <c>insufficient_scope</c> returns 403 with the header; <c>invalid_client</c> returns 401 with a Basic challenge
-    /// and the JSON error body; everything else uses the fallback status code with a JSON body.
+    /// and the JSON error body; <c>invalid_request</c> returns 400 with the JSON body whatever the fallback; everything
+    /// else uses the fallback status code with a JSON body.
     /// </summary>
     public static IResult Format(this OidcError error, int fallbackStatusCode, string? realm = null)
     {

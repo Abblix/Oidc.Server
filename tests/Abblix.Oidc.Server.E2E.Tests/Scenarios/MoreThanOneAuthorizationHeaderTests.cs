@@ -116,7 +116,7 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
 
     /// <summary>
     /// The two credentials joined into one line, as RFC 9110 section 5.3 lets an intermediary combine field lines, are
-    /// one value that is not credentials at all, so the request is read as carrying none: a bare 401. This is the
+    /// one value that is not credentials at all, so the request is answered 401 as carrying none. This is the
     /// control that tells the two-line rows above apart from a host that joined the lines before the library saw them.
     /// </summary>
     [Fact]
@@ -173,8 +173,10 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
     }
 
     /// <summary>
-    /// One Authorization line beside the same credentials in the body is answered as it was before the field could
-    /// be counted: this change decides only the field sent more than once.
+    /// One Authorization line beside the same credentials in the body is still served, as it was before the lines were
+    /// counted. RFC 6749 section 2.3 says "The client MUST NOT use more than one authentication method in each
+    /// request", and the server does not refuse this pair today; the row pins that answer, so changing it is a decision
+    /// made visibly rather than a side effect of counting lines.
     /// </summary>
     [Fact]
     public async Task Token_endpoint_with_one_basic_line_and_a_body_secret_is_answered_as_before()

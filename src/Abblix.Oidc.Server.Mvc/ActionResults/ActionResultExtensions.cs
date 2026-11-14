@@ -113,7 +113,8 @@ public static class ActionResultExtensions
 	/// and no response body. Scope errors (<c>insufficient_scope</c>) return HTTP 403 with the header.
 	/// Client authentication failures (<c>invalid_client</c>) return HTTP 401 with a Basic challenge
 	/// and the JSON error body per RFC 6749 Section 5.2.
-	/// All other errors use the specified fallback status code with a JSON body.
+	/// <c>invalid_request</c> returns HTTP 400 with the JSON body whatever the fallback (RFC 6749 Section 5.2,
+	/// RFC 6750 Section 3.1). All other errors use the specified fallback status code with a JSON body.
 	/// </summary>
 	/// <param name="error">The OIDC error to format.</param>
 	/// <param name="fallbackStatusCode">The HTTP status code to use for non-token errors.</param>
