@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -37,6 +38,9 @@ public interface IRequestObjectFetcher
     /// <c>request_uri</c> for an authorization request (RFC 9101 section 4). An object carrying any of them, whatever
     /// its value, is refused with <c>invalid_request_object</c> before its parameters are used; empty where the
     /// request kind forbids none.</param>
+    /// <param name="whyRefused">The request kind's own rule on the validated claims, such as the registered claims a
+    /// signed CIBA authentication request must carry: why it refuses them, refused with <c>invalid_request_object</c>,
+    /// or null where it accepts them.</param>
     /// <returns>
     /// A task representing the asynchronous operation. The task result contains a <see cref="Result{T, AuthError}"/> object,
     /// which either represents a successfully processed request or an error indicating issues with the JWT validation.
@@ -52,6 +56,7 @@ public interface IRequestObjectFetcher
         T request,
         string? requestObject,
         Func<ClientInfo, string?>? requiredSigningAlgorithm,
-        string[] forbiddenMembers)
+        string[] forbiddenMembers,
+        Func<JsonObject, string?> whyRefused)
         where T : class;
 }

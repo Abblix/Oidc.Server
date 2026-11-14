@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Buffers.Text;
 using System.Net;
 using System.Text.Json.Nodes;
 using Abblix.DependencyInjection;
@@ -211,6 +212,91 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// CIBA Core 1.0 section 7.1.1: "The JWT MUST also contain the following [RFC7519] registered claims: aud ... iss ...
+    /// exp ... iat ... nbf ... jti". A signed authentication request lacking any of them is refused; the same request
+    /// carrying all of them is accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(null, HttpStatusCode.OK, null)]
+    [InlineData(JwtClaimTypes.Issuer, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
+    [InlineData(JwtClaimTypes.Audience, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
+    [InlineData(JwtClaimTypes.ExpiresAt, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
+    [InlineData(JwtClaimTypes.IssuedAt, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
+    [InlineData(JwtClaimTypes.NotBefore, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
+    [InlineData(JwtClaimTypes.JwtId, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
+    public async Task ASignedRequestLackingARegisteredClaim_IsRefused(
+        string? omitted, HttpStatusCode expectedStatus, string? expectedError)
+    {
+        var requestObject = await SignedRequestAsync(PlainClientId, token =>
+        {
+            if (omitted is null)
+                return;
+
+            token.Payload.Json.Remove(omitted);
+            // An object without iss still names its client, so it is refused for the claim and not for an unknown signer
+            if (omitted == JwtClaimTypes.Issuer)
+                token.Payload.Json[IanaClaimTypes.ClientId] = PlainClientId;
+        });
+
+        if (omitted is not null)
+            Assert.False(PayloadOf(requestObject).ContainsKey(omitted), $"the object still carries {omitted}");
+
+        using var response = await PostAsync(PlainClientId, requestObject);
+
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.True(expectedStatus == response.StatusCode, $"{response.StatusCode}: {body}");
+        Assert.Equal(expectedError, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// CIBA Core 1.0 section 7.1.1: "The Audience claim MUST contain the value of the Issuer Identifier for the OP". An
+    /// object addressed to the backchannel authentication endpoint alone is refused; one whose audience contains the
+    /// issuer beside another value is accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { Host + Acme + AuthorizePath }, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
+    [InlineData(new[] { "https://elsewhere.example.com", Host + Acme }, HttpStatusCode.OK, null)]
+    public async Task TheAudience_MustContainTheIssuer(
+        string[] audiences, HttpStatusCode expectedStatus, string? expectedError)
+    {
+        var requestObject = await SignedRequestAsync(PlainClientId, token => token.Payload.Audiences = audiences);
+
+        using var response = await PostAsync(PlainClientId, requestObject);
+
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.True(expectedStatus == response.StatusCode, $"{response.StatusCode}: {body}");
+        Assert.Equal(expectedError, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A signed, unencrypted authentication request of <paramref name="clientId"/> carrying every claim CIBA Core 1.0
+    /// section 7.1.1 lists, changed by <paramref name="change"/> before it is signed.
+    /// </summary>
+    private async Task<string> SignedRequestAsync(string clientId, Action<JsonWebToken> change)
+    {
+        var token = RequestToken(clientId);
+        change(token);
+        return await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, ClientKey);
+    }
+
+    private static JsonObject PayloadOf(string jwt)
+        => JsonNode.Parse(Base64Url.DecodeFromChars(jwt.Split('.')[1]))!.AsObject();
+
+    /// <summary>
+    /// Posts <paramref name="requestObject"/> beside the private_key_jwt assertion of <paramref name="clientId"/>.
+    /// </summary>
+    private async Task<HttpResponseMessage> PostAsync(string clientId, string requestObject)
+        => await _http!.PostAsync(
+            Acme + AuthorizePath,
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [CibaParameters.Request] = requestObject,
+                [ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer,
+                [ClientRequest.Parameters.ClientAssertion] = await ClientAssertionAsync(clientId),
+            }),
+            TestContext.Current.CancellationToken);
+
+    /// <summary>
     /// Posts a signed authentication request (CIBA Core 1.0 section 7.1.1) of <paramref name="clientId"/>, encrypted to
     /// the tenant with <paramref name="keyManagement"/>, beside that client's private_key_jwt assertion or, when not
     /// <paramref name="authenticated"/>, beside its client_id alone; the object is issued by
@@ -242,6 +328,14 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
     /// section 7.1.1 requires, encrypted to the tenant's key with <paramref name="keyManagement"/>.
     /// </summary>
     private async Task<string> RequestObjectAsync(string clientId, string keyManagement)
+        => await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(
+            RequestToken(clientId), ClientKey, EncryptionKey.Sanitize(includePrivateKeys: false), keyManagement);
+
+    /// <summary>
+    /// The request parameters of <paramref name="clientId"/> with the registered claims CIBA Core 1.0 section 7.1.1
+    /// requires, to be signed PS256.
+    /// </summary>
+    private static JsonWebToken RequestToken(string clientId)
     {
         var now = TimeProvider.System.GetUtcNow();
         var token = new JsonWebToken
@@ -259,9 +353,7 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
         };
         token.Payload.Json[CibaParameters.Scope] = Scopes.OpenId;
         token.Payload.Json[CibaParameters.LoginHint] = LoginHint;
-
-        return await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(
-            token, ClientKey, EncryptionKey.Sanitize(includePrivateKeys: false), keyManagement);
+        return token;
     }
 
     /// <summary>

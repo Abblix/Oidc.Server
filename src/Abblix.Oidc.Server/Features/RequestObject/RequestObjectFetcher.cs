@@ -52,6 +52,7 @@ public partial class RequestObjectFetcher(
     /// <param name="requiredSigningAlgorithm">An optional selector returning the signing algorithm the
     /// request object must use for a given client, or <c>null</c> to impose no per-client requirement.</param>
     /// <param name="forbiddenMembers">Parameters the request object must not include.</param>
+    /// <param name="whyRefused">The request kind's own rule on the validated claims: why it refuses them, or null.</param>
     /// <returns>
     /// A task representing the asynchronous operation. The task result contains an <see cref="Result{T, AuthError}"/>
     /// which either represents a successfully processed request or an error indicating issues with the JWT validation.
@@ -66,7 +67,8 @@ public partial class RequestObjectFetcher(
         T request,
         string? requestObject,
         Func<ClientInfo, string?>? requiredSigningAlgorithm,
-        string[] forbiddenMembers)
+        string[] forbiddenMembers,
+        Func<JsonObject, string?> whyRefused)
         where T : class
     {
         if (!requestObject.HasValue())
@@ -85,6 +87,9 @@ public partial class RequestObjectFetcher(
                 // included with a null value, and whose merge carries an outer parameter of the same name the object lacks
                 if (forbiddenMembers.FirstOrDefault(payload.ContainsKey) is { } included)
                     return InvalidRequestObject($"The request object must not include the {included} parameter");
+
+                if (whyRefused(payload) is { } refusal)
+                    return InvalidRequestObject(refusal);
 
                 // Strict RFC 9101 section 6.3 processing - only the request object's parameters are used and anything
                 // passed outside it is ignored - applies when the host turns it on globally or the client's

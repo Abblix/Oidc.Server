@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
@@ -49,7 +50,8 @@ public class RequestObjectFetchAdapterTests
                 signingClient, outer,
                 RequestJwt,
                 It.Is<Func<ClientInfo, string?>>(alg => alg(signingClient) == SigningAlgorithms.PS256),
-                It.Is<string[]>(members => members.Length == 0)))
+                It.Is<string[]>(members => members.Length == 0),
+                It.IsAny<Func<JsonObject, string?>>()))
             .ReturnsAsync(merged);
 
         var result = await new RequestObjectFetchAdapter(fetcher.Object).FetchAsync(SingleIssuer.Tenant, signingClient, outer);

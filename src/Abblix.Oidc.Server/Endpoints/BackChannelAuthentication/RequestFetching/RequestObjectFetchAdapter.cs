@@ -35,5 +35,6 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
         // RFC 9101 section 4 forbids request and request_uri inside an authorization request's object; this endpoint
         // forbids no member of its own
         => requestObjectFetcher.FetchAsync(tenant,
-            client, request, request.Request, signer => signer.BackChannelAuthenticationRequestSigningAlg, []);
+            client, request, request.Request, signer => signer.BackChannelAuthenticationRequestSigningAlg, [],
+            claims => SignedAuthenticationRequestClaims.WhyRefused(claims, tenant.Issuer));
 }
