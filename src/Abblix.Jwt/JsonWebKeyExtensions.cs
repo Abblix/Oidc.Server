@@ -105,6 +105,8 @@ public static class JsonWebKeyExtensions
     /// "anything goes" would hand an RSA key to an ECDSA algorithm and fail at the signature instead of at the
     /// selection. Asking the material settles it, and RFC 7518 sections 3.1 and 3.4 make the answer exact.
     /// </remarks>
-    private static bool CanPerform(this JsonWebKey key, string algorithm)
+    /// <param name="key">The key asked about.</param>
+    /// <param name="algorithm">The algorithm it would be used for.</param>
+    public static bool CanPerform(this JsonWebKey key, string algorithm)
         => key.Algorithm is not null ? key.Algorithm == algorithm : key.SupportsAlgorithm(algorithm);
 }

@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
@@ -26,7 +27,6 @@ namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 /// </summary>
 public class PushedAuthorizationRequestValidator(
     IAuthorizationRequestValidator authorizationRequestValidator,
-    IClientAuthenticator clientAuthenticator,
     IProofValidator proofValidator) : IPushedAuthorizationRequestValidator
 {
     /// <summary>
@@ -36,6 +36,7 @@ public class PushedAuthorizationRequestValidator(
     /// and ensures that the request is legitimately associated with the authenticated client.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="clientInfo">The client that authenticated the request.</param>
     /// <param name="authorizationRequest">The authorization request to be validated.</param>
     /// <param name="clientRequest">Carrier of the client's authentication credentials (basic, JWT
     /// assertion, mTLS, etc.) used to authenticate the client per RFC 9126 section 2. Also carries an
@@ -45,16 +46,10 @@ public class PushedAuthorizationRequestValidator(
     /// and adheres to the expected protocol constraints.</returns>
     public async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(
         TenantDefinition tenant,
+        ClientInfo clientInfo,
         AuthorizationRequest authorizationRequest,
         ClientRequest clientRequest)
     {
-        var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(
-            tenant, clientRequest);
-        if (clientInfo == null)
-        {
-            return ErrorFactory.InvalidClient("The client is not authorized");
-        }
-
         // RFC 9126 section 2.1: request_uri "MUST NOT be provided" here, and section 2.3 takes its codes from RFC 6749,
         // where a request carrying it is malformed: invalid_request
         if (authorizationRequest.RequestUri is not null)
@@ -63,7 +58,10 @@ public class PushedAuthorizationRequestValidator(
                 $"{RequestUri} is prohibited to use in pushed authorization request");
         }
 
-        var dpopResult = await ResolveProofKeyThumbprintAsync(clientRequest, authorizationRequest);
+        var dpopResult = await ResolveProofKeyThumbprintAsync(
+            clientRequest,
+            authorizationRequest,
+            SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile));
         if (dpopResult.TryGetFailure(out var dpopError))
             return dpopError;
 
@@ -85,6 +83,18 @@ public class PushedAuthorizationRequestValidator(
                     redirectUri,
                     responseMode);
             }
+
+            // FAPI 1.0 Part 2 section 5.2.2: "shall require PAR requests, if supported, to use PKCE (RFC7636) with S256
+            // as the code challenge method", whether or not PKCE is required of a request sent directly
+            if (SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile).RequirePkceWithPushedRequests &&
+                validRequest.Model is not { CodeChallenge.Length: > 0, CodeChallengeMethod: CodeChallengeMethods.S256 })
+            {
+                return new AuthorizationRequestValidationError(
+                    ErrorCodes.InvalidRequest,
+                    "The security profile requires a pushed request to carry a PKCE code challenge with the S256 method",
+                    redirectUri,
+                    responseMode);
+            }
         }
 
         return result;
@@ -99,12 +109,20 @@ public class PushedAuthorizationRequestValidator(
     /// back-filled) request on success.
     /// </summary>
     private async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> ResolveProofKeyThumbprintAsync(
-        ClientRequest clientRequest, AuthorizationRequest authorizationRequest)
+        ClientRequest clientRequest, AuthorizationRequest authorizationRequest, SecurityProfileRequirements profile)
     {
         if (clientRequest.DPoPProof is not { } proofJwt)
             return authorizationRequest;
 
-        var proofResult = await proofValidator.ValidateAsync(proofJwt);
+        // FAPI 1.0 Part 2 section 8.2: "shall only support sender-constrained access tokens via MTLS", so a proof binds
+        // nothing this client will be issued, and is refused before it is read
+        if (profile.RequireCertificateBoundTokens)
+        {
+            return ErrorFactory.InvalidRequest(
+                "The security profile issues certificate-bound access tokens only; DPoP is not accepted.");
+        }
+
+        var proofResult = await proofValidator.ValidateAsync(profile, proofJwt);
 
         if (proofResult.TryGetFailure(out var proofError))
         {
@@ -113,7 +131,8 @@ public class PushedAuthorizationRequestValidator(
                 $"DPoP proof rejected ({proofError.Reason}).");
         }
 
-        var derived = proofResult.GetSuccess().ProofKeyThumbprint;
+        var proof = proofResult.GetSuccess();
+        var derived = proof.ProofKeyThumbprint;
         if (authorizationRequest.ProofKeyThumbprint is { } committed)
         {
             if (committed != derived)

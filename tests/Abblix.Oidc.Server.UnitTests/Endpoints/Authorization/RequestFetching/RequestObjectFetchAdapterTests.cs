@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
@@ -29,11 +30,52 @@ public class RequestObjectFetchAdapterTests
     private const string RequestJwt = "header.payload.signature";
 
     private readonly Mock<IRequestObjectFetcher> _requestObjectFetcher = new(MockBehavior.Strict);
+    private readonly ClientInfo _namedClient = new(ClientId);
     private readonly RequestObjectFetchAdapter _adapter;
 
     public RequestObjectFetchAdapterTests()
     {
-        _adapter = new RequestObjectFetchAdapter(_requestObjectFetcher.Object);
+        var clients = new Mock<IClientInfoProvider>();
+        clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_namedClient);
+        _adapter = new RequestObjectFetchAdapter(_requestObjectFetcher.Object, clients.Object);
+    }
+
+    /// <summary>
+    /// OpenID Connect Core section 6.1 has the client_id outside the request object too, so the object is fetched for
+    /// the client it names, whose profile then bounds every layer of the object before it is read.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_HandsTheFetcherTheClientTheRequestNames()
+    {
+        SetupFetcher(CreateRequest());
+
+        await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest());
+
+        _requestObjectFetcher.Verify(
+            f => f.FetchAsync(
+                TestTenant.Matched, _namedClient, It.IsAny<AuthorizationRequest>(), RequestJwt,
+                It.IsAny<Func<ClientInfo, string?>?>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// RFC 9101 section 6.3: "The client ID values in the "client_id" request parameter and in the Request Object
+    /// "client_id" claim MUST be identical", and section 4 has the object contain every parameter but "request" and
+    /// "request_uri". The object is merged over the request without its client_id, so what comes back names only the
+    /// client the object itself names.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_MergesTheObjectOverTheRequestWithoutItsClientId()
+    {
+        SetupFetcher(CreateRequest());
+
+        await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest());
+
+        _requestObjectFetcher.Verify(
+            f => f.FetchAsync(
+                TestTenant.Matched, _namedClient, It.Is<AuthorizationRequest>(r => r.ClientId == null), RequestJwt,
+                It.IsAny<Func<ClientInfo, string?>?>()),
+            Times.Once);
     }
 
     private static AuthorizationRequest CreateRequest(
@@ -49,8 +91,29 @@ public class RequestObjectFetchAdapterTests
     private void SetupFetcher(AuthorizationRequest merged) =>
         _requestObjectFetcher
             .Setup(f => f.FetchAsync(
-                TestTenant.Matched, It.IsAny<AuthorizationRequest>(), RequestJwt, It.IsAny<Func<ClientInfo, string?>?>()))
+                TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<AuthorizationRequest>(), RequestJwt,
+                It.IsAny<Func<ClientInfo, string?>?>()))
             .ReturnsAsync(merged);
+
+    /// <summary>
+    /// RFC 9101 section 5: "client_id REQUIRED. OAuth 2.0 [RFC6749] "client_id". The value MUST match the "request" or
+    /// "request_uri" Request Object's (Section 2.1) "client_id"." A request carrying an object but no client_id beside
+    /// it is refused with invalid_request before the object is read, as section 6.3 has a failed client ID check
+    /// answered under RFC 6749.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_ARequestObjectWithoutAnOuterClientId_IsRefusedUnread()
+    {
+        var result = await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest(clientId: null));
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        _requestObjectFetcher.Verify(
+            f => f.FetchAsync(
+                It.IsAny<TenantDefinition>(), It.IsAny<ClientInfo?>(), It.IsAny<AuthorizationRequest>(),
+                It.IsAny<string?>(), It.IsAny<Func<ClientInfo, string?>?>()),
+            Times.Never);
+    }
 
     [Fact]
     public async Task FetchAsync_MatchingParameters_ReturnsMergedRequest()

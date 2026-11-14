@@ -283,6 +283,7 @@ public partial class MultiTenancyRegistrationTests
                 Header = { Algorithm = SigningAlgorithms.RS256 },
                 Payload = { Subject = "user123", Issuer = acme.Issuer.OriginalString },
             },
+            client: null,
             new ServiceJwtEncryption(
                 Encrypt: true,
                 EncryptionAlgorithms.KeyManagement.RsaOaep256,
@@ -296,7 +297,7 @@ public partial class MultiTenancyRegistrationTests
         // Refused by the check the server reads its own tokens with. Read with it at acme too, the token would have
         // it count acme's issuer against the license, which this suite does not lift.
         var atGlobex = await provider.GetRequiredService<IAuthServiceJwtValidator>()
-            .ValidateAsync(globex, encrypted, TokenTypePolicy.CheckedByCaller);
+            .ValidateAsync(globex, null, encrypted, TokenTypePolicy.CheckedByCaller);
         Assert.True(atGlobex.TryGetFailure(out var refusal), "Another tenant read the token.");
         Assert.Contains("decryption", refusal.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
@@ -30,7 +31,7 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <param name="catalog">Tells an issuer this server serves, whose statements are refused.</param>
 public partial class SoftwareStatementValidator(
     ILogger<SoftwareStatementValidator> logger,
-    IJsonWebTokenValidator jwtValidator,
+    ProfiledJwtValidator jwtValidator,
     IOptionsMonitor<OidcOptions> options,
     [FromKeyedServices(KeySetOwners.SoftwareStatementIssuer)] ISecureHttpFetcher secureFetcher,
     ITenantCatalog catalog)
@@ -57,8 +58,7 @@ public partial class SoftwareStatementValidator(
                 "No trusted issuers configured for software statement validation");
         }
 
-        var profile = SecurityProfileRequirements.Resolve(
-            tenant.DefaultSecurityProfile);
+        var profile = SecurityProfileRequirements.For(tenant, client: null);
 
         var validationParameters = new ValidationParameters
         {
@@ -77,7 +77,7 @@ public partial class SoftwareStatementValidator(
             RefetchIssuerSigningKeys = issuer => ResolveSigningKeysAsync(softwareStatementOptions, issuer, refetch: true),
         };
 
-        var result = await jwtValidator.ValidateAsync(softwareStatement, validationParameters);
+        var result = await jwtValidator.ValidateAsync(profile, softwareStatement, validationParameters);
 
         if (result.TryGetFailure(out var error))
         {

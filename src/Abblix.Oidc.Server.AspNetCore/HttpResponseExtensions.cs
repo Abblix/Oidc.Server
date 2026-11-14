@@ -55,6 +55,24 @@ public static class HttpResponseExtensions
     }
 
     /// <summary>
+    /// Adds the <c>private</c> directive to the Cache-Control the response already carries, keeping every directive
+    /// in it - the no-store above included - so the response still sends one Cache-Control header.
+    /// </summary>
+    /// <remarks>
+    /// RFC 6750 section 2.3: "Server success (2XX status) responses to these requests SHOULD contain a Cache-Control
+    /// header with the "private" option", these being requests carrying the access token in the URI query. The typed
+    /// header is read anew from the response, so the shared value written above is never changed.
+    /// </remarks>
+    /// <param name="response">The HTTP response to modify.</param>
+    public static void AddPrivateCacheDirective(this HttpResponse response)
+    {
+        var headers = response.GetTypedHeaders();
+        var cacheControl = headers.CacheControl ?? new CacheControlHeaderValue();
+        cacheControl.Private = true;
+        headers.CacheControl = cacheControl;
+    }
+
+    /// <summary>
     /// Advertises a positive cache lifetime for a public, cacheable metadata response - the JWKS endpoint. Sets
     /// <c>Cache-Control: public, max-age=&lt;maxAge&gt;</c> and clears any <c>Pragma</c> / <c>Expires</c> a
     /// no-cache policy left behind, so the response carries a single, non-contradictory caching directive. Size

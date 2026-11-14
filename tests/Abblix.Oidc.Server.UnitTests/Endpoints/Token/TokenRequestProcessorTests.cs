@@ -150,6 +150,58 @@ public partial class TokenRequestProcessorTests
     }
 
     /// <summary>
+    /// RFC 8707 section 2: invalid_target answers a resource "invalid, missing, unknown, or malformed". One whose
+    /// published encryption key would have the token encrypted with an algorithm the profile forbids is answered so,
+    /// since the refusal is the resource's, not the server's.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_AnAudienceKeyTheProfileRefuses_IsInvalidTarget()
+    {
+        var request = CreateValidTokenRequest([]);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [], null);
+        _contextEvaluator.Setup(e => e.EvaluateAuthorizationContext(request)).Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, null,
+                It.IsAny<DateTimeOffset?>()))
+            .ThrowsAsync(new AudienceKeyRefusedException(
+                [new Uri("https://orders.example.com")],
+                new Abblix.Oidc.Server.Features.Tokens.Formatters.AlgorithmRefusedByProfileException(
+                    "refused", "RSA1_5", new Abblix.Jwt.RsaJsonWebKey())));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidTarget, error.Error);
+    }
+
+    /// <summary>
+    /// A completion of a CIBA request in push mode mints the ID token in a request the client's key set was not judged
+    /// in. Where its profile leaves nothing in that key set to encrypt to, the ID token service refuses, and the refusal
+    /// is answered as the processor's error rather than as a server error.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_AnIdTokenTheClientsKeySetCannotReceive_IsRefused()
+    {
+        var request = CreateValidTokenRequest([Scopes.OpenId]);
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, [Scopes.OpenId], null);
+        _contextEvaluator.Setup(e => e.EvaluateAuthorizationContext(request)).Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(
+                TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, null,
+                It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(CreateAccessToken());
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, "access_token_jwt", null, null, authContext)))
+            .ReturnsAsync(new OidcError(ErrorCodes.InvalidClient, "the client's key set"));
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidClient, error.Error);
+    }
+
+    /// <summary>
     /// Verifies ID token is created when openid scope present.
     /// Per OIDC Core Section 3.1.3.3, ID token MUST be returned for openid scope.
     /// </summary>
@@ -175,14 +227,7 @@ public partial class TokenRequestProcessorTests
             .ReturnsAsync(accessToken);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched, It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt,
-                null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)))
             .ReturnsAsync(idToken);
 
         // Act
@@ -192,14 +237,7 @@ public partial class TokenRequestProcessorTests
         Assert.True(result.TryGetSuccess(out var tokenIssued));
         Assert.Same(idToken, tokenIssued.IdToken);
         _identityTokenService.Verify(
-            s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched, It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt,
-                null),
+            s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)),
             Times.Once);
     }
 
@@ -303,17 +341,8 @@ public partial class TokenRequestProcessorTests
 
         PushDeliveryBindings? captured = null;
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched, It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt,
-                null,
-                It.IsAny<PushDeliveryBindings?>()))
-            .Callback((TenantDefinition _, AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _, string? _,
-                PushDeliveryBindings? bindings) => captured = bindings)
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)))
+            .Callback((TenantDefinition _, IdentityTokenRequest issued) => captured = issued.PushBindings)
             .ReturnsAsync(idToken);
 
         // Act
@@ -333,13 +362,6 @@ public partial class TokenRequestProcessorTests
     /// same scopes and the same refresh token, and the only difference
     /// is that nobody declared a push. Section 10.3.1 requires these claims in push mode, and a poll or
     /// ping client holds the identifier already.
-    /// <para>
-    /// It is not the only thing holding that property, and calling it "the control" without this would
-    /// overstate it. Building the bindings unconditionally turns four rows red: this one and three that
-    /// predate the branch, whose Moq setups name the six-argument call and so bake in a null binding.
-    /// What this row adds is saying the property out loud, where those three hold it as a side effect
-    /// of how they were arranged.
-    /// </para>
     /// </remarks>
     [Fact]
     public async Task ProcessAsync_WithoutAPushDelivery_PassesNoBindings()
@@ -373,17 +395,8 @@ public partial class TokenRequestProcessorTests
 
         var captured = new PushDeliveryBindings("not-set", null);
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched, It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt,
-                null,
-                It.IsAny<PushDeliveryBindings?>()))
-            .Callback((TenantDefinition _, AuthSession _, AuthorizationContext _, ClientInfo _, bool _, string? _, string? _, string? _,
-                PushDeliveryBindings? bindings) => captured = bindings!)
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)))
+            .Callback((TenantDefinition _, IdentityTokenRequest issued) => captured = issued.PushBindings!)
             .ReturnsAsync(idToken);
 
         // Act
@@ -429,14 +442,7 @@ public partial class TokenRequestProcessorTests
             .ReturnsAsync(refreshToken);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched, It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt,
-                null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)))
             .ReturnsAsync(idToken);
 
         // Act
@@ -659,9 +665,7 @@ public partial class TokenRequestProcessorTests
             .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, authSession, narrowedContext, request.ClientInfo, ExistingGrantId, null))
             .ReturnsAsync(accessToken);
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                authSession, narrowedContext, request.ClientInfo, false, null, accessToken.EncodedJwt, null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, authSession, narrowedContext)))
             .ReturnsAsync(CreateIdToken());
 
         var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
@@ -1002,8 +1006,7 @@ public partial class TokenRequestProcessorTests
                 authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId))
             .ReturnsAsync(CreateRefreshToken());
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched, It.IsAny<AuthSession>(), authContext, request.ClientInfo, false, null, accessToken.EncodedJwt, null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)))
             .ThrowsAsync(new HttpRequestException("The client key set could not be fetched."));
 
         await Assert.ThrowsAsync<HttpRequestException>(() => _processor.ProcessAsync(SingleIssuer.Tenant, request));
@@ -1076,14 +1079,7 @@ public partial class TokenRequestProcessorTests
             .ReturnsAsync(accessToken);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched, It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt,
-                null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)))
             .ReturnsAsync(idToken);
 
         // Act
@@ -1091,14 +1087,7 @@ public partial class TokenRequestProcessorTests
 
         // Assert
         _identityTokenService.Verify(
-            s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched, It.IsAny<AuthSession>(),
-                authContext,
-                request.ClientInfo,
-                false,
-                null,
-                accessToken.EncodedJwt,
-                null),
+            s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)),
             Times.Once);
     }
 

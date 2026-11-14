@@ -18,6 +18,12 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 public record ClientRegistrationValidationContext(ClientRegistrationRequest Request)
 {
 	/// <summary>
+	/// The registration metadata as the pipeline leaves it, which a step completes where the client named nothing
+	/// and the server decides the value, such as the signing algorithm a security profile bounds.
+	/// </summary>
+	public ClientRegistrationRequest Request { get; set; } = Request;
+
+	/// <summary>
 	/// The pairwise sector identifier (host) resolved by <c>SubjectTypeValidator</c> per
 	/// OIDC Core section 8.1. <c>null</c> when the client does not request pairwise subjects.
 	/// </summary>

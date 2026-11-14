@@ -133,19 +133,20 @@ public class RevocationFollowsTheValidatedTenantTests
                     ? new JwtValidationError(JwtError.TokenRevoked, "Cut off")
                     : null);
 
-        var validator = new AuthServiceJwtValidator(
-            inner.Object,
+        IAuthServiceJwtValidator validator = new AuthServiceJwtValidator(
+            new ProfiledJwtValidator(inner.Object),
             SingleIssuer.LicensedCatalog,
             Mock.Of<IAuthServiceKeysProvider>(),
             new TokenStatusCheck(
                 registry.Object,
                 cutoffs.Object,
                 new GrantRevocation(registry.Object, Mock.Of<IClientInfoProvider>())),
-            TestOidcOptions.Defaults());
+            TestOidcOptions.Defaults(),
+            Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>());
 
         // The request served at a tenant, as tenant resolution leaves it, around the validation
         using var request = TenantScope.Enter(servedAt);
-        return await validator.ValidateAsync(Validated, "jwt", TokenTypePolicy.CheckedByCaller);
+        return await validator.ValidateAsync(Validated, null, "jwt", TokenTypePolicy.CheckedByCaller);
 
         JsonWebTokenStatus StatusOf(TenantDefinition tenant, string id)
         {

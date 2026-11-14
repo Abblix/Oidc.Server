@@ -56,6 +56,7 @@ public class InitialAccessTokenValidator(
         // the one exception to the rule every other token here follows.
         var result = await jwtValidator.ValidateAsync(
             tenant,
+            client: null,
             header.Parameter,
             TokenTypePolicy.Exactly(JwtTypes.InitialAccessToken),
             // A token that never expires could not be revoked for good: its revocation is kept until it expires

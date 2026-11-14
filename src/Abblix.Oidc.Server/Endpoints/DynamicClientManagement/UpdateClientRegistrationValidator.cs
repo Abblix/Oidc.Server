@@ -37,6 +37,6 @@ public class UpdateClientRegistrationValidator(IClientRegistrationContextValidat
 		if (error != null)
 			return error;
 
-		return new ValidClientRegistrationRequest(request, context.SectorIdentifier);
+		return new ValidClientRegistrationRequest(context.Request, context.SectorIdentifier);
 	}
 }

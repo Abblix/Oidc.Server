@@ -67,11 +67,30 @@ internal class JsonWebTokenValidator(JwsValidation jws, JweValidation jwe) : IJs
         return jwtParts.Length switch
         {
             3 => await jws.ValidateAsync(jwtParts, parameters),
-            5 => await (await jwe.DecryptAsync(jwtParts, parameters))
+            5 => await (await DecryptAsync(jwtParts, parameters))
                 .BindAsync(innerJwt => ValidateAsync(innerJwt, parameters)),
             _ => new JwtValidationError(
                 JwtError.MalformedToken,
                 $"Invalid JWT format: expected 3 or 5 dot-separated parts, got {jwtParts.Length}"),
         };
+    }
+
+    /// <summary>
+    /// Decrypts one JWE layer, once <see cref="ValidationParameters.ValidateKeyManagementAlgorithm"/> accepts its key
+    /// management algorithm. A JWE found inside comes back through <see cref="ValidateAsync"/>, so every layer is
+    /// judged before any key is used on it.
+    /// </summary>
+    private async Task<Result<string, JwtValidationError>> DecryptAsync(string[] jwtParts, ValidationParameters parameters)
+    {
+        if (parameters.ValidateKeyManagementAlgorithm is { } validateAlgorithm &&
+            Encryption.JweEnvelope.Read(jwtParts).TryGetSuccess(out var envelope) &&
+            !validateAlgorithm(envelope.Algorithm))
+        {
+            return new JwtValidationError(
+                JwtError.InvalidToken,
+                $"The key management algorithm '{envelope.Algorithm}' is not accepted on this validation path");
+        }
+
+        return await jwe.DecryptAsync(jwtParts, parameters);
     }
 }

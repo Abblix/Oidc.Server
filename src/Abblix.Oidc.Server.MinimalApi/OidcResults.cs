@@ -104,6 +104,10 @@ public static class OidcResults
         return result;
     }
 
+    /// <summary>Decorates a result to shape the response before the inner result executes.</summary>
+    internal static IResult WithResponse(this IResult inner, Action<HttpResponse> decorate)
+        => new ResultDecorator(inner, decorate);
+
     /// <summary>Decorates a result to set a response header before the inner result executes.</summary>
     public static IResult WithHeader(this IResult inner, string name, string value)
         => new ResultDecorator(inner, response => response.Headers[name] = value);

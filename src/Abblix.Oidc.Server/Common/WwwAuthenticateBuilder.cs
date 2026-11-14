@@ -81,7 +81,12 @@ public static class WwwAuthenticateBuilder
         IEnumerable<string> dpopAlgs,
         bool advertiseBearer)
     {
-        var dpop = BuildDPoPChallenge(error, realm, dpopAlgs);
+        // A resource admitting no proof algorithm, where the client's profile refuses DPoP, does not offer the scheme
+        var algorithms = dpopAlgs.ToArray();
+        if (algorithms.Length == 0 && advertiseBearer)
+            return [BuildBearerChallenge(error, realm)];
+
+        var dpop = BuildDPoPChallenge(error, realm, algorithms);
         if (!advertiseBearer)
             return [dpop];
 

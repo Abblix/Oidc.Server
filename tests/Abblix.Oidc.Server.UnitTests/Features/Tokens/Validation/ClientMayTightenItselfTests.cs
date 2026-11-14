@@ -65,7 +65,8 @@ public class ClientMayTightenItselfTests
     {
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
+            // An algorithm every profile admits, since what is under test is the clock window
+            Header = { Algorithm = SigningAlgorithms.PS256 },
             Payload =
             {
                 Issuer = ClientId,
@@ -103,7 +104,7 @@ public class ClientMayTightenItselfTests
         var validator = new ClientJwtValidator(
             NullLogger<ClientJwtValidator>.Instance,
             requestInfoProvider.Object,
-            tokenValidator.Object,
+            new ProfiledJwtValidator(tokenValidator.Object),
             clientInfoProvider.Object,
             new Mock<IClientKeysProvider>().Object,
             serviceKeys.Object,
@@ -111,7 +112,7 @@ public class ClientMayTightenItselfTests
 
         return await validator.ValidateAsync(
             new TestIssuer { Issuer = new Uri(Issuer), DefaultSecurityProfile = deploymentProfile }.ToTenant(),
-            "header.payload.signature",
+            null, "header.payload.signature",
             TokenTypePolicy.CheckedByCaller,
             options);
     }

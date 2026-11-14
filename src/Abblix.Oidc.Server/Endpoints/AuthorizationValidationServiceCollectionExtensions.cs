@@ -62,6 +62,7 @@ public static class AuthorizationValidationServiceCollectionExtensions
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.PromptValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.DisplayValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, NonceValidator>(),
+            ServiceDescriptor.Singleton<IAuthorizationContextValidator, StateValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, Authorization.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<IAuthorizationContextValidator, PkceValidator>(),

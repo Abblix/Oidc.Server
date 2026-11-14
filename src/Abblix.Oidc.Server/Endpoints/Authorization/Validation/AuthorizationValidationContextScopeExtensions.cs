@@ -32,6 +32,14 @@ internal static class AuthorizationValidationContextScopeExtensions
 			: [.. context.Request.Scope.Where(value => value != Scopes.OfflineAccess)];
 
 	/// <summary>
+	/// Whether the client asked for the <c>openid</c> scope itself, which a default it is served does not count as: the
+	/// condition FAPI 1.0 Part 1 sections 5.2.2.2 and 5.2.2.3 put the nonce and the state on. A request coming back from
+	/// a page carries the scope it was served, so whether the client named one is read from the first pass.
+	/// </summary>
+	public static bool ClientRequestsOpenId(this AuthorizationValidationContext context)
+		=> !context.Request.ClientNamedNoScope && context.Request.Scope.Contains(Scopes.OpenId, StringComparer.Ordinal);
+
+	/// <summary>
 	/// The scope the request is served with: the one it names, or else the client's default, or null when the client
 	/// is required to name one and the request names none.
 	/// </summary>

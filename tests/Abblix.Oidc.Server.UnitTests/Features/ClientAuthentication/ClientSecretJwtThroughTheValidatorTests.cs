@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using System;
 using System.Text;
 using System.Threading.Tasks;
@@ -100,7 +101,7 @@ public class ClientSecretJwtThroughTheValidatorTests
 
         return new ClientSecretJwtAuthenticator(
             NullLogger<ClientSecretJwtAuthenticator>.Instance,
-            jwt.GetRequiredService<IJsonWebTokenValidator>(),
+            new ProfiledJwtValidator(jwt.GetRequiredService<IJsonWebTokenValidator>()),
             clients.Object,
             TimeProvider.System,
             replayCache.Object,

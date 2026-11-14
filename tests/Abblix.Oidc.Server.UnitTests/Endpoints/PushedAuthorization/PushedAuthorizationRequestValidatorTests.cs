@@ -72,8 +72,18 @@ public class PushedAuthorizationRequestValidatorTests
 
         _validator = new PushedAuthorizationRequestValidator(
             _innerValidator.Object,
-            _clientAuthenticator.Object,
             _proofValidator.Object);
+    }
+
+    /// <summary>
+    /// Validates as the handler does: for the client the authenticator returns, which each test sets up.
+    /// </summary>
+    private async Task<Result<ValidAuthorizationRequest, AuthorizationRequestValidationError>> ValidateAsync(
+        AuthorizationRequest request,
+        ClientRequest clientRequest)
+    {
+        var client = await _clientAuthenticator.Object.TryAuthenticateClientAsync(SingleIssuer.Tenant, clientRequest);
+        return await _validator.ValidateAsync(SingleIssuer.Tenant, client!, request, clientRequest);
     }
 
     private AuthorizationRequest? _capturedRequest;
@@ -103,14 +113,36 @@ public class PushedAuthorizationRequestValidatorTests
         var token = new JsonWebToken { Payload = new JsonWebTokenPayload(payloadJson) };
         var proof = new Proof(token, new OctetJsonWebKey(), DerivedThumbprint, "jti-1", ProofIssuedAt);
         _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)proof);
     }
 
     private void SetupProofFailure(string reason = "signature_invalid")
         => _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)new ProofError(reason));
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.2: access tokens are sender-constrained via MTLS only, so a pushed request from a
+    /// client held to FAPI 1.0 Advanced carrying a DPoP proof is refused with invalid_request before the proof is read.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi1Advanced_ADPoPProof_IsRefusedUnread()
+    {
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced });
+
+        var result = await ValidateAsync( BuildRequest(), BuildClientRequest(ProofJwt));
+
+        Assert.Equal(ErrorCodes.InvalidRequest, Assert.IsType<AuthorizationRequestValidationError>(
+            result.TryGetFailure(out var error) ? error : null).Error);
+        _proofValidator.Verify(
+            v => v.ValidateAsync(
+                It.IsAny<SecurityProfileRequirements>(), It.IsAny<string>(), It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
 
     /// <summary>
     /// RFC 9126 section 2.1: the request_uri parameter "MUST NOT be provided" in a pushed request, and section 2.3
@@ -121,7 +153,7 @@ public class PushedAuthorizationRequestValidatorTests
     {
         var request = BuildRequest() with { RequestUri = new Uri("https://client.example.com/request.jwt") };
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, request, BuildClientRequest());
+        var result = await ValidateAsync( request, BuildClientRequest());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -130,7 +162,7 @@ public class PushedAuthorizationRequestValidatorTests
     [Fact]
     public async Task ValidateAsync_NoDPoPHeaderNoParameter_PassesThrough()
     {
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, BuildRequest(), BuildClientRequest());
+        var result = await ValidateAsync( BuildRequest(), BuildClientRequest());
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.NotNull(_capturedRequest);
@@ -142,7 +174,7 @@ public class PushedAuthorizationRequestValidatorTests
     {
         SetupProofSuccess();
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, BuildRequest(), BuildClientRequest(ProofJwt));
+        var result = await ValidateAsync( BuildRequest(), BuildClientRequest(ProofJwt));
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(DerivedThumbprint, _capturedRequest?.ProofKeyThumbprint);
@@ -153,8 +185,7 @@ public class PushedAuthorizationRequestValidatorTests
     {
         SetupProofSuccess();
 
-        var result = await _validator.ValidateAsync(
-            SingleIssuer.Tenant,
+        var result = await ValidateAsync(
             BuildRequest(proofKeyThumbprint: DerivedThumbprint),
             BuildClientRequest(ProofJwt));
 
@@ -167,8 +198,7 @@ public class PushedAuthorizationRequestValidatorTests
     {
         SetupProofSuccess();
 
-        var result = await _validator.ValidateAsync(
-            SingleIssuer.Tenant,
+        var result = await ValidateAsync(
             BuildRequest(proofKeyThumbprint: DifferentThumbprint),
             BuildClientRequest(ProofJwt));
 
@@ -181,9 +211,68 @@ public class PushedAuthorizationRequestValidatorTests
     {
         SetupProofFailure();
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, BuildRequest(), BuildClientRequest(ProofJwt));
+        var result = await ValidateAsync( BuildRequest(), BuildClientRequest(ProofJwt));
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidDPoPProof, error.Error);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require PAR requests, if supported, to use PKCE (RFC7636) with
+    /// S256 as the code challenge method". A pushed request from a client held to that profile is refused without a
+    /// code challenge or with the plain method, and passes with S256; a client held to no profile pushes without one.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, null, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "challenge", CodeChallengeMethods.Plain, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "challenge", CodeChallengeMethods.S256, true)]
+    [InlineData(null, null, null, true)]
+    public async Task ValidateAsync_Fapi1Advanced_RequiresPkceWithS256(
+        ClientSecurityProfile? profile, string? challenge, string? method, bool accepted)
+    {
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = profile });
+        var request = BuildRequest() with { CodeChallenge = challenge, CodeChallengeMethod = method };
+
+        var result = await ValidateAsync( request, BuildClientRequest());
+
+        if (accepted)
+            Assert.True(result.TryGetSuccess(out _));
+        else
+            Assert.Equal(ErrorCodes.InvalidRequest, Assert.IsType<AuthorizationRequestValidationError>(
+                result.TryGetFailure(out var error) ? error : null).Error);
+    }
+
+    /// <summary>
+    /// The same clauses at the pushed authorization request endpoint: the proof is judged under the profile of the
+    /// client presenting it, which for FAPI 2.0 (section 5.4.1) refuses a proof signed RS256 and admits one signed
+    /// ES256. A client held to FAPI 1.0 Advanced sends no proof at all.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, false)]
+    [InlineData(SigningAlgorithms.ES256, true)]
+    public async Task ValidateAsync_Fapi2_JudgesTheProofAlgorithm(string algorithm, bool accepted)
+    {
+        SecurityProfileRequirements? judgedUnder = null;
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .ReturnsAsync(new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi2 });
+        var token = new JsonWebToken { Header = { Algorithm = algorithm } };
+        _proofValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Callback<SecurityProfileRequirements, string, string?, CancellationToken>(
+                (profile, _, _, _) => judgedUnder = profile)
+            .ReturnsAsync((Result<Proof, ProofError>)new Proof(
+                token, new OctetJsonWebKey(), DerivedThumbprint, "jti-1", ProofIssuedAt));
+        var request = BuildRequest() with
+        {
+            CodeChallenge = "challenge",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
+        };
+
+        await ValidateAsync( request, BuildClientRequest(ProofJwt));
+
+        Assert.Equal(accepted, judgedUnder!.PermitsSigningAlgorithm(algorithm));
     }
 }

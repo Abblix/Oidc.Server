@@ -68,8 +68,12 @@ public class RegistrationAccessTokenService(
             },
         };
 
+        // The client is named by its id alone here; a dynamically registered client is held to the tenant's
+        // profile, which is what a null client resolves to
         return serviceJwtFormatter.FormatAsync(
             tenant,
-            token, ServiceJwtEncryption.ForRegistrationAccessToken(options.Value));
+            token,
+            client: null,
+            ServiceJwtEncryption.ForRegistrationAccessToken(options.Value));
     }
 }

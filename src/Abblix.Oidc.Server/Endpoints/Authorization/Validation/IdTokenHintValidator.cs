@@ -44,7 +44,7 @@ public class IdTokenHintValidator(IIdTokenHintParser hintParser) : IAuthorizatio
         if (!context.Request.IdTokenHint.HasValue())
             return null;
 
-        var result = await hintParser.ParseAsync(tenant, context.Request.IdTokenHint);
+        var result = await hintParser.ParseAsync(tenant, context.ClientInfo, context.Request.IdTokenHint);
         if (result.TryGetFailure(out var reason))
             return context.InvalidRequest(reason);
 

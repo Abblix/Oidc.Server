@@ -63,6 +63,6 @@ public class PrivateKeyJwtAuthenticator(
         // validator's, which also reads request objects: the base class judges the type and the audience after
         // validation, by RFC 10070 section 4.
         return await tokenValidator.ValidateAsync(
-            tenant, jwt, TokenTypePolicy.CheckedByCaller, AssertionValidationOptions);
+            tenant, client: null, jwt, TokenTypePolicy.CheckedByCaller, AssertionValidationOptions);
     }
 }

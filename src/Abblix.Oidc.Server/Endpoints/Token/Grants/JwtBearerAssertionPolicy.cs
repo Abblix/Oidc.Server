@@ -97,7 +97,8 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	}
 
 	/// <summary>
-	/// Validates that the JWT signing algorithm is in the allowed list.
+	/// Validates that the JWT signing algorithm is in the trusted issuer's allowed list. The client's security profile
+	/// bounded the algorithm already, where the assertion was validated.
 	/// </summary>
 	public Result<JwtBearerValidationContext, OidcError> ValidateAlgorithm(
 		JwtBearerValidationContext ctx, ClientInfo clientInfo)

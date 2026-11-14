@@ -26,6 +26,17 @@ internal sealed class RequestParameterBinder(IModelBinderFactory binderFactory, 
 {
     /// <inheritdoc />
     public Task BindModelAsync(ModelBindingContext bindingContext)
+        => BindAsync(binderFactory, metadataProvider, bindingContext, acrossSplitSources: false);
+
+    /// <summary>
+    /// The binding both this binder and <see cref="SplitSourceParameterBinder"/> give a parameter, differing only in
+    /// which sources the refusal of a repetition counts.
+    /// </summary>
+    internal static Task BindAsync(
+        IModelBinderFactory binderFactory,
+        IModelMetadataProvider metadataProvider,
+        ModelBindingContext bindingContext,
+        bool acrossSplitSources)
     {
         // Built from the type's metadata, not the property's: the property names this binder, and the factory would
         // hand it back. Cached per property, so the framework builds it once
@@ -37,7 +48,7 @@ internal sealed class RequestParameterBinder(IModelBinderFactory binderFactory, 
         });
 
         IModelBinder named = new MalformedValueBinder(inner);
-        var binder = bindingContext.ModelMetadata.IsComplexType ? named : new SingleValueBinder(named);
+        var binder = bindingContext.ModelMetadata.IsComplexType ? named : new SingleValueBinder(named, acrossSplitSources);
         return binder.BindModelAsync(bindingContext);
     }
 }

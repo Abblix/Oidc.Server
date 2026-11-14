@@ -79,6 +79,17 @@ public record ValidationParameters
 	public IReadOnlySet<string>? AllowedSigningAlgorithms { get; init; }
 
 	/// <summary>
+	/// Judges the key management algorithm (the <c>alg</c> of the protected header) of each JWE layer before the layer
+	/// is decrypted, a JWE carried inside another included; a layer it answers <c>false</c> for is refused. When
+	/// <c>null</c> every algorithm a registered key-management encryptor serves is accepted.
+	/// </summary>
+	/// <remarks>
+	/// A delegate rather than a set, so a caller that learns which policy applies only from the token itself - the
+	/// client the inner JWS names - can record each layer's algorithm and judge it once it knows.
+	/// </remarks>
+	public Func<string, bool>? ValidateKeyManagementAlgorithm { get; init; }
+
+	/// <summary>
 	/// Resolves signing keys (JWKs) asynchronously for a specified issuer.
 	/// </summary>
 	/// <param name="issuer">Issuer whose signing keys are to be resolved.</param>

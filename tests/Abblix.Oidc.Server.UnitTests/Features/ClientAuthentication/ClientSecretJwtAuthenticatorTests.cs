@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Linq;
@@ -63,7 +64,7 @@ public class ClientSecretJwtAuthenticatorTests
 
         _authenticator = new ClientSecretJwtAuthenticator(
             logger.Object,
-            _tokenValidator.Object,
+            new ProfiledJwtValidator(_tokenValidator.Object),
             _clientInfoProvider.Object,
             _clock,
             _replayCache.Object,
@@ -254,7 +255,7 @@ public class ClientSecretJwtAuthenticatorTests
 
         var authenticator = new ClientSecretJwtAuthenticator(
             Mock.Of<ILogger<ClientSecretJwtAuthenticator>>(),
-            _tokenValidator.Object,
+            new ProfiledJwtValidator(_tokenValidator.Object),
             _clientInfoProvider.Object,
             _clock,
             _replayCache.Object,

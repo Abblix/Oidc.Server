@@ -61,18 +61,13 @@ public partial class FlowTypeValidator(
             return Error(ErrorCodes.InvalidRequest, "The response type is required");
         }
 
-        // A code-only profile (FAPI 2.0) rejects any response type that returns a token or id_token
-        // from the authorization endpoint, regardless of what the client's AllowedResponseTypes
-        // permits - the profile tightens, the granular whitelist cannot widen it. Checked before the
-        // server-support gate so a profiled client gets the profile-specific reason even on a server
-        // where Implicit Flow is enabled for other clients.
+        // Checked before the server-support gate so a profiled client gets the profile-specific reason even on a
+        // server where Implicit Flow is enabled for other clients
         var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
-        if (profile.RequireCodeResponseTypeOnly && returnsTokenFromAuthorization)
+        if (WhyTheProfileRefuses(profile, context.Request, returnsTokenFromAuthorization) is { } refusal)
         {
             LogResponseTypeNotAllowed(Sanitized.Values(responseType));
-            return Error(
-                ErrorCodes.UnauthorizedClient,
-                "The security profile permits only the authorization code response type");
+            return Error(refusal.ErrorCode, refusal.Reason);
         }
 
         // Server-level support: every part of response_type must have a registered processor. This
@@ -122,6 +117,47 @@ public partial class FlowTypeValidator(
         string GetDefaultResponseMode()
             => returnsTokenFromAuthorization ? ResponseModes.Fragment : ResponseModes.Query;
     }
+
+    /// <summary>
+    /// The error and description a security profile refuses the requested response type with, or null where it
+    /// admits it.
+    /// </summary>
+    private static (string ErrorCode, string Reason)? WhyTheProfileRefuses(
+        SecurityProfileRequirements profile,
+        Model.AuthorizationRequest request,
+        bool returnsTokenFromAuthorization)
+    {
+        // A code-only profile (FAPI 2.0) rejects any response type that returns a token or id_token from the
+        // authorization endpoint, regardless of what the client's AllowedResponseTypes permits - the profile
+        // tightens, the granular whitelist cannot widen it
+        if (profile.RequireCodeResponseTypeOnly && returnsTokenFromAuthorization)
+        {
+            return (ErrorCodes.UnauthorizedClient,
+                "The security profile permits only the authorization code response type");
+        }
+
+        // FAPI 1.0 Part 2 section 5.2.2: "code id_token", whose ID token signs the response, or "code" with the
+        // response mode "jwt", which wraps it in a signed JWT. A response nothing signs is refused, with the
+        // unsupported_response_type RFC 6749 section 4.1.2.1 has for a method the server will not use here
+        if (profile.RequireSignedAuthorizationResponse && !IsSignedResponse(request))
+        {
+            return (ErrorCodes.UnsupportedResponseType,
+                "The security profile requires the code id_token response type, or code with the jwt response mode");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether the response the request asks for is one the server signs: <c>code id_token</c> in either order, or
+    /// <c>code</c> alone with the response mode <c>jwt</c>.
+    /// </summary>
+    private static bool IsSignedResponse(Model.AuthorizationRequest request) => request.ResponseType switch
+    {
+        { Length: 2 } both when both.HasFlag(ResponseTypes.Code) && both.HasFlag(ResponseTypes.IdToken) => true,
+        { Length: 1 } one when one.HasFlag(ResponseTypes.Code) => request.ResponseMode == ResponseModes.Jwt,
+        _ => false,
+    };
 
     /// <summary>
     /// Validates whether the requested response type in an authorization request matches any of the allowed response

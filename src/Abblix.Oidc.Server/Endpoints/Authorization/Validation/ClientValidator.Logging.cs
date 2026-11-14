@@ -18,4 +18,10 @@ partial class ClientValidator
         Level = LogLevel.Warning,
         Message = "The client with id {ClientId} was not found")]
     private partial void LogClientNotFound(Sanitized ClientId);
+
+    [LoggerMessage(
+        EventId = LogEvents.Endpoints.AuthorizationClientValidator.ClientCannotSatisfyProfile,
+        Level = LogLevel.Warning,
+        Message = "The client {ClientId} is configured against its security profile: {Violations}")]
+    private partial void LogClientCannotSatisfyProfile(Sanitized ClientId, IReadOnlyList<string> Violations);
 }

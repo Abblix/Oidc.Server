@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
@@ -50,7 +51,27 @@ public class UserInfoRequestProcessor(
 		if (userInfo == null)
 			return new OidcError(ErrorCodes.InvalidToken, "The user claims aren't found");
 
+		// OpenID Connect Core 1.0 section 5.3.2: "If a Claim is not returned, that Claim Name SHOULD be omitted from the
+		// JSON object representing the Claims; it SHOULD NOT be present with a null or empty string value."
+		var withoutValue = userInfo
+			.Where(claim => IsWithoutValue(claim.Value))
+			.Select(claim => claim.Key)
+			.ToList();
+
+		foreach (var name in withoutValue)
+			userInfo.Remove(name);
+
 		var issuer = LicenseChecker.CheckIssuer(tenant.Issuer.OriginalString, tenant, catalog);
 		return new UserInfoFoundResponse(userInfo, request.ClientInfo, issuer);
 	}
+
+	/// <summary>
+	/// A claim the store answered without a value: JSON null, or a string with nothing in it.
+	/// </summary>
+	private static bool IsWithoutValue(JsonNode? value) => value switch
+	{
+		null => true,
+		JsonValue scalar when scalar.TryGetValue<string>(out var text) => text.Length == 0,
+		_ => false,
+	};
 }

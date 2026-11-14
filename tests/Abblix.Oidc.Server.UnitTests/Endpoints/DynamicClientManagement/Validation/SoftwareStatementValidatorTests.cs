@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using System;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -44,7 +45,7 @@ public class SoftwareStatementValidatorTests
 
         _validator = new SoftwareStatementValidator(
             NullLogger<SoftwareStatementValidator>.Instance,
-            _jwtValidator.Object,
+            new ProfiledJwtValidator(_jwtValidator.Object),
             optionsMonitor.Object,
             _secureFetcher.Object,
             SingleIssuer.LicensedCatalog);
@@ -328,5 +329,34 @@ public class SoftwareStatementValidatorTests
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnapprovedSoftwareStatement, result.Error);
+    }
+
+    /// <summary>
+    /// A software statement is a JWS this server processes, so at a tenant held to FAPI 1.0 Advanced it is accepted only
+    /// under the algorithms Part 2 section 8.6 names, as a JWT bearer assertion is; a tenant held to no profile names no
+    /// list.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, true)]
+    [InlineData(ClientSecurityProfile.None, false)]
+    public async Task TheSignatureAlgorithms_AreTheTenantsProfiles(ClientSecurityProfile profile, bool bounded)
+    {
+        _oidcOptions.SoftwareStatement.TrustedIssuers =
+        [
+            new TrustedIssuer { Issuer = "https://trusted-issuer.example.com", JwksUri = new Uri("https://trusted-issuer.example.com/jwks") },
+        ];
+        ValidationParameters? captured = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
+            .Callback(new Action<string, ValidationParameters>((_, p) => captured = p))
+            .ReturnsAsync(new JsonWebToken());
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+
+        await _validator.ValidateAsync(tenant, CreateContext("eyJ.valid.jwt"));
+
+        if (bounded)
+            Assert.Equal([SigningAlgorithms.ES256, SigningAlgorithms.PS256], captured!.AllowedSigningAlgorithms!.Order());
+        else
+            Assert.Null(captured!.AllowedSigningAlgorithms);
     }
 }

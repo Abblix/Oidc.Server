@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -20,9 +21,11 @@ namespace Abblix.Oidc.Server.Features.LogoutNotification;
 /// the details of the logout event.</param>
 /// <param name="logoutTokenSender">The service responsible for sending the logout tokens to the client
 /// applications via back-channel communication.</param>
-public class BackChannelLogoutNotifier(
+/// <param name="logger">Records a notification not sent for the client's key set.</param>
+public partial class BackChannelLogoutNotifier(
     ILogoutTokenService logoutTokenService,
-    ILogoutTokenSender logoutTokenSender) : ILogoutNotifier
+    ILogoutTokenSender logoutTokenSender,
+    ILogger<BackChannelLogoutNotifier> logger) : ILogoutNotifier
 {
     /// <summary>
     /// Asynchronously notifies a client of a logout event by creating a logout token and sending it to the client's
@@ -43,7 +46,17 @@ public class BackChannelLogoutNotifier(
             return;
 
         // Create the logout token specific to the logout event and client
-        var logoutToken = await logoutTokenService.CreateLogoutTokenAsync(tenant, clientInfo, logoutContext);
+        var created = await logoutTokenService.CreateLogoutTokenAsync(tenant, clientInfo, logoutContext);
+
+        // A client whose key set its profile leaves nothing in to encrypt to cannot be sent a logout token it can read,
+        // and a token sent in the clear would be one its profile forbids, so the notification is not sent
+        if (created.TryGetFailure(out var refusal))
+        {
+            LogLogoutTokenNotIssued(clientInfo.ClientId, refusal.ErrorDescription);
+            return;
+        }
+
+        var logoutToken = created.GetSuccess();
 
         // Send the logout token to the client's back-channel logout endpoint
         await logoutTokenSender.SendBackChannelLogoutAsync(clientInfo, logoutToken);

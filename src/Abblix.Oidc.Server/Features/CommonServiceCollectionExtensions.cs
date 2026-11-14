@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.DependencyInjection;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Implementation;
@@ -63,6 +65,10 @@ public static class CommonServiceCollectionExtensions
         // The next-poll instant of a polled request, kept apart from the request itself: a poll
         // writing the request back to note it overwrote whatever the approval had changed.
         services.TryAddSingleton<IPollScheduleStore, PollScheduleStore>();
+        // The one door to the creator for what this server issues and to the validator for what it accepts, each
+        // holding the algorithms to the security profile in force, registered with what they guard
+        services.TryAddSingleton<ProfiledJwtIssuer>();
+        services.TryAddSingleton<ProfiledJwtValidator>();
         return services
             .AddJsonWebTokens()
             .AddTelemetryDecorator<IJsonWebTokenSigner, MeasuredJsonWebTokenSigner>();

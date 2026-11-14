@@ -6,7 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -29,18 +31,22 @@ namespace Abblix.Oidc.Server.Features.Tokens.Validation;
 /// <param name="statusCheck">Refuses a token revoked, rotated or cut off at the tenant it is validated for.</param>
 /// <param name="oidcOptions">Supplies <see cref="OidcOptions.ReplicaClockSkew"/>, the drift between this server's
 /// instances.</param>
+/// <param name="clientInfoProvider">Finds the client a token presented by another was issued to, whose profile it is
+/// held to as well.</param>
 public class AuthServiceJwtValidator(
-	IJsonWebTokenValidator validator,
+	ProfiledJwtValidator validator,
 	ITenantCatalog catalog,
 	IAuthServiceKeysProvider serviceKeysProvider,
 	TokenStatusCheck statusCheck,
-	IOptions<OidcOptions> oidcOptions) : IAuthServiceJwtValidator
+	IOptions<OidcOptions> oidcOptions,
+	IClientInfoProvider clientInfoProvider) : IAuthServiceJwtValidator
 {
 
 	/// <summary>
 	/// Asynchronously validates a JWT, checking its authenticity, issuer, audience, and cryptographic signatures.
 	/// </summary>
 	/// <param name="tenant">The tenant the token is for.</param>
+	/// <param name="client">The client presenting the token, or null where none is known.</param>
 	/// <param name="jwt">The JWT string to validate.</param>
 	/// <param name="tokenTypes">The token types the caller accepts.</param>
 	/// <param name="options">Validation options to apply. Defaults to <see cref="ValidationOptions.Default"/>.</param>
@@ -49,11 +55,17 @@ public class AuthServiceJwtValidator(
 	/// </returns>
 	public async Task<Result<JsonWebToken, JwtValidationError>> ValidateAsync(
 		TenantDefinition tenant,
+		ClientInfo? client,
 		string jwt,
 		TokenTypePolicy tokenTypes,
 		ValidationOptions options = ValidationOptions.Default)
 	{
+		// The profile of the client presenting the token where it is known, else the tenant's, so a token this server
+		// signed or encrypted otherwise before that profile was in force is refused. Each JWE layer is recorded for
+		// the client the token was issued to, known only once it is read
+		var keyManagementAlgorithms = new List<string>();
 		var result = await validator.ValidateAsync(
+			SecurityProfileRequirements.For(tenant, client),
 			jwt,
 			new ValidationParameters
 			{
@@ -69,10 +81,22 @@ public class AuthServiceJwtValidator(
 				// is tolerated: the expiry the issuing instance set is a deadline no instance moves. A value above
 				// a tenant's profile ceiling gets that tenant refused by ClockSkewCeilingCheck
 				ClockSkew = new ClockSkew { Past = TimeSpan.Zero, Future = oidcOptions.Value.ReplicaClockSkew },
+				ValidateKeyManagementAlgorithm = algorithm =>
+				{
+					keyManagementAlgorithms.Add(algorithm);
+					return true;
+				},
 			});
 
 		if (!result.TryGetSuccess(out var token))
 			return result;
+
+		if (await AlgorithmOutsideTheOwnersProfileAsync(tenant, client, token, keyManagementAlgorithms) is { } algorithm)
+		{
+			return new JwtValidationError(
+				JwtError.InvalidToken,
+				$"The token uses {algorithm}, which the security profile of the client it was issued to does not admit");
+		}
 
 		// What is recorded about a refresh token, revoked, rotated or cut off, is kept for the tenant and creation it
 		// was issued at, so one of another creation of this tenant, or of a version before 3.0, which names none,
@@ -85,6 +109,34 @@ public class AuthServiceJwtValidator(
 		}
 
 		return await statusCheck.CheckAsync(tenant, token, options);
+	}
+
+	/// <summary>
+	/// The algorithm of <paramref name="token"/> the profile of the client it was issued to does not admit, where that
+	/// client is not the one presenting it, or none is known to present it; null otherwise.
+	/// </summary>
+	/// <remarks>
+	/// A token one client holds may be presented by another - introspected by a resource server, exchanged on a
+	/// delegation - and both clients' profiles bound how it may be processed, so the stricter wins. The presenter's
+	/// profile was applied while validating; the owner's is known only from the token, so it is applied here. Where no
+	/// presenter is known - a bearer access token at userinfo, an id_token_hint at end session - the owner's profile is
+	/// the only one that bounds the token, and FAPI 2.0 section 5.4.1 holds the server to it "when creating or
+	/// processing JWTs". The owner is the client the token names: an access or refresh token's client_id, an ID
+	/// token's azp or sole audience.
+	/// </remarks>
+	private async Task<string?> AlgorithmOutsideTheOwnersProfileAsync(
+		TenantDefinition tenant,
+		ClientInfo? presenter,
+		JsonWebToken token,
+		List<string> keyManagementAlgorithms)
+	{
+		if (token.Payload.NamedClientId() is not { } ownerId || ownerId == presenter?.ClientId)
+			return null;
+
+		if (await clientInfoProvider.TryFindClientAsync(tenant, ownerId) is not { } owner)
+			return null;
+
+		return SecurityProfileRequirements.For(tenant, owner).AlgorithmOutside(token, keyManagementAlgorithms);
 	}
 
 	/// <summary>

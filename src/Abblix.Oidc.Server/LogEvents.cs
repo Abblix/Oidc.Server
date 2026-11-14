@@ -88,6 +88,7 @@ internal static class LogEvents
             private const int Base = 2040;
 
             public const int ClientNotFound = Base + 1;
+            public const int ClientCannotSatisfyProfile = Base + 2;
         }
 
         /// <summary>
@@ -316,6 +317,7 @@ internal static class LogEvents
             /// of a field - and so that this record goes on naming one shape per number.
             /// </summary>
             public const int RegistrationCannotSatisfyDeploymentProfile = Base + 3;
+            public const int ClientIdentifiersMismatch = Base + 4;
         }
     }
 
@@ -398,6 +400,7 @@ internal static class LogEvents
             public const int AudienceValidationFailed = Base + 5;
             public const int TimestampsOutsideTheClientsProfile = Base + 6;
             public const int TimestampUnreadable = Base + 7;
+            public const int AlgorithmOutsideTheClientsProfile = Base + 8;
         }
 
         /// <summary>
@@ -757,7 +760,7 @@ internal static class LogEvents
             public const int InvalidToken = Base + 1;
             public const int SigningAlgorithmMismatch = Base + 2;
             public const int ParametersOutsideRequestObjectIgnored = Base + 3;
-            public const int LifetimeOutsideProfile = Base + 4;
+            public const int RefusedByProfile = Base + 4;
         }
 
         /// <summary>
@@ -934,6 +937,17 @@ internal static class LogEvents
 
             public const int SessionClientsExhausted = Base;
         }
+
+        /// <summary>
+        /// <c>Features/LogoutNotification/BackChannelLogoutNotifier.cs</c> - a notification not sent
+        /// (sub-range 10320-10339).
+        /// </summary>
+        public static class BackChannelLogoutNotifier
+        {
+            private const int Base = 10320;
+
+            public const int LogoutTokenNotIssued = Base;
+        }
     }
 
     /// <summary>
@@ -1058,6 +1072,23 @@ internal static class LogEvents
             private const int Base = 10900;
 
             public const int RequestRefused = Base;
+        }
+    }
+
+    /// <summary>
+    /// Range 11100-11199: <c>Features/Tokens</c>, a second window, because 5000-5099 is fully allocated.
+    /// </summary>
+    public static class TokenIssuance
+    {
+        /// <summary>
+        /// <c>Features/Tokens/AccessTokenService.cs</c> - an access token not issued for what its audience
+        /// publishes (sub-range 11100-11109).
+        /// </summary>
+        public static class AccessTokenService
+        {
+            private const int Base = 11100;
+
+            public const int AudienceKeyRefused = Base;
         }
     }
 

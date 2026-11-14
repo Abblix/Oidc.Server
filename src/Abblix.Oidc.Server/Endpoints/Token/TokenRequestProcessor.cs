@@ -82,13 +82,26 @@ public class TokenRequestProcessor(
 
 		var grantId = ResolveGrantId(request, presentedRefreshToken, issuesRefreshToken);
 
-		var accessToken = await accessTokenService.CreateAccessTokenAsync(
-			tenant,
-			request.AuthorizedGrant.AuthSession,
-			grantedContext,
-			clientInfo,
-			grantId,
-			request.AuthorizedGrant.ExpiresNoLaterThan);
+		EncodedJsonWebToken accessToken;
+		try
+		{
+			accessToken = await accessTokenService.CreateAccessTokenAsync(
+				tenant,
+				request.AuthorizedGrant.AuthSession,
+				grantedContext,
+				clientInfo,
+				grantId,
+				request.AuthorizedGrant.ExpiresNoLaterThan);
+		}
+		catch (AudienceKeyRefusedException)
+		{
+			// RFC 8707 section 2: the resource the request named is unusable, since the key it publishes would have
+			// the token encrypted with an algorithm the profile in force forbids. The resource's configuration is at
+			// fault, not this server's, so the request is answered rather than failed
+			return new OidcError(
+				ErrorCodes.InvalidTarget,
+				"The requested resource publishes an encryption key the security profile in force does not admit.");
+		}
 
 		// A token exchanged at the very end of its subject token's life is minted already expired, because the
 		// subject token was valid when it was checked and its expiry caps the new token. Such a token is refused
@@ -116,8 +129,14 @@ public class TokenRequestProcessor(
 		if (issuesRefreshToken)
 			await AddRefreshTokenAsync(tenant, response, request, grantedContext, presentedRefreshToken, grantId);
 
-		if (mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OpenId))
-			await AddIdentityTokenAsync(tenant, response, request, grantedContext, accessToken);
+		// A completion of a CIBA request in push mode mints the ID token in a request the client's key set was not
+		// judged in, so a refusal of that key set is answered here rather than thrown, before anything is spent
+		var issuesIdentityToken = mayIssueDerivedTokens && grantedScope.HasFlag(Scopes.OpenId);
+		if (await AddIdentityTokenAsync(tenant, response, request, grantedContext, accessToken, issuesIdentityToken)
+		    is { } refusal)
+		{
+			return refusal;
+		}
 
 		// Spent last, once every token of the response is issued, so a failure to issue one leaves the presented
 		// token unspent; the request losing the race to renew a single-use token hands over nothing it issued.
@@ -305,34 +324,26 @@ public class TokenRequestProcessor(
 			grantId.NotNull(nameof(grantId)));
 	}
 
-	private async Task AddIdentityTokenAsync(
+	private async Task<OidcError?> AddIdentityTokenAsync(
 		TenantDefinition tenant,
 		TokenIssued response,
 		ValidTokenRequest request,
 		AuthorizationContext authContext,
-		EncodedJsonWebToken accessToken)
+		EncodedJsonWebToken accessToken,
+		bool issues)
 	{
-		// The bindings exist only when the caller says it IS the push path. The mode could be read
-		// off clientInfo instead, and is not, so that this method does not have to know CIBA's
-		// delivery rules to serve every other grant type - see PushDeliveryBindings.
-		//
-		// The refresh token is read from the RESPONSE because it was minted in the step before. That order
-		// is load-bearing: assembling these bindings before the step that mints it silently drops
-		// rt_hash from every push notification that carries one.
-		var pushBindings = request.PushDeliveryOf is { } authenticationRequestId
-			? new PushDeliveryBindings(authenticationRequestId, response.RefreshToken?.EncodedJwt)
-			: null;
+		if (!issues)
+			return null;
 
-		response.IdToken = await identityTokenService.CreateIdentityTokenAsync(
-			tenant, request.AuthorizedGrant.AuthSession,
-			authContext,
-			request.ClientInfo,
-			false,
-			null,
-			accessToken.EncodedJwt,
-			// FAPI 1.0 Part 2 section 5.2.2.1 lets s_hash be omitted here once the authorization response
-			// carried it, and the token request holds no state to hash anyway.
-			null,
-			pushBindings);
+		var created = await identityTokenService.CreateIdentityTokenAsync(
+			tenant,
+			TokenResponseIdentityToken.For(
+				request, authContext, accessToken.EncodedJwt, response.RefreshToken?.EncodedJwt));
+
+		if (created is { } issued && issued.TryGetFailure(out var refusal))
+			return refusal;
+
+		response.IdToken = created?.GetSuccess();
+		return null;
 	}
 }

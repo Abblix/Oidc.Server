@@ -37,7 +37,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// as its assertion's audience.</param>
 public partial class ClientSecretJwtAuthenticator(
     ILogger<ClientSecretJwtAuthenticator> logger,
-    IJsonWebTokenValidator tokenValidator,
+    ProfiledJwtValidator tokenValidator,
     IClientInfoProvider clientInfoProvider,
     TimeProvider clock,
     IReplayCache replayCache,
@@ -67,8 +67,10 @@ public partial class ClientSecretJwtAuthenticator(
         TenantDefinition tenant, string jwt)
     {
         var context = new ValidationContext();
+        var profile = DefaultProfileRequirementsOf(tenant);
 
         var result = await tokenValidator.ValidateAsync(
+            profile,
             jwt,
             new ValidationParameters
             {
@@ -78,7 +80,7 @@ public partial class ClientSecretJwtAuthenticator(
 
                 // The tolerance belongs to the tenant's default profile, ceiling included -
                 // RFC 7523 Section 3 names no ceiling of its own.
-                ClockSkew = DefaultProfileRequirementsOf(tenant).ClockSkewOrDefault(),
+                ClockSkew = profile.ClockSkewOrDefault(),
                 ValidateIssuer = issuer => ValidateIssuer(tenant, issuer, context),
                 ResolveIssuerSigningKeys = issuer => ResolveIssuerSigningKeys(tenant, issuer, context),
             });

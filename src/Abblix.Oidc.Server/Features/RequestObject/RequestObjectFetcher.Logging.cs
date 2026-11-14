@@ -33,8 +33,8 @@ partial class RequestObjectFetcher
     private partial void LogParametersOutsideRequestObjectIgnored(Sanitized Parameters);
 
     [LoggerMessage(
-        EventId = LogEvents.Misc.RequestObjectFetcher.LifetimeOutsideProfile,
+        EventId = LogEvents.Misc.RequestObjectFetcher.RefusedByProfile,
         Level = LogLevel.Warning,
-        Message = "The request object for {ClientId} has a lifetime its security profile does not allow: {Reason}")]
-    private partial void LogLifetimeOutsideProfile(string ClientId, Sanitized Reason);
+        Message = "The request object for {ClientId} carries claims its security profile does not allow: {Reason}")]
+    private partial void LogRefusedByProfile(string ClientId, Sanitized Reason);
 }

@@ -179,15 +179,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(consents);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                true,
-                null,
-                null,
-                null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, true, null, null, null, session, null)))
             .ReturnsAsync(expectedIdToken);
 
         // Act
@@ -351,15 +343,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync("auth_code_123");
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                false,
-                "auth_code_123",
-                null,
-                state))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, "auth_code_123", null, state, session, null)))
             .ReturnsAsync(expectedIdToken);
 
         // Act
@@ -401,15 +385,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedCode);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                false,
-                expectedCode,
-                null,
-                null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, expectedCode, null, null, session, null)))
             .ReturnsAsync(expectedIdToken);
 
         // Act
@@ -451,15 +427,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedToken);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                false,
-                null,
-                expectedToken.EncodedJwt,
-                null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, expectedToken.EncodedJwt, null, session, null)))
             .ReturnsAsync(expectedIdToken);
 
         // Act
@@ -514,15 +482,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedToken);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                false,
-                expectedCode,
-                expectedToken.EncodedJwt,
-                null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, expectedCode, expectedToken.EncodedJwt, null, session, null)))
             .ReturnsAsync(expectedIdToken);
 
         var result = await processor.ProcessAsync(SingleIssuer.Tenant, request);
@@ -569,15 +529,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(expectedToken);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                false,
-                expectedCode,
-                expectedToken.EncodedJwt,
-                null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, expectedCode, expectedToken.EncodedJwt, null, session, null)))
             .ReturnsAsync(expectedIdToken);
 
         // Act
@@ -689,15 +641,7 @@ public partial class AuthorizationRequestProcessorTests
             .ReturnsAsync(consents);
 
         _identityTokenService
-            .Setup(s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                true,
-                null,
-                null,
-                null))
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, true, null, null, null, session, null)))
             .ReturnsAsync(expectedIdToken);
 
         // Act
@@ -705,15 +649,7 @@ public partial class AuthorizationRequestProcessorTests
 
         // Assert
         _identityTokenService.Verify(
-            s => s.CreateIdentityTokenAsync(
-                TestTenant.Matched,
-                session,
-                It.IsAny<AuthorizationContext>(),
-                request.ClientInfo,
-                true,
-                null,
-                null,
-                null),
+            s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, true, null, null, null, session, null)),
             Times.Once);
     }
 }

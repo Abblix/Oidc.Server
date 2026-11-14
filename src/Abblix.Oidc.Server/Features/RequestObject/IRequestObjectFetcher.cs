@@ -25,6 +25,8 @@ public interface IRequestObjectFetcher
     /// </summary>
     /// <typeparam name="T">The type of the request model.</typeparam>
     /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="client">The client the request names outside the object, whose profile the object is held to
+    /// before it is read; null where it names none.</param>
     /// <param name="request">The initial request model to bind the JWT payload to.</param>
     /// <param name="requestObject">The JWT contained within the request, if any.</param>
     /// <param name="requiredSigningAlgorithm">Optional selector returning the algorithm the resolved
@@ -42,6 +44,7 @@ public interface IRequestObjectFetcher
     /// </remarks>
     Task<Result<T, OidcError>> FetchAsync<T>(
         TenantDefinition tenant,
+        ClientInfo? client,
         T request,
         string? requestObject,
         Func<ClientInfo, string?>? requiredSigningAlgorithm = null)

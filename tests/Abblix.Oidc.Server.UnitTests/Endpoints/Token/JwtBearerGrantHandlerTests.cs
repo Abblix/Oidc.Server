@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using System;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -760,7 +761,7 @@ public class JwtBearerGrantHandlerTests
 
 		var handler = new JwtBearerGrantHandler(
 			logger.Object,
-			jwtValidator.Object,
+			new ProfiledJwtValidator(jwtValidator.Object),
 			issuerProvider.Object,
 			requestInfoProvider.Object,
 			sessionIdGenerator.Object,
@@ -1108,6 +1109,8 @@ public class JwtBearerGrantHandlerTests
 			maxJwtAge: TimeSpan.FromMinutes(10));
 		var jwt = CreateValidJwt();
 		jwt.Payload.IssuedAt = fixedTime.AddMinutes(-issuedMinutesAgo);
+		// An algorithm every profile admits, since what is under test is the assertion's age
+		jwt.Header.Algorithm = SigningAlgorithms.ES256;
 		SetupValidJwtValidation(mocks.JwtValidator, jwt);
 		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
 		var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
@@ -1357,5 +1360,37 @@ public class JwtBearerGrantHandlerTests
 		issuerProvider
 			.Setup(p => p.IsReplayedAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()))
 			.ReturnsAsync(false);
+	}
+
+	/// <summary>
+	/// FAPI 1.0 Part 2 section 8.6 names the algorithms the server uses for any JWS, so a bearer assertion presented by
+	/// a client held to FAPI 1.0 Advanced is refused under RS256 although its trusted issuer allows it; PS256 passes.
+	/// The validator is driven as the real one judges the algorithm list it is handed.
+	/// </summary>
+	[Theory]
+	[InlineData("RS256", false)]
+	[InlineData("PS256", true)]
+	public async Task AlgorithmValidation_UnderFapi1Advanced_AdmitsOnlyItsAlgorithms(string algorithm, bool accepted)
+	{
+		var (handler, mocks) = CreateHandler();
+		var jwt = CreateValidJwt();
+		jwt.Header.Algorithm = algorithm;
+		mocks.JwtValidator
+			.Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+			.ReturnsAsync((string _, ValidationParameters parameters) =>
+				parameters.AllowedSigningAlgorithms is { } allowed && !allowed.Contains(algorithm)
+					? new JwtValidationError(JwtError.InvalidAlgorithm, "Outside the allowed list")
+					: jwt);
+		SetupTrustedIssuer(mocks.IssuerProvider, Issuer, allowedAlgorithms: ["RS256", "PS256"]);
+		var clientInfo = new ClientInfo(ClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
+		var tokenRequest = new TokenRequest
+		{
+			GrantType = GrantTypes.JwtBearer,
+			Assertion = Assertion
+		};
+
+		var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+		Assert.Equal(accepted, result.TryGetSuccess(out _));
 	}
 }

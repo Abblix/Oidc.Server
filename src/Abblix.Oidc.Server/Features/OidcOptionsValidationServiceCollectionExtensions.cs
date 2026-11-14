@@ -82,6 +82,8 @@ internal static class OidcOptionsValidationServiceCollectionExtensions
             ServiceDescriptor.Singleton<ITenantsCheck, ResourceDefinitionsCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, DefaultResourceIndicatorCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ServiceTokenEncryptionKeysCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, ProfileSigningKeysCheck>(),
+            ServiceDescriptor.Singleton<ITenantsCheck, ProfileServiceTokensCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, ClockSkewCeilingCheck>(),
             ServiceDescriptor.Singleton<ITenantsCheck, BackChannelClientAuthenticationCheck>(),
         ]);

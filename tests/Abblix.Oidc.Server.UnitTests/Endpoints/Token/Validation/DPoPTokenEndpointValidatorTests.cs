@@ -379,12 +379,12 @@ public class DPoPTokenEndpointValidatorTests
 
     private void SetupProofValidatorSuccess(Proof proof) =>
         _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)proof);
 
     private void SetupProofValidatorFailure(ProofError error) =>
         _proofValidator
-            .Setup(v => v.ValidateAsync(ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Result<Proof, ProofError>)error);
 
     private void RequireNonceAtTokenEndpoint() => _opts.DPoP.Nonce.RequireAtTokenEndpoint = true;
@@ -418,5 +418,63 @@ public class DPoPTokenEndpointValidatorTests
         Assert.Equal(ErrorCodes.UseDPoPNonce, nonceError.Error);
         Assert.Equal(FreshNonce, nonceError.Nonce);
         Assert.Null(context.ProofKeyThumbprint);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 section 5.4.1 has the server, "when creating or processing JWTs", "use PS256, ES256, or EdDSA": the
+    /// proof is judged under the profile of the client presenting it, which for FAPI 2.0 refuses a proof signed RS256
+    /// and admits ES256, while a client held to no profile keeps RS256. A client held to FAPI 1.0 Advanced sends no
+    /// proof at all.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.RS256, false)]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.ES256, true)]
+    [InlineData(null, SigningAlgorithms.RS256, true)]
+    public async Task ValidateAsync_TheClientsProfile_DecidesTheProofAlgorithm(
+        ClientSecurityProfile? profile, string algorithm, bool accepted)
+    {
+        SecurityProfileRequirements? judgedUnder = null;
+        _proofValidator
+            .Setup(v => v.ValidateAsync(It.IsAny<SecurityProfileRequirements>(), ProofJwt, null, It.IsAny<CancellationToken>()))
+            .Callback<SecurityProfileRequirements, string, string?, CancellationToken>(
+                (requirements, _, _, _) => judgedUnder = requirements)
+            .ReturnsAsync((Result<Proof, ProofError>)BuildProof());
+        var context = CreateContext(proofJwt: ProofJwt, clientRequiresDPoP: false, securityProfile: profile);
+
+        await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(accepted, judgedUnder!.PermitsSigningAlgorithm(algorithm));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.2: protected resources "shall only support sender-constrained access tokens via MTLS".
+    /// A client held to FAPI 1.0 Advanced is issued certificate-bound tokens only: a request carrying a DPoP proof is
+    /// refused with invalid_request, signed ES256 or not, and one without a certificate the token could be bound to with
+    /// invalid_client, the mutual TLS authentication being what is missing; a FAPI 2.0 client keeps DPoP.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, true, true, ErrorCodes.InvalidRequest)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, true, false, ErrorCodes.InvalidRequest)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, false, false, ErrorCodes.InvalidClient)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, false, true, null)]
+    [InlineData(ClientSecurityProfile.Fapi2, true, false, null)]
+    public async Task ValidateAsync_Fapi1Advanced_IssuesCertificateBoundTokensOnly(
+        ClientSecurityProfile profile, bool withProof, bool withCertificate, string? expectedError)
+    {
+        using var certificate = CreateCertificate();
+        var proof = BuildProof();
+        proof.Token.Header.Algorithm = SigningAlgorithms.ES256;
+        if (withProof)
+            SetupProofValidatorSuccess(proof);
+        var context = CreateContext(
+            proofJwt: withProof ? ProofJwt : null,
+            clientRequiresDPoP: false,
+            clientCertificate: withCertificate ? certificate : null,
+            tlsClientCertificateBoundAccessTokens: true,
+            securityProfile: profile);
+
+        var error = await _validator.ValidateAsync(_issuer.ToTenant(), context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedError, error?.Error);
     }
 }

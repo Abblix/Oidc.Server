@@ -47,6 +47,8 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
     private const string RequestHeaderMarkerName = "RequestHeaderAttribute";
     private const string AuthorizationHeaderMarkerName = "AuthorizationHeaderAttribute";
     private const string ClientCertificateMarkerName = "ClientCertificateAttribute";
+    private const string QueryParameterMarkerName = "QueryParameterAttribute";
+    private const string FormParameterMarkerName = "FormParameterAttribute";
 
     // Validation markers - translated to the executable Minimal API validation attributes of the same name, so a
     // Validator pass over the bound model enforces the rule the core declared.
@@ -61,7 +63,8 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
     private static readonly ImmutableHashSet<string> SourceMarkerNames = ImmutableHashSet.Create(
         StringComparer.Ordinal,
-        RequestHeaderMarkerName, AuthorizationHeaderMarkerName, ClientCertificateMarkerName);
+        RequestHeaderMarkerName, AuthorizationHeaderMarkerName, ClientCertificateMarkerName,
+        QueryParameterMarkerName, FormParameterMarkerName);
 
     // RequiredMarkerName is left out: it lives in DataAnnotations, not among the declarative markers.
     private static readonly ImmutableHashSet<string> ValidationMarkerNames = ImmutableHashSet.Create(
@@ -454,6 +457,21 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
                     _assignments.Add((property.Name, "clientCertificate"));
                     break;
 
+                // A wire parameter read from one part of the request alone. RequestValues with the other part left
+                // out reads it exactly as the query-or-form models read theirs
+                case QueryParameterMarkerName
+                    when sourceMarker.ConstructorArguments is [{ Value: string queryName }]:
+                    ClassifySingleSourceWire(property, queryName, $"new {known.RequestValues}(request.Query, null)");
+                    return;
+
+                case FormParameterMarkerName
+                    when sourceMarker.ConstructorArguments is [{ Value: string formName }]:
+                    ClassifySingleSourceWire(
+                        property,
+                        formName,
+                        $"new {known.RequestValues}(global::Microsoft.AspNetCore.Http.QueryCollection.Empty, form)");
+                    return;
+
                 default:
                     return;
             }
@@ -480,6 +498,30 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
             _wireMembers.Add((wireName, property.Name));
 
             if (property.Type is not IArrayTypeSymbol || GetWireFormatMarkerName(property) != null)
+                _singleValuedWireNames.Add(wireName);
+        }
+
+        /// <summary>
+        /// Classifies a parameter that one source marker restricts to the query or the form. It is a wire parameter
+        /// all the same, malformed and repeated like the others, and the query-or-form <c>source</c> counts it, so a
+        /// model that splits one parameter by source refuses it sent in both, as it refused it before the split.
+        /// </summary>
+        private void ClassifySingleSourceWire(IPropertySymbol property, string wireName, string sourceExpression)
+        {
+            var type = property.Type.ToDisplayString(FullyQualifiedWithNullability);
+            _properties.Add((property.Name, type, GetInitializer(property), CollectValidations(property)));
+
+            var value = $"{sourceExpression}[{Literal(wireName)}]";
+            _assignments.Add((
+                property.Name,
+                $"{known.FormValues}.Read(() => {ConvertByType(property, value)}, {Literal(wireName)}, malformed)"));
+            _readsWire = true;
+
+            // One wire name may stand behind a member per source, and the refusals name it once
+            if (_wireMembers.All(member => member.WireName != wireName))
+                _wireMembers.Add((wireName, property.Name));
+
+            if (!_singleValuedWireNames.Contains(wireName))
                 _singleValuedWireNames.Add(wireName);
         }
 

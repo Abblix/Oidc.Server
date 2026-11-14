@@ -56,6 +56,9 @@ internal static class ClientRegistrationValidationServiceCollectionExtensions
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, BackChannelAuthenticationValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SigningAlgorithmsValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SignedResponseAlgorithmsValidator>(),
+            // After the check that a named algorithm is one this server supports at all, so a profile's narrower
+            // refusal is not reported for an algorithm the server cannot sign with in any case
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ProfileSigningKeysValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, EncryptedResponseAlgorithmsValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, TokenEndpointAuthMethodValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, CredentialsValidator>(),

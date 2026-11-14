@@ -28,6 +28,7 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// be validated and merged into the outer model.
     /// </summary>
     public Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(TenantDefinition tenant, BackChannelAuthenticationRequest request)
+        // The client authenticates after the request is read, so none is named to it here
         => requestObjectFetcher.FetchAsync(tenant,
-            request, request.Request, client => client.BackChannelAuthenticationRequestSigningAlg);
+            client: null, request, request.Request, client => client.BackChannelAuthenticationRequestSigningAlg);
 }

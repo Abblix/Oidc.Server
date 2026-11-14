@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Nodes;
@@ -85,7 +86,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
         var tokenIds = Mock.Of<ITokenIdGenerator>(generator => generator.GenerateTokenId() == "jti");
         var serviceFormatter = new Mock<IAuthServiceJwtFormatter>();
         serviceFormatter
-            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
             .ReturnsAsync("token");
         var session = new AuthSession("subject", "session", clock.GetUtcNow(), "local");
         static AuthorizationContext Context(string clientId) => new(clientId, [Scopes.OpenId], null);
@@ -101,7 +102,8 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     options,
                     SingleIssuer.LicensedCatalog,
                     new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>()),
-                    ScopeClaims.Of());
+                    ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
                 return clientId => access.CreateAccessTokenAsync(SingleIssuer.Tenant, session, Context(clientId), client, grantId: null, null);
 
             case IdentityToken:
@@ -120,9 +122,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     .ReturnsAsync(new JsonObject());
                 var identity = new IdentityTokenService(
                     SingleIssuer.LicensedCatalog, clock, clientFormatter.Object, claims.Object, options);
-                return clientId => identity.CreateIdentityTokenAsync(
-                    SingleIssuer.Tenant,
-                    session, Context(clientId), client, includeUserClaims: false, authorizationCode: null, accessToken: null, state: null);
+                return clientId => identity.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(session, Context(clientId), client, false, null, null, null));
 
             case RefreshToken:
                 var refresh = new RefreshTokenService(

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -55,7 +56,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// <param name="logger">Logger for recording JWT Bearer grant validation events and errors.</param>
 public partial class JwtBearerGrantHandler(
 	ILogger<JwtBearerGrantHandler> logger,
-	IJsonWebTokenValidator jwtValidator,
+	ProfiledJwtValidator jwtValidator,
 	IJwtBearerIssuerProvider issuerProvider,
 	IRequestInfoProvider requestInfoProvider,
 	ISessionIdGenerator sessionIdGenerator,
@@ -135,6 +136,7 @@ public partial class JwtBearerGrantHandler(
 	private async Task<Result<JsonWebToken, OidcError>> ValidateJwtAsync(TenantDefinition tenant, [Credential] string assertion, ClientInfo clientInfo)
 	{
 		var validationResult = await jwtValidator.ValidateAsync(
+			SecurityProfileRequirements.For(tenant, clientInfo),
 			assertion,
 			_assertionParameters.For(tenant, _assertionPolicy.ResolveClockSkew(tenant, clientInfo)));
 

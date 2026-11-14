@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -42,6 +43,7 @@ public partial class DPoPUserInfoValidator(
     /// </remarks>
     public async Task<OidcError?> ValidateAsync(
         TenantDefinition tenant,
+        ClientInfo? client,
         ClientRequest clientRequest,
         JsonWebToken accessToken,
         [Credential] string rawAccessToken)
@@ -49,7 +51,7 @@ public partial class DPoPUserInfoValidator(
         var schemeDPoP = clientRequest.AuthorizationHeader.HasScheme(TokenTypes.DPoP);
 
         return accessToken is { Payload.Confirmation.JwkThumbprint: {} committed }
-            ? await ValidateBoundPresentationAsync(tenant, clientRequest, schemeDPoP, committed, rawAccessToken)
+            ? await ValidateBoundPresentationAsync(tenant, client, clientRequest, schemeDPoP, committed, rawAccessToken)
             : ValidateUnboundPresentation(schemeDPoP);
     }
 
@@ -72,6 +74,7 @@ public partial class DPoPUserInfoValidator(
 
     private async Task<OidcError?> ValidateBoundPresentationAsync(
         TenantDefinition tenant,
+        ClientInfo? client,
         ClientRequest clientRequest,
         bool schemeDPoP,
         string committed,
@@ -91,7 +94,10 @@ public partial class DPoPUserInfoValidator(
             return new InvalidDPoPProofError("DPoP proof is required for the DPoP-bound access token.");
         }
 
-        var proofResult = await proofValidator.ValidateAsync(proofJwt, rawAccessToken);
+        // FAPI 2.0 section 5.4.1: the algorithms "when creating or processing JWTs" are those of the profile the client
+        // the token was issued to is held to, which may be stricter than the tenant's
+        var proofResult = await proofValidator.ValidateAsync(
+            SecurityProfileRequirements.For(tenant, client), proofJwt, rawAccessToken);
         if (proofResult.TryGetFailure(out var proofError))
         {
             LogProofRejected(proofError.Reason);

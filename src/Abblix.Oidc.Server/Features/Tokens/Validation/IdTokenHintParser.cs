@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -53,11 +54,12 @@ public class IdTokenHintParser(IAuthServiceJwtValidator jwtValidator) : IIdToken
         ValidationOptions.Default & ~ValidationOptions.ValidateLifetime & ~ValidationOptions.ValidateAudience;
 
     /// <inheritdoc />
-    public async Task<Result<JsonWebToken, string>> ParseAsync(TenantDefinition tenant, string idTokenHint)
+    public async Task<Result<JsonWebToken, string>> ParseAsync(
+        TenantDefinition tenant, ClientInfo? client, string idTokenHint)
     {
         // Another token this server issued, an access or refresh token whose audience may well match, is refused
         // by its type, which the signature alone would not catch, as RFC 8725 Section 3.12 describes.
-        var result = await jwtValidator.ValidateAsync(tenant, idTokenHint, JwtTypes.IdTokens, HintOptions);
+        var result = await jwtValidator.ValidateAsync(tenant, client, idTokenHint, JwtTypes.IdTokens, HintOptions);
         if (result.TryGetFailure(out var validationError))
             return $"The id token hint contains an invalid token: {validationError}";
 

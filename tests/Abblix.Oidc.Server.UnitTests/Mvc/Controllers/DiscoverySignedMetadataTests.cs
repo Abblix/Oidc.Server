@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -61,7 +62,7 @@ public class DiscoverySignedMetadataTests
         _formatter = new ConfigurationResponseFormatter(
             _optionsMock.Object,
             _endpointResolverMock.Object,
-            new SignedMetadataProvider(_jwtCreatorMock.Object, _keysProviderMock.Object, _clock),
+            new SignedMetadataProvider(new ProfiledJwtIssuer(_jwtCreatorMock.Object), _keysProviderMock.Object, _clock),
             SingleIssuer.Accessor);
     }
 

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -37,7 +38,9 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </remarks>
 internal partial class SecurityProfileClientAuthenticator(
     IClientAuthenticator inner,
-    ILogger<SecurityProfileClientAuthenticator> logger) : IClientAuthenticator
+    ILogger<SecurityProfileClientAuthenticator> logger,
+    IClientKeysProvider clientKeysProvider,
+    IOptions<OidcOptions> options) : IClientAuthenticator
 {
     public IEnumerable<string> ClientAuthenticationMethodsSupported
         => inner.ClientAuthenticationMethodsSupported;
@@ -52,7 +55,7 @@ internal partial class SecurityProfileClientAuthenticator(
         // it demands. What the client is held to comes from the combination further down, which
         // takes the tenant's demands as a floor; this read must not, or an undefined value the
         // client set would be hidden behind a defined default of the tenant.
-        var profile = clientInfo.SecurityProfile ?? tenant.DefaultSecurityProfile;
+        var profile = SecurityProfileRequirements.ProfileNamedFor(tenant, clientInfo);
 
         // Said where a client is met after proving who it is. The value cannot be interpreted, so
         // the client is held to every control this server can demand - and without this line the
@@ -69,11 +72,37 @@ internal partial class SecurityProfileClientAuthenticator(
             LogProfileIsNotOneThisServerDefines(clientInfo.ClientId, (int)profile);
         }
 
-        var violations = SecurityProfileConsistency.FindViolations(
-            clientInfo.EffectiveResponseTypes,
-            clientInfo.TokenEndpointAuthMethod,
-            clientInfo.ClientAssertionAudiences,
-            SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile));
+        var requirements = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile);
+
+        // FAPI 1.0 Part 1 section 5.2.2: invalid_client "when mis-matched client identifiers were provided through the
+        // client authentication methods that permits sending the client identifier in more than one way". The
+        // credential decided which client this is, so a client_id naming another one is refused rather than ignored
+        if (requirements.RequireMatchingClientIdentifiers &&
+            request.ClientId is { Length: > 0 } namedClientId &&
+            !string.Equals(namedClientId, clientInfo.ClientId, StringComparison.Ordinal))
+        {
+            LogClientIdentifiersMismatch(clientInfo.ClientId, Sanitized.Value(namedClientId));
+            return null;
+        }
+        IReadOnlyList<string> violations =
+        [
+            ..SecurityProfileConsistency.FindViolations(
+                clientInfo.EffectiveResponseTypes,
+                clientInfo.TokenEndpointAuthMethod,
+                clientInfo.ClientAssertionAudiences,
+                requirements),
+            ..SecurityProfileConsistency.FindAlgorithmViolations(clientInfo, requirements),
+            ..SecurityProfileConsistency.FindJwksUriViolations(clientInfo.JwksUri, requirements),
+            ..SecurityProfileConsistency.FindTokenBindingViolations(
+                clientInfo.TokenEndpointAuthMethod,
+                clientInfo.TlsClientCertificateBoundAccessTokens,
+                clientInfo.RequireDPoP,
+                requirements),
+            ..SecurityProfileConsistency.FindServiceTokenViolations(
+                SecurityProfileConsistency.IssuedToAClient(options.Value.ServiceTokens), requirements),
+            ..await SecurityProfileConsistency.FindEncryptionKeyViolationsAsync(
+                clientKeysProvider, clientInfo, requirements),
+        ];
 
         if (violations.Count == 0)
             return clientInfo;

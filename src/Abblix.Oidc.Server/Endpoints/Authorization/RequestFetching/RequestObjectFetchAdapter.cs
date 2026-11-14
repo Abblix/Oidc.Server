@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using System.Reflection;
 using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -25,7 +26,10 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
 /// </summary>
 /// <param name="requestObjectFetcher">The request object fetcher responsible for fetching and processing
 /// the JWT request object.</param>
-public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetcher) : IAuthorizationRequestFetcher
+/// <param name="clientInfoProvider">Finds the client the request names outside the object.</param>
+public class RequestObjectFetchAdapter(
+    IRequestObjectFetcher requestObjectFetcher,
+    IClientInfoProvider clientInfoProvider) : IAuthorizationRequestFetcher
 {
     /// <summary>
     /// Fetches and processes the authorization request by delegating to the request object fetcher.
@@ -51,8 +55,30 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
         if (request.PushedRequestUri is not null)
             return request;
 
+        // RFC 9101 section 5: "client_id REQUIRED. OAuth 2.0 [RFC6749] "client_id". The value MUST match the "request"
+        // or "request_uri" Request Object's (Section 2.1) "client_id"", and section 6.3 has a failed client ID check
+        // answered as "specified in Section 5.2 of [RFC6749]". So the client is known before the object
+        // is read, and the object is held to its profile up front
+        ClientInfo? namedClient = null;
+        if (request.Request is not null)
+        {
+            if (request.ClientId is not { Length: > 0 } clientId)
+            {
+                return ErrorFactory.ValidationError(
+                    ErrorCodes.InvalidRequest,
+                    $"The {AuthorizationRequest.Parameters.ClientId} parameter is required beside a request object");
+            }
+
+            namedClient = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
+        }
+
+        // RFC 9101 section 6.3: "The client ID values in the "client_id" request parameter and in the Request Object
+        // "client_id" claim MUST be identical", and section 4 has the object contain every parameter but "request" and
+        // "request_uri". The outer client_id is left out of what the object is merged over, so the comparison below
+        // refuses an object naming no client as it refuses one naming another
+        var mergedOver = request.Request.HasValue() ? request with { ClientId = null } : request;
         var fetchResult = await requestObjectFetcher.FetchAsync(tenant,
-            request, request.Request, client => client.RequestObjectSigningAlgorithm);
+            namedClient, mergedOver, request.Request, client => client.RequestObjectSigningAlgorithm);
 
         // Strict processing (RFC 9101 section 6.3) rebuilds the request from the object alone, which drops the request
         // parameter carrying that object, so the validated object is carried on: without it a client required to sign
@@ -91,9 +117,10 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// MUST match the ones inside the request object when the object carries them. The merge gives
     /// the request object's values precedence, so a mismatch surfaces as the merged value differing
     /// from the outer one - without this check an attacker-supplied object could silently swap the
-    /// flow or the client identity relative to what the plain OAuth parameters declared. A prompt value outside
-    /// <see cref="SupportedPrompts"/>, or a response mode outside <see cref="SupportedResponseModes"/>, is
-    /// refused with invalid_request, as the same value is in the query.
+    /// flow or the client identity relative to what the plain OAuth parameters declared. The object is merged over a
+    /// request without its client_id, so an object carrying none is refused as well (RFC 9101 section 6.3). A prompt
+    /// value outside <see cref="SupportedPrompts"/>, or a response mode outside <see cref="SupportedResponseModes"/>,
+    /// is refused with invalid_request, as the same value is in the query.
     /// </summary>
     private static Result<AuthorizationRequest, OidcError> ValidateMergedParameters(
         AuthorizationRequest outer,

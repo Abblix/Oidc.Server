@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -59,8 +60,8 @@ public sealed class IssuerSpellingTests : IDisposable
         var formatter = new Mock<IAuthServiceJwtFormatter>(MockBehavior.Strict);
         JsonWebToken? issued = null;
         formatter
-            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<TenantDefinition, JsonWebToken, ServiceJwtEncryption>((_, jwt, _) => issued = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => issued = jwt)
             .ReturnsAsync("token");
 
         var service = new AccessTokenService(
@@ -71,7 +72,8 @@ public sealed class IssuerSpellingTests : IDisposable
             Options.Create(new OidcOptions()),
             SingleIssuer.HostCatalog,
             new AudienceKeyResolver(Mock.Of<IResourceManager>(), Mock.Of<IResourceKeysProvider>()),
-            ScopeClaims.Of());
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
 
         await service.CreateAccessTokenAsync(
             options.Value.ToTenant(),

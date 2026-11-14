@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Text;
+using System.Net.Http.Headers;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -151,6 +153,105 @@ public partial class JarRichAuthorizationRequestsTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
         Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// RFC 9126 section 3: "Request parameters required by a given client authentication method are included in the
+    /// "application/x-www-form-urlencoded" request directly and are the only parameters other than "request" in the
+    /// form body". A client_secret_basic client authenticates in the header, so its form holds the object alone, and
+    /// the pushed request is accepted with 201.
+    /// </summary>
+    [Fact]
+    public async Task StrictProcessing_PushedObjectAlone_WithBasicAuthentication_IsAccepted()
+    {
+        await using var host = CreateStrictHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var signing = await RegisterBasicSigningClientAsync(client, discovery);
+
+        var response = await PushObjectAloneAsync(
+            client, discovery, signing, await SignRequestObjectAsync(discovery, signing, GeneratePkcePair().Challenge));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The object is read for the client that authenticated, so an object another client signed is refused as
+    /// invalid_request_object, the client_id inside it not being the one the request is for (RFC 9101 section 6.3).
+    /// </summary>
+    [Fact]
+    public async Task StrictProcessing_PushedObjectOfAnotherClient_IsAnInvalidRequestObject()
+    {
+        await using var host = CreateStrictHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var poster = await RegisterBasicSigningClientAsync(client, discovery);
+        var other = await RegisterBasicSigningClientAsync(client, discovery);
+
+        var response = await PushObjectAloneAsync(
+            client, discovery, poster, await SignRequestObjectAsync(discovery, other, GeneratePkcePair().Challenge));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidRequestObject, await ErrorResponseReader.ErrorCodeOf(response));
+    }
+
+    /// <summary>
+    /// Pushes <paramref name="requestObject"/> as the only form parameter, <paramref name="poster"/> authenticating
+    /// with HTTP Basic.
+    /// </summary>
+    private static async Task<HttpResponseMessage> PushObjectAloneAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        SigningClient poster,
+        string requestObject)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.PushedAuthorizationRequestEndpoint!)
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.Request] = requestObject,
+            }),
+        };
+        request.Headers.Authorization = BasicAuthenticationOf(poster);
+
+        return await client.SendAsync(request, TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// HTTP Basic client authentication (RFC 6749 section 2.3.1) as <paramref name="poster"/>.
+    /// </summary>
+    private static AuthenticationHeaderValue BasicAuthenticationOf(SigningClient poster)
+        => new(
+            TokenTypes.Basic,
+            Convert.ToBase64String(Encoding.UTF8.GetBytes(
+                Uri.EscapeDataString(poster.ClientId) + ":" + Uri.EscapeDataString(poster.ClientSecret))));
+
+    /// <summary>
+    /// A client that must sign its request objects and authenticates with client_secret_basic, serving them at
+    /// <paramref name="requestUri"/> where one is given.
+    /// </summary>
+    private static async Task<SigningClient> RegisterBasicSigningClientAsync(
+        HttpClient client,
+        DiscoveryDocument discovery,
+        bool requireSignedRequestObject = true,
+        string? requestUri = null)
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var registered = await RegisterClientAsync(client, discovery, new JsonObject
+        {
+            [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
+            [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretBasic,
+            [RegistrationMembers.Jwks] = JsonSerializer.SerializeToNode(PublicJwksFor(key)),
+            [RegistrationMembers.RequireSignedRequestObject] = requireSignedRequestObject,
+            [RegistrationMembers.RequestUris] = requestUri is null ? null : new JsonArray { requestUri },
+        });
+
+        return new SigningClient(
+            registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>(),
+            registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>(),
+            key);
     }
 
     private sealed record SigningClient(string ClientId, string ClientSecret, RsaJsonWebKey Key);

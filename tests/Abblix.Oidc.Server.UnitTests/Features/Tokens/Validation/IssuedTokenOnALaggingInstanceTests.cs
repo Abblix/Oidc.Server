@@ -76,10 +76,10 @@ public class IssuedTokenOnALaggingInstanceTests
         };
         var options = provider.GetRequiredService<IOptions<OidcOptions>>().Value;
         var jwt = await provider.GetRequiredService<IAuthServiceJwtFormatter>()
-            .FormatAsync(tenant, token, ServiceJwtEncryption.ForAccessToken(options));
+            .FormatAsync(tenant, token, client: null, ServiceJwtEncryption.ForAccessToken(options));
 
         return await provider.GetRequiredService<IAuthServiceJwtValidator>()
-            .ValidateAsync(tenant, jwt, TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken));
+            .ValidateAsync(tenant, null, jwt, TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken));
     }
 
     [Fact]

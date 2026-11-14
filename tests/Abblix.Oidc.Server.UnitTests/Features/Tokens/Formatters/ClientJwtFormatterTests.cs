@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Constants;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -58,7 +59,7 @@ public class ClientJwtFormatterTests
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
         _formatter = new ClientJwtFormatter(
-            _jwtCreator.Object,
+            new ProfiledJwtIssuer(_jwtCreator.Object),
             _clientKeysProvider.Object,
             _serviceKeysProvider.Object);
 
@@ -326,5 +327,77 @@ public class ClientJwtFormatterTests
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, UserInfoPolicy(_clientInfo)));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
+    /// algorithm". For a client held to FAPI 1.0 Advanced whose published keys include one declaring RSA1_5, the
+    /// server encrypts to another of its keys with that key's algorithm; a client held to no profile is encrypted to its
+    /// first key as it always was.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "oaep", EncryptionAlgorithms.KeyManagement.RsaOaep256)]
+    [InlineData(null, "pkcs1", EncryptionAlgorithms.KeyManagement.Rsa1_5)]
+    public async Task FormatAsync_UnderFapi1Advanced_NeverEncryptsWithRsa1_5(
+        ClientSecurityProfile? profile, string expectedKeyId, string expectedAlgorithm)
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.PS256 },
+            Payload = { Subject = "user123", Audiences = [ClientId] },
+        };
+        var client = new ClientInfo(ClientId) { SecurityProfile = profile };
+        var pkcs1 = new RsaJsonWebKey { KeyId = "pkcs1", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 };
+        var oaep = new RsaJsonWebKey { KeyId = "oaep", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
+        var signing = new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.PS256 };
+        JsonWebKey? usedKey = null;
+        string? usedAlgorithm = null;
+
+        _serviceKeysProvider
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new[] { signing }.ToAsyncEnumerable());
+        _clientKeysProvider
+            .Setup(p => p.GetEncryptionKeys(client))
+            .Returns(new JsonWebKey[] { pkcs1, oaep }.ToAsyncEnumerable());
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>(
+                (_, _, key, algorithm, _) => (usedKey, usedAlgorithm) = (key, algorithm))
+            .ReturnsAsync(EncodedJwt);
+
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, client, UserInfoPolicy(client));
+
+        Assert.Equal(expectedKeyId, usedKey?.KeyId);
+        Assert.Equal(expectedAlgorithm, usedAlgorithm);
+    }
+
+    /// <summary>
+    /// A client held to FAPI 1.0 Advanced whose only published encryption key declares RSA1_5 is not answered with a
+    /// token encrypted against the profile, nor with one left unencrypted although it publishes a key: the token is not
+    /// issued.
+    /// </summary>
+    [Fact]
+    public async Task FormatAsync_UnderFapi1Advanced_WithOnlyAnRsa1_5Key_Refuses()
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.PS256 },
+            Payload = { Subject = "user123", Audiences = [ClientId] },
+        };
+        var client = new ClientInfo(ClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
+        _serviceKeysProvider
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new[] { new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }.ToAsyncEnumerable());
+        _clientKeysProvider
+            .Setup(p => p.GetEncryptionKeys(client))
+            .Returns(new JsonWebKey[]
+            {
+                new RsaJsonWebKey { KeyId = "pkcs1", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 },
+            }.ToAsyncEnumerable());
+
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, client, UserInfoPolicy(client));
+
+        // A refusal the caller answers in its own protocol, not a server error
+        Assert.True(result.TryGetFailure(out _));
     }
 }

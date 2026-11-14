@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -61,7 +62,123 @@ public class SecurityProfileTests
         Assert.True(requirements.RequireSenderConstrainedTokens);
         Assert.True(requirements.RequireCodeResponseTypeOnly);
         Assert.True(requirements.RequireStrictRequestObjectProcessing);
+
+        // The request object rules of FAPI 2.0 Message Signing section 5.3.1 belong to that profile
+        Assert.Null(requirements.MaxRequestObjectLifetime);
+        Assert.False(requirements.RequireSignedRequestObject);
+        Assert.False(requirements.RequireSignedAuthorizationResponse);
+        Assert.False(requirements.RequireIssuerAudienceInRequestObject);
+        Assert.False(requirements.RequireNonceWithOpenIdScope);
+        Assert.False(requirements.RequireStateWithoutOpenIdScope);
+        Assert.True(requirements.RequireFapiSigningAlgorithms);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require a JWS signed JWT request object", "shall only use the
+    /// parameters included in the signed request object", bounds its exp and nbf by 60 minutes, "shall only issue
+    /// sender-constrained access tokens", authenticates the client by mutual TLS or private_key_jwt and "shall not
+    /// support public clients".
+    /// </summary>
+    [Fact]
+    public void Resolve_Fapi1Advanced_RequiresWhatSection522Requires()
+    {
+        var requirements = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced);
+
+        Assert.True(requirements.RequireSignedRequestObject);
+        Assert.True(requirements.RequireStrictRequestObjectProcessing);
         Assert.Equal(TimeSpan.FromMinutes(60), requirements.MaxRequestObjectLifetime);
+        Assert.True(requirements.RequireSenderConstrainedTokens);
+        Assert.True(requirements.RequireConfidentialClient);
+        Assert.True(requirements.RequireKeyBasedClientAuthentication);
+        Assert.True(requirements.RequireSignedAuthorizationResponse);
+        Assert.True(requirements.RequireIssuerAudienceInRequestObject);
+        Assert.True(requirements.RequireNonceWithOpenIdScope);
+        Assert.True(requirements.RequireStateWithoutOpenIdScope);
+        Assert.True(requirements.RequirePkceWithPushedRequests);
+        Assert.True(requirements.RequireExactHttpsRedirectUris);
+        Assert.True(requirements.ForbidRsa1_5KeyManagement);
+        Assert.True(requirements.RequireMatchingClientIdentifiers);
+        Assert.True(requirements.RequireHttpsJwksUri);
+        Assert.True(requirements.RequireCertificateBoundTokens);
+        Assert.True(requirements.RequireFapiSigningAlgorithms);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 6.2.1, which Part 2 builds on: the resource server "shall not accept access tokens in the
+    /// query parameters stated in Section 2.3 of OAuth 2.0 Bearer Token Usage RFC6750".
+    /// </summary>
+    [Fact]
+    public void Resolve_Fapi1Advanced_RefusesTheAccessTokenInTheQuery()
+        => Assert.True(
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced).RequireAccessTokenOutsideQuery);
+
+    /// <summary>
+    /// And nothing the section does not ask for: it admits <c>code id_token</c>, makes PAR optional, asks PKCE only of
+    /// a pushed request, and names neither the clock window, the assertion audience nor refresh token rotation that
+    /// FAPI 2.0 does. A control demanded here would refuse a client the FAPI 1.0 profile admits.
+    /// </summary>
+    [Fact]
+    public void Resolve_Fapi1Advanced_DemandsNoFapi2OnlyControl()
+    {
+        var requirements = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced);
+
+        Assert.False(requirements.RequireCodeResponseTypeOnly);
+        Assert.False(requirements.RequirePushedAuthorizationRequests);
+        Assert.False(requirements.RequirePkce);
+        Assert.False(requirements.RequireS256CodeChallenge);
+        Assert.False(requirements.RequireStringAudienceInClientAssertion);
+        Assert.False(requirements.ForbidRefreshTokenRotation);
+        Assert.Null(requirements.MaxClockSkew);
+        Assert.Equal(
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.None).DefaultClockSkew,
+            requirements.DefaultClockSkew);
+    }
+
+    /// <summary>
+    /// A client naming one FAPI profile under a tenant holding it to the other is held to the controls of BOTH: the
+    /// signed request object only FAPI 1.0 Advanced demands, and the code-only response type only FAPI 2.0 does.
+    /// Equality against either bundle cannot show this, since the combination is neither.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi1Advanced)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, ClientSecurityProfile.Fapi2)]
+    public void For_TwoFapiProfiles_CarryTheControlsOfEach(
+        ClientSecurityProfile clientProfile,
+        ClientSecurityProfile defaultProfile)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = clientProfile };
+
+        var requirements = SecurityProfileRequirements.For(client, defaultProfile);
+
+        Assert.True(requirements.RequireSignedRequestObject);
+        Assert.True(requirements.RequireCodeResponseTypeOnly);
+        Assert.True(requirements.RequireSignedAuthorizationResponse);
+        Assert.True(requirements.RequireIssuerAudienceInRequestObject);
+        Assert.True(requirements.RequireNonceWithOpenIdScope);
+        Assert.True(requirements.RequireFapiSigningAlgorithms);
+        Assert.True(requirements.RequireStringAudienceInClientAssertion);
+        Assert.Equal(ClockSkew.Fapi2Ceiling, requirements.MaxClockSkew);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2 requires "the response_type value code id_token" or code with JARM, so a client
+    /// held to it and registered for <c>code id_token</c> is consistent, while a shared secret and a public client
+    /// are not.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, 0)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, 0)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, 1)]
+    [InlineData(ClientAuthenticationMethods.None, 2)]
+    public void FindViolations_Fapi1Advanced_HybridClient(string method, int expected)
+    {
+        var violations = SecurityProfileConsistency.FindViolations(
+            [[ResponseTypes.Code, ResponseTypes.IdToken]],
+            method,
+            ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint,
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced));
+
+        Assert.Equal(expected, violations.Count);
     }
 
     /// <summary>
@@ -81,6 +198,9 @@ public class SecurityProfileTests
     [InlineData(null, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)] // unset takes the floor
     [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, ClientSecurityProfile.Fapi2)] // cannot step below it
     [InlineData(ClientSecurityProfile.Fapi2, ClientSecurityProfile.None, ClientSecurityProfile.Fapi2)] // may rise above it
+    [InlineData(null, ClientSecurityProfile.Fapi1Advanced, ClientSecurityProfile.Fapi1Advanced)]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi1Advanced, ClientSecurityProfile.Fapi1Advanced)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, ClientSecurityProfile.None, ClientSecurityProfile.Fapi1Advanced)]
     public void For_TakesTheFloorAndWhateverTheClientAddsToIt(
         ClientSecurityProfile? clientProfile,
         ClientSecurityProfile defaultProfile,
@@ -192,6 +312,30 @@ public class SecurityProfileTests
         Assert.Empty(violations);
     }
 
+    /// <summary>
+    /// The same at startup: a FAPI 1.0 Advanced client requiring DPoP, or one no certificate-bound access token can be
+    /// issued to, keeps the server from starting (FAPI 1.0 Part 2 section 8.2).
+    /// </summary>
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    public void Check_Fapi1Advanced_AClientNoCertificateBoundTokenServes_Refuses(
+        bool requireDPoP, bool certificateBound, bool refused)
+    {
+        var client = new ClientInfo("fapi1")
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedResponseTypes = [[ResponseTypes.Code]],
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            RequireDPoP = requireDPoP,
+            TlsClientCertificateBoundAccessTokens = certificateBound,
+        };
+
+        Assert.Equal(refused, Check(Tenant(ClientSecurityProfile.Fapi1Advanced, client)).Count > 0);
+    }
+
     [Fact]
     public void Check_ConsistentFapi2Client_Passes()
     {
@@ -202,6 +346,9 @@ public class SecurityProfileTests
                 SecurityProfile = ClientSecurityProfile.Fapi2,
                 AllowedResponseTypes = [[ResponseTypes.Code]],
                 TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+                // FAPI 2.0 section 5.4.1 admits no RS256 in what the server signs for the client
+                IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+                AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
             });
 
         Assert.Empty(Check(tenant));
@@ -602,6 +749,7 @@ public class SecurityProfileTests
     [Theory]
     [InlineData(ClientSecurityProfile.None)]
     [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
     public void Check_DefinedProfile_Passes(ClientSecurityProfile profile)
     {
         Assert.Empty(Check(Tenant(profile)));
@@ -700,5 +848,196 @@ public class SecurityProfileTests
 
         Assert.True(requirements.RequirePkce);
         Assert.True(requirements.RequireConfidentialClient);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6: "For JWS, both clients and authorization servers shall use PS256 or ES256
+    /// algorithms". Under that profile those two pass and every other algorithm is refused, none included; with no
+    /// profile every algorithm is left to the checks that ran before.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.PS256, true)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.ES256, true)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.RS256, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.PS384, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.None, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, false)]
+    [InlineData(ClientSecurityProfile.None, SigningAlgorithms.RS256, true)]
+    public void PermitsSigningAlgorithm_AdmitsWhatSection86Names(
+        ClientSecurityProfile profile, string? algorithm, bool permitted)
+    {
+        Assert.Equal(permitted, SecurityProfileRequirements.Resolve(profile).PermitsSigningAlgorithm(algorithm));
+    }
+
+    /// <summary>
+    /// The server signs for a client what the client is configured for, so under FAPI 1.0 Advanced a client
+    /// configured for RS256 is refused: its ID tokens and JWT authorization responses at the RS256 defaults, a logout
+    /// token or a JWT userinfo or introspection response it names RS256 for. An unsigned userinfo or introspection
+    /// response, which is the default, is no JWS and passes.
+    /// </summary>
+    [Fact]
+    public void FindSigningAlgorithmViolations_Fapi1Advanced_NamesEachAlgorithmOutsideTheList()
+    {
+        var defaults = new ClientInfo(TestConstants.DefaultClientId);
+        var everyOneRs256 = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            LogoutTokenSignedResponseAlgorithm = SigningAlgorithms.RS256,
+            UserInfoSignedResponseAlgorithm = SigningAlgorithms.RS256,
+            IntrospectionSignedResponseAlgorithm = SigningAlgorithms.RS256,
+        };
+        var conformant = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.ES256,
+        };
+        var requirements = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced);
+
+        Assert.Equal(2, SecurityProfileConsistency.FindSigningAlgorithmViolations(defaults, requirements).Count);
+        Assert.Equal(5, SecurityProfileConsistency.FindSigningAlgorithmViolations(everyOneRs256, requirements).Count);
+        Assert.Empty(SecurityProfileConsistency.FindSigningAlgorithmViolations(conformant, requirements));
+        Assert.Empty(SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            everyOneRs256, SecurityProfileRequirements.Resolve(ClientSecurityProfile.None)));
+    }
+
+    /// <summary>
+    /// A tenant declaring a FAPI 1.0 Advanced client at the RS256 defaults is refused at startup, and the same client
+    /// configured for PS256 is not.
+    /// </summary>
+    [Fact]
+    public void Check_Fapi1AdvancedClientAtTheRs256Defaults_Refuses()
+    {
+        static ClientInfo Client() => new(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            TlsClientCertificateBoundAccessTokens = true,
+        };
+        var configured = Client();
+        configured.IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256;
+        configured.AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256;
+
+        Assert.NotEmpty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client())));
+        Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, configured)));
+    }
+
+    /// <summary>
+    /// What the client is registered to sign with is judged as well: a request object, authentication assertion or
+    /// CIBA request pinned to RS256 would be refused on every use, by the algorithm list or by the pin itself, so a
+    /// client configured that way under FAPI 1.0 Advanced is refused where it is configured.
+    /// </summary>
+    [Fact]
+    public void FindSigningAlgorithmViolations_Fapi1Advanced_NamesWhatTheClientIsPinnedToSign()
+    {
+        var pinned = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            RequestObjectSigningAlgorithm = SigningAlgorithms.RS256,
+            TokenEndpointAuthSigningAlgorithm = SigningAlgorithms.RS256,
+            BackChannelAuthenticationRequestSigningAlg = SigningAlgorithms.RS256,
+        };
+
+        Assert.Equal(3, SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            pinned, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced)).Count);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 5.2.2: "shall require redirect URIs to use the https scheme". A FAPI 1.0 Advanced client
+    /// registering an http redirect URI, a loopback one included, is refused at startup; https passes.
+    /// </summary>
+    [Fact]
+    public void Check_Fapi1AdvancedClientWithAnHttpRedirectUri_Refuses()
+    {
+        static ClientInfo Client(string redirectUri) => new(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            TlsClientCertificateBoundAccessTokens = true,
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            RedirectUris = [new Uri(redirectUri)],
+        };
+
+        Assert.NotEmpty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client("http://127.0.0.1:8080/cb"))));
+        Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client("https://client.example.com/cb"))));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
+    /// algorithm". A FAPI 1.0 Advanced client registered to have its ID tokens, userinfo, introspection or authorization
+    /// responses encrypted with RSA1_5, or to encrypt its request objects with it, is named for each; RSA-OAEP-256 is
+    /// not, and no profile names nothing.
+    /// </summary>
+    [Fact]
+    public void FindEncryptionAlgorithmViolations_Fapi1Advanced_NamesEachRsa1_5()
+    {
+        static ClientInfo Client(string algorithm) => new(TestConstants.DefaultClientId)
+        {
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            IdentityTokenEncryptedResponseAlgorithm = algorithm,
+            UserInfoEncryptedResponseAlgorithm = algorithm,
+            IntrospectionEncryptedResponseAlgorithm = algorithm,
+            AuthorizationEncryptedResponseAlgorithm = algorithm,
+            RequestObjectEncryptionAlgorithm = algorithm,
+        };
+        var fapi1 = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced);
+
+        Assert.Equal(5, SecurityProfileConsistency.FindAlgorithmViolations(
+            Client(EncryptionAlgorithms.KeyManagement.Rsa1_5), fapi1).Count);
+        Assert.Empty(SecurityProfileConsistency.FindAlgorithmViolations(
+            Client(EncryptionAlgorithms.KeyManagement.RsaOaep256), fapi1));
+        Assert.Empty(SecurityProfileConsistency.FindAlgorithmViolations(
+            Client(EncryptionAlgorithms.KeyManagement.Rsa1_5),
+            SecurityProfileRequirements.Resolve(ClientSecurityProfile.None)));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.9: the profile "requires that jwks_uri endpoints shall be served over TLS". A FAPI 1.0
+    /// Advanced client whose keys are published at an http jwks_uri is refused at startup, even where the host lifted
+    /// the https-only default of the fetcher; an https one passes.
+    /// </summary>
+    [Fact]
+    public void Check_Fapi1AdvancedClientWithAnHttpJwksUri_Refuses()
+    {
+        static ClientInfo Client(string jwksUri) => new(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            TlsClientCertificateBoundAccessTokens = true,
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            JwksUri = new Uri(jwksUri),
+        };
+
+        Assert.NotEmpty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client("http://client.example.com/jwks"))));
+        Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi1Advanced, Client("https://client.example.com/jwks"))));
+    }
+
+    /// <summary>
+    /// A relative jwks_uri or redirect URI, which a configuration binder or a host-written store can hold, is named as
+    /// not served over https rather than failing on its scheme.
+    /// </summary>
+    [Fact]
+    public void RelativeUris_AreNamedAsNotHttps()
+    {
+        var requirements = SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced);
+        var relative = new Uri("callback", UriKind.Relative);
+
+        Assert.Single(SecurityProfileConsistency.FindJwksUriViolations(relative, requirements));
+        Assert.Single(SecurityProfileConsistency.FindRedirectUriViolations([relative], requirements));
+    }
+
+    /// <summary>
+    /// The one resolver every guard is handed its bundle from: with no client it is what the tenant demands of every
+    /// client, with one it is the tenant's floor tightened by what that client names.
+    /// </summary>
+    [Fact]
+    public void For_TenantAndClient_IsTheFloorTightenedByTheClient()
+    {
+        var tenant = Tenant(ClientSecurityProfile.Fapi2);
+        var client = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
+
+        Assert.Same(SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2), SecurityProfileRequirements.For(tenant, null));
+        Assert.Equal(
+            SecurityProfileRequirements.For(client, ClientSecurityProfile.Fapi2),
+            SecurityProfileRequirements.For(tenant, client));
     }
 }

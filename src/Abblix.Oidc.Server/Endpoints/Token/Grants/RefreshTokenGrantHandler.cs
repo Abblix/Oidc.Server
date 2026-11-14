@@ -68,6 +68,7 @@ public class RefreshTokenGrantHandler(
 		// holds the resources of the grant it continues (RefreshTokenService), so it need not name this server.
 		var jwtValidationResult = await jwtValidator.ValidateAsync(
 			tenant,
+			clientInfo,
 			request.RefreshToken,
 			TokenTypePolicy.Exactly(JwtTypes.RefreshToken),
 			ServiceTokenValidation.AnyAudience);

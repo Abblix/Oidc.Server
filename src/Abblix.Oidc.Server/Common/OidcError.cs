@@ -27,4 +27,11 @@ public record OidcError(string Error, string ErrorDescription)
     /// </remarks>
     public string ErrorDescription { get; init => field = OAuthErrorDescription.Sanitize(value); } =
         OAuthErrorDescription.Sanitize(ErrorDescription);
+
+    /// <summary>
+    /// The DPoP proof signature algorithms the profile of the client the refused token was issued to admits, which a
+    /// <c>WWW-Authenticate: DPoP</c> challenge answering the refusal advertises (RFC 9449 section 7.1); empty where
+    /// that profile refuses DPoP, null where the client is not known.
+    /// </summary>
+    public IReadOnlyCollection<string>? DPoPAlgorithmsAdmitted { get; init; }
 }

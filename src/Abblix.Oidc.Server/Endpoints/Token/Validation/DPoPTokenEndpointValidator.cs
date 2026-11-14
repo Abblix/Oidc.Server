@@ -51,6 +51,32 @@ public partial class DPoPTokenEndpointValidator(
     /// <inheritdoc/>
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, TokenValidationContext context, CancellationToken cancellationToken)
     {
+        var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
+
+        // FAPI 1.0 Part 2 section 8.2: protected resources "shall only support sender-constrained access tokens via
+        // MTLS", so a client held to that profile is issued a certificate-bound token only and a proof is refused
+        if (profile.RequireCertificateBoundTokens)
+        {
+            if (context.ClientRequest.DPoPProof is not null)
+            {
+                return new OidcError(
+                    ErrorCodes.InvalidRequest,
+                    "The security profile issues certificate-bound access tokens only; DPoP is not accepted.");
+            }
+
+            // RFC 6749 section 5.2, invalid_client: "Client authentication failed", the mutual TLS the token would be
+            // bound through being what is missing
+            if (!WillIssueCertificateBoundToken(context))
+            {
+                LogProofRequiredButMissing("security profile");
+                return new OidcError(
+                    ErrorCodes.InvalidClient,
+                    "The security profile requires a certificate-bound token: authenticate with mutual TLS.");
+            }
+
+            return null;
+        }
+
         if (context.ClientRequest is { DPoPProof: { } proofJwt })
             return await ValidatePresentedProofAsync(tenant, context, proofJwt);
 
@@ -93,7 +119,8 @@ public partial class DPoPTokenEndpointValidator(
     /// </summary>
     private async Task<OidcError?> ValidatePresentedProofAsync(TenantDefinition tenant, TokenValidationContext context, string proofJwt)
     {
-        var proofResult = await proofValidator.ValidateAsync(proofJwt);
+        var proofResult = await proofValidator.ValidateAsync(
+            SecurityProfileRequirements.For(tenant, context.ClientInfo), proofJwt);
 
         if (proofResult.TryGetFailure(out var proofError))
         {

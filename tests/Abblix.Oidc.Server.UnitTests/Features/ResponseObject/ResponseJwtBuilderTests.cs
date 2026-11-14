@@ -61,7 +61,7 @@ public class ResponseJwtBuilderTests
         // The builder now delegates signing/encryption to a real ClientJwtFormatter built over the same mocks,
         // so the assertions on IJsonWebTokenCreator.IssueAsync continue to exercise the end-to-end JARM behavior.
         var clientJwtFormatter = new ClientJwtFormatter(
-            _jwtCreator.Object,
+            new ProfiledJwtIssuer(_jwtCreator.Object),
             _clientKeys.Object,
             _serviceKeys.Object);
 
@@ -203,7 +203,7 @@ public class ResponseJwtBuilderTests
         var builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             new ClientJwtFormatter(
-                _jwtCreator.Object, _clientKeys.Object, _serviceKeys.Object),
+                new ProfiledJwtIssuer(_jwtCreator.Object), _clientKeys.Object, _serviceKeys.Object),
             _timeProvider,
             options);
 

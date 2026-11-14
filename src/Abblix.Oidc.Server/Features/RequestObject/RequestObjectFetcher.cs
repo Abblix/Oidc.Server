@@ -46,6 +46,7 @@ public partial class RequestObjectFetcher(
     /// </summary>
     /// <typeparam name="T">The type of the request model.</typeparam>
     /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="client">The client the request names outside the object, or null.</param>
     /// <param name="request">The initial request model to bind the JWT payload to.</param>
     /// <param name="requestObject">The JWT contained within the request, if any.</param>
     /// <param name="requiredSigningAlgorithm">An optional selector returning the signing algorithm the
@@ -60,6 +61,7 @@ public partial class RequestObjectFetcher(
     /// </remarks>
     public async Task<Result<T, OidcError>> FetchAsync<T>(
         TenantDefinition tenant,
+        ClientInfo? client,
         T request,
         string? requestObject,
         Func<ClientInfo, string?>? requiredSigningAlgorithm = null)
@@ -68,7 +70,7 @@ public partial class RequestObjectFetcher(
         if (!requestObject.HasValue())
             return request;
 
-        var validationResult = await ValidateAsync(tenant, requestObject, requiredSigningAlgorithm);
+        var validationResult = await ValidateAsync(tenant, client, requestObject, requiredSigningAlgorithm);
         return await validationResult.BindAsync<T>(
             async validated =>
             {
@@ -76,7 +78,7 @@ public partial class RequestObjectFetcher(
 
                 // Strict RFC 9101 section 6.3 processing - only the request object's parameters are used and anything
                 // passed outside it is ignored - applies when the host turns it on globally or the client's
-                // security profile (FAPI 2.0) mandates it. Otherwise the OpenID Connect Core section 6.1 merge
+                // security profile (FAPI 2.0, FAPI 1.0 Advanced) mandates it. Otherwise the OpenID Connect Core section 6.1 merge
                 // semantics bind the payload over the outer request. The OAuth-syntax client_id/response_type
                 // duplicates are cross-checked against the result by the authorization-endpoint adapter in both.
                 var strict = options.Value.IgnoreParametersOutsideRequestObject
@@ -150,6 +152,7 @@ public partial class RequestObjectFetcher(
     /// and structure, based on the OIDC options.
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="namedClient">The client the request names outside the object, or null.</param>
     /// <param name="requestObject">The JWT request object to be validated.</param>
     /// <param name="requiredSigningAlgorithm">An optional selector returning the signing algorithm the
     /// request object must use for a given client, or <c>null</c> to impose no per-client requirement.</param>
@@ -163,6 +166,7 @@ public partial class RequestObjectFetcher(
     /// </remarks>
     private async Task<Result<(JsonObject Payload, ClientInfo Client), OidcError>> ValidateAsync(
         TenantDefinition tenant,
+        ClientInfo? namedClient,
         string requestObject,
         Func<ClientInfo, string?>? requiredSigningAlgorithm)
     {
@@ -183,8 +187,12 @@ public partial class RequestObjectFetcher(
 
         using var scope = serviceProvider.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
+
+        // The client the request names outside the object is known before the object is read, so its profile bounds
+        // every layer of it up front rather than once the object names its client (FAPI 1.0 Part 2 section 8.6.1)
         // The type is judged below, where a refusal speaks the request object's error vocabulary
-        var result = await tokenValidator.ValidateAsync(tenant, requestObject, TokenTypePolicy.CheckedByCaller, validationOptions);
+        var result = await tokenValidator.ValidateAsync(
+            tenant, namedClient, requestObject, TokenTypePolicy.CheckedByCaller, validationOptions);
 
         return result.Match<Result<(JsonObject Payload, ClientInfo Client), OidcError>>(
             validJwt =>
@@ -206,8 +214,10 @@ public partial class RequestObjectFetcher(
 
                 // RFC 9101 section 10.5: a client registered with require_signed_request_object committed
                 // to SIGNED request objects - an unsigned (alg=none) object satisfies the
-                // structural check but not the commitment.
-                if (validJwt.Client.RequireSignedRequestObject &&
+                // structural check but not the commitment. A profile requiring signed request objects
+                // (FAPI 1.0 Part 2 section 5.2.2) commits the client the same way.
+                var profile = SecurityProfileRequirements.For(validJwt.Client, tenant.DefaultSecurityProfile);
+                if ((validJwt.Client.RequireSignedRequestObject || profile.RequireSignedRequestObject) &&
                     string.Equals(validJwt.Token.Header.Algorithm, SigningAlgorithms.None, StringComparison.Ordinal))
                 {
                     return new OidcError(
@@ -229,18 +239,19 @@ public partial class RequestObjectFetcher(
                         "The request object signing algorithm does not match the client's registered algorithm");
                 }
 
-                // FAPI 2.0 Message Signing section 5.3.1, FAPI 1.0 Part 2 section 5.2.2: a profile may require nbf and
-                // exp and bound both. Judged here rather than handed to the validator as RequireExpirationTime,
+                // FAPI 1.0 Part 2 section 5.2.2: a profile may require nbf, exp
+                // and the issuer as aud, and bound the first two. Judged here rather than handed to the validator,
                 // because the profile belongs to the client, known only once the validator has finished.
-                var lifetimeRefusal = RequestObjectLifetime.WhyRefused(
-                    SecurityProfileRequirements.For(validJwt.Client, tenant.DefaultSecurityProfile),
+                var profileRefusal = RequestObjectProfileRules.WhyRefused(
+                    profile,
                     validJwt.Token.Payload,
+                    tenant.Issuer,
                     timeProvider.GetUtcNow());
 
-                if (lifetimeRefusal != null)
+                if (profileRefusal != null)
                 {
-                    LogLifetimeOutsideProfile(validJwt.Client.ClientId, Sanitized.Value(lifetimeRefusal));
-                    return InvalidRequestObject(lifetimeRefusal);
+                    LogRefusedByProfile(validJwt.Client.ClientId, Sanitized.Value(profileRefusal));
+                    return InvalidRequestObject(profileRefusal);
                 }
 
                 return (validJwt.Token.Payload.Json, validJwt.Client);

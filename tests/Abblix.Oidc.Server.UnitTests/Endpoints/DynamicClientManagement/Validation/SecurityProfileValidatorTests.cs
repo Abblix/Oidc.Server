@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -102,5 +103,197 @@ public class SecurityProfileValidatorTests
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6: a registration under that profile naming RS256 for its ID tokens is refused with
+    /// invalid_client_metadata, while one naming PS256 or naming none - which is given PS256 - passes.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, false)]
+    [InlineData(SigningAlgorithms.PS256, true)]
+    [InlineData(null, true)]
+    public async Task ValidateAsync_Fapi1Advanced_IdTokenSigningAlgorithm(string? algorithm, bool accepted)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdTokenSignedResponseAlg = algorithm,
+            TlsClientCertificateBoundAccessTokens = true,
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
+
+        if (accepted)
+            Assert.Null(result);
+        else
+            Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
+    /// A registration pinning its request objects or its authentication assertions to RS256 under FAPI 1.0 Advanced
+    /// is refused with invalid_client_metadata rather than registered as a client that can never sign acceptably.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task ValidateAsync_Fapi1Advanced_WhatTheClientSignsWith(bool requestObject, bool assertion)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            RequestObjectSigningAlg = requestObject ? SigningAlgorithms.RS256 : null,
+            TokenEndpointAuthSigningAlg = assertion ? SigningAlgorithms.RS256 : null,
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
+    /// The same clause at registration: an http redirect URI is refused with the invalid_redirect_uri RFC 7591 section
+    /// 3.2.2 names for it.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi1Advanced_AnHttpRedirectUri_IsRefused()
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [new System.Uri("http://127.0.0.1:8080/cb")],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
+
+        Assert.Equal(ErrorCodes.InvalidRedirectUri, result?.Error);
+    }
+
+    /// <summary>
+    /// The same clause at registration: id_token_encrypted_response_alg RSA1_5 is refused with invalid_client_metadata.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi1Advanced_Rsa1_5Encryption_IsRefused()
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdTokenEncryptedResponseAlg = EncryptionAlgorithms.KeyManagement.Rsa1_5,
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
+    /// The same clause at registration: an http jwks_uri is refused with invalid_client_metadata.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi1Advanced_AnHttpJwksUri_IsRefused()
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            JwksUri = new System.Uri("http://client.example.com/jwks"),
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.2 has access tokens sender-constrained via MTLS only. A registration asking for DPoP
+    /// (RFC 9449 section 5.2) or one that could be bound to no certificate - neither authenticating with mutual TLS nor
+    /// registering tls_client_certificate_bound_access_tokens (RFC 8705 section 3) - would be refused every token, so
+    /// it is refused here with invalid_client_metadata.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, true, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, false, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, true, true)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, false, true)]
+    public async Task ValidateAsync_Fapi1Advanced_TokensItCannotBeIssued_AreRefused(
+        string method, bool dpop, bool certificateBound, bool accepted)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = method,
+            IdTokenSignedResponseAlg = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlg = SigningAlgorithms.PS256,
+            DpopBoundAccessTokens = dpop,
+            TlsClientCertificateBoundAccessTokens = certificateBound,
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
+
+        Assert.Equal(accepted ? null : ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+    /// <summary>
+    /// FAPI 2.0 section 5.4.2: "any server providing a jwks_uri endpoint shall only serve the jwks_uri endpoint over
+    /// TLS". A registration under FAPI 2.0 naming an http jwks_uri is refused with invalid_client_metadata; https passes.
+    /// </summary>
+    [Theory]
+    [InlineData("http://client.example.com/jwks", false)]
+    [InlineData("https://client.example.com/jwks", true)]
+    public async Task ValidateAsync_Fapi2_AJwksUriNotServedOverTls_IsRefused(string jwksUri, bool accepted)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdTokenSignedResponseAlg = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlg = SigningAlgorithms.PS256,
+            JwksUri = new System.Uri(jwksUri),
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(accepted ? null : ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+    /// <summary>
+    /// FAPI 2.0 section 5.4.1 has the server "adhere to [RFC8725]" when creating or processing JWTs, and RFC 8725
+    /// section 3.2 says "Avoid all RSA-PKCS1 v1.5 encryption algorithms": a registration under FAPI 2.0 asking for its ID
+    /// tokens encrypted with RSA1_5 is refused with invalid_client_metadata; RSA-OAEP-256 passes.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Rsa1_5, false)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, true)]
+    public async Task ValidateAsync_Fapi2_Rsa1_5Encryption_IsRefused(string keyManagement, bool accepted)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdTokenSignedResponseAlg = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlg = SigningAlgorithms.PS256,
+            IdTokenEncryptedResponseAlg = keyManagement,
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(accepted ? null : ErrorCodes.InvalidClientMetadata, result?.Error);
     }
 }

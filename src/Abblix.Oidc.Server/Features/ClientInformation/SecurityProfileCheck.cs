@@ -38,7 +38,7 @@ public sealed class SecurityProfileCheck : ITenantsCheck
             // The value tested is the EFFECTIVE one, so an undefined default and an undefined client profile are
             // one case rather than two: the consistency walk below resolves whatever this is, and resolving a value
             // the enum does not define throws.
-            var effectiveProfile = client.SecurityProfile ?? tenant.DefaultSecurityProfile;
+            var effectiveProfile = SecurityProfileRequirements.ProfileNamedFor(tenant, client);
             var undefined = UndefinedProfile(
                 effectiveProfile,
                 client.SecurityProfile.HasValue
@@ -51,12 +51,21 @@ public sealed class SecurityProfileCheck : ITenantsCheck
                 continue;
             }
 
+            var requirements = SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile);
             failures.AddRange(
                 from violation in SecurityProfileConsistency.FindViolations(
-                    client.EffectiveResponseTypes,
-                    client.TokenEndpointAuthMethod,
-                    client.ClientAssertionAudiences,
-                    SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile))
+                        client.EffectiveResponseTypes,
+                        client.TokenEndpointAuthMethod,
+                        client.ClientAssertionAudiences,
+                        requirements)
+                    .Concat(SecurityProfileConsistency.FindAlgorithmViolations(client, requirements))
+                    .Concat(SecurityProfileConsistency.FindRedirectUriViolations(client.RedirectUris, requirements))
+                    .Concat(SecurityProfileConsistency.FindJwksUriViolations(client.JwksUri, requirements))
+                    .Concat(SecurityProfileConsistency.FindTokenBindingViolations(
+                        client.TokenEndpointAuthMethod,
+                        client.TlsClientCertificateBoundAccessTokens,
+                        client.RequireDPoP,
+                        requirements))
                 select $"Client '{client.ClientId}': {violation}.");
         }
 
