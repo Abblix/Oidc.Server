@@ -80,12 +80,17 @@ public sealed class SharedSignalsTenantIsolationTests
     /// servers when creating or processing JWTs shall ... use PS256, ES256, or EdDSA (using the Ed25519 variant)
     /// algorithms". So it does whether the deployment names the algorithms it allows or leaves them unset, which stands
     /// for RS256 alone. The tenant held to no profile, with keys of the same algorithms and the same allowlist, signs
-    /// with its first key, RS256, as before.
+    /// with its first key, RS256, as before. A key declaring no algorithm, as one taken from a certificate, signs with
+    /// whichever of those algorithms its material performs.
     /// </summary>
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task AFapiTenantsEvents_AreSignedWithAnAlgorithmItsProfilePermits(bool allowlistSet)
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public async Task AFapiTenantsEvents_AreSignedWithAnAlgorithmItsProfilePermits(
+        bool allowlistSet,
+        bool keysDeclareAlgorithm)
     {
         var ct = TestContext.Current.CancellationToken;
         ConfiguredStream[] declared =
@@ -95,7 +100,9 @@ public sealed class SharedSignalsTenantIsolationTests
             declare: server => server
                 .AddConfiguredStreams("acme", declared)
                 .AddConfiguredStreams("globex", declared),
-            tenantAt: (id, path) => FapiAtAcme(id, path, SigningAlgorithms.RS256, SigningAlgorithms.PS256),
+            tenantAt: (id, path) => keysDeclareAlgorithm
+                ? FapiAtAcme(id, path, SigningAlgorithms.RS256, SigningAlgorithms.PS256)
+                : FapiAtAcme(id, path, (string?)null),
             events: options =>
             {
                 if (allowlistSet)
@@ -139,9 +146,9 @@ public sealed class SharedSignalsTenantIsolationTests
 
     /// <summary>
     /// The tenant <paramref name="id"/> at <paramref name="path"/>, held to FAPI 2.0 when it is acme and to no profile
-    /// otherwise, with an RSA signing key of each algorithm given.
+    /// otherwise, with an RSA signing key of each algorithm given, null for one declaring none.
     /// </summary>
-    private static TenantDefinition FapiAtAcme(string id, string path, params string[] keyAlgorithms) => new()
+    private static TenantDefinition FapiAtAcme(string id, string path, params string?[] keyAlgorithms) => new()
     {
         Id = id,
         Issuer = new Uri(Host + path),

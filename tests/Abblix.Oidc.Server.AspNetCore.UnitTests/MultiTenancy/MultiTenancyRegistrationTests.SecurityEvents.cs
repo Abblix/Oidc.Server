@@ -243,6 +243,26 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A key declaring no algorithm, as one taken from a certificate, signs with the first algorithm the tenant may
+    /// sign with that its material performs: PS256 at a tenant held to FAPI 2.0, RS256 at one held to no profile.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.PS256)]
+    [InlineData(ClientSecurityProfile.None, SigningAlgorithms.RS256)]
+    public async Task AKeyDeclaringNoAlgorithm_SignsWithOneItsMaterialPerforms(
+        ClientSecurityProfile profile,
+        string expected)
+    {
+        using var provider = SigningUnder(profile, null, (string?)null);
+
+        var signed = await provider.GetRequiredService<ISecurityEventTokenSigner>()
+            .SignAsync(new SecurityEventToken(new JsonWebToken()), TestContext.Current.CancellationToken);
+
+        var header = JsonNode.Parse(Base64Url.DecodeFromChars(signed.Split('.')[0]))!;
+        Assert.Equal(expected, header[JwtClaimTypes.Algorithm]?.GetValue<string>());
+    }
+
+    /// <summary>
     /// A tenant held to a FAPI profile refuses to sign where no algorithm can be produced that both the deployment
     /// allows and the profile permits: the deployment allows only what the profile does not, or the tenant has no key
     /// of what both do. Nothing signed with RS256 leaves it.
@@ -274,7 +294,7 @@ public partial class MultiTenancyRegistrationTests
     private static ServiceProvider SigningUnder(
         ClientSecurityProfile profile,
         string[]? allowed,
-        params string[] keyAlgorithms)
+        params string?[] keyAlgorithms)
     {
         var provider = SigningEvents(
             options =>
@@ -290,7 +310,7 @@ public partial class MultiTenancyRegistrationTests
                 DefaultSecurityProfile = profile,
                 SigningKeys =
                 [
-                    .. keyAlgorithms.Select<string, JsonWebKey>(algorithm => algorithm == SigningAlgorithms.ES256
+                    .. keyAlgorithms.Select<string?, JsonWebKey>(algorithm => algorithm == SigningAlgorithms.ES256
                         ? JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, algorithm)
                         : JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, algorithm)),
                 ],

@@ -18,7 +18,7 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.SharedSignals;
 
 /// <summary>
-/// Refuses a tenant whose signing keys declare none of the algorithms it may sign its security events with, which its
+/// Refuses a tenant whose signing keys perform none of the algorithms it may sign its security events with, which its
 /// security profile, FAPI 1.0 Part 2 section 8.6 and FAPI 2.0 section 5.4.1 among them, and the deployment's
 /// allowlist decide: every tenant has a transmitter once Shared Signals is added, and it would sign none of its events,
 /// each one left waiting in the outbox.
@@ -55,13 +55,13 @@ internal sealed class SecurityEventSigningKeysCheck(
             SecurityProfileRequirements.For(tenant, null),
             securityEvents.Value);
 
-        if (tenant.SigningKeys.Any(key => TenantSecurityEventTokenSigner.SignsWith(key, permitted)))
+        if (tenant.SigningKeys.Any(key => TenantSecurityEventTokenSigner.AlgorithmOf(key, permitted) is not null))
             return [];
 
         return
         [
             permitted.Length > 0
-                ? $"no signing key declares an algorithm its security events may be signed with " +
+                ? $"no signing key performs an algorithm its security events may be signed with " +
                   $"({string.Join(", ", permitted)}); add one."
                 : $"its security profile permits none of the algorithms " +
                   $"{nameof(SecurityEventsOptions)}.{nameof(SecurityEventsOptions.AllowedSigningAlgorithms)} " +
