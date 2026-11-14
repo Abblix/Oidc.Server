@@ -116,7 +116,8 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         // Proving the accept side, so the rejection above means something. Without this, a server that redirected
         // nowhere at all - endpoint broken, logout leg dead - would pass the open-redirect test just as happily,
         // and the suite would report a security property it never checked.
-        var client = CreateClient();
+        await using var host = CreateOwnHost();
+        var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
         var clientId = await RegisterLogoutClientAsync(client, discovery);
 
@@ -141,7 +142,8 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         // to take the arrival on faith and clear the session for whoever knocks. That is a logout CSRF: an
         // attacker-embedded link signs the user out repeatedly, and worse, a forged arrival is indistinguishable
         // from a real one at exactly the moment the client is deciding what local state to tear down.
-        var client = CreateClient();
+        await using var host = CreateOwnHost();
+        var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
         var clientId = await RegisterLogoutClientAsync(client, discovery);
 
@@ -165,7 +167,8 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     {
         // The whole point of the question. A request carrying no answer and no hint reaches the endpoint with the
         // browser's cookie on it, which is what any page on any site can cause. The session has to survive it.
-        var client = CreateClient();
+        await using var host = CreateOwnHost();
+        var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
         var clientId = await RegisterLogoutClientAsync(client, discovery);
 
@@ -275,7 +278,8 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task A_logout_with_nowhere_to_return_to_answers_no_content()
     {
-        var client = CreateClient();
+        await using var host = CreateOwnHost();
+        var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
         var clientId = await RegisterLogoutClientAsync(client, discovery);
 
@@ -298,7 +302,8 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task A_logout_naming_no_client_ends_the_session_and_redirects_nowhere()
     {
-        var client = CreateClient();
+        await using var host = CreateOwnHost();
+        var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
 
         var response = await EndSessionConfirmedAsync(client, discovery, new Dictionary<string, string>
@@ -393,12 +398,8 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         // On its own host: authorizing adds this client to the session the test host keeps for the whole
         // process, and that addition never goes away - a shared host would hand every later end-session test a
         // client to notify through the front channel, turning their redirects into this page.
-        await using var host = Factory.WithWebHostBuilder(_ => { });
-        var client = host.CreateClient(new WebApplicationFactoryClientOptions
-        {
-            AllowAutoRedirect = false,
-            BaseAddress = TestServerAddress.BaseAddress,
-        });
+        await using var host = CreateOwnHost();
+        var client = CreateClientFor(host);
 
         var discovery = await FetchDiscoveryAsync(client);
         var clientId = await RegisterFrontChannelLogoutClientAsync(client, discovery);
@@ -410,6 +411,24 @@ public class EndSessionTests(TestFactory factory) : TestBase(factory)
         var response = await EndSessionConfirmedAsync(client, discovery, logoutParameters(clientId));
         return (response, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
+
+    /// <summary>
+    /// Starts a host of the test's own, for a logout the end user confirms.
+    /// </summary>
+    /// <remarks>
+    /// The test host signs every request in as one and the same session, and the question is kept per session. On
+    /// the shared host another test class's request to this endpoint, arriving together with this test's question,
+    /// replaces the value issued for it, and the answer carrying that value is then asked again rather than obeyed.
+    /// A host of its own has no other caller.
+    /// </remarks>
+    private WebApplicationFactory<Program> CreateOwnHost() => Factory.WithWebHostBuilder(_ => { });
+
+    private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
+        => host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
 
     /// <summary>
     /// Registers a client that additionally asks to be signed out through the front channel.
