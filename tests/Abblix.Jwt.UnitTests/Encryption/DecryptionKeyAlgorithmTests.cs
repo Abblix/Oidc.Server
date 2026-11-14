@@ -82,4 +82,29 @@ public class DecryptionKeyAlgorithmTests
 			Assert.Equal(JwtError.InvalidToken, error.Error);
 		}
 	}
+
+	/// <summary>
+	/// The same binding holds where the key is used to encrypt: a key declaring one algorithm wraps no content key
+	/// under another, as a signing key signs under no algorithm but its own.
+	/// </summary>
+	[Theory]
+	[InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, EncryptionAlgorithms.KeyManagement.RsaOaep)]
+	[InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep, EncryptionAlgorithms.KeyManagement.RsaOaep256)]
+	public async Task AnEncryptionKey_WrapsOnlyUnderTheAlgorithmItDeclares(string declaredAlgorithm, string tokenAlgorithm)
+	{
+		var encryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { Algorithm = declaredAlgorithm };
+		var token = new JsonWebToken
+		{
+			Header = { Algorithm = SigningAlgorithms.RS256 },
+			Payload = { Issuer = "test-issuer", Audiences = ["test-audience"] },
+		};
+
+		await Assert.ThrowsAsync<InvalidOperationException>(() =>
+			ServiceProvider.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(
+				token,
+				SigningKey,
+				encryptionKey,
+				tokenAlgorithm,
+				EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256));
+	}
 }
