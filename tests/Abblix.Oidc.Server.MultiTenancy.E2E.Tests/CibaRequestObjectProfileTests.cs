@@ -50,6 +50,7 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
     private const string AuthorizePath = "/connect/bc-authorize";
     private const string FapiClientId = "fapi-ciba-client";
     private const string PlainClientId = "plain-ciba-client";
+    private const string PublicClientId = "public-browser-client";
     private const string LoginHint = "alice";
 
     private static readonly RsaJsonWebKey ClientKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
@@ -71,6 +72,14 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
         [
             Client(FapiClientId, ClientSecurityProfile.Fapi1Advanced),
             Client(PlainClientId, null),
+            // A browser client of another flow, which authenticates with the method "none"
+            new ClientInfo(PublicClientId)
+            {
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.None,
+                AllowedGrantTypes = [GrantTypes.AuthorizationCode],
+                AllowedResponseTypes = [[ResponseTypes.Code]],
+                RedirectUris = [new Uri("https://spa.example.com/callback")],
+            },
         ],
         SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
         EncryptionKeys = [EncryptionKey],
@@ -165,6 +174,24 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Equal(ErrorCodes.InvalidClient, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
+        Assert.Equal(0, _decryptionKeyReads.Count);
+    }
+
+    /// <summary>
+    /// CIBA Core 1.0 section 7.1: "The Client MUST authenticate to the Backchannel Authentication Endpoint using the
+    /// authentication method registered for its client_id". A caller naming a client registered with the method
+    /// "none" authenticates nobody, so it is answered unauthorized_client (section 13, "The Client is not authorized to
+    /// use this authentication flow") before its request object is read.
+    /// </summary>
+    [Fact]
+    public async Task ACallerNamingAPublicClient_IsUnauthorized_BeforeItsObjectIsDecrypted()
+    {
+        using var response = await InitiateAsync(
+            PublicClientId, EncryptionAlgorithms.KeyManagement.Rsa1_5, authenticated: false, signedBy: PlainClientId);
+
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.True(HttpStatusCode.BadRequest == response.StatusCode, $"{response.StatusCode}: {body}");
+        Assert.Equal(ErrorCodes.UnauthorizedClient, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
         Assert.Equal(0, _decryptionKeyReads.Count);
     }
 

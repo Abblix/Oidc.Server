@@ -329,7 +329,7 @@ public class BackChannelAuthenticationGrantHandler(
     /// a client configured for a delivery this deployment does not offer. GetRequiredKeyedService answers
     /// both with an InvalidOperationException, which reaches the token endpoint as an unhandled failure -
     /// while the backchannel authentication endpoint answers the identical client state with a named error
-    /// an operator can read (BackChannelAuthentication/Validation/ClientValidator.cs).
+    /// an operator can read (BackChannelAuthentication/BackChannelAuthenticationHandler.cs).
     /// Keyed lookup with a null check is the dispatch convention this project documents for a value read
     /// off a wire or off client metadata, precisely so an unknown discriminator is a rejection rather than
     /// a throw.

@@ -11,6 +11,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -58,6 +59,11 @@ public class BackChannelAuthenticationHandler(
             return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
         }
 
+        // Judged before the request object is read too, so a caller naming a client the flow is not open to, a public
+        // client of another flow above all, has nothing decrypted either
+        if (WhyNotOpenToTheFlow(clientInfo) is { } refusal)
+            return refusal;
+
         var fetchResult = await fetcher.FetchAsync(tenant, clientInfo, request);
         if (fetchResult.TryGetSuccess(out var fetchedRequest))
         {
@@ -70,5 +76,33 @@ public class BackChannelAuthenticationHandler(
 
         var validationResult = await validator.ValidateAsync(tenant, clientInfo, request, clientRequest);
         return await validationResult.BindAsync(valid => processor.ProcessAsync(tenant, valid));
+    }
+
+    /// <summary>
+    /// Why the authenticated client may not use the backchannel authentication flow, or null when it may.
+    /// </summary>
+    private static OidcError? WhyNotOpenToTheFlow(ClientInfo clientInfo)
+    {
+        // CIBA Core 1.0 section 7.1: "The Client MUST authenticate to the Backchannel Authentication Endpoint using the
+        // authentication method registered for its client_id". A client registered with the method "none" authenticates
+        // nobody, so the flow is not open to it. Section 13: unauthorized_client, "The Client is not authorized to use
+        // this authentication flow"
+        if (!clientInfo.EffectiveGrantTypes.Contains(GrantTypes.Ciba) || clientInfo is { ClientType: ClientType.Public })
+        {
+            return new OidcError(
+                ErrorCodes.UnauthorizedClient, "The Client is not authorized to use this authentication flow");
+        }
+
+        if (string.IsNullOrEmpty(clientInfo.BackChannelTokenDeliveryMode))
+        {
+            // The client has authenticated, so this is not invalid_client (a 401 challenging credentials that
+            // worked): CIBA Core 1.0 section 13, unauthorized_client
+            return new OidcError(
+                ErrorCodes.UnauthorizedClient,
+                "The client is not properly configured for backchannel authentication. " +
+                "A token delivery mode (poll, ping, or push) must be specified.");
+        }
+
+        return null;
     }
 }

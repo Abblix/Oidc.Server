@@ -45,8 +45,8 @@ public static class BackChannelAuthenticationServiceCollectionExtensions
 
     /// <summary>
     /// Configures and registers a composite of back-channel authentication context validators
-    /// into the service collection. Validators run in sequence to verify the client, the
-    /// requested resources and scopes, the user identity hint, the requested expiry, the user
+    /// into the service collection. Validators run in sequence, for the client the handler has already
+    /// authenticated and found open to the flow, to verify the requested resources and scopes, the user identity hint, the requested expiry, the user
     /// code, and the ping-mode configuration before a CIBA request is accepted.
     /// </summary>
     /// <param name="services">The service collection to which the back-channel authentication context validators will be added.</param>
@@ -55,7 +55,6 @@ public static class BackChannelAuthenticationServiceCollectionExtensions
     {
         // compose BackChannelAuthenticationValidationContext validation as a pipeline of several IBackChannelAuthenticationContextValidator
         services.TryAddEnumerable([
-            ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ClientValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ResourceValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, BackChannelAuthentication.Validation.ScopeValidator>(),
             ServiceDescriptor.Singleton<IBackChannelAuthenticationContextValidator, UserIdentityValidator>(),

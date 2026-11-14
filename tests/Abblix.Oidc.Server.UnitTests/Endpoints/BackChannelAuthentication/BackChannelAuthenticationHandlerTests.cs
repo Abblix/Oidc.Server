@@ -36,6 +36,16 @@ public class BackChannelAuthenticationHandlerTests
     private readonly BackChannelAuthenticationRequest _request = new() { Request = "header.payload.signature" };
     private readonly ClientRequest _clientRequest = new() { ClientId = "client-1" };
 
+    /// <summary>
+    /// A confidential client registered for the flow with a delivery mode, which the flow is open to.
+    /// </summary>
+    private static ClientInfo CibaClient() => new("client-1")
+    {
+        AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.Ciba],
+        TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
+        BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll,
+    };
+
     private BackChannelAuthenticationHandler Handler() => new(
         _clientAuthenticator.Object, _fetcher.Object, _validator.Object, _processor.Object);
 
@@ -57,13 +67,42 @@ public class BackChannelAuthenticationHandlerTests
     }
 
     /// <summary>
+    /// A client the flow is not open to is answered unauthorized_client (CIBA Core 1.0 section 13) before its request
+    /// object is read: one without the CIBA grant, with the grant in the wrong case, registered with the method "none"
+    /// (section 7.1, "The Client MUST authenticate"), or with no token delivery mode.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.RefreshToken }, ClientAuthenticationMethods.ClientSecretBasic, BackchannelTokenDeliveryModes.Poll)]
+    [InlineData(new string[0], ClientAuthenticationMethods.ClientSecretBasic, BackchannelTokenDeliveryModes.Poll)]
+    [InlineData(new[] { "urn:openid:params:grant-type:CIBA" }, ClientAuthenticationMethods.ClientSecretBasic, BackchannelTokenDeliveryModes.Poll)]
+    [InlineData(new[] { GrantTypes.Ciba }, ClientAuthenticationMethods.None, BackchannelTokenDeliveryModes.Poll)]
+    [InlineData(new[] { GrantTypes.Ciba }, ClientAuthenticationMethods.ClientSecretBasic, null)]
+    public async Task AClientTheFlowIsNotOpenTo_IsUnauthorized_BeforeTheRequestIsRead(
+        string[] grantTypes, string authenticationMethod, string? deliveryMode)
+    {
+        _clientAuthenticator
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest))
+            .ReturnsAsync(new ClientInfo("client-1")
+            {
+                AllowedGrantTypes = grantTypes,
+                TokenEndpointAuthMethod = authenticationMethod,
+                BackChannelTokenDeliveryMode = deliveryMode,
+            });
+
+        var result = await Handler().HandleAsync(SingleIssuer.Tenant, _request, _clientRequest);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
+    }
+
+    /// <summary>
     /// The client that authenticated is the one the request object is fetched for and the one the request is validated
     /// for, and it authenticates once.
     /// </summary>
     [Fact]
     public async Task TheAuthenticatedClient_IsHandedToTheFetcherAndTheValidator_AuthenticatingOnce()
     {
-        var client = new ClientInfo("client-1");
+        var client = CibaClient();
         var fetched = _request with { LoginHint = "end-user" };
         var refusal = new OidcError(ErrorCodes.InvalidScope, "refused");
 
@@ -92,7 +131,7 @@ public class BackChannelAuthenticationHandlerTests
     [Fact]
     public async Task ARefusedRequestObject_IsAnsweredWithTheFetchersError()
     {
-        var client = new ClientInfo("client-1");
+        var client = CibaClient();
 
         _clientAuthenticator
             .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, _clientRequest))
