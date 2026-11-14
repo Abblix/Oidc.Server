@@ -72,7 +72,12 @@ public class PushedAuthorizationHandler(
                 ErrorFactory.InvalidRequest("The pushed authorization request must be bound to the client that posted it"));
         }
 
-        var fetchResult = await fetcher.FetchAsync(tenant, authorizationRequest);
+        // RFC 9126 section 3: "Request parameters required by a given client authentication method are included in the
+        // "application/x-www-form-urlencoded" request directly and are the only parameters other than "request" in the
+        // form body". A client whose authentication method carries no client_id in the form sends the object alone, so
+        // the client it authenticated as is the one the object is read for
+        var fetchResult = await fetcher.FetchAsync(
+            tenant, authorizationRequest with { ClientId = authorizationRequest.ClientId ?? clientInfo.ClientId });
 
         if (fetchResult.TryGetFailure(out var fetchError))
             return new AuthorizationError(authorizationRequest, fetchError);

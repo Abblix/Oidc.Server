@@ -57,7 +57,7 @@ public class RequestObjectFetchAdapter(
 
         // RFC 9101 section 5: "client_id REQUIRED. OAuth 2.0 [RFC6749] "client_id". The value MUST match the "request"
         // or "request_uri" Request Object's (Section 2.1) "client_id"", and section 6.3 has a failed client ID check
-        // answered as RFC 6749 section 4.1.2.1 answers a malformed request. So the client is known before the object
+        // answered as "specified in Section 5.2 of [RFC6749]". So the client is known before the object
         // is read, and the object is held to its profile up front
         ClientInfo? namedClient = null;
         if (request.Request is not null)
