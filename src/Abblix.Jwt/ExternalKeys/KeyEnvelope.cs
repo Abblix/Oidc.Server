@@ -49,6 +49,9 @@ internal sealed class KeyEnvelope(IJsonWebTokenEncryptor encryptor)
             plaintext,
             keyEncryptionKey,
             tokenType: null,
+            // RFC 7517 section 7 lets "cty" be omitted when "the application knows that the encrypted content is a
+            // JWK by another means or convention", which an envelope is
+            contentType: null,
             keyWrapAlgorithm,
             contentEncryptionAlgorithm,
             cancellationToken);

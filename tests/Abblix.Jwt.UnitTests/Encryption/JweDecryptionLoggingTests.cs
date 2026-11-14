@@ -139,6 +139,7 @@ public class JweDecryptionLoggingTests
             Encoding.UTF8.GetBytes("inner token"),
             key,
             tokenType: null,
+            contentType: null,
             EncryptionAlgorithms.KeyManagement.Aes128KW,
             EncryptionAlgorithms.ContentEncryption.Aes128Gcm,
             TestContext.Current.CancellationToken);

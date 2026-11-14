@@ -27,6 +27,7 @@ internal sealed class JweEncryption(IServiceProvider serviceProvider, LocalKeyEn
         byte[] plaintext,
         JsonWebKey encryptionKey,
         string? tokenType,
+        string? contentType,
         string keyEncryptionAlgorithm,
         string contentEncryptionAlgorithm,
         CancellationToken cancellationToken = default)
@@ -41,6 +42,7 @@ internal sealed class JweEncryption(IServiceProvider serviceProvider, LocalKeyEn
             Algorithm = keyEncryptionAlgorithm,
             EncryptionAlgorithm = contentEncryptionAlgorithm,
             Type = tokenType,
+            ContentType = contentType,
             KeyId = encryptionKey.KeyId
         };
 
