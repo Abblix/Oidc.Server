@@ -29,7 +29,7 @@ public static class AccessTokenPresentation
     /// and a parameter together still name one scheme; <see cref="AccessTokenScheme.DPoP"/> for the
     /// <c>Authorization: DPoP</c> header alone; null for that header beside a parameter, two schemes at once
     /// (answered as section 7.2 answers two Authorization headers in Figure 19), for the Authorization header sent
-    /// more than once, which is that figure itself whatever a parameter beside it names, and for a request presenting
+    /// more than once, answered as that figure answers it whichever schemes the lines name, and for a request presenting
     /// no token in a scheme the endpoint speaks.
     /// </returns>
     public static AccessTokenScheme? SchemeOf(UserInfoRequest request, ClientRequest clientRequest)
