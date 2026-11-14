@@ -41,7 +41,11 @@ public class EncryptedClaimsSetTests
 			Header = { Algorithm = SigningAlgorithms.None },
 			Payload = { Issuer = "test-issuer", Audiences = ["test-audience"], Subject = "user-1" },
 		};
-		return ServiceProvider.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, null, EncryptionKey);
+		return ServiceProvider.GetRequiredService<IJsonWebTokenCreator>().EncryptClaimsAsync(
+			token,
+			EncryptionKey,
+			EncryptionAlgorithms.KeyManagement.RsaOaep256,
+			EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256);
 	}
 
 	private static ValidationParameters Parameters(ValidationOptions options) => new()
@@ -67,6 +71,48 @@ public class EncryptedClaimsSetTests
 		Assert.True(plaintext.TryGetSuccess(out var bytes));
 		var claims = JsonNode.Parse(bytes)!.AsObject();
 		Assert.Equal("user-1", claims[JwtClaimTypes.Subject]!.GetValue<string>());
+	}
+
+	/// <summary>
+	/// A token issued with no signing key and an encryption key stays a nested JWT, an unsigned JWS under cty JWT:
+	/// OpenID Connect Core 1.0 section 2 has an encrypted ID token "signed then encrypted, with the result being a Nested
+	/// JWT", and the claims-set form is asked for by name.
+	/// </summary>
+	[Fact]
+	public async Task ATokenWithNoSigningKey_StaysANestedJwt()
+	{
+		var token = new JsonWebToken
+		{
+			Header = { Algorithm = SigningAlgorithms.None },
+			Payload = { Issuer = "test-issuer", Subject = "user-1" },
+		};
+		var jwe = await ServiceProvider.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, null, EncryptionKey);
+
+		var header = JsonNode.Parse(Base64Url.DecodeFromChars(jwe.Split('.')[0]))!.AsObject();
+		Assert.Equal(JsonWebTokenTypes.Jwt, header[JwtClaimTypes.ContentType]?.GetValue<string>());
+	}
+
+	/// <summary>
+	/// A claims set is an unsigned token to every check that reads the algorithm: it validates with the algorithm
+	/// none, so a caller refusing unsigned tokens by that name refuses it, and an allow-list without none refuses it.
+	/// </summary>
+	[Fact]
+	public async Task AnUnsignedEncryptedToken_ReadsAsSignedWithNone()
+	{
+		var jwe = await IssueUnsignedAsync();
+		var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+
+		var opened = await validator.ValidateAsync(jwe, Parameters(default));
+		Assert.True(opened.TryGetSuccess(out var token));
+		Assert.Equal(SigningAlgorithms.None, token.Header.Algorithm);
+
+		var allowList = Parameters(default) with
+		{
+			AllowedSigningAlgorithms = new HashSet<string>(StringComparer.Ordinal) { SigningAlgorithms.RS256 },
+		};
+		var refused = await validator.ValidateAsync(jwe, allowList);
+		Assert.True(refused.TryGetFailure(out var error));
+		Assert.Equal(JwtError.InvalidAlgorithm, error.Error);
 	}
 
 	/// <summary>

@@ -538,6 +538,51 @@ public class ClientJwtFormatterTests
     }
 
     /// <summary>
+    /// A JWT registered unsigned and encrypted takes the form its specification names: an ID token stays a Nested JWT,
+    /// "signed then encrypted" (OpenID Connect Core 1.0 section 2), an unsigned JWS inside the JWE; a UserInfo response,
+    /// which "MAY be encrypted without also being signed" (section 5.3.2), is its claims set encrypted.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FormatAsync_AnUnsignedEncryptedJwt_TakesTheFormItsSpecificationNames(bool userInfo)
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.None },
+            Payload = { Subject = "user123", Audiences = [ClientId] },
+        };
+        var rsa = new RsaJsonWebKey { KeyId = "rsa" };
+        var nested = false;
+        var claimsSet = false;
+        _serviceKeysProvider
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
+        _clientKeysProvider
+            .Setup(p => p.GetEncryptionKeys(_clientInfo))
+            .Returns(new JsonWebKey[] { rsa }.ToAsyncEnumerable());
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, null, rsa, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback(() => nested = true)
+            .ReturnsAsync(EncodedJwt);
+        _jwtCreator
+            .Setup(c => c.EncryptClaimsAsync(token, rsa, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback(() => claimsSet = true)
+            .ReturnsAsync(EncodedJwt);
+        _clientInfo.IdentityTokenEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+        _clientInfo.UserInfoEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+
+        await _formatter.FormatAsync(
+            SingleIssuer.Tenant,
+            token,
+            _clientInfo,
+            userInfo ? UserInfoPolicy(_clientInfo) : LogoutTokenPolicy(_clientInfo));
+
+        Assert.Equal(!userInfo, nested);
+        Assert.Equal(userInfo, claimsSet);
+    }
+
+    /// <summary>
     /// A registered algorithm no published key can be used with, an empty key set included (a jwks_uri that could
     /// not be read), is the refusal, never a token sent signed only.
     /// </summary>

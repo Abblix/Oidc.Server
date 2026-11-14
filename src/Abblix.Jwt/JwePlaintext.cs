@@ -20,7 +20,8 @@ internal static class JwePlaintext
 {
     /// <summary>
     /// Whether <paramref name="plaintext"/> is the claims set of the JWE <paramref name="jwtParts"/>, and the token it
-    /// makes with the JWE's header. A plaintext that is not a JSON object is taken as a nested JWT, as a token issued
+    /// makes: unsigned, so its header names the algorithm <c>none</c> and the JWE's typ, and a check refusing an unsigned
+    /// token refuses it as it refuses an unsigned JWS. A plaintext that is not a JSON object is taken as a nested JWT, as a token issued
     /// before cty was written carries one without it.
     /// </summary>
     /// <param name="jwtParts">The compact parts of the JWE the plaintext came from.</param>
@@ -43,7 +44,11 @@ internal static class JwePlaintext
             return false;
         }
 
-        claimsSet = new JsonWebToken { Header = envelope.Header, Payload = new JsonWebTokenPayload(claims) };
+        claimsSet = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.None, Type = envelope.Header.Type },
+            Payload = new JsonWebTokenPayload(claims),
+        };
         nestedJwt = null;
         return true;
     }

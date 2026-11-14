@@ -74,6 +74,12 @@ public class ClientJwtFormatter(
                 "under its security profile");
         }
 
+        if (signingCredentials is null && encryption.UnsignedIsClaimsSet)
+        {
+            return await issuer.EncryptClaimsAsync(
+                profile, token, encryptingCredentials, keyEncryptionAlgorithm, contentEncryptionAlgorithm);
+        }
+
         return await issuer.IssueAsync(
             profile,
             token,

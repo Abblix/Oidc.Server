@@ -66,4 +66,12 @@ internal sealed class JsonWebTokenCreator(
         string keyEncryptionAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
         string contentEncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512)
         => issuer.IssueAsync(token, signingKey, encryptionKey, keyEncryptionAlgorithm, contentEncryptionAlgorithm);
+
+    /// <inheritdoc />
+    public Task<string> EncryptClaimsAsync(
+        JsonWebToken token,
+        JsonWebKey encryptionKey,
+        string keyEncryptionAlgorithm,
+        string contentEncryptionAlgorithm)
+        => issuer.EncryptClaimsAsync(token, encryptionKey, keyEncryptionAlgorithm, contentEncryptionAlgorithm);
 }

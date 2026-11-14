@@ -19,7 +19,8 @@ internal sealed class JwePlaintextValidation(JwtClaimsChain claimsChain)
 {
     /// <summary>
     /// Validates <paramref name="plaintext"/>, decrypted from the JWE <paramref name="jwtParts"/>. A claims set carries
-    /// no signature, so it is refused where signed tokens are required, as an unsigned JWS is.
+    /// no signature, so its algorithm <c>none</c> is judged as that of an unsigned JWS is: refused where signed tokens
+    /// are required or the allowed algorithms leave it out.
     /// </summary>
     /// <param name="jwtParts">The compact parts of the JWE.</param>
     /// <param name="plaintext">The decrypted plaintext.</param>
@@ -34,12 +35,7 @@ internal sealed class JwePlaintextValidation(JwtClaimsChain claimsChain)
         if (!JwePlaintext.TryReadClaimsSet(jwtParts, plaintext, out var claimsSet, out var nestedJwt))
             return validator.ValidateAsync(nestedJwt, parameters);
 
-        if (parameters.Options.HasFlag(ValidationOptions.RequireSignedTokens))
-        {
-            return Task.FromResult<Result<JsonWebToken, JwtValidationError>>(
-                new JwtValidationError(JwtError.InvalidAlgorithm, "Unsigned tokens are not allowed"));
-        }
-
-        return claimsChain.ValidateAsync(claimsSet, parameters);
+        return JwsAlgorithmValidator.Validate(claimsSet, parameters)
+            .BindAsync(token => claimsChain.ValidateAsync(token, parameters));
     }
 }

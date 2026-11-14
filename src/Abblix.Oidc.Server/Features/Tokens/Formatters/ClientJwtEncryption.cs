@@ -25,10 +25,15 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// to fall back to <see cref="DefaultContentEncryptionAlgorithm"/>.</param>
 /// <param name="DefaultContentEncryptionAlgorithm">The content-encryption algorithm to use when the client did not
 /// register one.</param>
+/// <param name="UnsignedIsClaimsSet">Whether a JWT registered unsigned is encrypted as its claims set (RFC 7519 section
+/// 3) rather than as an unsigned JWS inside the JWE: OpenID Connect Core 1.0 section 5.3.2 has a UserInfo response that
+/// "MAY be encrypted without also being signed", while section 2 has an encrypted ID token "signed then encrypted, with
+/// the result being a Nested JWT".</param>
 public sealed record ClientJwtEncryption(
 	string? KeyManagementAlgorithm,
 	string? ContentEncryptionAlgorithm,
-	string DefaultContentEncryptionAlgorithm)
+	string DefaultContentEncryptionAlgorithm,
+	bool UnsignedIsClaimsSet = false)
 {
 	/// <summary>
 	/// The content-encryption algorithm the JWT is encrypted with: the registered one, else the default.
@@ -42,7 +47,8 @@ public sealed record ClientJwtEncryption(
 	public static ClientJwtEncryption ForUserInfo(ClientInfo clientInfo, OidcOptions options) => new(
 		clientInfo.UserInfoEncryptedResponseAlgorithm,
 		clientInfo.UserInfoEncryptedResponseEncryption,
-		options.DefaultContentEncryptionAlgorithm);
+		options.DefaultContentEncryptionAlgorithm,
+		UnsignedIsClaimsSet: true);
 
 	/// <summary>
 	/// Policy for an ID token or logout token: encrypts when the client registered

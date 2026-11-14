@@ -30,22 +30,6 @@ internal sealed class NestedJwtIssuer(IJsonWebTokenSigner signer, IJsonWebTokenE
         string keyEncryptionAlgorithm,
         string contentEncryptionAlgorithm)
     {
-        // RFC 7519 section 3: a JWT that is only encrypted is a JWE "with the JWT Claims Set being the plaintext
-        // encrypted by the JWE", carrying no cty (section 5.2 has cty JWT only for a nested JWT). Wrapping an unsigned
-        // JWS instead would make a token a validator requiring signatures refuses for a signature nobody made
-        if (signingKey == null && encryptionKey != null)
-        {
-            token.Header.Algorithm = SigningAlgorithms.None;
-            return await encryptor.EncryptAsync(
-                Encoding.UTF8.GetBytes(token.Payload.Json.ToJsonString()),
-                encryptionKey,
-                token.Header.Type,
-                contentType: null,
-                keyEncryptionAlgorithm,
-                contentEncryptionAlgorithm,
-                CancellationToken.None);
-        }
-
         // IssueAsync does not yet carry a CancellationToken: the external key-custodian ports that would
         // observe one arrive with remote signing / key-management, which is when it is threaded up from
         // the callers. In-process crypto ignores cancellation, so None is passed until then.
@@ -68,4 +52,22 @@ internal sealed class NestedJwtIssuer(IJsonWebTokenSigner signer, IJsonWebTokenE
 
         return jwtString;
     }
+
+    /// <summary>
+    /// Encrypts <paramref name="token"/> without signing it: RFC 7519 section 3 has the JWE "with the JWT Claims Set
+    /// being the plaintext encrypted by the JWE", and section 5.2 cty JWT only for a nested JWT, so it carries none.
+    /// </summary>
+    public Task<string> EncryptClaimsAsync(
+        JsonWebToken token,
+        JsonWebKey encryptionKey,
+        string keyEncryptionAlgorithm,
+        string contentEncryptionAlgorithm)
+        => encryptor.EncryptAsync(
+            Encoding.UTF8.GetBytes(token.Payload.Json.ToJsonString()),
+            encryptionKey,
+            token.Header.Type,
+            contentType: null,
+            keyEncryptionAlgorithm,
+            contentEncryptionAlgorithm,
+            CancellationToken.None);
 }
