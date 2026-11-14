@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -65,6 +66,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAuthorizationValueReuseDetector, AuthorizationValueReuseDetector>();
         services.TryAddSingleton<IAuthorizationRequestStorage, AuthorizationRequestStorage>();
         services.TryAddSingleton<IConsumedRequestUriRegistry, ConsumedRequestUriRegistry>();
+        // Both reserve in the replay cache, in the store under the shared key
+        services.AddReplayPrevention();
         services.TryAddSingleton<ISessionClientRegistry, SessionClientRegistry>();
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, RecordLifetimeOptionsValidator>());

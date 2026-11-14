@@ -6,31 +6,25 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Google.Protobuf.WellKnownTypes;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Features.Storages;
 
 /// <summary>
-/// Keeps the ended flows in the same entity storage the stored requests live in.
+/// Reserves the ended flows in the replay cache.
 /// </summary>
-/// <param name="storage">Where the record is written and read.</param>
-/// <param name="keyFactory">Names the record.</param>
-/// <param name="timeProvider">Dates the record.</param>
+/// <param name="replayCache">The store every tenant's reservations are kept in, each under names of its own. The
+/// store itself rather than the server's form of it, which keeps for longer than asked and keeps by the tenant the
+/// request runs in, while the record here lasts as long as a page of the flow and the tenant is named by the
+/// caller.</param>
+/// <param name="keyFactory">Names the reservation.</param>
 public class ConsumedRequestUriRegistry(
-    IEntityStorage storage,
-    IEntityStorageKeyFactory keyFactory,
-    TimeProvider timeProvider) : IConsumedRequestUriRegistry
+    [FromKeyedServices(TenantServiceKeys.Shared)] IReplayCache replayCache,
+    IEntityStorageKeyFactory keyFactory) : IConsumedRequestUriRegistry
 {
     /// <inheritdoc />
-    public Task MarkConsumedAsync(TenantDefinition tenant, Uri requestUri, DateTimeOffset expiresAt)
-        => storage.SetAsync(
-            keyFactory.ConsumedRequestUriKey(tenant, requestUri),
-            new Proto.ConsumedRequestUri { ConsumedAt = Timestamp.FromDateTimeOffset(timeProvider.GetUtcNow()) },
-            new StorageOptions { AbsoluteExpiration = expiresAt });
-
-    /// <inheritdoc />
-    public async Task<bool> IsConsumedAsync(TenantDefinition tenant, Uri requestUri)
-        => await storage.GetAsync<Proto.ConsumedRequestUri>(keyFactory.ConsumedRequestUriKey(tenant, requestUri), false)
-            is not null;
+    public Task<bool> TryConsumeAsync(TenantDefinition tenant, Uri requestUri, DateTimeOffset expiresAt)
+        => replayCache.TryReserveAsync(keyFactory.ConsumedRequestUriKey(tenant, requestUri), expiresAt);
 }

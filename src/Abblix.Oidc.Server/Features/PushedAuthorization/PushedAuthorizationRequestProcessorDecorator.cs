@@ -48,7 +48,7 @@ public class PushedAuthorizationRequestProcessorDecorator(
     /// <returns>The inner processor's <see cref="AuthorizationResponse"/>, unchanged.</returns>
     public async Task<AuthorizationResponse> ProcessAsync(TenantDefinition tenant, ValidAuthorizationRequest request)
     {
-        var response = await inner.ProcessAsync(tenant, request);
+        var response = await EndFlowAsync(tenant, request, await inner.ProcessAsync(tenant, request));
 
         // PushedRequestFetcher carries the URN forward onto the resolved request (surfaced as
         // ValidAuthorizationRequest.RequestUri) and deliberately does not consume on fetch, so multi-step UI re-reads
@@ -65,19 +65,47 @@ public class PushedAuthorizationRequestProcessorDecorator(
 
         // The URN the request was first fetched under - usually the one the client pushed - outlives the pages the
         // request went through, and is done with once a code or token is issued. So are the pages it led to that the
-        // code did not come by, as a refresh of one made: each carries this URN, and the record refuses them while a
-        // page can still be presented.
-        if (response is SuccessfullyAuthenticated && request.Model.OriginRequestUri is { } originRequestUri)
+        // code did not come by, as a refresh of one made: each carries this URN, and the record of the ended flow
+        // refuses them above while a page can still be presented.
+        if (response is SuccessfullyAuthenticated &&
+            request.Model.OriginRequestUri is { } originRequestUri &&
+            originRequestUri != request.RequestUri)
         {
-            if (originRequestUri != request.RequestUri)
-                await authorizationRequestStorage.TryGetAsync(tenant, originRequestUri, shouldRemove: true);
-
-            await consumedRequestUris.MarkConsumedAsync(
-                tenant,
-                originRequestUri,
-                timeProvider.GetUtcNow() + options.Value.AuthenticationRequestExpiresIn);
+            await authorizationRequestStorage.TryGetAsync(tenant, originRequestUri, shouldRemove: true);
         }
 
         return response;
+    }
+
+    /// <summary>
+    /// Ends the flow <paramref name="request"/> belongs to when <paramref name="response"/> issued a code or token,
+    /// answering with an error instead when the flow had ended already.
+    /// </summary>
+    /// <remarks>
+    /// The flow ends with the first code or token, so of two of its pages reaching one together, or a page
+    /// refreshed after it ended, only the first is answered with what was issued. The other's code, issued before
+    /// this, never leaves the server and expires unredeemed.
+    /// </remarks>
+    private async Task<AuthorizationResponse> EndFlowAsync(
+        TenantDefinition tenant,
+        ValidAuthorizationRequest request,
+        AuthorizationResponse response)
+    {
+        if (response is not SuccessfullyAuthenticated ||
+            request.Model.OriginRequestUri is not { } flowRequestUri ||
+            await consumedRequestUris.TryConsumeAsync(
+                tenant,
+                flowRequestUri,
+                timeProvider.GetUtcNow() + options.Value.AuthenticationRequestExpiresIn))
+        {
+            return response;
+        }
+
+        return new AuthorizationError(
+            request.Model,
+            ErrorCodes.InvalidRequestUri,
+            $"The request by {flowRequestUri} has already been used",
+            request.ResponseMode,
+            request.Model.RedirectUri);
     }
 }

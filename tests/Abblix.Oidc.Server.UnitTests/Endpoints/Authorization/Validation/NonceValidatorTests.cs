@@ -13,8 +13,6 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
-using Abblix.Oidc.Server.Features.ReusePrevention;
-using Moq;
 using Xunit;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
@@ -33,7 +31,7 @@ public class NonceValidatorTests
 
     public NonceValidatorTests()
     {
-        _validator = new NonceValidator(Mock.Of<IAuthorizationValueReuseDetector>());
+        _validator = new NonceValidator();
     }
 
     /// <summary>
@@ -77,29 +75,6 @@ public class NonceValidatorTests
 
         // Assert
         Assert.Null(result);
-    }
-
-    /// <summary>
-    /// Verifies that a nonce the client already used for a previously issued authorization code is rejected
-    /// when reuse detection is enabled - a nonce must be transaction-specific (RFC 9700 Section 2.1.1). The
-    /// code response type keeps the nonce optional, so the rejection comes from reuse, not a missing nonce.
-    /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithReusedNonce_ShouldFail()
-    {
-        // Arrange
-        var reuseDetector = new Mock<IAuthorizationValueReuseDetector>();
-        reuseDetector
-            .Setup(d => d.IsReusedAsync(TestTenant.Matched, ClientId, It.IsAny<string>(), ValidNonce))
-            .ReturnsAsync(true);
-        var validator = new NonceValidator(reuseDetector.Object);
-        var context = CreateContext([ResponseTypes.Code], nonce: ValidNonce);
-
-        // Act
-        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
-
-        // Assert
-        Assert.NotNull(result);
     }
 
     /// <summary>

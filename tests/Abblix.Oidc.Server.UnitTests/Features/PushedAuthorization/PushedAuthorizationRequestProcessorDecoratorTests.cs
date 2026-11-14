@@ -9,6 +9,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -19,6 +20,8 @@ using Abblix.Oidc.Server.Features.PushedAuthorization;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
@@ -43,6 +46,12 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
     {
         _inner = new Mock<IAuthorizationRequestProcessor>(MockBehavior.Strict);
         _storage = new Mock<IAuthorizationRequestStorage>(MockBehavior.Strict);
+
+        // No flow has ended unless a test says so
+        _consumedRequestUris
+            .Setup(r => r.TryConsumeAsync(It.IsAny<TenantDefinition>(), It.IsAny<Uri>(), It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(true);
+
         _decorator = new PushedAuthorizationRequestProcessorDecorator(
             _inner.Object,
             _storage.Object,
@@ -116,7 +125,7 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
         _storage.Verify(s => s.TryGetAsync(TestTenant.Matched, pageUri, true), Times.Once);
         _storage.Verify(s => s.TryGetAsync(TestTenant.Matched, pushedUri, true), Times.Once);
         _consumedRequestUris.Verify(
-            r => r.MarkConsumedAsync(TestTenant.Matched, pushedUri, _timeProvider.GetUtcNow() + _options.AuthenticationRequestExpiresIn),
+            r => r.TryConsumeAsync(TestTenant.Matched, pushedUri, _timeProvider.GetUtcNow() + _options.AuthenticationRequestExpiresIn),
             Times.Once);
     }
 
@@ -135,8 +144,61 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
         await _decorator.ProcessAsync(SingleIssuer.Tenant, request);
 
         _consumedRequestUris.Verify(
-            r => r.MarkConsumedAsync(TestTenant.Matched, pushedUri, _timeProvider.GetUtcNow() + _options.AuthenticationRequestExpiresIn),
+            r => r.TryConsumeAsync(TestTenant.Matched, pushedUri, _timeProvider.GetUtcNow() + _options.AuthenticationRequestExpiresIn),
             Times.Once);
+    }
+
+    /// <summary>
+    /// A page of a flow that already ended with a code, as a refresh of the page makes, is answered with an error
+    /// instead of the code it was issued, and the flow's request_uri is left to the request that ended it.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_SuccessOnPageOfEndedFlow_ReturnsInvalidRequestUri()
+    {
+        var pageUri = new Uri("urn:ietf:params:oauth:request_uri:refreshed-page");
+        var pushedUri = new Uri("urn:ietf:params:oauth:request_uri:pushed");
+        var request = CreateValidRequest(pageUri, pushedBy: pushedUri);
+        _inner.Setup(p => p.ProcessAsync(TestTenant.Matched, request)).ReturnsAsync(Success(request));
+        _consumedRequestUris
+            .Setup(r => r.TryConsumeAsync(TestTenant.Matched, pushedUri, It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(false);
+
+        var response = await _decorator.ProcessAsync(SingleIssuer.Tenant, request);
+
+        var error = Assert.IsType<AuthorizationError>(response);
+        Assert.Equal(ErrorCodes.InvalidRequestUri, error.Error);
+        _storage.Verify(s => s.TryGetAsync(It.IsAny<TenantDefinition>(), It.IsAny<Uri>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Two pages of one flow reaching a code together end it once: one is answered with its code, the other with an
+    /// error, over the registry and the replay cache a server registers.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_TwoPagesOfOneFlowTogether_OneIsAnsweredWithACode()
+    {
+        var pushedUri = new Uri("urn:ietf:params:oauth:request_uri:pushed");
+        var first = CreateValidRequest(new Uri("urn:ietf:params:oauth:request_uri:page-1"), pushedBy: pushedUri);
+        var second = CreateValidRequest(new Uri("urn:ietf:params:oauth:request_uri:page-2"), pushedBy: pushedUri);
+        _inner.Setup(p => p.ProcessAsync(TestTenant.Matched, first)).ReturnsAsync(Success(first));
+        _inner.Setup(p => p.ProcessAsync(TestTenant.Matched, second)).ReturnsAsync(Success(second));
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, It.IsAny<Uri>(), true)).ReturnsAsync((AuthorizationRequest?)null);
+
+        var registry = new ConsumedRequestUriRegistry(
+            new DistributedReplayCache(
+                new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
+                _timeProvider,
+                "test:"),
+            new EntityStorageKeyFactory());
+        var decorator = new PushedAuthorizationRequestProcessorDecorator(
+            _inner.Object, _storage.Object, registry, Options.Create(_options), _timeProvider);
+
+        var responses = await Task.WhenAll(
+            Task.Run(() => decorator.ProcessAsync(SingleIssuer.Tenant, first), TestContext.Current.CancellationToken),
+            Task.Run(() => decorator.ProcessAsync(SingleIssuer.Tenant, second), TestContext.Current.CancellationToken));
+
+        Assert.Single(responses, response => response is SuccessfullyAuthenticated);
+        Assert.Single(responses, response => response is AuthorizationError { Error: ErrorCodes.InvalidRequestUri });
     }
 
     /// <summary>
