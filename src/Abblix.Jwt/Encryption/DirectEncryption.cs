@@ -6,6 +6,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
 
 namespace Abblix.Jwt.Encryption;
 
@@ -82,7 +83,7 @@ internal sealed class DirectEncryption : IKeyManagementAlgorithm<OctetJsonWebKey
 
 		// Per RFC 7518 Section 4.5: The symmetric key must be the same as the CEK
 		// The CEK size must match the requirements of the content encryption algorithm
-		if (!keyToEncrypt.SequenceEqual(sharedKey.KeyValue))
+		if (!CryptographicOperations.FixedTimeEquals(keyToEncrypt, sharedKey.KeyValue))
 		{
 			throw new InvalidOperationException(
 				"For direct encryption (dir), the Content Encryption Key must be the same as the shared symmetric key");

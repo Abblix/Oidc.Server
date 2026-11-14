@@ -70,9 +70,10 @@ public class JweDecryptionLoggingTests
         var keyId = "line\r\nforged record " + new string('k', LongerThanAnyRecordKeeps);
         jwtParts[0] = EncodeHeader("unknown-alg", EncryptionAlgorithms.ContentEncryption.Aes128Gcm, keyId);
 
+        // A key declaring no algorithm is a candidate for the unknown one, so the token reaches the keys
         var result = await _encryptor.DecryptAsync(
             jwtParts,
-            NewKey(keyId).ToAsync(),
+            (NewKey(keyId) with { Algorithm = null }).ToAsync(),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out _));
@@ -117,6 +118,26 @@ public class JweDecryptionLoggingTests
         Assert.Equal(LogLevel.Warning, entry.Level);
     }
 
+    /// <summary>
+    /// A key the token names that declares another algorithm is recorded as such, not as a key missing here.
+    /// </summary>
+    [Fact]
+    public async Task TokenWhoseKeyDeclaresAnotherAlgorithm_IsRecordedAsSuch()
+    {
+        var jwtParts = await EncryptTo(NewKey("sender-key"));
+
+        var result = await _encryptor.DecryptAsync(
+            jwtParts,
+            (NewKey("sender-key") with { Algorithm = EncryptionAlgorithms.KeyManagement.Aes256KW }).ToAsync(),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        var entry = Assert.Single(_logger.Entries);
+        Assert.Equal(LogEvents.Jwt.DecryptionKeysForAnotherAlgorithm, entry.EventId);
+        Assert.Equal(1, entry.Value("KeyCount"));
+    }
+
     [Fact]
     public async Task TokenAKeyOpens_IsNotRecorded()
     {
@@ -138,6 +159,7 @@ public class JweDecryptionLoggingTests
             Encoding.UTF8.GetBytes("inner token"),
             key,
             tokenType: null,
+            contentType: null,
             EncryptionAlgorithms.KeyManagement.Aes128KW,
             EncryptionAlgorithms.ContentEncryption.Aes128Gcm,
             TestContext.Current.CancellationToken);

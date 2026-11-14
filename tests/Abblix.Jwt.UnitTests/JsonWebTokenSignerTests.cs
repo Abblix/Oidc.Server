@@ -108,18 +108,20 @@ public class JsonWebTokenSignerTests
     }
 
     /// <summary>
-    /// A key with no public half cannot verify anything, which is a fault in the keys the caller resolved rather than
-    /// a property of the token.
+    /// A key with no public half verifies nothing. It usually comes from the issuer's JWK Set, so the token is answered
+    /// with a verdict rather than an exception.
     /// </summary>
     [Fact]
-    public async Task AKeyWithoutItsPublicHalf_IsAFault()
+    public async Task AKeyWithoutItsPublicHalf_VerifiesNothing()
     {
         var header = new JsonWebTokenHeader(new JsonObject { ["alg"] = SigningAlgorithms.RS256 });
         var keyWithoutPublicHalf = new RsaJsonWebKey { Algorithm = SigningAlgorithms.RS256 };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => Signer().ValidateAsync(
+        var error = await Signer().ValidateAsync(
             ["e30", "e30", "AQAB"], header, new JsonWebKey[] { keyWithoutPublicHalf }.ToAsyncEnumerable(),
-            TestContext.Current.CancellationToken));
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(JwtError.InvalidSignature, error?.Error);
     }
 
     /// <summary>Signs under whatever algorithm it is asked for, checking nothing, and counts the requests.</summary>

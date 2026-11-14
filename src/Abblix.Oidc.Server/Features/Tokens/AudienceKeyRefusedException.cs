@@ -11,8 +11,9 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
-/// An access token was not issued because the encryption key its audience publishes would have it encrypted with a
-/// key management algorithm the security profile in force forbids.
+/// An access token was not issued because none of the encryption keys its audience publishes is one a token can be
+/// encrypted to: under an algorithm this server performs, that the key's material carries out, and that the security
+/// profile in force admits.
 /// </summary>
 /// <remarks>
 /// The refusal belongs to the resource the request named rather than to the server, so the token endpoint answers it
@@ -21,24 +22,26 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 public sealed class AudienceKeyRefusedException : InvalidOperationException
 {
     /// <summary>
-    /// Creates the refusal from the one <see cref="ProfiledJwtIssuer"/> raised.
+    /// Creates the refusal of a resource that publishes encryption keys, none of which a token can be encrypted to.
     /// </summary>
     /// <param name="resources">The resources the access token was for.</param>
-    /// <param name="refusal">The issuer's refusal of the key management algorithm.</param>
-    public AudienceKeyRefusedException(IReadOnlyCollection<Uri> resources, AlgorithmRefusedByProfileException refusal)
-        : base(refusal.Message, refusal)
+    /// <param name="defaultAlgorithm">The key management algorithm a key declaring none was judged under.</param>
+    /// <param name="message">What was refused, naming the resource.</param>
+    public AudienceKeyRefusedException(IReadOnlyCollection<Uri> resources, string defaultAlgorithm, string message)
+        : base(message)
     {
         Resources = resources;
-        Algorithm = refusal.Algorithm;
+        DefaultAlgorithm = defaultAlgorithm;
     }
+
+    /// <summary>
+    /// The key management algorithm a key declaring none was judged under: the server's own setting for the token,
+    /// else the library's default, which a refusal of such a key may come from rather than from the key.
+    /// </summary>
+    public string DefaultAlgorithm { get; }
 
     /// <summary>
     /// The resources the access token was for, one of which publishes the key.
     /// </summary>
     public IReadOnlyCollection<Uri> Resources { get; }
-
-    /// <summary>
-    /// The key management algorithm the profile forbids.
-    /// </summary>
-    public string? Algorithm { get; }
 }

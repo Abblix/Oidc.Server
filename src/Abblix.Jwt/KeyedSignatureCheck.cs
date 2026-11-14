@@ -5,17 +5,25 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Security.Cryptography;
 using Abblix.Jwt.Signing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Jwt;
 
 /// <summary>
 /// Checks a JWS signature under one key with the signature primitive registered for the algorithm and the key's type.
 /// </summary>
+/// <remarks>
+/// A verification key usually comes from the issuer's JWK Set, so key material the platform cannot import is a key
+/// the signature does not verify under rather than a fault: the validator still answers with a verdict, and a sibling
+/// key of the same set can still verify the token.
+/// </remarks>
+/// <param name="logger">Records a candidate key the platform could not import.</param>
 /// <param name="serviceProvider">Resolves the keyed signature primitives
 /// (<see cref="ISignatureAlgorithm{TJsonWebKey}"/>) by algorithm.</param>
-internal sealed class KeyedSignatureCheck(IServiceProvider serviceProvider)
+internal sealed partial class KeyedSignatureCheck(ILogger<KeyedSignatureCheck> logger, IServiceProvider serviceProvider)
 {
     /// <summary>
     /// Verifies a signature using the appropriate signer based on the key type and algorithm.
@@ -25,23 +33,39 @@ internal sealed class KeyedSignatureCheck(IServiceProvider serviceProvider)
     /// <param name="algorithm">The signing algorithm.</param>
     /// <param name="data">The data that was signed.</param>
     /// <param name="signature">The signature to verify.</param>
-    /// <returns>True if the signature is valid; otherwise, false.</returns>
+    /// <returns>True if the signature is valid; false when it is not, or when the key cannot be imported.</returns>
     public bool Verify(JsonWebKey key, string algorithm, byte[] data, byte[] signature)
     {
-        // Validate that key contains public key material for verification
         if (!key.HasPublicKey)
         {
-            throw new InvalidOperationException(
-                $"Signature verification requires public key material, but key (kid={key.KeyId}) contains no public key data.");
+            LogUnimportableKey(key.KeyId, algorithm, "the key carries no public key material");
+            return false;
         }
 
-        return key switch
+        try
         {
-            RsaJsonWebKey rsaKey => ValidateBy(rsaKey),
-            EllipticCurveJsonWebKey ecKey => ValidateBy(ecKey),
-            OctetJsonWebKey octetKey => ValidateBy(octetKey),
-            _ => false,
-        };
+            return key switch
+            {
+                RsaJsonWebKey rsaKey => ValidateBy(rsaKey),
+                EllipticCurveJsonWebKey ecKey when NamedCurves.Named(ecKey.Curve) is null
+                    => Unimportable($"the curve {ecKey.Curve} is not supported"),
+                EllipticCurveJsonWebKey ecKey => ValidateBy(ecKey),
+                OctetJsonWebKey octetKey => ValidateBy(octetKey),
+                _ => false,
+            };
+        }
+        // Windows CNG reports a point off its curve as PlatformNotSupportedException wrapping the
+        // CryptographicException other platforms throw.
+        catch (Exception exception) when (exception is CryptographicException or PlatformNotSupportedException)
+        {
+            return Unimportable(exception.Message);
+        }
+
+        bool Unimportable(string reason)
+        {
+            LogUnimportableKey(key.KeyId, algorithm, reason);
+            return false;
+        }
 
         bool ValidateBy<TJsonWebKey>(TJsonWebKey jwk) where TJsonWebKey : JsonWebKey
         {

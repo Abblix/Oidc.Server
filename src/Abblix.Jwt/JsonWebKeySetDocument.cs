@@ -21,13 +21,50 @@ internal sealed record JsonWebKeySetDocument([property: JsonPropertyName(JsonWeb
     /// Reads the set an object holds. A set without a <c>keys</c> member holds no keys, as its type says, rather than
     /// a null array a caller would enumerate.
     /// </summary>
+    /// <remarks>
+    /// RFC 7517 section 5: "Implementations SHOULD ignore JWKs within a JWK Set that use "kty" (key type) values that
+    /// are not understood by them, that are missing required members, or for which values are out of the supported
+    /// ranges." So one such key leaves the rest of an issuer's set usable, where a single key read on its own is
+    /// still refused. A member that is not a JWK at all - not an object, a member named twice, a value that does not
+    /// decode - is left out the same way: that is this library's choice, which the sentence does not make for it.
+    /// </remarks>
     /// <param name="value">An object: the converter is its only caller, and a JSON null never reaches a converter.
     /// </param>
+    /// <exception cref="JsonException">The <c>keys</c> member is not an array.</exception>
     public static JsonWebKeySet Read(JsonElement value)
     {
-        // An object never deserializes to null, and a JSON null never reaches the converter that calls this
-        var document = value.Deserialize<JsonWebKeySetDocument>(JsonWebKeySerializerOptions.Instance)!;
-        return new JsonWebKeySet(document.Keys ?? []);
+        if (!value.TryGetProperty(JsonWebKeySet.KeysMember, out var keys) || keys.ValueKind == JsonValueKind.Null)
+            return new JsonWebKeySet([]);
+
+        if (keys.ValueKind != JsonValueKind.Array)
+            throw new JsonException($"The '{JsonWebKeySet.KeysMember}' member of a key set must be an array");
+
+        return new JsonWebKeySet([.. keys.EnumerateArray().Select(Understood).OfType<JsonWebKey>()]);
+    }
+
+    /// <summary>
+    /// The key <paramref name="member"/> holds, or null when it holds none or one this library does not understand:
+    /// an unknown or missing key type, a malformed or repeated member, no public key members, or a curve it does not
+    /// support. A JSON null deserializes to null and is left out with them.
+    /// </summary>
+    private static JsonWebKey? Understood(JsonElement member)
+    {
+        JsonWebKey? key;
+        try
+        {
+            key = member.Deserialize<JsonWebKey>(JsonWebKeySerializerOptions.Instance);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        return key switch
+        {
+            { HasPublicKey: false } => null,
+            EllipticCurveJsonWebKey ecKey when NamedCurves.Named(ecKey.Curve) is null => null,
+            _ => key,
+        };
     }
 
     /// <summary>

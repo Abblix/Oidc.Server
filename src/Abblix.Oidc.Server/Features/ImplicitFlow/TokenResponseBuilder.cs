@@ -36,7 +36,7 @@ public class TokenResponseBuilder(IAccessTokenService accessTokenService)
     }
 
     /// <inheritdoc />
-    public async Task BuildResponseAsync(
+    public async Task<AuthorizationError?> BuildResponseAsync(
         TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
@@ -44,13 +44,29 @@ public class TokenResponseBuilder(IAccessTokenService accessTokenService)
     {
         result.TokenType = TokenTypes.Bearer;
 
-        result.AccessToken = await accessTokenService.CreateAccessTokenAsync(
-            tenant,
-            authorizedGrant.AuthSession,
-            authorizedGrant.Context,
-            request.ClientInfo,
-            // The authorization endpoint never issues a refresh token, so there is no family to join.
-            grantId: null,
-            expiresNoLaterThan: null);
+        try
+        {
+            result.AccessToken = await accessTokenService.CreateAccessTokenAsync(
+                tenant,
+                authorizedGrant.AuthSession,
+                authorizedGrant.Context,
+                request.ClientInfo,
+                // The authorization endpoint never issues a refresh token, so there is no family to join.
+                grantId: null,
+                expiresNoLaterThan: null);
+        }
+        catch (AudienceKeyRefusedException refused)
+        {
+            // RFC 8707 section 2: a resource none of whose keys a token can be encrypted to is refused as the token
+            // endpoint refuses it, with invalid_target, here on the authorization error response
+            return new AuthorizationError(
+                request.Model,
+                ErrorCodes.InvalidTarget,
+                refused.Message,
+                request.ResponseMode,
+                request.Model.RedirectUri);
+        }
+
+        return null;
     }
 }

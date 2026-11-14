@@ -81,8 +81,15 @@ internal sealed class ProofValidator(
         var httpMethod = requestInfoProvider.RequestMethod;
         var requestUri = requestInfoProvider.RequestUri;
 
-        var error = ValidateJwkShape(jwt.Header, out var jwk) ??
-                    ValidateRequestBinding(jwt.Payload, httpMethod, requestUri, out issuedAt) ??
+        // The JWT validator verified the signature under the embedded 'jwk' and refused one carrying private
+        // material, which RFC 9449 section 4.3 lists as "The jwk JOSE Header Parameter does not contain a private
+        // key", so the header holds a public key on the success path.
+        var jwk = jwt.Header.TryReadVerificationKey(out var embedded) && embedded is not null
+            ? embedded
+            : throw new InvalidOperationException(
+                $"The header '{JwtClaimTypes.JsonWebKeyHeader}' was verified, so it holds a valid key.");
+
+        var error = ValidateRequestBinding(jwt.Payload, httpMethod, requestUri, out issuedAt) ??
                     ProofBindingClaims.AccessToken(jwt.Payload, accessToken) ??
                     TryGetJti(jwt.Payload, out jwtId);
 
@@ -107,29 +114,6 @@ internal sealed class ProofValidator(
         }
 
         return new Proof(jwt, jwk, jwk.ComputeJwkThumbprintBase64Url(), jwtId, issuedAt);
-    }
-
-    /// <summary>
-    /// Enforces the RFC 9449 section 4.2 rule that the embedded <c>jwk</c> MUST NOT contain
-    /// private-key material. The JWT validator already extracted the JWK and used its
-    /// public part to verify the signature, so the key is guaranteed non-null on the
-    /// success path; this post-check catches accidental private-key disclosure before
-    /// the proof is accepted.
-    /// </summary>
-    private static ProofError? ValidateJwkShape(JsonWebTokenHeader header, out JsonWebKey jwk)
-    {
-        jwk = header.TryReadVerificationKey(out var embedded) && embedded is not null
-            ? embedded
-            : throw new InvalidOperationException(
-                $"The header '{JwtClaimTypes.JsonWebKeyHeader}' was verified, so it holds a valid key.");
-        if (jwk.HasPrivateKey)
-        {
-            return new ProofError(
-                ProofErrorReasons.InvalidJwk,
-                $"Header '{JwtClaimTypes.JsonWebKeyHeader}' must not contain private key material.");
-        }
-
-        return null;
     }
 
     /// <summary>

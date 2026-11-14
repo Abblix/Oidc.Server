@@ -221,7 +221,8 @@ public class AuthorizationRequestProcessor(
 			if (!responseType.HasFlag(builder.ResponseType))
 				continue;
 
-			await builder.BuildResponseAsync(tenant, request, authorizedGrant, result);
+			if (await builder.BuildResponseAsync(tenant, request, authorizedGrant, result) is { } refusal)
+				return refusal;
 		}
 
 		// Return the final authorization result containing codes and tokens as needed.

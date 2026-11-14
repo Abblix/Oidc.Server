@@ -25,11 +25,8 @@ internal sealed class RsaKeyRecipient(RSAEncryptionPadding padding)
 	{
 		try
 		{
-			// RSA decryption output is never longer than its input
-			var buffer = new byte[encryptedKey.Length];
-
 			using var rsa = rsaKey.ToRsa();
-			return rsa.TryDecrypt(encryptedKey, buffer, padding, out var bytesWritten) ? buffer[..bytesWritten] : null;
+			return rsa.Decrypt(encryptedKey, padding);
 		}
 		catch (CryptographicException)
 		{

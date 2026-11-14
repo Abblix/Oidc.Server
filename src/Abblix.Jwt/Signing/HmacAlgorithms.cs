@@ -9,24 +9,27 @@ using System.Security.Cryptography;
 
 namespace Abblix.Jwt.Signing;
 
-/// <summary>The platform HMAC each HS algorithm of RFC 7518 section 3.2 names.</summary>
+/// <summary>The hash each HS algorithm of RFC 7518 section 3.2 names.</summary>
 internal static class HmacAlgorithms
 {
 	/// <summary>
-	/// Creates an HMAC instance for the algorithm and key.
+	/// Computes the HMAC of <paramref name="data"/> under <paramref name="keyValue"/> with the hash
+	/// <paramref name="algorithm"/> names.
 	/// </summary>
 	/// <param name="algorithm">The HS algorithm, HS256, HS384 or HS512.</param>
 	/// <param name="keyValue">The symmetric key bytes.</param>
-	/// <returns>An HMAC instance configured for the algorithm.</returns>
+	/// <param name="data">The data to authenticate.</param>
+	/// <returns>The HMAC value.</returns>
 	/// <exception cref="InvalidOperationException">Thrown when the algorithm is not supported.</exception>
-	public static HMAC Create(string algorithm, byte[] keyValue)
+	public static byte[] Compute(string algorithm, byte[] keyValue, byte[] data)
 	{
-		return algorithm switch
+		var hash = algorithm switch
 		{
-			SigningAlgorithms.HS256 => new HMACSHA256(keyValue),
-			SigningAlgorithms.HS384 => new HMACSHA384(keyValue),
-			SigningAlgorithms.HS512 => new HMACSHA512(keyValue),
+			SigningAlgorithms.HS256 => HashAlgorithmName.SHA256,
+			SigningAlgorithms.HS384 => HashAlgorithmName.SHA384,
+			SigningAlgorithms.HS512 => HashAlgorithmName.SHA512,
 			_ => throw new InvalidOperationException($"Unsupported HMAC algorithm: {algorithm}")
 		};
+		return CryptographicOperations.HmacData(hash, keyValue, data);
 	}
 }

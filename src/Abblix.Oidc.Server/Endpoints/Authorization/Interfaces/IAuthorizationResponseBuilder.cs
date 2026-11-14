@@ -40,7 +40,9 @@ public interface IAuthorizationResponseBuilder : IGrantTypeInformer
     /// other builder and may read what they put on <paramref name="result"/>; the others run in registration
     /// order and must not read each other's fields.
     /// </summary>
-    Task BuildResponseAsync(
+    /// <returns>Null, or the error the authorization request is answered with instead of the response, when what
+    /// this builder issues is refused for a reason the request itself names.</returns>
+    Task<AuthorizationError?> BuildResponseAsync(
         TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,

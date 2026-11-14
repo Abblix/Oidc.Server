@@ -109,6 +109,37 @@ public class DuplicateJsonMemberTests
     }
 
     /// <summary>
+    /// RFC 7516 section 5.2, step 4: "During this step, verify that the resulting JOSE Header does not contain
+    /// duplicate Header Parameter names." A repeated member of a JWE protected header, at the top level or inside a
+    /// structured parameter, is refused before any key is tried.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"alg":"dir","enc":"A128GCM","enc":"A256GCM"}""")]
+    [InlineData("""{"alg":"ECDH-ES","enc":"A128GCM","epk":{"kty":"EC","crv":"P-256","x":"AAA","x":"BBB","y":"CCC"}}""")]
+    public async Task DuplicateJweHeaderParameter_FailsValidation_WithoutThrowing(string headerJson)
+    {
+        var jwe = $"{EncodeBase64Url(headerJson)}..AAAAAAAAAAAAAAAA.AAAA.AAAAAAAAAAAAAAAAAAAAAA";
+        var decryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
+        var keysRead = 0;
+
+        var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+        var result = await validator.ValidateAsync(jwe, new ValidationParameters
+        {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
+            ResolveIssuerSigningKeys = _ => SigningKey.ToAsync(),
+            ResolveTokenDecryptionKeys = _ => new[] { decryptionKey }.ToAsyncEnumerable().Select(key =>
+            {
+                keysRead++;
+                return key;
+            }),
+        });
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+        Assert.Equal(0, keysRead);
+    }
+
+    /// <summary>
     /// The control: the same shapes without duplicates still validate, so the guard rejects repetition
     /// rather than anything structural it happens to sit next to.
     /// </summary>

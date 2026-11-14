@@ -426,6 +426,35 @@ public class AuthServiceJwtFormatterTests
     }
 
     /// <summary>
+    /// A key the policy carries for another party is used under the algorithm that party declares for it, whatever
+    /// the server's own policy names: RFC 8725 section 3.1 binds each key to one algorithm, and the key is that
+    /// party's.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep, EncryptionAlgorithms.KeyManagement.RsaOaep256)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, EncryptionAlgorithms.KeyManagement.RsaOaep)]
+    public async Task FormatAsync_PolicyCarriesKeyDeclaringAnAlgorithm_EncryptsUnderThatAlgorithm(
+        string declaredAlgorithm,
+        string policyAlgorithm)
+    {
+        var token = TokenWith();
+        SetupSigningKeys(_signingKeyRS256);
+
+        var audienceKey = new RsaJsonWebKey { KeyId = "audience-enc", Algorithm = declaredAlgorithm };
+        var policy = Encrypt(policyAlgorithm) with { Key = audienceKey };
+
+        string? capturedAlgorithm = null;
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, _signingKeyRS256, audienceKey, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, _, alg, _) => capturedAlgorithm = alg)
+            .ReturnsAsync(EncodedJwt);
+
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, client: null, policy);
+
+        Assert.Equal(declaredAlgorithm, capturedAlgorithm);
+    }
+
+    /// <summary>
     /// Verifies that a policy requiring encryption refuses to issue the token when no encryption key is
     /// available, rather than downgrading to a signed JWS. A host that asked for confidentiality and silently
     /// did not get it has no way to learn that, and the token would travel readable while the configuration
