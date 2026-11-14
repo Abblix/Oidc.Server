@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.MinimalApi.UnitTests;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -53,6 +54,17 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
         var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
         Assert.Equal(ErrorCodes.InvalidRequest, JsonNode.Parse(raw)![ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// RFC 6750 section 3: a protected resource refusing a request that "does not contain an access token that enables
+    /// access" MUST include WWW-Authenticate, and the Bearer challenge carries the section 3.1 error code.
+    /// </summary>
+    private static void AssertBearerChallengeCarriesInvalidRequest(HttpResponseMessage response)
+    {
+        var challenge = ChallengeReader.Parse(Assert.Single(response.Headers.WwwAuthenticate).ToString());
+        Assert.Equal(TokenTypes.Bearer, challenge.Scheme);
+        Assert.Equal(ErrorCodes.InvalidRequest, challenge.Parameters["error"]);
     }
 
     private async Task<(HttpClient Client, Uri Endpoint, string AccessToken)> ObtainAccessTokenAsync()
@@ -95,6 +107,31 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
                 new Dictionary<string, string> { [UserInfoRequest.Parameters.AccessToken] = accessToken }),
         };
         AddAuthorizationLines(request, $"{TokenTypes.Bearer} {accessToken}", $"{TokenTypes.Bearer} {accessToken}");
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        await AssertInvalidRequestAsync(response);
+    }
+
+    /// <summary>
+    /// An empty line is a line too: the field arrives twice whatever the first one holds, so a credential behind it is
+    /// not read as the only one, nor is a token in the body beside them.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UserInfo_with_an_empty_line_before_the_credentials_is_an_invalid_request(bool tokenInBody)
+    {
+        var (client, endpoint, accessToken) = await ObtainAccessTokenAsync();
+
+        using var request = new HttpRequestMessage(tokenInBody ? HttpMethod.Post : HttpMethod.Get, endpoint);
+        if (tokenInBody)
+        {
+            request.Content = new FormUrlEncodedContent(
+                new Dictionary<string, string> { [UserInfoRequest.Parameters.AccessToken] = accessToken });
+        }
+
+        AddAuthorizationLines(request, string.Empty, $"{TokenTypes.Bearer} {accessToken}");
 
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
@@ -158,6 +195,28 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
         await AssertInvalidRequestAsync(response);
     }
 
+    /// <summary>
+    /// An empty line before the Basic credentials still makes two lines, with or without the secret in the body too.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Token_endpoint_with_an_empty_line_before_the_credentials_is_an_invalid_request(bool withSecretInBody)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.TokenEndpoint)
+        {
+            Content = ClientCredentialsGrant(withSecretInBody),
+        };
+        AddAuthorizationLines(request, string.Empty, $"{TokenTypes.Basic} {BasicCredentials}");
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        await AssertInvalidRequestAsync(response);
+    }
+
     [Fact]
     public async Task Token_endpoint_with_one_basic_line_is_answered()
     {
@@ -197,7 +256,7 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
 
     /// <summary>
     /// Every other endpoint authenticating the client as the token endpoint does (RFC 7662 section 2.1, RFC 7009
-    /// section 2.1, RFC 9126 section 2.1, RFC 8628 section 3.1, OpenID CIBA Core section 7.1) answers the field sent
+    /// section 2.1, RFC 9126 section 2.1, RFC 8628 section 3.2, OpenID CIBA Core section 7.1) answers the field sent
     /// twice the same way.
     /// </summary>
     [Theory]
@@ -230,7 +289,8 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
         await AssertInvalidRequestAsync(response);
     }
 
-    private async Task<(HttpClient Client, Uri ConfigurationUri, string RegistrationAccessToken)> RegisterAsync()
+    private async Task<(HttpClient Client, Uri ConfigurationUri, string RegistrationAccessToken, string ClientId)>
+        RegisterAsync()
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
@@ -242,30 +302,45 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
         return (
             client,
             new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute),
-            registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>());
+            registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>(),
+            registered[ResponseMembers.ClientId]!.GetValue<string>());
     }
 
     /// <summary>
-    /// RFC 7592 section 2.1: a registration access token "not valid" is answered "as described in the OAuth Bearer
-    /// Token Usage specification", whose section 3.1 makes more than one method an invalid_request.
+    /// RFC 7592 section 2.1 (and 2.2, 2.3 for the update and the removal): a registration access token "not valid" is
+    /// answered "as described in the OAuth Bearer Token Usage specification", whose section 3.1 makes more than one
+    /// method an invalid_request, carried on the Bearer challenge section 3 requires.
     /// </summary>
-    [Fact]
-    public async Task Client_configuration_endpoint_with_two_bearer_lines_is_an_invalid_request()
+    [Theory]
+    [InlineData("GET")]
+    [InlineData("PUT")]
+    [InlineData("DELETE")]
+    public async Task Client_configuration_endpoint_with_two_bearer_lines_is_an_invalid_request(string method)
     {
-        var (client, configurationUri, token) = await RegisterAsync();
+        var (client, configurationUri, token, clientId) = await RegisterAsync();
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, configurationUri);
+        using var request = new HttpRequestMessage(new HttpMethod(method), configurationUri);
+        if (method == HttpMethod.Put.Method)
+        {
+            request.Content = JsonContent.Create(new JsonObject
+            {
+                [RequestMembers.ClientId] = clientId,
+                [RequestMembers.RedirectUris] = new JsonArray(TestConstants.RedirectUri),
+            });
+        }
+
         AddAuthorizationLines(request, $"{TokenTypes.Bearer} {token}", $"{TokenTypes.Bearer} {token}");
 
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         await AssertInvalidRequestAsync(response);
+        AssertBearerChallengeCarriesInvalidRequest(response);
     }
 
     [Fact]
     public async Task Client_configuration_endpoint_with_one_bearer_line_is_answered()
     {
-        var (client, configurationUri, token) = await RegisterAsync();
+        var (client, configurationUri, token, _) = await RegisterAsync();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, configurationUri);
         AddAuthorizationLines(request, $"{TokenTypes.Bearer} {token}");
@@ -317,6 +392,7 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
             $"{TokenTypes.Bearer} first", $"{TokenTypes.Bearer} second");
 
         await AssertInvalidRequestAsync(response);
+        AssertBearerChallengeCarriesInvalidRequest(response);
     }
 
     /// <summary>
