@@ -48,31 +48,30 @@ public class ClientJwtFormatter(
         var signingCredentials = await serviceKeysProvider.GetSigningKeys(tenant, true)
             .FirstByAlgorithmAsync(token.Header.Algorithm);
 
-        // JARM section 2.2 / section 3 opt-in: when the policy requires a registered key-management algorithm and the client has
-        // not registered one, the response is signed only - the client's encryption keys are not even resolved.
-        if (encryption is { RequireRegisteredAlgorithm: true, KeyManagementAlgorithm: null })
+        // OpenID Connect Dynamic Client Registration 1.0 section 2, id_token_encrypted_response_alg: "JWE alg algorithm
+        // REQUIRED for encrypting the ID Token issued to this Client" and "The default, if omitted, is that no encryption
+        // is performed"; JARM section 3 and the userinfo and introspection members say the same. Only a registered
+        // algorithm asks for encryption, and the token is encrypted under exactly that algorithm
+        if (encryption.KeyManagementAlgorithm is not { } keyEncryptionAlgorithm)
             return await issuer.IssueAsync(profile, token, signingCredentials);
 
-        // FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
-        // algorithm". The key and the algorithm are chosen together, so a key the profile forbids is passed over, as is
-        // one nothing can be encrypted to (a key declaring a signing algorithm, one the host did not register, or one
-        // whose material the default algorithm does not fit); the keys sit at a jwks_uri the client can change after
-        // registration, so this is decided here, where the key is chosen
-        var defaultAlgorithm = NotForbidden(encryption.KeyManagementAlgorithm, profile.ForbidRsa1_5KeyManagement)
-            ?? EncryptionAlgorithms.KeyManagement.RsaOaep256;
-        var clientKeys = await clientKeysProvider.GetEncryptionKeys(clientInfo).ToArrayAsync();
-        var (encryptingCredentials, keyEncryptionAlgorithm) = clientKeys
-            .Select(key => (Key: key, Algorithm: issuer.EncryptionAlgorithmFor(profile, key, defaultAlgorithm)))
-            .FirstOrDefault(candidate => candidate.Algorithm is not null);
+        // A key qualifies when it declares the registered algorithm or none, its material carries it out, the host
+        // performs it and the profile admits it (FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and
+        // authorization servers shall not use the RSA1_5 algorithm"); the keys sit at a jwks_uri the client can change
+        // after registration, so this is decided here, where the key is chosen
+        var encryptingCredentials = await clientKeysProvider.GetEncryptionKeys(clientInfo)
+            .FirstOrDefaultAsync(key =>
+                (key.Algorithm ?? keyEncryptionAlgorithm) == keyEncryptionAlgorithm &&
+                issuer.EncryptionAlgorithmFor(profile, key, keyEncryptionAlgorithm) is not null);
 
-        // A client that publishes encryption keys expects what is issued to it encrypted, so a token is not sent in
-        // the clear because no key it publishes is one the server can use under its profile
-        if (encryptingCredentials == null && clientKeys.Length > 0)
+        // A client that registered an algorithm expects what is issued to it encrypted, so a token is not sent in the
+        // clear because no key it publishes (or none it could be read from) is one that algorithm can be used with
+        if (encryptingCredentials == null)
         {
             return new OidcError(
                 ErrorCodes.InvalidClient,
-                $"The key set of the client {clientInfo.ClientId} holds no encryption key the server can use under " +
-                "its security profile");
+                $"The key set of the client {clientInfo.ClientId} holds no encryption key for its registered " +
+                $"{keyEncryptionAlgorithm} the server can use under its security profile");
         }
 
         var contentEncryptionAlgorithm = encryption.ContentEncryptionAlgorithm
@@ -86,11 +85,4 @@ public class ClientJwtFormatter(
             keyEncryptionAlgorithm,
             contentEncryptionAlgorithm);
     }
-
-    /// <summary>
-    /// The registered key management algorithm, or null where it is RSA1_5 and the profile forbids it - which the
-    /// client's configuration checks refuse before here, so it is reached only by a client stored with it.
-    /// </summary>
-    private static string? NotForbidden(string? algorithm, bool forbidRsa1_5)
-        => forbidRsa1_5 && algorithm == EncryptionAlgorithms.KeyManagement.Rsa1_5 ? null : algorithm;
 }
