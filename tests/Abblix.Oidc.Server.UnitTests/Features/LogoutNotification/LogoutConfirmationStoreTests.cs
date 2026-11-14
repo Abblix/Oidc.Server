@@ -149,6 +149,29 @@ public class LogoutConfirmationStoreTests
     }
 
     /// <summary>
+    /// Two first requests for one session that overlap are asked the same question, so the end user's answer to
+    /// the page either of them rendered ends the session. Both read before either writes, which is the overlap
+    /// that issuing by a read and then a write lets each of them answer with a value of its own, the later write
+    /// voiding the earlier one.
+    /// </summary>
+    [Fact]
+    public async Task TwoOverlappingFirstRequests_AreAskedTheSameQuestion()
+    {
+        var storage = new DistributedCacheStorage(
+            new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
+            new ProtobufSerializer());
+        var overlapping = new ReadsMeetFirst(storage, readers: 2);
+        var store = new LogoutConfirmationStore(overlapping, new EntityStorageKeyFactory(), Options.Create(_options));
+
+        var issued = await Task.WhenAll(
+            Task.Run(() => store.IssueAsync(SingleIssuer.Tenant, SessionId), TestContext.Current.CancellationToken),
+            Task.Run(() => store.IssueAsync(SingleIssuer.Tenant, SessionId), TestContext.Current.CancellationToken));
+
+        Assert.Equal(issued[0], issued[1]);
+        Assert.True(await store.RedeemLogoutConfirmationAsync(SingleIssuer.Tenant, SessionId, issued[0]));
+    }
+
+    /// <summary>
     /// And once it has been answered the next request asks afresh, so the value just given stops being one.
     /// </summary>
     [Fact]
@@ -215,6 +238,45 @@ public class LogoutConfirmationStoreTests
         _options.LogoutConfirmationLifetime = TimeSpan.Zero;
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => _store.IssueAsync(SingleIssuer.Tenant, SessionId));
+    }
+
+    /// <summary>
+    /// The real storage, except that its first reads are answered only once that many callers are reading, so the
+    /// callers have all read before any of them writes. Later reads pass straight through.
+    /// </summary>
+    private sealed class ReadsMeetFirst(IEntityStorage inner, int readers) : IEntityStorage
+    {
+        private readonly TaskCompletionSource _allReading = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _arrived;
+
+        public async Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null)
+        {
+            var value = await inner.GetAsync<T>(key, removeOnRetrieval, token);
+            var arrived = Interlocked.Increment(ref _arrived);
+            if (arrived == readers)
+                _allReading.SetResult();
+
+            if (arrived <= readers)
+                await _allReading.Task.WaitAsync(TimeSpan.FromSeconds(10), token ?? CancellationToken.None);
+
+            return value;
+        }
+
+        public Task SetAsync<T>(string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.SetAsync(key, value, options, token);
+
+        public Task<bool> TrySetIfAbsentAsync<T>(
+            string key, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TrySetIfAbsentAsync(key, value, options, token);
+
+        public Task<bool> TryReplaceAsync<T>(
+            string key, T expected, T value, StorageOptions options, CancellationToken? token = null)
+            => inner.TryReplaceAsync(key, expected, value, options, token);
+
+        public Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null)
+            => inner.TryExtendAsync(key, options, token);
+
+        public Task RemoveAsync(string key, CancellationToken? token = null) => inner.RemoveAsync(key, token);
     }
 
     /// <summary>

@@ -25,7 +25,8 @@ public interface ILogoutConfirmationStore
     /// Issues the value that answers for <paramref name="sessionId"/>, to be rendered into the page that asks the
     /// end user and sent back with their answer. A session has one outstanding question at a time: asking again
     /// while it stands answers with the same value, so a request arriving while the end user reads the page
-    /// cannot void the answer they are about to give.
+    /// cannot void the answer they are about to give. Two first requests for one session that overlap are given
+    /// the same value too: the value is written only where the session has none, decided by the storage.
     /// </summary>
     /// <param name="tenant">The tenant the session belongs to.</param>
     /// <param name="sessionId">The session the end user is being asked about.</param>

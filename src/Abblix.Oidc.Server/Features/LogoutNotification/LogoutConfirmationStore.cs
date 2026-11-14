@@ -39,22 +39,28 @@ public sealed class LogoutConfirmationStore(
 
         // Asking again is the same question. Anyone can make a browser reach the logout address, so issuing a
         // fresh value here would let a request arriving while the end user reads the page void the answer they
-        // are about to give. The store does not grow either way: the key is the session's, so a new value would
-        // replace this record rather than add one.
-        if (await storage.GetAsync<LogoutConfirmation>(key, removeOnRetrieval: false) is { } outstanding)
-            return outstanding.Confirmation;
+        // are about to give. A value is written only where the session has none, and the storage decides that
+        // between concurrent callers: of two first requests that overlap, one writes and the other reads back what
+        // it wrote. A value answered or expired between that losing write and the read leaves the session with no
+        // question, and the next pass asks afresh; each pass that writes nothing follows a write somebody else made.
+        while (true)
+        {
+            if (await storage.GetAsync<LogoutConfirmation>(key, removeOnRetrieval: false) is { } outstanding)
+                return outstanding.Confirmation;
 
-        // Drawn from a cryptographically secure source and sized by configuration, like every other value this
-        // server issues that an outsider must not be able to state: guessing one would end a session.
-        var confirmation = Base64Url.EncodeToString(
-            CryptoRandom.GetRandomBytes(options.Value.LogoutConfirmationLength));
+            // Drawn from a cryptographically secure source and sized by configuration, like every other value this
+            // server issues that an outsider must not be able to state: guessing one would end a session.
+            var confirmation = Base64Url.EncodeToString(
+                CryptoRandom.GetRandomBytes(options.Value.LogoutConfirmationLength));
 
-        await storage.SetAsync(
-            key,
-            new LogoutConfirmation { Confirmation = confirmation },
-            new StorageOptions { AbsoluteExpirationRelativeToNow = options.Value.LogoutConfirmationLifetime });
-
-        return confirmation;
+            if (await storage.TrySetIfAbsentAsync(
+                    key,
+                    new LogoutConfirmation { Confirmation = confirmation },
+                    new StorageOptions { AbsoluteExpirationRelativeToNow = options.Value.LogoutConfirmationLifetime }))
+            {
+                return confirmation;
+            }
+        }
     }
 
     /// <inheritdoc />
