@@ -267,7 +267,8 @@ public static class SecurityProfileConsistency
     /// The client's configuration is what the server signs with, so it is judged here rather than when a token is
     /// issued, where the only answers left would be a token signed against the profile or a failure the client could
     /// do nothing about. A userinfo or introspection response configured <c>none</c> is plain JSON and carries no
-    /// JWS, and a logout token without an algorithm of its own takes the ID token's, so neither is named; an ID token
+    /// JWS unless the client registered userinfo encryption, which makes it an unsigned JWT; a logout token
+    /// without an algorithm of its own takes the ID token's, so neither is named; an ID token
     /// or authorization response configured <c>none</c> is an unsigned JWS, and is.
     /// </remarks>
     /// <param name="client">The client whose configuration is checked.</param>
@@ -280,7 +281,9 @@ public static class SecurityProfileConsistency
                 (nameof(ClientInfo.IdentityTokenSignedResponseAlgorithm), client.IdentityTokenSignedResponseAlgorithm),
                 (nameof(ClientInfo.AuthorizationSignedResponseAlgorithm), client.AuthorizationSignedResponseAlgorithm),
                 (nameof(ClientInfo.LogoutTokenSignedResponseAlgorithm), client.LogoutTokenSignedResponseAlgorithm),
-                (nameof(ClientInfo.UserInfoSignedResponseAlgorithm), SignedOrNull(client.UserInfoSignedResponseAlgorithm)),
+                (nameof(ClientInfo.UserInfoSignedResponseAlgorithm), client.UserInfoEncryptedResponseAlgorithm is null
+                    ? SignedOrNull(client.UserInfoSignedResponseAlgorithm)
+                    : client.UserInfoSignedResponseAlgorithm),
                 (nameof(ClientInfo.IntrospectionSignedResponseAlgorithm),
                     SignedOrNull(client.IntrospectionSignedResponseAlgorithm)),
                 (nameof(ClientInfo.RequestObjectSigningAlgorithm), client.RequestObjectSigningAlgorithm),

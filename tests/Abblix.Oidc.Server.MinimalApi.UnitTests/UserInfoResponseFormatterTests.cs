@@ -124,4 +124,38 @@ public class UserInfoResponseFormatterTests
 
         Assert.Equal(expectedStatusCode, response.StatusCode);
     }
+
+    /// <summary>
+    /// OpenID Connect Core 1.0 section 5.3.2: "The response MAY be encrypted without also being signed", and "If the
+    /// UserInfo Response is signed and/or encrypted, then the Claims are returned in a JWT". A client that registered
+    /// userinfo_encrypted_response_alg alone is answered with a JWT, not the plain document.
+    /// </summary>
+    [Fact]
+    public async Task An_encrypted_only_response_is_a_jwt()
+    {
+        var client = new ClientInfo("client")
+        {
+            UserInfoEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
+        };
+        var clientJwtFormatter = new Mock<IClientJwtFormatter>(MockBehavior.Strict);
+        clientJwtFormatter
+            .Setup(f => f.FormatAsync(
+                Served,
+                It.Is<JsonWebToken>(token => token.Header.Algorithm == SigningAlgorithms.None),
+                client,
+                It.Is<ClientJwtEncryption>(encryption =>
+                    encryption.KeyManagementAlgorithm == EncryptionAlgorithms.KeyManagement.RsaOaep256)))
+            .ReturnsAsync("header.encrypted-key.iv.ciphertext.tag");
+        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
+        options.Setup(o => o.Value).Returns(new OidcOptions());
+        var formatter = new UserInfoResponseFormatter(
+            TimeProvider.System, clientJwtFormatter.Object, new ServedBy(Served), options.Object);
+        Result<UserInfoFoundResponse, OidcError> found =
+            new UserInfoFoundResponse(new JsonObject(), client, Served.Issuer.OriginalString);
+
+        var response = await HttpResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), found));
+
+        Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
+        Assert.StartsWith(MediaTypes.Jwt, response.Headers.ContentType.ToString());
+    }
 }

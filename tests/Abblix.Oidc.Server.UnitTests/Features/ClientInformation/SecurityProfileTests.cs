@@ -900,6 +900,30 @@ public class SecurityProfileTests
     }
 
     /// <summary>
+    /// A userinfo response the client registered encryption for and no signature is a JWT signed with none (OpenID
+    /// Connect Core 1.0 section 5.3.2, "The response MAY be encrypted without also being signed"), which FAPI 1.0 Part 2
+    /// section 8.6 does not admit, so such a client is named; one that registered no encryption is sent plain JSON.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, 1)]
+    [InlineData(null, 0)]
+    public void FindSigningAlgorithmViolations_AnEncryptedUnsignedUserInfo_IsAnUnsignedJws(
+        string? encryption, int violations)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            UserInfoEncryptedResponseAlgorithm = encryption,
+        };
+
+        var found = SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            client, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced));
+
+        Assert.Equal(violations, found.Count);
+    }
+
+    /// <summary>
     /// A tenant declaring a FAPI 1.0 Advanced client at the RS256 defaults is refused at startup, and the same client
     /// configured for PS256 is not.
     /// </summary>
@@ -973,6 +997,7 @@ public class SecurityProfileTests
         {
             IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            UserInfoSignedResponseAlgorithm = SigningAlgorithms.PS256,
             IdentityTokenEncryptedResponseAlgorithm = algorithm,
             UserInfoEncryptedResponseAlgorithm = algorithm,
             IntrospectionEncryptedResponseAlgorithm = algorithm,

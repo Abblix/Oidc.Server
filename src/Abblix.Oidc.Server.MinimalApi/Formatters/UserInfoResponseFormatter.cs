@@ -71,8 +71,13 @@ public class UserInfoResponseFormatter(
 
     private async Task<IResult> FormatSuccessAsync(UserInfoFoundResponse found)
     {
-        if (found.ClientInfo.UserInfoSignedResponseAlgorithm == SigningAlgorithms.None)
+        // OpenID Connect Core 1.0 section 5.3.2: "If the UserInfo Response is signed and/or encrypted, then the Claims
+        // are returned in a JWT" and "The response MAY be encrypted without also being signed"
+        if (found.ClientInfo is
+            { UserInfoSignedResponseAlgorithm: SigningAlgorithms.None, UserInfoEncryptedResponseAlgorithm: null })
+        {
             return Results.Json(found.User);
+        }
 
         var token = new JsonWebToken
         {
