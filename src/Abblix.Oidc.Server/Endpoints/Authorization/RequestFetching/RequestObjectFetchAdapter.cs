@@ -78,7 +78,7 @@ public class RequestObjectFetchAdapter(
         // refuses an object naming no client as it refuses one naming another
         var mergedOver = request.Request.HasValue() ? request with { ClientId = null } : request;
         var fetchResult = await requestObjectFetcher.FetchAsync(tenant,
-            namedClient, mergedOver, request.Request, client => client.RequestObjectSigningAlgorithm);
+            namedClient, mergedOver, request.Request, client => client.RequestObjectSigningAlgorithm, ForbiddenMembers);
 
         // Strict processing (RFC 9101 section 6.3) rebuilds the request from the object alone, which drops the request
         // parameter carrying that object, so the validated object is carried on: without it a client required to sign
@@ -92,6 +92,20 @@ public class RequestObjectFetchAdapter(
             }))
             .MapFailure(error => ErrorFactory.ValidationError(error.Error, error.ErrorDescription));
     }
+
+    /// <summary>
+    /// RFC 9101 section 4: ""request" and "request_uri" parameters MUST NOT be included in Request Objects", and
+    /// section 7 has "invalid_request_object The request parameter contains an invalid Request Object". Refused for
+    /// an object by value and for one fetched from a request_uri alike. The pushed authorization request endpoint
+    /// reads its object through this adapter too, since RFC 9126 section 2.1 step 3 has the server "Validate the pushed
+    /// request as it would an authorization request sent to the authorization endpoint" and section 3 has "The rules
+    /// for processing, signing, and encryption of the Request Object as defined in JAR [RFC9101] apply".
+    /// </summary>
+    private static readonly string[] ForbiddenMembers =
+    [
+        AuthorizationRequest.Parameters.Request,
+        AuthorizationRequest.Parameters.RequestUri,
+    ];
 
     /// <summary>
     /// The <c>prompt</c> values the request model declares supported.

@@ -47,7 +47,8 @@ public class RequestObjectFetchAdapterTests
                 TestTenant.Matched,
                 null, outer,
                 RequestJwt,
-                It.Is<Func<ClientInfo, string?>>(alg => alg(signingClient) == SigningAlgorithms.PS256)))
+                It.Is<Func<ClientInfo, string?>>(alg => alg(signingClient) == SigningAlgorithms.PS256),
+                It.Is<string[]>(members => members.Length == 0)))
             .ReturnsAsync(merged);
 
         var result = await new RequestObjectFetchAdapter(fetcher.Object).FetchAsync(SingleIssuer.Tenant, outer);

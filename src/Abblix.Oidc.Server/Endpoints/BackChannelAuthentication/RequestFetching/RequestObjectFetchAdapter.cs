@@ -28,7 +28,8 @@ public class RequestObjectFetchAdapter(IRequestObjectFetcher requestObjectFetche
     /// be validated and merged into the outer model.
     /// </summary>
     public Task<Result<BackChannelAuthenticationRequest, OidcError>> FetchAsync(TenantDefinition tenant, BackChannelAuthenticationRequest request)
-        // The client authenticates after the request is read, so none is named to it here
+        // The client authenticates after the request is read, so none is named to it here. RFC 9101 section 4 forbids
+        // request and request_uri inside an authorization request's object; this endpoint forbids no member of its own
         => requestObjectFetcher.FetchAsync(tenant,
-            client: null, request, request.Request, client => client.BackChannelAuthenticationRequestSigningAlg);
+            client: null, request, request.Request, client => client.BackChannelAuthenticationRequestSigningAlg, []);
 }
