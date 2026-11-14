@@ -72,6 +72,10 @@ public class ProfileSigningKeysValidatorTests
         Assert.Equal(SigningAlgorithms.PS256, rsaTenant.Request.AuthorizationSignedResponseAlg);
         Assert.Equal(SigningAlgorithms.ES256, ecTenant.Request.IdTokenSignedResponseAlg);
         Assert.Equal(SigningAlgorithms.ES256, ecTenant.Request.AuthorizationSignedResponseAlg);
+
+        // RFC 9701 section 6 would default an omitted introspection algorithm to RS256, which the profile refuses
+        Assert.Equal(SigningAlgorithms.PS256, rsaTenant.Request.IntrospectionSignedResponseAlg);
+        Assert.Equal(SigningAlgorithms.ES256, ecTenant.Request.IntrospectionSignedResponseAlg);
     }
 
     /// <summary>

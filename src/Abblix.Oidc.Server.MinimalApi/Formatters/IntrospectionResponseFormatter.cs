@@ -73,8 +73,10 @@ public class IntrospectionResponseFormatter(
         if (request == null)
             return false;
 
+        // A quality of zero marks the media type "not acceptable" (RFC 9110 section 12.4.2)
         return request.GetTypedHeaders().Accept.Any(
             mediaType => mediaType.MediaType.HasValue &&
+                         mediaType.Quality is not 0 &&
                          string.Equals(
                              mediaType.MediaType.Value,
                              MediaTypes.TokenIntrospectionJwt,

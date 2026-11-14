@@ -69,9 +69,25 @@ public class IntrospectionResponseJwtBuilderTests
     [InlineData(SigningAlgorithms.ES384, SigningAlgorithms.ES384)]
     public async Task WithoutAProfile_TheClientsAlgorithmOrRs256(string registered, string expected)
     {
-        await Builder().BuildAsync(Tenant(ClientSecurityProfile.None), Client(registered), new JsonObject());
+        await Builder(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature))
+            .BuildAsync(Tenant(ClientSecurityProfile.None), Client(registered), new JsonObject());
 
         Assert.Equal(expected, _signed?.Header.Algorithm);
+    }
+
+    /// <summary>
+    /// A tenant whose keys cannot produce the RS256 default, holding a P-256 key alone, signs with ES256 rather than
+    /// failing the request; a tenant whose keys produce none of the fallbacks fails loudly.
+    /// </summary>
+    [Fact]
+    public async Task WithoutAProfile_ATenantWithoutAnRsaKey_SignsWithItsP256Key()
+    {
+        await Builder(Ec()).BuildAsync(Tenant(ClientSecurityProfile.None), Client(), new JsonObject());
+
+        Assert.Equal(SigningAlgorithms.ES256, _signed?.Header.Algorithm);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Builder(
+                JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P384, SigningAlgorithms.ES384))
+            .BuildAsync(Tenant(ClientSecurityProfile.None), Client(), new JsonObject()));
     }
 
     /// <summary>
@@ -100,7 +116,8 @@ public class IntrospectionResponseJwtBuilderTests
     {
         var tenant = Tenant(ClientSecurityProfile.None);
 
-        await Builder().BuildAsync(tenant, Client(), new JsonObject { [IntrospectionSuccess.Parameters.Active] = true });
+        await Builder(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature))
+            .BuildAsync(tenant, Client(), new JsonObject { [IntrospectionSuccess.Parameters.Active] = true });
 
         Assert.NotNull(_signed);
         Assert.Equal(JsonWebTokenTypes.TokenIntrospection, _signed.Header.Type);

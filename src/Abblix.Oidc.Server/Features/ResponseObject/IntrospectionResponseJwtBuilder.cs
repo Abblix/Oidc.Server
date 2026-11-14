@@ -71,22 +71,32 @@ public class IntrospectionResponseJwtBuilder(
     /// registered none, RFC 9701 section 6: "The default, if omitted, is RS256".
     /// </summary>
     /// <remarks>
-    /// A security profile that does not admit RS256 (FAPI 2.0 section 5.4.1, FAPI 1.0 Part 2 section 8.6) would refuse
-    /// to sign with the default, so for a client held to one the default is the first algorithm the profile admits
-    /// that a signing key of the tenant produces, as a registration naming no ID token algorithm is given.
+    /// The default is taken only where a signing key of the tenant produces it and the client's security profile
+    /// admits it. Otherwise, our choice rather than the specification's, the first of <see cref="Fallbacks"/> that
+    /// both hold for: a profile not admitting RS256 (FAPI 2.0 section 5.4.1, FAPI 1.0 Part 2 section 8.6) gets PS256 or
+    /// ES256 as a registration naming no ID token algorithm is given, and a tenant without an RSA key signs with its
+    /// P-256 key rather than failing the request.
     /// </remarks>
     private async Task<string> SigningAlgorithmAsync(TenantDefinition tenant, ClientInfo client)
     {
         if (client.IntrospectionSignedResponseAlgorithm != SigningAlgorithms.None)
             return client.IntrospectionSignedResponseAlgorithm;
 
-        if (SecurityProfileRequirements.For(tenant, client).PermitsSigningAlgorithm(SigningAlgorithms.RS256))
-            return SigningAlgorithms.RS256;
-
+        var profile = SecurityProfileRequirements.For(tenant, client);
         var signingKeys = await serviceKeysProvider.GetSigningKeys(tenant).ToArrayAsync();
-        return SecurityProfileRequirements.FapiSigningAlgorithmProducedBy(signingKeys)
-            ?? throw new InvalidOperationException(
-                $"No signing key of the tenant {tenant.Id} produces an algorithm the security profile of the client " +
-                $"{client.ClientId} admits");
+
+        return Array.Find(
+                   Fallbacks,
+                   algorithm => profile.PermitsSigningAlgorithm(algorithm) &&
+                                Array.Exists(signingKeys, key => key.CanPerform(algorithm)))
+               ?? throw new InvalidOperationException(
+                   $"No signing key of the tenant {tenant.Id} produces {string.Join(", ", Fallbacks)} under the " +
+                   $"security profile of the client {client.ClientId}");
     }
+
+    /// <summary>
+    /// The default of RFC 9701 section 6 first, then the algorithms the FAPI profiles admit, in their order.
+    /// </summary>
+    private static readonly string[] Fallbacks =
+        [SigningAlgorithms.RS256, ..SecurityProfileRequirements.FapiSigningAlgorithms];
 }

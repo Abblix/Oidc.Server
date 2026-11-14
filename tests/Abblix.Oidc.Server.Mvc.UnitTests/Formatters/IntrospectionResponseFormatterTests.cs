@@ -60,7 +60,10 @@ public class IntrospectionResponseFormatterTests
                 _clientJwtFormatter.Object,
                 TimeProvider.System,
                 Options.Create(new OidcOptions()),
-                Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict)),
+                Mock.Of<IAuthServiceKeysProvider>(provider =>
+                    provider.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()) ==
+                    new JsonWebKey[] { JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, null, 2048) }
+                        .ToAsyncEnumerable())),
             httpContextAccessor.Object);
 
         Result<IntrospectionSuccess, OidcError> response = success;
@@ -152,6 +155,19 @@ public class IntrospectionResponseFormatterTests
         var json = Assert.IsType<JsonResult>(result);
         var introspection = Assert.IsType<JsonObject>(json.Value);
         Assert.False(introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
+    }
+
+    /// <summary>
+    /// RFC 9110 section 12.4.2: a quality value of 0 "means 'not acceptable'", so a caller listing the JWT media type
+    /// with q=0 is answered with the plain document.
+    /// </summary>
+    [Fact]
+    public async Task FormatResponseAsync_WhenJwtIsNotAcceptable_ReturnsPlainJson()
+    {
+        var result = await FormatAsync(
+            ActiveResponse(SigningAlgorithms.RS256), $"application/json, {MediaTypes.TokenIntrospectionJwt};q=0");
+
+        Assert.IsType<JsonResult>(result);
     }
 
     [Fact]
