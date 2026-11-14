@@ -76,6 +76,53 @@ public class AesCbcHmacKnownAnswerTests
 		Assert.Equal(Plaintext, Convert.ToHexStringLower(plaintext!));
 	}
 
+	/// <summary>
+	/// An IV of another length than one AES block, under a tag computed for it, is a token that does not open, never
+	/// an exception from the cipher.
+	/// </summary>
+	[Theory]
+	[InlineData(0)]
+	[InlineData(15)]
+	[InlineData(17)]
+	[InlineData(32)]
+	public void AnInitializationVectorOfAnotherLength_DoesNotOpen(int ivLength)
+	{
+		const string algorithm = EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256;
+		var key = Convert.FromHexString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+		var ciphertext = Convert.FromHexString("c80edfa32ddf39d5ef00c0b468834279");
+		var iv = new byte[ivLength];
+		var aad = Convert.FromHexString(AdditionalAuthenticatedData);
+		var contentKey = new AesCbcHmacKey(algorithm);
+		var tag = contentKey.TagOf(contentKey.Split(key).MacKey, aad, iv, ciphertext);
+
+		var opened = new AesCbcHmacEncryptor(algorithm).TryDecrypt(
+			key, new EncryptedData(iv, ciphertext, tag), aad, out var plaintext);
+
+		Assert.False(opened);
+		Assert.Null(plaintext);
+	}
+
+	/// <summary>
+	/// RFC 7518 section 5.2.2.2, step 3: "The value E is decrypted and the PKCS #7 padding is checked and removed."
+	/// An empty ciphertext holds no padding block, so even under a tag that verifies it does not open.
+	/// </summary>
+	[Fact]
+	public void AnEmptyCiphertextUnderAValidTag_DoesNotOpen()
+	{
+		const string algorithm = EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256;
+		var key = Convert.FromHexString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+		var iv = Convert.FromHexString(InitializationVector);
+		var aad = Convert.FromHexString(AdditionalAuthenticatedData);
+		var contentKey = new AesCbcHmacKey(algorithm);
+		var tag = contentKey.TagOf(contentKey.Split(key).MacKey, aad, iv, []);
+
+		var opened = new AesCbcHmacEncryptor(algorithm).TryDecrypt(
+			key, new EncryptedData(iv, [], tag), aad, out var plaintext);
+
+		Assert.False(opened);
+		Assert.Null(plaintext);
+	}
+
 	[Theory]
 	[MemberData(nameof(AppendixB))]
 	public void TheListedInputs_GiveTheListedTag(string algorithm, string key, string ciphertext, string tag)
