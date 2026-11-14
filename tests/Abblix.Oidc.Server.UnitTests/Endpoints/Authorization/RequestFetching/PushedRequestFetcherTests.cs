@@ -33,6 +33,9 @@ public class PushedRequestFetcherTests
     private readonly Mock<IAuthorizationRequestStorage> _storage = new(MockBehavior.Strict);
     private readonly Mock<IClientInfoProvider> _clientInfoProvider = new(MockBehavior.Strict);
 
+    // No flow has ended unless a test says so
+    private readonly Mock<IConsumedRequestUriRegistry> _consumedRequestUris = new();
+
     private PushedRequestFetcher CreateFetcher(bool serverWideRequirement = false)
     {
         var snapshot = new Mock<IOptionsSnapshot<OidcOptions>>();
@@ -43,7 +46,8 @@ public class PushedRequestFetcherTests
         return new PushedRequestFetcher(
             snapshot.Object,
             _storage.Object,
-            _clientInfoProvider.Object);
+            _clientInfoProvider.Object,
+            _consumedRequestUris.Object);
     }
 
     private static AuthorizationRequest CreateRequest() => new()
@@ -53,6 +57,26 @@ public class PushedRequestFetcherTests
         RedirectUri = TestConstants.DefaultRedirectUri,
         Scope = [Scopes.OpenId],
     };
+
+    /// <summary>
+    /// A request stored for a page of a flow that already ended with a code is refused, though the record is still
+    /// there.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_PageOfEndedFlow_ReturnsInvalidRequestUri()
+    {
+        var pageUri = new Uri(RequestUrn.Prefix + "page");
+        var originUri = new Uri(RequestUrn.Prefix + "pushed");
+        _storage
+            .Setup(s => s.TryGetAsync(TestTenant.Matched, pageUri, false))
+            .ReturnsAsync(CreateRequest() with { OriginRequestUri = originUri });
+        _consumedRequestUris.Setup(r => r.IsConsumedAsync(TestTenant.Matched, originUri)).ReturnsAsync(true);
+
+        var result = await CreateFetcher().FetchAsync(SingleIssuer.Tenant, CreateRequest() with { RequestUri = pageUri });
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequestUri, error.Error);
+    }
 
     /// <summary>
     /// RFC 9101 section 6.3, which RFC 9126 section 4 applies to a pushed request: the client_id the authorization

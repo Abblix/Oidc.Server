@@ -66,7 +66,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAuthorizationValueReuseDetector, AuthorizationValueReuseDetector>();
         services.TryAddSingleton<IAuthorizationRequestStorage, AuthorizationRequestStorage>();
         services.TryAddSingleton<IConsumedRequestUriRegistry, ConsumedRequestUriRegistry>();
-        // Both reserve in the replay cache, in the store under the shared key
+        // The reuse detector reserves in the replay cache, in the store under the shared key
         services.AddReplayPrevention();
         services.TryAddSingleton<ISessionClientRegistry, SessionClientRegistry>();
         services.TryAddEnumerable(

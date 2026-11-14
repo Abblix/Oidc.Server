@@ -57,7 +57,7 @@ public class AuthorizationCodeBuilder(
             return Reused(request, "The PKCE code_challenge must be unique per authorization request");
         }
 
-        if (context.Nonce is { } nonce &&
+        if (context.Nonce is { Length: > 0 } nonce &&
             !await reuseDetector.TryReserveAsync(tenant, context.ClientId, AuthorizationRequest.Parameters.Nonce, nonce))
         {
             return Reused(request, "The nonce must be unique per authorization request");

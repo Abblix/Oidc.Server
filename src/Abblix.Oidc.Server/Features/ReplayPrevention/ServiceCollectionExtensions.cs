@@ -34,7 +34,7 @@ public static class ServiceCollectionExtensions
     /// then serves instead, in any order.
     /// </para>
     /// <para>
-    /// Idempotent, because three unrelated feature registrations call it.
+    /// Idempotent, because several unrelated feature registrations call it.
     /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>
@@ -42,7 +42,7 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton(TimeProvider.System);
 
-        // Three feature registrations call this, and the decoration below is not idempotent by
+        // Several feature registrations call this, and the decoration below is not idempotent by
         // itself - applying it twice would skew the window twice and log every reservation twice.
         if (services.Any(descriptor => descriptor.ServiceType == typeof(AlreadyRegistered)))
         {

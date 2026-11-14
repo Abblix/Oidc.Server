@@ -17,7 +17,7 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// <remarks>
 /// Each page the end user is sent to stores the request under a URN of its own, and a refresh of the page makes
 /// another; consuming the URN a code came by leaves the others. The record is what refuses them: each of them carries
-/// the URN its flow began with, and ending the flow again under it is refused.
+/// the URN its flow began with.
 /// </remarks>
 public interface IConsumedRequestUriRegistry
 {
@@ -31,4 +31,11 @@ public interface IConsumedRequestUriRegistry
     /// <returns><c>true</c> when the flow had not ended and this call ended it; <c>false</c> when it had ended
     /// already.</returns>
     Task<bool> TryConsumeAsync(TenantDefinition tenant, Uri requestUri, DateTimeOffset expiresAt);
+
+    /// <summary>
+    /// Whether the flow begun with <paramref name="requestUri"/> has ended.
+    /// </summary>
+    /// <param name="tenant">The tenant the request URI belongs to.</param>
+    /// <param name="requestUri">The URN the flow began with.</param>
+    Task<bool> IsConsumedAsync(TenantDefinition tenant, Uri requestUri);
 }

@@ -22,8 +22,8 @@ namespace Abblix.Oidc.Server.Features.PushedAuthorization;
 /// its remaining time-to-live. Interactive continuations (login, consent, account selection) leave it in
 /// place so the user agent can re-enter the authorization endpoint with the same <c>request_uri</c>, except
 /// the one a request came back with from the login or account-creation page, which it is done with. A success
-/// also records that the flow ended, under the <c>request_uri</c> it began with, so the other pages of the flow
-/// are refused while they could still be presented.
+/// also ends the flow, under the <c>request_uri</c> it began with, so the other pages of the flow are refused while
+/// they could still be presented, and a page whose flow another page ended first is answered with an error.
 /// </summary>
 /// <param name="inner">The authorization request processor being decorated.</param>
 /// <param name="authorizationRequestStorage">The storage backing pushed authorization requests, from which
@@ -45,7 +45,8 @@ public class PushedAuthorizationRequestProcessorDecorator(
     /// </summary>
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The validated authorization request to process.</param>
-    /// <returns>The inner processor's <see cref="AuthorizationResponse"/>, unchanged.</returns>
+    /// <returns>The inner processor's <see cref="AuthorizationResponse"/>, or an error when it issued a code or token
+    /// for a flow another page had already ended.</returns>
     public async Task<AuthorizationResponse> ProcessAsync(TenantDefinition tenant, ValidAuthorizationRequest request)
     {
         var response = await EndFlowAsync(tenant, request, await inner.ProcessAsync(tenant, request));
@@ -82,9 +83,9 @@ public class PushedAuthorizationRequestProcessorDecorator(
     /// answering with an error instead when the flow had ended already.
     /// </summary>
     /// <remarks>
-    /// The flow ends with the first code or token, so of two of its pages reaching one together, or a page
-    /// refreshed after it ended, only the first is answered with what was issued. The other's code, issued before
-    /// this, never leaves the server and expires unredeemed.
+    /// The flow ends with the first code or token, so of two of its pages reaching one together only the first is
+    /// answered with what was issued. What the other was issued before this, a code and in a hybrid flow its
+    /// tokens, never leaves the server.
     /// </remarks>
     private async Task<AuthorizationResponse> EndFlowAsync(
         TenantDefinition tenant,

@@ -27,6 +27,7 @@ internal static class StoredProtobufCodecs
         ProtobufCodecs.Stored(Proto.SessionClientsGeneration.Parser),
         ProtobufCodecs.Stored(Proto.LogoutConfirmation.Parser),
         ProtobufCodecs.Stored(Proto.NonceSecret.Parser),
+        ProtobufCodecs.Stored(Proto.ConsumedRequestUri.Parser),
         ProtobufCodecs.Text(),
     ];
 }

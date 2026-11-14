@@ -8,8 +8,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
-using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PushedAuthorization;
+using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -172,7 +173,8 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
 
     /// <summary>
     /// Two pages of one flow reaching a code together end it once: one is answered with its code, the other with an
-    /// error, over the registry and the replay cache a server registers.
+    /// error. The other page runs whole inside this one's step on the record, whether that step reads the record or
+    /// claims it, so a registry that reads and then writes lets both through.
     /// </summary>
     [Fact]
     public async Task ProcessAsync_TwoPagesOfOneFlowTogether_OneIsAnsweredWithACode()
@@ -184,18 +186,33 @@ public class PushedAuthorizationRequestProcessorDecoratorTests
         _inner.Setup(p => p.ProcessAsync(TestTenant.Matched, second)).ReturnsAsync(Success(second));
         _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, It.IsAny<Uri>(), true)).ReturnsAsync((AuthorizationRequest?)null);
 
-        var registry = new ConsumedRequestUriRegistry(
-            new DistributedReplayCache(
+        var keyFactory = new EntityStorageKeyFactory();
+        var overlapping = new LetsAnotherCallerIn(
+            new DistributedCacheStorage(
                 new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
-                _timeProvider,
-                "test:"),
-            new EntityStorageKeyFactory());
+                new ProtobufSerializer()),
+            keyFactory.ConsumedRequestUriKey(SingleIssuer.Tenant, pushedUri));
         var decorator = new PushedAuthorizationRequestProcessorDecorator(
-            _inner.Object, _storage.Object, registry, Options.Create(_options), _timeProvider);
+            _inner.Object,
+            _storage.Object,
+            new ConsumedRequestUriRegistry(overlapping.Storage, keyFactory, TimeProvider.System),
+            Options.Create(_options),
+            // The clock the in-memory cache expires entries by, so the record outlives the test
+            TimeProvider.System);
 
-        var responses = await Task.WhenAll(
-            Task.Run(() => decorator.ProcessAsync(SingleIssuer.Tenant, first), TestContext.Current.CancellationToken),
-            Task.Run(() => decorator.ProcessAsync(SingleIssuer.Tenant, second), TestContext.Current.CancellationToken));
+        Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse? other = null;
+        var ran = 0;
+        async Task RunTheOther()
+        {
+            if (Interlocked.Exchange(ref ran, 1) == 0)
+                other = await decorator.ProcessAsync(SingleIssuer.Tenant, second);
+        }
+
+        overlapping.OnNextReadOf(RunTheOther);
+        overlapping.OnNextClaimOf(RunTheOther);
+
+        var mine = await decorator.ProcessAsync(SingleIssuer.Tenant, first);
+        Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse?[] responses = [mine, other];
 
         Assert.Single(responses, response => response is SuccessfullyAuthenticated);
         Assert.Single(responses, response => response is AuthorizationError { Error: ErrorCodes.InvalidRequestUri });

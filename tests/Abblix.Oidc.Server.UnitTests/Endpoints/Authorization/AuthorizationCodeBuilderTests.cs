@@ -80,6 +80,27 @@ public class AuthorizationCodeBuilderTests
             Times.Once);
     }
 
+    /// <summary>
+    /// An empty nonce is no nonce, as the nonce validator reads it, so it is never reserved and a client sending one
+    /// on every request is not refused for repeating it.
+    /// </summary>
+    [Fact]
+    public async Task AnEmptyNonce_IsNotReserved()
+    {
+        _reuse
+            .Setup(d => d.TryReserveAsync(
+                TestTenant.Matched, ClientId, AuthorizationRequest.Parameters.CodeChallenge, CodeChallenge))
+            .ReturnsAsync(true);
+        var (request, grant, result) = Arrange();
+        grant = grant with { Context = grant.Context with { Nonce = string.Empty } };
+        _codes
+            .Setup(s => s.GenerateAuthorizationCodeAsync(TestTenant.Matched, grant, It.IsAny<TimeSpan>()))
+            .ReturnsAsync(Code);
+
+        Assert.Null(await Builder().BuildResponseAsync(SingleIssuer.Tenant, request, grant, result));
+        Assert.Equal(Code, result.Code);
+    }
+
     private AuthorizationCodeBuilder Builder() => new(_codes.Object, _reuse.Object);
 
     private static (ValidAuthorizationRequest, AuthorizedGrant, SuccessfullyAuthenticated) Arrange()
