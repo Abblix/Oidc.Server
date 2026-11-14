@@ -143,7 +143,10 @@ public static class ActionResultExtensions
 				=> new UnauthorizedObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))
 					.WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBasicChallenge(realm)),
 
-			(_, StatusCodes.Status400BadRequest)
+			// RFC 6749 section 5.2 answers its errors with 400 "unless specified otherwise", and RFC 6750 section 3.1
+			// has invalid_request answered with 400 too, so an endpoint whose other errors take another status does
+			// not lend it to a malformed request
+			(ErrorCodes.InvalidRequest, _) or (_, StatusCodes.Status400BadRequest)
 				=> new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
 
 			(_, StatusCodes.Status401Unauthorized)

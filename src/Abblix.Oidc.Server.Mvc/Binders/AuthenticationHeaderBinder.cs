@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Net.Http.Headers;
 using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Oidc.Server.Mvc.Attributes;
 using Microsoft.AspNetCore.Http;
@@ -53,21 +52,20 @@ public class AuthenticationHeaderBinder : ModelBinderBase
     }
 
     /// <summary>
-    /// Tries to parse the authentication header from the provided string values.
+    /// Binds every line of the header field as received, never joined into one value.
     /// </summary>
+    /// <remarks>
+    /// RFC 9110 section 11.6.2 defines the field as <c>Authorization = credentials</c>, which is not a list, so the
+    /// lines cannot be recombined (section 5.3): each is the credentials of a method of its own, and which of them a
+    /// request may carry is the endpoint's question, not the binder's.
+    /// </remarks>
     /// <param name="type">The type of the model to bind to.</param>
-    /// <param name="values">The header values to parse.</param>
-    /// <param name="result">The resulting parsed object if successful.</param>
-    /// <returns>True if parsing is successful, otherwise false.</returns>
+    /// <param name="values">The header field lines.</param>
+    /// <param name="result">The lines as an array.</param>
+    /// <returns>Always true: a line is kept whether or not it parses as credentials.</returns>
     protected override bool TryParse(Type type, StringValues values, out object? result)
     {
-        if (!AuthenticationHeaderValue.TryParse(values, out var headerValue))
-        {
-            result = null;
-            return false;
-        }
-
-        result = headerValue;
+        result = values.ToArray();
         return true;
     }
 

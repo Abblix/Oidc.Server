@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.AspNetCore;
-using System.Net.Http.Headers;
 using System.Net.Mime;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -19,6 +18,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Core = Abblix.Oidc.Server.Model;
+using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 
 namespace Abblix.Oidc.Server.MinimalApi;
 
@@ -68,7 +68,10 @@ internal static class ClientRegistrationEndpoints
         if (body is not { Request: { } request })
             return body.Refusal!;
 
-        var clientRegistrationRequest = request with { AuthorizationHeader = ParseAuthorizationHeader(context.Request) };
+        var clientRegistrationRequest = request with
+        {
+            AuthorizationHeaderLines = FormValues.HeaderLines(context.Request, HttpRequestHeaders.Authorization),
+        };
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), clientRegistrationRequest);
         return await formatter.FormatResponseAsync(clientRegistrationRequest, response);
     }
@@ -111,13 +114,5 @@ internal static class ClientRegistrationEndpoints
         Core.ClientRequest coreClientRequest = authorizationRequest;
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreClientRequest);
         return await formatter.FormatResponseAsync(coreClientRequest, response);
-    }
-
-    private static AuthenticationHeaderValue? ParseAuthorizationHeader(HttpRequest request)
-    {
-        var rawAuthorization = request.Headers.Authorization.ToString();
-        return !string.IsNullOrEmpty(rawAuthorization) && AuthenticationHeaderValue.TryParse(rawAuthorization, out var header)
-            ? header
-            : null;
     }
 }

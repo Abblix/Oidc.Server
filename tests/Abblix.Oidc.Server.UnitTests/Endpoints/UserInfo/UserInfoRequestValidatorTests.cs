@@ -73,7 +73,7 @@ public class UserInfoRequestValidatorTests
         var result = await validator.ValidateAsync(
             SingleIssuer.Tenant,
             new UserInfoRequest(),
-            new ClientRequest { AuthorizationHeader = new AuthenticationHeaderValue(TokenTypes.Bearer, "token") });
+            new ClientRequest { AuthorizationHeaderLines = [new AuthenticationHeaderValue(TokenTypes.Bearer, "token").ToString()] });
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(expected, error.DPoPAlgorithmsAdmitted!.Order(StringComparer.Ordinal));
@@ -126,7 +126,7 @@ public class UserInfoRequestValidatorTests
         return new ClientRequest
         {
             ClientId = clientId,
-            AuthorizationHeader = authHeader,
+            AuthorizationHeaderLines = authHeader is { } header ? [header.ToString()] : null,
         };
     }
 

@@ -262,7 +262,7 @@ public class DPoPUserInfoValidatorTests
     private static ClientRequest BuildClientRequest(string scheme, string? dpopProof)
         => new()
         {
-            AuthorizationHeader = new AuthenticationHeaderValue(scheme, "opaque-access-token"),
+            AuthorizationHeaderLines = [new AuthenticationHeaderValue(scheme, "opaque-access-token").ToString()],
             DPoPProof = dpopProof,
         };
 

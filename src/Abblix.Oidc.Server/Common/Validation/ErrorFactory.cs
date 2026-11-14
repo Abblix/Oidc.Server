@@ -52,6 +52,17 @@ public static class ErrorFactory
         new(ErrorCodes.InvalidClientMetadata, "The request body cannot be read as client metadata");
 
     /// <summary>
+    /// The refusal of a request carrying the <c>Authorization</c> header field on more than one line, each line
+    /// credentials of its own (RFC 9110 section 11.6.2), so the request presents more than one at once. At a protected
+    /// resource RFC 6750 section 3.1 names a request that "uses more than one method for including an access token"
+    /// an invalid_request, and at an endpoint authenticating the client RFC 6749 section 5.2 names one that "includes
+    /// multiple credentials, utilizes more than one mechanism for authenticating the client" the same. Both answer
+    /// with 400.
+    /// </summary>
+    public static OidcError MoreThanOneAuthorizationHeader { get; } =
+        new(ErrorCodes.InvalidRequest, "The Authorization header is included more than once");
+
+    /// <summary>
     /// The validation message for a request whose host is missing or cannot be part of a URI, so that no address of
     /// this server can be built for it.
     /// </summary>

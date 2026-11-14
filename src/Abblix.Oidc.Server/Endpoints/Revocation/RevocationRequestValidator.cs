@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -92,6 +93,13 @@ public partial class RevocationRequestValidator(
 		// used than revoked. The protection the spec actually mandates is the token-ownership
 		// check below. Do not re-add a public-client rejection here: it slipped in once and
 		// left every SPA and native client unable to revoke its own refresh token on logout.
+		//
+		// RFC 7009 section 2.2.1 presents errors as RFC 6749 section 5.2 does, which names a request that "includes
+		// multiple credentials, utilizes more than one mechanism for authenticating the client" an invalid_request.
+		// Decided before the authenticator, which would count a failed attempt
+		if (clientRequest.HasMoreThanOneAuthorizationHeader)
+			return ErrorFactory.MoreThanOneAuthorizationHeader;
+
 		var clientInfo = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
 		if (clientInfo == null)
 		{

@@ -178,44 +178,21 @@ public class ModelBinderRefusalTests
     }
 
     /// <summary>
-    /// A value the header grammar cannot parse is refused rather than passed along as something the endpoint
-    /// would read as a credential.
+    /// The authorization header binder keeps every line as received, a line the credentials grammar rejects
+    /// included: the field is not a list (RFC 9110 sections 11.6.2 and 5.3), so the lines are neither joined nor
+    /// judged here, and the core model reads credentials from a single line only.
     /// </summary>
-    /// <remarks>
-    /// The cases are chosen from what the grammar actually rejects, which is narrower than it looks: a scheme
-    /// is any token, so "this is not a header value" parses happily as the scheme "this" with the rest as its
-    /// parameter (measured). What fails is an empty value, or a first token that is not a token at all - a
-    /// comma or an equals sign inside it, or non-ASCII. Writing this test from the phrase that reads most
-    /// obviously wrong would have asserted a refusal that never happens.
-    /// </remarks>
     [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
+    [InlineData("Bearer some-token")]
     [InlineData("=bad")]
-    [InlineData("Bearer,token")]
-    public async Task The_authorization_header_binder_refuses_a_value_the_grammar_rejects(string headerValue)
+    [InlineData("Bearer some-token", "DPoP some-token")]
+    [InlineData("Basic a", "Basic b", "Basic c")]
+    public async Task The_authorization_header_binder_binds_every_line_apart(params string[] lines)
     {
         var outcome = await ModelBinderRunner.BindHeaderAsync(
-            new AuthenticationHeaderBinder(), typeof(AuthenticationHeaderValue), "Authorization", headerValue);
-
-        Assert.False(outcome.IsModelSet);
-    }
-
-    /// <summary>
-    /// And the ordinary case, so the refusal in
-    /// <see cref="The_authorization_header_binder_refuses_a_value_the_grammar_rejects"/> means something: a
-    /// well-formed header binds to its scheme and parameter.
-    /// </summary>
-    [Fact]
-    public async Task The_authorization_header_binder_binds_a_well_formed_header()
-    {
-        var outcome = await ModelBinderRunner.BindHeaderAsync(
-            new AuthenticationHeaderBinder(), typeof(AuthenticationHeaderValue),
-            "Authorization", "Bearer some-token");
+            new AuthenticationHeaderBinder(), typeof(IReadOnlyList<string>), "Authorization", lines);
 
         Assert.True(outcome.IsModelSet);
-        var header = Assert.IsType<AuthenticationHeaderValue>(outcome.Model);
-        Assert.Equal("Bearer", header.Scheme);
-        Assert.Equal("some-token", header.Parameter);
+        Assert.Equal(lines, Assert.IsType<string[]>(outcome.Model));
     }
 }

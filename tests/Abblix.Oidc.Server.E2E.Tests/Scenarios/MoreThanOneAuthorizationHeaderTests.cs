@@ -10,11 +10,16 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
 using RequestMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
@@ -266,5 +271,60 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    private async Task<HttpResponseMessage> RegisterWithInitialAccessTokenRequiredAsync(params string[] lines)
+    {
+        await using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
+                    new PostConfigureOptions<OidcOptions>(
+                        Options.DefaultName,
+                        options => options.RequireInitialAccessToken = true))));
+
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        var discovery = await FetchDiscoveryAsync(client);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.RegistrationEndpoint)
+        {
+            Content = JsonContent.Create(new JsonObject
+            {
+                [RequestMembers.RedirectUris] = new JsonArray(TestConstants.RedirectUri),
+            }),
+        };
+        AddAuthorizationLines(request, lines);
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        await response.Content.LoadIntoBufferAsync(TestContext.Current.CancellationToken);
+        return response;
+    }
+
+    /// <summary>
+    /// RFC 7591 section 3.2.2 answers an initial access token error "appropriate to the OAuth 2.0 token type", and
+    /// RFC 6750 section 3.1 makes more than one method an invalid_request. The lines are refused before either token
+    /// is read, so neither has to be valid.
+    /// </summary>
+    [Fact]
+    public async Task Registration_with_two_bearer_lines_is_an_invalid_request()
+    {
+        var response = await RegisterWithInitialAccessTokenRequiredAsync(
+            $"{TokenTypes.Bearer} first", $"{TokenTypes.Bearer} second");
+
+        await AssertInvalidRequestAsync(response);
+    }
+
+    /// <summary>
+    /// One line carrying a token that is not valid is judged as the token it carries.
+    /// </summary>
+    [Fact]
+    public async Task Registration_with_one_bearer_line_is_judged_by_its_token()
+    {
+        var response = await RegisterWithInitialAccessTokenRequiredAsync($"{TokenTypes.Bearer} first");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }

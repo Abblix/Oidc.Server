@@ -50,7 +50,10 @@ public static class OidcResults
                 .Json(new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status401Unauthorized)
                 .WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBasicChallenge(realm)),
 
-            (_, StatusCodes.Status400BadRequest) => Results
+            // RFC 6749 section 5.2 answers its errors with 400 "unless specified otherwise", and RFC 6750 section 3.1 has
+            // invalid_request answered with 400 too, so an endpoint whose other errors take another status does not
+            // lend it to a malformed request
+            (ErrorCodes.InvalidRequest, _) or (_, StatusCodes.Status400BadRequest) => Results
                 .Json(new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status400BadRequest),
 
             (_, StatusCodes.Status401Unauthorized) => Results

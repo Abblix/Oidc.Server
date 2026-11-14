@@ -10,6 +10,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Utils;
@@ -28,11 +29,27 @@ namespace Abblix.Oidc.Server.Model;
 public record ClientRegistrationRequest
 {
     /// <summary>
-    /// The Authorization header from the HTTP request, used for initial access token validation
-    /// per RFC 7591 Section 3. This is a transport-level property, not part of the registration metadata.
+    /// Every line of the HTTP <c>Authorization</c> header field, as received, or <c>null</c> when the request carries
+    /// none: the initial access token per RFC 7591 Section 3. A transport-level property, not part of the
+    /// registration metadata. Kept line by line because the field is not a list (RFC 9110 sections 11.6.2 and 5.3).
     /// </summary>
     [JsonIgnore]
-    public AuthenticationHeaderValue? AuthorizationHeader { get; init; }
+    [Credential]
+    public IReadOnlyList<string>? AuthorizationHeaderLines { get; init; }
+
+    /// <summary>
+    /// The credentials of the <c>Authorization</c> header: <c>null</c> when the request carries no line, more than
+    /// one line (<see cref="HasMoreThanOneAuthorizationHeader"/>) or a line that does not parse.
+    /// </summary>
+    [JsonIgnore]
+    public AuthenticationHeaderValue? AuthorizationHeader
+        => AuthenticationHeaderValueExtensions.FromSingleLine(AuthorizationHeaderLines);
+
+    /// <summary>
+    /// Whether the request carries the <c>Authorization</c> header field on more than one line.
+    /// </summary>
+    [JsonIgnore]
+    public bool HasMoreThanOneAuthorizationHeader => AuthorizationHeaderLines is { Count: > 1 };
 
     /// <summary>
     /// The <c>redirect_uris</c> array (RFC 7591 section 2) listing every absolute URI the OP may use to deliver

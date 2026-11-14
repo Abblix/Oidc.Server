@@ -431,18 +431,9 @@ public class MinimalApiModelGenerator : IIncrementalGenerator
 
                 case AuthorizationHeaderMarkerName:
                     // The Authorization header is the standard transport for client/registration credentials
-                    // (RFC 9110 section 11.6.2); parsed once into a local that every authorization-header property reads.
-                    if (_preStatements.All(static statement => !statement.Contains("authorizationHeader")))
-                    {
-                        _preStatements.Add(
-                            "global::System.Net.Http.Headers.AuthenticationHeaderValue? authorizationHeader = null;");
-                        _preStatements.Add("var rawAuthorization = request.Headers.Authorization.ToString();");
-                        _preStatements.Add(
-                            "if (!string.IsNullOrEmpty(rawAuthorization)) " +
-                            "global::System.Net.Http.Headers.AuthenticationHeaderValue.TryParse(rawAuthorization, out authorizationHeader);");
-                    }
-
-                    _assignments.Add((property.Name, "authorizationHeader"));
+                    // (RFC 9110 section 11.6.2). Its lines are read apart, never joined: the field is not a list, and
+                    // a request repeating it is the endpoint's to refuse.
+                    _assignments.Add((property.Name, $"{known.FormValues}.HeaderLines(request, \"Authorization\")"));
                     break;
 
                 case ClientCertificateMarkerName:

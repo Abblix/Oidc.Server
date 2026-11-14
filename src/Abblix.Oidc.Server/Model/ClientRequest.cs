@@ -9,6 +9,7 @@
 using System.Net.Http.Headers;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Serialization;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Utils;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
@@ -47,12 +48,30 @@ public record ClientRequest
 	}
 
 	/// <summary>
-	/// The HTTP <c>Authorization</c> header from the inbound request, captured for transport-level
-	/// authentication schemes such as <c>Basic</c> (client_secret_basic) or <c>Bearer</c>. Not serialized.
+	/// Every line of the HTTP <c>Authorization</c> header field the inbound request carries, as received, or
+	/// <c>null</c> when it carries none. Kept apart line by line because the field is not a list (RFC 9110 sections
+	/// 11.6.2 and 5.3): a request repeating it uses more than one method at once, which each endpoint refuses on its
+	/// own terms. Not serialized.
 	/// </summary>
 	[JsonIgnore]
 	[AuthorizationHeader]
-	public AuthenticationHeaderValue? AuthorizationHeader { get; set; }
+	[Credential]
+	public IReadOnlyList<string>? AuthorizationHeaderLines { get; set; }
+
+	/// <summary>
+	/// The credentials of the <c>Authorization</c> header for transport-level authentication schemes such as
+	/// <c>Basic</c> (client_secret_basic), <c>Bearer</c> or <c>DPoP</c>: <c>null</c> when the request carries no
+	/// line, more than one line (<see cref="HasMoreThanOneAuthorizationHeader"/>) or a line that does not parse.
+	/// </summary>
+	[JsonIgnore]
+	public AuthenticationHeaderValue? AuthorizationHeader
+		=> AuthenticationHeaderValueExtensions.FromSingleLine(AuthorizationHeaderLines);
+
+	/// <summary>
+	/// Whether the request carries the <c>Authorization</c> header field on more than one line.
+	/// </summary>
+	[JsonIgnore]
+	public bool HasMoreThanOneAuthorizationHeader => AuthorizationHeaderLines is { Count: > 1 };
 
 	/// <summary>
 	/// The OAuth 2.0 <c>client_id</c> identifying the registered client (RFC 6749 section 2.3.1).
