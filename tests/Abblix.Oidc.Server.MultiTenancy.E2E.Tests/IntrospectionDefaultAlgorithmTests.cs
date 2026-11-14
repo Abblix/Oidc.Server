@@ -45,7 +45,9 @@ public sealed class IntrospectionDefaultAlgorithmTests
         JsonWebKey signingKey,
         string serviceTokenAlgorithm,
         JsonWebKeySet? clientKeys = null,
-        string introspectionAlgorithm = SigningAlgorithms.None)
+        string introspectionAlgorithm = SigningAlgorithms.None,
+        string? keyManagementAlgorithm = null,
+        string? contentEncryptionAlgorithm = null)
     {
         await TestLicense.Loaded;
 
@@ -82,6 +84,8 @@ public sealed class IntrospectionDefaultAlgorithmTests
                     AllowedGrantTypes = [GrantTypes.ClientCredentials],
                     IdentityTokenSignedResponseAlgorithm = serviceTokenAlgorithm,
                     IntrospectionSignedResponseAlgorithm = introspectionAlgorithm,
+                    IntrospectionEncryptedResponseAlgorithm = keyManagementAlgorithm,
+                    IntrospectionEncryptedResponseEncryption = contentEncryptionAlgorithm,
                     Jwks = clientKeys,
                 },
             ],
@@ -150,6 +154,37 @@ public sealed class IntrospectionDefaultAlgorithmTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var jwt = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Equal(3, jwt.Split('.').Length);
+    }
+
+    /// <summary>
+    /// RFC 9701 section 6, introspection_encrypted_response_alg: "If this is specified, the response will be encrypted
+    /// using JWE and the configured content encryption algorithm (introspection_encrypted_response_enc)". A client
+    /// registering RSA-OAEP-256 with A256GCM and publishing an RSA encryption key for it gets a JWE of five parts whose
+    /// header names the registered algorithms.
+    /// </summary>
+    [Fact]
+    public async Task AClientRegisteringEncryption_GetsAJweWithTheRegisteredAlgorithms()
+    {
+        var clientKey = JsonWebKeyFactory.CreateRsa(
+            PublicKeyUsages.Encryption, EncryptionAlgorithms.KeyManagement.RsaOaep256);
+        await using var app = await StartAsync(
+            JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature),
+            SigningAlgorithms.RS256,
+            new JsonWebKeySet([clientKey.Sanitize(includePrivateKeys: false)]),
+            keyManagementAlgorithm: EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            contentEncryptionAlgorithm: EncryptionAlgorithms.ContentEncryption.Aes256Gcm);
+
+        var response = await IntrospectAsync(app);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var jwe = (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Split('.');
+        Assert.Equal(5, jwe.Length);
+        var header = JsonNode.Parse(Encoding.UTF8.GetString(Base64Url.DecodeFromChars(jwe[0])))!;
+        Assert.Equal(
+            EncryptionAlgorithms.KeyManagement.RsaOaep256, header[JwtClaimTypes.Algorithm]!.GetValue<string>());
+        Assert.Equal(
+            EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+            header[JwtClaimTypes.EncryptionAlgorithm]!.GetValue<string>());
     }
 
     /// <summary>

@@ -21,6 +21,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Utils;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
@@ -35,6 +36,11 @@ public class IntrospectionResponseJwtBuilderTests
 {
     private JsonWebToken? _signed;
 
+    /// <summary>
+    /// What the client JWT formatter answers; a signed JWT unless a test says otherwise.
+    /// </summary>
+    private Result<string, OidcError> _formatted = "header.payload.signature";
+
     private IntrospectionResponseJwtBuilder Builder(params JsonWebKey[] signingKeys)
     {
         var formatter = new Mock<IClientJwtFormatter>(MockBehavior.Strict);
@@ -42,7 +48,7 @@ public class IntrospectionResponseJwtBuilderTests
             .Setup(f => f.FormatAsync(
                 It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
             .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, token, _, _) => _signed = token)
-            .ReturnsAsync("header.payload.signature");
+            .ReturnsAsync(() => _formatted);
 
         var keys = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
         keys.Setup(k => k.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()))
@@ -120,6 +126,23 @@ public class IntrospectionResponseJwtBuilderTests
         await Builder(key).BuildAsync(Tenant(ClientSecurityProfile.Fapi2MessageSigning), Client(), new JsonObject());
 
         Assert.Equal(expected, _signed?.Header.Algorithm);
+    }
+
+    /// <summary>
+    /// A refusal of the client JWT formatter, such as a key set the client changed after it was resolved, is the
+    /// builder's answer as it stands, for the adapter to map, and not an exception.
+    /// </summary>
+    [Fact]
+    public async Task AFormatterRefusal_IsTheBuildersResult()
+    {
+        var refusal = new OidcError(ErrorCodes.InvalidClient, "the key set changed");
+        _formatted = refusal;
+
+        var result = await Builder(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature))
+            .BuildAsync(Tenant(ClientSecurityProfile.None), Client(), new JsonObject());
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Same(refusal, error);
     }
 
     /// <summary>
