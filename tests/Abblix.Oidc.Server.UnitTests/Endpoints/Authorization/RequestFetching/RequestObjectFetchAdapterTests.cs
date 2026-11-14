@@ -58,6 +58,26 @@ public class RequestObjectFetchAdapterTests
             Times.Once);
     }
 
+    /// <summary>
+    /// RFC 9101 section 6.3: "The client ID values in the "client_id" request parameter and in the Request Object
+    /// "client_id" claim MUST be identical", and section 4 has the object contain every parameter but "request" and
+    /// "request_uri". The object is merged over the request without its client_id, so what comes back names only the
+    /// client the object itself names.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_MergesTheObjectOverTheRequestWithoutItsClientId()
+    {
+        SetupFetcher(CreateRequest());
+
+        await _adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest());
+
+        _requestObjectFetcher.Verify(
+            f => f.FetchAsync(
+                TestTenant.Matched, _namedClient, It.Is<AuthorizationRequest>(r => r.ClientId == null), RequestJwt,
+                It.IsAny<Func<ClientInfo, string?>?>()),
+            Times.Once);
+    }
+
     private static AuthorizationRequest CreateRequest(
         string? clientId = ClientId,
         string[]? responseType = null) => new()

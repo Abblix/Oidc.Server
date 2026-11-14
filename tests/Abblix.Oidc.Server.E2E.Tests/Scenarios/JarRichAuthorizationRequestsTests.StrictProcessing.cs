@@ -227,12 +227,14 @@ public partial class JarRichAuthorizationRequestsTests
                 Uri.EscapeDataString(poster.ClientId) + ":" + Uri.EscapeDataString(poster.ClientSecret))));
 
     /// <summary>
-    /// A client that must sign its request objects and authenticates with client_secret_basic.
+    /// A client that must sign its request objects and authenticates with client_secret_basic, serving them at
+    /// <paramref name="requestUri"/> where one is given.
     /// </summary>
     private static async Task<SigningClient> RegisterBasicSigningClientAsync(
         HttpClient client,
         DiscoveryDocument discovery,
-        bool requireSignedRequestObject = true)
+        bool requireSignedRequestObject = true,
+        string? requestUri = null)
     {
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
         var registered = await RegisterClientAsync(client, discovery, new JsonObject
@@ -243,6 +245,7 @@ public partial class JarRichAuthorizationRequestsTests
             [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretBasic,
             [RegistrationMembers.Jwks] = JsonSerializer.SerializeToNode(PublicJwksFor(key)),
             [RegistrationMembers.RequireSignedRequestObject] = requireSignedRequestObject,
+            [RegistrationMembers.RequestUris] = requestUri is null ? null : new JsonArray { requestUri },
         });
 
         return new SigningClient(

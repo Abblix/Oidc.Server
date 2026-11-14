@@ -8,11 +8,16 @@
 
 using System.Net;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
+using Abblix.Utils;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -167,19 +172,26 @@ public partial class JarRichAuthorizationRequestsTests
     /// </summary>
     [Theory]
     // Section 6.3 and section 4: the object naming no client, merged over the outer parameters
-    [InlineData(false, Named.Nobody)]
+    [InlineData(false, Named.Nobody, false)]
     // Section 6.3 and section 4: the object naming no client, processed strictly
-    [InlineData(true, Named.Nobody)]
+    [InlineData(true, Named.Nobody, false)]
     // Section 6.3: the object naming another client than the client_id beside it
-    [InlineData(false, Named.Other)]
+    [InlineData(false, Named.Other, false)]
+    // Section 6.3 and section 4: the object fetched from the request_uri naming no client
+    [InlineData(false, Named.Nobody, true)]
     public async Task ARequestObjectNotNamingTheClientIdBesideIt_IsAnInvalidRequestObjectAtTheAuthorizationEndpoint(
         bool strict,
-        Named claimClientId)
+        Named claimClientId,
+        bool byReference)
     {
-        await using var host = strict ? CreateStrictHost() : Factory.WithWebHostBuilder(_ => { });
+        var served = new ServedRequestObject();
+        await using var baseHost = strict ? CreateStrictHost() : Factory.WithWebHostBuilder(_ => { });
+        await using var host = baseHost.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.Replace(ServiceDescriptor.Singleton<ISecureHttpFetcher>(served))));
         var client = CreateClientFor(host);
         var discovery = await FetchDiscoveryAsync(client);
-        var poster = await RegisterBasicSigningClientAsync(client, discovery, requireSignedRequestObject: false);
+        var poster = await RegisterBasicSigningClientAsync(
+            client, discovery, requireSignedRequestObject: false, requestUri: ServedRequestObject.Address);
         var other = await RegisterBasicSigningClientAsync(client, discovery, requireSignedRequestObject: false);
         var claim = claimClientId switch
         {
@@ -189,16 +201,45 @@ public partial class JarRichAuthorizationRequestsTests
             _ => throw new ArgumentOutOfRangeException(nameof(claimClientId)),
         };
 
-        var uri = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, new Dictionary<string, string>
+        var requestObject = await SignNamingAsync(discovery, poster, claim, GeneratePkcePair().Challenge);
+        var parameters = new Dictionary<string, string> { [AuthorizationRequest.Parameters.ClientId] = poster.ClientId };
+        if (byReference)
         {
-            [AuthorizationRequest.Parameters.ClientId] = poster.ClientId,
-            [AuthorizationRequest.Parameters.Request] =
-                await SignNamingAsync(discovery, poster, claim, GeneratePkcePair().Challenge),
-        });
-        using var response = await client.GetAsync(uri, TestContext.Current.CancellationToken);
+            served.Content = requestObject;
+            parameters[AuthorizationRequest.Parameters.RequestUri] = ServedRequestObject.Address;
+        }
+        else
+        {
+            parameters[AuthorizationRequest.Parameters.Request] = requestObject;
+        }
+
+        using var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters),
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(ErrorCodes.InvalidRequestObject, await ErrorResponseReader.ErrorCodeOf(response));
+        Assert.Equal(byReference ? new Uri(ServedRequestObject.Address) : null, served.Fetched);
+    }
+
+    /// <summary>
+    /// Answers the server's fetch of a request_uri with the request object the test sets, standing in for the
+    /// client's own web server.
+    /// </summary>
+    private sealed class ServedRequestObject : ISecureHttpFetcher
+    {
+        public const string Address = "https://client.example.com/request.jwt";
+
+        public string? Content { get; set; }
+
+        /// <summary>The address the server last fetched a request object from.</summary>
+        public Uri? Fetched { get; private set; }
+
+        public Task<Result<T, OidcError>> FetchAsync<T>(Uri uri, bool refetch = false)
+        {
+            Fetched = uri;
+            return Task.FromResult<Result<T, OidcError>>((T)(object)Content!);
+        }
     }
 
     /// <summary>
