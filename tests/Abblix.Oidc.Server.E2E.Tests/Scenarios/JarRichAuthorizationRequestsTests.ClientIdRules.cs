@@ -54,6 +54,12 @@ public partial class JarRichAuthorizationRequestsTests
     [InlineData(true, Named.Nobody, true, Named.Nobody, Named.Poster, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
     // Section 3: the object beside a client_id of another client than the one that authenticated
     [InlineData(false, Named.Other, true, Named.Poster, Named.Poster, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    // Section 2.1 step 3, validated as at the authorization endpoint, where RFC 9101 section 6.3 has "The client ID
+    // values in the "client_id" request parameter and in the Request Object "client_id" claim MUST be identical":
+    // the object naming no client beside the client_id of the one that authenticated, merged over the outer parameters
+    [InlineData(false, Named.Poster, true, Named.Nobody, Named.Poster, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
+    // The same, processed strictly
+    [InlineData(true, Named.Poster, true, Named.Nobody, Named.Poster, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequestObject)]
     public async Task APushedRequest_IsAcceptedOnlyForTheClientThatAuthenticated(
         bool strict,
         Named formClientId,
@@ -150,6 +156,49 @@ public partial class JarRichAuthorizationRequestsTests
         });
 
         Assert.False(string.IsNullOrEmpty(code));
+    }
+
+    /// <summary>
+    /// RFC 9101 section 6.3: "The client ID values in the "client_id" request parameter and in the Request Object
+    /// "client_id" claim MUST be identical", and section 4 has the object "contain all the parameters ... used to
+    /// process the OAuth 2.0 [RFC6749] authorization request except the "request" and "request_uri" parameters". An
+    /// object naming no client, or another one, beside a client_id is one section 7 calls "invalid_request_object":
+    /// "The request parameter contains an invalid Request Object."
+    /// </summary>
+    [Theory]
+    // Section 6.3 and section 4: the object naming no client, merged over the outer parameters
+    [InlineData(false, Named.Nobody)]
+    // Section 6.3 and section 4: the object naming no client, processed strictly
+    [InlineData(true, Named.Nobody)]
+    // Section 6.3: the object naming another client than the client_id beside it
+    [InlineData(false, Named.Other)]
+    public async Task ARequestObjectNotNamingTheClientIdBesideIt_IsAnInvalidRequestObjectAtTheAuthorizationEndpoint(
+        bool strict,
+        Named claimClientId)
+    {
+        await using var host = strict ? CreateStrictHost() : Factory.WithWebHostBuilder(_ => { });
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var poster = await RegisterBasicSigningClientAsync(client, discovery, requireSignedRequestObject: false);
+        var other = await RegisterBasicSigningClientAsync(client, discovery, requireSignedRequestObject: false);
+        var claim = claimClientId switch
+        {
+            Named.Nobody => null,
+            Named.Poster => poster.ClientId,
+            Named.Other => other.ClientId,
+            _ => throw new ArgumentOutOfRangeException(nameof(claimClientId)),
+        };
+
+        var uri = QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = poster.ClientId,
+            [AuthorizationRequest.Parameters.Request] =
+                await SignNamingAsync(discovery, poster, claim, GeneratePkcePair().Challenge),
+        });
+        using var response = await client.GetAsync(uri, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidRequestObject, await ErrorResponseReader.ErrorCodeOf(response));
     }
 
     /// <summary>

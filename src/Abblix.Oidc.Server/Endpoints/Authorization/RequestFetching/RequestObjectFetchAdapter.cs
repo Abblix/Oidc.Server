@@ -72,10 +72,11 @@ public class RequestObjectFetchAdapter(
             namedClient = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         }
 
-        // A client_id taken from authentication rather than sent is one the object itself has to name (RFC 9126 section
-        // 3, "the "client_id" claim in the Request Object"), so it is left out of what the object is merged over, and
-        // the comparison below refuses an object naming none as one naming another
-        var mergedOver = request.ClientIdFromAuthentication ? request with { ClientId = null } : request;
+        // RFC 9101 section 6.3: "The client ID values in the "client_id" request parameter and in the Request Object
+        // "client_id" claim MUST be identical", and section 4 has the object contain every parameter but "request" and
+        // "request_uri". The outer client_id is left out of what the object is merged over, so the comparison below
+        // refuses an object naming no client as it refuses one naming another
+        var mergedOver = request.Request.HasValue() ? request with { ClientId = null } : request;
         var fetchResult = await requestObjectFetcher.FetchAsync(tenant,
             namedClient, mergedOver, request.Request, client => client.RequestObjectSigningAlgorithm);
 
@@ -116,9 +117,10 @@ public class RequestObjectFetchAdapter(
     /// MUST match the ones inside the request object when the object carries them. The merge gives
     /// the request object's values precedence, so a mismatch surfaces as the merged value differing
     /// from the outer one - without this check an attacker-supplied object could silently swap the
-    /// flow or the client identity relative to what the plain OAuth parameters declared. A prompt value outside
-    /// <see cref="SupportedPrompts"/>, or a response mode outside <see cref="SupportedResponseModes"/>, is
-    /// refused with invalid_request, as the same value is in the query.
+    /// flow or the client identity relative to what the plain OAuth parameters declared. The object is merged over a
+    /// request without its client_id, so an object carrying none is refused as well (RFC 9101 section 6.3). A prompt
+    /// value outside <see cref="SupportedPrompts"/>, or a response mode outside <see cref="SupportedResponseModes"/>,
+    /// is refused with invalid_request, as the same value is in the query.
     /// </summary>
     private static Result<AuthorizationRequest, OidcError> ValidateMergedParameters(
         AuthorizationRequest outer,

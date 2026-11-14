@@ -80,7 +80,7 @@ public class PushedAuthorizationHandler(
         var fetchResult = await fetcher.FetchAsync(
             tenant,
             authorizationRequest is { Request: not null, ClientId: null }
-                ? authorizationRequest with { ClientId = clientInfo.ClientId, ClientIdFromAuthentication = true }
+                ? authorizationRequest with { ClientId = clientInfo.ClientId }
                 : authorizationRequest);
 
         if (fetchResult.TryGetFailure(out var fetchError))
