@@ -12,7 +12,6 @@ using System.Reflection;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration;
-using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Xunit;
 
@@ -27,15 +26,13 @@ namespace Abblix.Oidc.Server.UnitTests.Architecture;
 public class OnlyTheGuardTakesTheCreatorTests
 {
     /// <summary>
-    /// The types allowed the creator besides the guard: two read only which algorithms the creator supports, and the
-    /// security event token signer is left to issue #897.
+    /// The types allowed the creator besides the guard: two read only which algorithms the creator supports.
     /// </summary>
     private static readonly Type[] Exempt =
     [
         typeof(ProfiledJwtIssuer),
         typeof(JwtAlgorithmsProvider),
         typeof(ServiceTokensAlgorithmsValidator),
-        typeof(TenantSecurityEventTokenSigner),
     ];
 
     private static Type[] TypesTaking(Type dependency)
