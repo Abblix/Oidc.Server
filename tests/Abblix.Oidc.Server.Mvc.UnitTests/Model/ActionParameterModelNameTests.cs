@@ -46,5 +46,6 @@ public class ActionParameterModelNameTests
         // for a field named after the parameter
         Assert.All(models, entry => Assert.True(
             entry.Parameter.BindingInfo?.BinderModelName != null,
-            $"{entry.Action}: {entry.Parameter.Name} has no model name, so a field of that name becomes its prefix"));    }
+            $"{entry.Action}: {entry.Parameter.Name} has no model name, so a field of that name becomes its prefix"));
+    }
 }

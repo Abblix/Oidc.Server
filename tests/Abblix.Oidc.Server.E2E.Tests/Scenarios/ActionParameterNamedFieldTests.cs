@@ -107,6 +107,10 @@ public class ActionParameterNamedFieldTests(TestFactory factory) : TestBase(fact
             HttpStatusCode.Created);
     }
 
+    /// <summary>
+    /// Every field of a device authorization request may be absent, so the request names a resource the client may
+    /// not have: refused when it is read, and answered with a code if a field hid it.
+    /// </summary>
     [Theory]
     [InlineData("deviceAuthorizationRequest")]
     [InlineData("clientRequest")]
@@ -131,11 +135,12 @@ public class ActionParameterNamedFieldTests(TestFactory factory) : TestBase(fact
             new Dictionary<string, string>
             {
                 [DeviceAuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
+                [DeviceAuthorizationRequest.Parameters.Resource] = "https://unregistered.example.com/api",
                 [ClientRequest.Parameters.ClientId] = registered[RegistrationResponse.ClientId]!.GetValue<string>(),
                 [ClientRequest.Parameters.ClientSecret] = registered[RegistrationResponse.ClientSecret]!.GetValue<string>(),
             },
             field,
-            HttpStatusCode.OK);
+            HttpStatusCode.BadRequest);
     }
 
     /// <summary>
@@ -155,11 +160,11 @@ public class ActionParameterNamedFieldTests(TestFactory factory) : TestBase(fact
             HttpStatusCode.SeeOther);
     }
 
-    [Theory]
-    [InlineData("userInfoRequest")]
-    [InlineData("clientRequest")]
-    public async Task UserInfo_request_with_a_field_named_after_an_action_parameter_is_answered_as_without_it(
-        string field)
+    /// <summary>
+    /// The userinfo request reads no client field, so only the name of its own model is a row here.
+    /// </summary>
+    [Fact]
+    public async Task UserInfo_request_with_a_field_named_after_its_action_parameter_is_answered_as_without_it()
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
@@ -172,13 +177,13 @@ public class ActionParameterNamedFieldTests(TestFactory factory) : TestBase(fact
             {
                 [UserInfoRequest.Parameters.AccessToken] = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>(),
             },
-            field,
+            "userInfoRequest",
             HttpStatusCode.OK);
     }
 
     /// <summary>
-    /// A logout request naming only the client is answered by asking the end user to confirm it, with the field or
-    /// without it.
+    /// A logout request carrying an id_token_hint that is no token is refused for it; a field hiding the hint would
+    /// turn the answer into a request for the end user's confirmation.
     /// </summary>
     [Fact]
     public async Task End_session_request_with_a_field_named_after_its_action_parameter_is_answered_as_without_it()
@@ -192,6 +197,7 @@ public class ActionParameterNamedFieldTests(TestFactory factory) : TestBase(fact
             new Dictionary<string, string>
             {
                 [EndSessionRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+                [EndSessionRequest.Parameters.IdTokenHint] = "not-a-token",
             },
             "request",
             HttpStatusCode.BadRequest);
