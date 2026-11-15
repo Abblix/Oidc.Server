@@ -594,6 +594,32 @@ public class ClientJwtValidatorTests
     }
 
     /// <summary>
+    /// An unsecured token whose client_id claim names a client the server does not know names a client, just not the
+    /// one the request names, so it is not attributed to that one.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_AnUnsecuredTokenNamingAnUnknownClient_IsNotAttributedToTheNamedClient()
+    {
+        const string unknownClientId = "ghost";
+        var token = CreateValidToken();
+        token.Header.Algorithm = SigningAlgorithms.None;
+        token.Payload.Issuer = null;
+        token.Payload.ClientId = unknownClientId;
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .ReturnsAsync(token);
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, unknownClientId))
+            .ReturnsAsync((ClientInfo?)null);
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, CreateClientInfo(ValidClientId), ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+    }
+
+    /// <summary>
     /// Verifies that ValidateAsync resolves signing keys from client keys provider.
     /// Per RFC 7523, client must sign JWT with private key; server validates with public key.
     /// </summary>

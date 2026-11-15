@@ -198,7 +198,7 @@ public partial class ClientJwtValidator(
         // OpenID Connect Core 1.0 section 6.1 asks a request object for iss only "If signed", and has the client_id
         // outside it "match those in the Request Object, if present", so an unsecured token naming neither speaks for
         // the client the request names. A signed one must name its own, since its key is looked up by it
-        if (context.ClientInfo == null && UnsecuredToken.Is(validatedToken))
+        if (context.ClientInfo == null && clientIdFromJwt == null && UnsecuredToken.Is(validatedToken))
             context.ClientInfo = client;
 
         if (context.ClientInfo == null)

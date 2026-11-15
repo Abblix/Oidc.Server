@@ -139,6 +139,47 @@ public partial class JarRichAuthorizationRequestsTests
     }
 
     /// <summary>
+    /// An unsecured object naming neither its issuer nor a client speaks for the client beside it, and so is held to
+    /// what that client committed to: RFC 9101 section 10.5 has a client registered with require_signed_request_object
+    /// send only signed objects, and OpenID Connect Dynamic Client Registration 1.0 section 2 has "All Request Objects
+    /// from this Client MUST be rejected, if not signed with this algorithm" of request_object_signing_alg.
+    /// </summary>
+    [Theory]
+    [InlineData(true, null)]
+    [InlineData(false, SigningAlgorithms.RS256)]
+    public async Task AnUnsecuredRequestObjectNamingNoClient_IsAnInvalidRequestObject_ForAClientCommittedToSigning(
+        bool requireSignedRequestObject,
+        string? requestObjectSigningAlgorithm)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+        var registered = await RegisterClientAsync(client, discovery, new JsonObject
+        {
+            [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
+            [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretBasic,
+            [RegistrationMembers.Jwks] = System.Text.Json.JsonSerializer.SerializeToNode(PublicJwksFor(key)),
+            [RegistrationMembers.RequireSignedRequestObject] = requireSignedRequestObject,
+            [RegistrationMembers.RequestObjectSigningAlg] = requestObjectSigningAlgorithm,
+        });
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+
+        using var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, new Dictionary<string, string>
+            {
+                [AuthorizationRequest.Parameters.ClientId] = clientId,
+                [AuthorizationRequest.Parameters.Request] = Unsecured(
+                    UnsecuredObjectClaims(clientId, discovery.Issuer, ResponseTypes.Code, namesIssuer: false)),
+            }),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidRequestObject, await ErrorResponseReader.ErrorCodeOf(response));
+    }
+
+    /// <summary>
     /// The claims of an unsecured request object to <paramref name="audience"/>, issued by <paramref name="clientId"/>
     /// when <paramref name="namesIssuer"/>: every parameter of an OpenID request with PKCE for
     /// <paramref name="responseType"/>, but no client_id.
