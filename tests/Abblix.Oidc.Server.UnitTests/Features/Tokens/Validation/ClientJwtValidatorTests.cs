@@ -567,6 +567,33 @@ public class ClientJwtValidatorTests
     }
 
     /// <summary>
+    /// OpenID Connect Core 1.0 section 6.1 asks a request object for iss only "If signed", so an unsecured token
+    /// naming neither its issuer nor a client_id speaks for the client the request names; a signed one does not.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.None, true)]
+    [InlineData(SigningAlgorithms.RS256, false)]
+    public async Task ValidateAsync_ATokenNamingNoClient_SpeaksForTheNamedClientOnlyUnsecured(
+        string algorithm,
+        bool served)
+    {
+        var token = CreateValidToken();
+        token.Header.Algorithm = algorithm;
+        token.Payload.Issuer = null;
+        var namedClient = CreateClientInfo(ValidClientId);
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .ReturnsAsync(token);
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, namedClient, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(served, result.TryGetSuccess(out var valid));
+        if (served)
+            Assert.Same(namedClient, valid!.Client);
+    }
+
+    /// <summary>
     /// Verifies that ValidateAsync resolves signing keys from client keys provider.
     /// Per RFC 7523, client must sign JWT with private key; server validates with public key.
     /// </summary>

@@ -109,6 +109,42 @@ public partial class JarRichAuthorizationRequestsTests
     }
 
     /// <summary>
+    /// A request object encrypted to the server without being signed proves no more than an unsecured one, so it may
+    /// leave its client_id to the one beside it as OpenID Connect Core 1.0 section 6.1 has ("if present"), for a client
+    /// not committed to signing.
+    /// </summary>
+    [Fact]
+    public async Task EncryptedUnsignedRequestObjectWithoutClientId_IsServedForTheClientIdBesideIt()
+    {
+        var serverKey = JsonWebKeyFactory.CreateRsa(
+            PublicKeyUsages.Encryption,
+            EncryptionAlgorithms.KeyManagement.RsaOaep256);
+        await using var host = CreateHostWithEncryptionKeys(serverKey);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var clientId = await RegisterUnsecuredObjectClientAsync(client, discovery, ResponseTypes.Code);
+
+        var claimsSet = Encoding.UTF8.GetBytes(
+            UnsecuredObjectClaims(clientId, discovery.Issuer, ResponseTypes.Code, namesIssuer: true).ToJsonString());
+        var encrypted = await JwtServices.GetRequiredService<IJsonWebTokenEncryptor>().EncryptAsync(
+            claimsSet,
+            serverKey.Sanitize(includePrivateKeys: false),
+            tokenType: null,
+            contentType: null,
+            EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+            TestContext.Current.CancellationToken);
+
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [AuthorizationRequest.Parameters.Request] = encrypted,
+        });
+
+        Assert.False(string.IsNullOrEmpty(code));
+    }
+
+    /// <summary>
     /// A tenant whose RSA encryption key declares no algorithm lists the RSA key management algorithms its material
     /// performs that the host registers - RSA1_5 is opt-in and left out - and no algorithm of another key type.
     /// </summary>

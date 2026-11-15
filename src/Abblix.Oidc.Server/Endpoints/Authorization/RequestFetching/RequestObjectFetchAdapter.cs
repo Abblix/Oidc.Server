@@ -17,6 +17,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.RequestObject;
+using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
@@ -102,7 +103,7 @@ public class RequestObjectFetchAdapter(
     /// </summary>
     /// <param name="requestObject">The validated request object.</param>
     protected virtual string? WhyRefused(JsonWebToken requestObject)
-        => !UnsecuredRequestObject.Is(requestObject) && NamesNoClient(requestObject)
+        => !UnsecuredToken.Is(requestObject) && NamesNoClient(requestObject)
             ? NoClientNamed
             : null;
 

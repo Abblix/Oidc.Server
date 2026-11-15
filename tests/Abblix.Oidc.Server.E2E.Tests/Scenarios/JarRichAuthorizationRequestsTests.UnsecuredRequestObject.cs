@@ -37,21 +37,25 @@ public partial class JarRichAuthorizationRequestsTests
 {
     /// <summary>
     /// The object carries every parameter but client_id, and the request outside it the client_id alone, or with the
-    /// response_type and scope OpenID Connect Core 1.0 section 6.1 has passed outside too.
+    /// response_type and scope OpenID Connect Core 1.0 section 6.1 has passed outside too. The object names its issuer
+    /// or not: section 6.1 asks for iss only "If signed".
     /// </summary>
     [Theory]
-    [InlineData("code id_token", null, Arrival.AuthorizeByValue, false)]
-    [InlineData("code token", null, Arrival.AuthorizeByValue, false)]
-    [InlineData("code id_token token", null, Arrival.AuthorizeByValue, false)]
-    [InlineData("code id_token", null, Arrival.AuthorizeByValue, true)]
-    [InlineData("code", null, Arrival.AuthorizeByValue, false)]
-    [InlineData("code id_token", ResponseModes.FormPost, Arrival.AuthorizeByValue, false)]
-    [InlineData("code id_token", null, Arrival.AuthorizeByReference, false)]
+    [InlineData("code id_token", null, Arrival.AuthorizeByValue, false, true)]
+    [InlineData("code token", null, Arrival.AuthorizeByValue, false, true)]
+    [InlineData("code id_token token", null, Arrival.AuthorizeByValue, false, true)]
+    [InlineData("code id_token", null, Arrival.AuthorizeByValue, true, true)]
+    [InlineData("code", null, Arrival.AuthorizeByValue, false, true)]
+    [InlineData("code id_token", ResponseModes.FormPost, Arrival.AuthorizeByValue, false, true)]
+    [InlineData("code id_token", null, Arrival.AuthorizeByReference, false, true)]
+    [InlineData("code", null, Arrival.AuthorizeByValue, false, false)]
+    [InlineData("code id_token", null, Arrival.AuthorizeByReference, false, false)]
     public async Task AnUnsecuredRequestObjectWithoutClientId_IsServedForTheClientIdBesideIt(
         string responseType,
         string? responseMode,
         Arrival arrival,
-        bool oauthParametersOutside)
+        bool oauthParametersOutside,
+        bool namesIssuer)
     {
         var served = new ServedRequestObject();
         await using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -63,7 +67,7 @@ public partial class JarRichAuthorizationRequestsTests
         var discovery = await FetchDiscoveryAsync(client);
         var clientId = await RegisterUnsecuredObjectClientAsync(client, discovery, responseType);
 
-        var claims = UnsecuredObjectClaims(clientId, discovery.AuthorizationEndpoint, responseType);
+        var claims = UnsecuredObjectClaims(clientId, discovery.AuthorizationEndpoint, responseType, namesIssuer);
         if (responseMode is not null)
             claims[AuthorizationRequest.Parameters.ResponseMode] = responseMode;
 
@@ -107,11 +111,14 @@ public partial class JarRichAuthorizationRequestsTests
     /// section 6.3 uses "only the parameters in the Request Object".
     /// </summary>
     [Theory]
-    [InlineData(Arrival.Pushed, false)]
-    [InlineData(Arrival.AuthorizeByValue, true)]
+    [InlineData(Arrival.Pushed, false, true)]
+    [InlineData(Arrival.AuthorizeByValue, true, true)]
+    [InlineData(Arrival.Pushed, false, false)]
+    [InlineData(Arrival.AuthorizeByValue, true, false)]
     public async Task AnUnsecuredRequestObjectWithoutClientId_IsAnInvalidRequestObject_OutsideTheOpenIdConnectRule(
         Arrival arrival,
-        bool strict)
+        bool strict,
+        bool namesIssuer)
     {
         await using var host = strict ? CreateStrictHost() : Factory.WithWebHostBuilder(_ => { });
         var client = CreateClientFor(host);
@@ -122,7 +129,7 @@ public partial class JarRichAuthorizationRequestsTests
         {
             [AuthorizationRequest.Parameters.ClientId] = poster.ClientId,
             [AuthorizationRequest.Parameters.Request] =
-                Unsecured(UnsecuredObjectClaims(poster.ClientId, discovery.Issuer, ResponseTypes.Code)),
+                Unsecured(UnsecuredObjectClaims(poster.ClientId, discovery.Issuer, ResponseTypes.Code, namesIssuer)),
         };
 
         using var response = await SendAsync(client, discovery, poster, arrival, parameters);
@@ -132,15 +139,15 @@ public partial class JarRichAuthorizationRequestsTests
     }
 
     /// <summary>
-    /// The claims of an unsecured request object issued by <paramref name="clientId"/> to <paramref name="audience"/>:
-    /// every parameter of an OpenID request with PKCE for <paramref name="responseType"/>, but no client_id.
+    /// The claims of an unsecured request object to <paramref name="audience"/>, issued by <paramref name="clientId"/>
+    /// when <paramref name="namesIssuer"/>: every parameter of an OpenID request with PKCE for
+    /// <paramref name="responseType"/>, but no client_id.
     /// </summary>
-    private static JsonObject UnsecuredObjectClaims(string clientId, Uri audience, string responseType)
+    private static JsonObject UnsecuredObjectClaims(string clientId, Uri audience, string responseType, bool namesIssuer)
     {
         var now = TimeProvider.System.GetUtcNow();
-        return new JsonObject
+        var claims = new JsonObject
         {
-            [JwtClaimTypes.Issuer] = clientId,
             [JwtClaimTypes.Audience] = audience.OriginalString,
             [JwtClaimTypes.IssuedAt] = now.ToUnixTimeSeconds(),
             [JwtClaimTypes.ExpiresAt] = now.AddMinutes(5).ToUnixTimeSeconds(),
@@ -153,6 +160,10 @@ public partial class JarRichAuthorizationRequestsTests
             [AuthorizationRequest.Parameters.CodeChallenge] = GeneratePkcePair().Challenge,
             [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
         };
+        if (namesIssuer)
+            claims[JwtClaimTypes.Issuer] = clientId;
+
+        return claims;
     }
 
     /// <summary>

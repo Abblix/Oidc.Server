@@ -113,36 +113,17 @@ public partial class ClientJwtValidator(
 
         var validatedToken = result.GetSuccess();
 
-        var clientIdFromJwt = validatedToken.Payload.ClientId;
-        if (clientIdFromJwt != null)
-        {
-            if (context.ClientInfo == null)
-            {
-                // No client found by issuer, try client_id claim
-                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientIdFromJwt);
-            }
-            else if (context.ClientInfo.ClientId != clientIdFromJwt)
-            {
-                // Both issuer and client_id present but don't match
-                LogClientIdMismatch(context.ClientInfo.ClientId, clientIdFromJwt);
+        var determined = await DetermineClientAsync(tenant, client, context, validatedToken);
+        if (determined.TryGetFailure(out var undetermined))
+            return undetermined;
 
-                return new JwtValidationError(
-                    JwtError.InvalidToken,
-                    $"Client ID mismatch: issuer resolves to '{context.ClientInfo.ClientId}', but client_id claim is '{clientIdFromJwt}'");
-            }
-        }
+        var tokenClient = determined.GetSuccess();
 
-        if (context.ClientInfo == null)
-        {
-            LogClientNotDetermined();
-            return new JwtValidationError(JwtError.InvalidToken, "Unable to determine client from JWT");
-        }
-
-        var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
+        var profile = SecurityProfileRequirements.For(tokenClient, tenant.DefaultSecurityProfile);
 
         if (profile.AlgorithmOutside(validatedToken, keyManagementAlgorithms) is { } algorithm)
         {
-            LogAlgorithmOutsideTheClientsProfile(context.ClientInfo.ClientId, Sanitized.Value(algorithm));
+            LogAlgorithmOutsideTheClientsProfile(tokenClient.ClientId, Sanitized.Value(algorithm));
             return new JwtValidationError(
                 JwtError.InvalidToken, "The token uses an algorithm the client's security profile does not admit");
         }
@@ -165,7 +146,7 @@ public partial class ClientJwtValidator(
             if (!validatedToken.Payload.TryReadTimestamps(
                     out var notBefore, out var expiresAt, out var issuedAt, out var whyUnreadable))
             {
-                LogTimestampUnreadable(context.ClientInfo.ClientId, whyUnreadable);
+                LogTimestampUnreadable(tokenClient.ClientId, whyUnreadable);
                 return new JwtValidationError(JwtError.InvalidToken, whyUnreadable);
             }
 
@@ -175,13 +156,58 @@ public partial class ClientJwtValidator(
 
             if (refusal != null)
             {
-                LogTimestampsOutsideTheClientsProfile(context.ClientInfo.ClientId, refusal);
+                LogTimestampsOutsideTheClientsProfile(tokenClient.ClientId, refusal);
                 return new JwtValidationError(JwtError.InvalidToken, refusal);
             }
         }
 
-        LogValidationSucceeded(context.ClientInfo.ClientId);
-        return new ValidJsonWebToken(validatedToken, context.ClientInfo);
+        LogValidationSucceeded(tokenClient.ClientId);
+        return new ValidJsonWebToken(validatedToken, tokenClient);
+    }
+
+    /// <summary>
+    /// Settles the client the token speaks for on <paramref name="context"/>: the one its issuer resolved to, else the
+    /// one its client_id claim names, else, for an unsecured token naming neither, the one the request names.
+    /// </summary>
+    /// <returns>The client, or the refusal when the token names two clients or none can be determined.</returns>
+    private async Task<Result<ClientInfo, JwtValidationError>> DetermineClientAsync(
+        TenantDefinition tenant,
+        ClientInfo? client,
+        ValidationContext context,
+        JsonWebToken validatedToken)
+    {
+        var clientIdFromJwt = validatedToken.Payload.ClientId;
+        if (clientIdFromJwt != null)
+        {
+            if (context.ClientInfo == null)
+            {
+                // No client found by issuer, try client_id claim
+                context.ClientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientIdFromJwt);
+            }
+            else if (context.ClientInfo.ClientId != clientIdFromJwt)
+            {
+                // Both issuer and client_id present but don't match
+                LogClientIdMismatch(context.ClientInfo.ClientId, clientIdFromJwt);
+
+                return new JwtValidationError(
+                    JwtError.InvalidToken,
+                    $"Client ID mismatch: issuer resolves to '{context.ClientInfo.ClientId}', but client_id claim is '{clientIdFromJwt}'");
+            }
+        }
+
+        // OpenID Connect Core 1.0 section 6.1 asks a request object for iss only "If signed", and has the client_id
+        // outside it "match those in the Request Object, if present", so an unsecured token naming neither speaks for
+        // the client the request names. A signed one must name its own, since its key is looked up by it
+        if (context.ClientInfo == null && UnsecuredToken.Is(validatedToken))
+            context.ClientInfo = client;
+
+        if (context.ClientInfo == null)
+        {
+            LogClientNotDetermined();
+            return new JwtValidationError(JwtError.InvalidToken, "Unable to determine client from JWT");
+        }
+
+        return context.ClientInfo;
     }
 
     /// <summary>
