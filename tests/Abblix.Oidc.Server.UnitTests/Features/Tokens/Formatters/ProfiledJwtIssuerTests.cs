@@ -135,4 +135,28 @@ public class ProfiledJwtIssuerTests
                 _encryptionKey,
                 EncryptionAlgorithms.KeyManagement.Rsa1_5));
     }
+
+    /// <summary>
+    /// A claims set encrypted without a signature is an unsigned token, which FAPI 1.0 Part 2 section 8.6 does not admit
+    /// ("shall use PS256 or ES256 algorithms"): it is refused under the profile before the creator is reached, and
+    /// issued without one.
+    /// </summary>
+    [Fact]
+    public async Task AnUnsignedClaimsSet_IsRefusedUnderTheProfile()
+    {
+        _creator
+            .Setup(c => c.EncryptClaimsAsync(
+                It.IsAny<JsonWebToken>(), _encryptionKey, It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync("issued");
+        var issuer = new ProfiledJwtIssuer(_creator.Object);
+        Task<string> Issue(SecurityProfileRequirements profile) => issuer.EncryptClaimsAsync(
+            profile,
+            Token(SigningAlgorithms.None),
+            _encryptionKey,
+            EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256);
+
+        await Assert.ThrowsAsync<AlgorithmRefusedByProfileException>(() => Issue(Fapi1));
+        Assert.Equal("issued", await Issue(Unprofiled));
+    }
 }

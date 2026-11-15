@@ -133,4 +133,106 @@ public class EncryptedClaimsSetTests
 		Assert.True(refused.TryGetFailure(out var error));
 		Assert.Equal(JwtError.InvalidAlgorithm, error.Error);
 	}
+
+	/// <summary>
+	/// A JWE whose plaintext is <paramref name="claims"/>, encrypted under <paramref name="tokenType"/> and
+	/// <paramref name="contentType"/>, as another party may send it.
+	/// </summary>
+	private static Task<string> EncryptAsync(JsonObject claims, string? tokenType, string? contentType)
+		=> ServiceProvider.GetRequiredService<IJsonWebTokenEncryptor>().EncryptAsync(
+			System.Text.Encoding.UTF8.GetBytes(claims.ToJsonString()),
+			EncryptionKey,
+			tokenType,
+			contentType,
+			EncryptionAlgorithms.KeyManagement.RsaOaep256,
+			EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256,
+			TestContext.Current.CancellationToken);
+
+	private static JsonObject Claims() => new()
+	{
+		[JwtClaimTypes.Issuer] = "test-issuer",
+		[JwtClaimTypes.Subject] = "user-1",
+	};
+
+	/// <summary>
+	/// RFC 7519 section 7.2 step 8: under cty JWT the plaintext "is a JWT that was the subject of nested signing or
+	/// encryption operations", in any case of the media type name (section 5.2: "media type names are not case
+	/// sensitive"), so a JSON object there is a malformed nested JWT rather than a claims set.
+	/// </summary>
+	[Theory]
+	[InlineData(JsonWebTokenTypes.Jwt)]
+	[InlineData("jwt")]
+	public async Task AJsonObjectUnderCtyJwt_IsAMalformedNestedJwt(string contentType)
+	{
+		var jwe = await EncryptAsync(Claims(), tokenType: null, contentType);
+
+		var result = await ServiceProvider.GetRequiredService<IJsonWebTokenValidator>()
+			.ValidateAsync(jwe, Parameters(default));
+
+		Assert.True(result.TryGetFailure(out var error));
+		Assert.Equal(JwtError.MalformedToken, error.Error);
+	}
+
+	/// <summary>
+	/// The claims set takes the JWE's typ, so a validation requiring a type refuses one whose JWE names none or
+	/// another, and accepts the matching one.
+	/// </summary>
+	[Theory]
+	[InlineData(null, false)]
+	[InlineData(JsonWebTokenTypes.Jwt, false)]
+	[InlineData("at+jwt", true)]
+	public async Task TheJweTyp_IsTheTypeOfTheClaimsSet(string? tokenType, bool accepted)
+	{
+		var jwe = await EncryptAsync(Claims(), tokenType, contentType: null);
+
+		var result = await ServiceProvider.GetRequiredService<IJsonWebTokenValidator>().ValidateAsync(
+			jwe,
+			Parameters(default) with { TokenTypes = TokenTypePolicy.Exactly("at+jwt") });
+
+		if (accepted)
+		{
+			Assert.True(result.TryGetSuccess(out _));
+		}
+		else
+		{
+			Assert.True(result.TryGetFailure(out var error));
+			Assert.Equal(JwtError.InvalidTokenType, error.Error);
+		}
+	}
+
+	/// <summary>
+	/// The claims of a claims set are validated as those of a JWS are: an issuer the caller does not accept and an
+	/// expired token are refused.
+	/// </summary>
+	[Theory]
+	[InlineData("issuer")]
+	[InlineData("lifetime")]
+	public async Task TheClaimsOfAClaimsSet_AreValidated(string check)
+	{
+		var claims = Claims();
+		ValidationParameters parameters;
+		switch (check)
+		{
+			case "issuer":
+				parameters = Parameters(ValidationOptions.ValidateIssuer) with
+				{
+					ValidateIssuer = issuer => Task.FromResult(issuer == "another-issuer"),
+				};
+				break;
+
+			case "lifetime":
+				claims[JwtClaimTypes.ExpiresAt] = TimeProvider.System.GetUtcNow().AddHours(-1).ToUnixTimeSeconds();
+				parameters = Parameters(ValidationOptions.ValidateLifetime);
+				break;
+
+			default:
+				throw new ArgumentOutOfRangeException(nameof(check), check, null);
+		}
+
+		var jwe = await EncryptAsync(claims, tokenType: null, contentType: null);
+		var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
+
+		Assert.True((await validator.ValidateAsync(jwe, Parameters(default))).TryGetSuccess(out _));
+		Assert.True((await validator.ValidateAsync(jwe, parameters)).TryGetFailure(out _));
+	}
 }
