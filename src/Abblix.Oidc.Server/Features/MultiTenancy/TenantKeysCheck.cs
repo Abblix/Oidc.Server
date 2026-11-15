@@ -15,7 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses a tenant declaring keys its server's placement never reads; with the keys coming from each tenant's
+/// Refuses a tenant declaring keys the library's key provider never reads; with the keys coming from each tenant's
 /// settings, a tenant declaring no signing key, a key lacking a member its type requires, or a key another tenant
 /// declares; and, with the keys held by a custodian, whether or not a key provider of the host's own stands in front
 /// of the library's, a tenant naming no key there or one another tenant names.
