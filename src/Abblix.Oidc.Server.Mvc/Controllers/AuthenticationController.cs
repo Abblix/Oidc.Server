@@ -100,6 +100,7 @@ public sealed class AuthenticationController : ControllerBase
     [HttpGetOrPost]
     [ActionName(nameof(UserInfoAsync))]
     [EnableCors(OidcConstants.CorsPolicyName)]
+    [ChallengesInvalidRequestAsUserInfo]
     public async Task<ActionResult> UserInfoAsync(
         [FromServices] IUserInfoHandler handler,
         [FromServices] IUserInfoResponseFormatter<ActionResult> formatter,

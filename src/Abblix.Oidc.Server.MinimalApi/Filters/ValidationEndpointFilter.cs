@@ -29,18 +29,23 @@ internal sealed class ValidationEndpointFilter : IEndpointFilter
 
         // The form belongs to the request, and every model bound from it records that it could not be read
         if (models.Any(model => model.FormUnreadable))
-            return Refuse([ErrorFactory.UnreadableForm]);
+            return await RefuseAsync(context.HttpContext, [ErrorFactory.UnreadableForm]);
 
         var failures = new List<string>();
         foreach (var model in models)
             failures.AddRange(await FailuresOf(model));
 
         // Two models of one request may bind the same parameter, such as client_id, and refuse it alike
-        return failures.Count > 0 ? Refuse(failures.Distinct()) : await next(context);
+        return failures.Count > 0 ? await RefuseAsync(context.HttpContext, failures.Distinct()) : await next(context);
     }
 
-    private static IResult Refuse(IEnumerable<string> failures)
-        => ErrorFactory.InvalidRequest(failures).Format(StatusCodes.Status400BadRequest);
+    private static Task<IResult> RefuseAsync(HttpContext httpContext, IEnumerable<string> failures)
+    {
+        var error = ErrorFactory.InvalidRequest(failures);
+        return httpContext.GetEndpoint()?.Metadata.GetMetadata<InvalidRequestFormat>() is { } format
+            ? format.Format(httpContext, error)
+            : Task.FromResult(error.Format(StatusCodes.Status400BadRequest));
+    }
 
     private static async Task<IEnumerable<string>> FailuresOf(IValidatableModel model)
     {
