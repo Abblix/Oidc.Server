@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -26,8 +27,9 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <c>request_object_encryption_alg</c>/<c>enc</c> (RFC 9101) and
 /// <c>authorization_encrypted_response_alg</c>/<c>enc</c> (JARM section 3). Each algorithm of a JWT this server sends
 /// must be one issuance encrypts with (<see cref="IJwtAlgorithmsProvider.EncryptedResponseAlgorithmsSupported"/> and
-/// <see cref="IJwtAlgorithmsProvider.EncryptedResponseMethodsSupported"/>), and each algorithm of a request object one
-/// the server decrypts with; and each algorithm a JWT this server sends is encrypted under
+/// <see cref="IJwtAlgorithmsProvider.EncryptedResponseMethodsSupported"/>), and the key management algorithm of a request
+/// object one the tenant's own published encryption keys open, the list discovery advertises as
+/// <c>request_object_encryption_alg_values_supported</c>; and each algorithm a JWT this server sends is encrypted under
 /// must have a key the client will hold, so a registration that could never be sent the JWT it asked to have encrypted
 /// is answered with <c>invalid_client_metadata</c> instead of every such JWT being refused afterwards.
 /// </summary>
@@ -41,25 +43,50 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// A key set passed by value is judged here, as it changes only by a registration; whether a key published at the
 /// <c>jwks_uri</c> carries the algorithm is not, since the client can change that document after registration, so it is
 /// decided where the JWT is encrypted.
+/// A request object is decrypted with the tenant's published encryption keys alone, none of them symmetric, so a
+/// symmetric <c>request_object_encryption_alg</c>, which Dynamic Client Registration 1.0 section 2 has a client include
+/// "when symmetric encryption will be used", names an encryption this server does not decrypt and is refused.
 /// </remarks>
 /// <param name="jwtAlgorithms">The JWE algorithms the server encrypts and decrypts with, as discovery advertises
 /// them.</param>
+/// <param name="serviceKeys">The tenant's own keys, which a request object is encrypted to.</param>
 /// <param name="options">Supplies the content encryption algorithm a client that registered none is sent, which fixes
 /// the length of a key used directly as the content encryption key.</param>
 /// <param name="clientInfoProvider">Supplies the stored client an update keeps the secrets of.</param>
 /// <param name="timeProvider">Supplies the time a stored secret's expiry is judged against.</param>
 public class EncryptedResponseAlgorithmsValidator(
     IJwtAlgorithmsProvider jwtAlgorithms,
+    IAuthServiceKeysProvider serviceKeys,
     IOptions<OidcOptions> options,
     IClientInfoProvider clientInfoProvider,
     TimeProvider timeProvider) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
-        => ValidateSupported(context.Request) ?? await ValidateKeySourcesAsync(tenant, context);
+        => ValidateSupported(context.Request, await RequestObjectAlgorithmsAsync(tenant, context.Request))
+           ?? await ValidateKeySourcesAsync(tenant, context);
 
-    private OidcError? ValidateSupported(Model.ClientRegistrationRequest request)
+    /// <summary>
+    /// The key management algorithms a request object to <paramref name="tenant"/> is opened under: the same answer
+    /// discovery gives, so a client registers only what it was told. Not asked where the client registers none.
+    /// </summary>
+    private async Task<IEnumerable<string>> RequestObjectAlgorithmsAsync(
+        TenantDefinition tenant,
+        Model.ClientRegistrationRequest request)
     {
+        if (request.RequestObjectEncryptionAlg is null)
+            return [];
+
+        return await serviceKeys.GetInboundKeyManagementAlgorithmsAsync(
+            tenant,
+            jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported);
+    }
+
+    private OidcError? ValidateSupported(
+        Model.ClientRegistrationRequest request,
+        IEnumerable<string> requestObjectAlgorithms)
+    {
+
         var responseAlgorithms = jwtAlgorithms.EncryptedResponseAlgorithmsSupported;
         var responseMethods = jwtAlgorithms.EncryptedResponseMethodsSupported;
 
@@ -71,10 +98,7 @@ public class EncryptedResponseAlgorithmsValidator(
                 request.IntrospectionEncryptedResponseAlg, Parameters.IntrospectionEncryptedResponseAlg, responseAlgorithms)
             ?? ValidateEnc(
                 request.IntrospectionEncryptedResponseEnc, Parameters.IntrospectionEncryptedResponseEnc, responseMethods)
-            ?? ValidateAlg(
-                request.RequestObjectEncryptionAlg,
-                Parameters.RequestObjectEncryptionAlg,
-                jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported)
+            ?? ValidateAlg(request.RequestObjectEncryptionAlg, Parameters.RequestObjectEncryptionAlg, requestObjectAlgorithms)
             ?? ValidateEnc(
                 request.RequestObjectEncryptionEnc,
                 Parameters.RequestObjectEncryptionEnc,
