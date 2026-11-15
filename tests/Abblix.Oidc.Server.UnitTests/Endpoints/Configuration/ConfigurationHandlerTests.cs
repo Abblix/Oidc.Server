@@ -15,11 +15,16 @@ using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
@@ -233,6 +238,71 @@ public class ConfigurationHandlerTests
         Assert.Equal(
             implicitListed ? grantTypes : grantTypes.Where(grantType => grantType != GrantTypes.Implicit),
             document.GrantTypesSupported);
+    }
+
+    /// <summary>
+    /// The response types the document lists are exactly those the authorization endpoint accepts from some client of
+    /// the tenant: a value listed and refused tells a client the server supports a flow it will not run, and a value
+    /// accepted and not listed hides one it does. The server makes up every response type, the none flow included, as
+    /// a host enabling the implicit and none flows does; the client is registered for all of them and states no
+    /// profile, so only the tenant's profile decides. A value counts as accepted where it passes with the response
+    /// mode the request leaves to the server or with jwt, which a profile requiring a signed response asks for.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None)]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
+    public async Task TheDocument_ListsExactlyTheResponseTypesTheAuthorizationEndpointAccepts(ClientSecurityProfile profile)
+    {
+        IAuthorizationResponseBuilder[] builders =
+        [
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Code),
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Token),
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.IdToken),
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.None),
+        ];
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+        var validator = new FlowTypeValidator(Mock.Of<ILogger<FlowTypeValidator>>(), builders);
+        var everyResponseType = EveryResponseType.Select(responseType => responseType.Split(' ')).ToArray();
+
+        async Task<bool> AcceptedAsync(string[] responseType)
+        {
+            foreach (var responseMode in new[] { null, ResponseModes.Jwt })
+            {
+                var context = new AuthorizationValidationContext(new AuthorizationRequest
+                {
+                    ClientId = TestConstants.DefaultClientId,
+                    ResponseType = responseType,
+                    ResponseMode = responseMode,
+                    RedirectUri = new Uri("https://client.example.com/callback"),
+                    Scope = [Scopes.OpenId],
+                })
+                {
+                    ClientInfo = new ClientInfo(TestConstants.DefaultClientId) { AllowedResponseTypes = everyResponseType },
+                };
+
+                if (await validator.ValidateAsync(tenant, context) is null)
+                    return true;
+            }
+
+            return false;
+        }
+
+        var accepted = new List<string>();
+        foreach (var responseType in everyResponseType)
+        {
+            if (await AcceptedAsync(responseType))
+                accepted.Add(string.Join(' ', responseType));
+        }
+
+        // The metadata the server builds accepts request objects, so the handler asks for the keys to encrypt one to
+        var handler = HandlerFor(KeysProviderOf(), new AuthorizationMetadataProvider(builders));
+        var document = await handler.HandleAsync(tenant);
+
+        Assert.Equal(accepted, document.ResponseTypesSupported);
     }
 
     private const string RsaDeclaringOaep256 = nameof(RsaDeclaringOaep256);
