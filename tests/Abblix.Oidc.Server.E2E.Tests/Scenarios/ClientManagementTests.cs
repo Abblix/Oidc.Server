@@ -210,6 +210,47 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// A member sent as JSON null is read as omitted, as RFC 7592 section 2.2 treats an omitted field as a null one,
+    /// so the registration gets the member's default on both hosts rather than a fault or a refusal.
+    /// </summary>
+    [Theory]
+    [InlineData(RequestMembers.ResponseTypes)]
+    [InlineData(RequestMembers.GrantTypes)]
+    [InlineData(RequestMembers.ApplicationType)]
+    [InlineData(RequestMembers.TokenEndpointAuthMethod)]
+    [InlineData(RequestMembers.PostLogoutRedirectUris)]
+    public async Task A_null_member_is_read_as_omitted(string member)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata($"null-{member}");
+        metadata[member] = null;
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    /// <summary>
+    /// A null among the response types names no response type, and is refused as the empty one is.
+    /// </summary>
+    [Fact]
+    public async Task A_null_response_type_is_invalid_client_metadata()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("null-response-type");
+        metadata[RequestMembers.ResponseTypes] = new JsonArray((JsonNode?)null);
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
     /// An application type nobody defined, from a client that registers no redirect URI but a post-logout one, is
     /// refused rather than answered as a fault of the server.
     /// </summary>

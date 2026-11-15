@@ -317,14 +317,12 @@ public class PostLogoutRedirectUrisValidatorTests
     /// An application type the server does not know comes from the request body, so it is refused rather than
     /// thrown on, also for a client that registers no redirect URI and so never meets that validator's refusal.
     /// </summary>
-    [Theory]
-    [InlineData("service")]
-    [InlineData(null)]
-    public async Task ValidateAsync_UnknownApplicationType_IsInvalidClientMetadata(string? applicationType)
+    [Fact]
+    public async Task ValidateAsync_UnknownApplicationType_IsInvalidClientMetadata()
     {
         var context = CreateContext(
             postLogoutRedirectUris: [new Uri("https://example.com/logout")],
-            applicationType: applicationType!);
+            applicationType: "service");
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
