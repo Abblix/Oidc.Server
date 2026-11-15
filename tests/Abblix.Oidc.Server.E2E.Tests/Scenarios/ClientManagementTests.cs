@@ -1056,11 +1056,24 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     [Fact]
     public async Task Every_registered_member_comes_back_from_registration_read_and_update()
     {
-        var client = CreateClient();
+        // A request object is encrypted to a key of the server, so its algorithm is accepted only with a server
+        // encryption key that opens it; every other member needs no configuration of the host
+        await using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.PostConfigure<TestTenantSettings>(tenant => tenant.EncryptionKeys =
+                [
+                    JsonWebKeyFactory.CreateEllipticCurve(
+                        EllipticCurveTypes.P256, EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW),
+                ])));
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
         var discovery = await FetchDiscoveryAsync(client);
 
-        // Every member the test host accepts without configuration of its own, each set apart from the server's
-        // default and from every other member, so a value returned under the wrong name or left at its default fails
+        // Every member, each set apart from the server's default and from every other member, so a value returned
+        // under the wrong name or left at its default fails
         var metadata = new JsonObject
         {
             [RequestMembers.ClientName] = "described",

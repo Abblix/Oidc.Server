@@ -9,6 +9,8 @@
 using Abblix.Oidc.Server.Common.Constants;
 using System;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -16,7 +18,6 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
-using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
@@ -46,11 +47,11 @@ public class ClientJwtFormatterTests
 
     /// <summary>What the client registered for UserInfo, which is also what an ID token uses.</summary>
     private static ClientJwtEncryption UserInfoPolicy(ClientInfo client)
-        => ClientJwtEncryption.ForUserInfo(client, new OidcOptions());
+        => ClientJwtEncryption.ForUserInfo(client);
 
     /// <summary>What the client registered for identity tokens, which logout tokens share.</summary>
     private static ClientJwtEncryption LogoutTokenPolicy(ClientInfo client)
-        => ClientJwtEncryption.ForIdentityToken(client, new OidcOptions());
+        => ClientJwtEncryption.ForIdentityToken(client);
 
     public ClientJwtFormatterTests()
     {
@@ -644,5 +645,63 @@ public class ClientJwtFormatterTests
 
         // A refusal the caller answers in its own protocol, not a server error
         Assert.True(result.TryGetFailure(out _));
+    }
+
+    /// <summary>
+    /// A client registering only the key management algorithm is sent the content encryption algorithm its
+    /// specification names, as the registration response echoes no other: OpenID Connect Dynamic Client Registration 1.0
+    /// section 2, "the default id_token_encrypted_response_enc value is A128CBC-HS256" (and userinfo likewise), RFC 9701
+    /// section 6 for introspection ("The default, if omitted, is A128CBC-HS256") and JARM section 3. Under dir the key
+    /// is that algorithm's: 32 octets, the whole SHA-256 digest of the client secret (OpenID Connect Core 1.0 section
+    /// 10.2, "For keys of 256 or fewer bits, SHA-256 is used"). No host setting chooses another value.
+    /// </summary>
+    [Theory]
+    [InlineData("id_token")]
+    [InlineData("userinfo")]
+    [InlineData("introspection")]
+    [InlineData("authorization")]
+    public async Task FormatAsync_AnAlgorithmRegisteredWithoutItsContentEncryption_TakesTheSpecificationsDefault(
+        string response)
+    {
+        const string secret = "a-client-secret-kept-for-client_secret_jwt";
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.RS256 },
+            Payload = { Subject = "user123", Audiences = [ClientId] },
+        };
+        var client = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            ClientSecrets = [new ClientSecret { Value = secret, Sha512Hash = [1] }],
+        };
+        const string dir = EncryptionAlgorithms.KeyManagement.Dir;
+        var policy = response switch
+        {
+            "id_token" => ClientJwtEncryption.ForIdentityToken(
+                client with { IdentityTokenEncryptedResponseAlgorithm = dir }),
+            "userinfo" => ClientJwtEncryption.ForUserInfo(client with { UserInfoEncryptedResponseAlgorithm = dir }),
+            "introspection" => ClientJwtEncryption.ForIntrospection(
+                client with { IntrospectionEncryptedResponseAlgorithm = dir }),
+            "authorization" => ClientJwtEncryption.ForJarm(
+                client with { AuthorizationEncryptedResponseAlgorithm = dir }),
+            _ => throw new ArgumentOutOfRangeException(nameof(response), response, null),
+        };
+        JsonWebKey? usedKey = null;
+        string? usedContentEncryption = null;
+        _jwtCreator.Setup(c => c.EncryptedResponseAlgorithmsSupported).Returns([dir]);
+        _serviceKeysProvider
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>(
+                (_, _, key, _, contentEncryption) => (usedKey, usedContentEncryption) = (key, contentEncryption))
+            .ReturnsAsync(EncodedJwt);
+
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, client, policy);
+
+        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, usedContentEncryption);
+        var octet = Assert.IsType<OctetJsonWebKey>(usedKey);
+        Assert.Equal(SHA256.HashData(Encoding.UTF8.GetBytes(secret)), octet.KeyValue);
     }
 }

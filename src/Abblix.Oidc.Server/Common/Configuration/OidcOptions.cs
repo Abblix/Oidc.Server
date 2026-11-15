@@ -130,29 +130,15 @@ public record OidcOptions
 	public TimeSpan KeyRolloverPropagation { get; set; } = TimeSpan.FromHours(1);
 
 	/// <summary>
-	/// The default content encryption algorithm used for encrypting JWT tokens.
+	/// The content encryption algorithm the JWTs this server issues for itself (access, refresh, registration access
+	/// and initial access tokens, see <see cref="ServiceTokens"/>) are encrypted with.
 	/// Per RFC 7518 Section 5, specifies how the JWT payload is encrypted using the Content Encryption Key (CEK).
 	/// Common values: A256CBC-HS512, A128CBC-HS256, A256GCM, A128GCM.
-	/// Defaults to A256CBC-HS512 for maximum security.
+	/// Defaults to A256CBC-HS512 for maximum security. A JWT sent to a client whose client registered no enc is
+	/// encrypted with the value its specification names instead
+	/// (<see cref="Features.Tokens.Formatters.ClientJwtEncryption.DefaultContentEncryptionAlgorithm"/>).
 	/// </summary>
 	public string DefaultContentEncryptionAlgorithm { get; set; } = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512;
-
-	/// <summary>
-	/// The content encryption algorithm used for an encrypted authorization response (JARM) when the client
-	/// registered <c>authorization_encrypted_response_alg</c> but omitted
-	/// <c>authorization_encrypted_response_enc</c>.
-	/// </summary>
-	/// <remarks>
-	/// Separate from <see cref="DefaultContentEncryptionAlgorithm"/> because the specification names a
-	/// different value for this one response: JWT Secured Authorization Response Mode section 3 says that
-	/// "if authorization_encrypted_response_alg is specified, the default for this value is A128CBC-HS256".
-	/// A client registering only the key-management algorithm expects that, so the server has to encrypt
-	/// with it or produce a response the client cannot read.
-	/// It is a setting rather than a constant so a deployment whose clients all understand a stronger
-	/// algorithm can raise the floor, the same way the general default can be raised.
-	/// </remarks>
-	public string DefaultAuthorizationResponseEncryptionAlgorithm { get; set; }
-		= EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256;
 
 	/// <summary>
 	/// Per-type signing and encryption settings for the JWTs the server issues for itself (access, refresh,

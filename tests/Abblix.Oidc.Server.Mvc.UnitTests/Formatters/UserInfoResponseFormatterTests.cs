@@ -16,7 +16,6 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
 using Moq;
 using UserInfoRequest = Abblix.Oidc.Server.Model.UserInfoRequest;
 
@@ -40,8 +39,7 @@ public class UserInfoResponseFormatterTests
         var formatter = new UserInfoResponseFormatter(
             TimeProvider.System,
             new Mock<IClientJwtFormatter>(MockBehavior.Strict).Object,
-            tenantAccessor,
-            new Mock<IOptionsSnapshot<OidcOptions>>(MockBehavior.Strict).Object);
+            tenantAccessor);
 
         Result<UserInfoFoundResponse, OidcError> response = new OidcError(errorCode, "the description");
         return await ActionResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), response));
@@ -63,10 +61,8 @@ public class UserInfoResponseFormatterTests
             .Setup(f => f.FormatAsync(
                 It.IsAny<TenantDefinition>(), It.IsAny<Abblix.Jwt.JsonWebToken>(), client, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(new OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to"));
-        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
-        options.Setup(o => o.Value).Returns(new OidcOptions());
         var formatter = new UserInfoResponseFormatter(
-            TimeProvider.System, clientJwtFormatter.Object, tenantAccessor, options.Object);
+            TimeProvider.System, clientJwtFormatter.Object, tenantAccessor);
         Result<UserInfoFoundResponse, OidcError> found =
             new UserInfoFoundResponse(new System.Text.Json.Nodes.JsonObject(), client, tenant.Issuer.OriginalString)
             {
@@ -123,10 +119,8 @@ public class UserInfoResponseFormatterTests
                 It.Is<ClientJwtEncryption>(encryption =>
                     encryption.KeyManagementAlgorithm == Abblix.Jwt.EncryptionAlgorithms.KeyManagement.RsaOaep256)))
             .ReturnsAsync("header.encrypted-key.iv.ciphertext.tag");
-        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
-        options.Setup(o => o.Value).Returns(new OidcOptions());
         var formatter = new UserInfoResponseFormatter(
-            TimeProvider.System, clientJwtFormatter.Object, tenantAccessor, options.Object);
+            TimeProvider.System, clientJwtFormatter.Object, tenantAccessor);
         Result<UserInfoFoundResponse, OidcError> found =
             new UserInfoFoundResponse(new System.Text.Json.Nodes.JsonObject(), client, tenant.Issuer.OriginalString);
 
@@ -170,9 +164,7 @@ public class UserInfoResponseFormatterTests
         var issuer = new ProfiledJwtIssuer(Get<Abblix.Jwt.IJsonWebTokenCreator>());
         var clientJwtFormatter = new ClientJwtFormatter(
             issuer, new ClientEncryptionKeyResolver(issuer, clientKeys.Object, TimeProvider.System), serviceKeys.Object);
-        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
-        options.Setup(o => o.Value).Returns(new OidcOptions());
-        var formatter = new UserInfoResponseFormatter(TimeProvider.System, clientJwtFormatter, tenantAccessor, options.Object);
+        var formatter = new UserInfoResponseFormatter(TimeProvider.System, clientJwtFormatter, tenantAccessor);
         Result<UserInfoFoundResponse, OidcError> found = new UserInfoFoundResponse(
             new System.Text.Json.Nodes.JsonObject { [Abblix.Jwt.IanaClaimTypes.Sub] = "user-1" },
             client,

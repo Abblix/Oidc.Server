@@ -124,7 +124,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                         It.IsAny<ClientInfo>()))
                     .ReturnsAsync(new JsonObject());
                 var identity = new IdentityTokenService(
-                    SingleIssuer.LicensedCatalog, clock, clientFormatter.Object, claims.Object, options);
+                    SingleIssuer.LicensedCatalog, clock, clientFormatter.Object, claims.Object);
                 return clientId => identity.CreateIdentityTokenAsync(SingleIssuer.Tenant, new IdentityTokenRequest(session, Context(clientId), client, false, null, null, null));
 
             case RefreshToken:

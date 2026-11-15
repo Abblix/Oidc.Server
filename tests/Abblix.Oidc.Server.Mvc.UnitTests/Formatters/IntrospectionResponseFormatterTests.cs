@@ -22,7 +22,6 @@ using Abblix.Oidc.Server.Mvc.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using Moq;
 
 namespace Abblix.Oidc.Server.Mvc.UnitTests.Formatters;
@@ -59,7 +58,6 @@ public class IntrospectionResponseFormatterTests
             new IntrospectionResponseJwtBuilder(
                 _clientJwtFormatter.Object,
                 TimeProvider.System,
-                Options.Create(new OidcOptions()),
                 Mock.Of<IAuthServiceKeysProvider>(provider =>
                     provider.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()) ==
                     new JsonWebKey[] { JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, null, 2048) }

@@ -25,6 +25,12 @@ public interface IJsonWebTokenCreator
 	IEnumerable<string> EncryptedResponseAlgorithmsSupported { get; }
 
 	/// <summary>
+	/// Lists the JWE content-encryption algorithms (the <c>enc</c> values, e.g. "A128CBC-HS256") supported for
+	/// encrypting a JWT on creation, projected from the registered content encryptors.
+	/// </summary>
+	IEnumerable<string> EncryptedResponseMethodsSupported { get; }
+
+	/// <summary>
 	/// Issues a new JWT based on the specified JsonWebToken object, signing key, and optional encrypting key.
 	/// </summary>
 	/// <param name="token">The JsonWebToken object containing the payload of the JWT.</param>

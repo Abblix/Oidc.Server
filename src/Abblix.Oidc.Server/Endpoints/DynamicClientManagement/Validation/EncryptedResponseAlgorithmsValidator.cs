@@ -8,12 +8,12 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
-using Microsoft.Extensions.Options;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -23,9 +23,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <c>id_token_encrypted_response_alg</c>/<c>enc</c> and <c>userinfo_encrypted_response_alg</c>/<c>enc</c>
 /// (OIDC Core), <c>introspection_encrypted_response_alg</c>/<c>enc</c> (RFC 9701),
 /// <c>request_object_encryption_alg</c>/<c>enc</c> (RFC 9101) and
-/// <c>authorization_encrypted_response_alg</c>/<c>enc</c> (JARM section 3). Each key-management (<c>alg</c>) value
-/// must appear in the server's supported key-management algorithms and each content-encryption (<c>enc</c>)
-/// value in its supported content-encryption algorithms; and each algorithm a JWT this server sends is encrypted under
+/// <c>authorization_encrypted_response_alg</c>/<c>enc</c> (JARM section 3). Each algorithm of a JWT this server sends
+/// must be one issuance encrypts with (<see cref="IJwtAlgorithmsProvider.EncryptedResponseAlgorithmsSupported"/> and
+/// <see cref="IJwtAlgorithmsProvider.EncryptedResponseMethodsSupported"/>), and the key management algorithm of a request
+/// object one the tenant's own published encryption keys open, the list discovery advertises as
+/// <c>request_object_encryption_alg_values_supported</c>; and each algorithm a JWT this server sends is encrypted under
 /// must have a key the client will hold, so a registration that could never be sent the JWT it asked to have encrypted
 /// is answered with <c>invalid_client_metadata</c> instead of every such JWT being refused afterwards.
 /// </summary>
@@ -39,33 +41,101 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// A key set passed by value is judged here, as it changes only by a registration; whether a key published at the
 /// <c>jwks_uri</c> carries the algorithm is not, since the client can change that document after registration, so it is
 /// decided where the JWT is encrypted.
+/// A request object is decrypted with the tenant's published encryption keys alone, none of them symmetric, so a
+/// symmetric <c>request_object_encryption_alg</c>, which Dynamic Client Registration 1.0 section 2 has a client include
+/// "when symmetric encryption will be used", names an encryption this server does not decrypt and is refused.
 /// </remarks>
-/// <param name="jwtValidator">Source of the JWE algorithms the server supports (the registered encryptors).</param>
-/// <param name="options">Supplies the content encryption algorithm a client that registered none is sent, which fixes
-/// the length of a key used directly as the content encryption key.</param>
+/// <param name="jwtAlgorithms">The JWE algorithms the server encrypts and decrypts with, as discovery advertises
+/// them.</param>
+/// <param name="serviceKeys">The tenant's own keys, which a request object is encrypted to.</param>
 /// <param name="clientInfoProvider">Supplies the stored client an update keeps the secrets of.</param>
 /// <param name="timeProvider">Supplies the time a stored secret's expiry is judged against.</param>
 public class EncryptedResponseAlgorithmsValidator(
-    IJsonWebTokenValidator jwtValidator,
-    IOptions<OidcOptions> options,
+    IJwtAlgorithmsProvider jwtAlgorithms,
+    IAuthServiceKeysProvider serviceKeys,
     IClientInfoProvider clientInfoProvider,
     TimeProvider timeProvider) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
-        => ValidateSupported(context.Request) ?? await ValidateKeySourcesAsync(tenant, context);
+        => ValidatePairs(context.Request)
+           ?? ValidateSupported(context.Request, await RequestObjectAlgorithmsAsync(tenant, context.Request))
+           ?? await ValidateKeySourcesAsync(tenant, context);
 
-    private OidcError? ValidateSupported(Model.ClientRegistrationRequest request)
-        => ValidateAlg(request.IdTokenEncryptedResponseAlg, Parameters.IdTokenEncryptedResponseAlg)
-            ?? ValidateEnc(request.IdTokenEncryptedResponseEnc, Parameters.IdTokenEncryptedResponseEnc)
-            ?? ValidateAlg(request.UserInfoEncryptedResponseAlg, Parameters.UserInfoEncryptedResponseAlg)
-            ?? ValidateEnc(request.UserInfoEncryptedResponseEnc, Parameters.UserInfoEncryptedResponseEnc)
-            ?? ValidateAlg(request.IntrospectionEncryptedResponseAlg, Parameters.IntrospectionEncryptedResponseAlg)
-            ?? ValidateEnc(request.IntrospectionEncryptedResponseEnc, Parameters.IntrospectionEncryptedResponseEnc)
-            ?? ValidateAlg(request.RequestObjectEncryptionAlg, Parameters.RequestObjectEncryptionAlg)
-            ?? ValidateEnc(request.RequestObjectEncryptionEnc, Parameters.RequestObjectEncryptionEnc)
-            ?? ValidateAlg(request.AuthorizationEncryptedResponseAlg, Parameters.AuthorizationEncryptedResponseAlg)
-            ?? ValidateEnc(request.AuthorizationEncryptedResponseEnc, Parameters.AuthorizationEncryptedResponseEnc);
+    /// <summary>
+    /// Refuses a content encryption algorithm registered without its key management algorithm. OpenID Connect Dynamic
+    /// Client Registration 1.0 section 2: "When id_token_encrypted_response_enc is included,
+    /// id_token_encrypted_response_alg MUST also be provided", and the same of the userinfo and request object pairs;
+    /// RFC 9701 section 6: "This parameter MUST NOT be specified without setting introspection_encrypted_response_alg";
+    /// JARM section 3: "When authorization_encrypted_response_enc is included, authorization_encrypted_response_alg
+    /// MUST also be provided".
+    /// </summary>
+    private static OidcError? ValidatePairs(Model.ClientRegistrationRequest request)
+    {
+        (string? Method, string MethodName, string? Algorithm, string AlgorithmName)[] pairs =
+        [
+            (request.IdTokenEncryptedResponseEnc, Parameters.IdTokenEncryptedResponseEnc,
+                request.IdTokenEncryptedResponseAlg, Parameters.IdTokenEncryptedResponseAlg),
+            (request.UserInfoEncryptedResponseEnc, Parameters.UserInfoEncryptedResponseEnc,
+                request.UserInfoEncryptedResponseAlg, Parameters.UserInfoEncryptedResponseAlg),
+            (request.IntrospectionEncryptedResponseEnc, Parameters.IntrospectionEncryptedResponseEnc,
+                request.IntrospectionEncryptedResponseAlg, Parameters.IntrospectionEncryptedResponseAlg),
+            (request.RequestObjectEncryptionEnc, Parameters.RequestObjectEncryptionEnc,
+                request.RequestObjectEncryptionAlg, Parameters.RequestObjectEncryptionAlg),
+            (request.AuthorizationEncryptedResponseEnc, Parameters.AuthorizationEncryptedResponseEnc,
+                request.AuthorizationEncryptedResponseAlg, Parameters.AuthorizationEncryptedResponseAlg),
+        ];
+
+        foreach (var (method, methodName, algorithm, algorithmName) in pairs)
+        {
+            if (method is not null && algorithm is null)
+                return ErrorFactory.InvalidClientMetadata($"The {methodName} is registered without {algorithmName}");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The key management algorithms a request object to <paramref name="tenant"/> is opened under: the same answer
+    /// discovery gives, so a client registers only what it was told. Not asked where the client registers none.
+    /// </summary>
+    private async Task<IEnumerable<string>> RequestObjectAlgorithmsAsync(
+        TenantDefinition tenant,
+        Model.ClientRegistrationRequest request)
+    {
+        if (request.RequestObjectEncryptionAlg is null)
+            return [];
+
+        return await serviceKeys.GetInboundKeyManagementAlgorithmsAsync(
+            tenant,
+            jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported);
+    }
+
+    private OidcError? ValidateSupported(
+        Model.ClientRegistrationRequest request,
+        IEnumerable<string> requestObjectAlgorithms)
+    {
+        var responseAlgorithms = jwtAlgorithms.EncryptedResponseAlgorithmsSupported;
+        var responseMethods = jwtAlgorithms.EncryptedResponseMethodsSupported;
+
+        return ValidateAlg(request.IdTokenEncryptedResponseAlg, Parameters.IdTokenEncryptedResponseAlg, responseAlgorithms)
+            ?? ValidateEnc(request.IdTokenEncryptedResponseEnc, Parameters.IdTokenEncryptedResponseEnc, responseMethods)
+            ?? ValidateAlg(request.UserInfoEncryptedResponseAlg, Parameters.UserInfoEncryptedResponseAlg, responseAlgorithms)
+            ?? ValidateEnc(request.UserInfoEncryptedResponseEnc, Parameters.UserInfoEncryptedResponseEnc, responseMethods)
+            ?? ValidateAlg(
+                request.IntrospectionEncryptedResponseAlg, Parameters.IntrospectionEncryptedResponseAlg, responseAlgorithms)
+            ?? ValidateEnc(
+                request.IntrospectionEncryptedResponseEnc, Parameters.IntrospectionEncryptedResponseEnc, responseMethods)
+            ?? ValidateAlg(request.RequestObjectEncryptionAlg, Parameters.RequestObjectEncryptionAlg, requestObjectAlgorithms)
+            ?? ValidateEnc(
+                request.RequestObjectEncryptionEnc,
+                Parameters.RequestObjectEncryptionEnc,
+                jwtAlgorithms.RequestObjectEncryptionEncValuesSupported)
+            ?? ValidateAlg(
+                request.AuthorizationEncryptedResponseAlg, Parameters.AuthorizationEncryptedResponseAlg, responseAlgorithms)
+            ?? ValidateEnc(
+                request.AuthorizationEncryptedResponseEnc, Parameters.AuthorizationEncryptedResponseEnc, responseMethods);
+    }
 
     /// <summary>
     /// Refuses the first algorithm a JWT this server sends is encrypted under that the client will have no key for. The
@@ -76,7 +146,8 @@ public class EncryptedResponseAlgorithmsValidator(
         ClientRegistrationValidationContext context)
     {
         var request = context.Request;
-        var defaultEncryption = options.Value.DefaultContentEncryptionAlgorithm;
+        // The fallback each of these JWTs is encrypted with where the client registers no enc
+        const string defaultEncryption = ClientJwtEncryption.DefaultContentEncryptionAlgorithm;
         (string Name, string? Algorithm, string ContentEncryption)[] encrypted =
         [
             (Parameters.IdTokenEncryptedResponseAlg, request.IdTokenEncryptedResponseAlg,
@@ -85,10 +156,8 @@ public class EncryptedResponseAlgorithmsValidator(
                 request.UserInfoEncryptedResponseEnc ?? defaultEncryption),
             (Parameters.IntrospectionEncryptedResponseAlg, request.IntrospectionEncryptedResponseAlg,
                 request.IntrospectionEncryptedResponseEnc ?? defaultEncryption),
-
-            // JARM section 3 names its own default, as ClientJwtEncryption.ForJarm does
             (Parameters.AuthorizationEncryptedResponseAlg, request.AuthorizationEncryptedResponseAlg,
-                request.AuthorizationEncryptedResponseEnc ?? options.Value.DefaultAuthorizationResponseEncryptionAlgorithm),
+                request.AuthorizationEncryptedResponseEnc ?? defaultEncryption),
         ];
 
         foreach (var (name, algorithm, contentEncryption) in encrypted)
@@ -140,15 +209,19 @@ public class EncryptedResponseAlgorithmsValidator(
 
         return null;
     }
+
     /// <summary>
-    /// Validates a JWE key-management (<c>alg</c>) value against the server's supported key-management algorithms.
+    /// Validates a JWE key-management (<c>alg</c>) value against the key-management algorithms
+    /// <paramref name="supported"/>.
+    /// A value outside them is client metadata the server rejects, which RFC 7591 section 3.2.2 answers with
+    /// <c>invalid_client_metadata</c>: "The value of one of the client metadata fields is invalid and the server has
+    /// rejected this request".
     /// </summary>
-    private OidcError? ValidateAlg(string? alg, string description)
+    private static OidcError? ValidateAlg(string? alg, string description, IEnumerable<string> supported)
     {
-        if (alg is not null && !jwtValidator.EncryptionAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
+        if (alg is not null && !supported.Contains(alg, StringComparer.Ordinal))
         {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
+            return ErrorFactory.InvalidClientMetadata(
                 $"The encryption key-management algorithm for {description} is not supported");
         }
 
@@ -156,16 +229,14 @@ public class EncryptedResponseAlgorithmsValidator(
     }
 
     /// <summary>
-    /// Validates a JWE content-encryption (<c>enc</c>) value against the server's supported content-encryption
-    /// algorithms.
+    /// Validates a JWE content-encryption (<c>enc</c>) value against the content-encryption algorithms
+    /// <paramref name="supported"/>.
     /// </summary>
-    private OidcError? ValidateEnc(string? enc, string description)
+    private static OidcError? ValidateEnc(string? enc, string description, IEnumerable<string> supported)
     {
-        if (enc is not null && !jwtValidator.EncryptionMethodsSupported.Contains(enc, StringComparer.Ordinal))
+        if (enc is not null && !supported.Contains(enc, StringComparer.Ordinal))
         {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                $"The encryption method for {description} is not supported");
+            return ErrorFactory.InvalidClientMetadata($"The encryption method for {description} is not supported");
         }
 
         return null;

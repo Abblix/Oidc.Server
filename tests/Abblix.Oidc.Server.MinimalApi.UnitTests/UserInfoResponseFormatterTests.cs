@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Moq;
-using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -48,7 +47,7 @@ public class UserInfoResponseFormatterTests
     private static async Task<HttpResultRunner.Response> FormatErrorAsync(string errorCode)
     {
         // The JWT formatter and the options serve only a successful response, which no test here formats
-        var formatter = new UserInfoResponseFormatter(TimeProvider.System, null!, new ServedBy(Served), null!);
+        var formatter = new UserInfoResponseFormatter(TimeProvider.System, null!, new ServedBy(Served));
 
         Result<UserInfoFoundResponse, OidcError> response = new OidcError(errorCode, "the description");
         return await HttpResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), response));
@@ -64,7 +63,7 @@ public class UserInfoResponseFormatterTests
     [InlineData(new string[0], new[] { "Bearer" })]
     public async Task The_challenge_advertises_the_algorithms_the_error_names(string[] admitted, string[] schemes)
     {
-        var formatter = new UserInfoResponseFormatter(TimeProvider.System, null!, new ServedBy(Served), null!);
+        var formatter = new UserInfoResponseFormatter(TimeProvider.System, null!, new ServedBy(Served));
         Result<UserInfoFoundResponse, OidcError> refused =
             new OidcError(ErrorCodes.InvalidToken, "presented with the Bearer scheme") { DPoPAlgorithmsAdmitted = admitted };
 
@@ -90,10 +89,8 @@ public class UserInfoResponseFormatterTests
         clientJwtFormatter
             .Setup(f => f.FormatAsync(Served, It.IsAny<JsonWebToken>(), client, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(new OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to"));
-        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
-        options.Setup(o => o.Value).Returns(new OidcOptions());
         var formatter = new UserInfoResponseFormatter(
-            TimeProvider.System, clientJwtFormatter.Object, new ServedBy(Served), options.Object);
+            TimeProvider.System, clientJwtFormatter.Object, new ServedBy(Served));
         Result<UserInfoFoundResponse, OidcError> found =
             new UserInfoFoundResponse(new JsonObject(), client, Served.Issuer.OriginalString)
             {
@@ -146,10 +143,8 @@ public class UserInfoResponseFormatterTests
                 It.Is<ClientJwtEncryption>(encryption =>
                     encryption.KeyManagementAlgorithm == EncryptionAlgorithms.KeyManagement.RsaOaep256)))
             .ReturnsAsync("header.encrypted-key.iv.ciphertext.tag");
-        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
-        options.Setup(o => o.Value).Returns(new OidcOptions());
         var formatter = new UserInfoResponseFormatter(
-            TimeProvider.System, clientJwtFormatter.Object, new ServedBy(Served), options.Object);
+            TimeProvider.System, clientJwtFormatter.Object, new ServedBy(Served));
         Result<UserInfoFoundResponse, OidcError> found =
             new UserInfoFoundResponse(new JsonObject(), client, Served.Issuer.OriginalString);
 
@@ -193,9 +188,7 @@ public class UserInfoResponseFormatterTests
         var issuer = new ProfiledJwtIssuer(Get<Abblix.Jwt.IJsonWebTokenCreator>());
         var clientJwtFormatter = new ClientJwtFormatter(
             issuer, new ClientEncryptionKeyResolver(issuer, clientKeys.Object, TimeProvider.System), serviceKeys.Object);
-        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
-        options.Setup(o => o.Value).Returns(new OidcOptions());
-        var formatter = new UserInfoResponseFormatter(TimeProvider.System, clientJwtFormatter, tenantAccessor, options.Object);
+        var formatter = new UserInfoResponseFormatter(TimeProvider.System, clientJwtFormatter, tenantAccessor);
         Result<UserInfoFoundResponse, OidcError> found = new UserInfoFoundResponse(
             new System.Text.Json.Nodes.JsonObject { [Abblix.Jwt.IanaClaimTypes.Sub] = "user-1" },
             client,

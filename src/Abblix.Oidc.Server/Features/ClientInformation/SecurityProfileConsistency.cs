@@ -166,12 +166,10 @@ public static class SecurityProfileConsistency
     /// </remarks>
     /// <param name="encryptionKeyResolver">Chooses the key a JWT for the client is encrypted to.</param>
     /// <param name="client">The client.</param>
-    /// <param name="options">Supplies the content encryption algorithm a client that registered none is sent.</param>
     /// <param name="requirements">The control bundle the client is held to.</param>
     public static async Task<IReadOnlyList<string>> FindEncryptionKeyViolationsAsync(
         ClientEncryptionKeyResolver encryptionKeyResolver,
         ClientInfo client,
-        OidcOptions options,
         SecurityProfileRequirements requirements)
     {
         if (!requirements.ForbidRsa1_5KeyManagement)
@@ -179,10 +177,10 @@ public static class SecurityProfileConsistency
 
         (string Name, ClientJwtEncryption Encryption)[] encrypted =
         [
-            (nameof(ClientInfo.IdentityTokenEncryptedResponseAlgorithm), ClientJwtEncryption.ForIdentityToken(client, options)),
-            (nameof(ClientInfo.UserInfoEncryptedResponseAlgorithm), ClientJwtEncryption.ForUserInfo(client, options)),
-            (nameof(ClientInfo.IntrospectionEncryptedResponseAlgorithm), ClientJwtEncryption.ForIntrospection(client, options)),
-            (nameof(ClientInfo.AuthorizationEncryptedResponseAlgorithm), ClientJwtEncryption.ForJarm(client, options)),
+            (nameof(ClientInfo.IdentityTokenEncryptedResponseAlgorithm), ClientJwtEncryption.ForIdentityToken(client)),
+            (nameof(ClientInfo.UserInfoEncryptedResponseAlgorithm), ClientJwtEncryption.ForUserInfo(client)),
+            (nameof(ClientInfo.IntrospectionEncryptedResponseAlgorithm), ClientJwtEncryption.ForIntrospection(client)),
+            (nameof(ClientInfo.AuthorizationEncryptedResponseAlgorithm), ClientJwtEncryption.ForJarm(client)),
         ];
 
         var violations = new List<string>();

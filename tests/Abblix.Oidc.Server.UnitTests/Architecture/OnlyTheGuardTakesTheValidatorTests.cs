@@ -32,7 +32,6 @@ public class OnlyTheGuardTakesTheValidatorTests
         typeof(ProfiledJwtValidator),
         typeof(JwtAlgorithmsProvider),
         typeof(BackChannelAuthenticationValidator),
-        typeof(EncryptedResponseAlgorithmsValidator),
     ];
 
     private static Type[] TypesTakingTheValidator()

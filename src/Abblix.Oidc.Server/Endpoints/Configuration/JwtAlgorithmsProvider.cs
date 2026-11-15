@@ -72,25 +72,28 @@ public sealed class JwtAlgorithmsProvider(
 	public IEnumerable<string> AuthorizationSigningAlgValuesSupported => ClientAddressedSigningAlgorithms;
 
 	/// <summary>
-	/// The key management algorithms a JWT this server sends a client can be encrypted under: those it performs, less
-	/// the symmetric ones OpenID Connect Core 1.0 section 10.2 derives no key for from the client secret (it covers "the
-	/// AES key wrapping or direct encryption algorithm used"), which registration refuses for every client.
+	/// The key management algorithms the creator encrypts with, less the symmetric ones OpenID Connect Core 1.0 section
+	/// 10.2 derives no key for from the client secret (it covers "the AES key wrapping or direct encryption algorithm
+	/// used"), which no client holds a key for.
 	/// </summary>
-	private IEnumerable<string> ClientAddressedEncryptionAlgorithms
-		=> jwtValidator.EncryptionAlgorithmsSupported.Where(ClientSecretEncryptionKey.CanBeServed);
+	public IEnumerable<string> EncryptedResponseAlgorithmsSupported
+		=> jwtCreator.EncryptedResponseAlgorithmsSupported.Where(ClientSecretEncryptionKey.CanBeServed);
 
 	/// <inheritdoc />
-	public IEnumerable<string> AuthorizationEncryptionAlgValuesSupported => ClientAddressedEncryptionAlgorithms;
+	public IEnumerable<string> EncryptedResponseMethodsSupported => jwtCreator.EncryptedResponseMethodsSupported;
 
 	/// <inheritdoc />
-	public IEnumerable<string> AuthorizationEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;
+	public IEnumerable<string> AuthorizationEncryptionAlgValuesSupported => EncryptedResponseAlgorithmsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> AuthorizationEncryptionEncValuesSupported => EncryptedResponseMethodsSupported;
 
 	/// <inheritdoc />
 	public IEnumerable<string> IntrospectionSigningAlgValuesSupported => ClientAddressedSigningAlgorithms;
 
 	/// <inheritdoc />
-	public IEnumerable<string> IntrospectionEncryptionAlgValuesSupported => ClientAddressedEncryptionAlgorithms;
+	public IEnumerable<string> IntrospectionEncryptionAlgValuesSupported => EncryptedResponseAlgorithmsSupported;
 
 	/// <inheritdoc />
-	public IEnumerable<string> IntrospectionEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;
+	public IEnumerable<string> IntrospectionEncryptionEncValuesSupported => EncryptedResponseMethodsSupported;
 }

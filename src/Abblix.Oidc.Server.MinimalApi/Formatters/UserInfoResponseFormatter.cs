@@ -9,7 +9,6 @@
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
@@ -18,7 +17,6 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Abblix.Oidc.Server.AspNetCore;
-using Microsoft.Extensions.Options;
 using UserInfoRequest = Abblix.Oidc.Server.Model.UserInfoRequest;
 
 using Abblix.Oidc.Server.AspNetCore.Formatters;
@@ -34,8 +32,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 public class UserInfoResponseFormatter(
     TimeProvider clock,
     IClientJwtFormatter clientJwtFormatter,
-    ITenantAccessor tenantAccessor,
-    IOptionsSnapshot<OidcOptions> options) : IUserInfoResponseFormatter<IResult>
+    ITenantAccessor tenantAccessor) : IUserInfoResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(
@@ -96,7 +93,7 @@ public class UserInfoResponseFormatter(
             tenant,
             token,
             found.ClientInfo,
-            ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value));
+            ClientJwtEncryption.ForUserInfo(found.ClientInfo));
 
         // RFC 6750 section 3.1, invalid_token: "The access token provided is expired, revoked, malformed, or invalid
         // for other reasons". The token's client registered userinfo_encrypted_response_alg and has no key it can be

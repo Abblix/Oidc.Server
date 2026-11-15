@@ -77,6 +77,6 @@ public class ResponseJwtBuilder(
             tenant,
             token,
             clientInfo,
-            ClientJwtEncryption.ForJarm(clientInfo, options.Value));
+            ClientJwtEncryption.ForJarm(clientInfo));
     }
 }

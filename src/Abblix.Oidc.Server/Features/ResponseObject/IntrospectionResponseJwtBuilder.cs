@@ -9,13 +9,11 @@
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.ResponseObject;
 
@@ -26,13 +24,11 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 /// </summary>
 /// <param name="clientJwtFormatter">Signs and optionally encrypts the assembled JWT.</param>
 /// <param name="timeProvider">Supplies the current time for the <c>iat</c> claim.</param>
-/// <param name="options">Supplies the default content-encryption algorithm.</param>
 /// <param name="serviceKeysProvider">The tenant's signing keys, which decide the algorithm a profiled client naming
 /// none is signed for with.</param>
 public class IntrospectionResponseJwtBuilder(
     IClientJwtFormatter clientJwtFormatter,
     TimeProvider timeProvider,
-    IOptions<OidcOptions> options,
     IAuthServiceKeysProvider serviceKeysProvider) : IIntrospectionResponseJwtBuilder
 {
     /// <inheritdoc />
@@ -74,7 +70,7 @@ public class IntrospectionResponseJwtBuilder(
             tenant,
             token,
             client,
-            ClientJwtEncryption.ForIntrospection(client, options.Value));
+            ClientJwtEncryption.ForIntrospection(client));
     }
 
     /// <summary>

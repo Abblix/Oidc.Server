@@ -8,7 +8,6 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -18,7 +17,6 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.SecurityEvents;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
@@ -32,15 +30,12 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="jwtFormatter">Formatter for encoding the generated logout token into a compact serialized format.
 /// </param>
 /// <param name="tokenIdGenerator">Generator for creating unique JWT identifiers.</param>
-/// <param name="options">Supplies the default content-encryption algorithm used when the client registered a
-/// key-management algorithm but no <c>id_token_encrypted_response_enc</c>.</param>
 public partial class LogoutTokenService(
     ILogger<LogoutTokenService> logger,
     TimeProvider clock,
     ISubjectTypeConverter subjectTypeConverter,
     IClientJwtFormatter jwtFormatter,
-    ITokenIdGenerator tokenIdGenerator,
-    IOptions<OidcOptions> options) : ILogoutTokenService
+    ITokenIdGenerator tokenIdGenerator) : ILogoutTokenService
 {
     /// <summary>
     /// Asynchronously creates a logout token based on the provided client information and logout event context.
@@ -120,7 +115,7 @@ public partial class LogoutTokenService(
             tenant,
             logoutToken,
             clientInfo,
-            ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value));
+            ClientJwtEncryption.ForIdentityToken(clientInfo));
 
         return jwt.MapSuccess(encoded => new EncodedJsonWebToken(logoutToken, encoded));
     }

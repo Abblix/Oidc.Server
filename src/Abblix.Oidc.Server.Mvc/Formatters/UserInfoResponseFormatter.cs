@@ -9,7 +9,6 @@
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
@@ -22,7 +21,6 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Abblix.Oidc.Server.AspNetCore;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
@@ -32,8 +30,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 public class UserInfoResponseFormatter(
     TimeProvider clock,
     IClientJwtFormatter clientJwtFormatter,
-    ITenantAccessor tenantAccessor,
-    IOptionsSnapshot<OidcOptions> options) : IUserInfoResponseFormatter<ActionResult>
+    ITenantAccessor tenantAccessor) : IUserInfoResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Asynchronously formats the response for a user information request.
@@ -107,7 +104,7 @@ public class UserInfoResponseFormatter(
             tenant,
             token,
             found.ClientInfo,
-            ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value));
+            ClientJwtEncryption.ForUserInfo(found.ClientInfo));
 
         // RFC 6750 section 3.1, invalid_token: "The access token provided is expired, revoked, malformed, or invalid
         // for other reasons". The token's client registered userinfo_encrypted_response_alg and has no key it can be
