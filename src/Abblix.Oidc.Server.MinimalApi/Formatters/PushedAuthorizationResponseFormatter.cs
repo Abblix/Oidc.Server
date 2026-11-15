@@ -15,7 +15,7 @@ using AuthorizationRequest = Abblix.Oidc.Server.Model.AuthorizationRequest;
 using ParResponse = Abblix.Oidc.Server.Model.PushedAuthorizationResponse;
 using CorePushedAuthorizationResponse = Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces.PushedAuthorizationResponse;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// (RFC 9126): responses are always JSON and errors never redirect.
 /// </summary>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class PushedAuthorizationResponseFormatter(ITenantAccessor tenantAccessor) : IPushedAuthorizationResponseFormatter
+public class PushedAuthorizationResponseFormatter(ITenantAccessor tenantAccessor) : IPushedAuthorizationResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(AuthorizationRequest request, AuthorizationResponse response)

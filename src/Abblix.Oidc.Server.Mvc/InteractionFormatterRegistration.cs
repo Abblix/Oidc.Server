@@ -10,7 +10,7 @@ using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.AspNetCore.SessionManagement;
 using Abblix.Oidc.Server.Mvc.Features.SessionManagement;
 using Abblix.Oidc.Server.Mvc.Formatters;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -25,20 +25,20 @@ internal static class InteractionFormatterRegistration
 {
 	public static IServiceCollection AddOidcInteractionFormatters(this IServiceCollection services)
 	{
-		services.TryAddScoped<IConfigurationResponseFormatter, ConfigurationResponseFormatter>();
-		services.TryAddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>();
+		services.TryAddScoped<IConfigurationResponseFormatter<ActionResult>, ConfigurationResponseFormatter>();
+		services.TryAddScoped<IAuthorizationResponseFormatter<ActionResult>, AuthorizationResponseFormatter>();
 
-		services.TryAddScoped<IEndSessionResponseFormatter, EndSessionResponseFormatter>();
-		services.Decorate<IEndSessionResponseFormatter, EndSessionResponseFormatterDecorator>();
+		services.TryAddScoped<IEndSessionResponseFormatter<ActionResult>, EndSessionResponseFormatter>();
+		services.Decorate<IEndSessionResponseFormatter<ActionResult>, EndSessionResponseFormatterDecorator>();
 
-		services.TryAddScoped<ICheckSessionResponseFormatter, CheckSessionResponseFormatter>();
-		services.Decorate<ICheckSessionResponseFormatter, CheckSessionResponseCachingDecorator>();
+		services.TryAddScoped<ICheckSessionResponseFormatter<ActionResult>, CheckSessionResponseFormatter>();
+		services.Decorate<ICheckSessionResponseFormatter<ActionResult>, CheckSessionResponseCachingDecorator>();
 		services.TryAddSingleton<ICheckSessionResponseCache<ActionResult>, CheckSessionResponseCache<ActionResult>>();
 
-		services.TryAddScoped<IRegisterClientResponseFormatter, RegisterClientResponseFormatter>();
-		services.TryAddScoped<IReadClientResponseFormatter, ReadClientResponseFormatter>();
-		services.TryAddScoped<IUpdateClientResponseFormatter, UpdateClientResponseFormatter>();
-		services.TryAddScoped<IRemoveClientResponseFormatter, RemoveClientResponseFormatter>();
+		services.TryAddScoped<IRegisterClientResponseFormatter<ActionResult>, RegisterClientResponseFormatter>();
+		services.TryAddScoped<IReadClientResponseFormatter<ActionResult>, ReadClientResponseFormatter>();
+		services.TryAddScoped<IUpdateClientResponseFormatter<ActionResult>, UpdateClientResponseFormatter>();
+		services.TryAddScoped<IRemoveClientResponseFormatter<ActionResult>, RemoveClientResponseFormatter>();
 		return services;
 	}
 }

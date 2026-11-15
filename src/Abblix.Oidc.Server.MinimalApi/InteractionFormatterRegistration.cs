@@ -11,7 +11,7 @@ using Abblix.Oidc.Server.AspNetCore.SessionManagement;
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 using Abblix.Oidc.Server.MinimalApi.Formatters;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -26,22 +26,22 @@ internal static class InteractionFormatterRegistration
 {
     public static IServiceCollection AddOidcInteractionFormatters(this IServiceCollection services)
     {
-        services.TryAddScoped<IConfigurationResponseFormatter, ConfigurationResponseFormatter>();
+        services.TryAddScoped<IConfigurationResponseFormatter<IResult>, ConfigurationResponseFormatter>();
 
-        services.TryAddScoped<ICheckSessionResponseFormatter, CheckSessionResponseFormatter>();
-        services.Decorate<ICheckSessionResponseFormatter, CheckSessionResponseCachingDecorator>();
+        services.TryAddScoped<ICheckSessionResponseFormatter<IResult>, CheckSessionResponseFormatter>();
+        services.Decorate<ICheckSessionResponseFormatter<IResult>, CheckSessionResponseCachingDecorator>();
         services.TryAddSingleton<ICheckSessionResponseCache<IResult>, CheckSessionResponseCache<IResult>>();
 
-        services.TryAddScoped<IEndSessionResponseFormatter, EndSessionResponseFormatter>();
-        services.Decorate<IEndSessionResponseFormatter, EndSessionResponseFormatterDecorator>();
+        services.TryAddScoped<IEndSessionResponseFormatter<IResult>, EndSessionResponseFormatter>();
+        services.Decorate<IEndSessionResponseFormatter<IResult>, EndSessionResponseFormatterDecorator>();
 
-        services.TryAddScoped<IAuthorizationResponseFormatter, AuthorizationResponseFormatter>();
+        services.TryAddScoped<IAuthorizationResponseFormatter<IResult>, AuthorizationResponseFormatter>();
 
         services.TryAddScoped<RegistrationClientUriBuilder>();
-        services.TryAddScoped<IRegisterClientResponseFormatter, RegisterClientResponseFormatter>();
-        services.TryAddScoped<IReadClientResponseFormatter, ReadClientResponseFormatter>();
-        services.TryAddScoped<IUpdateClientResponseFormatter, UpdateClientResponseFormatter>();
-        services.TryAddScoped<IRemoveClientResponseFormatter, RemoveClientResponseFormatter>();
+        services.TryAddScoped<IRegisterClientResponseFormatter<IResult>, RegisterClientResponseFormatter>();
+        services.TryAddScoped<IReadClientResponseFormatter<IResult>, ReadClientResponseFormatter>();
+        services.TryAddScoped<IUpdateClientResponseFormatter<IResult>, UpdateClientResponseFormatter>();
+        services.TryAddScoped<IRemoveClientResponseFormatter<IResult>, RemoveClientResponseFormatter>();
         return services;
     }
 }

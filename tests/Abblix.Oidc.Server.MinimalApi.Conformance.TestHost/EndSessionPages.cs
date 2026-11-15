@@ -6,12 +6,13 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.AspNetCore.Http;
 using System.Net;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using EndSessionRequest = Abblix.Oidc.Server.Model.EndSessionRequest;
 
@@ -26,8 +27,8 @@ namespace Abblix.Oidc.Server.MinimalApi.Conformance.TestHost;
 /// the server learns the end user agreed. Every other answer is the library's own.
 /// </remarks>
 public sealed class EndSessionPages(
-    IEndSessionResponseFormatter inner,
-    IOidcEndpointResolver endpointResolver) : IEndSessionResponseFormatter
+    IEndSessionResponseFormatter<IResult> inner,
+    IOidcEndpointResolver endpointResolver) : IEndSessionResponseFormatter<IResult>
 {
     public Task<IResult> FormatResponseAsync(
         EndSessionRequest request, Result<IEndSessionResponse, OidcError> response)

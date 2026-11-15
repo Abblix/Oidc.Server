@@ -9,15 +9,15 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Utils;
-using Microsoft.AspNetCore.Http;
 using UserInfoRequest = Abblix.Oidc.Server.Model.UserInfoRequest;
 
-namespace Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+namespace Abblix.Oidc.Server.AspNetCore.Formatters;
 
-/// <summary>Formats the result of an OpenID Connect UserInfo request into an <see cref="IResult"/>.</summary>
-public interface IUserInfoResponseFormatter
+/// <summary>Formats the result of an OpenID Connect UserInfo request into a <typeparamref name="TResult"/>.</summary>
+/// <typeparam name="TResult">The transport's result type: an MVC action result or a Minimal API result.</typeparam>
+public interface IUserInfoResponseFormatter<TResult> where TResult : class
 {
     /// <summary>Formats the UserInfo result (plain JSON, or a signed JWT when the client registered a
     /// <c>userinfo_signed_response_alg</c>, on success; the OAuth error otherwise).</summary>
-    Task<IResult> FormatResponseAsync(UserInfoRequest request, Result<UserInfoFoundResponse, OidcError> response);
+    Task<TResult> FormatResponseAsync(UserInfoRequest request, Result<UserInfoFoundResponse, OidcError> response);
 }

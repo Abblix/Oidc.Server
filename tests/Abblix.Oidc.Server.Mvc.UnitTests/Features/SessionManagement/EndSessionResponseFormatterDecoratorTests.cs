@@ -14,7 +14,7 @@ using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.Mvc.Features.SessionManagement;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -29,7 +29,7 @@ namespace Abblix.Oidc.Server.Mvc.UnitTests.Features.SessionManagement;
 /// </summary>
 public class EndSessionResponseFormatterDecoratorTests
 {
-    private readonly Mock<IEndSessionResponseFormatter> _inner = new(MockBehavior.Strict);
+    private readonly Mock<IEndSessionResponseFormatter<ActionResult>> _inner = new(MockBehavior.Strict);
     private readonly EndSessionResponseFormatterDecorator _decorator;
 
     public EndSessionResponseFormatterDecoratorTests()

@@ -13,7 +13,7 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using CoreResponse = Abblix.Oidc.Server.Model.DeviceAuthorizationResponse;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -22,7 +22,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// as the endpoint's processor completed it, or the OAuth error on failure.
 /// </summary>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class DeviceAuthorizationResponseFormatter(ITenantAccessor tenantAccessor) : IDeviceAuthorizationResponseFormatter
+public class DeviceAuthorizationResponseFormatter(ITenantAccessor tenantAccessor) : IDeviceAuthorizationResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(

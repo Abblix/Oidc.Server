@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.Features.UserAuthentication;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using EndSessionRequest = Abblix.Oidc.Server.Model.EndSessionRequest;
@@ -20,16 +20,16 @@ using EndSessionRequest = Abblix.Oidc.Server.Model.EndSessionRequest;
 namespace Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
 
 /// <summary>
-/// Decorates <see cref="IEndSessionResponseFormatter"/> to delete the session-management cookie when a logout ended
+/// Decorates <see cref="IEndSessionResponseFormatter{IResult}"/> to delete the session-management cookie when a logout ended
 /// the session and the deployment serves that cookie, so the browser's logged-in state is cleared with it.
 /// </summary>
 /// <param name="inner">The End Session response formatter decorated.</param>
 /// <param name="sessionManagementService">Supplies the session-management cookie.</param>
 /// <param name="tenantAccessor">Names the tenant whose session cookie is cleared.</param>
 public class EndSessionResponseFormatterDecorator(
-    IEndSessionResponseFormatter inner,
+    IEndSessionResponseFormatter<IResult> inner,
     ISessionManagementService sessionManagementService,
-    ITenantAccessor tenantAccessor) : IEndSessionResponseFormatter
+    ITenantAccessor tenantAccessor) : IEndSessionResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public async Task<IResult> FormatResponseAsync(

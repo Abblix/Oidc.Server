@@ -9,7 +9,7 @@
 using System.Net.Mime;
 using System.Security.Cryptography;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// Provides a response formatter for Check Session frames, generating a per-request CSP nonce
 /// to protect the inline script from XSS attacks.
 /// </summary>
-public class CheckSessionResponseFormatter : ICheckSessionResponseFormatter
+public class CheckSessionResponseFormatter : ICheckSessionResponseFormatter<ActionResult>
 {
     private const string NoncePlaceholder = "{{nonce}}";
     private const int NonceByteLength = 16;

@@ -10,7 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// success, as the endpoint's processor completed it, or the OAuth error on failure.
 /// </summary>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class DeviceAuthorizationResponseFormatter(ITenantAccessor tenantAccessor) : IDeviceAuthorizationResponseFormatter
+public class DeviceAuthorizationResponseFormatter(ITenantAccessor tenantAccessor) : IDeviceAuthorizationResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Formats a device authorization response into an HTTP response.

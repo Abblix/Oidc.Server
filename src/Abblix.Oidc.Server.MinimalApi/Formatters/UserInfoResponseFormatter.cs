@@ -21,7 +21,7 @@ using Abblix.Oidc.Server.AspNetCore;
 using Microsoft.Extensions.Options;
 using UserInfoRequest = Abblix.Oidc.Server.Model.UserInfoRequest;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -35,7 +35,7 @@ public class UserInfoResponseFormatter(
     TimeProvider clock,
     IClientJwtFormatter clientJwtFormatter,
     ITenantAccessor tenantAccessor,
-    IOptionsSnapshot<OidcOptions> options) : IUserInfoResponseFormatter
+    IOptionsSnapshot<OidcOptions> options) : IUserInfoResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(

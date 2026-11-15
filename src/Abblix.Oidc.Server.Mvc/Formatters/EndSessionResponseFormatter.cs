@@ -14,7 +14,7 @@ using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
@@ -26,7 +26,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// </summary>
 /// <param name="frontChannelLogoutService">Service for generating front-channel logout HTML responses.</param>
 public class EndSessionResponseFormatter(
-    IFrontChannelLogoutService frontChannelLogoutService) : IEndSessionResponseFormatter
+    IFrontChannelLogoutService frontChannelLogoutService) : IEndSessionResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Formats an end-session response asynchronously based on the provided response model.

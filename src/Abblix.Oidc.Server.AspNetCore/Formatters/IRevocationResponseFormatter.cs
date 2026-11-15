@@ -9,14 +9,14 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Utils;
-using Microsoft.AspNetCore.Http;
 using RevocationRequest = Abblix.Oidc.Server.Model.RevocationRequest;
 
-namespace Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+namespace Abblix.Oidc.Server.AspNetCore.Formatters;
 
-/// <summary>Formats the result of a token revocation request into an <see cref="IResult"/>.</summary>
-public interface IRevocationResponseFormatter
+/// <summary>Formats the result of a token revocation request into a <typeparamref name="TResult"/>.</summary>
+/// <typeparam name="TResult">The transport's result type: an MVC action result or a Minimal API result.</typeparam>
+public interface IRevocationResponseFormatter<TResult> where TResult : class
 {
     /// <summary>Formats the revocation result (empty 200 on success, OAuth error otherwise).</summary>
-    Task<IResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, OidcError> response);
+    Task<TResult> FormatResponseAsync(RevocationRequest request, Result<TokenRevoked, OidcError> response);
 }

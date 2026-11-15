@@ -16,7 +16,7 @@ using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Model;
 using Abblix.Oidc.Server.Mvc.Filters;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Microsoft.AspNetCore.Mvc;
 using Core = Abblix.Oidc.Server.Model;
 
@@ -63,7 +63,7 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult<Core.AuthorizationResponse>> PushAuthorizeAsync(
         [FromServices] IPushedAuthorizationHandler handler,
-        [FromServices] IPushedAuthorizationResponseFormatter formatter,
+        [FromServices] IPushedAuthorizationResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] AuthorizationRequest authorizationRequest,
         [FromForm] ClientRequest clientRequest)
@@ -107,7 +107,7 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     [Consumes(MediaTypes.FormUrlEncoded)]
     public async Task<ActionResult> BackChannelAuthenticationAsync(
         [FromServices] IBackChannelAuthenticationHandler handler,
-        [FromServices] IBackChannelAuthenticationResponseFormatter formatter,
+        [FromServices] IBackChannelAuthenticationResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] BackChannelAuthenticationRequest authenticationRequest,
         [FromForm] ClientRequest clientRequest)
@@ -131,7 +131,7 @@ public sealed class BackChannelAuthorizationController : ControllerBase
     [Consumes(MediaTypes.FormUrlEncoded)]
     public async Task<ActionResult> DeviceAuthorizationAsync(
         [FromServices] IDeviceAuthorizationHandler handler,
-        [FromServices] IDeviceAuthorizationResponseFormatter formatter,
+        [FromServices] IDeviceAuthorizationResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] DeviceAuthorizationRequest deviceAuthorizationRequest,
         [FromForm] ClientRequest clientRequest)

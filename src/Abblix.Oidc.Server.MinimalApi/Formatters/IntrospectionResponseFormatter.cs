@@ -18,7 +18,7 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using IntrospectionRequest = Abblix.Oidc.Server.Model.IntrospectionRequest;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 public class IntrospectionResponseFormatter(
     ITenantAccessor tenantAccessor,
     IIntrospectionResponseJwtBuilder jwtBuilder,
-    IHttpContextAccessor httpContextAccessor) : IIntrospectionResponseFormatter
+    IHttpContextAccessor httpContextAccessor) : IIntrospectionResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(IntrospectionRequest request, Result<IntrospectionSuccess, OidcError> response)

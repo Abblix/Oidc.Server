@@ -7,19 +7,19 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
-using Microsoft.AspNetCore.Http;
 
-namespace Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+namespace Abblix.Oidc.Server.AspNetCore.Formatters;
 
 /// <summary>
-/// Formats a check-session response (the session-management iframe document) into an <see cref="IResult"/>.
+/// Formats a check-session response (the session-management iframe document) into a <typeparamref name="TResult"/>.
 /// </summary>
-public interface ICheckSessionResponseFormatter
+/// <typeparam name="TResult">The transport's result type: an MVC action result or a Minimal API result.</typeparam>
+public interface ICheckSessionResponseFormatter<TResult> where TResult : class
 {
     /// <summary>
     /// Formats the check-session response.
     /// </summary>
     /// <param name="response">The check-session response carrying the HTML template.</param>
-    /// <returns>An <see cref="IResult"/> that writes the iframe document with a per-request CSP nonce.</returns>
-    Task<IResult> FormatResponseAsync(CheckSessionResponse response);
+    /// <returns>A <typeparamref name="TResult"/> that writes the iframe document with a per-request CSP nonce.</returns>
+    Task<TResult> FormatResponseAsync(CheckSessionResponse response);
 }

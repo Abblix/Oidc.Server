@@ -14,7 +14,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Mvc.Filters;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -77,7 +77,7 @@ public sealed class DiscoveryController : ControllerBase
 	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 	public async Task<ActionResult<Abblix.Oidc.Server.Model.ConfigurationResponse>> ConfigurationAsync(
 		[FromServices] IConfigurationHandler handler,
-		[FromServices] IConfigurationResponseFormatter formatter,
+		[FromServices] IConfigurationResponseFormatter<ActionResult> formatter,
 		[FromServices] ITenantAccessor tenantAccessor)
 	{
 		var response = await handler.HandleAsync(tenantAccessor.CurrentTenant());

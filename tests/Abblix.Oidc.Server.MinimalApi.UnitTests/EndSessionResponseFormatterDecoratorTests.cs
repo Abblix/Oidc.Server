@@ -15,7 +15,7 @@ using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SessionManagement;
 using Abblix.Oidc.Server.MinimalApi.Features.SessionManagement;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
@@ -68,10 +68,10 @@ public class EndSessionResponseFormatterDecoratorTests
 
     /// <summary>An inner formatter with nothing of its own to say, so the cookie is the only thing under test.
     /// </summary>
-    private sealed class AlwaysNoContent : IEndSessionResponseFormatter
+    private sealed class AlwaysNoContent : IEndSessionResponseFormatter<IResult>
     {
         [SuppressMessage("Minor Code Smell", "S2325",
-            Justification = "Implements IEndSessionResponseFormatter; the analyser reads the file without building it.")]
+            Justification = "Implements IEndSessionResponseFormatter<IResult>; the analyser reads the file without building it.")]
         [SuppressMessage("Major Code Smell", "S1172",
             Justification = "The parameters belong to the interface; this formatter answers the same way whatever it is given.")]
         public Task<IResult> FormatResponseAsync(

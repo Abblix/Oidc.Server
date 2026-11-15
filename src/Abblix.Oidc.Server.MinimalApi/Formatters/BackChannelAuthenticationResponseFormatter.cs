@@ -14,7 +14,7 @@ using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Net.Http.Headers;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// </summary>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
 public class BackChannelAuthenticationResponseFormatter(ITenantAccessor tenantAccessor)
-    : IBackChannelAuthenticationResponseFormatter
+    : IBackChannelAuthenticationResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(

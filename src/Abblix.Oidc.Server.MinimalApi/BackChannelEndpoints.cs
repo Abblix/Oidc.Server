@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -63,7 +63,7 @@ internal static class BackChannelEndpoints
         PushedAuthorizationRequest authorizationRequest,
         ClientRequest clientRequest,
         [FromServices] IPushedAuthorizationHandler handler,
-        [FromServices] IPushedAuthorizationResponseFormatter formatter,
+        [FromServices] IPushedAuthorizationResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;
@@ -80,7 +80,7 @@ internal static class BackChannelEndpoints
         BackChannelAuthenticationRequest authenticationRequest,
         ClientRequest clientRequest,
         [FromServices] IBackChannelAuthenticationHandler handler,
-        [FromServices] IBackChannelAuthenticationResponseFormatter formatter,
+        [FromServices] IBackChannelAuthenticationResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.BackChannelAuthenticationRequest coreAuthenticationRequest = authenticationRequest;
@@ -97,7 +97,7 @@ internal static class BackChannelEndpoints
         DeviceAuthorizationRequest deviceAuthorizationRequest,
         ClientRequest clientRequest,
         [FromServices] IDeviceAuthorizationHandler handler,
-        [FromServices] IDeviceAuthorizationResponseFormatter formatter,
+        [FromServices] IDeviceAuthorizationResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.DeviceAuthorizationRequest coreDeviceAuthorizationRequest = deviceAuthorizationRequest;

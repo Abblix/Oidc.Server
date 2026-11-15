@@ -18,7 +18,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Model;
 using Abblix.Oidc.Server.Mvc.Attributes;
 using Abblix.Oidc.Server.Mvc.Filters;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Core = Abblix.Oidc.Server.Model;
@@ -71,7 +71,7 @@ public sealed class AuthenticationController : ControllerBase
     [Produces(MediaTypeNames.Text.Html, MediaTypeNames.Application.Json)]
     public async Task<ActionResult<Core.AuthorizationResponse>> AuthorizeAsync(
         [FromServices] IAuthorizationHandler handler,
-        [FromServices] IAuthorizationResponseFormatter formatter,
+        [FromServices] IAuthorizationResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         [FromQueryOrForm] AuthorizationRequest authorizationRequest)
     {
@@ -102,7 +102,7 @@ public sealed class AuthenticationController : ControllerBase
     [EnableCors(OidcConstants.CorsPolicyName)]
     public async Task<ActionResult> UserInfoAsync(
         [FromServices] IUserInfoHandler handler,
-        [FromServices] IUserInfoResponseFormatter formatter,
+        [FromServices] IUserInfoResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         [FromQueryOrForm] UserInfoRequest userInfoRequest,
         [FromForm] ClientRequest clientRequest)
@@ -136,7 +136,7 @@ public sealed class AuthenticationController : ControllerBase
     [EnableCors(OidcConstants.CorsPolicyName)]
     public async Task<ActionResult> EndSessionAsync(
         [FromServices] IEndSessionHandler handler,
-        [FromServices] IEndSessionResponseFormatter formatter,
+        [FromServices] IEndSessionResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         [FromQueryOrForm] EndSessionRequest request)
     {
@@ -171,7 +171,7 @@ public sealed class AuthenticationController : ControllerBase
     [EnableCors(OidcConstants.CorsPolicyName)]
     public async Task<ActionResult> CheckSessionAsync(
         [FromServices] ICheckSessionHandler handler,
-        [FromServices] ICheckSessionResponseFormatter formatter,
+        [FromServices] ICheckSessionResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant());

@@ -20,6 +20,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Microsoft.AspNetCore.Mvc;
+using ModelResponse = Abblix.Oidc.Server.Model.ConfigurationResponse;
 using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -71,6 +73,12 @@ public class DiscoverySignedMetadataTests
     /// section 3 marks REQUIRED, and nothing else. These tests are about the signed_metadata field, so every
     /// other field is left absent on purpose.
     /// </summary>
+    private async Task<ModelResponse> FormatAsync(EndpointResponse response)
+    {
+        var result = Assert.IsType<ObjectResult>(await _formatter.FormatResponseAsync(response));
+        return Assert.IsType<ModelResponse>(result.Value);
+    }
+
     private static EndpointResponse MinimalResponse() => new()
     {
         Issuer = new Uri(Issuer),
@@ -88,10 +96,8 @@ public class DiscoverySignedMetadataTests
     {
         _oidcOptions.Discovery.SignedMetadata = false;
 
-        var result = await _formatter.FormatResponseAsync(MinimalResponse());
-
-        Assert.NotNull(result.Value);
-        Assert.Null(result.Value.SignedMetadata);
+        var result = await FormatAsync(MinimalResponse());
+        Assert.Null(result.SignedMetadata);
         _jwtCreatorMock.Verify(
             c => c.IssueAsync(It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey?>(), It.IsAny<JsonWebKey?>(),
                 It.IsAny<string>(), It.IsAny<string>()),
@@ -117,9 +123,9 @@ public class DiscoverySignedMetadataTests
                 (_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(SignedJws);
 
-        var result = await _formatter.FormatResponseAsync(MinimalResponse());
+        var result = await FormatAsync(MinimalResponse());
 
-        Assert.Equal(SignedJws, result.Value!.SignedMetadata);
+        Assert.Equal(SignedJws, result.SignedMetadata);
         Assert.Null(capturedEncryptionKey);
     }
 

@@ -7,14 +7,14 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
-using Microsoft.AspNetCore.Http;
 using AuthorizationRequest = Abblix.Oidc.Server.Model.AuthorizationRequest;
 
-namespace Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+namespace Abblix.Oidc.Server.AspNetCore.Formatters;
 
-/// <summary>Formats the response to a pushed authorization request (RFC 9126) into an <see cref="IResult"/>.</summary>
-public interface IPushedAuthorizationResponseFormatter
+/// <summary>Formats the response to a pushed authorization request (RFC 9126) into a <typeparamref name="TResult"/>.</summary>
+/// <typeparam name="TResult">The transport's result type: an MVC action result or a Minimal API result.</typeparam>
+public interface IPushedAuthorizationResponseFormatter<TResult> where TResult : class
 {
     /// <summary>Formats the PAR result (201 with the request URI on success, JSON OAuth error otherwise).</summary>
-    Task<IResult> FormatResponseAsync(AuthorizationRequest request, AuthorizationResponse response);
+    Task<TResult> FormatResponseAsync(AuthorizationRequest request, AuthorizationResponse response);
 }

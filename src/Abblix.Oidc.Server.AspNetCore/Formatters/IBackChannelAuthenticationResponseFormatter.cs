@@ -8,15 +8,15 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Utils;
-using Microsoft.AspNetCore.Http;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Model.BackChannelAuthenticationRequest;
 using BackChannelAuthenticationSuccess = Abblix.Oidc.Server.Model.BackChannelAuthenticationSuccess;
 using ClientRequest = Abblix.Oidc.Server.Model.ClientRequest;
 
-namespace Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+namespace Abblix.Oidc.Server.AspNetCore.Formatters;
 
-/// <summary>Formats the result of a CIBA backchannel authentication request into an <see cref="IResult"/>.</summary>
-public interface IBackChannelAuthenticationResponseFormatter
+/// <summary>Formats the result of a CIBA backchannel authentication request into a <typeparamref name="TResult"/>.</summary>
+/// <typeparam name="TResult">The transport's result type: an MVC action result or a Minimal API result.</typeparam>
+public interface IBackChannelAuthenticationResponseFormatter<TResult> where TResult : class
 {
     /// <summary>
     /// Formats the backchannel authentication result: a JSON success response, or the RFC-compliant OAuth error
@@ -26,7 +26,7 @@ public interface IBackChannelAuthenticationResponseFormatter
     /// <param name="clientRequest">The client request, used to match the <c>WWW-Authenticate</c> scheme on a 401
     /// per RFC 6749 section 5.2.</param>
     /// <param name="response">The backchannel authentication result to format.</param>
-    Task<IResult> FormatResponseAsync(
+    Task<TResult> FormatResponseAsync(
         BackChannelAuthenticationRequest request,
         ClientRequest clientRequest,
         Result<BackChannelAuthenticationSuccess, OidcError> response);
