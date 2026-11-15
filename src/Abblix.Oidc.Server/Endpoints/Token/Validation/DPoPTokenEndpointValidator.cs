@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Nonces;
+using Abblix.Oidc.Server.Features.Tokens;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -66,7 +67,7 @@ public partial class DPoPTokenEndpointValidator(
 
             // RFC 6749 section 5.2, invalid_client: "Client authentication failed", the mutual TLS the token would be
             // bound through being what is missing
-            if (!WillIssueCertificateBoundToken(context))
+            if (!WillIssueCertificateBoundToken(context, profile))
             {
                 LogProofRequiredButMissing("security profile");
                 return new OidcError(
@@ -97,16 +98,13 @@ public partial class DPoPTokenEndpointValidator(
         // client registered to bind it. So the answer is given here, before a device code or a backchannel
         // authentication request is spent. The profile tightens, and the granular RequireDPoP toggle cannot
         // weaken it.
-        if (SecurityProfileRequirements
-                .For(context.ClientInfo, tenant.DefaultSecurityProfile)
-                .RequireSenderConstrainedTokens &&
-            !WillIssueCertificateBoundToken(context))
+        if (profile.RequireSenderConstrainedTokens && !WillIssueCertificateBoundToken(context, profile))
         {
             LogProofRequiredButMissing("security profile");
             return new OidcError(
                 ErrorCodes.InvalidDPoPProof,
-                "The security profile requires a sender-constrained token: " +
-                "present a DPoP proof or authenticate with mutual TLS.");
+                "The security profile requires a sender-constrained token: present a DPoP proof, or a client " +
+                "certificate as a client registered for certificate-bound access tokens.");
         }
 
         return null;
@@ -146,15 +144,13 @@ public partial class DPoPTokenEndpointValidator(
     /// <summary>
     /// Whether the access token about to be issued will be certificate-bound (RFC 8705 section 3), and
     /// therefore sender-constrained via mutual TLS rather than DPoP: a certificate is presented by a client
-    /// that authenticates with mTLS or has registered for certificate-bound tokens. The binding decision in
+    /// whose tokens <see cref="CertificateBoundAccessTokens"/> binds. The binding decision in
     /// TokenAuthorizationContextEvaluator also keeps a grant already bound to a certificate bound; such a grant
-    /// was issued to a client registered as above, so the two part only for a registration changed since, and
+    /// was issued to a client bound as above, so the two part only for a registration changed since, and
     /// then the profile is held to the registration as it stands.
     /// </summary>
-    private static bool WillIssueCertificateBoundToken(TokenValidationContext context)
+    private static bool WillIssueCertificateBoundToken(
+        TokenValidationContext context, SecurityProfileRequirements profile)
         => context.ClientRequest.ClientCertificate is not null &&
-           (context.ClientInfo.TokenEndpointAuthMethod
-                is ClientAuthenticationMethods.TlsClientAuth
-                or ClientAuthenticationMethods.SelfSignedTlsClientAuth ||
-            context.ClientInfo.TlsClientCertificateBoundAccessTokens);
+           CertificateBoundAccessTokens.AreIssuedTo(context.ClientInfo, profile);
 }

@@ -230,8 +230,10 @@ public static class SecurityProfileConsistency
                 "but the client requires DPoP-bound access tokens");
         }
 
-        // RFC 8705 section 3: a token is bound to the certificate of a client that authenticates with mutual TLS or
-        // registers tls_client_certificate_bound_access_tokens; any other client is refused every token
+        // The profile binds the token to the certificate presented with the request, and refuses a request presenting
+        // none: a client authenticating with mutual TLS presents one with every request, and one registering
+        // tls_client_certificate_bound_access_tokens (RFC 8705 section 3.4) states it will; any other client would be
+        // refused every token
         if (!tlsClientCertificateBoundAccessTokens && tokenEndpointAuthMethod
                 is not (ClientAuthenticationMethods.TlsClientAuth or ClientAuthenticationMethods.SelfSignedTlsClientAuth))
         {

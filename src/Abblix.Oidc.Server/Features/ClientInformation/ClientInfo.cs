@@ -441,9 +441,9 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// RFC 8705 section 3.4 client metadata (<c>tls_client_certificate_bound_access_tokens</c>): when
     /// <c>true</c>, access tokens issued to this client are certificate-bound whenever the token
-    /// request arrives over mutual TLS - independently of the client authentication method, which
-    /// is what distinguishes this flag from the implicit binding the mTLS authentication methods
-    /// already get.
+    /// request arrives over mutual TLS, independently of the client authentication method. A client
+    /// authenticating with mutual TLS without it gets no certificate binding, unless its security profile
+    /// issues certificate-bound tokens only.
     /// </summary>
     public bool TlsClientCertificateBoundAccessTokens { get; set; } = false;
 

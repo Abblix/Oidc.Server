@@ -15,17 +15,19 @@ public enum RefreshTokenReusePolicy
 {
 	/// <summary>
 	/// Refresh tokens are reused only by a client that authenticates by certificate (<c>tls_client_auth</c>,
-	/// <c>self_signed_tls_client_auth</c>) or with <c>private_key_jwt</c> while requiring DPoP, and that receives its
-	/// access tokens only from the token endpoint. Every other client rotates them.
+	/// <c>self_signed_tls_client_auth</c>) and has its tokens bound to it, or with <c>private_key_jwt</c> while
+	/// requiring DPoP, and that receives its access tokens only from the token endpoint. Every other client rotates them.
 	/// </summary>
 	/// <remarks>
 	/// Rotation adds nothing for a confidential client whose access tokens are sender-constrained, and costs a client
 	/// that fails to store a rotated token its session (FAPI 2.0 Security Profile section 5.3.2.1, note 1). The
 	/// binding is required on every token request, not merely allowed: a certificate authenticates each request and
-	/// binds its token, and a client requiring DPoP is refused without a proof. Tokens that reach the client by
+	/// binds its token for a client registered for certificate-bound access tokens (RFC 8705 section 3.4) or held to a
+	/// profile issuing no other, and a client requiring DPoP is refused without a proof. Tokens that reach the client by
 	/// another way carry no binding, since no certificate or proof accompanies them: those delivered by CIBA push,
 	/// and an access token returned from the authorization endpoint for a response type that includes
-	/// <c>token</c>. So a client registered for either rotates, as does a <c>private_key_jwt</c> client whose
+	/// <c>token</c>. So a client registered for either rotates, as does a certificate client whose tokens nothing binds,
+	/// since authenticating by certificate binds no token by itself, a <c>private_key_jwt</c> client whose
 	/// certificate binding is optional, since a request made without a certificate gets an unbound token, and a
 	/// client authenticating with a shared secret, whose tokens are bound to no key at all.
 	/// </remarks>
