@@ -9,10 +9,16 @@
 // The server the OpenID Foundation conformance suite is pointed at. It runs as a container on the suite's own
 // Docker network, so the suite's browser and its back channel reach it by one name, and it reaches the suite by
 // the name the suite writes into every URL it hands out. conformance/run.ps1 drives a run.
+//
+// The OpenID Connect plans register their clients with the suite as they go; the FAPI and CIBA plans authenticate as
+// static clients, which the host mints at startup with their keys and certificates and writes the suite's
+// configuration for (FapiPlanFamily).
 
 using Microsoft.AspNetCore.Http;
 using System.Net;
+using System.Net.Security;
 using System.Text;
+using System.Text.Json;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Abblix.Jwt;
@@ -22,6 +28,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.MinimalApi.Conformance.TestHost;
 using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Features;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.ImplicitFlow;
@@ -37,6 +44,7 @@ using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 using UriBuilder = Abblix.Utils.UriBuilder;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -44,11 +52,27 @@ var builder = WebApplication.CreateBuilder(args);
 var settings = builder.Configuration.GetSection("Conformance");
 var issuer = new Uri(Required(settings, "Issuer"));
 var suite = new Uri(Required(settings, "SuiteBaseUrl"));
-var user = new ConformanceUser(Required(settings, "UserEmail"), Required(settings, "UserPassword"));
+var mtlsBase = new Uri(Required(settings, "MtlsBaseUrl"));
+var userEmail = Required(settings, "UserEmail");
+var user = new ConformanceUser(userEmail, Required(settings, "UserPassword"));
 
-// The suite does not check this server's certificate, so a fresh self-signed one for the issuer's name will do
+// The suite does not check this server's certificate, so a fresh self-signed one for each name will do
 builder.WebHost.ConfigureKestrel(kestrel =>
-    kestrel.ListenAnyIP(issuer.Port, listen => listen.UseHttps(CreateCertificate(issuer.Host))));
+{
+    kestrel.ListenAnyIP(issuer.Port, listen => listen.UseHttps(FapiTls(new HttpsConnectionAdapterOptions
+    {
+        ServerCertificate = CreateCertificate(issuer.Host),
+    })));
+
+    // The mutual-TLS endpoint aliases (RFC 8705 section 5) take any client certificate: the server matches it
+    // against the client's registered keys, or binds the token to it
+    kestrel.ListenAnyIP(mtlsBase.Port, listen => listen.UseHttps(FapiTls(new HttpsConnectionAdapterOptions
+    {
+        ServerCertificate = CreateCertificate(mtlsBase.Host),
+        ClientCertificateMode = ClientCertificateMode.RequireCertificate,
+        ClientCertificateValidation = (_, _, _) => true,
+    })));
+});
 
 builder.Services.AddSingleton(user);
 builder.Services.AddSingleton<IUserInfoProvider>(user);
@@ -62,11 +86,32 @@ builder.Services.AddIntrospection();
 builder.Services.AddCheckSession();
 builder.Services.AddFrontChannelLogout();
 builder.Services.AddBackChannelLogout();
+builder.Services.AddSingleton<IUserDeviceAuthenticationHandler, ConformanceUserDevice>();
+builder.Services.AddBackChannelAuthentication();
+
+var fapiFamilies = FapiPlanFamily.All
+    .Select(family => family.Declare(issuer, mtlsBase, suite, userEmail))
+    .ToArray();
+
+// The suite reads a FAPI plan's clients, keys and certificates from its configuration file, so the run script names
+// a directory to write them into, one file per configuration, named by its alias
+if (settings["PlanConfigurations"] is { Length: > 0 } planConfigurations)
+{
+    Directory.CreateDirectory(planConfigurations);
+    foreach (var (alias, configuration) in fapiFamilies.SelectMany(declared => declared.PlanConfigurations))
+    {
+        await File.WriteAllTextAsync(
+            Path.Combine(planConfigurations, alias + ".json"),
+            configuration.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    }
+}
 
 var tenant = new TenantDefinition
 {
     Id = "conformance",
     Issuer = issuer,
+    MtlsBaseUri = mtlsBase,
+    Clients = [..fapiFamilies.SelectMany(declared => declared.Clients)],
     LoginUri = new Uri("/login", UriKind.Relative),
     SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
 
@@ -89,6 +134,19 @@ builder.Services.AddOidcServices(options =>
         ClientAssertionAudiences = ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint,
         AllowOfflineAccessWithUserAgentAccessToken = true,
     };
+
+    // The server's own tokens take one algorithm, and the FAPI clients' profiles admit only PS256 and ES256, which the
+    // tenant's key, declaring no algorithm, produces
+    foreach (var serviceToken in new[]
+             {
+                 options.ServiceTokens.AccessToken,
+                 options.ServiceTokens.RefreshToken,
+                 options.ServiceTokens.RegistrationAccessToken,
+                 options.ServiceTokens.InitialAccessToken,
+             })
+    {
+        serviceToken.Signing.Algorithm = SigningAlgorithms.PS256;
+    }
 });
 builder.Services.Decorate<IClientInfoManager, PkceOptionalForRegisteredClients>();
 builder.Services.Decorate<IEndSessionResponseFormatter<IResult>, EndSessionPages>();
@@ -129,6 +187,17 @@ app.MapPost("/conformance/rotate-keys", () =>
     return Results.NoContent();
 });
 
+// The end user's answer on their device to a pending CIBA request, given by the suite in the user's place
+app.MapPost(FapiPlanFamily.CibaApprovalPath, async (
+        string auth_req_id,
+        string action,
+        IBackChannelRequestStorage storage,
+        IAuthenticationCompletionHandler completion,
+        TimeProvider clock) =>
+    await ConformanceUserDevice.AnswerAsync(tenant, auth_req_id, action, storage, completion, clock)
+        ? Results.NoContent()
+        : Results.NotFound());
+
 app.MapPost("/login", async (
         [FromForm] string email,
         [FromForm] string password,
@@ -168,6 +237,30 @@ app.MapPost("/login", async (
     .DisableAntiforgery();
 
 await app.RunAsync();
+
+// FAPI 2.0 Security Profile section 5.2.2 and FAPI 1.0 Part 2 section 8.5 hold TLS 1.2 to the cipher suites BCP 195
+// recommends, which the FAPI plans check by offering others. The platform takes a cipher suite policy on Linux only,
+// where the host runs in the suite's network; elsewhere its defaults stay
+static HttpsConnectionAdapterOptions FapiTls(HttpsConnectionAdapterOptions options)
+{
+    if (!OperatingSystem.IsLinux())
+        return options;
+
+    var policy = new CipherSuitesPolicy(
+    [
+        TlsCipherSuite.TLS_AES_128_GCM_SHA256,
+        TlsCipherSuite.TLS_AES_256_GCM_SHA384,
+        TlsCipherSuite.TLS_CHACHA20_POLY1305_SHA256,
+        TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+        TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+        TlsCipherSuite.TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
+        TlsCipherSuite.TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
+    ]);
+#pragma warning disable CA1416 // Set only on Linux, as the guard above holds, which the analyzer does not follow into a lambda
+    options.OnAuthenticate = (_, ssl) => ssl.CipherSuitesPolicy = policy;
+#pragma warning restore CA1416
+    return options;
+}
 
 static string Required(IConfiguration section, string key)
     => section[key] ?? throw new InvalidOperationException($"Conformance:{key} is not set");

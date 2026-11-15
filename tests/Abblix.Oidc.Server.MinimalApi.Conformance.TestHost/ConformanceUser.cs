@@ -57,6 +57,12 @@ public sealed class ConformanceUser(string email, string secret) : IUserInfoProv
     public bool Matches(string typedEmail, string typedSecret)
         => string.Equals(typedEmail, email, StringComparison.OrdinalIgnoreCase) && typedSecret == secret;
 
+    /// <summary>
+    /// Whether a CIBA request's login hint names this user, as the suite's FAPI-CIBA configuration has it name them:
+    /// by the address they sign in with.
+    /// </summary>
+    public bool IsNamedBy(string? loginHint) => string.Equals(loginHint, email, StringComparison.OrdinalIgnoreCase);
+
     public Task<JsonObject?> GetUserInfoAsync(
         TenantDefinition tenant, AuthSession authSession, IEnumerable<string> requestedClaims)
     {
