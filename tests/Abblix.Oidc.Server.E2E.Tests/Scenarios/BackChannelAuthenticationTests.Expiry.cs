@@ -26,7 +26,7 @@ public partial class BackChannelAuthenticationTests
     /// <summary>
     /// The lifetime the request asks for, short enough to wait out.
     /// </summary>
-    private static readonly TimeSpan ShortRequestedExpiry = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan ShortRequestedExpiry = TimeSpan.FromSeconds(3);
 
     /// <summary>
     /// CIBA Core 1.0 section 11: expired_token, "The auth_req_id has expired. The Client will need to make a new

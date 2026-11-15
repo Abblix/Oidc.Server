@@ -559,6 +559,7 @@ internal static class LogEvents
             public const int NotPendingOnCompletion = Base + 4;
             public const int AuthenticationLevelNotTheOneRequired = Base + 5;
             public const int GrantNamesAnotherClient = Base + 6;
+            public const int ExpiredBeforeAnswered = Base + 7;
         }
 
         /// <summary>

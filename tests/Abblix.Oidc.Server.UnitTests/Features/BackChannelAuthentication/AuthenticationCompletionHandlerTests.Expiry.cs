@@ -12,7 +12,11 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNotifiers;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -48,6 +52,44 @@ public partial class AuthenticationCompletionHandlerTests
             () => CreatePollModeHandler().DenyAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, _expiresIn));
 
         Assert.Equal(BackChannelAuthenticationStatus.Pending, expired.Status);
+    }
+
+    /// <summary>
+    /// A late answer is told to the operator as what it is, an answer that came after the request expired, and not as
+    /// the refusal of a request that is not pending: the record still reads pending.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_WhenTheStoredRequestHasExpired_LogsTheExpiry()
+    {
+        var expired = PendingRecordExpiringAt(ApprovedAt);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(expired);
+
+        var logger = new Mock<ILogger<PollModeCompletionHandler>>();
+        // [LoggerMessage] gates each call on IsEnabled, which a loose mock answers false
+        logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
+        var handler = new PollModeCompletionHandler(
+            logger.Object, TestFingerprints.Instance, _storage.Object, PublicSubjects(),
+            new FakeTimeProvider(ApprovedAt), null);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => handler.CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, expired, PollClient(), _expiresIn));
+
+        logger.Verify(
+            l => l.Log(
+                LogLevel.Information,
+                It.Is<EventId>(id => id.Id == LogEvents.Device.AuthenticationCompletionHandler.ExpiredBeforeAnswered),
+                It.IsAny<It.IsAnyType>(),
+                null,
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+        logger.Verify(
+            l => l.Log(
+                It.IsAny<LogLevel>(),
+                It.Is<EventId>(id => id.Id == LogEvents.Device.AuthenticationCompletionHandler.NotPendingOnCompletion),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Never);
     }
 
     private static BackChannelAuthenticationRequest PendingRecordExpiringAt(DateTimeOffset expiresAt)

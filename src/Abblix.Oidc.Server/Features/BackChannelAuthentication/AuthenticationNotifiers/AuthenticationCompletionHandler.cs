@@ -78,8 +78,8 @@ public abstract partial class AuthenticationCompletionHandler(
     /// </list>
     /// Called by AuthenticationCompletionRouter after determining the appropriate delivery mode handler.
     /// </remarks>
-    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
-    /// identifier. The full statement of the condition, and why it is stated that way rather than as a
+    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record whose expiry
+    /// has not come under this identifier. The full statement of the condition, and why it is stated that way rather than as a
     /// list of causes, is on <see cref="IAuthenticationCompletionHandler.CompleteAsync"/>.</exception>
     public async Task CompleteAuthenticationAsync(
         TenantDefinition tenant,
@@ -279,8 +279,8 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="tenant">The tenant the request is completed at, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="authenticationRequestId">The auth_req_id the end user refused.</param>
     /// <param name="expiresIn">How long a denied request stays readable, for the modes that leave one.</param>
-    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
-    /// identifier: a request already answered, removed or expired cannot be refused either.</exception>
+    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record whose expiry
+    /// has not come under this identifier: a request already answered, removed or expired cannot be refused either.</exception>
     public async Task DenyAuthenticationAsync(TenantDefinition tenant, [Credential] string authenticationRequestId, TimeSpan expiresIn)
     {
         var stored = await ReadPendingAsync(tenant, authenticationRequestId, "denied");
@@ -298,8 +298,14 @@ public abstract partial class AuthenticationCompletionHandler(
         // A pending record outlives its expiry so a late poll is told expired_token, so its presence no longer says it
         // may still be answered: one whose ExpiresAt has come is refused as one that is gone
         var stored = await storage.TryGetAsync(tenant, authenticationRequestId);
-        if (stored is { Status: BackChannelAuthenticationStatus.Pending } && clock.GetUtcNow() < stored.ExpiresAt)
-            return stored;
+        if (stored is { Status: BackChannelAuthenticationStatus.Pending })
+        {
+            if (clock.GetUtcNow() < stored.ExpiresAt)
+                return stored;
+
+            LogExpiredBeforeAnswered(FingerprintOf(authenticationRequestId), answered);
+            throw NotPending(answered, stored);
+        }
 
         LogNotPendingOnCompletion(FingerprintOf(authenticationRequestId), answered, stored?.Status.ToString());
         throw NotPending(answered, stored);

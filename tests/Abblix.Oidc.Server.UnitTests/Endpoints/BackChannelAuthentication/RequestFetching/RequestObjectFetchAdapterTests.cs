@@ -110,6 +110,26 @@ public class RequestObjectFetchAdapterTests
     }
 
     /// <summary>
+    /// The profile a tenant holds every client to is a floor, so a client naming none is held to signed requests when
+    /// its tenant's default profile requires them.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_PlainParametersAtATenantRequiringSignedRequests_AreInvalidRequest()
+    {
+        var outer = new BackChannelAuthenticationRequest { Scope = [Scopes.OpenId], LoginHint = "end-user" };
+        var client = new ClientInfo("client-1");
+        var tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced }.ToTenant();
+
+        var fetcher = new Mock<IRequestObjectFetcher>(MockBehavior.Strict);
+
+        var result = await new RequestObjectFetchAdapter(fetcher.Object, Mock.Of<IJwtAlgorithmsProvider>())
+            .FetchAsync(tenant, client, outer);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
     /// A client held to no profile, or to a profile that requires no signed request object, may send its
     /// authentication request as plain parameters: CIBA Core 1.0 section 7.2 validates the JWT only "If the
     /// authentication request is signed".

@@ -76,7 +76,8 @@ public class BackChannelAuthenticationGrantHandler(
     ///   <item><term>Pending (long-polling):</term> Waits for status change notification up to configured timeout,
     ///   then re-checks storage to return grant or appropriate error</item>
     ///   <item><term>Denied:</term> Returns access_denied error</item>
-    ///   <item><term>Expired/Not Found:</term> Returns expired_token error</item>
+    ///   <item><term>Expired:</term> Returns expired_token error and removes the request</item>
+    ///   <item><term>Not Found or issued to another client:</term> Returns invalid_grant error</item>
     ///   <item><term>Rate Limited:</term> Returns slow_down when asked before the instant this request's client was given</item>
     /// </list>
     /// <para>
