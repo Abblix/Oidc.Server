@@ -256,9 +256,7 @@ static HttpsConnectionAdapterOptions FapiTls(HttpsConnectionAdapterOptions optio
         TlsCipherSuite.TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
         TlsCipherSuite.TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
     ]);
-#pragma warning disable CA1416 // Set only on Linux, as the guard above holds, which the analyzer does not follow into a lambda
     options.OnAuthenticate = (_, ssl) => ssl.CipherSuitesPolicy = policy;
-#pragma warning restore CA1416
     return options;
 }
 

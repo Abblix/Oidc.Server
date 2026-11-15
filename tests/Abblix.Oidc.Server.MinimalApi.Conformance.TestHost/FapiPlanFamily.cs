@@ -64,7 +64,8 @@ public sealed record FapiPlanFamily(
     /// The plan's client assertions name the token endpoint, and at the pushed authorization request endpoint an
     /// array holding the issuer beside another value, which the suite expects accepted as RFC 7523 section 3 allowed
     /// before RFC 10070 section 4 closed it: the clients are granted both, as a host grants a client that cannot change
-    /// yet.
+    /// yet. The pushed authorization request endpoint URL as the audience, which the suite expects accepted too, has
+    /// no grant: RFC 10070 section 5 has the server reject it, so that module fails whatever the host sets.
     /// </remarks>
     public static FapiPlanFamily Fapi1Advanced { get; } = new(
         ClientSecurityProfile.Fapi1Advanced,
@@ -97,7 +98,7 @@ public sealed record FapiPlanFamily(
     /// </remarks>
     public static FapiPlanFamily Ciba { get; } = new(
         ClientSecurityProfile.Fapi1Advanced,
-        "openid profile",
+        "openid profile offline_access",
         [
             new SuitePlan("abblix-ciba-pkjwt-poll", false, true, BackchannelTokenDeliveryModes.Poll),
             new SuitePlan("abblix-ciba-pkjwt-ping", false, true, BackchannelTokenDeliveryModes.Ping),

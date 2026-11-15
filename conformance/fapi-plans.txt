@@ -4,7 +4,6 @@
 # have to match how those clients authenticate and bind their tokens. One plan per line, in the suite runner's syntax;
 # a line starting with # is a comment.
 fapi2-security-profile-final-test-plan[client_auth_type=private_key_jwt][sender_constrain=dpop][fapi_profile=plain_fapi][openid=openid_connect] @ abblix-fapi2-pkjwt-dpop
-fapi2-security-profile-final-test-plan[client_auth_type=private_key_jwt][sender_constrain=dpop][fapi_profile=plain_fapi][openid=plain_oauth] @ abblix-fapi2-pkjwt-dpop
 fapi2-security-profile-final-test-plan[client_auth_type=private_key_jwt][sender_constrain=mtls][fapi_profile=plain_fapi][openid=openid_connect] @ abblix-fapi2-pkjwt-mtls
 fapi2-security-profile-final-test-plan[client_auth_type=mtls][sender_constrain=dpop][fapi_profile=plain_fapi][openid=openid_connect] @ abblix-fapi2-mtls-dpop
 fapi2-security-profile-final-test-plan[client_auth_type=mtls][sender_constrain=mtls][fapi_profile=plain_fapi][openid=openid_connect] @ abblix-fapi2-mtls-mtls
