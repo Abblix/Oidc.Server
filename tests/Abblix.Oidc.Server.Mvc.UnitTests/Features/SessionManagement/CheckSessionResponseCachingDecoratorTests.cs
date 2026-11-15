@@ -15,7 +15,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Features.SessionManagement;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -87,7 +87,7 @@ public class CheckSessionResponseCachingDecoratorTests
         public TenantContext Current => served;
     }
 
-    private sealed class CountingFormatter : ICheckSessionResponseFormatter
+    private sealed class CountingFormatter : ICheckSessionResponseFormatter<ActionResult>
     {
         public int Formatted { get; private set; }
 

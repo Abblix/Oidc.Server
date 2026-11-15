@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -20,7 +20,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// Formats a client-removal result (RFC 7592 section 2.3) as <see cref="IResult"/>: an empty 204 on success, or the JSON
 /// OAuth error on failure.
 /// </summary>
-public class RemoveClientResponseFormatter : IRemoveClientResponseFormatter
+public class RemoveClientResponseFormatter : IRemoveClientResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(ClientRequest request, Result<RemoveClientSuccessfulResponse, OidcError> response)

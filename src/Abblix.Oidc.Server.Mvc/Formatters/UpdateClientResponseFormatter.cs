@@ -11,7 +11,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,7 +22,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// Provides a response formatter for update client responses per RFC 7592 Section 2.2.
 /// </summary>
 /// <param name="clientUriBuilder">Builds the URL of the client's configuration endpoint.</param>
-public class UpdateClientResponseFormatter(RegistrationClientUriBuilder clientUriBuilder) : IUpdateClientResponseFormatter
+public class UpdateClientResponseFormatter(RegistrationClientUriBuilder clientUriBuilder) : IUpdateClientResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Formats a response for updating a client asynchronously.

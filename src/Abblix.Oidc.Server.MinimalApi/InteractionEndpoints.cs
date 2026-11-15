@@ -13,7 +13,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -64,7 +64,7 @@ internal static class InteractionEndpoints
         UserInfoRequest userInfoRequest,
         ClientRequest clientRequest,
         [FromServices] IUserInfoHandler handler,
-        [FromServices] IUserInfoResponseFormatter formatter,
+        [FromServices] IUserInfoResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.UserInfoRequest coreUserInfoRequest = userInfoRequest;
@@ -80,7 +80,7 @@ internal static class InteractionEndpoints
     private static async Task<IResult> EndSessionAsync(
         EndSessionRequest endSessionRequest,
         [FromServices] IEndSessionHandler handler,
-        [FromServices] IEndSessionResponseFormatter formatter,
+        [FromServices] IEndSessionResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.EndSessionRequest coreEndSessionRequest = endSessionRequest;
@@ -95,7 +95,7 @@ internal static class InteractionEndpoints
     private static async Task<IResult> AuthorizeAsync(
         AuthorizationRequest authorizationRequest,
         [FromServices] IAuthorizationHandler handler,
-        [FromServices] IAuthorizationResponseFormatter formatter,
+        [FromServices] IAuthorizationResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.AuthorizationRequest coreAuthorizationRequest = authorizationRequest;

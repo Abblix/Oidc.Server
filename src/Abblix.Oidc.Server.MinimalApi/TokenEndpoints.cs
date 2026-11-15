@@ -13,7 +13,7 @@ using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -64,7 +64,7 @@ internal static class TokenEndpoints
         TokenRequest tokenRequest,
         ClientRequest clientRequest,
         [FromServices] ITokenHandler handler,
-        [FromServices] ITokenResponseFormatter formatter,
+        [FromServices] ITokenResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         CancellationToken cancellationToken)
     {
@@ -82,7 +82,7 @@ internal static class TokenEndpoints
         RevocationRequest revocationRequest,
         ClientRequest clientRequest,
         [FromServices] IRevocationHandler handler,
-        [FromServices] IRevocationResponseFormatter formatter,
+        [FromServices] IRevocationResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.RevocationRequest coreRevocationRequest = revocationRequest;
@@ -96,7 +96,7 @@ internal static class TokenEndpoints
         IntrospectionRequest introspectionRequest,
         ClientRequest clientRequest,
         [FromServices] IIntrospectionHandler handler,
-        [FromServices] IIntrospectionResponseFormatter formatter,
+        [FromServices] IIntrospectionResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.IntrospectionRequest coreIntrospectionRequest = introspectionRequest;

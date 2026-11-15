@@ -11,7 +11,7 @@ using System.Net.Mime;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -62,7 +62,7 @@ internal static class ClientRegistrationEndpoints
         ClientMetadataBody body,
         HttpContext context,
         [FromServices] IRegisterClientHandler handler,
-        [FromServices] IRegisterClientResponseFormatter formatter,
+        [FromServices] IRegisterClientResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         if (body is not { Request: { } request })
@@ -80,7 +80,7 @@ internal static class ClientRegistrationEndpoints
     private static async Task<IResult> ReadClientAsync(
         ClientAuthorizationRequest authorizationRequest,
         [FromServices] IReadClientHandler handler,
-        [FromServices] IReadClientResponseFormatter formatter,
+        [FromServices] IReadClientResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.ClientRequest coreClientRequest = authorizationRequest;
@@ -93,7 +93,7 @@ internal static class ClientRegistrationEndpoints
         ClientAuthorizationRequest authorizationRequest,
         ClientMetadataBody body,
         [FromServices] IUpdateClientHandler handler,
-        [FromServices] IUpdateClientResponseFormatter formatter,
+        [FromServices] IUpdateClientResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         if (body is not { Request: { } registrationRequest })
@@ -108,7 +108,7 @@ internal static class ClientRegistrationEndpoints
     private static async Task<IResult> RemoveClientAsync(
         ClientAuthorizationRequest authorizationRequest,
         [FromServices] IRemoveClientHandler handler,
-        [FromServices] IRemoveClientResponseFormatter formatter,
+        [FromServices] IRemoveClientResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         Core.ClientRequest coreClientRequest = authorizationRequest;

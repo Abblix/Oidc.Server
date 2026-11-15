@@ -15,7 +15,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 public class IntrospectionResponseFormatter(
     ITenantAccessor tenantAccessor,
     IIntrospectionResponseJwtBuilder jwtBuilder,
-    IHttpContextAccessor httpContextAccessor) : IIntrospectionResponseFormatter
+    IHttpContextAccessor httpContextAccessor) : IIntrospectionResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Formats an introspection response asynchronously.

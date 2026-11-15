@@ -12,7 +12,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -21,7 +21,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// <c>registration_client_uri</c> filled in) on success, or the JSON OAuth error on failure.
 /// </summary>
 /// <param name="uriBuilder">Builds the <c>registration_client_uri</c> for the client.</param>
-public class ReadClientResponseFormatter(RegistrationClientUriBuilder uriBuilder) : IReadClientResponseFormatter
+public class ReadClientResponseFormatter(RegistrationClientUriBuilder uriBuilder) : IReadClientResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(ClientRequest request, Result<ReadClientSuccessfulResponse, OidcError> response)

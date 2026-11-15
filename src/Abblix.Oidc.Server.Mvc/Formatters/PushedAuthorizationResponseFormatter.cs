@@ -11,7 +11,7 @@ using Abblix.Oidc.Server.Common.Exceptions;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using CoreModel = Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -30,7 +30,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <see cref="AuthorizationResponseFormatter"/>, which is intended for the authorization endpoint.
 /// </remarks>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class PushedAuthorizationResponseFormatter(ITenantAccessor tenantAccessor) : IPushedAuthorizationResponseFormatter
+public class PushedAuthorizationResponseFormatter(ITenantAccessor tenantAccessor) : IPushedAuthorizationResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Asynchronously formats the response to a pushed authorization request.

@@ -13,7 +13,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -71,7 +71,7 @@ internal static class DiscoveryEndpoints
     /// </summary>
     private static async Task<IResult> CheckSessionAsync(
         [FromServices] ICheckSessionHandler handler,
-        [FromServices] ICheckSessionResponseFormatter formatter,
+        [FromServices] ICheckSessionResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant());
@@ -83,7 +83,7 @@ internal static class DiscoveryEndpoints
     /// </summary>
     private static async Task<IResult> ConfigurationAsync(
         [FromServices] IConfigurationHandler handler,
-        [FromServices] IConfigurationResponseFormatter formatter,
+        [FromServices] IConfigurationResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant());

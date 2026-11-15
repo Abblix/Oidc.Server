@@ -11,14 +11,14 @@ using System.Security.Cryptography;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
 using Microsoft.AspNetCore.Http;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>
 /// Produces the check-session iframe document, generating a per-request CSP nonce to protect the inline script.
 /// </summary>
-public class CheckSessionResponseFormatter : ICheckSessionResponseFormatter
+public class CheckSessionResponseFormatter : ICheckSessionResponseFormatter<IResult>
 {
     private const string NoncePlaceholder = "{{nonce}}";
     private const int NonceByteLength = 16;

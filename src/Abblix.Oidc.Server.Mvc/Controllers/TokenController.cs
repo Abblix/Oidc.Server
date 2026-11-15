@@ -15,7 +15,7 @@ using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Filters;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.Mvc.Model;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
@@ -68,7 +68,7 @@ public class TokenController : ControllerBase
     [EnableCors(OidcConstants.CorsPolicyName)]
     public async Task<ActionResult<TokenResponse>> TokenAsync(
         [FromServices] ITokenHandler handler,
-        [FromServices] ITokenResponseFormatter formatter,
+        [FromServices] ITokenResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] TokenRequest tokenRequest,
         [FromForm] ClientRequest clientRequest)
@@ -103,7 +103,7 @@ public class TokenController : ControllerBase
     [EnableCors(OidcConstants.CorsPolicyName)]
     public async Task<ActionResult> RevocationAsync(
         [FromServices] IRevocationHandler handler,
-        [FromServices] IRevocationResponseFormatter formatter,
+        [FromServices] IRevocationResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] RevocationRequest revocationRequest,
         [FromForm] ClientRequest clientRequest)
@@ -137,7 +137,7 @@ public class TokenController : ControllerBase
     [Consumes(MediaTypes.FormUrlEncoded)]
     public async Task<ActionResult> IntrospectionAsync(
         [FromServices] IIntrospectionHandler handler,
-        [FromServices] IIntrospectionResponseFormatter formatter,
+        [FromServices] IIntrospectionResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         [FromForm] IntrospectionRequest introspectionRequest,
         [FromForm] ClientRequest clientRequest)

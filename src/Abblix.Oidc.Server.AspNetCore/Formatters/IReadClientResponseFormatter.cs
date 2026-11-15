@@ -9,13 +9,13 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
-using Microsoft.AspNetCore.Http;
 
-namespace Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+namespace Abblix.Oidc.Server.AspNetCore.Formatters;
 
-/// <summary>Formats the result of reading a client configuration (RFC 7592) into an <see cref="IResult"/>.</summary>
-public interface IReadClientResponseFormatter
+/// <summary>Formats the result of reading a client configuration (RFC 7592) into a <typeparamref name="TResult"/>.</summary>
+/// <typeparam name="TResult">The transport's result type: an MVC action result or a Minimal API result.</typeparam>
+public interface IReadClientResponseFormatter<TResult> where TResult : class
 {
     /// <summary>Formats the read result (200 with the client configuration, or the OAuth error).</summary>
-    Task<IResult> FormatResponseAsync(ClientRequest request, Result<ReadClientSuccessfulResponse, OidcError> response);
+    Task<TResult> FormatResponseAsync(ClientRequest request, Result<ReadClientSuccessfulResponse, OidcError> response);
 }

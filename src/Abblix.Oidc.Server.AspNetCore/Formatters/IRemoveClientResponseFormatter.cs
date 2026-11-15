@@ -10,13 +10,13 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
-using Microsoft.AspNetCore.Http;
 
-namespace Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+namespace Abblix.Oidc.Server.AspNetCore.Formatters;
 
-/// <summary>Formats the result of removing a client (RFC 7592 section 2.3) into an <see cref="IResult"/>.</summary>
-public interface IRemoveClientResponseFormatter
+/// <summary>Formats the result of removing a client (RFC 7592 section 2.3) into a <typeparamref name="TResult"/>.</summary>
+/// <typeparam name="TResult">The transport's result type: an MVC action result or a Minimal API result.</typeparam>
+public interface IRemoveClientResponseFormatter<TResult> where TResult : class
 {
     /// <summary>Formats the removal result (empty 204 on success, or the OAuth error).</summary>
-    Task<IResult> FormatResponseAsync(ClientRequest request, Result<RemoveClientSuccessfulResponse, OidcError> response);
+    Task<TResult> FormatResponseAsync(ClientRequest request, Result<RemoveClientSuccessfulResponse, OidcError> response);
 }

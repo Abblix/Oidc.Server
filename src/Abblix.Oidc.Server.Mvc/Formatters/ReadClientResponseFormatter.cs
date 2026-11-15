@@ -10,7 +10,7 @@ using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -21,7 +21,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// Provides a response formatter for reading client responses.
 /// </summary>
 /// <param name="clientUriBuilder">Builds the URL of the client's configuration endpoint.</param>
-public class ReadClientResponseFormatter(RegistrationClientUriBuilder clientUriBuilder) : IReadClientResponseFormatter
+public class ReadClientResponseFormatter(RegistrationClientUriBuilder clientUriBuilder) : IReadClientResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Formats a response for reading a client asynchronously.

@@ -15,7 +15,7 @@ using Microsoft.AspNetCore.Http;
 using TokenRequest = Abblix.Oidc.Server.Model.TokenRequest;
 using TokenResponse = Abblix.Oidc.Server.Model.TokenResponse;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// OAuth error (status, JSON envelope, WWW-Authenticate challenge, DPoP-Nonce) on failure.
 /// </summary>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
-public class TokenResponseFormatter(ITenantAccessor tenantAccessor) : ITokenResponseFormatter
+public class TokenResponseFormatter(ITenantAccessor tenantAccessor) : ITokenResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(TokenRequest request, Result<TokenIssued, OidcError> response)
