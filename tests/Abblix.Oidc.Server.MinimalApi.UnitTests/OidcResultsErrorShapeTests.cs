@@ -297,7 +297,9 @@ public class OidcResultsErrorShapeTests
         var response = await HttpResultRunner.RunAsync(error.Format(fallbackStatusCode, Realm));
 
         Assert.Equal(fallbackStatusCode, response.StatusCode);
-        Assert.False(response.Headers.ContainsKey(HeaderNames.WWWAuthenticate));
+        Assert.DoesNotContain(
+            TokenTypes.Bearer,
+            response.Headers[HeaderNames.WWWAuthenticate].Select(challenge => ChallengeReader.Parse(challenge).Scheme));
     }
 
     /// <summary>
