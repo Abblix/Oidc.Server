@@ -52,6 +52,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Abblix.Jwt.UnitTests" />
+    <InternalsVisibleTo Include="Abblix.Oidc.Server" />
   </ItemGroup>
 
   <ItemGroup>

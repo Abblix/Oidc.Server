@@ -14,11 +14,14 @@ using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.AspNetCore.Formatters;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.MinimalApi.Filters;
 using Abblix.Oidc.Server.MinimalApi.Model;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Core = Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.MinimalApi;
@@ -37,6 +40,7 @@ internal static class InteractionEndpoints
             oidcGroup
                 .MapMethods(routes.UserInfo, [HttpMethods.Get, HttpMethods.Post], UserInfoAsync)
                 .WithName(EndpointNames.UserInfo)
+                .WithMetadata(new InvalidRequestFormat(FormatUserInfoRefusalAsync))
                 .RequireCors(OidcConstants.CorsPolicyName);
         }
 
@@ -72,6 +76,17 @@ internal static class InteractionEndpoints
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), coreUserInfoRequest, coreClientRequest);
         return await formatter.FormatResponseAsync(coreUserInfoRequest, response);
     }
+
+    /// <summary>
+    /// Answers a UserInfo request the binder refused through the endpoint's own formatter, which carries the
+    /// WWW-Authenticate challenges: the endpoint is a protected resource (OpenID Connect Core 1.0 section 1.2), and
+    /// RFC 6750 section 3 has a request that "does not contain an access token that enables access to the protected
+    /// resource" answered with that field, a request the binder refused included.
+    /// </summary>
+    private static Task<IResult> FormatUserInfoRefusalAsync(HttpContext context, OidcError error)
+        // The refused request has no token the formatter could read, and a failure is formatted from the error alone
+        => context.RequestServices.GetRequiredService<IUserInfoResponseFormatter<IResult>>()
+            .FormatResponseAsync(new Core.UserInfoRequest(), error);
 
     /// <summary>
     /// Ends the user's session (OpenID Connect RP-Initiated Logout). The request is bound from the query string or the

@@ -50,15 +50,7 @@ public static class CommonServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IHashService, HashService>();
         services.TryAddSingleton<CredentialFingerprints>();
-        services.TryAddKeyedSingleton<IBinarySerializer, JsonBinarySerializer>(nameof(JsonBinarySerializer));
-        services.TryAddKeyedSingleton<IBinarySerializer, ProtobufSerializer>(nameof(ProtobufSerializer));
-        services.TryAddSingleton<IBinarySerializer, CompositeBinarySerializer>();
-        // Every tenant's entities are kept in one store, each under keys its stores build from the tenant. The store
-        // is the one registered under the shared key, which a host substitutes in any order, or one the host
-        // registered for the server before this call, which the forwarding below then leaves in place
-        services.TryAddKeyedSingleton<IEntityStorage, DistributedCacheStorage>(TenantServiceKeys.Shared);
-        services.TryAddSingleton<IEntityStorage>(
-            serviceProvider => serviceProvider.GetRequiredKeyedService<IEntityStorage>(TenantServiceKeys.Shared));
+        services.AddEntityStorage();
         services.AddTelemetryDecorator<IEntityStorage, MeasuredEntityStorage>();
         services.TryAddSingleton<ITenantAccessor, AmbientTenantAccessor>();
 
@@ -76,6 +68,27 @@ public static class CommonServiceCollectionExtensions
         return services
             .AddJsonWebTokens()
             .AddTelemetryDecorator<IJsonWebTokenSigner, MeasuredJsonWebTokenSigner>();
+    }
+
+    /// <summary>
+    /// Registers the entity storage the server's stores use, and what it writes entities with.
+    /// </summary>
+    /// <remarks>
+    /// Apart from the common services, because the replay cache is kept there too and is registered by features a
+    /// host may add on their own. A call after the first changes nothing.
+    /// </remarks>
+    internal static IServiceCollection AddEntityStorage(this IServiceCollection services)
+    {
+        services.TryAddKeyedSingleton<IBinarySerializer, JsonBinarySerializer>(nameof(JsonBinarySerializer));
+        services.TryAddKeyedSingleton<IBinarySerializer, ProtobufSerializer>(nameof(ProtobufSerializer));
+        services.TryAddSingleton<IBinarySerializer, CompositeBinarySerializer>();
+        // Every tenant's entities are kept in one store, each under keys its stores build from the tenant. The store
+        // is the one registered under the shared key, which a host substitutes in any order, or one the host
+        // registered for the server before this call, which the forwarding below then leaves in place
+        services.TryAddKeyedSingleton<IEntityStorage, DistributedCacheStorage>(TenantServiceKeys.Shared);
+        services.TryAddSingleton<IEntityStorage>(
+            serviceProvider => serviceProvider.GetRequiredKeyedService<IEntityStorage>(TenantServiceKeys.Shared));
+        return services;
     }
 
     /// <summary>

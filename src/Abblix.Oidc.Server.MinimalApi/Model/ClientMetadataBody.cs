@@ -25,11 +25,11 @@ namespace Abblix.Oidc.Server.MinimalApi.Model;
 /// <remarks>
 /// The framework answers a JSON body it cannot read with a bare 400 before any endpoint filter runs, so the body is
 /// read here, through the host's JSON options, and an unreadable document is answered as
-/// <see cref="ErrorFactory.UnreadableClientMetadata"/>, as the MVC host answers it. A body of another media type never
-/// gets here, since the route accepts JSON only, but one declaring no media type does and is answered 415 as the
-/// framework answers it, and so is one declaring a character set nobody can decode, as the MVC host answers it. A
-/// body past the size bound keeps the status the server gives it, and a read the client broke off or the server
-/// cancelled gets the bare 400 the framework gives it.
+/// <see cref="ErrorFactory.UnreadableClientMetadata"/>, as the MVC host answers it. A body declaring another media type
+/// or none is routed to the endpoint beside this one (<see cref="ClientMetadataRefusals"/>), since the route accepts JSON
+/// only; one declaring a character set nobody can decode is answered 415, as the MVC host answers it. A body past the
+/// size bound keeps the status the server gives it, and a read the client broke off or the server cancelled gets the
+/// bare 400 the framework gives it. Each of these refusals is answered only once the request's token passes.
 /// </remarks>
 /// <param name="Request">The metadata read from the body, or <c>null</c> when it could not be read.</param>
 /// <param name="Refusal">The answer to a body that could not be read, or <c>null</c> when it was read.</param>

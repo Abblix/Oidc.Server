@@ -57,9 +57,13 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// <c>attribute_not_exists(pk) OR expiresAt &lt; :now</c>, since its TTL deletion runs late; in etcd a
 /// transaction on a key's create revision with a lease, which expires the key itself. A plain
 /// <c>ON CONFLICT DO NOTHING</c> keeps refusing a key whose entry has expired until the purge runs.
-/// Replay detection of presented tokens (DPoP proofs, client assertions, JWT bearer grant assertions, security
-/// event tokens) is not kept here: it goes through <c>IReplayCache</c>, which takes its own implementation of
-/// the same primitive.
+/// </para>
+/// <para>
+/// The server's replay detection of presented tokens - DPoP proofs, client assertions, JWT bearer grant
+/// assertions, and the security event tokens of a receiver running beside the server - reserves through
+/// <see cref="TrySetIfAbsentAsync{T}"/> and gives a reservation back through <see cref="RemoveAsync"/>, so it
+/// holds across nodes with such a storage too. A host that registers its own <c>IReplayCache</c> keeps those
+/// reservations there instead.
 /// </para>
 /// </remarks>
 public interface IEntityStorage

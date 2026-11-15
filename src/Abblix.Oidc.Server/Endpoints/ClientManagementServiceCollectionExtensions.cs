@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -37,6 +38,7 @@ internal static class ClientManagementServiceCollectionExtensions
         services.AddClientRegistrationContextValidators();
 
         services.TryAddSingleton<IRegistrationAccessTokenValidator, RegistrationAccessTokenValidator>();
+        services.TryAddSingleton<IInitialAccessTokenValidator, InitialAccessTokenValidator>();
         services.TryAddTransient(newClientOptionsFactory);
 
         return services
