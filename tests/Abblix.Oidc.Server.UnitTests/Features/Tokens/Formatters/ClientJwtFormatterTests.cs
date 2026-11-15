@@ -55,7 +55,7 @@ public class ClientJwtFormatterTests
     private LogRecord RefusalLogged()
         => Assert.Single(
             _loggers.Entries,
-            entry => entry.EventId.Id == LogEvents.Tokens.ClientJwtFormatter.JwtNotIssued);
+            entry => entry.EventId.Id == LogEvents.TokenIssuance.ClientJwtFormatter.JwtNotIssued);
 
     /// <summary>What the client registered for UserInfo, which is also what an ID token uses.</summary>
     private static ClientJwtEncryption UserInfoPolicy(ClientInfo client)

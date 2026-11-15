@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 partial class ClientJwtFormatter
 {
     [LoggerMessage(
-        EventId = LogEvents.Tokens.ClientJwtFormatter.JwtNotIssued,
+        EventId = LogEvents.TokenIssuance.ClientJwtFormatter.JwtNotIssued,
         Message = "No JWT issued to client {ClientId} ({Cause}): {Reason}")]
     private partial void LogJwtNotIssued(LogLevel level, string ClientId, ClientJwtRefusalCause Cause, string Reason);
 }
