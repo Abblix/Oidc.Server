@@ -29,6 +29,9 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// </summary>
 public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
 {
+    private const string Realm = "realm";
+    private const string Algorithms = "algs";
+
     [Fact]
     public async Task Token_endpoint_with_proof_lacking_nonce_returns_use_dpop_nonce_challenge_with_header()
     {
@@ -65,8 +68,8 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
         var response = await SendUserInfoWithoutNonceAsync();
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Contains(response.Headers.WwwAuthenticate,
-            h => h.Scheme == TokenTypes.DPoP && (h.Parameter ?? string.Empty).Contains(ErrorCodes.UseDPoPNonce));
+        var (dpop, _) = DualChallengeReader.Challenges(response);
+        Assert.Equal(ErrorCodes.UseDPoPNonce, dpop.Parameters[ErrorResponse.Parameters.Error]);
         Assert.True(response.Headers.TryGetValues(HttpRequestHeaders.DPoPNonce, out var nonceValues),
             "UserInfo challenge response missing DPoP-Nonce header");
         Assert.False(string.IsNullOrEmpty(nonceValues.First()));
@@ -87,9 +90,14 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        Assert.Equal(ErrorCodes.UseDPoPNonce, dpop.Parameters[ErrorResponse.Parameters.Error]);
-        Assert.DoesNotContain(ErrorResponse.Parameters.Error, bearer.Parameters.Keys);
-        Assert.DoesNotContain(ErrorResponse.Parameters.ErrorDescription, bearer.Parameters.Keys);
+        ChallengeAssert.Carries(
+            dpop,
+            TokenTypes.DPoP,
+            (Realm, null),
+            (ErrorResponse.Parameters.Error, ErrorCodes.UseDPoPNonce),
+            (ErrorResponse.Parameters.ErrorDescription, null),
+            (Algorithms, null));
+        ChallengeAssert.Carries(bearer, TokenTypes.Bearer, (Realm, null));
     }
 
     [Fact]

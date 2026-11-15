@@ -36,6 +36,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
     private const string ErrorDescription = "error_description";
     private const string Scope = "scope";
     private const string Algorithms = "algs";
+    private const string Realm = "realm";
 
     /// <summary>
     /// RFC 6750 section 3.1 and RFC 9449 section 7.2, Figure 17: no credentials, two bare challenges, the DPoP one still
@@ -51,9 +52,15 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        Assert.DoesNotContain(Error, dpop.Parameters.Keys);
-        Assert.Contains(Algorithms, dpop.Parameters.Keys);
-        Assert.DoesNotContain(Error, bearer.Parameters.Keys);
+        ChallengeAssert.Carries(
+            dpop,
+            TokenTypes.DPoP,
+            (Realm, discovery.Issuer.OriginalString),
+            (Algorithms, null));
+        ChallengeAssert.Carries(
+            bearer,
+            TokenTypes.Bearer,
+            (Realm, discovery.Issuer.OriginalString));
     }
 
     /// <summary>
@@ -69,10 +76,17 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        Assert.Equal(ErrorCodes.InvalidToken, bearer.Parameters[Error]);
-        Assert.Contains(ErrorDescription, bearer.Parameters.Keys);
-        Assert.DoesNotContain(Error, dpop.Parameters.Keys);
-        Assert.DoesNotContain(ErrorDescription, dpop.Parameters.Keys);
+        ChallengeAssert.Carries(
+            bearer,
+            TokenTypes.Bearer,
+            (Realm, discovery.Issuer.OriginalString),
+            (Error, ErrorCodes.InvalidToken),
+            (ErrorDescription, null));
+        ChallengeAssert.Carries(
+            dpop,
+            TokenTypes.DPoP,
+            (Realm, discovery.Issuer.OriginalString),
+            (Algorithms, null));
     }
 
     /// <summary>
@@ -93,8 +107,17 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        Assert.Equal(ErrorCodes.InvalidToken, bearer.Parameters[Error]);
-        Assert.DoesNotContain(Error, dpop.Parameters.Keys);
+        ChallengeAssert.Carries(
+            bearer,
+            TokenTypes.Bearer,
+            (Realm, discovery.Issuer.OriginalString),
+            (Error, ErrorCodes.InvalidToken),
+            (ErrorDescription, null));
+        ChallengeAssert.Carries(
+            dpop,
+            TokenTypes.DPoP,
+            (Realm, discovery.Issuer.OriginalString),
+            (Algorithms, null));
     }
 
     /// <summary>
@@ -113,10 +136,17 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        Assert.Equal(ErrorCodes.InvalidDPoPProof, dpop.Parameters[Error]);
-        Assert.Contains(Algorithms, dpop.Parameters.Keys);
-        Assert.DoesNotContain(Error, bearer.Parameters.Keys);
-        Assert.DoesNotContain(ErrorDescription, bearer.Parameters.Keys);
+        ChallengeAssert.Carries(
+            dpop,
+            TokenTypes.DPoP,
+            (Realm, discovery.Issuer.OriginalString),
+            (Error, ErrorCodes.InvalidDPoPProof),
+            (ErrorDescription, null),
+            (Algorithms, null));
+        ChallengeAssert.Carries(
+            bearer,
+            TokenTypes.Bearer,
+            (Realm, discovery.Issuer.OriginalString));
     }
 
     /// <summary>
@@ -135,9 +165,17 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        Assert.Equal(ErrorCodes.InvalidToken, bearer.Parameters[Error]);
-        Assert.DoesNotContain(Error, dpop.Parameters.Keys);
-        Assert.Contains(Algorithms, dpop.Parameters.Keys);
+        ChallengeAssert.Carries(
+            bearer,
+            TokenTypes.Bearer,
+            (Realm, discovery.Issuer.OriginalString),
+            (Error, ErrorCodes.InvalidToken),
+            (ErrorDescription, null));
+        ChallengeAssert.Carries(
+            dpop,
+            TokenTypes.DPoP,
+            (Realm, discovery.Issuer.OriginalString),
+            (Algorithms, null));
     }
 
     /// <summary>
@@ -159,10 +197,18 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        Assert.Equal(ErrorCodes.InsufficientScope, bearer.Parameters[Error]);
-        Assert.Equal(Scopes.OpenId, bearer.Parameters[Scope]);
-        Assert.DoesNotContain(Error, dpop.Parameters.Keys);
-        Assert.DoesNotContain(Scope, dpop.Parameters.Keys);
+        ChallengeAssert.Carries(
+            bearer,
+            TokenTypes.Bearer,
+            (Realm, discovery.Issuer.OriginalString),
+            (Error, ErrorCodes.InsufficientScope),
+            (ErrorDescription, null),
+            (Scope, Scopes.OpenId));
+        ChallengeAssert.Carries(
+            dpop,
+            TokenTypes.DPoP,
+            (Realm, discovery.Issuer.OriginalString),
+            (Algorithms, null));
     }
 
     /// <summary>
@@ -185,8 +231,19 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        Assert.Equal(ErrorCodes.InvalidRequest, dpop.Parameters[Error]);
-        Assert.Equal(ErrorCodes.InvalidRequest, bearer.Parameters[Error]);
+        ChallengeAssert.Carries(
+            dpop,
+            TokenTypes.DPoP,
+            (Realm, discovery.Issuer.OriginalString),
+            (Error, ErrorCodes.InvalidRequest),
+            (ErrorDescription, null),
+            (Algorithms, null));
+        ChallengeAssert.Carries(
+            bearer,
+            TokenTypes.Bearer,
+            (Realm, discovery.Issuer.OriginalString),
+            (Error, ErrorCodes.InvalidRequest),
+            (ErrorDescription, null));
     }
 
     /// <summary>
@@ -216,8 +273,19 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        Assert.Equal(ErrorCodes.InvalidRequest, dpop.Parameters[Error]);
-        Assert.Equal(ErrorCodes.InvalidRequest, bearer.Parameters[Error]);
+        ChallengeAssert.Carries(
+            dpop,
+            TokenTypes.DPoP,
+            (Realm, discovery.Issuer.OriginalString),
+            (Error, ErrorCodes.InvalidRequest),
+            (ErrorDescription, null),
+            (Algorithms, null));
+        ChallengeAssert.Carries(
+            bearer,
+            TokenTypes.Bearer,
+            (Realm, discovery.Issuer.OriginalString),
+            (Error, ErrorCodes.InvalidRequest),
+            (ErrorDescription, null));
     }
 
     private async Task<(HttpClient Client, DiscoveryDocument Discovery)> EndpointAsync()
