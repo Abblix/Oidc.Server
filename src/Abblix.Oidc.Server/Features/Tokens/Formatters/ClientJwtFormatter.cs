@@ -78,8 +78,8 @@ public class ClientJwtFormatter(
         {
             // unauthorized_client rather than invalid_client: the client is who it says, and it is the JWT it asked
             // for that cannot be issued (RFC 6749 section 5.2)
-            return new OidcError(
-                ErrorCodes.UnauthorizedClient,
+            return new ClientJwtRefusal(
+                ClientJwtRefusalCause.NoClientEncryptionKey,
                 $"The client {clientInfo.ClientId} has no key its registered {keyEncryptionAlgorithm} can encrypt to " +
                 "under its security profile");
         }
@@ -118,7 +118,7 @@ public class ClientJwtFormatter(
     /// the JWT its registration asks for that cannot be issued (RFC 6749 section 5.2). Each caller answers the refusal
     /// in its own protocol.
     /// </remarks>
-    private static OidcError? WhyItCannotBeSigned(
+    private static ClientJwtRefusal? WhyItCannotBeSigned(
         ClientInfo clientInfo,
         SecurityProfileRequirements profile,
         string? algorithm,
@@ -126,16 +126,16 @@ public class ClientJwtFormatter(
     {
         if (!profile.PermitsSigningAlgorithm(algorithm))
         {
-            return new OidcError(
-                ErrorCodes.UnauthorizedClient,
+            return new ClientJwtRefusal(
+                ClientJwtRefusalCause.AlgorithmOutsideProfile,
                 $"The client {clientInfo.ClientId} is registered for {algorithm ?? SigningAlgorithms.None} signatures, " +
                 "which its security profile does not admit");
         }
 
         if (signingKey is null && !IsUnsigned(algorithm))
         {
-            return new OidcError(
-                ErrorCodes.UnauthorizedClient,
+            return new ClientJwtRefusal(
+                ClientJwtRefusalCause.NoTenantSigningKey,
                 $"The client {clientInfo.ClientId} is registered for {algorithm} signatures, which no signing key of " +
                 "the tenant produces");
         }

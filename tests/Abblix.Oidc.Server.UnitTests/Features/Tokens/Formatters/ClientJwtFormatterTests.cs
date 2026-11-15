@@ -336,6 +336,9 @@ public class ClientJwtFormatterTests
 
         Assert.True(result.TryGetFailure(out var refusal));
         Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
+        Assert.Equal(
+            ClientJwtRefusalCause.NoTenantSigningKey,
+            Assert.IsType<ClientJwtRefusal>(refusal).Cause);
     }
 
     /// <summary>
@@ -363,6 +366,9 @@ public class ClientJwtFormatterTests
 
         Assert.True(result.TryGetFailure(out var refusal));
         Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
+        Assert.Equal(
+            ClientJwtRefusalCause.AlgorithmOutsideProfile,
+            Assert.IsType<ClientJwtRefusal>(refusal).Cause);
     }
 
     /// <summary>
@@ -632,6 +638,9 @@ public class ClientJwtFormatterTests
 
         Assert.True(result.TryGetFailure(out var refusal));
         Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
+        Assert.Equal(
+            ClientJwtRefusalCause.NoClientEncryptionKey,
+            Assert.IsType<ClientJwtRefusal>(refusal).Cause);
     }
 
     /// <summary>

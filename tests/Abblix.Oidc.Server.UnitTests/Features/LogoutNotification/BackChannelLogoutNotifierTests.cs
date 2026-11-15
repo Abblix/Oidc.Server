@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Common.Constants;
 using Microsoft.Extensions.Logging.Abstractions;
 using System;
@@ -58,6 +60,39 @@ public class BackChannelLogoutNotifierTests
 
         _logoutTokenSender.Verify(
             s => s.SendBackChannelLogoutAsync(It.IsAny<ClientInfo>(), It.IsAny<EncodedJsonWebToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A logout token not sent is logged by why it could not be signed: the client registered an algorithm its profile
+    /// does not admit, or its key set leaves nothing to encrypt to, is the client's configuration and a warning; no
+    /// signing key of the tenant performing the algorithm is the server's own and an error.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientJwtRefusalCause.AlgorithmOutsideProfile, LogLevel.Warning)]
+    [InlineData(ClientJwtRefusalCause.NoTenantSigningKey, LogLevel.Error)]
+    [InlineData(ClientJwtRefusalCause.NoClientEncryptionKey, LogLevel.Warning)]
+    [InlineData(null, LogLevel.Warning)]
+    public async Task NotifyClientAsync_ALogoutTokenNotIssued_IsLoggedByItsCause(
+        ClientJwtRefusalCause? cause, LogLevel expected)
+    {
+        var clientInfo = CreateClientInfoWithBackChannelLogout();
+        var logoutContext = CreateLogoutContext();
+        var refusal = cause is { } named
+            ? new ClientJwtRefusal(named, "cannot be signed")
+            : new Abblix.Oidc.Server.Common.OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to");
+        _logoutTokenService
+            .Setup(s => s.CreateLogoutTokenAsync(TestTenant.Matched, clientInfo, logoutContext))
+            .ReturnsAsync(refusal);
+        var loggers = new RecordingLoggerFactory();
+        var notifier = new BackChannelLogoutNotifier(
+            _logoutTokenService.Object, _logoutTokenSender.Object, loggers.CreateLogger<BackChannelLogoutNotifier>());
+
+        await notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
+
+        var entry = Assert.Single(
+            loggers.Entries,
+            entry => entry.EventId.Id == LogEvents.LogoutNotification.BackChannelLogoutNotifier.LogoutTokenNotIssued);
+        Assert.Equal(expected, entry.Level);
     }
 
     private static ClientInfo CreateClientInfo(BackChannelLogoutOptions? backChannelLogout)

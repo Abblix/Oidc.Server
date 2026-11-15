@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Microsoft.Extensions.Time.Testing;
 using System;
@@ -587,6 +588,50 @@ public partial class AuthenticationCompletionHandlerTests
         _storage.Verify(
             s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId),
             Times.Once);
+    }
+
+    /// <summary>
+    /// Tokens a push request cannot be issued are logged by why: an ID token the client registered an algorithm for
+    /// that its profile does not admit, or an encryption it publishes no key for, is the client's configuration and a
+    /// warning; no signing key of the tenant
+    /// performing it, like any other failure to issue, is the server's and an error. The client is told the
+    /// transaction failed either way.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientJwtRefusalCause.AlgorithmOutsideProfile, LogLevel.Warning)]
+    [InlineData(ClientJwtRefusalCause.NoTenantSigningKey, LogLevel.Error)]
+    [InlineData(ClientJwtRefusalCause.NoClientEncryptionKey, LogLevel.Warning)]
+    [InlineData(null, LogLevel.Error)]
+    public async Task CompleteAuthenticationAsync_PushMode_TokensNotIssued_AreLoggedByTheirCause(
+        ClientJwtRefusalCause? cause, LogLevel expected)
+    {
+        var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
+        var context = new AuthorizationContext(ClientId, [Scopes.OpenId], null);
+        var request = new BackChannelAuthenticationRequest(new AuthorizedGrant(authSession, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            Status = BackChannelAuthenticationStatus.Pending,
+            ClientNotificationEndpoint = _notificationEndpoint,
+            ClientNotificationToken = NotificationToken,
+        };
+        StoredRecordIs(request);
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push };
+        OidcError error = cause is { } named
+            ? new ClientJwtRefusal(named, "cannot be signed")
+            : new OidcError(ErrorCodes.InvalidRequest, "Token generation failed");
+        _tokenRequestProcessor.Setup(p => p.ProcessAsync(TestTenant.Matched, It.IsAny<ValidTokenRequest>()))
+            .ReturnsAsync((Result<TokenIssued, OidcError>)error);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(request);
+        NotificationsAreAccepted();
+        var loggers = new RecordingLoggerFactory();
+
+        await CreatePushModeHandler(logger: loggers.CreateLogger<PushModeCompletionHandler>())
+            .CompleteAuthenticationAsync(SingleIssuer.Tenant, AuthReqId, request, clientInfo, _expiresIn);
+
+        VerifyPushErrorSent(ErrorCodes.TransactionFailed);
+        var entry = Assert.Single(
+            loggers.Entries,
+            entry => entry.EventId.Id == LogEvents.Device.PushModeCompletionHandler.TokenGenerationFailed);
+        Assert.Equal(expected, entry.Level);
     }
 
     /// <summary>

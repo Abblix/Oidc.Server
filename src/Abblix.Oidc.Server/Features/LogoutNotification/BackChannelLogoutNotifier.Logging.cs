@@ -14,7 +14,6 @@ partial class BackChannelLogoutNotifier
 {
 	[LoggerMessage(
 		EventId = LogEvents.LogoutNotification.BackChannelLogoutNotifier.LogoutTokenNotIssued,
-		Level = LogLevel.Warning,
 		Message = "No back-channel logout notification sent to client {ClientId}: {Reason}")]
-	private partial void LogLogoutTokenNotIssued(string ClientId, string Reason);
+	private partial void LogLogoutTokenNotIssued(LogLevel level, string ClientId, string Reason);
 }
