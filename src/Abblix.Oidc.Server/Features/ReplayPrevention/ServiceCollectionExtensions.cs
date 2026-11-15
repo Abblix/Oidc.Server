@@ -33,7 +33,8 @@ public static class ServiceCollectionExtensions
     /// <see cref="ReplayCacheServiceCollectionExtensions.AddDistributedReplayCache"/> registers for a receiver of
     /// security event tokens, so the server and a receiver beside it share it in either order of their
     /// registrations. A store the host registered serves instead: one under the shared key in any order, or one
-    /// without a key registered before this call.
+    /// without a key registered before this call. A receiver's store the host decorated before this call counts as
+    /// the host's own and is kept, so the server's reservations then stay in it rather than in the entity storage.
     /// </para>
     /// <para>
     /// Idempotent, because several unrelated feature registrations call it.

@@ -58,6 +58,11 @@ public static class ReplayCacheServiceCollectionExtensions
     /// receivers reserve there. TryAdd, so a store the host registered before wins.
     /// </para>
     /// <para>
+    /// A package with a policy of its own decorates the registered store rather than registering another, so every
+    /// package in the host keeps reserving in one store. Beside the OpenID Connect server, a decoration made before
+    /// the server registers is kept as the host's own store, and the server reserves in it too.
+    /// </para>
+    /// <para>
     /// The cache itself is the host's choice and is deliberately not registered here:
     /// <c>AddDistributedMemoryCache()</c> keeps the reservations in one process, Redis or another backend shares
     /// them between instances.
