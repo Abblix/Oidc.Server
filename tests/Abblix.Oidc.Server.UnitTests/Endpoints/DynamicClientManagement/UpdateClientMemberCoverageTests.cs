@@ -46,6 +46,38 @@ public class UpdateClientMemberCoverageTests
         nameof(ClientInfo.AllowOfflineAccessWithUserAgentAccessToken),
     ];
 
+    /// <summary>
+    /// The members an update keeps from the stored client: what the host set and no registration metadata carries, the
+    /// credentials, and the identity and sector the client's end users are known under. Every other member is the
+    /// request's, so a member of the request copied from the stored client fails as surely as a host setting lost.
+    /// </summary>
+    private static readonly string[] KeptFromHost =
+    [
+        nameof(ClientInfo.ClientId),
+        nameof(ClientInfo.ClientSecrets),
+        nameof(ClientInfo.SectorIdentifier),
+        nameof(ClientInfo.SecurityProfile),
+        nameof(ClientInfo.PlainPkceAllowed),
+        nameof(ClientInfo.AuthorizationCodeExpiresIn),
+        nameof(ClientInfo.AccessTokenExpiresIn),
+        nameof(ClientInfo.SingleResourceAccessTokens),
+        $"{nameof(ClientInfo.RefreshToken)}.{nameof(RefreshTokenOptions.AbsoluteExpiresIn)}",
+        $"{nameof(ClientInfo.RefreshToken)}.{nameof(RefreshTokenOptions.SlidingExpiresIn)}",
+        $"{nameof(ClientInfo.RefreshToken)}.{nameof(RefreshTokenOptions.ReusePolicy)}",
+        nameof(ClientInfo.IdentityTokenExpiresIn),
+        nameof(ClientInfo.LogoutTokenSignedResponseAlgorithm),
+        nameof(ClientInfo.ForceUserClaimsInIdentityToken),
+        nameof(ClientInfo.ForceAuthorizationDetailsInIdentityToken),
+        nameof(ClientInfo.ResourceLocations),
+        nameof(ClientInfo.AllowCrossClientSubjectTokenExchange),
+        nameof(ClientInfo.AllowCrossClientIntrospection),
+        nameof(ClientInfo.ParseLoginHintTokenAsJwt),
+        nameof(ClientInfo.DefaultScope),
+        nameof(ClientInfo.RequireScope),
+        nameof(ClientInfo.ExpiresAfter),
+        $"{nameof(ClientInfo.BackChannelLogout)}.{nameof(BackChannelLogoutOptions.LogoutTokenExpiresIn)}",
+    ];
+
     private static readonly NewClientOptions NewClients = new()
     {
         ClientAssertionAudiences = ClientAssertionAudiences.Issuer | ClientAssertionAudiences.AllowArray,
@@ -71,11 +103,18 @@ public class UpdateClientMemberCoverageTests
 
         ClientInfo[] updated = [await UpdateAsync(stored, first), await UpdateAsync(stored, second), await UpdateAsync(stored, third)];
 
-        var unaccounted = new List<string>();
+        var misplaced = new List<string>();
         foreach (var path in Leaves(typeof(ClientInfo), []))
         {
             var name = string.Join(".", path.Select(property => property.Name));
-            var values = updated.Select(client => Read(client, path)).ToArray();
+
+            // Judged only in the updates that built the member's parent: a member under an object the request decides
+            // to build, such as the certificate options, is absent where it was not built rather than different
+            var values = updated
+                .Where(client => path.Length == 1 || Read(client, path[..^1]) is not null)
+                .Select(client => Read(client, path))
+                .ToArray();
+            Assert.True(values.Length >= 2, $"{name} is built in fewer than two of the updates, so nothing judges it");
 
             if (TakenFromNewClientOptions.Contains(name))
             {
@@ -85,11 +124,11 @@ public class UpdateClientMemberCoverageTests
 
             var takenFromRequest = values.Skip(1).Any(value => !StructurallyEqual(values[0], value));
             var keptFromHost = values.All(value => StructurallyEqual(Read(stored, path), value));
-            if (!takenFromRequest && !keptFromHost)
-                unaccounted.Add(name);
+            if (keptFromHost != KeptFromHost.Contains(name) || !takenFromRequest && !keptFromHost)
+                misplaced.Add(name);
         }
 
-        Assert.Empty(unaccounted);
+        Assert.Empty(misplaced);
     }
 
     /// <summary>

@@ -85,6 +85,22 @@ public class UpdateClientRequestValidatorTests
         Assert.Same(valid.Client.ClientInfo, judged?.StoredClient);
     }
 
+    /// <summary>
+    /// The update is built from the metadata as the pipeline leaves it, the values a step completes where the client
+    /// named none included, not from the request as it arrived.
+    /// </summary>
+    [Fact]
+    public async Task AnUpdate_CarriesTheMetadataAsThePipelineLeftIt()
+    {
+        var result = await Validator(
+                StoredSector,
+                context => context.Request = context.Request with { ClientName = "completed-by-the-pipeline" })
+            .ValidateAsync(SingleIssuer.Tenant, Update());
+
+        Assert.True(result.TryGetSuccess(out var valid));
+        Assert.Equal("completed-by-the-pipeline", valid.RegistrationRequest.ClientName);
+    }
+
     private static UpdateClientRequest Update()
         => new(new ClientRequest { ClientId = ClientId }, new ClientRegistrationRequest { ClientId = ClientId });
 
