@@ -179,6 +179,39 @@ public class SecurityProfileValidatorTests
     }
 
     /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.1 and FAPI 1.0 Part 2 section 5.2.2 have the server "only issue
+    /// sender-constrained access tokens", and the FAPI CIBA profile section 5.2.2 has it "not support CIBA push mode".
+    /// A CIBA registration in the push mode is refused with invalid_client_metadata (RFC 7591 section 3.2.2, "The value
+    /// of one of the client metadata fields is invalid") at a tenant held to any FAPI profile, and the same registration
+    /// in the ping mode, or at a tenant held to no profile, passes.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, BackchannelTokenDeliveryModes.Push, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientSecurityProfile.Fapi2, BackchannelTokenDeliveryModes.Ping, null)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, BackchannelTokenDeliveryModes.Push, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, BackchannelTokenDeliveryModes.Push, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, BackchannelTokenDeliveryModes.Ping, null)]
+    [InlineData(ClientSecurityProfile.None, BackchannelTokenDeliveryModes.Push, null)]
+    public async Task ValidateAsync_ThePushMode_IsRefusedUnderFapi(
+        ClientSecurityProfile profile, string deliveryMode, string? expectedError)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            ResponseTypes = [],
+            GrantTypes = [GrantTypes.Ciba],
+            BackChannelTokenDeliveryMode = deliveryMode,
+            BackChannelClientNotificationEndpoint = new Uri("https://client.example.com/ciba"),
+
+            // A key-based method certificate-bound tokens come with, which every FAPI profile admits
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
+        });
+
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(profile), context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
     /// The algorithms a registration names are judged only where the client can be issued the JWT they sign, the same
     /// answer startup gives: a client of the client credentials grant alone, registering no response type, is never
     /// issued an ID token or an authorization response, so RS256 named for both passes; a client of the CIBA grant is

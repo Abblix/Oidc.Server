@@ -455,6 +455,27 @@ public static class SecurityProfileConsistency
             : [];
 
     /// <summary>
+    /// Names a CIBA token delivery mode the profile refuses, or nothing. FAPI 2.0 Security Profile section 5.3.2.1 and
+    /// FAPI 1.0 Part 2 section 5.2.2 have the server "only issue sender-constrained access tokens", and a push mode
+    /// client is handed its tokens in a request this server sends to it (CIBA Core 1.0 section 10.3.1), with no DPoP
+    /// proof (RFC 9449 section 5) and no client certificate (RFC 8705 section 3) of a token request to bind them to.
+    /// The FAPI CIBA profile, written over FAPI 1.0, refuses the mode outright in its section 5.2.2: the server "shall
+    /// not support CIBA push mode".
+    /// </summary>
+    /// <param name="backChannelTokenDeliveryMode">The token delivery mode the client is configured or registers for,
+    /// null where it uses no CIBA.</param>
+    /// <param name="requirements">The control bundle the client is held to, floor included.</param>
+    public static IReadOnlyList<string> FindTokenDeliveryViolations(
+        string? backChannelTokenDeliveryMode,
+        SecurityProfileRequirements requirements)
+        // Ordinally, as registration admits the mode and as the completion of a request picks the handler of it
+        => requirements.RequireSenderConstrainedTokens &&
+           backChannelTokenDeliveryMode == BackchannelTokenDeliveryModes.Push
+            ? ["the client's security profile issues sender-constrained access tokens only, but the client is " +
+               "registered for the CIBA push mode, which delivers them to the client unbound"]
+            : [];
+
+    /// <summary>
     /// The algorithm of a response that may also go unsigned, or null where it does: for userinfo and introspection
     /// <c>none</c> is a plain JSON response rather than an unsigned JWS.
     /// </summary>
