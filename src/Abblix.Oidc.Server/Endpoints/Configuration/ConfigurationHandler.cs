@@ -72,7 +72,7 @@ public sealed class ConfigurationHandler(
 			SubjectTypesSupported = scopesAndClaims.SubjectTypesSupported(tenant),
 
 			ClaimsParameterSupported = authorizationMetadata.ClaimsParameterSupported,
-			ResponseTypesSupported = authorizationMetadata.ResponseTypesSupported,
+			ResponseTypesSupported = AdmittedResponseTypes(tenant, authorizationMetadata.ResponseTypesSupported),
 			ResponseModesSupported = authorizationMetadata.ResponseModesSupported,
 
 			PromptValuesSupported = authorizationMetadata.PromptValuesSupported,
@@ -162,6 +162,19 @@ public sealed class ConfigurationHandler(
 			.ToArray();
 
 		return algorithms.Length > 0 ? algorithms : null;
+	}
+
+	/// <summary>
+	/// The response types of <paramref name="responseTypes"/> the tenant's profile admits at the authorization endpoint:
+	/// code alone where it requires the code response type, FAPI 2.0 Security Profile section 5.3.2.2, "authorization
+	/// servers shall require the value of response_type described in [RFC6749] to be code". The tenant's profile binds
+	/// every client it serves, so a value it refuses is one this authorization server does not support, and OpenID
+	/// Connect Discovery 1.0 section 3 and RFC 8414 section 2 list only the values it supports.
+	/// </summary>
+	private static IEnumerable<string> AdmittedResponseTypes(TenantDefinition tenant, IEnumerable<string> responseTypes)
+	{
+		var profile = SecurityProfileRequirements.For(tenant, client: null);
+		return responseTypes.Where(responseType => !profile.RequireCodeResponseTypeOnly || responseType == ResponseTypes.Code);
 	}
 
 	/// <summary>

@@ -21,6 +21,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.ImplicitFlow;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.NoneFlow;
 using Abblix.Oidc.Server.MinimalApi;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Builder;
@@ -37,11 +38,12 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 /// authorization endpoint". A tenant held to FAPI 2.0 starts with clients that never use it - a resource server that
 /// only introspects tokens and a client of the client credentials grant, neither registering a response type - lets
 /// the resource server introspect, and registers such a client, while it still refuses a registration for code
-/// id_token.
+/// id_token, and its discovery document lists code as the one response type it supports.
 /// </summary>
 /// <remarks>
-/// The host enables the implicit flow, so code id_token is a response type the server supports and its refusal at the
-/// FAPI 2.0 tenant is the profile's: the tenant holding its clients to no profile registers the same request. The
+/// The host enables the implicit flow and the none response type, so code id_token and none are response types the
+/// server supports and their absence at the FAPI 2.0 tenant is the profile's: the tenant holding its clients to no
+/// profile registers the same request and lists them. The
 /// clients the tenant starts with name PS256 for their ID tokens and authorization responses, since the startup check
 /// holds every algorithm a client is configured for to FAPI 2.0 section 5.4.1 whether or not anything is issued under
 /// it.
@@ -111,6 +113,7 @@ public sealed class Fapi2ClientsOutsideTheAuthorizationEndpointTests : IAsyncLif
         builder.Services.AddDynamicClientRegistration();
         builder.Services.AddIntrospection();
         builder.Services.EnableImplicitFlow();
+        builder.Services.EnableNoneFlow();
         // FAPI 2.0 section 5.4.1 holds the tokens the server signs for itself to PS256, ES256 or EdDSA too
         builder.Services.AddOidcServices(options =>
         {
@@ -183,6 +186,38 @@ public sealed class Fapi2ClientsOutsideTheAuthorizationEndpointTests : IAsyncLif
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
         Assert.False(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
+    }
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.2 has the server "require the value of response_type described in
+    /// [RFC6749] to be code", so the FAPI 2.0 tenant's discovery document lists code alone, while the tenant holding its
+    /// clients to no profile lists every response type the server makes up.
+    /// </summary>
+    [Fact]
+    public async Task TheDiscoveryDocument_ListsTheResponseTypesTheTenantsProfileAdmits()
+    {
+        async Task<string[]> ResponseTypesListedAtAsync(string tenant)
+        {
+            var document = JsonNode.Parse(await _http!.GetStringAsync(
+                tenant + "/.well-known/openid-configuration", TestContext.Current.CancellationToken))!;
+            return document[ConfigurationResponse.Parameters.ResponseTypesSupported]!.AsArray()
+                .Select(responseType => responseType!.GetValue<string>())
+                .ToArray();
+        }
+
+        Assert.Equal([ResponseTypes.Code], await ResponseTypesListedAtAsync(Acme));
+        Assert.Equal(
+            [
+                ResponseTypes.Code,
+                ResponseTypes.Token,
+                ResponseTypes.IdToken,
+                ResponseTypes.None,
+                $"{ResponseTypes.Code} {ResponseTypes.Token}",
+                $"{ResponseTypes.Code} {ResponseTypes.IdToken}",
+                $"{ResponseTypes.Token} {ResponseTypes.IdToken}",
+                $"{ResponseTypes.Code} {ResponseTypes.Token} {ResponseTypes.IdToken}",
+            ],
+            await ResponseTypesListedAtAsync(Globex));
     }
 
     /// <summary>

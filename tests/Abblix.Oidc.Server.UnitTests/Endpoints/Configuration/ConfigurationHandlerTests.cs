@@ -134,6 +134,48 @@ public class ConfigurationHandlerTests
         Assert.Equal(encryption, document.IntrospectionEncryptionAlgValuesSupported);
     }
 
+    /// <summary>
+    /// Every response type the registered builders make up, implicit, hybrid and none included, in the order the
+    /// authorization endpoint metadata lists them.
+    /// </summary>
+    private static readonly string[] EveryResponseType =
+    [
+        ResponseTypes.Code,
+        ResponseTypes.Token,
+        ResponseTypes.IdToken,
+        ResponseTypes.None,
+        $"{ResponseTypes.Code} {ResponseTypes.Token}",
+        $"{ResponseTypes.Code} {ResponseTypes.IdToken}",
+        $"{ResponseTypes.Token} {ResponseTypes.IdToken}",
+        $"{ResponseTypes.Code} {ResponseTypes.Token} {ResponseTypes.IdToken}",
+    ];
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.2: "authorization servers shall require the value of response_type
+    /// described in [RFC6749] to be code", and the tenant's profile binds every client it serves, so the document of a
+    /// tenant held to any profile of the FAPI 2.0 family lists code alone (OpenID Connect Discovery 1.0 section 3, RFC
+    /// 8414 section 2: the values "that this authorization server supports"). A tenant held to no profile lists every
+    /// response type the server makes up.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, true)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests, true)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, true)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, true)]
+    [InlineData(ClientSecurityProfile.None, false)]
+    public async Task TheDocument_ListsTheResponseTypesTheTenantsProfileAdmits(
+        ClientSecurityProfile profile,
+        bool codeOnly)
+    {
+        var metadata = new Mock<IAuthorizationMetadataProvider>();
+        metadata.Setup(m => m.ResponseTypesSupported).Returns(EveryResponseType);
+        var handler = HandlerFor(Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict), metadata.Object);
+
+        var document = await handler.HandleAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant());
+
+        Assert.Equal(codeOnly ? [ResponseTypes.Code] : EveryResponseType, document.ResponseTypesSupported);
+    }
+
     private const string RsaDeclaringOaep256 = nameof(RsaDeclaringOaep256);
     private const string RsaDeclaringNone = nameof(RsaDeclaringNone);
     private const string EllipticCurveDeclaringNone = nameof(EllipticCurveDeclaringNone);
@@ -223,6 +265,17 @@ public class ConfigurationHandlerTests
     /// </summary>
     private static ConfigurationHandler HandlerFor(IAuthServiceKeysProvider keys, bool requestParameterSupported = true)
     {
+        var metadata = new Mock<IAuthorizationMetadataProvider>();
+        metadata.Setup(m => m.RequestParameterSupported).Returns(requestParameterSupported);
+        return HandlerFor(keys, metadata.Object);
+    }
+
+    /// <summary>
+    /// A handler over <paramref name="metadata"/> and a server registering a fixed set of request object encryption
+    /// algorithms.
+    /// </summary>
+    private static ConfigurationHandler HandlerFor(IAuthServiceKeysProvider keys, IAuthorizationMetadataProvider metadata)
+    {
         var algorithms = new Mock<IJwtAlgorithmsProvider>();
         algorithms.Setup(a => a.RequestObjectEncryptionAlgValuesSupported).Returns(
         [
@@ -235,8 +288,6 @@ public class ConfigurationHandlerTests
         ]);
         algorithms.Setup(a => a.RequestObjectEncryptionEncValuesSupported)
             .Returns([EncryptionAlgorithms.ContentEncryption.Aes256Gcm]);
-        var metadata = new Mock<IAuthorizationMetadataProvider>();
-        metadata.Setup(m => m.RequestParameterSupported).Returns(requestParameterSupported);
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
         options.Setup(o => o.Value).Returns(new OidcOptions());
         var clientAuthenticator = new Mock<IClientAuthenticator>();
@@ -247,7 +298,7 @@ public class ConfigurationHandlerTests
             SingleIssuer.LicensedCatalog,
             Mock.Of<ILogoutNotifier>(),
             clientAuthenticator.Object,
-            metadata.Object,
+            metadata,
             Mock.Of<IScopesAndClaimsProvider>(),
             algorithms.Object,
             keys,
