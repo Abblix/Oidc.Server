@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Linq;
 using Abblix.DependencyInjection;
@@ -15,7 +16,7 @@ using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Mvc;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -82,7 +83,7 @@ public class AddLogoutNotificationTests
         // The page builder is the dependency this row is about, and the formatter is what answers a logout
         // request: nothing else proves a host serving no channel can build it.
         Assert.NotNull(scope.ServiceProvider.GetService<IFrontChannelLogoutService>());
-        Assert.NotNull(scope.ServiceProvider.GetService<IEndSessionResponseFormatter>());
+        Assert.NotNull(scope.ServiceProvider.GetService<IEndSessionResponseFormatter<ActionResult>>());
     }
 
     [Fact]

@@ -11,7 +11,8 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
@@ -26,14 +27,14 @@ public class ConfigurationResponseFormatter(
 	IOptionsSnapshot<OidcOptions> options,
 	IOidcEndpointResolver endpointResolver,
 	ISignedMetadataProvider signedMetadataProvider,
-	ITenantAccessor tenantAccessor) : IConfigurationResponseFormatter
+	ITenantAccessor tenantAccessor) : IConfigurationResponseFormatter<ActionResult>
 {
 	/// <summary>
 	/// Formats the configuration response by mapping metadata and adding endpoint URLs.
 	/// </summary>
 	/// <param name="response">Framework-agnostic configuration response with metadata.</param>
 	/// <returns>An action result with the MVC-enriched configuration response including URLs.</returns>
-	public async Task<ActionResult<ModelResponse>> FormatResponseAsync(EndpointResponse response)
+	public async Task<ActionResult> FormatResponseAsync(EndpointResponse response)
 	{
 		var tokenEndpoint = Resolve(OidcEndpoints.Token, response.Issuer);
 		var revocationEndpoint = Resolve(OidcEndpoints.Revocation, response.Issuer);
@@ -121,7 +122,11 @@ public class ConfigurationResponseFormatter(
 			mvcResponse = mvcResponse with { SignedMetadata = await signedMetadataProvider.SignAsync(tenantAccessor.CurrentTenant(), mvcResponse) };
 		}
 
-		return mvcResponse;
+		return new ObjectResult(mvcResponse)
+		{
+			DeclaredType = typeof(ModelResponse),
+			StatusCode = StatusCodes.Status200OK,
+		};
 	}
 
 	/// <summary>

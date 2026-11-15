@@ -10,6 +10,7 @@
 // Docker network, so the suite's browser and its back channel reach it by one name, and it reaches the suite by
 // the name the suite writes into every URL it hands out. conformance/run.ps1 drives a run.
 
+using Microsoft.AspNetCore.Http;
 using System.Net;
 using System.Text;
 using System.Security.Cryptography;
@@ -32,7 +33,7 @@ using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.MinimalApi;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
@@ -90,7 +91,7 @@ builder.Services.AddOidcServices(options =>
     };
 });
 builder.Services.Decorate<IClientInfoManager, PkceOptionalForRegisteredClients>();
-builder.Services.Decorate<IEndSessionResponseFormatter, EndSessionPages>();
+builder.Services.Decorate<IEndSessionResponseFormatter<IResult>, EndSessionPages>();
 builder.Services.Decorate<IAuthServiceKeysProvider, RotatingSigningKeys>();
 
 // Every client the suite registers keeps its key set, request objects and logout endpoints on the suite's host,

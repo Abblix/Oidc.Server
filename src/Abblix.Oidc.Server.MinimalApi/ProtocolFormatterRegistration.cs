@@ -6,8 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.AspNetCore.Http;
 using Abblix.Oidc.Server.MinimalApi.Formatters;
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -21,13 +22,13 @@ internal static class ProtocolFormatterRegistration
 {
     public static IServiceCollection AddOidcProtocolFormatters(this IServiceCollection services)
     {
-        services.TryAddScoped<ITokenResponseFormatter, TokenResponseFormatter>();
-        services.TryAddScoped<IRevocationResponseFormatter, RevocationResponseFormatter>();
-        services.TryAddScoped<IIntrospectionResponseFormatter, IntrospectionResponseFormatter>();
-        services.TryAddScoped<IPushedAuthorizationResponseFormatter, PushedAuthorizationResponseFormatter>();
-        services.TryAddScoped<IBackChannelAuthenticationResponseFormatter, BackChannelAuthenticationResponseFormatter>();
-        services.TryAddScoped<IDeviceAuthorizationResponseFormatter, DeviceAuthorizationResponseFormatter>();
-        services.TryAddScoped<IUserInfoResponseFormatter, UserInfoResponseFormatter>();
+        services.TryAddScoped<ITokenResponseFormatter<IResult>, TokenResponseFormatter>();
+        services.TryAddScoped<IRevocationResponseFormatter<IResult>, RevocationResponseFormatter>();
+        services.TryAddScoped<IIntrospectionResponseFormatter<IResult>, IntrospectionResponseFormatter>();
+        services.TryAddScoped<IPushedAuthorizationResponseFormatter<IResult>, PushedAuthorizationResponseFormatter>();
+        services.TryAddScoped<IBackChannelAuthenticationResponseFormatter<IResult>, BackChannelAuthenticationResponseFormatter>();
+        services.TryAddScoped<IDeviceAuthorizationResponseFormatter<IResult>, DeviceAuthorizationResponseFormatter>();
+        services.TryAddScoped<IUserInfoResponseFormatter<IResult>, UserInfoResponseFormatter>();
         return services;
     }
 }

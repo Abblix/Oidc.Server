@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -8,25 +8,22 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
-using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
-using Microsoft.AspNetCore.Mvc;
+using EndSessionRequest = Abblix.Oidc.Server.Model.EndSessionRequest;
 
-namespace Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+namespace Abblix.Oidc.Server.AspNetCore.Formatters;
 
-/// <summary>
-/// Defines an interface for formatting a response to an end-session request and response.
-/// </summary>
-public interface IEndSessionResponseFormatter
+/// <summary>Formats the result of an RP-initiated logout (end-session) request into a <typeparamref name="TResult"/>.</summary>
+/// <typeparam name="TResult">The transport's result type: an MVC action result or a Minimal API result.</typeparam>
+public interface IEndSessionResponseFormatter<TResult> where TResult : class
 {
     /// <summary>
-    /// Formats a response asynchronously for an end-session request and response.
+    /// Formats the end-session result: a front-channel-logout HTML page, a post-logout redirect, an empty 204, or an
+    /// OAuth error.
     /// </summary>
     /// <param name="request">The end-session request as it arrived, its <c>post_logout_redirect_uri</c> unchecked:
     /// the address a successful logout may send the end user to is the one the response carries, and an address the
     /// request names but no client confirms is dropped there.</param>
     /// <param name="response">The end-session response to be formatted.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation,
-    /// with the formatted response as an <see cref="ActionResult"/>.</returns>
-    Task<ActionResult> FormatResponseAsync(EndSessionRequest request, Result<IEndSessionResponse, OidcError> response);
+    Task<TResult> FormatResponseAsync(EndSessionRequest request, Result<IEndSessionResponse, OidcError> response);
 }

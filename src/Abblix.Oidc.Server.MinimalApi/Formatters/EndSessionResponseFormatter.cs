@@ -18,7 +18,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Net.Http.Headers;
 using EndSessionRequest = Abblix.Oidc.Server.Model.EndSessionRequest;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -28,7 +28,7 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// </summary>
 /// <param name="frontChannelLogoutService">Builds the front-channel logout HTML response.</param>
 public class EndSessionResponseFormatter(
-    IFrontChannelLogoutService frontChannelLogoutService) : IEndSessionResponseFormatter
+    IFrontChannelLogoutService frontChannelLogoutService) : IEndSessionResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(EndSessionRequest request, Result<IEndSessionResponse, OidcError> response)

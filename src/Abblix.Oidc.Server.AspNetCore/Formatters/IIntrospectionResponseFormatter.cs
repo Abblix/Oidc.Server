@@ -9,14 +9,14 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Utils;
-using Microsoft.AspNetCore.Http;
 using IntrospectionRequest = Abblix.Oidc.Server.Model.IntrospectionRequest;
 
-namespace Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+namespace Abblix.Oidc.Server.AspNetCore.Formatters;
 
-/// <summary>Formats the result of a token introspection request into an <see cref="IResult"/>.</summary>
-public interface IIntrospectionResponseFormatter
+/// <summary>Formats the result of a token introspection request into a <typeparamref name="TResult"/>.</summary>
+/// <typeparam name="TResult">The transport's result type: an MVC action result or a Minimal API result.</typeparam>
+public interface IIntrospectionResponseFormatter<TResult> where TResult : class
 {
     /// <summary>Formats the introspection result (RFC 7662 JSON or RFC 9701 JWT on success, OAuth error otherwise).</summary>
-    Task<IResult> FormatResponseAsync(IntrospectionRequest request, Result<IntrospectionSuccess, OidcError> response);
+    Task<TResult> FormatResponseAsync(IntrospectionRequest request, Result<IntrospectionSuccess, OidcError> response);
 }

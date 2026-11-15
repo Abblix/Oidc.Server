@@ -9,21 +9,21 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Utils;
-using Microsoft.AspNetCore.Http;
 using TokenRequest = Abblix.Oidc.Server.Model.TokenRequest;
 
-namespace Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+namespace Abblix.Oidc.Server.AspNetCore.Formatters;
 
 /// <summary>
-/// Formats the result of a token request into an <see cref="IResult"/> (the success token response or the OAuth error).
+/// Formats the result of a token request into a <typeparamref name="TResult"/> (the success token response or the OAuth error).
 /// </summary>
-public interface ITokenResponseFormatter
+/// <typeparam name="TResult">The transport's result type: an MVC action result or a Minimal API result.</typeparam>
+public interface ITokenResponseFormatter<TResult> where TResult : class
 {
     /// <summary>
     /// Formats the token endpoint result.
     /// </summary>
     /// <param name="request">The core token request being answered.</param>
     /// <param name="response">The success-or-error result produced by the token handler.</param>
-    /// <returns>An <see cref="IResult"/> carrying the token response or the formatted error.</returns>
-    Task<IResult> FormatResponseAsync(TokenRequest request, Result<TokenIssued, OidcError> response);
+    /// <returns>A <typeparamref name="TResult"/> carrying the token response or the formatted error.</returns>
+    Task<TResult> FormatResponseAsync(TokenRequest request, Result<TokenIssued, OidcError> response);
 }

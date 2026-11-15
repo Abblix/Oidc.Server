@@ -17,7 +17,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -33,7 +33,7 @@ public class UserInfoResponseFormatter(
     TimeProvider clock,
     IClientJwtFormatter clientJwtFormatter,
     ITenantAccessor tenantAccessor,
-    IOptionsSnapshot<OidcOptions> options) : IUserInfoResponseFormatter
+    IOptionsSnapshot<OidcOptions> options) : IUserInfoResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Asynchronously formats the response for a user information request.

@@ -11,7 +11,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -25,7 +25,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// authentication response, encapsulating success or error scenarios as defined by OAuth 2.0 standards.
 /// </summary>
 public class BackChannelAuthenticationResponseFormatter(
-    ITenantAccessor tenantAccessor) : IBackChannelAuthenticationResponseFormatter
+    ITenantAccessor tenantAccessor) : IBackChannelAuthenticationResponseFormatter<ActionResult>
 {
     /// <summary>
     /// This method transforms the back-channel authentication response into a suitable HTTP response,

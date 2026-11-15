@@ -6,8 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.AspNetCore.Mvc;
 using Abblix.Oidc.Server.Mvc.Formatters;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -21,13 +22,13 @@ internal static class ProtocolFormatterRegistration
 {
 	public static IServiceCollection AddOidcProtocolFormatters(this IServiceCollection services)
 	{
-		services.TryAddScoped<IPushedAuthorizationResponseFormatter, PushedAuthorizationResponseFormatter>();
-		services.TryAddScoped<ITokenResponseFormatter, TokenResponseFormatter>();
-		services.TryAddScoped<IUserInfoResponseFormatter, UserInfoResponseFormatter>();
-		services.TryAddScoped<IRevocationResponseFormatter, RevocationResponseFormatter>();
-		services.TryAddScoped<IIntrospectionResponseFormatter, IntrospectionResponseFormatter>();
-		services.TryAddScoped<IBackChannelAuthenticationResponseFormatter, BackChannelAuthenticationResponseFormatter>();
-		services.TryAddScoped<IDeviceAuthorizationResponseFormatter, DeviceAuthorizationResponseFormatter>();
+		services.TryAddScoped<IPushedAuthorizationResponseFormatter<ActionResult>, PushedAuthorizationResponseFormatter>();
+		services.TryAddScoped<ITokenResponseFormatter<ActionResult>, TokenResponseFormatter>();
+		services.TryAddScoped<IUserInfoResponseFormatter<ActionResult>, UserInfoResponseFormatter>();
+		services.TryAddScoped<IRevocationResponseFormatter<ActionResult>, RevocationResponseFormatter>();
+		services.TryAddScoped<IIntrospectionResponseFormatter<ActionResult>, IntrospectionResponseFormatter>();
+		services.TryAddScoped<IBackChannelAuthenticationResponseFormatter<ActionResult>, BackChannelAuthenticationResponseFormatter>();
+		services.TryAddScoped<IDeviceAuthorizationResponseFormatter<ActionResult>, DeviceAuthorizationResponseFormatter>();
 		return services;
 	}
 }

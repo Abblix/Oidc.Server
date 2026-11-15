@@ -20,7 +20,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using CoreModel = Abblix.Oidc.Server.Model;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -35,7 +35,7 @@ public class AuthorizationResponseFormatter(
     IAuthorizationRequestStorage authorizationRequestStorage,
     ISessionManagementService sessionManagementService,
     IParametersProvider parametersProvider,
-    IHttpContextAccessor httpContextAccessor) : IAuthorizationResponseFormatter
+    IHttpContextAccessor httpContextAccessor) : IAuthorizationResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public async Task<IResult> FormatResponseAsync(CoreModel.AuthorizationRequest request, AuthorizationResponse response)

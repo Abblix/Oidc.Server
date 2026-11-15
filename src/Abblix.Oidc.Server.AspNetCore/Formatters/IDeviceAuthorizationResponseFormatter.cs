@@ -8,25 +8,25 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Utils;
-using Microsoft.AspNetCore.Http;
 using DeviceAuthorizationRequest = Abblix.Oidc.Server.Model.DeviceAuthorizationRequest;
 using DeviceAuthorizationResponse = Abblix.Oidc.Server.Model.DeviceAuthorizationResponse;
 
-namespace Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+namespace Abblix.Oidc.Server.AspNetCore.Formatters;
 
 /// <summary>
-/// Formats the result of a device authorization request (RFC 8628) into an <see cref="IResult"/> (the device-code
+/// Formats the result of a device authorization request (RFC 8628) into a <typeparamref name="TResult"/> (the device-code
 /// response on success or the OAuth error otherwise).
 /// </summary>
-public interface IDeviceAuthorizationResponseFormatter
+/// <typeparam name="TResult">The transport's result type: an MVC action result or a Minimal API result.</typeparam>
+public interface IDeviceAuthorizationResponseFormatter<TResult> where TResult : class
 {
     /// <summary>
     /// Formats the device authorization endpoint result.
     /// </summary>
     /// <param name="request">The core device authorization request being answered.</param>
     /// <param name="response">The success-or-error result produced by the device authorization handler.</param>
-    /// <returns>An <see cref="IResult"/> carrying the device-code response or the formatted error.</returns>
-    Task<IResult> FormatResponseAsync(
+    /// <returns>A <typeparamref name="TResult"/> carrying the device-code response or the formatted error.</returns>
+    Task<TResult> FormatResponseAsync(
         DeviceAuthorizationRequest request,
         Result<DeviceAuthorizationResponse, OidcError> response);
 }

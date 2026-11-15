@@ -39,9 +39,11 @@ internal static class TransportAdapterConflict
 
     /// <summary>
     /// Throws when <paramref name="services"/> already carries a registration declared by the other adapter.
+    /// Each adapter registers a marker type of its own for this check to find, since the contracts it serves are
+    /// declared in the assembly both adapters share.
     /// </summary>
     /// <param name="services">The service collection being configured.</param>
-    /// <param name="otherAdapterAssemblyName">The assembly whose contracts mark the other adapter.</param>
+    /// <param name="otherAdapterAssemblyName">The assembly whose service types mark the other adapter.</param>
     /// <param name="message">What the host is told to do about it.</param>
     /// <exception cref="InvalidOperationException">The other adapter is already registered.</exception>
     /// <remarks>

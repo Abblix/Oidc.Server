@@ -13,7 +13,7 @@ using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Mvc.Binders;
 using Abblix.Oidc.Server.Mvc.Filters;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.Mvc.Model;
 using Microsoft.AspNetCore.Mvc;
 using Core = Abblix.Oidc.Server.Model;
@@ -68,7 +68,7 @@ public class ClientManagementController : ControllerBase
     [RefusesUnreadableClientMetadata]
     public async Task<ActionResult> RegisterClientAsync(
         [FromServices] IRegisterClientHandler handler,
-        [FromServices] IRegisterClientResponseFormatter formatter,
+        [FromServices] IRegisterClientResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         [FromBody] Core.ClientRegistrationRequest request,
         [HeaderBinder(typeof(AuthenticationHeaderBinder), HttpRequestHeaders.Authorization)]
@@ -101,7 +101,7 @@ public class ClientManagementController : ControllerBase
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> ReadClientAsync(
         [FromServices] IReadClientHandler handler,
-        [FromServices] IReadClientResponseFormatter formatter,
+        [FromServices] IReadClientResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         ClientAuthorizationRequest authorizationRequest)
     {
@@ -134,7 +134,7 @@ public class ClientManagementController : ControllerBase
     [RefusesUnreadableClientMetadata]
     public async Task<ActionResult> UpdateClientAsync(
         [FromServices] IUpdateClientHandler handler,
-        [FromServices] IUpdateClientResponseFormatter formatter,
+        [FromServices] IUpdateClientResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         ClientAuthorizationRequest authorizationRequest,
         [FromBody] Core.ClientRegistrationRequest registrationRequest)
@@ -166,7 +166,7 @@ public class ClientManagementController : ControllerBase
     [Produces(MediaTypeNames.Application.Json)]
     public async Task<ActionResult> RemoveClientAsync(
         [FromServices] IRemoveClientHandler handler,
-        [FromServices] IRemoveClientResponseFormatter formatter,
+        [FromServices] IRemoveClientResponseFormatter<ActionResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor,
         ClientAuthorizationRequest authorizationRequest)
     {
