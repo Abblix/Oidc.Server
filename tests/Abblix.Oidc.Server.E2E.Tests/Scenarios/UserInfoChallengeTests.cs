@@ -12,7 +12,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
-using Abblix.Oidc.Server.MinimalApi.UnitTests;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using Xunit;
@@ -51,7 +50,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        var (dpop, bearer) = Challenges(response);
+        var (dpop, bearer) = DualChallengeReader.Challenges(response);
         Assert.DoesNotContain(Error, dpop.Parameters.Keys);
         Assert.Contains(Algorithms, dpop.Parameters.Keys);
         Assert.DoesNotContain(Error, bearer.Parameters.Keys);
@@ -69,7 +68,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await SendAsync(client, discovery, TokenTypes.Bearer, "INVALID_TOKEN", proof: null);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        var (dpop, bearer) = Challenges(response);
+        var (dpop, bearer) = DualChallengeReader.Challenges(response);
         Assert.Equal(ErrorCodes.InvalidToken, bearer.Parameters[Error]);
         Assert.Contains(ErrorDescription, bearer.Parameters.Keys);
         Assert.DoesNotContain(Error, dpop.Parameters.Keys);
@@ -93,7 +92,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        var (dpop, bearer) = Challenges(response);
+        var (dpop, bearer) = DualChallengeReader.Challenges(response);
         Assert.Equal(ErrorCodes.InvalidToken, bearer.Parameters[Error]);
         Assert.DoesNotContain(Error, dpop.Parameters.Keys);
     }
@@ -113,7 +112,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await SendAsync(client, discovery, TokenTypes.DPoP, accessToken, proof);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        var (dpop, bearer) = Challenges(response);
+        var (dpop, bearer) = DualChallengeReader.Challenges(response);
         Assert.Equal(ErrorCodes.InvalidDPoPProof, dpop.Parameters[Error]);
         Assert.Contains(Algorithms, dpop.Parameters.Keys);
         Assert.DoesNotContain(Error, bearer.Parameters.Keys);
@@ -135,7 +134,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await SendAsync(client, discovery, TokenTypes.Bearer, accessToken, proof: null);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        var (dpop, bearer) = Challenges(response);
+        var (dpop, bearer) = DualChallengeReader.Challenges(response);
         Assert.Equal(ErrorCodes.InvalidToken, bearer.Parameters[Error]);
         Assert.DoesNotContain(Error, dpop.Parameters.Keys);
         Assert.Contains(Algorithms, dpop.Parameters.Keys);
@@ -159,7 +158,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await SendAsync(client, discovery, TokenTypes.Bearer, accessToken, proof: null);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        var (dpop, bearer) = Challenges(response);
+        var (dpop, bearer) = DualChallengeReader.Challenges(response);
         Assert.Equal(ErrorCodes.InsufficientScope, bearer.Parameters[Error]);
         Assert.Equal(Scopes.OpenId, bearer.Parameters[Scope]);
         Assert.DoesNotContain(Error, dpop.Parameters.Keys);
@@ -185,7 +184,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var (dpop, bearer) = Challenges(response);
+        var (dpop, bearer) = DualChallengeReader.Challenges(response);
         Assert.Equal(ErrorCodes.InvalidRequest, dpop.Parameters[Error]);
         Assert.Equal(ErrorCodes.InvalidRequest, bearer.Parameters[Error]);
     }
@@ -216,7 +215,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var (dpop, bearer) = Challenges(response);
+        var (dpop, bearer) = DualChallengeReader.Challenges(response);
         Assert.Equal(ErrorCodes.InvalidRequest, dpop.Parameters[Error]);
         Assert.Equal(ErrorCodes.InvalidRequest, bearer.Parameters[Error]);
     }
@@ -248,21 +247,5 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         if (proof is not null)
             request.WithDPoPHeader(proof);
         return await client.SendAsync(request, TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>
-    /// The DPoP and the Bearer challenge of the response, each exactly once.
-    /// </summary>
-    private static (ChallengeReader.Challenge DPoP, ChallengeReader.Challenge Bearer) Challenges(
-        HttpResponseMessage response)
-    {
-        var challenges = response.Headers.WwwAuthenticate
-            .Select(header => ChallengeReader.Parse(header.ToString()))
-            .ToArray();
-
-        Assert.Equal(2, challenges.Length);
-        return (
-            Assert.Single(challenges, challenge => challenge.Scheme == TokenTypes.DPoP),
-            Assert.Single(challenges, challenge => challenge.Scheme == TokenTypes.Bearer));
     }
 }

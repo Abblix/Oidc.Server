@@ -34,17 +34,18 @@ public static class OidcResults
         if (FormatRefusal(error) is { } refusal)
             return refusal;
 
-        var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm);
-
+        // The Bearer challenge is built in the arms that send it and nowhere else: building it refuses a code or scope
+        // outside the set RFC 6750 section 3 gives its attributes, a rule about that header that an answer without it
+        // must not fail on
         return (error.Error, fallbackStatusCode) switch
         {
             (ErrorCodes.InvalidToken, _) => Results
                 .StatusCode(StatusCodes.Status401Unauthorized)
-                .WithHeader(HeaderNames.WWWAuthenticate, challenge),
+                .WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
 
             (ErrorCodes.InsufficientScope, _) => Results
                 .StatusCode(StatusCodes.Status403Forbidden)
-                .WithHeader(HeaderNames.WWWAuthenticate, challenge),
+                .WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
 
             // RFC 6749 section 5.2: a 401 with a Basic challenge for a client-authentication failure; the error stays in the
             // JSON body because RFC 7617 defines no error attributes for the Basic scheme.
@@ -56,7 +57,7 @@ public static class OidcResults
             // HTTP "WWW-Authenticate" response header field", and the Bearer challenge carries the error
             (_, _) when error is BearerRequestError => Results
                 .Json(new ErrorResponse(error.Error, error.ErrorDescription), statusCode: StatusCodes.Status400BadRequest)
-                .WithHeader(HeaderNames.WWWAuthenticate, challenge),
+                .WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
 
             // RFC 6749 section 5.2 answers its errors with 400 "unless specified otherwise", and RFC 6750 section 3.1 has
             // invalid_request answered with 400 too, so an endpoint whose other errors take another status does not

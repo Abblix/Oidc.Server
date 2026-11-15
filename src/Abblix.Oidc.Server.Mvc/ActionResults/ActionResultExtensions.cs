@@ -126,15 +126,16 @@ public static class ActionResultExtensions
 		if (FormatRefusal(error) is { } refusal)
 			return refusal;
 
-		var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm);
-
+		// The Bearer challenge is built in the arms that send it and nowhere else: building it refuses a code or scope
+		// outside the set RFC 6750 section 3 gives its attributes, a rule about that header that an answer without it
+		// must not fail on
 		return (error.Error, fallbackStatusCode) switch
 		{
 			(ErrorCodes.InvalidToken, _) => new UnauthorizedResult()
-				.WithHeader(HeaderNames.WWWAuthenticate, challenge),
+				.WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
 
 			(ErrorCodes.InsufficientScope, _) => new StatusCodeResult(StatusCodes.Status403Forbidden)
-				.WithHeader(HeaderNames.WWWAuthenticate, challenge),
+				.WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
 
 			// RFC 6749 section 5.2: a 401 is REQUIRED when the client authenticated via the Authorization
 			// header and allowed otherwise, so the uniform 401 satisfies both cases. Basic is the
@@ -149,7 +150,7 @@ public static class ActionResultExtensions
 			// HTTP "WWW-Authenticate" response header field", and the Bearer challenge carries the error
 			(_, _) when error is BearerRequestError
 				=> new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))
-					.WithHeader(HeaderNames.WWWAuthenticate, challenge),
+					.WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
 
 			// RFC 6749 section 5.2 answers its errors with 400 "unless specified otherwise", and RFC 6750 section 3.1
 			// has invalid_request answered with 400 too, so an endpoint whose other errors take another status does
