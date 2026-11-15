@@ -468,6 +468,10 @@ public record ClientInfo(string ClientId)
     ///
     /// <c>null</c> (the default) states no preference and leaves the client on
     /// <see cref="MultiTenancy.TenantDefinition.DefaultSecurityProfile"/> alone.
+    ///
+    /// Set by the host, never through dynamic client registration. An update of a dynamically registered client
+    /// (RFC 7592) keeps it, as it keeps every other member the registration metadata cannot carry, and is judged
+    /// under it.
     /// </summary>
     public ClientSecurityProfile? SecurityProfile { get; set; }
 

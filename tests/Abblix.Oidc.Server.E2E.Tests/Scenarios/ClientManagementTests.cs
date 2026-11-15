@@ -1206,6 +1206,51 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(registration.ClientId, body[ResponseMembers.ClientId]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// An update is judged under the security profile the host holds the client to, and keeps it: a client the host
+    /// holds to FAPI 2.0 at a tenant held to none cannot replace its metadata with a set the FAPI 2.0 rules refuse (a
+    /// client secret sent in a header among them), while a client the host holds to no profile of its own, or names
+    /// none for explicitly, can, and keeps what the host named.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, HttpStatusCode.BadRequest)]
+    [InlineData(null, HttpStatusCode.OK)]
+    [InlineData(ClientSecurityProfile.None, HttpStatusCode.OK)]
+    public async Task An_update_is_judged_under_the_profile_the_host_holds_the_client_to(
+        ClientSecurityProfile? hostHeldProfile,
+        HttpStatusCode expected)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var registration = await RegisterAsync(client, discovery, "held-by-the-host");
+        var tenant = TestTenant.Of(Factory.Services);
+        var clients = Factory.Services.GetRequiredService<IClientInfoManager>();
+        var registered = await clients.TryFindRegisteredClientAsync(tenant, registration.ClientId);
+        Assert.NotNull(registered);
+        Assert.True(await clients.TryUpdateClientAsync(
+            tenant,
+            registered,
+            registered with { ClientInfo = registered.ClientInfo with { SecurityProfile = hostHeldProfile } }));
+
+        var updated = NewClientMetadata("held-by-the-host");
+        updated[RequestMembers.ClientId] = registration.ClientId;
+        updated[RequestMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretBasic;
+        var update = Request(HttpMethod.Put, registration.ConfigurationUri, registration.AccessToken);
+        update.Content = JsonContent.Create(updated);
+        var response = await client.SendAsync(update, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.BadRequest)
+        {
+            Assert.Equal(
+                ErrorCodes.InvalidClientMetadata,
+                (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+        }
+
+        var stored = await clients.TryFindRegisteredClientAsync(tenant, registration.ClientId);
+        Assert.Equal(hostHeldProfile, stored?.ClientInfo.SecurityProfile);
+    }
+
     [Fact]
     public async Task One_clients_token_does_not_open_anothers_registration()
     {

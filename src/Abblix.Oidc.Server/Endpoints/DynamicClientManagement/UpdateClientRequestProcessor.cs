@@ -53,15 +53,17 @@ public class UpdateClientRequestProcessor(
         var existingClient = request.Client.ClientInfo;
 
         // RFC 7592 section 2.2 replaces the metadata but not the credentials, so the client's secrets are kept
-        // rather than updated here; the sector identifier the pairwise subjects hang on is kept too.
+        // rather than updated here; the sector identifier the pairwise subjects hang on is kept too, and so is what
+        // the host set on the client beyond its metadata, the security profile it is held to among them.
         var updatedClient = new ClientInfoBuilder(existingClient.ClientId, request.RegistrationRequest)
             .WithSectorIdentifier(existingClient.SectorIdentifier)
+            .WithHostSettingsOf(existingClient)
             .WithDefaultScope(newClientOptions.Scope)
             .WithDefaultAllowedResources(newClientOptions.AllowedResources)
             .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
             .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)
             .WithClientAssertionAudiences(newClientOptions.ClientAssertionAudiences.AdmittedBy(
-                SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile)))
+                SecurityProfileRequirements.For(tenant, existingClient)))
             .WithClientSecrets(existingClient.ClientSecrets)
             .Build();
 

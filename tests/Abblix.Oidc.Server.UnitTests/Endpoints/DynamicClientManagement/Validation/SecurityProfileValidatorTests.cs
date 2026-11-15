@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
@@ -500,5 +501,42 @@ public class SecurityProfileValidatorTests
             .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
 
         Assert.Equal(accepted ? null : ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
+    /// An update is judged under the profile the stored client is held to, its own profile tightening the tenant's, as
+    /// startup and authentication judge it: a client held to FAPI 2.0 at a tenant held to none cannot update itself to
+    /// metadata the FAPI 2.0 rules refuse, while a client with no profile of its own is judged by the tenant's alone.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(null, null)]
+    public async Task AnUpdate_IsJudgedUnderTheStoredClientsOwnProfile(
+        ClientSecurityProfile? ownProfile,
+        string? expectedError)
+    {
+        var context = CreateContext([[ResponseTypes.IdToken]]) with
+        {
+            Operation = DynamicClientOperation.Update,
+            StoredClient = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ownProfile },
+        };
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.None), context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
+    /// An update reaching this step without the stored client it replaces comes from a pipeline missing the step that
+    /// finds it, and fails loudly rather than being judged under the tenant's profile alone.
+    /// </summary>
+    [Fact]
+    public async Task AnUpdateWithoutItsStoredClient_Throws()
+    {
+        var context = CreateContext([[ResponseTypes.Code]]) with { Operation = DynamicClientOperation.Update };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.None), context));
     }
 }
