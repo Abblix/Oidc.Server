@@ -48,7 +48,7 @@ Abblix OIDC Server turns your ASP.NET Core application into a fully certified Op
 
 - Certified: all seven OpenID Provider profiles and all four logout profiles, 634 conformance tests passed with none skipped and no warnings. FAPI is not among them.
 - A library you own, not a server you run: the OpenID Connect endpoints live inside your app, so users, data, and UI never leave it.
-- Current with the modern security stack: DPoP, PAR, JARM, RAR, CIBA, device authorization, token exchange, certificate-bound tokens and JWT introspection responses (RFC 9701), alongside the OAuth 2.0 and OpenID Connect core.
+- Current with the modern security stack: DPoP, PAR, JARM, RAR, CIBA, device authorization, token exchange, certificate-bound tokens and JWT introspection responses, alongside the OAuth 2.0 and OpenID Connect core.
 - Security profiles the server enforces per client or per tenant: FAPI 2.0, FAPI 2.0 Message Signing and FAPI 1.0 Advanced.
 - Many issuers in one deployment: each tenant has its own clients, keys and security profile, declared at startup or added while the server runs.
 - Engineering you can audit: over 11,000 passing tests, top SonarCloud security, reliability, and maintainability ratings, and a CodeQL scan of every push to the development branch.
@@ -145,16 +145,14 @@ dotnet add package Abblix.OIDC.Server.MinimalAPI
 
 Both adapters expose the same OpenID Connect endpoints and pull in the core `Abblix.OIDC.Server` package as a dependency, so pick the one that matches how your application maps requests. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
 
-The rest are optional, each one for a feature you may not need:
+[Abblix.OIDC](src/Abblix.Oidc/README.md) (the OAuth 2.0 and OpenID Connect vocabulary the server shares with its clients) and [Abblix.JWT](src/Abblix.Jwt/README.md) (JWT signing, encryption and validation on the platform's own cryptography) come with the server. The rest are optional: add each one only if you actually need its feature.
 
 |Package|What it adds|
 |:-|:-|
-|[Abblix.OIDC](src/Abblix.Oidc/README.md)|The OAuth 2.0 and OpenID Connect vocabulary the server and its clients share: grant and response types, scopes, error codes, claims|
-|[Abblix.JWT](src/Abblix.Jwt/README.md)|JWT signing, encryption and validation and JSON Web Keys, on the platform's own cryptography|
 |[Abblix.JWT.Vault](src/Abblix.Jwt.Vault/README.md), [Abblix.JWT.Azure](src/Abblix.Jwt.Azure/README.md)|Signing and decryption keys kept in HashiCorp Vault or OpenBao Transit, or in Azure Key Vault (see [External key custodians](EXTERNAL_KEYS.md))|
 |[Abblix.OIDC.Server.SharedSignals](src/Abblix.Oidc.Server.SharedSignals/README.md)|A Shared Signals transmitter for each tenant of the server|
 |[Abblix.SharedSignals](src/Abblix.SharedSignals/README.md), [.MinimalAPI](src/Abblix.SharedSignals.MinimalApi/README.md), [.Redis](src/Abblix.SharedSignals.Redis/README.md)|OpenID Shared Signals Framework 1.0 transmitter and receiver, its endpoints, and a Redis event outbox for several replicas|
-|[Abblix.SecurityEvents](src/Abblix.SecurityEvents/README.md), [.CAEP](src/Abblix.SecurityEvents.CAEP/README.md), [.RISC](src/Abblix.SecurityEvents.RISC/README.md), [.MinimalAPI](src/Abblix.SecurityEvents.MinimalApi/README.md)|Security Event Tokens (RFC 8417) with push and poll delivery, the CAEP and RISC event types, and receiver endpoints|
+|[Abblix.SecurityEvents.CAEP](src/Abblix.SecurityEvents.CAEP/README.md), [.RISC](src/Abblix.SecurityEvents.RISC/README.md), [.MinimalAPI](src/Abblix.SecurityEvents.MinimalApi/README.md)|The CAEP and RISC security event types, and endpoints receiving security events|
 
 ## ⚠️ Upgrading to 3.0
 
