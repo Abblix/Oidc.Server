@@ -230,6 +230,56 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        AssertDefault(member, await ReadJsonAsync(response));
+    }
+
+    /// <summary>
+    /// The same on update: a null replaces the stored value with the member's default, as RFC 7592 section 2.2 treats
+    /// an omitted field as a null one.
+    /// </summary>
+    [Fact]
+    public async Task A_null_member_in_an_update_is_read_as_omitted()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("null-on-update");
+        metadata[RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode, GrantTypes.RefreshToken);
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+
+        var updated = NewClientMetadata("null-on-update");
+        updated[RequestMembers.ClientId] = registered[ResponseMembers.ClientId]!.GetValue<string>();
+        updated[RequestMembers.ResponseTypes] = null;
+        updated[RequestMembers.GrantTypes] = null;
+
+        var update = Request(
+            HttpMethod.Put,
+            new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute),
+            registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>());
+        update.Content = JsonContent.Create(updated);
+        var response = await client.SendAsync(update, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await ReadJsonAsync(response);
+        AssertDefault(RequestMembers.ResponseTypes, body);
+        AssertDefault(RequestMembers.GrantTypes, body);
+    }
+
+    /// <summary>
+    /// The member's value in <paramref name="body"/> is the default a registration omitting it is given.
+    /// </summary>
+    private static void AssertDefault(string member, JsonObject body)
+    {
+        JsonNode expected = member switch
+        {
+            RequestMembers.ResponseTypes => new JsonArray(ResponseTypes.Code),
+            RequestMembers.GrantTypes => new JsonArray(GrantTypes.AuthorizationCode),
+            RequestMembers.ApplicationType => ApplicationTypes.Web,
+            RequestMembers.TokenEndpointAuthMethod => ClientAuthenticationMethods.ClientSecretBasic,
+            RequestMembers.PostLogoutRedirectUris => new JsonArray(),
+            _ => throw new ArgumentOutOfRangeException(nameof(member), member, "No default is known for the member"),
+        };
+
+        Assert.True(JsonNode.DeepEquals(expected, body[member]), $"{member}: {body[member]?.ToJsonString() ?? "absent"}");
     }
 
     /// <summary>

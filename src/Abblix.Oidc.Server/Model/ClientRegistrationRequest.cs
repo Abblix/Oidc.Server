@@ -25,9 +25,11 @@ namespace Abblix.Oidc.Server.Model;
 /// <remarks>
 /// See the OpenID Connect Registration specification at https://openid.net/specs/openid-connect-registration-1_0.html.
 /// <para>
-/// A member with a default reads it back for an explicit JSON <c>null</c> too, which the deserializer assigns whatever
-/// the annotation says: RFC 7592 section 2.2 treats an omitted field as a null one, and a null read as absent is
-/// neither a fault of the server nor a host-dependent refusal of a value the client never set.
+/// <see cref="ResponseTypes"/>, <see cref="GrantTypes"/>, <see cref="ApplicationType"/>,
+/// <see cref="TokenEndpointAuthMethod"/> and <see cref="PostLogoutRedirectUris"/> read their default back for an
+/// explicit JSON <c>null</c> too, which the deserializer assigns whatever the annotation says. At registration RFC 7591
+/// section 2 lets the server "reject any requested client metadata values by replacing requested values with suitable
+/// defaults"; at update RFC 7592 section 2.2 treats an omitted field as a null one.
 /// </para>
 /// </remarks>
 [ExternalInput]
