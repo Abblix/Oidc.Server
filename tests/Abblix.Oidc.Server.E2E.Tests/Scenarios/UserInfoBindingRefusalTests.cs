@@ -10,6 +10,7 @@ using System.Net;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.MinimalApi.UnitTests;
 using Abblix.Oidc.Server.Model;
 using Xunit;
@@ -50,7 +51,7 @@ public class UserInfoBindingRefusalTests(TestFactory factory) : TestBase(factory
         Assert.True(twoLines.Headers.TryAddWithoutValidation(
             HttpRequestHeaders.Authorization,
             [$"{TokenTypes.Bearer} {AccessToken}", $"{TokenTypes.Bearer} {AccessToken}"]));
-        var expected = await ReadRefusalAsync(await client.SendAsync(twoLines, TestContext.Current.CancellationToken));
+        var expected = await ReadRefusalAsync(discovery.Issuer, await client.SendAsync(twoLines, TestContext.Current.CancellationToken));
 
         using var request = refusal switch
         {
@@ -59,7 +60,7 @@ public class UserInfoBindingRefusalTests(TestFactory factory) : TestBase(factory
             nameof(TokenTwiceInTheBody) => TokenTwiceInTheBody(endpoint),
             _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, null),
         };
-        var actual = await ReadRefusalAsync(await client.SendAsync(request, TestContext.Current.CancellationToken));
+        var actual = await ReadRefusalAsync(discovery.Issuer, await client.SendAsync(request, TestContext.Current.CancellationToken));
 
         Assert.Equal(expected, actual);
     }
@@ -87,7 +88,7 @@ public class UserInfoBindingRefusalTests(TestFactory factory) : TestBase(factory
     /// What a client acts on in the refusal: the status, the error code, and each challenge's scheme with the attributes
     /// it carries except the description, whose wording names the parameter that was refused.
     /// </summary>
-    private static async Task<string> ReadRefusalAsync(HttpResponseMessage response)
+    private static async Task<string> ReadRefusalAsync(Uri issuer, HttpResponseMessage response)
     {
         var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
@@ -99,10 +100,20 @@ public class UserInfoBindingRefusalTests(TestFactory factory) : TestBase(factory
             .ToArray();
 
         // Both schemes are offered, each carrying the error, since the request did not say which one it meant
-        Assert.Equal([TokenTypes.DPoP, TokenTypes.Bearer], challenges.Select(challenge => challenge.Scheme));
-        Assert.All(challenges, challenge => Assert.Equal(ErrorCodes.InvalidRequest, challenge.Parameters[ErrorAttribute]));
-        Assert.All(challenges, challenge => Assert.False(string.IsNullOrEmpty(challenge.Parameters[RealmAttribute])));
-        Assert.False(string.IsNullOrEmpty(challenges[0].Parameters[AlgorithmsAttribute]));
+        Assert.Equal(2, challenges.Length);
+        ChallengeAssert.Carries(
+            challenges[0],
+            TokenTypes.DPoP,
+            (RealmAttribute, issuer.OriginalString),
+            (ErrorAttribute, ErrorCodes.InvalidRequest),
+            (ErrorResponse.Parameters.ErrorDescription, null),
+            (AlgorithmsAttribute, null));
+        ChallengeAssert.Carries(
+            challenges[1],
+            TokenTypes.Bearer,
+            (RealmAttribute, issuer.OriginalString),
+            (ErrorAttribute, ErrorCodes.InvalidRequest),
+            (ErrorResponse.Parameters.ErrorDescription, null));
 
         return string.Join(
             " | ",

@@ -62,9 +62,11 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
     /// </summary>
     private static void AssertBearerChallengeCarriesInvalidRequest(HttpResponseMessage response)
     {
-        var challenge = ChallengeReader.Parse(Assert.Single(response.Headers.WwwAuthenticate).ToString());
-        Assert.Equal(TokenTypes.Bearer, challenge.Scheme);
-        Assert.Equal(ErrorCodes.InvalidRequest, challenge.Parameters["error"]);
+        ChallengeAssert.Carries(
+            ChallengeReader.Parse(Assert.Single(response.Headers.WwwAuthenticate).ToString()),
+            TokenTypes.Bearer,
+            (ErrorResponse.Parameters.Error, ErrorCodes.InvalidRequest),
+            (ErrorResponse.Parameters.ErrorDescription, null));
     }
 
     private async Task<(HttpClient Client, Uri Endpoint, string AccessToken)> ObtainAccessTokenAsync()

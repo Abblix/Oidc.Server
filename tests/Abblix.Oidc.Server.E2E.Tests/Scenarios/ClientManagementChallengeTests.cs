@@ -89,11 +89,10 @@ public class ClientManagementChallengeTests(TestFactory factory) : TestBase(fact
         var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(response.StatusCode == HttpStatusCode.Unauthorized, $"{(int)response.StatusCode}: {raw}");
 
-        var challenge = ChallengeReader.Parse(Assert.Single(response.Headers.WwwAuthenticate).ToString());
-        Assert.Equal(TokenTypes.Bearer, challenge.Scheme);
-        Assert.Equal(
-            [new KeyValuePair<string, string>(RealmAttribute, discovery.Issuer.OriginalString)],
-            challenge.Parameters);
+        ChallengeAssert.Carries(
+            ChallengeReader.Parse(Assert.Single(response.Headers.WwwAuthenticate).ToString()),
+            TokenTypes.Bearer,
+            (RealmAttribute, discovery.Issuer.OriginalString));
     }
 
     public static TheoryData<string> Methods() => ["GET", "PUT", "DELETE", "POST"];
@@ -130,9 +129,13 @@ public class ClientManagementChallengeTests(TestFactory factory) : TestBase(fact
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
         Assert.Equal(ErrorCodes.InvalidRequest, JsonNode.Parse(raw)![ErrorResponse.Parameters.Error]!.GetValue<string>());
 
-        var challenge = ChallengeReader.Parse(Assert.Single(response.Headers.WwwAuthenticate).ToString());
-        Assert.Equal(TokenTypes.Bearer, challenge.Scheme);
-        Assert.Equal(ErrorCodes.InvalidRequest, challenge.Parameters[ErrorResponse.Parameters.Error]);
+        // The error attributes are the whole challenge: the realm goes only on the bare one, and a scope names what a
+        // valid token lacks, which a request without one cannot lack
+        ChallengeAssert.Carries(
+            ChallengeReader.Parse(Assert.Single(response.Headers.WwwAuthenticate).ToString()),
+            TokenTypes.Bearer,
+            (ErrorResponse.Parameters.Error, ErrorCodes.InvalidRequest),
+            (ErrorResponse.Parameters.ErrorDescription, null));
     }
 
     private static async Task<(DiscoveryDocument Discovery, HttpRequestMessage Request)> PrepareAsync(

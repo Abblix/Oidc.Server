@@ -52,6 +52,7 @@ public class ClientMetadataBodyAfterTheTokenTests(TestFactory factory) : TestBas
     private const string ChunkedOverTheBound = nameof(ChunkedOverTheBound);
 
     private const string NoToken = nameof(NoToken);
+    private const string InvalidToken = nameof(InvalidToken);
     private const string ValidToken = nameof(ValidToken);
     private const string OpenRegistration = nameof(OpenRegistration);
 
@@ -62,15 +63,18 @@ public class ClientMetadataBodyAfterTheTokenTests(TestFactory factory) : TestBas
         [
             NotJson, RedirectUrisNotAnArray, TextPlain, NoMediaType, NotAMediaType, UndecodableCharset,
 #if !MINIMAL_API_TRANSPORT
-            // The Minimal API host leaves the bound to the server, which the in-memory test server does not enforce
+            // The Minimal API host leaves the bound to the server, which the in-memory test server does not enforce;
+            // its suite holds these rows on Kestrel instead (RegistrationBodyBoundOnKestrelTests)
             DeclaredOverTheBound, ChunkedOverTheBound,
 #endif
         ];
         foreach (var body in bodies)
         {
             data.Add("PUT", body, NoToken);
+            data.Add("PUT", body, InvalidToken);
             data.Add("PUT", body, ValidToken);
             data.Add("POST", body, NoToken);
+            data.Add("POST", body, InvalidToken);
             data.Add("POST", body, ValidToken);
             data.Add("POST", body, OpenRegistration);
         }
@@ -120,21 +124,49 @@ public class ClientMetadataBodyAfterTheTokenTests(TestFactory factory) : TestBas
         }
 
         using var request = new HttpRequestMessage(new HttpMethod(method), target) { Content = Body(host.Services, body) };
-        if (token == ValidToken)
-            request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, credentials);
+        switch (token)
+        {
+            case ValidToken:
+                request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, credentials);
+                break;
+
+            case InvalidToken:
+                // The token the endpoint issued, one character short, so it no longer validates
+                request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, credentials[..^1]);
+                break;
+
+            case NoToken or OpenRegistration:
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(token), token, null);
+        }
 
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
-        if (token == NoToken)
+        switch (token)
         {
-            Assert.True(response.StatusCode == HttpStatusCode.Unauthorized, $"{(int)response.StatusCode}: {raw}");
-            var challenge = ChallengeReader.Parse(Assert.Single(response.Headers.WwwAuthenticate).ToString());
-            Assert.Equal(TokenTypes.Bearer, challenge.Scheme);
-            Assert.Equal(
-                [new KeyValuePair<string, string>(RealmAttribute, discovery.Issuer.OriginalString)],
-                challenge.Parameters);
-            return;
+            case NoToken:
+                Assert.True(response.StatusCode == HttpStatusCode.Unauthorized, $"{(int)response.StatusCode}: {raw}");
+                ChallengeAssert.Carries(
+                    ChallengeReader.Parse(Assert.Single(response.Headers.WwwAuthenticate).ToString()),
+                    TokenTypes.Bearer,
+                    (RealmAttribute, discovery.Issuer.OriginalString));
+                return;
+
+            case InvalidToken:
+                // RFC 6750 section 3.1: a token that is "expired, revoked, malformed, or invalid for other reasons"
+                // is invalid_token, answered with 401 whatever the body beside it, the error carried by the challenge
+                // alone
+                Assert.True(response.StatusCode == HttpStatusCode.Unauthorized, $"{(int)response.StatusCode}: {raw}");
+                Assert.Empty(raw);
+                ChallengeAssert.Carries(
+                    ChallengeReader.Parse(Assert.Single(response.Headers.WwwAuthenticate).ToString()),
+                    TokenTypes.Bearer,
+                    (ErrorResponse.Parameters.Error, ErrorCodes.InvalidToken),
+                    (ErrorResponse.Parameters.ErrorDescription, null));
+                return;
         }
 
         // A request whose token passes, or one at an endpoint asking for none, gets the body's own refusal
