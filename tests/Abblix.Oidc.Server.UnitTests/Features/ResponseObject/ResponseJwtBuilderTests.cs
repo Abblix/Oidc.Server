@@ -333,4 +333,23 @@ public class ResponseJwtBuilderTests
     {
         Assert.Equal(expectedDeliveryMode, responseMode.ToDeliveryMode(carriesTokens));
     }
+
+    /// <summary>
+    /// An authorization response the server cannot sign for the client - its algorithm produced by no key of the tenant,
+    /// or not admitted by its security profile - is the builder's failure, which the encoder answers with
+    /// unauthorized_client in the plain mode the JWT mode delivers through, rather than with a server error.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.ES256, null)]
+    [InlineData(SigningAlgorithms.RS256, ClientSecurityProfile.Fapi2)]
+    public async Task BuildAsync_AResponseTheServerCannotSign_IsRefused(string algorithm, ClientSecurityProfile? profile)
+    {
+        _client.AuthorizationSignedResponseAlgorithm = algorithm;
+        _client.SecurityProfile = profile;
+
+        var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+
+        Assert.True(result.TryGetFailure(out var refusal));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
+    }
 }

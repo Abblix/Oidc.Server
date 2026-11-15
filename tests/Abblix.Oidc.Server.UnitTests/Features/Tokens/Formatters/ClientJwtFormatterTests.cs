@@ -314,34 +314,55 @@ public class ClientJwtFormatterTests
     }
 
     /// <summary>
-    /// Verifies that FormatAsync throws when no service signing keys available.
-    /// Critical security check - prevents token issuance without valid signatures.
+    /// A token whose algorithm no signing key of the tenant produces is not issued, neither unsigned nor with another
+    /// key: it is refused with unauthorized_client, which each caller answers in its own protocol (RFC 6749 section 5.2
+    /// at the token endpoint), the JWT the client asked for being what cannot be issued.
     /// </summary>
-    [Fact]
-    public async Task FormatAsync_WithNoSigningKeys_ShouldThrow()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FormatAsync_AnAlgorithmNoTenantKeyProduces_IsRefused(bool anotherKey)
     {
-        // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
+            Header = { Algorithm = SigningAlgorithms.ES256 },
             Payload = { Subject = "user123", Audiences = [ClientId] }
         };
-
         _serviceKeysProvider
             .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
+            .Returns((anotherKey ? new[] { _signingKeyRS256 } : []).ToAsyncEnumerable());
 
-        _clientKeysProvider
-            .Setup(p => p.GetEncryptionKeys(_clientInfo))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, UserInfoPolicy(_clientInfo));
 
-        _jwtCreator
-            .Setup(c => c.IssueAsync(token, null!, null, It.IsAny<string>(), It.IsAny<string>()))
-            .ThrowsAsync(new InvalidOperationException("Signing key is required"));
+        Assert.True(result.TryGetFailure(out var refusal));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
+    }
 
-        // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, UserInfoPolicy(_clientInfo)));
+    /// <summary>
+    /// A token whose algorithm the client's security profile does not admit is refused with unauthorized_client before
+    /// anything is signed, though a tenant key produces it: FAPI 2.0 Security Profile section 5.4.1 names PS256, ES256
+    /// and EdDSA, and an unsigned token, or one naming no algorithm, is admitted by no FAPI profile.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256)]
+    [InlineData(SigningAlgorithms.None)]
+    [InlineData(null)]
+    public async Task FormatAsync_AnAlgorithmTheProfileDoesNotAdmit_IsRefused(string? algorithm)
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = algorithm },
+            Payload = { Subject = "user123", Audiences = [ClientId] }
+        };
+        var client = new ClientInfo(ClientId) { SecurityProfile = ClientSecurityProfile.Fapi2 };
+        _serviceKeysProvider
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
+
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, client, UserInfoPolicy(client));
+
+        Assert.True(result.TryGetFailure(out var refusal));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
     }
 
     /// <summary>

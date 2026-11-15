@@ -7,10 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
@@ -615,6 +618,44 @@ public class LogoutTokenServiceTests
         Assert.Same(clientInfo, formattedClient);
 
         _jwtFormatter.Verify(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()), Times.Once);
+    }
+
+    /// <summary>
+    /// A logout token the server cannot sign for the client - here ES256, the algorithm the client's ID tokens use and
+    /// its logout tokens fall back to, at a tenant holding only an RSA key - is not issued: the service answers with
+    /// the formatter's refusal, which the back-channel notifier answers by not sending the notification.
+    /// </summary>
+    [Fact]
+    public async Task CreateLogoutTokenAsync_ATokenNoTenantKeySigns_IsRefused()
+    {
+        var clientInfo = CreateClientInfo();
+        clientInfo.IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.ES256;
+        _subjectTypeConverter
+            .Setup(c => c.Convert(TestTenant.Matched, SubjectId, clientInfo))
+            .Returns(SubjectId);
+        var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
+        var serviceKeys = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
+        serviceKeys
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 } }
+                .ToAsyncEnumerable());
+        var service = new LogoutTokenService(
+            new Mock<ILogger<LogoutTokenService>>().Object,
+            new FakeTimeProvider(_currentTime),
+            _subjectTypeConverter.Object,
+            new ClientJwtFormatter(
+                new ProfiledJwtIssuer(creator.Object),
+                new ClientEncryptionKeyResolver(
+                    new ProfiledJwtIssuer(creator.Object),
+                    new Mock<IClientKeysProvider>(MockBehavior.Strict).Object,
+                    TimeProvider.System),
+                serviceKeys.Object),
+            _tokenIdGenerator.Object);
+
+        var result = await service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, CreateLogoutContext());
+
+        Assert.True(result.TryGetFailure(out var refusal));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
     }
 
     private static ClientInfo CreateClientInfo(

@@ -314,7 +314,10 @@ public sealed record SecurityProfileRequirements
     /// registration naming none of the first two is given one a signing key of the tenant produces, by
     /// <c>Endpoints.DynamicClientManagement.Validation.ProfileSigningKeysValidator</c>, and a static client is checked
     /// against the tenant's keys at startup. A client added to the store afterwards is refused at the authorization
-    /// endpoint and where it authenticates, before anything is signed for it. The tokens this server signs for itself,
+    /// endpoint and where it authenticates, before anything is signed for it. Whatever changed in between, nothing is
+    /// signed for a client that its profile or the tenant's keys do not admit:
+    /// <see cref="Tokens.Formatters.ClientJwtFormatter"/>, which every such JWT passes, refuses it, and each endpoint
+    /// answers the refusal in its own protocol. The tokens this server signs for itself,
     /// such as JWT access tokens, take the algorithm the deployment configures, which
     /// <c>Common.Configuration.ProfileServiceTokensCheck</c> holds to the profiles in force at startup.
     /// </para>
