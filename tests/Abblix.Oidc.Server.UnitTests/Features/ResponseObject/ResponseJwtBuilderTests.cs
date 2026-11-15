@@ -223,7 +223,7 @@ public class ResponseJwtBuilderTests
 
         var options = Options.Create(new OidcOptions
         {
-            DefaultAuthorizationResponseEncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+            DefaultClientContentEncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
         });
 
         var builder = new ResponseJwtBuilder(

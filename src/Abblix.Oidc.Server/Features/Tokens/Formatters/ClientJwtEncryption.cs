@@ -47,7 +47,7 @@ public sealed record ClientJwtEncryption(
 	public static ClientJwtEncryption ForUserInfo(ClientInfo clientInfo, OidcOptions options) => new(
 		clientInfo.UserInfoEncryptedResponseAlgorithm,
 		clientInfo.UserInfoEncryptedResponseEncryption,
-		options.DefaultContentEncryptionAlgorithm,
+		options.DefaultClientContentEncryptionAlgorithm,
 		UnsignedIsClaimsSet: true);
 
 	/// <summary>
@@ -57,7 +57,7 @@ public sealed record ClientJwtEncryption(
 	public static ClientJwtEncryption ForIdentityToken(ClientInfo clientInfo, OidcOptions options) => new(
 		clientInfo.IdentityTokenEncryptedResponseAlgorithm,
 		clientInfo.IdentityTokenEncryptedResponseEncryption,
-		options.DefaultContentEncryptionAlgorithm);
+		options.DefaultClientContentEncryptionAlgorithm);
 
 	/// <summary>
 	/// Policy for a signed/encrypted token introspection response (RFC 9701): encrypts when the client registered
@@ -66,22 +66,16 @@ public sealed record ClientJwtEncryption(
 	public static ClientJwtEncryption ForIntrospection(ClientInfo clientInfo, OidcOptions options) => new(
 		clientInfo.IntrospectionEncryptedResponseAlgorithm,
 		clientInfo.IntrospectionEncryptedResponseEncryption,
-		options.DefaultContentEncryptionAlgorithm);
+		options.DefaultClientContentEncryptionAlgorithm);
 
 	/// <summary>
 	/// Policy for a JARM authorization response JWT: encrypts only when the client registered
 	/// <c>authorization_encrypted_response_alg</c> (JARM section 2.2 / section 3 opt-in), falling back to
-	/// <see cref="OidcOptions.DefaultAuthorizationResponseEncryptionAlgorithm"/> when
+	/// <see cref="OidcOptions.DefaultClientContentEncryptionAlgorithm"/> when
 	/// <c>authorization_encrypted_response_enc</c> is omitted.
 	/// </summary>
-	/// <remarks>
-	/// The fallback comes from its own setting rather than
-	/// <see cref="OidcOptions.DefaultContentEncryptionAlgorithm"/>, because JARM section 3 names a different
-	/// value for this response than the one the other client-addressed JWTs default to, and a client that
-	/// registered only the key-management algorithm is entitled to the one the specification named.
-	/// </remarks>
 	public static ClientJwtEncryption ForJarm(ClientInfo clientInfo, OidcOptions options) => new(
 		clientInfo.AuthorizationEncryptedResponseAlgorithm,
 		clientInfo.AuthorizationEncryptedResponseEncryption,
-		options.DefaultAuthorizationResponseEncryptionAlgorithm);
+		options.DefaultClientContentEncryptionAlgorithm);
 }

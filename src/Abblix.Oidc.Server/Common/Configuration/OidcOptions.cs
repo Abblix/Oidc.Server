@@ -130,28 +130,32 @@ public record OidcOptions
 	public TimeSpan KeyRolloverPropagation { get; set; } = TimeSpan.FromHours(1);
 
 	/// <summary>
-	/// The default content encryption algorithm used for encrypting JWT tokens.
+	/// The content encryption algorithm the JWTs this server issues for itself (access, refresh, registration access
+	/// and initial access tokens, see <see cref="ServiceTokens"/>) are encrypted with.
 	/// Per RFC 7518 Section 5, specifies how the JWT payload is encrypted using the Content Encryption Key (CEK).
 	/// Common values: A256CBC-HS512, A128CBC-HS256, A256GCM, A128GCM.
-	/// Defaults to A256CBC-HS512 for maximum security.
+	/// Defaults to A256CBC-HS512 for maximum security. A JWT sent to a client is encrypted with
+	/// <see cref="DefaultClientContentEncryptionAlgorithm"/> instead.
 	/// </summary>
 	public string DefaultContentEncryptionAlgorithm { get; set; } = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512;
 
 	/// <summary>
-	/// The content encryption algorithm used for an encrypted authorization response (JARM) when the client
-	/// registered <c>authorization_encrypted_response_alg</c> but omitted
-	/// <c>authorization_encrypted_response_enc</c>.
+	/// The content encryption algorithm a JWT sent to a client - an ID token or logout token, a UserInfo, introspection
+	/// or JARM authorization response - is encrypted with when the client registered its
+	/// <c>*_encrypted_response_alg</c> but omitted the matching <c>*_encrypted_response_enc</c>.
 	/// </summary>
 	/// <remarks>
-	/// Separate from <see cref="DefaultContentEncryptionAlgorithm"/> because the specification names a
-	/// different value for this one response: JWT Secured Authorization Response Mode section 3 says that
-	/// "if authorization_encrypted_response_alg is specified, the default for this value is A128CBC-HS256".
-	/// A client registering only the key-management algorithm expects that, so the server has to encrypt
-	/// with it or produce a response the client cannot read.
-	/// It is a setting rather than a constant so a deployment whose clients all understand a stronger
-	/// algorithm can raise the floor, the same way the general default can be raised.
+	/// Each specification names the same value: OpenID Connect Dynamic Client Registration 1.0 section 2, "If
+	/// id_token_encrypted_response_alg is specified, the default id_token_encrypted_response_enc value is
+	/// A128CBC-HS256", and likewise for userinfo; RFC 9701 section 6 for introspection, "The default, if omitted, is
+	/// A128CBC-HS256"; JWT Secured Authorization Response Mode section 3, "if authorization_encrypted_response_alg is
+	/// specified, the default for this value is A128CBC-HS256". The registration response then carries no
+	/// <c>*_encrypted_response_enc</c>, so a client expects that value, and the server has to encrypt with it or produce
+	/// a JWT the client cannot read. Under <c>dir</c> it also fixes the length of the key derived from the client secret.
+	/// It is a setting rather than a constant so a deployment whose clients all understand a stronger algorithm can
+	/// raise the floor.
 	/// </remarks>
-	public string DefaultAuthorizationResponseEncryptionAlgorithm { get; set; }
+	public string DefaultClientContentEncryptionAlgorithm { get; set; }
 		= EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256;
 
 	/// <summary>

@@ -152,7 +152,8 @@ public class EncryptedResponseAlgorithmsValidator(
         ClientRegistrationValidationContext context)
     {
         var request = context.Request;
-        var defaultEncryption = options.Value.DefaultContentEncryptionAlgorithm;
+        // The fallback ClientJwtEncryption gives each of these JWTs where the client registers no enc
+        var defaultEncryption = options.Value.DefaultClientContentEncryptionAlgorithm;
         (string Name, string? Algorithm, string ContentEncryption)[] encrypted =
         [
             (Parameters.IdTokenEncryptedResponseAlg, request.IdTokenEncryptedResponseAlg,
@@ -161,10 +162,8 @@ public class EncryptedResponseAlgorithmsValidator(
                 request.UserInfoEncryptedResponseEnc ?? defaultEncryption),
             (Parameters.IntrospectionEncryptedResponseAlg, request.IntrospectionEncryptedResponseAlg,
                 request.IntrospectionEncryptedResponseEnc ?? defaultEncryption),
-
-            // JARM section 3 names its own default, as ClientJwtEncryption.ForJarm does
             (Parameters.AuthorizationEncryptedResponseAlg, request.AuthorizationEncryptedResponseAlg,
-                request.AuthorizationEncryptedResponseEnc ?? options.Value.DefaultAuthorizationResponseEncryptionAlgorithm),
+                request.AuthorizationEncryptedResponseEnc ?? defaultEncryption),
         ];
 
         foreach (var (name, algorithm, contentEncryption) in encrypted)
