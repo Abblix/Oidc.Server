@@ -228,14 +228,27 @@ public class EncryptedResponseAlgorithmsValidatorTests
     }
 
     /// <summary>
-    /// No published key of the tenant is symmetric, so a symmetric request object algorithm is refused even for a client
-    /// whose secret the server keeps, rather than registered and every request object encrypted under it refused.
+    /// A symmetric key the tenant holds for its own tokens is never published, so no client can encrypt a request
+    /// object to it: a symmetric request object algorithm is refused even where the tenant holds an octet key declaring
+    /// exactly that algorithm, and even for a client whose secret the server keeps, rather than registered and every
+    /// request object encrypted under it refused.
     /// </summary>
     [Theory]
     [InlineData(EncryptionAlgorithms.KeyManagement.Aes128KW)]
     [InlineData(EncryptionAlgorithms.KeyManagement.Dir)]
     public async Task ValidateAsync_ASymmetricRequestObjectAlgorithm_IsRefused(string algorithm)
     {
+        _tenantKeys =
+        [
+            JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption),
+            new OctetJsonWebKey
+            {
+                Algorithm = algorithm,
+                Usage = PublicKeyUsages.Encryption,
+                KeyValue = new byte[32],
+            },
+        ];
+        _jwtAlgorithms.Setup(a => a.RequestObjectEncryptionAlgValuesSupported).Returns([algorithm]);
         var request = Request() with
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
