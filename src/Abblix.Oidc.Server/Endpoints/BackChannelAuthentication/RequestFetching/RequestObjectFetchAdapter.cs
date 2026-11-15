@@ -39,6 +39,18 @@ public class RequestObjectFetchAdapter(
         ClientInfo client,
         BackChannelAuthenticationRequest request)
     {
+        // FAPI-CIBA section 5.2.2: the server "shall require Backchannel Authentication Endpoint requests to be signed
+        // as described in [CIBA] 7.1.1". Judged on the request as received: once fetched under strict processing, the
+        // request object's parameters are bound onto a fresh model, which carries no request parameter either way.
+        // CIBA Core 1.0 section 13: invalid_request, "The request is missing a required parameter"
+        if (!request.Request.HasValue() &&
+            SecurityProfileRequirements.For(tenant, client).RequireSignedRequestObject)
+        {
+            return new OidcError(
+                ErrorCodes.InvalidRequest,
+                "The client is required to send its authentication request as a signed request object");
+        }
+
         // RFC 9101 section 4 forbids request and request_uri inside an authorization request's object; this endpoint
         // forbids no member of its own
         var result = await requestObjectFetcher.FetchAsync(tenant,

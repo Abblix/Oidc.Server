@@ -83,4 +83,58 @@ public class RequestObjectFetchAdapterTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
+
+    /// <summary>
+    /// FAPI-CIBA section 5.2.2 has the server "require Backchannel Authentication Endpoint requests to be signed as
+    /// described in [CIBA] 7.1.1", and the profiles requiring signed request objects carry that requirement here. A
+    /// request of such a client sent as plain parameters is missing the request parameter, which CIBA Core 1.0 section
+    /// 13 answers invalid_request, "The request is missing a required parameter", and nothing of it is fetched.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
+    public async Task FetchAsync_PlainParametersOfAClientHeldToSignedRequests_AreInvalidRequest(
+        ClientSecurityProfile profile)
+    {
+        var outer = new BackChannelAuthenticationRequest { Scope = [Scopes.OpenId], LoginHint = "end-user" };
+        var client = new ClientInfo("client-1") { SecurityProfile = profile };
+
+        var fetcher = new Mock<IRequestObjectFetcher>(MockBehavior.Strict);
+
+        var result = await new RequestObjectFetchAdapter(fetcher.Object, Mock.Of<IJwtAlgorithmsProvider>())
+            .FetchAsync(SingleIssuer.Tenant, client, outer);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// A client held to no profile, or to a profile that requires no signed request object, may send its
+    /// authentication request as plain parameters: CIBA Core 1.0 section 7.2 validates the JWT only "If the
+    /// authentication request is signed".
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses)]
+    public async Task FetchAsync_PlainParametersOfAClientNotHeldToSignedRequests_AreFetched(
+        ClientSecurityProfile? profile)
+    {
+        var outer = new BackChannelAuthenticationRequest { Scope = [Scopes.OpenId], LoginHint = "end-user" };
+        var client = new ClientInfo("client-1") { SecurityProfile = profile };
+
+        var fetcher = new Mock<IRequestObjectFetcher>(MockBehavior.Strict);
+        fetcher
+            .Setup(f => f.FetchAsync(
+                TestTenant.Matched, client, outer, null,
+                It.IsAny<Func<ClientInfo, string?>>(), It.IsAny<string[]>(), It.IsAny<Func<JsonWebToken, string?>>()))
+            .ReturnsAsync(outer);
+
+        var result = await new RequestObjectFetchAdapter(fetcher.Object, Mock.Of<IJwtAlgorithmsProvider>())
+            .FetchAsync(SingleIssuer.Tenant, client, outer);
+
+        Assert.True(result.TryGetSuccess(out var value));
+        Assert.Same(outer, value);
+    }
 }
