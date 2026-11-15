@@ -1,14 +1,14 @@
 <a name="top"></a>
 [![Abblix OIDC Server](https://resources.abblix.com/imgs/jpg/abblix-oidc-server-github-banner.jpg)](https://www.abblix.com/abblix-oidc-server)
-[![.NET](https://img.shields.io/badge/.NET-8.0%2C%209.0%2C%2010.0-512BD4)](https://docs.abblix.com/docs/technical-requirements)
-[![language](https://img.shields.io/badge/language-C%23-239120)](https://learn.microsoft.com/ru-ru/dotnet/csharp/tour-of-csharp/overview)
+[![.NET](https://img.shields.io/badge/.NET-11.0-512BD4)](https://docs.abblix.com/docs/technical-requirements)
+[![language](https://img.shields.io/badge/language-C%23-239120)](https://learn.microsoft.com/en-us/dotnet/csharp/tour-of-csharp/overview)
 [![OS](https://img.shields.io/badge/OS-linux%2C%20windows%2C%20macOS-0078D4)](https://docs.abblix.com/docs/technical-requirements)
 [![CPU](https://img.shields.io/badge/CPU-x86%2C%20x64%2C%20ARM%2C%20ARM64-FF8C00)](https://docs.abblix.com/docs/technical-requirements)
 [![security rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=security_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![reliability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=reliability_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![maintainability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
-[![CodeQL analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/dynamic/github-code-scanning/codeql/badge.svg?branch=develop)](https://github.com/Abblix/Oidc.Server/security/code-scanning?query=is%3Aopen)
-[![tests](https://img.shields.io/badge/tests-2000+%20passing-brightgreen)](https://github.com/Abblix/Oidc.Server/tree/master/Abblix.Oidc.Server.UnitTests)
+[![CodeQL analysis](https://github.com/Abblix/Oidc.Server/actions/workflows/codeql.yml/badge.svg?branch=develop)](https://github.com/Abblix/Oidc.Server/security/code-scanning?query=is%3Aopen)
+[![tests](https://img.shields.io/badge/tests-11000+%20passing-brightgreen)](https://github.com/Abblix/Oidc.Server/tree/develop/tests)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/Abblix.OIDC.Server)](https://www.nuget.org/packages/Abblix.OIDC.Server)
 [![GitHub release](https://img.shields.io/github/v/release/Abblix/Oidc.Server)](#)
 [![GitHub release date](https://img.shields.io/github/release-date/Abblix/Oidc.Server)](#)
@@ -48,8 +48,10 @@ Abblix OIDC Server turns your ASP.NET Core application into a fully certified Op
 
 - Certified: all seven OpenID Provider profiles and all four logout profiles, 634 conformance tests passed with none skipped and no warnings. FAPI is not among them.
 - A library you own, not a server you run: the OpenID Connect endpoints live inside your app, so users, data, and UI never leave it.
-- Current with the modern security stack: DPoP, PAR, JARM, RAR, token exchange, and certificate-bound tokens, alongside the OAuth 2.0 and OpenID Connect core.
-- Engineering you can audit: 2000+ passing tests, top SonarCloud security, reliability, and maintainability ratings, and CodeQL scanning on every change.
+- Current with the modern security stack: DPoP, PAR, JARM, RAR, CIBA, device authorization, token exchange, certificate-bound tokens and JWT introspection responses (RFC 9701), alongside the OAuth 2.0 and OpenID Connect core.
+- Security profiles the server enforces per client or per tenant: FAPI 2.0, FAPI 2.0 Message Signing and FAPI 1.0 Advanced.
+- Many issuers in one deployment: each tenant has its own clients, keys and security profile, declared at startup or added while the server runs.
+- Engineering you can audit: over 11,000 passing tests, top SonarCloud security, reliability, and maintainability ratings, and a CodeQL scan of every push to the development branch.
 - Modern .NET, minimal friction: targets .NET 11, with drop-in adapters for both MVC and Minimal API.
 - Observable through OpenTelemetry: each endpoint request gets its own span and metrics, and the structured logs the server writes carry the trace of the request they belong to.
 
@@ -60,7 +62,7 @@ Under the hood, the library leans on modular and hexagonal architecture and the 
 Install the Minimal API adapter, then register the server and map its endpoints in `Program.cs`:
 
 ```shell
-dotnet add package Abblix.OIDC.Server.MinimalApi
+dotnet add package Abblix.OIDC.Server.MinimalAPI
 ```
 
 ```csharp
@@ -138,10 +140,21 @@ dotnet add package Abblix.OIDC.Server.MVC
 For Minimal API endpoint routing:
 
 ```shell
-dotnet add package Abblix.OIDC.Server.MinimalApi
+dotnet add package Abblix.OIDC.Server.MinimalAPI
 ```
 
 Both adapters expose the same OpenID Connect endpoints and pull in the core `Abblix.OIDC.Server` package as a dependency, so pick the one that matches how your application maps requests. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
+
+The rest are optional, each one for a feature you may not need:
+
+|Package|What it adds|
+|:-|:-|
+|[Abblix.OIDC](src/Abblix.Oidc/README.md)|The OAuth 2.0 and OpenID Connect vocabulary the server and its clients share: grant and response types, scopes, error codes, claims|
+|[Abblix.JWT](src/Abblix.Jwt/README.md)|JWT signing, encryption and validation and JSON Web Keys, on the platform's own cryptography|
+|[Abblix.JWT.Vault](src/Abblix.Jwt.Vault/README.md), [Abblix.JWT.Azure](src/Abblix.Jwt.Azure/README.md)|Signing and decryption keys kept in HashiCorp Vault or OpenBao Transit, or in Azure Key Vault (see [External key custodians](EXTERNAL_KEYS.md))|
+|[Abblix.OIDC.Server.SharedSignals](src/Abblix.Oidc.Server.SharedSignals/README.md)|A Shared Signals transmitter for each tenant of the server|
+|[Abblix.SharedSignals](src/Abblix.SharedSignals/README.md), [.MinimalAPI](src/Abblix.SharedSignals.MinimalApi/README.md), [.Redis](src/Abblix.SharedSignals.Redis/README.md)|OpenID Shared Signals Framework 1.0 transmitter and receiver, its endpoints, and a Redis event outbox for several replicas|
+|[Abblix.SecurityEvents](src/Abblix.SecurityEvents/README.md), [.CAEP](src/Abblix.SecurityEvents.CAEP/README.md), [.RISC](src/Abblix.SecurityEvents.RISC/README.md), [.MinimalAPI](src/Abblix.SecurityEvents.MinimalApi/README.md)|Security Event Tokens (RFC 8417) with push and poll delivery, the CAEP and RISC event types, and receiver endpoints|
 
 ## ⚠️ Upgrading to 3.0
 
