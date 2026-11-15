@@ -27,11 +27,13 @@ public static class SecurityProfileConsistency
     /// Returns the human-readable violations that prevent a client with the given registered response
     /// types from satisfying the effective profile, or an empty list when the configuration is
     /// self-consistent. The check operates on response types because that is the one part of a FAPI
-    /// client the profile cannot silently fix at request time: a client that never permits the
-    /// authorization-code response type, or that permits an implicit/hybrid one, is misconfigured
-    /// rather than merely tightened.
+    /// client the profile cannot silently fix at request time: a client using the authorization endpoint
+    /// that never permits the authorization-code response type, or that permits an implicit/hybrid one,
+    /// is misconfigured rather than merely tightened. A client registering no response type does not use
+    /// the authorization endpoint and is not judged by its response types.
     /// </summary>
-    /// <param name="allowedResponseTypes">The response-type combinations the client is registered for.</param>
+    /// <param name="allowedResponseTypes">The response-type combinations the client is registered for, empty for a
+    /// client that never uses the authorization endpoint.</param>
     /// <param name="tokenEndpointAuthMethod">How the client authenticates at the token endpoint.</param>
     /// <param name="assertionAudiences">What the client's authentication assertions may name as their audience
     /// (<see cref="ClientInfo.ClientAssertionAudiences"/>); always <see cref="ClientAssertionAudiences.Issuer"/> for a
@@ -74,7 +76,11 @@ public static class SecurityProfileConsistency
                 $"private key JWT, but the client uses {tokenEndpointAuthMethod}");
         }
 
-        if (!requirements.RequireCodeResponseTypeOnly)
+        // FAPI 2.0 section 5.3.2.2 binds the response type "for flows that use the authorization endpoint", and RFC 7591
+        // section 2 defines response_types as those "the client can use at the authorization endpoint". A client
+        // registering none never uses it - the authorization endpoint admits only a registered response type - as a
+        // resource server calling only introspection or a client of the client credentials, CIBA or device grant
+        if (!requirements.RequireCodeResponseTypeOnly || allowedResponseTypes.Count == 0)
             return violations;
 
         // A single-element "code" entry, matched case-insensitively to stay consistent with the

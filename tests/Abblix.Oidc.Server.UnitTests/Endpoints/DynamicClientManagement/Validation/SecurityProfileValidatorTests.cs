@@ -106,6 +106,30 @@ public class SecurityProfileValidatorTests
     }
 
     /// <summary>
+    /// FAPI 2.0 section 5.3.2.2 binds the response type "for flows that use the authorization endpoint", and RFC 7591
+    /// section 2.1 correlates the client credentials grant with no response type: a registration under a FAPI profile
+    /// for that grant alone, or for no grant at all as a resource server calling introspection, registers no response
+    /// type and passes.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, GrantTypes.ClientCredentials)]
+    [InlineData(ClientSecurityProfile.Fapi2, null)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, GrantTypes.ClientCredentials)]
+    public async Task ValidateAsync_Fapi_NoResponseTypes_ShouldReturnNull(ClientSecurityProfile profile, string? grantType)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            ResponseTypes = [],
+            GrantTypes = grantType is null ? [] : [grantType],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+        });
+
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(profile), context);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
     /// OpenID Connect Core 1.0 section 5.3.2: a userinfo response registered for encryption is a JWT, so naming none for
     /// its signature under FAPI 1.0 Part 2 section 8.6 is refused; none without encryption is plain JSON and passes, as
     /// does encryption with no signature named, which is given one later.

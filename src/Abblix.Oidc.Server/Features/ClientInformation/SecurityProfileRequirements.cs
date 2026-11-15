@@ -156,6 +156,9 @@ public sealed record SecurityProfileRequirements
     /// hybrid response type that returns a token or id_token from the authorization endpoint.
     /// Enforced by <c>Endpoints.Authorization.Validation.FlowTypeValidator</c> at request time and
     /// by <see cref="SecurityProfileConsistency"/> as a fail-loud registration/startup check.
+    /// FAPI 2.0 section 5.3.2.2 states it "for flows that use the authorization endpoint", so it binds
+    /// only a client registering a response type: one registering none, as a resource server or a
+    /// client of the client credentials, CIBA or device grant, never reaches that endpoint.
     /// </summary>
     public bool RequireCodeResponseTypeOnly { get; init; }
 

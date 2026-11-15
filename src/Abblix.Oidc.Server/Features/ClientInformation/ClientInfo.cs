@@ -130,12 +130,15 @@ public record ClientInfo(string ClientId)
     /// <summary>
     /// Defines the response types that the client is permitted to use, or null when the client does not
     /// state them and the default in <see cref="EffectiveResponseTypes"/> applies.
-    /// This controls how tokens are issued in response to an authorization request.
+    /// This controls how tokens are issued in response to an authorization request. An empty list closes
+    /// the authorization endpoint to the client and leaves every other endpoint and grant as they are: it
+    /// is the shape of a resource server that only introspects tokens, or of a client of the client
+    /// credentials, CIBA or device grant.
     /// </summary>
     /// <remarks>
     /// Null and empty mean different things. Null is "not stated", and the default applies. An empty
-    /// list is stated: it allows nothing, and it is how a client is switched off without being removed
-    /// from the registry.
+    /// list is stated, and the default does not apply: the client may use none of the values this
+    /// property lists.
     ///
     /// Null rather than a defaulted value on purpose, so that a registry kept in configuration says what
     /// the client may do and nothing else. The .NET configuration binder adds to a collection a property

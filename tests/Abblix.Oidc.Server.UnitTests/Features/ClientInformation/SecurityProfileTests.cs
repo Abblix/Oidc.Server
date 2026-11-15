@@ -300,6 +300,67 @@ public class SecurityProfileTests
         Assert.Single(violations);
     }
 
+    /// <summary>
+    /// FAPI 2.0 section 5.3.2.2 binds the response type "for flows that use the authorization endpoint", and RFC 7591
+    /// section 2 defines response_types as those "the client can use at the authorization endpoint". A client
+    /// registering none never uses it, as a resource server calling only introspection or a client of the client
+    /// credentials, CIBA or device grant, and the FAPI 2.0 profiles take it as it is.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
+    // The control: FAPI 1.0 Advanced never held a client to the code-only rule, so this row passes with or without it
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
+    public void FindViolations_NoResponseTypes_NoViolations(ClientSecurityProfile profile)
+    {
+        var violations = SecurityProfileConsistency.FindViolations(
+            [],
+            ClientAuthenticationMethods.PrivateKeyJwt,
+            assertionAudiences: ClientAssertionAudiences.Issuer,
+            SecurityProfileRequirements.Resolve(profile));
+
+        Assert.Empty(violations);
+    }
+
+    /// <summary>
+    /// The same at startup: a tenant held to FAPI 2.0 starts with a resource server that only introspects tokens and
+    /// with a client of the client credentials grant, neither registering a response type, while beside them a client
+    /// registering code id_token keeps it from starting.
+    /// </summary>
+    [Fact]
+    public void Check_Fapi2_AdmitsClientsThatNeverUseTheAuthorizationEndpoint()
+    {
+        var resourceServer = new ClientInfo("resource-server")
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedGrantTypes = [],
+            AllowedResponseTypes = [],
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        };
+        var machine = new ClientInfo("machine")
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            AllowedResponseTypes = [],
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        };
+        var hybrid = new ClientInfo("hybrid")
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken]],
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        };
+
+        Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi2, resourceServer, machine)));
+
+        var refusals = Check(Tenant(ClientSecurityProfile.Fapi2, resourceServer, machine, hybrid));
+        Assert.NotEmpty(refusals);
+        Assert.All(refusals, refusal => Assert.Contains("Client 'hybrid'", refusal.Message));
+    }
+
     [Fact]
     public void FindViolations_NoProfile_NeverFlags()
     {
