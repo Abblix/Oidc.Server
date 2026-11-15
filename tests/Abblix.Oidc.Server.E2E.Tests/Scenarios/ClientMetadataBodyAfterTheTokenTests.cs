@@ -63,7 +63,8 @@ public class ClientMetadataBodyAfterTheTokenTests(TestFactory factory) : TestBas
         [
             NotJson, RedirectUrisNotAnArray, TextPlain, NoMediaType, NotAMediaType, UndecodableCharset,
 #if !MINIMAL_API_TRANSPORT
-            // The Minimal API host leaves the bound to the server, which the in-memory test server does not enforce
+            // The Minimal API host leaves the bound to the server, which the in-memory test server does not enforce;
+            // its suite holds these rows on Kestrel instead (RegistrationBodyBoundOnKestrelTests)
             DeclaredOverTheBound, ChunkedOverTheBound,
 #endif
         ];
