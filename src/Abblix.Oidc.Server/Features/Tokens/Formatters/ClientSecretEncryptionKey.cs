@@ -49,13 +49,12 @@ internal static class ClientSecretEncryptionKey
     /// the client publishes, a symmetric one only where section 10.2 derives a key for it from the client secret.
     /// </summary>
     /// <remarks>
-    /// <c>dir</c> is asked with A128CBC-HS256, the content encryption default OpenID Connect Dynamic Client Registration
-    /// 1.0 section 2 names ("the default id_token_encrypted_response_enc value is A128CBC-HS256"), so it counts as
-    /// servable.
+    /// <c>dir</c> is asked with the content encryption algorithm a client registering none is sent
+    /// (<see cref="ClientJwtEncryption.DefaultContentEncryptionAlgorithm"/>), so it counts as servable.
     /// </remarks>
     public static bool CanBeServed(string keyManagementAlgorithm)
         => !IsSymmetric(keyManagementAlgorithm) ||
-           SizeInBytes(keyManagementAlgorithm, ContentEncryption.Aes128CbcHmacSha256) is not null;
+           SizeInBytes(keyManagementAlgorithm, ClientJwtEncryption.DefaultContentEncryptionAlgorithm) is not null;
 
     /// <summary>
     /// The length of the key section 10.2 derives for the algorithm, or null where it derives none: section 10.2 covers

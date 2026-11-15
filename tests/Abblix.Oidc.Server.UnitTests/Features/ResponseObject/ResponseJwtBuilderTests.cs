@@ -201,18 +201,12 @@ public class ResponseJwtBuilderTests
     }
 
     /// <summary>
-    /// The JARM fallback is a setting, so a deployment whose clients all understand a stronger algorithm can
-    /// raise it.
+    /// JARM section 3 names the fallback, so the content encryption algorithm a host sets for the server's own tokens
+    /// does not reach an authorization response: a client registering only
+    /// <c>authorization_encrypted_response_alg</c> is sent A128CBC-HS256 whatever the host configured.
     /// </summary>
-    /// <remarks>
-    /// <see cref="BuildAsync_WithEncryptionAlgorithmButNoEnc_DefaultsToA128CbcHs256"/> pins the value the
-    /// specification names, which a client registering only
-    /// <c>authorization_encrypted_response_alg</c> is entitled to. This one pins that the value is reachable
-    /// at all: without it the setting could be read from nowhere and every test would still pass, because the
-    /// default it happens to carry is the same constant the code used to hold.
-    /// </remarks>
     [Fact]
-    public async Task BuildAsync_WithEncryptionAlgorithmButNoEnc_HonoursTheConfiguredFallback()
+    public async Task BuildAsync_WithEncryptionAlgorithmButNoEnc_IgnoresTheServerTokensContentEncryption()
     {
         var capture = CaptureIssue();
         _clientKeys
@@ -223,7 +217,7 @@ public class ResponseJwtBuilderTests
 
         var options = Options.Create(new OidcOptions
         {
-            DefaultClientContentEncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+            DefaultContentEncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
         });
 
         var builder = new ResponseJwtBuilder(
@@ -238,7 +232,7 @@ public class ResponseJwtBuilderTests
 
         await builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
-        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, capture.ContentAlgorithm);
+        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, capture.ContentAlgorithm);
     }
 
     /// <summary>

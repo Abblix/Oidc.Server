@@ -22,7 +22,6 @@ using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
-using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -55,7 +54,7 @@ public class IntrospectionResponseJwtBuilderTests
             .Returns(() => signingKeys.ToAsyncEnumerable());
 
         return new IntrospectionResponseJwtBuilder(
-            formatter.Object, TimeProvider.System, Options.Create(new OidcOptions()), keys.Object);
+            formatter.Object, TimeProvider.System, keys.Object);
     }
 
     private static TenantDefinition Tenant(ClientSecurityProfile profile)

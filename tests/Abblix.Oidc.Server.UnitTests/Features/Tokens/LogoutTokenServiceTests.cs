@@ -18,7 +18,6 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
@@ -68,8 +67,7 @@ public class LogoutTokenServiceTests
             timeProvider,
             _subjectTypeConverter.Object,
             _jwtFormatter.Object,
-            _tokenIdGenerator.Object,
-            Options.Create(new OidcOptions()));
+            _tokenIdGenerator.Object);
     }
 
     /// <summary>
@@ -85,8 +83,7 @@ public class LogoutTokenServiceTests
             new FakeTimeProvider(_currentTime),
             _subjectTypeConverter.Object,
             _jwtFormatter.Object,
-            _tokenIdGenerator.Object,
-            Options.Create(new OidcOptions()));
+            _tokenIdGenerator.Object);
         var clientInfo = CreateClientInfo();
         var logoutContext = CreateLogoutContext();
         SetupMocks(clientInfo, logoutContext, _ => { });

@@ -24,7 +24,6 @@ using Abblix.Oidc.Server.MinimalApi.Formatters;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -70,7 +69,7 @@ public class IntrospectionResponseFormatterTests
         var formatter = new IntrospectionResponseFormatter(
             new ServedBy(Served),
             new IntrospectionResponseJwtBuilder(
-                clientJwtFormatter.Object, TimeProvider.System, Options.Create(new OidcOptions()), signingKeys),
+                clientJwtFormatter.Object, TimeProvider.System, signingKeys),
             Mock.Of<IHttpContextAccessor>(accessor => accessor.HttpContext == httpContext));
 
         Result<IntrospectionSuccess, OidcError> found = new IntrospectionSuccess(

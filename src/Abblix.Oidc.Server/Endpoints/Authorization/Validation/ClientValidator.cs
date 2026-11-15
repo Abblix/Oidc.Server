@@ -79,7 +79,7 @@ public partial class ClientValidator(
             ..SecurityProfileConsistency.FindServiceTokenViolations(
                 SecurityProfileConsistency.IssuedToAClient(options.Value.ServiceTokens), requirements),
             ..await SecurityProfileConsistency.FindEncryptionKeyViolationsAsync(
-                encryptionKeyResolver, clientInfo, options.Value, requirements),
+                encryptionKeyResolver, clientInfo, requirements),
         ];
         if (violations.Count > 0)
         {

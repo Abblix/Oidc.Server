@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Microsoft.Extensions.Options;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Common.Configuration;
 using System;
@@ -61,7 +60,6 @@ public class EncryptedResponseAlgorithmsValidatorTests
         _validator = new EncryptedResponseAlgorithmsValidator(
             _jwtAlgorithms.Object,
             _serviceKeys.Object,
-            Options.Create(new OidcOptions()),
             _clientInfoProvider.Object,
             TimeProvider.System);
     }

@@ -18,7 +18,6 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
-using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
@@ -48,11 +47,11 @@ public class ClientJwtFormatterTests
 
     /// <summary>What the client registered for UserInfo, which is also what an ID token uses.</summary>
     private static ClientJwtEncryption UserInfoPolicy(ClientInfo client)
-        => ClientJwtEncryption.ForUserInfo(client, new OidcOptions());
+        => ClientJwtEncryption.ForUserInfo(client);
 
     /// <summary>What the client registered for identity tokens, which logout tokens share.</summary>
     private static ClientJwtEncryption LogoutTokenPolicy(ClientInfo client)
-        => ClientJwtEncryption.ForIdentityToken(client, new OidcOptions());
+        => ClientJwtEncryption.ForIdentityToken(client);
 
     public ClientJwtFormatterTests()
     {
@@ -654,7 +653,7 @@ public class ClientJwtFormatterTests
     /// section 2, "the default id_token_encrypted_response_enc value is A128CBC-HS256" (and userinfo likewise), RFC 9701
     /// section 6 for introspection ("The default, if omitted, is A128CBC-HS256") and JARM section 3. Under dir the key
     /// is that algorithm's: 32 octets, the whole SHA-256 digest of the client secret (OpenID Connect Core 1.0 section
-    /// 10.2, "For keys of 256 or fewer bits, SHA-256 is used").
+    /// 10.2, "For keys of 256 or fewer bits, SHA-256 is used"). No host setting chooses another value.
     /// </summary>
     [Theory]
     [InlineData("id_token")]
@@ -676,16 +675,15 @@ public class ClientJwtFormatterTests
             ClientSecrets = [new ClientSecret { Value = secret, Sha512Hash = [1] }],
         };
         const string dir = EncryptionAlgorithms.KeyManagement.Dir;
-        var options = new OidcOptions();
         var policy = response switch
         {
             "id_token" => ClientJwtEncryption.ForIdentityToken(
-                client with { IdentityTokenEncryptedResponseAlgorithm = dir }, options),
-            "userinfo" => ClientJwtEncryption.ForUserInfo(client with { UserInfoEncryptedResponseAlgorithm = dir }, options),
+                client with { IdentityTokenEncryptedResponseAlgorithm = dir }),
+            "userinfo" => ClientJwtEncryption.ForUserInfo(client with { UserInfoEncryptedResponseAlgorithm = dir }),
             "introspection" => ClientJwtEncryption.ForIntrospection(
-                client with { IntrospectionEncryptedResponseAlgorithm = dir }, options),
+                client with { IntrospectionEncryptedResponseAlgorithm = dir }),
             "authorization" => ClientJwtEncryption.ForJarm(
-                client with { AuthorizationEncryptedResponseAlgorithm = dir }, options),
+                client with { AuthorizationEncryptedResponseAlgorithm = dir }),
             _ => throw new ArgumentOutOfRangeException(nameof(response), response, null),
         };
         JsonWebKey? usedKey = null;

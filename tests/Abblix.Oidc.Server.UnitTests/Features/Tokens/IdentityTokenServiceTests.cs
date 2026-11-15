@@ -24,7 +24,6 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Model;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -64,8 +63,7 @@ public class IdentityTokenServiceTests
             SingleIssuer.LicensedCatalog,
             timeProvider,
             _jwtFormatter.Object,
-            _userClaimsProvider.Object,
-            Options.Create(new OidcOptions()));
+            _userClaimsProvider.Object);
     }
 
     /// <summary>

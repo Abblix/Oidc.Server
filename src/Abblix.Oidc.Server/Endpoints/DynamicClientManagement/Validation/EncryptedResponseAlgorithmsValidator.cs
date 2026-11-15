@@ -8,14 +8,12 @@
 
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
-using Microsoft.Extensions.Options;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -50,14 +48,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <param name="jwtAlgorithms">The JWE algorithms the server encrypts and decrypts with, as discovery advertises
 /// them.</param>
 /// <param name="serviceKeys">The tenant's own keys, which a request object is encrypted to.</param>
-/// <param name="options">Supplies the content encryption algorithm a client that registered none is sent, which fixes
-/// the length of a key used directly as the content encryption key.</param>
 /// <param name="clientInfoProvider">Supplies the stored client an update keeps the secrets of.</param>
 /// <param name="timeProvider">Supplies the time a stored secret's expiry is judged against.</param>
 public class EncryptedResponseAlgorithmsValidator(
     IJwtAlgorithmsProvider jwtAlgorithms,
     IAuthServiceKeysProvider serviceKeys,
-    IOptions<OidcOptions> options,
     IClientInfoProvider clientInfoProvider,
     TimeProvider timeProvider) : IClientRegistrationContextValidator
 {
@@ -151,8 +146,8 @@ public class EncryptedResponseAlgorithmsValidator(
         ClientRegistrationValidationContext context)
     {
         var request = context.Request;
-        // The fallback ClientJwtEncryption gives each of these JWTs where the client registers no enc
-        var defaultEncryption = options.Value.DefaultClientContentEncryptionAlgorithm;
+        // The fallback each of these JWTs is encrypted with where the client registers no enc
+        const string defaultEncryption = ClientJwtEncryption.DefaultContentEncryptionAlgorithm;
         (string Name, string? Algorithm, string ContentEncryption)[] encrypted =
         [
             (Parameters.IdTokenEncryptedResponseAlg, request.IdTokenEncryptedResponseAlg,
