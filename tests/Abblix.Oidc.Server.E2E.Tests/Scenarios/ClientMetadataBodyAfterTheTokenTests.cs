@@ -130,7 +130,7 @@ public class ClientMetadataBodyAfterTheTokenTests(TestFactory factory) : TestBas
                 break;
 
             case InvalidToken:
-                // The token the endpoint issued, one character short, so its signature no longer verifies
+                // The token the endpoint issued, one character short, so it no longer validates
                 request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, credentials[..^1]);
                 break;
 
@@ -157,7 +157,7 @@ public class ClientMetadataBodyAfterTheTokenTests(TestFactory factory) : TestBas
             case InvalidToken:
                 // RFC 6750 section 3.1: a token that is "expired, revoked, malformed, or invalid for other reasons"
                 // is invalid_token, answered with 401 whatever the body beside it, the error carried by the challenge
-                // alone as the section's own example carries it
+                // alone
                 Assert.True(response.StatusCode == HttpStatusCode.Unauthorized, $"{(int)response.StatusCode}: {raw}");
                 Assert.Empty(raw);
                 ChallengeAssert.Carries(
