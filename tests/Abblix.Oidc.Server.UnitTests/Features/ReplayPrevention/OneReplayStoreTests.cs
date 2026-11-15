@@ -121,13 +121,40 @@ public class OneReplayStoreTests
     }
 
     /// <summary>
-    /// The host's entity storage keeps the reservations, whether it is registered under the shared key before or
-    /// after the server, or without a key before it.
+    /// A receiver's store the host decorated before the server is the host's own: the server's reservations stay
+    /// in it, through the host's decoration, and none reaches the entity storage.
+    /// </summary>
+    [Fact]
+    public async Task AReceiversStoreTheHostDecorated_IsKept()
+    {
+        var cache = new RecordingCache();
+        var storage = new AddIfAbsentOnlyStorage();
+        var services = Host(cache);
+        services.AddKeyedSingleton<IEntityStorage>(TenantServiceKeys.Shared, storage);
+        services.AddDistributedReplayCache();
+        Abblix.DependencyInjection.ServiceCollectionExtensions.Decorate<IReplayCache, HostPolicy>(services);
+        services.AddReplayPrevention();
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.True(await provider.GetRequiredService<IReplayCache>().TryReserveAsync(
+            Identifier, Now.AddMinutes(5), TestContext.Current.CancellationToken));
+
+        var shared = Assert.IsType<HostPolicy>(provider.GetRequiredKeyedService<IReplayCache>(TenantServiceKeys.Shared));
+        Assert.Equal([Identifier], shared.Reserved);
+        Assert.Equal([Prefix + Identifier], cache.Written);
+        Assert.Empty(storage.Claimed);
+    }
+
+    /// <summary>
+    /// The host's entity storage keeps the reservations, whether it is registered under the shared key or without
+    /// one, before the server or after it.
     /// </summary>
     [Theory]
     [InlineData(true, true)]
     [InlineData(true, false)]
     [InlineData(false, true)]
+    [InlineData(false, false)]
     public async Task TheHostsEntityStorage_KeepsTheReservations(bool keyed, bool beforeTheServer)
     {
         var cache = new RecordingCache();
@@ -297,6 +324,35 @@ public class OneReplayStoreTests
             lock (_written)
                 _written.Add(key);
         }
+    }
+
+    /// <summary>A host's policy over the store it decorates, recording what passed through it.</summary>
+    private sealed class HostPolicy(IReplayCache inner) : IReplayCache
+    {
+        private readonly List<string> _reserved = [];
+
+        public IReadOnlyList<string> Reserved
+        {
+            get
+            {
+                lock (_reserved)
+                    return [.. _reserved];
+            }
+        }
+
+        public Task<bool> TryReserveAsync(
+            string identifier,
+            DateTimeOffset expiresAt,
+            CancellationToken cancellationToken = default)
+        {
+            lock (_reserved)
+                _reserved.Add(identifier);
+
+            return inner.TryReserveAsync(identifier, expiresAt, cancellationToken);
+        }
+
+        public Task ReleaseAsync(string identifier, CancellationToken cancellationToken = default)
+            => inner.ReleaseAsync(identifier, cancellationToken);
     }
 
     /// <summary>A host's own store, recording what it was asked to reserve.</summary>
