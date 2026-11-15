@@ -20,10 +20,10 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
-using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -277,8 +277,6 @@ public class ConfigurationHandlerTests
                     ClientId = TestConstants.DefaultClientId,
                     ResponseType = responseType,
                     ResponseMode = responseMode,
-                    RedirectUri = new Uri("https://client.example.com/callback"),
-                    Scope = [Scopes.OpenId],
                 })
                 {
                     ClientInfo = new ClientInfo(TestConstants.DefaultClientId) { AllowedResponseTypes = everyResponseType },
