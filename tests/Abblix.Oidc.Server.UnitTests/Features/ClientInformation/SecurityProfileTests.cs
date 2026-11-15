@@ -1027,6 +1027,7 @@ public class SecurityProfileTests
     [InlineData(new[] { GrantTypes.DeviceAuthorization, GrantTypes.RefreshToken }, 1)]
     [InlineData(new[] { GrantTypes.Password }, 1)]
     [InlineData(new[] { GrantTypes.JwtBearer }, 1)]
+    [InlineData(new[] { "urn:example:params:oauth:grant-type:host-defined" }, 1)]
     public void FindSigningAlgorithmViolations_NoResponseTypes_JudgesTheIdTokenOnlyForAGrantIssuingOne(
         string[] grantTypes, int expected)
     {

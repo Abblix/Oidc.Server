@@ -82,6 +82,33 @@ public class ProfileSigningKeysValidatorTests
     }
 
     /// <summary>
+    /// A registration with no response type is judged for its ID token algorithm by its grant types: the CIBA grant and
+    /// a grant the host defines are answered with an ID token at the token endpoint, so ES256 named for it at a tenant
+    /// holding only an RSA key pinned to PS256 is refused, and the client credentials grant is issued none, so it is
+    /// accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.Ciba, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(HostDefinedGrantType, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(GrantTypes.ClientCredentials, null)]
+    public async Task AnIdTokenAlgorithm_IsJudgedByTheGrantTypes(string grantType, string? expectedError)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            ResponseTypes = [],
+            GrantTypes = [grantType],
+            IdTokenSignedResponseAlg = SigningAlgorithms.ES256,
+        });
+
+        var result = await Validator(Rsa(SigningAlgorithms.PS256))
+            .ValidateAsync(Tenant(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    private const string HostDefinedGrantType = "urn:example:params:oauth:grant-type:host-defined";
+
+    /// <summary>
     /// A registration of the client credentials grant naming a back-channel logout URI can still be sent a logout token,
     /// signed with the ID token's algorithm, so ES256 named for it at a tenant holding only an RSA key pinned to PS256
     /// is refused.
