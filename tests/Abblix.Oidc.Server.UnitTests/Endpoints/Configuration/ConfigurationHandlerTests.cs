@@ -15,11 +15,16 @@ using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
@@ -134,6 +139,170 @@ public class ConfigurationHandlerTests
         Assert.Equal(encryption, document.IntrospectionEncryptionAlgValuesSupported);
     }
 
+    /// <summary>
+    /// Every response type the registered builders make up, implicit, hybrid and none included, in the order the
+    /// authorization endpoint metadata lists them.
+    /// </summary>
+    private static readonly string[] EveryResponseType =
+    [
+        ResponseTypes.Code,
+        ResponseTypes.Token,
+        ResponseTypes.IdToken,
+        ResponseTypes.None,
+        $"{ResponseTypes.Code} {ResponseTypes.Token}",
+        $"{ResponseTypes.Code} {ResponseTypes.IdToken}",
+        $"{ResponseTypes.Token} {ResponseTypes.IdToken}",
+        $"{ResponseTypes.Code} {ResponseTypes.Token} {ResponseTypes.IdToken}",
+    ];
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.2: "authorization servers shall require the value of response_type
+    /// described in [RFC6749] to be code", and the tenant's profile binds every client it serves, so the document of a
+    /// tenant held to any profile of the FAPI 2.0 family lists code alone (OpenID Connect Discovery 1.0 section 3, RFC
+    /// 8414 section 2: the values "that this authorization server supports"). A tenant held to no profile lists every
+    /// response type the server makes up.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, true)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests, true)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, true)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, true)]
+    [InlineData(ClientSecurityProfile.None, false)]
+    public async Task TheDocument_ListsTheResponseTypesTheTenantsProfileAdmits(
+        ClientSecurityProfile profile,
+        bool codeOnly)
+    {
+        var metadata = new Mock<IAuthorizationMetadataProvider>();
+        metadata.Setup(m => m.ResponseTypesSupported).Returns(EveryResponseType);
+        var handler = HandlerFor(Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict), metadata.Object);
+
+        var document = await handler.HandleAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant());
+
+        Assert.Equal(codeOnly ? [ResponseTypes.Code] : EveryResponseType, document.ResponseTypesSupported);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2 has the server "require the response_type value code id_token, or the
+    /// response_type value code in conjunction with the response_mode value jwt", so the document of a tenant held to
+    /// FAPI 1.0 Advanced lists those two response types alone.
+    /// </summary>
+    [Fact]
+    public async Task TheDocument_ListsTheSignedResponseTypes_WhereTheTenantsProfileRequiresASignedResponse()
+    {
+        var metadata = new Mock<IAuthorizationMetadataProvider>();
+        metadata.Setup(m => m.ResponseTypesSupported).Returns(EveryResponseType);
+        var handler = HandlerFor(Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict), metadata.Object);
+
+        var document = await handler.HandleAsync(
+            new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced }.ToTenant());
+
+        Assert.Equal(
+            [ResponseTypes.Code, $"{ResponseTypes.Code} {ResponseTypes.IdToken}"],
+            document.ResponseTypesSupported);
+    }
+
+    /// <summary>
+    /// The implicit grant type is what a client registers for a response type returning a token or an ID token from
+    /// the authorization endpoint (RFC 7591 section 2.1), which FAPI 2.0 Security Profile section 5.3.2.2 refuses, so
+    /// the document of a tenant held to any profile of the FAPI 2.0 family does not list it (OpenID Connect Discovery
+    /// 1.0 section 3, RFC 8414 section 2: the grant types "that this authorization server supports"). FAPI 1.0 Advanced
+    /// admits code id_token, a hybrid response type, and so keeps it, as does a tenant held to no profile.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, false)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests, false)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, false)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, true)]
+    [InlineData(ClientSecurityProfile.None, true)]
+    public async Task TheDocument_ListsTheImplicitGrantType_OnlyWhereTheTenantsProfileAdmitsAnImplicitResponse(
+        ClientSecurityProfile profile,
+        bool implicitListed)
+    {
+        string[] grantTypes =
+        [
+            GrantTypes.AuthorizationCode,
+            GrantTypes.Implicit,
+            GrantTypes.RefreshToken,
+            GrantTypes.ClientCredentials,
+        ];
+        var scopesAndClaims = new Mock<IScopesAndClaimsProvider>();
+        scopesAndClaims.Setup(p => p.GrantTypesSupported).Returns(grantTypes);
+        var handler = HandlerFor(
+            Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
+            Mock.Of<IAuthorizationMetadataProvider>(),
+            scopesAndClaims.Object);
+
+        var document = await handler.HandleAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant());
+
+        Assert.Equal(
+            implicitListed ? grantTypes : grantTypes.Where(grantType => grantType != GrantTypes.Implicit),
+            document.GrantTypesSupported);
+    }
+
+    /// <summary>
+    /// The response types the document lists are exactly those the authorization endpoint accepts from some client of
+    /// the tenant: a value listed and refused tells a client the server supports a flow it will not run, and a value
+    /// accepted and not listed hides one it does. The server makes up every response type, the none flow included, as
+    /// a host enabling the implicit and none flows does; the client is registered for all of them and states no
+    /// profile, so only the tenant's profile decides. A value counts as accepted where it passes with the response
+    /// mode the request leaves to the server or with jwt, which a profile requiring a signed response asks for.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None)]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
+    public async Task TheDocument_ListsExactlyTheResponseTypesTheAuthorizationEndpointAccepts(ClientSecurityProfile profile)
+    {
+        IAuthorizationResponseBuilder[] builders =
+        [
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Code),
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.Token),
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.IdToken),
+            Mock.Of<IAuthorizationResponseBuilder>(b => b.ResponseType == ResponseTypes.None),
+        ];
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+        var validator = new FlowTypeValidator(Mock.Of<ILogger<FlowTypeValidator>>(), builders);
+        var everyResponseType = EveryResponseType.Select(responseType => responseType.Split(' ')).ToArray();
+
+        async Task<bool> AcceptedAsync(string[] responseType)
+        {
+            foreach (var responseMode in new[] { null, ResponseModes.Jwt })
+            {
+                var context = new AuthorizationValidationContext(new AuthorizationRequest
+                {
+                    ClientId = TestConstants.DefaultClientId,
+                    ResponseType = responseType,
+                    ResponseMode = responseMode,
+                })
+                {
+                    ClientInfo = new ClientInfo(TestConstants.DefaultClientId) { AllowedResponseTypes = everyResponseType },
+                };
+
+                if (await validator.ValidateAsync(tenant, context) is null)
+                    return true;
+            }
+
+            return false;
+        }
+
+        var accepted = new List<string>();
+        foreach (var responseType in everyResponseType)
+        {
+            if (await AcceptedAsync(responseType))
+                accepted.Add(string.Join(' ', responseType));
+        }
+
+        // The metadata the server builds accepts request objects, so the handler asks for the keys to encrypt one to
+        var handler = HandlerFor(KeysProviderOf(), new AuthorizationMetadataProvider(builders));
+        var document = await handler.HandleAsync(tenant);
+
+        Assert.Equal(accepted, document.ResponseTypesSupported);
+    }
+
     private const string RsaDeclaringOaep256 = nameof(RsaDeclaringOaep256);
     private const string RsaDeclaringNone = nameof(RsaDeclaringNone);
     private const string EllipticCurveDeclaringNone = nameof(EllipticCurveDeclaringNone);
@@ -223,6 +392,20 @@ public class ConfigurationHandlerTests
     /// </summary>
     private static ConfigurationHandler HandlerFor(IAuthServiceKeysProvider keys, bool requestParameterSupported = true)
     {
+        var metadata = new Mock<IAuthorizationMetadataProvider>();
+        metadata.Setup(m => m.RequestParameterSupported).Returns(requestParameterSupported);
+        return HandlerFor(keys, metadata.Object);
+    }
+
+    /// <summary>
+    /// A handler over <paramref name="metadata"/> and a server registering a fixed set of request object encryption
+    /// algorithms.
+    /// </summary>
+    private static ConfigurationHandler HandlerFor(
+        IAuthServiceKeysProvider keys,
+        IAuthorizationMetadataProvider metadata,
+        IScopesAndClaimsProvider? scopesAndClaims = null)
+    {
         var algorithms = new Mock<IJwtAlgorithmsProvider>();
         algorithms.Setup(a => a.RequestObjectEncryptionAlgValuesSupported).Returns(
         [
@@ -235,8 +418,6 @@ public class ConfigurationHandlerTests
         ]);
         algorithms.Setup(a => a.RequestObjectEncryptionEncValuesSupported)
             .Returns([EncryptionAlgorithms.ContentEncryption.Aes256Gcm]);
-        var metadata = new Mock<IAuthorizationMetadataProvider>();
-        metadata.Setup(m => m.RequestParameterSupported).Returns(requestParameterSupported);
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
         options.Setup(o => o.Value).Returns(new OidcOptions());
         var clientAuthenticator = new Mock<IClientAuthenticator>();
@@ -247,8 +428,8 @@ public class ConfigurationHandlerTests
             SingleIssuer.LicensedCatalog,
             Mock.Of<ILogoutNotifier>(),
             clientAuthenticator.Object,
-            metadata.Object,
-            Mock.Of<IScopesAndClaimsProvider>(),
+            metadata,
+            scopesAndClaims ?? Mock.Of<IScopesAndClaimsProvider>(),
             algorithms.Object,
             keys,
             [],
