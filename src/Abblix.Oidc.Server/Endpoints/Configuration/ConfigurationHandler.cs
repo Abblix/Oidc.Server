@@ -187,8 +187,9 @@ public sealed class ConfigurationHandler(
 	/// The CIBA token delivery modes of <paramref name="deliveryModes"/> the tenant's profile admits a client in. A profile
 	/// issuing sender-constrained access tokens only (FAPI 2.0 Security Profile section 5.3.2.1, FAPI 1.0 Part 2 section
 	/// 5.2.2) refuses every client of the tenant registered for the push mode, which the FAPI CIBA profile section 5.2.2
-	/// has the server "not support"; CIBA Core 1.0 section 4 asks the list for "one or more of" the modes, so it is left
-	/// out.
+	/// has the server "not support", so it is left out. CIBA Core 1.0 section 4 asks the list for "one or more of" the
+	/// modes: the delivery handlers the server registers include poll, which every profile admits, but under such a
+	/// profile a host that removed the poll and ping handlers is left with an empty list.
 	/// </summary>
 	private static IEnumerable<string> AdmittedTokenDeliveryModes(TenantDefinition tenant, IEnumerable<string> deliveryModes)
 	{
