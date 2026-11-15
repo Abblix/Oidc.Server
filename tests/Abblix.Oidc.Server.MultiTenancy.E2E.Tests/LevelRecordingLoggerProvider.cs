@@ -17,12 +17,12 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 internal sealed class LevelRecordingLoggerProvider : ILoggerProvider
 {
     /// <summary>
-    /// Every entry logged, with its level and message.
+    /// Every entry logged, with its level, the category of the logger that wrote it, and its message.
     /// </summary>
-    public ConcurrentQueue<(LogLevel Level, string Message)> Entries { get; } = new();
+    public ConcurrentQueue<(LogLevel Level, string Category, string Message)> Entries { get; } = new();
 
     /// <inheritdoc />
-    public ILogger CreateLogger(string categoryName) => new Recorder(Entries);
+    public ILogger CreateLogger(string categoryName) => new Recorder(Entries, categoryName);
 
     /// <inheritdoc />
     public void Dispose()
@@ -30,7 +30,9 @@ internal sealed class LevelRecordingLoggerProvider : ILoggerProvider
         // Nothing is held
     }
 
-    private sealed class Recorder(ConcurrentQueue<(LogLevel Level, string Message)> entries) : ILogger
+    private sealed class Recorder(
+        ConcurrentQueue<(LogLevel Level, string Category, string Message)> entries,
+        string category) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -42,6 +44,6 @@ internal sealed class LevelRecordingLoggerProvider : ILoggerProvider
             TState state,
             Exception? exception,
             Func<TState, Exception?, string> formatter)
-            => entries.Enqueue((logLevel, formatter(state, exception)));
+            => entries.Enqueue((logLevel, category, formatter(state, exception)));
     }
 }

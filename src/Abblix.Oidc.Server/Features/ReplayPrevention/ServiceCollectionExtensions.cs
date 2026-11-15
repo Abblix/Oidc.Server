@@ -27,11 +27,14 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The store is the one <see cref="ReplayCacheServiceCollectionExtensions.AddDistributedReplayCache"/>
-    /// registers, which a receiver of security event tokens registers too, so the server and a receiver beside it
-    /// share one store under one prefix in either order of their registrations. The server moves whatever store is
-    /// registered by then under <see cref="TenantServiceKeys.Shared"/>, unless the host registered one there, which
-    /// then serves instead, in any order.
+    /// The store keeps its reservations in the server's entity storage, through its add-if-absent, so a storage
+    /// whose add-if-absent holds across nodes makes the replay checks of every node hold too. It is registered under
+    /// <see cref="TenantServiceKeys.Shared"/> in place of the store
+    /// <see cref="ReplayCacheServiceCollectionExtensions.AddDistributedReplayCache"/> registers for a receiver of
+    /// security event tokens, so the server and a receiver beside it share it in either order of their
+    /// registrations. A store the host registered serves instead: one under the shared key in any order, or one
+    /// without a key registered before this call. A receiver's store the host decorated before this call counts as
+    /// the host's own and is kept, so the server's reservations then stay in it rather than in the entity storage.
     /// </para>
     /// <para>
     /// Idempotent, because several unrelated feature registrations call it.
@@ -51,12 +54,18 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(AlreadyRegistered.Instance);
 
-        // The store registered by now, a receiver's, the host's or the one registered here, is the shared one, unless
-        // the host registered its own under the shared key. A receiver registering after this finds the unkeyed
-        // registration below and adds nothing, so either order ends with this one store.
-        services.AddDistributedReplayCache();
-        var registered = Abblix.DependencyInjection.ServiceCollectionExtensions.RemoveAll<IReplayCache>(services)[^1];
-        services.TryAdd(AsShared(registered));
+        // The shared store is one the host registered by now, unless it registered its own under the shared key;
+        // otherwise it is the store over the entity storage, in place of the one a receiver registered by now. A
+        // receiver registering after this finds the unkeyed registration below and adds nothing, so either order ends
+        // with this one store.
+        services.AddEntityStorage();
+        var registered = Abblix.DependencyInjection.ServiceCollectionExtensions.RemoveAll<IReplayCache>(services);
+        services.TryAdd(registered is [.., var last] && !ReplayCacheServiceCollectionExtensions.IsDefaultStore(last)
+            ? AsShared(last)
+            : ServiceDescriptor.KeyedSingleton<IReplayCache>(
+                TenantServiceKeys.Shared,
+                (provider, _) => provider.CreateService<EntityStorageReplayCache>(
+                    Dependency.Override(ReplayCacheServiceCollectionExtensions.CacheKeyPrefix))));
         services.AddSingleton<IReplayCache>(
             provider => provider.GetRequiredKeyedService<IReplayCache>(TenantServiceKeys.Shared));
 

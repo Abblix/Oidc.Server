@@ -27,7 +27,7 @@ internal static class ClientRegistrationValidationServiceCollectionExtensions
     {
         // compose ClientRegistrationContext validation as a pipeline of several IClientRegistrationContextValidator
         services.TryAddEnumerable([
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, InitialAccessTokenValidator>(),
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, InitialAccessTokenContextValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, ClientIdValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, RedirectUrisValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, DynamicClientManagement.Validation.PostLogoutRedirectUrisValidator>(),

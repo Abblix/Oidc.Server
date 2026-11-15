@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
@@ -21,7 +22,10 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// <c>registration_client_uri</c> filled in) on success, or the JSON OAuth error on failure.
 /// </summary>
 /// <param name="uriBuilder">Builds the <c>registration_client_uri</c> for the client.</param>
-public class ReadClientResponseFormatter(RegistrationClientUriBuilder uriBuilder) : IReadClientResponseFormatter<IResult>
+/// <param name="tenantAccessor">Names the tenant the request is served at, whose issuer is the realm of a bare challenge.</param>
+public class ReadClientResponseFormatter(
+    RegistrationClientUriBuilder uriBuilder,
+    ITenantAccessor tenantAccessor) : IReadClientResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(ClientRequest request, Result<ReadClientSuccessfulResponse, OidcError> response)
@@ -32,5 +36,6 @@ public class ReadClientResponseFormatter(RegistrationClientUriBuilder uriBuilder
                     ? uriBuilder.Build(success.ClientId)
                     : null,
             }),
-            onFailure: error => error.Format(StatusCodes.Status404NotFound)));
+            onFailure: error => error.Format(
+                StatusCodes.Status404NotFound, ClientManagementRealm.Of(error, tenantAccessor))));
 }

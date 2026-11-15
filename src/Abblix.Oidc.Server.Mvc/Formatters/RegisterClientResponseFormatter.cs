@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -22,7 +23,10 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// Provides a response formatter for client registration responses.
 /// </summary>
 /// <param name="clientUriBuilder">Builds the URL of the client's configuration endpoint.</param>
-public class RegisterClientResponseFormatter(RegistrationClientUriBuilder clientUriBuilder) : IRegisterClientResponseFormatter<ActionResult>
+/// <param name="tenantAccessor">Names the tenant the request is served at, whose issuer is the realm of a bare challenge.</param>
+public class RegisterClientResponseFormatter(
+    RegistrationClientUriBuilder clientUriBuilder,
+    ITenantAccessor tenantAccessor) : IRegisterClientResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Formats a client registration response asynchronously, converting the response model to an appropriate
@@ -45,7 +49,8 @@ public class RegisterClientResponseFormatter(RegistrationClientUriBuilder client
     {
         return Task.FromResult(response.Match(
             onSuccess: success => FormatSuccess(request, success),
-            onFailure: error => error.Format(StatusCodes.Status400BadRequest)));
+            onFailure: error => error.Format(
+                StatusCodes.Status400BadRequest, ClientManagementRealm.Of(error, tenantAccessor))));
     }
 
     private ActionResult FormatSuccess(ClientRegistrationRequest request, ClientRegistrationSuccessResponse success)

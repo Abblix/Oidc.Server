@@ -301,6 +301,48 @@ public class SecurityProfileTests
     }
 
     /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.2: "For flows that use the authorization endpoint, authorization servers
+    /// shall require the value of response_type described in [RFC6749] to be code". The Message Signing profiles keep it
+    /// (its section 5: "All provisions of the [FAPI2_Security_Profile] apply to the Message Signing Profile as well"), so
+    /// a client registered for none beside code is named under each of them, at startup as at registration.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
+    public void FindViolations_Fapi2CodePlusNone_FlagsNone(ClientSecurityProfile profile)
+    {
+        var violations = SecurityProfileConsistency.FindViolations(
+            [[ResponseTypes.Code], [ResponseTypes.None]],
+            ClientAuthenticationMethods.PrivateKeyJwt,
+            assertionAudiences: ClientAssertionAudiences.Issuer,
+            SecurityProfileRequirements.Resolve(profile));
+
+        Assert.Single(violations);
+    }
+
+    /// <summary>
+    /// The same at startup: a FAPI 2.0 tenant does not start with a client registered for none beside code, and starts
+    /// with the same client registered for code alone.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Check_Fapi2ClientRegisteredForNone_Refuses(bool none)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedResponseTypes = none ? [[ResponseTypes.Code], [ResponseTypes.None]] : [[ResponseTypes.Code]],
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        };
+
+        Assert.Equal(none, Check(Tenant(ClientSecurityProfile.Fapi2, client)).Count > 0);
+    }
+
+    /// <summary>
     /// FAPI 2.0 section 5.3.2.2 binds the response type "for flows that use the authorization endpoint", and RFC 7591
     /// section 2 defines response_types as those "the client can use at the authorization endpoint". A client
     /// registering none never uses it, as a resource server calling only introspection or a client of the client
@@ -330,21 +372,25 @@ public class SecurityProfileTests
     [Fact]
     public void Check_Fapi2_AdmitsClientsThatNeverUseTheAuthorizationEndpoint()
     {
+        // At the RS256 defaults of the ID token and authorization response algorithms: neither JWT is ever issued to
+        // these clients, so neither algorithm is judged. The one whose grant types are left unset has the
+        // authorization code grant, whose code only the authorization endpoint it is closed to hands out
         var resourceServer = new ClientInfo("resource-server")
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             AllowedGrantTypes = [],
             AllowedResponseTypes = [],
-            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
-            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        };
+        var defaultGrants = new ClientInfo("default-grants")
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedResponseTypes = [],
         };
         var machine = new ClientInfo("machine")
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             AllowedGrantTypes = [GrantTypes.ClientCredentials],
             AllowedResponseTypes = [],
-            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
-            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         };
         var hybrid = new ClientInfo("hybrid")
         {
@@ -354,9 +400,9 @@ public class SecurityProfileTests
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         };
 
-        Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi2, resourceServer, machine)));
+        Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi2, resourceServer, defaultGrants, machine)));
 
-        var refusals = Check(Tenant(ClientSecurityProfile.Fapi2, resourceServer, machine, hybrid));
+        var refusals = Check(Tenant(ClientSecurityProfile.Fapi2, resourceServer, defaultGrants, machine, hybrid));
         Assert.NotEmpty(refusals);
         Assert.All(refusals, refusal => Assert.Contains("Client 'hybrid'", refusal.Message));
     }
@@ -958,6 +1004,105 @@ public class SecurityProfileTests
         Assert.Empty(SecurityProfileConsistency.FindSigningAlgorithmViolations(conformant, requirements));
         Assert.Empty(SecurityProfileConsistency.FindSigningAlgorithmViolations(
             everyOneRs256, SecurityProfileRequirements.Resolve(ClientSecurityProfile.None)));
+    }
+
+    /// <summary>
+    /// An algorithm is judged only where the client can be issued the JWT it signs. A client registering no response
+    /// type is never sent an authorization response; it is issued an ID token only by a grant that answers with one at
+    /// the token endpoint: CIBA Core 1.0 section 10.1.1 answers "as
+    /// specified in Section 3.1.3.3 of [OpenID.Core]", whose response carries "id_token ID Token value associated with
+    /// the authenticated session", and this server answers the device, password, JWT bearer and refresh token grants
+    /// the same way - a refresh token issued while the client had a response type outlives a change to its
+    /// registration. The client credentials and token exchange grants are issued none, and the authorization code
+    /// grant redeems a code only the authorization endpoint hands out. So at the RS256 defaults a client of a grant
+    /// issuing an ID token is named for that algorithm alone, and any other is not named.
+    /// </summary>
+    [Theory]
+    [InlineData(new string[0], 0)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode }, 0)]
+    [InlineData(new[] { GrantTypes.ClientCredentials }, 0)]
+    [InlineData(new[] { GrantTypes.TokenExchange }, 0)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.RefreshToken }, 1)]
+    [InlineData(new[] { GrantTypes.Ciba }, 1)]
+    [InlineData(new[] { GrantTypes.DeviceAuthorization, GrantTypes.RefreshToken }, 1)]
+    [InlineData(new[] { GrantTypes.Password }, 1)]
+    [InlineData(new[] { GrantTypes.JwtBearer }, 1)]
+    [InlineData(new[] { "urn:example:params:oauth:grant-type:host-defined" }, 1)]
+    public void FindSigningAlgorithmViolations_NoResponseTypes_JudgesTheIdTokenOnlyForAGrantIssuingOne(
+        string[] grantTypes, int expected)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            AllowedResponseTypes = [],
+            AllowedGrantTypes = grantTypes,
+        };
+
+        var violations = SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            client, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced));
+
+        Assert.Equal(expected, violations.Count);
+    }
+
+    /// <summary>
+    /// A client registering no response type but back-channel logout can still be sent a logout token for a session it
+    /// joined while it had one, signed with the ID token's algorithm when it names none of its own: that algorithm is
+    /// judged.
+    /// </summary>
+    [Fact]
+    public void FindSigningAlgorithmViolations_NoResponseTypesButBackChannelLogout_JudgesTheIdToken()
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            AllowedResponseTypes = [],
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            BackChannelLogout = new BackChannelLogoutOptions(new Uri("https://client.example.com/logout")),
+        };
+
+        var violations = SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            client, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced));
+
+        Assert.Single(violations);
+    }
+
+    /// <summary>
+    /// A client registering no response type but a redirect URI can still be sent an authorization error response,
+    /// which a JWT response mode signs with the client's authorization response algorithm: that one is judged, the ID
+    /// token's is not.
+    /// </summary>
+    [Fact]
+    public void FindSigningAlgorithmViolations_NoResponseTypesButARedirectUri_JudgesTheAuthorizationResponse()
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            AllowedResponseTypes = [],
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            RedirectUris = [new Uri("https://client.example.com/cb")],
+        };
+
+        var violations = SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            client, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced));
+
+        Assert.Single(violations);
+    }
+
+    /// <summary>
+    /// A client registering any response type uses the authorization endpoint, so both algorithms stay judged at the
+    /// RS256 defaults whatever its grant types: a response type of none still joins the user's session, which a logout
+    /// token signed with the ID token's algorithm ends.
+    /// </summary>
+    [Theory]
+    [InlineData(ResponseTypes.Code)]
+    [InlineData(ResponseTypes.None)]
+    public void FindSigningAlgorithmViolations_AResponseType_JudgesBothAlgorithms(string responseType)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            AllowedResponseTypes = [[responseType]],
+            AllowedGrantTypes = [],
+        };
+
+        Assert.Equal(2, SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            client, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced)).Count);
     }
 
     /// <summary>

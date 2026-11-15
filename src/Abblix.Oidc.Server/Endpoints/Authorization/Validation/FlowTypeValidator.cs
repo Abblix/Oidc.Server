@@ -61,15 +61,6 @@ public partial class FlowTypeValidator(
             return Error(ErrorCodes.InvalidRequest, "The response type is required");
         }
 
-        // Checked before the server-support gate so a profiled client gets the profile-specific reason even on a
-        // server where Implicit Flow is enabled for other clients
-        var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
-        if (WhyTheProfileRefuses(profile, context.Request, returnsTokenFromAuthorization) is { } refusal)
-        {
-            LogResponseTypeNotAllowed(Sanitized.Values(responseType));
-            return Error(refusal.ErrorCode, refusal.Reason);
-        }
-
         // Server-level support: every part of response_type must have a registered processor. This
         // is the gate that turns Implicit Flow opt-in: when EnableImplicitFlow() is not called,
         // the token / id_token processors are absent from DI and the corresponding parts get
@@ -81,6 +72,16 @@ public partial class FlowTypeValidator(
             return Error(
                 ErrorCodes.UnsupportedResponseType,
                 $"The response type '{unsupportedPart}' is not supported by this server");
+        }
+
+        // After the server-support gate, so a part no processor serves is answered with unsupported_response_type
+        // under a profile too, and before the client's own list, so a profiled client gets the profile-specific
+        // reason even where Implicit Flow is enabled and the client is registered for it
+        var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
+        if (WhyTheProfileRefuses(profile, context.Request) is { } refusal)
+        {
+            LogResponseTypeNotAllowed(Sanitized.Values(responseType));
+            return Error(refusal.ErrorCode, refusal.Reason);
         }
 
         if (!ResponseTypeAllowed(context))
@@ -124,13 +125,13 @@ public partial class FlowTypeValidator(
     /// </summary>
     private static (string ErrorCode, string Reason)? WhyTheProfileRefuses(
         SecurityProfileRequirements profile,
-        Model.AuthorizationRequest request,
-        bool returnsTokenFromAuthorization)
+        Model.AuthorizationRequest request)
     {
-        // A code-only profile (FAPI 2.0) rejects any response type that returns a token or id_token from the
-        // authorization endpoint, regardless of what the client's AllowedResponseTypes permits - the profile
-        // tightens, the granular whitelist cannot widen it
-        if (profile.RequireCodeResponseTypeOnly && returnsTokenFromAuthorization)
+        // FAPI 2.0 Security Profile section 5.3.2.2: "authorization servers shall require the value of response_type
+        // described in [RFC6749] to be code". An implicit or hybrid response type is refused, and so is none, which
+        // returns no token, whatever the client's AllowedResponseTypes permits - the profile tightens, the granular
+        // whitelist cannot widen it
+        if (profile.RequireCodeResponseTypeOnly && !request.ResponseType.IsCodeAlone())
         {
             return (ErrorCodes.UnauthorizedClient,
                 "The security profile permits only the authorization code response type");

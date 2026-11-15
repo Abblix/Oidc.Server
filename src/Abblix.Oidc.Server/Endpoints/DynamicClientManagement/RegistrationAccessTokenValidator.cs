@@ -33,11 +33,22 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
     /// <inheritdoc />
     public async Task<Result<string, OidcError>> ValidateAsync(TenantDefinition tenant, AuthenticationHeaderValue? header, string clientId)
     {
-        if (header?.Parameter == null)
-            return Refused($"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
+        // RFC 6750 section 3.1: a request that "lacks any authentication information (e.g., the client was unaware that
+        // authentication is necessary or attempted using an unsupported authentication method)" gets no error code, so
+        // the typed marker has the challenge builder leave the error attributes out. A token in the query is not read
+        // here at all, so the request carrying one lacks it alike
+        if (header == null)
+            return new MissingAuthenticationError(
+                $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
 
         if (!header.HasScheme(TokenTypes.Bearer))
-            return Refused($"The scheme name '{header.Scheme}' is not supported");
+            return new MissingAuthenticationError($"The scheme name '{header.Scheme}' is not supported");
+
+        // RFC 6750 section 2.1: the credentials are "Bearer" 1*SP b64token, so the scheme alone is a malformed request,
+        // which section 3.1 names invalid_request, rather than a token found invalid
+        if (header.Parameter == null)
+            return new BearerRequestError(
+                $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
 
         // The audience is required and checked: it names this server, which is what reads the token. Which
         // registration the token is about is a separate question, and the subject answers it - see below.

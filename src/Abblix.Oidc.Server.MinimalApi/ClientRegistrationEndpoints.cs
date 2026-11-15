@@ -27,6 +27,12 @@ namespace Abblix.Oidc.Server.MinimalApi;
 /// </summary>
 internal static class ClientRegistrationEndpoints
 {
+    /// <summary>
+    /// The route order of an endpoint taking the requests of another media type than its sibling accepts: a request
+    /// both could take goes to the one of lower order.
+    /// </summary>
+    private const int AfterTheJsonEndpoint = 1;
+
     /// <summary>Maps the enabled endpoints of this area onto the OIDC route group.</summary>
     public static void MapClientRegistrationEndpoints(
         this RouteGroupBuilder oidcGroup, OidcOptions options, OidcRouteOptions routes)
@@ -39,16 +45,31 @@ internal static class ClientRegistrationEndpoints
                 .Accepts<Core.ClientRegistrationRequest>(MediaTypeNames.Application.Json)
                 .BoundBy(options.MaxRegistrationRequestSize);
 
+            // Routing answers a body of a media type no endpoint accepts with a 415 of its own, before any token is
+            // read, so a request of another media type is routed here instead and refused only once its token passes.
+            // Ordered after the endpoint above, which keeps every JSON body
+            oidcGroup
+                .MapPost(
+                    routes.Register,
+                    new Func<HttpContext, Task<IResult>>(ClientMetadataRefusals.RegisterClientOfAnotherMediaTypeAsync))
+                .WithOrder(AfterTheJsonEndpoint)
+                .ExcludeFromDescription();
+
             oidcGroup
                 .MapGet(routes.RegisterClient, ReadClientAsync)
                 .WithName(EndpointNames.RegisterClient);
 
-            // The update endpoint (RFC 7592 Section 2.2) binds the same model as registration, ahead of the
-            // registration access token check, so it carries the same bound.
+            // The update endpoint (RFC 7592 Section 2.2) reads the same model as registration, so it carries the same
+            // bound; the body is refused only once the registration access token passes.
             oidcGroup
                 .MapPut(routes.RegisterClient, UpdateClientAsync)
                 .Accepts<Core.ClientRegistrationRequest>(MediaTypeNames.Application.Json)
                 .BoundBy(options.MaxRegistrationRequestSize);
+
+            oidcGroup
+                .MapPut(routes.RegisterClient, ClientMetadataRefusals.UpdateClientOfAnotherMediaTypeAsync)
+                .WithOrder(AfterTheJsonEndpoint)
+                .ExcludeFromDescription();
 
             oidcGroup.MapDelete(routes.RegisterClient, RemoveClientAsync);
         }
@@ -66,7 +87,7 @@ internal static class ClientRegistrationEndpoints
         [FromServices] ITenantAccessor tenantAccessor)
     {
         if (body is not { Request: { } request })
-            return body.Refusal!;
+            return await ClientMetadataRefusals.RefuseRegistrationAsync(context, body.Refusal!);
 
         var clientRegistrationRequest = request with
         {
@@ -92,12 +113,13 @@ internal static class ClientRegistrationEndpoints
     private static async Task<IResult> UpdateClientAsync(
         ClientAuthorizationRequest authorizationRequest,
         ClientMetadataBody body,
+        HttpContext context,
         [FromServices] IUpdateClientHandler handler,
         [FromServices] IUpdateClientResponseFormatter<IResult> formatter,
         [FromServices] ITenantAccessor tenantAccessor)
     {
         if (body is not { Request: { } registrationRequest })
-            return body.Refusal!;
+            return await ClientMetadataRefusals.RefuseUpdateAsync(context, authorizationRequest, body.Refusal!);
 
         var updateRequest = new UpdateClientRequest(authorizationRequest, registrationRequest);
         var response = await handler.HandleAsync(tenantAccessor.CurrentTenant(), updateRequest);

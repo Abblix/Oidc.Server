@@ -56,4 +56,49 @@ public class ProfileSigningKeysCheckTests
             [Tenant(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature), Client(SigningAlgorithms.PS256))],
             options).ToList());
     }
+
+    /// <summary>
+    /// The algorithms are judged only where the client can be issued what they sign, by the same answer the
+    /// consistency check gives: a client of the client credentials grant alone, registering neither a response type
+    /// nor a redirect URI, is never issued an ID token or an authorization response, so its RS256 defaults pass at a
+    /// tenant holding only a P-256 key; the same client of the CIBA grant is issued ID tokens, and with a redirect URI
+    /// it can be sent a signed authorization error response, and either is refused.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.ClientCredentials, false, false)]
+    [InlineData(GrantTypes.Ciba, false, true)]
+    [InlineData(GrantTypes.ClientCredentials, true, true)]
+    public void AClientNeverIssuedTheJwt_IsNotJudgedForItsAlgorithm(string grantType, bool redirectUri, bool refused)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedResponseTypes = [],
+            AllowedGrantTypes = [grantType],
+            RedirectUris = redirectUri ? [TestConstants.DefaultRedirectUri] : [],
+        };
+
+        var refusals = new ProfileSigningKeysCheck().Check([Tenant(Ec(), client)], new OidcOptions()).ToList();
+
+        Assert.Equal(refused, refusals.Count > 0);
+    }
+
+    /// <summary>
+    /// A client of the client credentials grant registering back-channel logout can still be sent a logout token for a
+    /// session it joined while it had a response type, signed with its RS256 ID token default, which a tenant holding
+    /// only a P-256 key cannot produce: it is refused.
+    /// </summary>
+    [Fact]
+    public void AClientWithBackChannelLogout_IsJudgedForItsIdTokenAlgorithm()
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedResponseTypes = [],
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            BackChannelLogout = new BackChannelLogoutOptions(TestConstants.DefaultRedirectUri),
+        };
+
+        Assert.NotEmpty(new ProfileSigningKeysCheck().Check([Tenant(Ec(), client)], new OidcOptions()));
+    }
 }

@@ -180,14 +180,19 @@ public class IntrospectionResponseFormatterTests
     }
 
     /// <summary>
-    /// A JWT no signing key produces (ES256 under an RSA key alone) for a caller accepting JSON as well is answered with
-    /// the JSON document, the representation it named; the same caller accepting the JWT alone gets 406.
+    /// A JWT no signing key produces (ES256 under an RSA key alone), which the formatter refuses as the tenant's missing
+    /// key, for a caller accepting JSON as well is answered with the JSON document, the representation it named; the
+    /// same caller accepting the JWT alone gets 406.
     /// </summary>
     [Theory]
     [InlineData(MediaTypes.TokenIntrospectionJwt + ", " + System.Net.Mime.MediaTypeNames.Application.Json, typeof(JsonResult))]
     [InlineData(MediaTypes.TokenIntrospectionJwt, typeof(ObjectResult))]
     public async Task FormatResponseAsync_AJwtNoKeyProduces_FallsBackOnlyToAnAcceptedJson(string accept, System.Type expected)
     {
+        _clientJwtFormatter
+            .Setup(f => f.FormatAsync(It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
+            .ReturnsAsync(new ClientJwtRefusal(ClientJwtRefusalCause.NoTenantSigningKey, "no signing key"));
+
         var result = await FormatAsync(ActiveResponse(SigningAlgorithms.ES256), accept);
 
         Assert.IsType(expected, result);

@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using System.Buffers.Text;
 using System.Net;
 using System.Net.Http.Headers;
@@ -49,12 +51,15 @@ public sealed class IntrospectionDefaultAlgorithmTests
         JsonWebKeySet? clientKeys = null,
         string introspectionAlgorithm = SigningAlgorithms.None,
         string? keyManagementAlgorithm = null,
-        string? contentEncryptionAlgorithm = null)
+        string? contentEncryptionAlgorithm = null,
+        LevelRecordingLoggerProvider? logs = null)
     {
         await TestLicense.Loaded;
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
+        if (logs is not null)
+            builder.Services.AddSingleton<ILoggerProvider>(logs);
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddMemoryCache();
         builder.Services.AddAuthentication().AddCookie();
@@ -261,5 +266,34 @@ public sealed class IntrospectionDefaultAlgorithmTests
         var response = await IntrospectAsync(app);
 
         Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
+    }
+
+    /// <summary>
+    /// A tenant whose keys cannot sign the response for the client - ES256 registered at a tenant holding an RSA key
+    /// alone, or the RS256 default at one holding a P-256 key alone - is the server's misconfiguration, and is logged as
+    /// an error where the JWT is refused, as at every other endpoint; the caller is still answered 406.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ATenantWithoutTheSigningKey_IsLoggedAsAnError(bool rsaTenant)
+    {
+        var logs = new LevelRecordingLoggerProvider();
+        await using var app = rsaTenant
+            ? await StartAsync(
+                JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature),
+                SigningAlgorithms.RS256,
+                introspectionAlgorithm: SigningAlgorithms.ES256,
+                logs: logs)
+            : await StartAsync(
+                JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256),
+                SigningAlgorithms.ES256,
+                logs: logs);
+
+        var response = await IntrospectAsync(app);
+
+        Assert.Equal(HttpStatusCode.NotAcceptable, response.StatusCode);
+        var entry = Assert.Single(logs.Entries, entry => entry.Category == typeof(ClientJwtFormatter).FullName);
+        Assert.Equal(LogLevel.Error, entry.Level);
     }
 }

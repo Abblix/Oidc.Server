@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Common.Constants;
 using System;
 using System.Linq;
@@ -40,10 +41,21 @@ public class ClientJwtFormatterTests
     private readonly Mock<IClientKeysProvider> _clientKeysProvider;
     private readonly Mock<IAuthServiceKeysProvider> _serviceKeysProvider;
     private readonly ClientJwtFormatter _formatter;
+    private readonly RecordingLoggerFactory _loggers = new();
 
     private readonly JsonWebKey _signingKeyRS256;
     private readonly JsonWebKey _clientEncryptionKey;
     private readonly ClientInfo _clientInfo;
+
+    /// <summary>
+    /// The one record the formatter wrote of its refusal. Every client JWT is signed here, so this is where a refusal is
+    /// logged at the level of its cause: a warning where the client's registration or keys are wrong, an error where
+    /// the tenant has no signing key for the algorithm, which every endpoint then shows the same way.
+    /// </summary>
+    private LogRecord RefusalLogged()
+        => Assert.Single(
+            _loggers.Entries,
+            entry => entry.EventId.Id == LogEvents.TokenIssuance.ClientJwtFormatter.JwtNotIssued);
 
     /// <summary>What the client registered for UserInfo, which is also what an ID token uses.</summary>
     private static ClientJwtEncryption UserInfoPolicy(ClientInfo client)
@@ -69,6 +81,7 @@ public class ClientJwtFormatterTests
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
         _formatter = new ClientJwtFormatter(
+            _loggers.CreateLogger<ClientJwtFormatter>(),
             new ProfiledJwtIssuer(_jwtCreator.Object),
             new ClientEncryptionKeyResolver(
                 new ProfiledJwtIssuer(_jwtCreator.Object), _clientKeysProvider.Object, TimeProvider.System),
@@ -314,34 +327,63 @@ public class ClientJwtFormatterTests
     }
 
     /// <summary>
-    /// Verifies that FormatAsync throws when no service signing keys available.
-    /// Critical security check - prevents token issuance without valid signatures.
+    /// A token whose algorithm no signing key of the tenant produces is not issued, neither unsigned nor with another
+    /// key: it is refused with unauthorized_client, which each caller answers in its own protocol (RFC 6749 section 5.2
+    /// at the token endpoint), the JWT the client asked for being what cannot be issued.
     /// </summary>
-    [Fact]
-    public async Task FormatAsync_WithNoSigningKeys_ShouldThrow()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FormatAsync_AnAlgorithmNoTenantKeyProduces_IsRefused(bool anotherKey)
     {
-        // Arrange
         var token = new JsonWebToken
         {
-            Header = { Algorithm = SigningAlgorithms.RS256 },
+            Header = { Algorithm = SigningAlgorithms.ES256 },
             Payload = { Subject = "user123", Audiences = [ClientId] }
         };
-
         _serviceKeysProvider
             .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
+            .Returns((anotherKey ? new[] { _signingKeyRS256 } : []).ToAsyncEnumerable());
 
-        _clientKeysProvider
-            .Setup(p => p.GetEncryptionKeys(_clientInfo))
-            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, UserInfoPolicy(_clientInfo));
 
-        _jwtCreator
-            .Setup(c => c.IssueAsync(token, null!, null, It.IsAny<string>(), It.IsAny<string>()))
-            .ThrowsAsync(new InvalidOperationException("Signing key is required"));
+        Assert.True(result.TryGetFailure(out var refusal));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
+        Assert.Equal(
+            ClientJwtRefusalCause.NoTenantSigningKey,
+            Assert.IsType<ClientJwtRefusal>(refusal).Cause);
+        Assert.Equal(LogLevel.Error, RefusalLogged().Level);
+    }
 
-        // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, UserInfoPolicy(_clientInfo)));
+    /// <summary>
+    /// A token whose algorithm the client's security profile does not admit is refused with unauthorized_client before
+    /// anything is signed, though a tenant key produces it: FAPI 2.0 Security Profile section 5.4.1 names PS256, ES256
+    /// and EdDSA, and an unsigned token, or one naming no algorithm, is admitted by no FAPI profile.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256)]
+    [InlineData(SigningAlgorithms.None)]
+    [InlineData(null)]
+    public async Task FormatAsync_AnAlgorithmTheProfileDoesNotAdmit_IsRefused(string? algorithm)
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = algorithm },
+            Payload = { Subject = "user123", Audiences = [ClientId] }
+        };
+        var client = new ClientInfo(ClientId) { SecurityProfile = ClientSecurityProfile.Fapi2 };
+        _serviceKeysProvider
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
+
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, client, UserInfoPolicy(client));
+
+        Assert.True(result.TryGetFailure(out var refusal));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
+        Assert.Equal(
+            ClientJwtRefusalCause.AlgorithmOutsideProfile,
+            Assert.IsType<ClientJwtRefusal>(refusal).Cause);
+        Assert.Equal(LogLevel.Warning, RefusalLogged().Level);
     }
 
     /// <summary>
@@ -611,6 +653,10 @@ public class ClientJwtFormatterTests
 
         Assert.True(result.TryGetFailure(out var refusal));
         Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
+        Assert.Equal(
+            ClientJwtRefusalCause.NoClientEncryptionKey,
+            Assert.IsType<ClientJwtRefusal>(refusal).Cause);
+        Assert.Equal(LogLevel.Warning, RefusalLogged().Level);
     }
 
     /// <summary>

@@ -29,7 +29,9 @@ public interface IRegistrationAccessTokenValidator
     /// <param name="clientId">The <c>client_id</c> targeted by the management request.</param>
     /// <returns>
     /// The jti of the token when it is valid for the client, which the caller matches against the one its
-    /// registration holds; otherwise an <c>invalid_token</c> error describing the failure.
+    /// registration holds; otherwise the refusal: a <see cref="MissingAuthenticationError"/> for a request carrying no
+    /// Bearer credentials, a <see cref="BearerRequestError"/> for the Bearer scheme without a token, an
+    /// <c>invalid_token</c> error describing the failure of the token it carries.
     /// </returns>
     Task<Result<string, OidcError>> ValidateAsync(TenantDefinition tenant, AuthenticationHeaderValue? header, string clientId);
 }

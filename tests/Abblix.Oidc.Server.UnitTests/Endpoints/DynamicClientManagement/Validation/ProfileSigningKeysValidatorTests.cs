@@ -56,6 +56,81 @@ public class ProfileSigningKeysValidatorTests
         => JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
 
     /// <summary>
+    /// The algorithms a registration names are judged only where the client can be issued what they sign, the answer
+    /// startup gives: a client of the client credentials grant naming ES256 for its ID tokens and authorization
+    /// responses at a tenant holding only an RSA key pinned to PS256 is accepted while it registers neither a response
+    /// type nor a redirect URI, and refused once it registers a redirect URI, to which an error response is signed.
+    /// </summary>
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, ErrorCodes.InvalidClientMetadata)]
+    public async Task AnAlgorithmForAJwtNeverIssued_IsNotJudged(bool redirectUri, string? expectedError)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = redirectUri ? [TestConstants.DefaultRedirectUri] : null,
+            ResponseTypes = [],
+            GrantTypes = [GrantTypes.ClientCredentials],
+            IdTokenSignedResponseAlg = SigningAlgorithms.ES256,
+            AuthorizationSignedResponseAlg = SigningAlgorithms.ES256,
+        });
+
+        var result = await Validator(Rsa(SigningAlgorithms.PS256))
+            .ValidateAsync(Tenant(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
+    /// A registration with no response type is judged for its ID token algorithm by its grant types: the CIBA grant and
+    /// a grant the host defines are answered with an ID token at the token endpoint, so ES256 named for it at a tenant
+    /// holding only an RSA key pinned to PS256 is refused, and the client credentials grant is issued none, so it is
+    /// accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.Ciba, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(HostDefinedGrantType, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(GrantTypes.ClientCredentials, null)]
+    public async Task AnIdTokenAlgorithm_IsJudgedByTheGrantTypes(string grantType, string? expectedError)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            ResponseTypes = [],
+            GrantTypes = [grantType],
+            IdTokenSignedResponseAlg = SigningAlgorithms.ES256,
+        });
+
+        var result = await Validator(Rsa(SigningAlgorithms.PS256))
+            .ValidateAsync(Tenant(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    private const string HostDefinedGrantType = "urn:example:params:oauth:grant-type:host-defined";
+
+    /// <summary>
+    /// A registration of the client credentials grant naming a back-channel logout URI can still be sent a logout token,
+    /// signed with the ID token's algorithm, so ES256 named for it at a tenant holding only an RSA key pinned to PS256
+    /// is refused.
+    /// </summary>
+    [Fact]
+    public async Task AnIdTokenAlgorithmSigningLogoutTokens_IsJudged()
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            BackChannelLogoutUri = TestConstants.DefaultRedirectUri,
+            ResponseTypes = [],
+            GrantTypes = [GrantTypes.ClientCredentials],
+            IdTokenSignedResponseAlg = SigningAlgorithms.ES256,
+        });
+
+        var result = await Validator(Rsa(SigningAlgorithms.PS256))
+            .ValidateAsync(Tenant(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
     /// The algorithm given is the first of PS256 and ES256 a key of the tenant can produce: PS256 with an RSA key
     /// declaring no algorithm, ES256 with a P-256 key alone.
     /// </summary>

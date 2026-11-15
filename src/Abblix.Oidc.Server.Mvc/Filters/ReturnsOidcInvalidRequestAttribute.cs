@@ -6,10 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Validation;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Abblix.Oidc.Server.Mvc.Filters;
 
@@ -38,17 +40,24 @@ internal sealed class ReturnsOidcInvalidRequestAttribute : Attribute, IActionFil
 	/// <inheritdoc />
 	public void OnActionExecuting(ActionExecutingContext context)
 	{
-		if (context.ModelState.IsValid)
-			return;
+		if (!context.ModelState.IsValid)
+			context.Result = InvalidRequestOf(context.ModelState).Format(StatusCodes.Status400BadRequest);
+	}
 
+	/// <summary>
+	/// The <c>invalid_request</c> error a failed model-binding or validation pass is answered with.
+	/// </summary>
+	/// <param name="modelState">The state the pass left, holding at least one failure.</param>
+	internal static OidcError InvalidRequestOf(ModelStateDictionary modelState)
+	{
 		// The first failure on a parameter is its cause: a refused repetition leaves the parameter unbound, and a
 		// required one then also reports its value missing, which says nothing the first message did not
 		var messages =
-			from entry in context.ModelState
+			from entry in modelState
 			where entry.Value.Errors.Count > 0
 			select entry.Value.Errors[0].ErrorMessage;
 
-		context.Result = ErrorFactory.InvalidRequest(messages).Format(StatusCodes.Status400BadRequest);
+		return ErrorFactory.InvalidRequest(messages);
 	}
 
 	/// <inheritdoc />
