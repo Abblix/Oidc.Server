@@ -50,6 +50,7 @@ public class SecurityProfileValidator : SyncClientRegistrationContextValidator
                 request.TokenEndpointAuthMethod,
                 assertionAudiences: ClientAssertionAudiences.Issuer,
                 requirements),
+            ..FindGrantTypeViolations(request.GrantTypes, requirements),
             ..SecurityProfileConsistency.FindSigningAlgorithmViolations(
                 [
                     (Parameters.IdTokenSignedResponseAlg, IdentityTokenSignature(

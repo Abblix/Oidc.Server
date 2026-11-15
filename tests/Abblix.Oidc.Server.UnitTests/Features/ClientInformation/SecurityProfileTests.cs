@@ -323,6 +323,76 @@ public class SecurityProfileTests
     }
 
     /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.1: authorization servers "shall reject requests using the resource owner
+    /// password credentials grant". The Message Signing profiles keep it (their section 5), so a client configured for
+    /// the password grant beside the authorization code grant is named under each of them, and the same client
+    /// configured for the authorization code grant alone is not.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
+    public void FindGrantTypeViolations_Fapi2_NamesThePasswordGrant(ClientSecurityProfile profile)
+    {
+        var requirements = SecurityProfileRequirements.Resolve(profile);
+
+        Assert.Single(SecurityProfileConsistency.FindGrantTypeViolations(
+            [GrantTypes.AuthorizationCode, GrantTypes.Password], requirements));
+        Assert.Empty(SecurityProfileConsistency.FindGrantTypeViolations([GrantTypes.AuthorizationCode], requirements));
+    }
+
+    /// <summary>
+    /// The token endpoint picks the handler of a grant type ignoring case, so a client configured for the password
+    /// grant in other letters is answered by it all the same, and is named as well.
+    /// </summary>
+    [Fact]
+    public void FindGrantTypeViolations_Fapi2_NamesThePasswordGrantInAnyCase()
+        => Assert.Single(SecurityProfileConsistency.FindGrantTypeViolations(
+            [GrantTypes.Password.ToUpperInvariant()], SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi2)));
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 and Part 2 name no grant type, so the password grant is left to a client held to FAPI 1.0
+    /// Advanced, as to one held to no profile.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
+    public void FindGrantTypeViolations_OutsideFapi2_LeavesThePasswordGrant(ClientSecurityProfile profile)
+        => Assert.Empty(SecurityProfileConsistency.FindGrantTypeViolations(
+            [GrantTypes.AuthorizationCode, GrantTypes.Password], SecurityProfileRequirements.Resolve(profile)));
+
+    /// <summary>
+    /// The same at startup, whether the client is held to FAPI 2.0 by its tenant or names it itself at a tenant held to
+    /// no profile: a client configured for the password grant keeps the tenant from starting, and the same client
+    /// without it does not.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, null, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, null, false)]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, true)]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, false)]
+    public void Check_Fapi2ClientConfiguredForThePasswordGrant_Refuses(
+        ClientSecurityProfile tenantProfile,
+        ClientSecurityProfile? clientProfile,
+        bool password)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            SecurityProfile = clientProfile,
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedGrantTypes = password
+                ? [GrantTypes.AuthorizationCode, GrantTypes.Password]
+                : [GrantTypes.AuthorizationCode],
+            AllowedResponseTypes = [[ResponseTypes.Code]],
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        };
+
+        Assert.Equal(password, Check(Tenant(tenantProfile, client)).Count > 0);
+    }
+
+    /// <summary>
     /// The same at startup: a FAPI 2.0 tenant does not start with a client registered for none beside code, and starts
     /// with the same client registered for code alone.
     /// </summary>

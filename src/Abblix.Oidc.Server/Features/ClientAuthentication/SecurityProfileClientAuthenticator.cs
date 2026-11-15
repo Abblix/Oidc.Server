@@ -98,6 +98,7 @@ internal partial class SecurityProfileClientAuthenticator(
                 clientInfo.TokenEndpointAuthMethod,
                 clientInfo.ClientAssertionAudiences,
                 requirements),
+            ..SecurityProfileConsistency.FindGrantTypeViolations(clientInfo.EffectiveGrantTypes, requirements),
             ..SecurityProfileConsistency.FindAlgorithmViolations(clientInfo, requirements),
             ..SecurityProfileConsistency.FindJwksUriViolations(clientInfo.JwksUri, requirements),
             ..SecurityProfileConsistency.FindResponseModeViolations(
