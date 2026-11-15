@@ -22,9 +22,13 @@ using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
@@ -301,6 +305,84 @@ public class ConfigurationHandlerTests
         var document = await handler.HandleAsync(tenant);
 
         Assert.Equal(accepted, document.ResponseTypesSupported);
+    }
+
+    /// <summary>
+    /// The grant types the document lists are exactly those the token endpoint lets some client of the tenant use: a
+    /// client configured for a grant and refused where it authenticates is issued nothing by it, so a listed grant
+    /// that refuses every client tells a client the server supports a grant it will not run. FAPI 2.0 Security Profile
+    /// section 5.3.2.1 has the server "reject requests using the resource owner password credentials grant", and a
+    /// client configured for that grant does not authenticate at a tenant held to the FAPI 2.0 family. The client
+    /// authenticates by mutual TLS and its ID tokens are signed PS256, so every profile admits it but for its grant.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None)]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
+    public async Task TheDocument_ListsExactlyTheGrantTypesTheTokenEndpointLetsAClientUse(ClientSecurityProfile profile)
+    {
+        string[] grantTypes =
+        [
+            GrantTypes.AuthorizationCode,
+            GrantTypes.RefreshToken,
+            GrantTypes.ClientCredentials,
+            GrantTypes.Password,
+        ];
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+
+        var accepted = new List<string>();
+        foreach (var grantType in grantTypes)
+        {
+            var client = new ClientInfo(TestConstants.DefaultClientId)
+            {
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
+                AllowedGrantTypes = [grantType],
+                AllowedResponseTypes = [],
+                IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+                AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            };
+            var authenticated = await AuthenticatorOver(client).TryAuthenticateClientAsync(tenant, new ClientRequest());
+            if (authenticated.TryGetSuccess(out _))
+                accepted.Add(grantType);
+        }
+
+        var scopesAndClaims = new Mock<IScopesAndClaimsProvider>();
+        scopesAndClaims.Setup(p => p.GrantTypesSupported).Returns(grantTypes);
+        var handler = HandlerFor(
+            Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
+            Mock.Of<IAuthorizationMetadataProvider>(),
+            scopesAndClaims.Object);
+
+        var document = await handler.HandleAsync(tenant);
+
+        Assert.Equal(accepted, document.GrantTypesSupported);
+    }
+
+    /// <summary>
+    /// The profile check every client meets where it authenticates at the token endpoint, over an authenticator whose
+    /// credential check <paramref name="client"/> passes. The service tokens are signed PS256, which every profile
+    /// admits.
+    /// </summary>
+    private static SecurityProfileClientAuthenticator AuthenticatorOver(ClientInfo client)
+    {
+        var inner = new Mock<IClientAuthenticator>();
+        inner.Setup(a => a.TryAuthenticateClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<ClientRequest>()))
+            .ReturnsAsync(client);
+        var options = new OidcOptions();
+        options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+        options.ServiceTokens.RefreshToken.Signing.Algorithm = SigningAlgorithms.PS256;
+
+        return new SecurityProfileClientAuthenticator(
+            inner.Object,
+            NullLogger<SecurityProfileClientAuthenticator>.Instance,
+            new ClientEncryptionKeyResolver(
+                new ProfiledJwtIssuer(Mock.Of<IJsonWebTokenCreator>(MockBehavior.Strict)),
+                Mock.Of<IClientKeysProvider>(MockBehavior.Strict),
+                TimeProvider.System),
+            Options.Create(options));
     }
 
     private const string RsaDeclaringOaep256 = nameof(RsaDeclaringOaep256);

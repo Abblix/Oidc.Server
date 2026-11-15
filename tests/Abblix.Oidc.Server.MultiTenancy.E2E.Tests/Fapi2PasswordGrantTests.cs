@@ -177,6 +177,27 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The discovery document lists the password grant where the token endpoint lets a client use it: at the tenant
+    /// holding its clients to no profile and not at the one held to FAPI 2.0 (OpenID Connect Discovery 1.0 section 3,
+    /// RFC 8414 section 2: the grant types "that this authorization server supports").
+    /// </summary>
+    [Theory]
+    [InlineData(Globex, true)]
+    [InlineData(Acme, false)]
+    public async Task TheDiscoveryDocument_ListsThePasswordGrantOnlyWhereTheTokenEndpointRunsIt(string tenant, bool listed)
+    {
+        var document = JsonNode.Parse(await _http!.GetStringAsync(
+            tenant + "/.well-known/openid-configuration", TestContext.Current.CancellationToken))!;
+        var grantTypes = document[ConfigurationResponse.Parameters.GrantTypesSupported]!.AsArray()
+            .Select(value => value!.GetValue<string>())
+            .ToArray();
+
+        // The grant a client of either tenant can use, so an empty or missing list cannot pass the row that lists none
+        Assert.Contains(GrantTypes.AuthorizationCode, grantTypes);
+        Assert.Equal(listed, grantTypes.Contains(GrantTypes.Password));
+    }
+
+    /// <summary>
     /// A registration for the password grant beside the authorization code grant is refused at the FAPI 2.0 tenant
     /// with invalid_client_metadata, and registered there without it; at the tenant holding its clients to no profile
     /// it is registered as it stands.

@@ -169,12 +169,16 @@ public sealed class ConfigurationHandler(
 	/// client registers for a response type returning a token or an ID token from the authorization endpoint (RFC 7591
 	/// section 2.1), and a profile requiring the code response type (FAPI 2.0 Security Profile section 5.3.2.2) refuses
 	/// every such response type for every client of the tenant, so OpenID Connect Discovery 1.0 section 3 and RFC 8414
-	/// section 2, which list the grant types "that this authorization server supports", do not list it.
+	/// section 2, which list the grant types "that this authorization server supports", do not list it. Nor a grant
+	/// type the profile refuses a client configured for, such as the password grant FAPI 2.0 Security Profile section
+	/// 5.3.2.1 has the server "reject": no client of the tenant authenticates with it.
 	/// </summary>
 	private static IEnumerable<string> AdmittedGrantTypes(TenantDefinition tenant, IEnumerable<string> grantTypes)
 	{
 		var profile = SecurityProfileRequirements.For(tenant, client: null);
-		return grantTypes.Where(grantType => !profile.RequireCodeResponseTypeOnly || grantType != GrantTypes.Implicit);
+		return grantTypes.Where(grantType =>
+			(!profile.RequireCodeResponseTypeOnly || grantType != GrantTypes.Implicit) &&
+			SecurityProfileConsistency.FindGrantTypeViolations([grantType], profile).Count == 0);
 	}
 
 	/// <summary>
