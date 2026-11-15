@@ -92,7 +92,7 @@ partial class PushModeCompletionHandler
         EventId = LogEvents.Device.PushModeCompletionHandler.DeliveryRefusedByProfile,
         Level = LogLevel.Warning,
         Message = "The security profile of client {ClientId} does not admit the push mode, so the request " +
-                  "auth_req_id {AuthReqId} was answered with access_denied and no tokens were issued")]
+                  "auth_req_id {AuthReqId} was answered with transaction_failed and no tokens were issued")]
     private partial void LogDeliveryRefusedByProfile(Fingerprint AuthReqId, string ClientId);
 
     [LoggerMessage(

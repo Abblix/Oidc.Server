@@ -29,14 +29,15 @@ public partial class AuthenticationCompletionHandlerTests
     /// FAPI 2.0 Security Profile section 5.3.2.1 and FAPI 1.0 Part 2 section 5.2.2 have the server "only issue
     /// sender-constrained access tokens", and the FAPI CIBA profile section 5.2.2 has it "not support CIBA push mode".
     /// A push request started while its client was held to no profile, and completed after the tenant's default or the
-    /// client's own profile was raised to FAPI, is answered with access_denied and no tokens are minted: a push client
-    /// never redeems at the token endpoint, where a poll or ping client would meet its profile again.
+    /// client's own profile was raised to FAPI, is answered with transaction_failed and no tokens are minted: a push
+    /// client never redeems at the token endpoint, where a poll or ping client would meet its profile again. Not
+    /// access_denied, which CIBA Core 1.0 section 12 keeps for "The end-user denied the authorization request".
     /// </summary>
     [Theory]
     [InlineData(ClientSecurityProfile.Fapi2, null)]
     [InlineData(ClientSecurityProfile.Fapi1Advanced, null)]
     [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2)]
-    public async Task CompleteAuthenticationAsync_PushMode_UnderAFapiProfile_SendsAccessDeniedAndNoTokens(
+    public async Task CompleteAuthenticationAsync_PushMode_UnderAFapiProfile_SendsTransactionFailedAndNoTokens(
         ClientSecurityProfile tenantProfile, ClientSecurityProfile? clientProfile)
     {
         var request = CreateRequestWithAuthorizationDetails(
@@ -63,7 +64,7 @@ public partial class AuthenticationCompletionHandlerTests
                 It.IsAny<string>(),
                 It.Is<IBackChannelNotificationRequest>(payload =>
                     payload is BackChannelPushErrorNotificationRequest
-                    && ((BackChannelPushErrorNotificationRequest)payload).Error == ErrorCodes.AccessDenied),
+                    && ((BackChannelPushErrorNotificationRequest)payload).Error == ErrorCodes.TransactionFailed),
                 BackchannelTokenDeliveryModes.Push),
             Times.Once);
         _notificationService.VerifyNoOtherCalls();

@@ -57,9 +57,6 @@ public partial class PushModeCompletionHandler(
     private static readonly OidcError RefusedGrant =
         new(ErrorCodes.AccessDenied, "The grant carries authorization_details that were refused");
 
-    private static readonly OidcError RefusedByProfile =
-        new(ErrorCodes.AccessDenied, "The client's security profile does not admit the push mode");
-
     private static readonly OidcError RevokedGrant =
         new(ErrorCodes.AccessDenied, "The grant was revoked");
 
@@ -243,15 +240,17 @@ public partial class PushModeCompletionHandler(
            await RefusedAsRevokedAsync(tenant, authenticationRequestId, request, clientInfo);
 
     /// <summary>
-    /// Refuses a taken request whose client its profile no longer admits in the push mode, telling the client
-    /// access_denied; answers whether it refused.
+    /// Refuses a taken request whose client its profile no longer admits in the push mode, telling the client the
+    /// transaction failed; answers whether it refused.
     /// </summary>
     /// <remarks>
     /// The client was admitted when it started the request, at the backchannel authentication endpoint, and the
     /// tenant's default or the client's own profile can be raised before the end user approves. A poll or ping client
     /// meets its profile again where it redeems the request; a push client never redeems, so this is where it does.
     /// FAPI 2.0 Security Profile section 5.3.2.1 and FAPI 1.0 Part 2 section 5.2.2 have the server "only issue
-    /// sender-constrained access tokens", which a push delivery cannot bind.
+    /// sender-constrained access tokens", which a push delivery cannot bind. CIBA Core 1.0 section 12 keeps
+    /// access_denied for "The end-user denied the authorization request" and has transaction_failed for a transaction
+    /// "unsuccessful for reasons other than those explicitly defined by access_denied and expired_token".
     /// </remarks>
     private async Task<bool> RefusedByProfileAsync(
         TenantDefinition tenant,
@@ -267,7 +266,7 @@ public partial class PushModeCompletionHandler(
         }
 
         LogDeliveryRefusedByProfile(FingerprintOf(authenticationRequestId), clientInfo.ClientId);
-        await SendErrorAsync(authenticationRequestId, request, RefusedByProfile);
+        await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
         return true;
     }
 
