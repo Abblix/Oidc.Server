@@ -61,18 +61,21 @@ public class ProfileSigningKeysCheckTests
     /// The algorithms are judged only where the client can be issued what they sign, by the same answer the
     /// consistency check gives: a client of the client credentials grant alone, registering neither a response type
     /// nor a redirect URI, is never issued an ID token or an authorization response, so its RS256 defaults pass at a
-    /// tenant holding only a P-256 key; the same client of the CIBA grant is issued ID tokens and is refused.
+    /// tenant holding only a P-256 key; the same client of the CIBA grant is issued ID tokens, and with a redirect URI
+    /// it can be sent a signed authorization error response, and either is refused.
     /// </summary>
     [Theory]
-    [InlineData(GrantTypes.ClientCredentials, false)]
-    [InlineData(GrantTypes.Ciba, true)]
-    public void AClientNeverIssuedTheJwt_IsNotJudgedForItsAlgorithm(string grantType, bool refused)
+    [InlineData(GrantTypes.ClientCredentials, false, false)]
+    [InlineData(GrantTypes.Ciba, false, true)]
+    [InlineData(GrantTypes.ClientCredentials, true, true)]
+    public void AClientNeverIssuedTheJwt_IsNotJudgedForItsAlgorithm(string grantType, bool redirectUri, bool refused)
     {
         var client = new ClientInfo(TestConstants.DefaultClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             AllowedResponseTypes = [],
             AllowedGrantTypes = [grantType],
+            RedirectUris = redirectUri ? [TestConstants.DefaultRedirectUri] : [],
         };
 
         var refusals = new ProfileSigningKeysCheck().Check([Tenant(Ec(), client)], new OidcOptions()).ToList();

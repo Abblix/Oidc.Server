@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -844,7 +845,8 @@ public class FlowTypeValidatorTests
     /// <summary>
     /// Under FAPI 2.0 a response type the server does not support is answered with the unsupported_response_type RFC
     /// 6749 section 4.1.2.1 reserves for it, not with the profile's refusal; a repeated code part is not the value code
-    /// the profile requires, and is refused by it.
+    /// the profile requires, and is refused by it even for a client registered for code, which that request matches
+    /// as a set.
     /// </summary>
     [Theory]
     [InlineData(new[] { "unknown" }, ErrorCodes.UnsupportedResponseType)]
@@ -852,7 +854,7 @@ public class FlowTypeValidatorTests
     [InlineData(new[] { ResponseTypes.Code, ResponseTypes.Code }, ErrorCodes.UnauthorizedClient)]
     public async Task ValidateAsync_Fapi2_ResponseTypeOtherThanCode(string[] responseType, string expectedError)
     {
-        var context = CreateContext(responseType, [responseType], securityProfile: ClientSecurityProfile.Fapi2);
+        var context = CreateContext(responseType, [responseType.Distinct().ToArray()], securityProfile: ClientSecurityProfile.Fapi2);
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 

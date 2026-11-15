@@ -56,6 +56,32 @@ public class ProfileSigningKeysValidatorTests
         => JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256);
 
     /// <summary>
+    /// The algorithms a registration names are judged only where the client can be issued what they sign, the answer
+    /// startup gives: a client of the client credentials grant naming ES256 for its ID tokens and authorization
+    /// responses at a tenant holding only an RSA key pinned to PS256 is accepted while it registers neither a response
+    /// type nor a redirect URI, and refused once it registers a redirect URI, to which an error response is signed.
+    /// </summary>
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, ErrorCodes.InvalidClientMetadata)]
+    public async Task AnAlgorithmForAJwtNeverIssued_IsNotJudged(bool redirectUri, string? expectedError)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = redirectUri ? [TestConstants.DefaultRedirectUri] : null,
+            ResponseTypes = [],
+            GrantTypes = [GrantTypes.ClientCredentials],
+            IdTokenSignedResponseAlg = SigningAlgorithms.ES256,
+            AuthorizationSignedResponseAlg = SigningAlgorithms.ES256,
+        });
+
+        var result = await Validator(Rsa(SigningAlgorithms.PS256))
+            .ValidateAsync(Tenant(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
     /// The algorithm given is the first of PS256 and ES256 a key of the tenant can produce: PS256 with an RSA key
     /// declaring no algorithm, ES256 with a P-256 key alone.
     /// </summary>
