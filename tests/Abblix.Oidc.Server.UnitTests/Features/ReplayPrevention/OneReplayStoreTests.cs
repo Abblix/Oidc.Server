@@ -13,8 +13,10 @@ using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
@@ -67,8 +69,123 @@ public class OneReplayStoreTests
 
         Assert.Equal([Prefix + Identifier], cache.Written);
         Assert.IsType<TenantReplayCache>(replayCache);
-        Assert.IsType<DistributedReplayCache>(
+        Assert.IsType<EntityStorageReplayCache>(
             provider.GetRequiredKeyedService<IReplayCache>(TenantServiceKeys.Shared));
+    }
+
+    /// <summary>
+    /// A receiver without the server keeps the store over the host's cache.
+    /// </summary>
+    [Fact]
+    public void AReceiverWithoutTheServer_KeepsTheDistributedStore()
+    {
+        var services = Host(new RecordingCache());
+        services.AddDistributedReplayCache();
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<DistributedReplayCache>(provider.GetRequiredService<IReplayCache>());
+    }
+
+    /// <summary>
+    /// A host's own store registered without a key before the server serves, whether a receiver registered the
+    /// library's store before it, after it or not at all.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(Order.ReceiverFirst)]
+    [InlineData(Order.ServerFirst)]
+    public async Task TheHostsUnkeyedStore_Serves(Order? receiver)
+    {
+        var cache = new RecordingCache();
+        var hostStore = new CountingStore();
+        var services = Host(cache);
+
+        if (receiver is Order.ReceiverFirst)
+            services.AddDistributedReplayCache();
+
+        services.AddSingleton<IReplayCache>(hostStore);
+
+        if (receiver is Order.ServerFirst)
+            services.AddDistributedReplayCache();
+
+        services.AddReplayPrevention();
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.True(await provider.GetRequiredService<IReplayCache>().TryReserveAsync(
+            Identifier, Now.AddMinutes(5), TestContext.Current.CancellationToken));
+
+        Assert.Equal([Identifier], hostStore.Reserved);
+        Assert.Empty(cache.Written);
+    }
+
+    /// <summary>
+    /// The host's entity storage keeps the reservations, whether it is registered under the shared key before or
+    /// after the server, or without a key before it.
+    /// </summary>
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task TheHostsEntityStorage_KeepsTheReservations(bool keyed, bool beforeTheServer)
+    {
+        var cache = new RecordingCache();
+        var storage = new AddIfAbsentOnlyStorage();
+        var services = Host(cache);
+
+        if (beforeTheServer)
+            Register(services, storage, keyed);
+
+        services.AddCommonServices();
+        services.AddReplayPrevention();
+
+        if (!beforeTheServer)
+            Register(services, storage, keyed);
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.True(await provider.GetRequiredService<IReplayCache>().TryReserveAsync(
+            Identifier, Now.AddMinutes(5), TestContext.Current.CancellationToken));
+
+        Assert.Equal([Prefix + Identifier], storage.Claimed);
+        Assert.Empty(cache.Written);
+
+        static void Register(IServiceCollection services, IEntityStorage storage, bool keyed)
+        {
+            if (keyed)
+                services.AddKeyedSingleton(TenantServiceKeys.Shared, storage);
+            else
+                services.AddSingleton(storage);
+        }
+    }
+
+    /// <summary>
+    /// An instance of the previous release, whose store wrote straight into the host's cache, and one of this
+    /// release, sharing that cache during a rolling upgrade, each refuse what the other reserved, and an identifier
+    /// one of them gives back is fresh to the other.
+    /// </summary>
+    [Fact]
+    public async Task ThePreviousReleasesStore_AndThisOne_ReadEachOthersReservations()
+    {
+        var cache = new RecordingCache();
+        var services = Host(cache);
+        services.AddReplayPrevention();
+        using var provider = services.BuildServiceProvider();
+
+        var current = provider.GetRequiredService<IReplayCache>();
+        var previous = new DistributedReplayCache(cache, new FakeTimeProvider(Now), Prefix);
+        var expiresAt = Now.AddMinutes(5);
+        var ct = TestContext.Current.CancellationToken;
+
+        Assert.True(await previous.TryReserveAsync("reserved-by-the-previous", expiresAt, ct));
+        Assert.False(await current.TryReserveAsync("reserved-by-the-previous", expiresAt, ct));
+
+        Assert.True(await current.TryReserveAsync("reserved-by-this", expiresAt, ct));
+        Assert.False(await previous.TryReserveAsync("reserved-by-this", expiresAt, ct));
+
+        await current.ReleaseAsync("reserved-by-the-previous", ct);
+        Assert.True(await previous.TryReserveAsync("reserved-by-the-previous", expiresAt, ct));
     }
 
     /// <summary>
