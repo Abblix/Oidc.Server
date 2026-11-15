@@ -19,6 +19,7 @@ using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi.Formatters;
@@ -48,7 +49,7 @@ public class UserInfoResponseFormatterTests
     private static async Task<HttpResultRunner.Response> FormatErrorAsync(string errorCode)
     {
         // The JWT formatter and the options serve only a successful response, which no test here formats
-        var formatter = new UserInfoResponseFormatter(TimeProvider.System, null!, new ServedBy(Served));
+        var formatter = new UserInfoResponseFormatter(TimeProvider.System, null!, new ServedBy(Served), new FapiInteractionIdResolver(NullLogger<FapiInteractionIdResolver>.Instance));
 
         Result<UserInfoFoundResponse, OidcError> response = new OidcError(errorCode, "the description");
         return await HttpResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), response));
@@ -64,7 +65,7 @@ public class UserInfoResponseFormatterTests
     [InlineData(new string[0], new[] { "Bearer" })]
     public async Task The_challenge_advertises_the_algorithms_the_error_names(string[] admitted, string[] schemes)
     {
-        var formatter = new UserInfoResponseFormatter(TimeProvider.System, null!, new ServedBy(Served));
+        var formatter = new UserInfoResponseFormatter(TimeProvider.System, null!, new ServedBy(Served), new FapiInteractionIdResolver(NullLogger<FapiInteractionIdResolver>.Instance));
         Result<UserInfoFoundResponse, OidcError> refused =
             new OidcError(ErrorCodes.InvalidToken, "presented with the Bearer scheme") { DPoPAlgorithmsAdmitted = admitted };
 
@@ -91,7 +92,7 @@ public class UserInfoResponseFormatterTests
             .Setup(f => f.FormatAsync(Served, It.IsAny<JsonWebToken>(), client, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(new OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to"));
         var formatter = new UserInfoResponseFormatter(
-            TimeProvider.System, clientJwtFormatter.Object, new ServedBy(Served));
+            TimeProvider.System, clientJwtFormatter.Object, new ServedBy(Served), new FapiInteractionIdResolver(NullLogger<FapiInteractionIdResolver>.Instance));
         Result<UserInfoFoundResponse, OidcError> found =
             new UserInfoFoundResponse(new JsonObject(), client, Served.Issuer.OriginalString)
             {
@@ -145,7 +146,7 @@ public class UserInfoResponseFormatterTests
                     encryption.KeyManagementAlgorithm == EncryptionAlgorithms.KeyManagement.RsaOaep256)))
             .ReturnsAsync("header.encrypted-key.iv.ciphertext.tag");
         var formatter = new UserInfoResponseFormatter(
-            TimeProvider.System, clientJwtFormatter.Object, new ServedBy(Served));
+            TimeProvider.System, clientJwtFormatter.Object, new ServedBy(Served), new FapiInteractionIdResolver(NullLogger<FapiInteractionIdResolver>.Instance));
         Result<UserInfoFoundResponse, OidcError> found =
             new UserInfoFoundResponse(new JsonObject(), client, Served.Issuer.OriginalString);
 
@@ -190,7 +191,7 @@ public class UserInfoResponseFormatterTests
         var clientJwtFormatter = new ClientJwtFormatter(
             NullLogger<ClientJwtFormatter>.Instance,
             issuer, new ClientEncryptionKeyResolver(issuer, clientKeys.Object, TimeProvider.System), serviceKeys.Object);
-        var formatter = new UserInfoResponseFormatter(TimeProvider.System, clientJwtFormatter, tenantAccessor);
+        var formatter = new UserInfoResponseFormatter(TimeProvider.System, clientJwtFormatter, tenantAccessor, new FapiInteractionIdResolver(NullLogger<FapiInteractionIdResolver>.Instance));
         Result<UserInfoFoundResponse, OidcError> found = new UserInfoFoundResponse(
             new System.Text.Json.Nodes.JsonObject { [Abblix.Jwt.IanaClaimTypes.Sub] = "user-1" },
             client,

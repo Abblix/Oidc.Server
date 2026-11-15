@@ -746,8 +746,8 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 9000-9119: misc - Discovery, Storage, Issuer, Session, RandomGenerator, and the stand-in provider of
-    /// user information.
+    /// Range 9000-9139: misc - Discovery, Storage, Issuer, Session, RandomGenerator, the stand-in provider of
+    /// user information, and the FAPI interaction identifier of UserInfo.
     /// </summary>
     public static class Misc
     {
@@ -821,6 +821,18 @@ internal static class LogEvents
             private const int Base = 9100;
 
             public const int NoProviderRegistered = Base + 1;
+        }
+
+        /// <summary>
+        /// <c>Endpoints/UserInfo/FapiInteractionIdResolver.cs</c> - the FAPI 1.0 interaction identifier a protected
+        /// resource answers with and logs (sub-range 9120-9139).
+        /// </summary>
+        public static class FapiInteractionIdResolver
+        {
+            private const int Base = 9120;
+
+            public const int InteractionIdAnswered = Base + 1;
+            public const int MalformedInteractionIdReplaced = Base + 2;
         }
     }
 

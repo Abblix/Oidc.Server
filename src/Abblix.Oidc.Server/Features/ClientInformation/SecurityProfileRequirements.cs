@@ -99,6 +99,16 @@ public sealed record SecurityProfileRequirements
     public bool RequireAccessTokenOutsideQuery { get; init; }
 
     /// <summary>
+    /// The profile has the protected resource answer with the <c>x-fapi-interaction-id</c> response header and log it,
+    /// as FAPI 1.0 Part 1 section 6.2.1 requires: it "shall set the response header x-fapi-interaction-id to the value
+    /// received from the corresponding FAPI client request header or to a RFC4122 UUID value if the request header was
+    /// not provided to track the interaction" and "shall log the value of x-fapi-interaction-id in the log entry".
+    /// FAPI 2.0 Security Profile has no such clause. Enforced by
+    /// <c>Endpoints.UserInfo.FapiInteractionIdResolver</c>, the library's own protected resource being UserInfo.
+    /// </summary>
+    public bool RequireFapiInteractionId { get; init; }
+
+    /// <summary>
     /// The furthest either clock window may reach under this profile, or null where the profile
     /// puts no bound on them. Read by every place that builds JWT validation parameters.
     /// </summary>
@@ -509,6 +519,7 @@ public sealed record SecurityProfileRequirements
         RequireMatchingClientIdentifiers = true,
         RequireCertificateBoundTokens = true,
         RequireAccessTokenOutsideQuery = true,
+        RequireFapiInteractionId = true,
         RequireFapiSigningAlgorithms = true,
         ForbidRsa1_5KeyManagement = true,
     };
@@ -717,6 +728,7 @@ public sealed record SecurityProfileRequirements
         RequireMatchingClientIdentifiers = true,
         RequireCertificateBoundTokens = true,
         RequireStringAudienceInClientAssertion = true,
+        RequireFapiInteractionId = true,
         RequireFapiSigningAlgorithms = true,
         ForbidRsa1_5KeyManagement = true,
         ForbidPasswordGrant = true,
@@ -858,6 +870,7 @@ public sealed record SecurityProfileRequirements
             RequireCertificateBoundTokens = RequireCertificateBoundTokens || other.RequireCertificateBoundTokens,
             RequireAccessTokenOutsideQuery =
                 RequireAccessTokenOutsideQuery || other.RequireAccessTokenOutsideQuery,
+            RequireFapiInteractionId = RequireFapiInteractionId || other.RequireFapiInteractionId,
             ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
             RequireFapiSigningAlgorithms = RequireFapiSigningAlgorithms || other.RequireFapiSigningAlgorithms,
             ForbidRsa1_5KeyManagement = ForbidRsa1_5KeyManagement || other.ForbidRsa1_5KeyManagement,
