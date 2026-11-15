@@ -842,6 +842,24 @@ public class FlowTypeValidatorTests
     }
 
     /// <summary>
+    /// Under FAPI 2.0 a response type the server does not support is answered with the unsupported_response_type RFC
+    /// 6749 section 4.1.2.1 reserves for it, not with the profile's refusal; a repeated code part is not the value code
+    /// the profile requires, and is refused by it.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { "unknown" }, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code, "unknown" }, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code, ResponseTypes.Code }, ErrorCodes.UnauthorizedClient)]
+    public async Task ValidateAsync_Fapi2_ResponseTypeOtherThanCode(string[] responseType, string expectedError)
+    {
+        var context = CreateContext(responseType, [responseType], securityProfile: ClientSecurityProfile.Fapi2);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
     /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require the response_type value code id_token, or the
     /// response_type value code in conjunction with the response_mode value jwt". Every other combination is
     /// refused for a client held to that profile, with the unsupported_response_type RFC 6749 section 4.1.2.1 names,
