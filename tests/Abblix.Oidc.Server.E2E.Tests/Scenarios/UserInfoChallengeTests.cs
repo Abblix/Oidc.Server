@@ -51,16 +51,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        ChallengeAssert.Carries(
-            dpop,
-            TokenTypes.DPoP,
-            (Realm, discovery.Issuer.OriginalString),
-            (Algorithms, null));
-        ChallengeAssert.Carries(
-            bearer,
-            TokenTypes.Bearer,
-            (Realm, discovery.Issuer.OriginalString));
+        AssertChallenges(response, discovery);
     }
 
     /// <summary>
@@ -75,18 +66,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await SendAsync(client, discovery, TokenTypes.Bearer, "INVALID_TOKEN", proof: null);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        ChallengeAssert.Carries(
-            bearer,
-            TokenTypes.Bearer,
-            (Realm, discovery.Issuer.OriginalString),
-            (Error, ErrorCodes.InvalidToken),
-            (ErrorDescription, null));
-        ChallengeAssert.Carries(
-            dpop,
-            TokenTypes.DPoP,
-            (Realm, discovery.Issuer.OriginalString),
-            (Algorithms, null));
+        AssertChallenges(response, discovery, bearerError: ErrorCodes.InvalidToken);
     }
 
     /// <summary>
@@ -106,18 +86,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        ChallengeAssert.Carries(
-            bearer,
-            TokenTypes.Bearer,
-            (Realm, discovery.Issuer.OriginalString),
-            (Error, ErrorCodes.InvalidToken),
-            (ErrorDescription, null));
-        ChallengeAssert.Carries(
-            dpop,
-            TokenTypes.DPoP,
-            (Realm, discovery.Issuer.OriginalString),
-            (Algorithms, null));
+        AssertChallenges(response, discovery, bearerError: ErrorCodes.InvalidToken);
     }
 
     /// <summary>
@@ -135,18 +104,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await SendAsync(client, discovery, TokenTypes.DPoP, accessToken, proof);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        ChallengeAssert.Carries(
-            dpop,
-            TokenTypes.DPoP,
-            (Realm, discovery.Issuer.OriginalString),
-            (Error, ErrorCodes.InvalidDPoPProof),
-            (ErrorDescription, null),
-            (Algorithms, null));
-        ChallengeAssert.Carries(
-            bearer,
-            TokenTypes.Bearer,
-            (Realm, discovery.Issuer.OriginalString));
+        AssertChallenges(response, discovery, dpopError: ErrorCodes.InvalidDPoPProof);
     }
 
     /// <summary>
@@ -164,18 +122,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await SendAsync(client, discovery, TokenTypes.Bearer, accessToken, proof: null);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        ChallengeAssert.Carries(
-            bearer,
-            TokenTypes.Bearer,
-            (Realm, discovery.Issuer.OriginalString),
-            (Error, ErrorCodes.InvalidToken),
-            (ErrorDescription, null));
-        ChallengeAssert.Carries(
-            dpop,
-            TokenTypes.DPoP,
-            (Realm, discovery.Issuer.OriginalString),
-            (Algorithms, null));
+        AssertChallenges(response, discovery, bearerError: ErrorCodes.InvalidToken);
     }
 
     /// <summary>
@@ -196,19 +143,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await SendAsync(client, discovery, TokenTypes.Bearer, accessToken, proof: null);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        ChallengeAssert.Carries(
-            bearer,
-            TokenTypes.Bearer,
-            (Realm, discovery.Issuer.OriginalString),
-            (Error, ErrorCodes.InsufficientScope),
-            (ErrorDescription, null),
-            (Scope, Scopes.OpenId));
-        ChallengeAssert.Carries(
-            dpop,
-            TokenTypes.DPoP,
-            (Realm, discovery.Issuer.OriginalString),
-            (Algorithms, null));
+        AssertChallenges(response, discovery, bearerError: ErrorCodes.InsufficientScope, bearerScope: Scopes.OpenId);
     }
 
     /// <summary>
@@ -230,20 +165,7 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        ChallengeAssert.Carries(
-            dpop,
-            TokenTypes.DPoP,
-            (Realm, discovery.Issuer.OriginalString),
-            (Error, ErrorCodes.InvalidRequest),
-            (ErrorDescription, null),
-            (Algorithms, null));
-        ChallengeAssert.Carries(
-            bearer,
-            TokenTypes.Bearer,
-            (Realm, discovery.Issuer.OriginalString),
-            (Error, ErrorCodes.InvalidRequest),
-            (ErrorDescription, null));
+        AssertChallenges(response, discovery, dpopError: ErrorCodes.InvalidRequest, bearerError: ErrorCodes.InvalidRequest);
     }
 
     /// <summary>
@@ -272,21 +194,33 @@ public class UserInfoChallengeTests(TestFactory factory) : DPoPTestBase(factory)
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var (dpop, bearer) = DualChallengeReader.Challenges(response);
-        ChallengeAssert.Carries(
-            dpop,
-            TokenTypes.DPoP,
-            (Realm, discovery.Issuer.OriginalString),
-            (Error, ErrorCodes.InvalidRequest),
-            (ErrorDescription, null),
-            (Algorithms, null));
-        ChallengeAssert.Carries(
-            bearer,
-            TokenTypes.Bearer,
-            (Realm, discovery.Issuer.OriginalString),
-            (Error, ErrorCodes.InvalidRequest),
-            (ErrorDescription, null));
+        AssertChallenges(response, discovery, dpopError: ErrorCodes.InvalidRequest, bearerError: ErrorCodes.InvalidRequest);
     }
+
+    /// <summary>
+    /// Both challenges of the refusal, each carrying exactly its parameters: the realm on both and the algorithms on the
+    /// DPoP one, the error attributes only on a challenge given an error code, and the scope only where it is given.
+    /// </summary>
+    private static void AssertChallenges(
+        HttpResponseMessage response,
+        DiscoveryDocument discovery,
+        string? dpopError = null,
+        string? bearerError = null,
+        string? bearerScope = null)
+    {
+        var realm = (Realm, (string?)discovery.Issuer.OriginalString);
+        var (dpop, bearer) = DualChallengeReader.Challenges(response);
+        ChallengeAssert.Carries(dpop, TokenTypes.DPoP, [realm, (Algorithms, null), .. ErrorAttributes(dpopError)]);
+        ChallengeAssert.Carries(
+            bearer, TokenTypes.Bearer, [realm, .. ErrorAttributes(bearerError), .. ScopeAttribute(bearerScope)]);
+    }
+
+    private static (string Name, string? Value)[] ErrorAttributes(string? error)
+        => error is null ? [] : [(Error, error), (ErrorDescription, null)];
+
+    private static (string Name, string? Value)[] ScopeAttribute(string? scope)
+        => scope is null ? [] : [(Scope, scope)];
+
 
     private async Task<(HttpClient Client, DiscoveryDocument Discovery)> EndpointAsync()
     {

@@ -136,8 +136,12 @@ public sealed class RegistrationBodyBoundOnKestrelTests : IAsyncLifetime
         else
         {
             var registered = await RegisterClientAsync(routes.Register, initialAccessToken);
-            path = new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>()).PathAndQuery;
-            credentials = registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>();
+            var clientUri = registered[ResponseMembers.RegistrationClientUri]?.GetValue<string>();
+            var accessToken = registered[ResponseMembers.RegistrationAccessToken]?.GetValue<string>();
+            Assert.NotNull(clientUri);
+            Assert.NotNull(accessToken);
+            path = new Uri(clientUri).PathAndQuery;
+            credentials = accessToken;
         }
 
         using var request = Request(new HttpMethod(method), path);
