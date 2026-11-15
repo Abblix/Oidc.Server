@@ -53,7 +53,8 @@ public class SecurityProfileValidator : SyncClientRegistrationContextValidator
             ..SecurityProfileConsistency.FindSigningAlgorithmViolations(
                 [
                     (Parameters.IdTokenSignedResponseAlg, IdentityTokenSignature(
-                        request.ResponseTypes, request.GrantTypes, request.IdTokenSignedResponseAlg)),
+                        request.ResponseTypes, request.GrantTypes, request.BackChannelLogoutUri is not null,
+                        request.IdTokenSignedResponseAlg)),
                     (Parameters.AuthorizationSignedResponseAlg, AuthorizationResponseSignature(
                         request.ResponseTypes, request.RedirectUris ?? [], request.AuthorizationSignedResponseAlg)),
                     (Parameters.UserInfoSignedResponseAlg, UserInfoSignature(

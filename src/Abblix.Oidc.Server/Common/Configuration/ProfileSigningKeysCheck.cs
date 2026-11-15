@@ -47,7 +47,8 @@ public sealed class ProfileSigningKeysCheck(IKeyCustodian? custodian = null) : I
     [
         // Only what can be issued to the client, by the answer the consistency check judges the profile's algorithms by
         (nameof(ClientInfo.IdentityTokenSignedResponseAlgorithm), SecurityProfileConsistency.IdentityTokenSignature(
-            client.EffectiveResponseTypes, client.EffectiveGrantTypes, client.IdentityTokenSignedResponseAlgorithm)),
+            client.EffectiveResponseTypes, client.EffectiveGrantTypes, client.BackChannelLogout is not null,
+            client.IdentityTokenSignedResponseAlgorithm)),
         (nameof(ClientInfo.AuthorizationSignedResponseAlgorithm), SecurityProfileConsistency.AuthorizationResponseSignature(
             client.EffectiveResponseTypes, client.RedirectUris, client.AuthorizationSignedResponseAlgorithm)),
         (nameof(ClientInfo.LogoutTokenSignedResponseAlgorithm), client.LogoutTokenSignedResponseAlgorithm),

@@ -285,7 +285,8 @@ public static class SecurityProfileConsistency
         => FindSigningAlgorithmViolations(
             [
                 (nameof(ClientInfo.IdentityTokenSignedResponseAlgorithm), IdentityTokenSignature(
-                    client.EffectiveResponseTypes, client.EffectiveGrantTypes, client.IdentityTokenSignedResponseAlgorithm)),
+                    client.EffectiveResponseTypes, client.EffectiveGrantTypes, client.BackChannelLogout is not null,
+                    client.IdentityTokenSignedResponseAlgorithm)),
                 (nameof(ClientInfo.AuthorizationSignedResponseAlgorithm), AuthorizationResponseSignature(
                     client.EffectiveResponseTypes, client.RedirectUris, client.AuthorizationSignedResponseAlgorithm)),
                 (nameof(ClientInfo.LogoutTokenSignedResponseAlgorithm), client.LogoutTokenSignedResponseAlgorithm),
@@ -463,16 +464,22 @@ public static class SecurityProfileConsistency
     /// specified in Section 3.1.3.3 of [OpenID.Core]", and so do the device, password, JWT bearer and refresh token
     /// grants here - a refresh token issued while the client had a response type outlives a change to its
     /// registration. The authorization code grant redeems a code only the authorization endpoint hands out, so it
-    /// does not count by itself.
+    /// does not count by itself. A client registering back-channel logout is judged as well: a session it joined
+    /// while it had a response type outlives a change to its registration, and the logout token ending that session
+    /// is signed with the ID token's algorithm unless the client names one for it.
     /// </summary>
     /// <param name="responseTypes">The response-type combinations the client is registered for.</param>
     /// <param name="grantTypes">The grant types the client is registered for.</param>
+    /// <param name="backChannelLogout">Whether the client registers a back-channel logout URI.</param>
     /// <param name="algorithm">The algorithm the client's ID tokens are signed with.</param>
     internal static string? IdentityTokenSignature(
         IReadOnlyCollection<string[]> responseTypes,
         IEnumerable<string> grantTypes,
+        bool backChannelLogout,
         string? algorithm)
-        => responseTypes.Count > 0 || grantTypes.Any(IssuesIdentityTokensByItself) ? algorithm : null;
+        => responseTypes.Count > 0 || backChannelLogout || grantTypes.Any(IssuesIdentityTokensByItself)
+            ? algorithm
+            : null;
 
     /// <summary>
     /// The signature algorithm the client's authorization responses are judged by, or null where it is sent none. A

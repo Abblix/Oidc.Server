@@ -1008,8 +1008,8 @@ public class SecurityProfileTests
 
     /// <summary>
     /// An algorithm is judged only where the client can be issued the JWT it signs. A client registering no response
-    /// type is never sent an authorization response, nor joins a session that a logout token would end; it is issued an
-    /// ID token only by a grant that answers with one at the token endpoint: CIBA Core 1.0 section 10.1.1 answers "as
+    /// type is never sent an authorization response; it is issued an ID token only by a grant that answers with one at
+    /// the token endpoint: CIBA Core 1.0 section 10.1.1 answers "as
     /// specified in Section 3.1.3.3 of [OpenID.Core]", whose response carries "id_token ID Token value associated with
     /// the authenticated session", and this server answers the device, password, JWT bearer and refresh token grants
     /// the same way - a refresh token issued while the client had a response type outlives a change to its
@@ -1040,6 +1040,27 @@ public class SecurityProfileTests
             client, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced));
 
         Assert.Equal(expected, violations.Count);
+    }
+
+    /// <summary>
+    /// A client registering no response type but back-channel logout can still be sent a logout token for a session it
+    /// joined while it had one, signed with the ID token's algorithm when it names none of its own: that algorithm is
+    /// judged.
+    /// </summary>
+    [Fact]
+    public void FindSigningAlgorithmViolations_NoResponseTypesButBackChannelLogout_JudgesTheIdToken()
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            AllowedResponseTypes = [],
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            BackChannelLogout = new BackChannelLogoutOptions(new Uri("https://client.example.com/logout")),
+        };
+
+        var violations = SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            client, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced));
+
+        Assert.Single(violations);
     }
 
     /// <summary>

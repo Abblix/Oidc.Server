@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -169,6 +170,28 @@ public class SecurityProfileValidatorTests
         var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
 
         Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
+    /// A registration naming no response type but a back-channel logout URI can still be sent a logout token for a
+    /// session the client joined before its registration changed, signed with the ID token's algorithm, so RS256 named
+    /// for the ID token is refused.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi2_NoResponseTypesButBackChannelLogout_JudgesTheIdToken()
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            BackChannelLogoutUri = new Uri("https://client.example.com/logout"),
+            ResponseTypes = [],
+            GrantTypes = [GrantTypes.ClientCredentials],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdTokenSignedResponseAlg = SigningAlgorithms.RS256,
+        });
+
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
     }
 
     /// <summary>

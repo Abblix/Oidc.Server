@@ -82,4 +82,23 @@ public class ProfileSigningKeysCheckTests
 
         Assert.Equal(refused, refusals.Count > 0);
     }
+
+    /// <summary>
+    /// A client of the client credentials grant registering back-channel logout can still be sent a logout token for a
+    /// session it joined while it had a response type, signed with its RS256 ID token default, which a tenant holding
+    /// only a P-256 key cannot produce: it is refused.
+    /// </summary>
+    [Fact]
+    public void AClientWithBackChannelLogout_IsJudgedForItsIdTokenAlgorithm()
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedResponseTypes = [],
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            BackChannelLogout = new BackChannelLogoutOptions(TestConstants.DefaultRedirectUri),
+        };
+
+        Assert.NotEmpty(new ProfileSigningKeysCheck().Check([Tenant(Ec(), client)], new OidcOptions()));
+    }
 }
