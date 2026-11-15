@@ -84,8 +84,9 @@ public static class TestConstants
     /// Authorization header.</summary>
     public const string ClientSecretBasicClientId = "e2e-client-secret-basic";
 
-    /// <summary>Client restricted to the client_credentials grant that authenticates with a JWT signed by its
-    /// secret (<c>client_secret_jwt</c>, OpenID Connect Core 1.0 section 9), so a test can see the token endpoint
+    /// <summary>Client restricted to the client_credentials and authorization_code grants that authenticates with
+    /// a JWT signed by its secret (<c>client_secret_jwt</c>, OpenID Connect Core 1.0 section 9), so a test can see
+    /// the token endpoint
     /// and the pushed authorization request endpoint judge the assertion's audience as RFC 10070 sections 4 and 5
     /// require.</summary>
     public const string ClientSecretJwtClientId = "e2e-client-secret-jwt";

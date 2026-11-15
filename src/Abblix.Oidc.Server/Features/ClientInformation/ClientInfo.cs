@@ -378,9 +378,11 @@ public record ClientInfo(string ClientId)
     /// <remarks>
     /// RFC 10070 makes the authorization server "reject any JWT that does not contain its issuer identifier as its sole
     /// audience value", which a client written to Core's "The Audience SHOULD be the URL of the Authorization Server's
-    /// Token Endpoint", or to RFC 7523's array, does not meet. Section 6 of the same RFC expects such clients to need time
-    /// to change, and the values beyond <see cref="ClientAssertionAudiences.Issuer"/> are that time, given to one client
-    /// at a time while every other client stays held to the rule.
+    /// Token Endpoint", or to RFC 7523's array, does not meet. A value beyond
+    /// <see cref="ClientAssertionAudiences.Issuer"/> departs from that MUST for the one client granted it, while every
+    /// other client stays held to the rule. Section 6 of that RFC permits no such departure: it only warns that such
+    /// clients "may not interoperate with authorization servers that strictly enforce the updated requirements", which
+    /// is why a host may choose it.
     /// <para>
     /// A value left unset, zero, reads as <see cref="ClientAssertionAudiences.Issuer"/>, so a host that stores its
     /// clients itself and has no value for this one holds the client to the rule. A configured set without

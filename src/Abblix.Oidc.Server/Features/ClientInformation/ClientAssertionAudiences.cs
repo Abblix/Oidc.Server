@@ -17,8 +17,10 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// its sole audience value", so <see cref="Issuer"/> alone is the value every client is held to: an unset set reads as
 /// it, and a configured set without it is refused at startup. <see cref="TokenEndpoint"/>,
 /// <see cref="BackChannelAuthenticationEndpoint"/>, <see cref="PushedAuthorizationRequestEndpoint"/> and
-/// <see cref="AllowArray"/> are the transition section 6 of the same RFC expects, granted by the host to a client that
-/// cannot change yet.
+/// <see cref="AllowArray"/> each depart from that MUST for the client granted them. Section 6 of the same RFC
+/// permits no such departure; it only warns that "some clients implementing earlier versions may not interoperate
+/// with authorization servers that strictly enforce the updated requirements", which is the reason a host may choose
+/// to grant one to a client that cannot change yet.
 /// </remarks>
 [Flags]
 public enum ClientAssertionAudiences
@@ -84,9 +86,10 @@ public enum ClientAssertionAudiences
     /// </summary>
     /// <remarks>
     /// RFC 10070 section 5 now has the issuer identifier "used as the sole value of the audience" and the server
-    /// "reject any such JWT that does not contain its own issuer identifier as the sole audience value", so it is
-    /// granted by the host to a client written to the replaced paragraph, and removed when the client is changed. A
-    /// client held to FAPI 2.0 cannot have it, for the reason <see cref="TokenEndpoint"/> gives.
+    /// "reject any such JWT that does not contain its own issuer identifier as the sole audience value", so granting
+    /// it departs from that MUST for this client. A host does so only to interoperate with a client written to the
+    /// replaced paragraph, and removes it when the client is changed. A client held to FAPI 2.0 cannot have it, for
+    /// the reason <see cref="TokenEndpoint"/> gives.
     /// </remarks>
     PushedAuthorizationRequestEndpoint = 1 << 4,
 }

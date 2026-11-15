@@ -65,13 +65,15 @@ public record NewClientOptions
     /// section 4 requires, as a string. A value left at zero reads as that default.
     /// </summary>
     /// <remarks>
-    /// RFC 7591 metadata has no member for it, so it is the host's to grant, never the client's to ask for. A host
-    /// widens it while the clients that register with it still write an older form, the token endpoint URL OpenID
-    /// Connect Core 1.0 section 9 recommends, the backchannel authentication endpoint URL CIBA Core 1.0 section 7.1
-    /// names and the pushed authorization request endpoint URL RFC 9126 section 2 named among them, as RFC 10070
-    /// section 6 expects such clients to need time to change. A tenant held to FAPI 2.0 gives its clients the issuer
-    /// alone whatever is set here. Applied on registration and on every RFC 7592 update, since an update builds the
-    /// client anew. A set without the issuer, or naming a value the enumeration does not define, is refused at startup.
+    /// RFC 7591 metadata has no member for it, so it is the host's to grant, never the client's to ask for. Widening
+    /// it departs from the MUST of RFC 10070 sections 4 and 5 for every client that registers, so a host does it only
+    /// while those clients still write an older form, the token endpoint URL OpenID Connect Core 1.0 section 9
+    /// recommends, the backchannel authentication endpoint URL CIBA Core 1.0 section 7.1 names and the pushed
+    /// authorization request endpoint URL RFC 9126 section 2 named among them: section 6 of that RFC warns that such
+    /// clients "may not interoperate with authorization servers that strictly enforce the updated requirements". A
+    /// tenant held to FAPI 2.0 gives its clients the issuer alone whatever is set here. Applied on registration and on
+    /// every RFC 7592 update, since an update builds the client anew. A set without the issuer, or naming a value the
+    /// enumeration does not define, is refused at startup.
     /// </remarks>
     public ClientAssertionAudiences ClientAssertionAudiences
     {
