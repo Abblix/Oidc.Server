@@ -69,7 +69,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <remarks>
     /// This method:
     /// <list type="bullet">
-    ///   <item>Refuses unless the STORED record reads Pending</item>
+    ///   <item>Refuses unless the STORED record reads Pending and its ExpiresAt has not come</item>
     ///   <item>Refuses an answer from somebody other than the end user the request named, or at an
     ///   authentication level its essential acr does not accept, by denying or removing according to the
     ///   mode</item>
@@ -78,8 +78,8 @@ public abstract partial class AuthenticationCompletionHandler(
     /// </list>
     /// Called by AuthenticationCompletionRouter after determining the appropriate delivery mode handler.
     /// </remarks>
-    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record whose expiry
-    /// has not come under this identifier. The full statement of the condition, and why it is stated that way rather than as a
+    /// <exception cref="InvalidOperationException">The store does not hold, under this identifier, a
+    /// PENDING record whose expiry has not come. The full statement of the condition, and why it is stated that way rather than as a
     /// list of causes, is on <see cref="IAuthenticationCompletionHandler.CompleteAsync"/>.</exception>
     public async Task CompleteAuthenticationAsync(
         TenantDefinition tenant,
@@ -107,8 +107,9 @@ public abstract partial class AuthenticationCompletionHandler(
         // top of that mints against a record nobody can check and writes it back into existence.
         //
         // And the refusal says only that, never WHY. Absence has more causes than this seam can tell
-        // apart - a poll redeemed it, a push delivered it, its lifetime ran out while the end user was
-        // deciding, or push removed it after a configuration fault, where nothing was answered at all.
+        // apart - a poll redeemed it, a push delivered it, it was evicted after it had expired, or push
+        // removed it after a configuration fault, where nothing was answered at all. A record still there
+        // and pending past its expiry is the one cause told apart: it is refused as expired.
         // Naming one of them would send an operator who just fixed a client registration looking for a
         // second completion that never happened.
         var stored = await ReadPendingAsync(tenant, authenticationRequestId, "completed");
@@ -279,8 +280,8 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="tenant">The tenant the request is completed at, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="authenticationRequestId">The auth_req_id the end user refused.</param>
     /// <param name="expiresIn">How long a denied request stays readable, for the modes that leave one.</param>
-    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record whose expiry
-    /// has not come under this identifier: a request already answered, removed or expired cannot be refused either.</exception>
+    /// <exception cref="InvalidOperationException">The store does not hold, under this identifier, a
+    /// PENDING record whose expiry has not come: a request already answered, removed or expired cannot be refused either.</exception>
     public async Task DenyAuthenticationAsync(TenantDefinition tenant, [Credential] string authenticationRequestId, TimeSpan expiresIn)
     {
         var stored = await ReadPendingAsync(tenant, authenticationRequestId, "denied");
@@ -335,12 +336,15 @@ public abstract partial class AuthenticationCompletionHandler(
             $"The authentication request cannot be {answered}: the stored record "
             + stored switch
             {
-                null => "is not there",
-                { Status: BackChannelAuthenticationStatus.Pending } => "has expired",
-                _ => $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}",
-            }
-            + ". Only a pending request can be answered. Recovering from a failed delivery means "
-            + "asking the end user again rather than answering the same request twice.");
+                null => "is not there" + OnlyAPendingRequest,
+                { Status: BackChannelAuthenticationStatus.Pending } =>
+                    "has expired. The client has to make a new authentication request.",
+                _ => $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}" + OnlyAPendingRequest,
+            });
+
+    private const string OnlyAPendingRequest =
+        ". Only a pending request can be answered. Recovering from a failed delivery means asking the end user " +
+        "again rather than answering the same request twice.";
 
     // The reasons a request is refused with. access_denied throughout: CIBA Core 1.0 defines it for the token
     // endpoint and the push error payload alike, and it is the server or the end user denying the request.
