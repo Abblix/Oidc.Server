@@ -176,6 +176,26 @@ public class ConfigurationHandlerTests
         Assert.Equal(codeOnly ? [ResponseTypes.Code] : EveryResponseType, document.ResponseTypesSupported);
     }
 
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2 has the server "require the response_type value code id_token, or the
+    /// response_type value code in conjunction with the response_mode value jwt", so the document of a tenant held to
+    /// FAPI 1.0 Advanced lists those two response types alone.
+    /// </summary>
+    [Fact]
+    public async Task TheDocument_ListsTheSignedResponseTypes_WhereTheTenantsProfileRequiresASignedResponse()
+    {
+        var metadata = new Mock<IAuthorizationMetadataProvider>();
+        metadata.Setup(m => m.ResponseTypesSupported).Returns(EveryResponseType);
+        var handler = HandlerFor(Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict), metadata.Object);
+
+        var document = await handler.HandleAsync(
+            new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced }.ToTenant());
+
+        Assert.Equal(
+            [ResponseTypes.Code, $"{ResponseTypes.Code} {ResponseTypes.IdToken}"],
+            document.ResponseTypesSupported);
+    }
+
     private const string RsaDeclaringOaep256 = nameof(RsaDeclaringOaep256);
     private const string RsaDeclaringNone = nameof(RsaDeclaringNone);
     private const string EllipticCurveDeclaringNone = nameof(EllipticCurveDeclaringNone);

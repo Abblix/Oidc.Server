@@ -165,16 +165,35 @@ public sealed class ConfigurationHandler(
 	}
 
 	/// <summary>
-	/// The response types of <paramref name="responseTypes"/> the tenant's profile admits at the authorization endpoint:
-	/// code alone where it requires the code response type, FAPI 2.0 Security Profile section 5.3.2.2, "authorization
-	/// servers shall require the value of response_type described in [RFC6749] to be code". The tenant's profile binds
-	/// every client it serves, so a value it refuses is one this authorization server does not support, and OpenID
-	/// Connect Discovery 1.0 section 3 and RFC 8414 section 2 list only the values it supports.
+	/// The response types of <paramref name="responseTypes"/> the tenant's profile admits at the authorization endpoint.
+	/// FAPI 2.0 Security Profile section 5.3.2.2: "authorization servers shall require the value of response_type
+	/// described in [RFC6749] to be code". FAPI 1.0 Part 2 section 5.2.2: the server "shall require the response_type
+	/// value code id_token, or the response_type value code in conjunction with the response_mode value jwt". The
+	/// tenant's profile binds every client it serves, so a value it refuses is one this authorization server does not
+	/// support, and OpenID Connect Discovery 1.0 section 3 and RFC 8414 section 2 list only the values it supports.
 	/// </summary>
 	private static IEnumerable<string> AdmittedResponseTypes(TenantDefinition tenant, IEnumerable<string> responseTypes)
 	{
 		var profile = SecurityProfileRequirements.For(tenant, client: null);
-		return responseTypes.Where(responseType => !profile.RequireCodeResponseTypeOnly || responseType == ResponseTypes.Code);
+		return responseTypes.Where(responseType => Admits(profile, responseType));
+	}
+
+	/// <summary>
+	/// Whether <paramref name="profile"/> admits <paramref name="responseType"/>, one value of the list the authorization
+	/// endpoint metadata builds, whose parts stand in their canonical order.
+	/// </summary>
+	private static bool Admits(SecurityProfileRequirements profile, string responseType)
+	{
+		if (responseType == ResponseTypes.Code)
+			return true;
+
+		if (profile.RequireCodeResponseTypeOnly)
+			return false;
+
+		// A response nothing signs is refused where the profile requires a signed one: code id_token is the one
+		// response type besides code whose ID token signs it
+		return profile.SignedAuthorizationResponseModes is null
+			|| responseType == $"{ResponseTypes.Code} {ResponseTypes.IdToken}";
 	}
 
 	/// <summary>
