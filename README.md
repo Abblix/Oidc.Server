@@ -49,8 +49,8 @@ Abblix OIDC Server turns your ASP.NET Core application into a fully certified Op
 - Certified: all seven OpenID Provider profiles and all four logout profiles, 634 conformance tests passed with none skipped and no warnings. FAPI is not among them.
 - A library you own, not a server you run: the OpenID Connect endpoints live inside your app, so users, data, and UI never leave it.
 - Current with the modern security stack: DPoP, PAR, JARM, RAR, CIBA, device authorization, token exchange, certificate-bound tokens and JWT introspection responses, alongside the OAuth 2.0 and OpenID Connect core.
-- Security profiles the server enforces per client or per tenant: FAPI 2.0, FAPI 2.0 Message Signing and FAPI 1.0 Advanced.
-- Many issuers in one deployment: each tenant has its own clients, keys and security profile, declared at startup or added while the server runs.
+- Security profiles the server enforces per client or per tenant, not yet certified: FAPI 2.0, FAPI 2.0 Message Signing and FAPI 1.0 Advanced.
+- Many issuers in one deployment: each tenant has its own clients, keys and security profile, declared at startup or added while the server runs. The free tier allows one production issuer, see [License](#-license).
 - Engineering you can audit: over 11,000 passing tests, top SonarCloud security, reliability, and maintainability ratings, and a CodeQL scan of every push to the development branch.
 - Modern .NET, minimal friction: targets .NET 11, with drop-in adapters for both MVC and Minimal API.
 - Observable through OpenTelemetry: each endpoint request gets its own span and metrics, and the structured logs the server writes carry the trace of the request they belong to.
@@ -95,7 +95,7 @@ app.Run();
 
 An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead. A host serving several tenants, a single tenant at an issuer with a path, or tenants from a store or catalog of its own also calls `app.UseMultiTenancy()` before its own routing, so each request reaches its tenant.
 
-This is the outline, not a complete application: the server also needs a cache, the CORS middleware, a login page and your user store. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) builds a complete, runnable solution step by step.
+This is the outline, not a complete application: the server also needs an `IDistributedCache` (a shared one when several instances run), the CORS middleware, a login page, your user store, and signing keys that outlive a restart, since the key in the outline is generated anew at every start. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) builds a complete, runnable solution step by step.
 
 ## 🎓 Certification
 
@@ -145,11 +145,11 @@ dotnet add package Abblix.OIDC.Server.MinimalAPI
 
 Both adapters expose the same OpenID Connect endpoints and pull in the core `Abblix.OIDC.Server` package as a dependency, so pick the one that matches how your application maps requests. For hosts that wire the protocol layer directly, install `Abblix.OIDC.Server` instead.
 
-[Abblix.OIDC](src/Abblix.Oidc/README.md) (the OAuth 2.0 and OpenID Connect vocabulary the server shares with its clients) and [Abblix.JWT](src/Abblix.Jwt/README.md) (JWT signing, encryption and validation on the platform's own cryptography) come with the server. The rest are optional: add each one only if you actually need its feature.
+[Abblix.OIDC](src/Abblix.Oidc/README.md) (the OAuth 2.0 and OpenID Connect vocabulary the server shares with its clients), [Abblix.JWT](src/Abblix.Jwt/README.md) (JWT signing, encryption and validation on the platform's own cryptography) and [Abblix.SecurityEvents](src/Abblix.SecurityEvents/README.md) (Security Event Tokens) come with the server. The rest are optional: add each one only if you actually need its feature.
 
 |Package|What it adds|
 |:-|:-|
-|[Abblix.JWT.Vault](src/Abblix.Jwt.Vault/README.md), [Abblix.JWT.Azure](src/Abblix.Jwt.Azure/README.md)|Signing and decryption keys kept in HashiCorp Vault or OpenBao Transit, or in Azure Key Vault (see [External key custodians](EXTERNAL_KEYS.md))|
+|[Abblix.JWT.Vault](src/Abblix.Jwt.Vault/README.md), [Abblix.JWT.Azure](src/Abblix.Jwt.Azure/README.md)|Signing and decryption keys held in, or sealed by, HashiCorp Vault or OpenBao Transit, or Azure Key Vault (see [External key custodians](EXTERNAL_KEYS.md))|
 |[Abblix.OIDC.Server.SharedSignals](src/Abblix.Oidc.Server.SharedSignals/README.md)|A Shared Signals transmitter for each tenant of the server|
 |[Abblix.SharedSignals](src/Abblix.SharedSignals/README.md), [.MinimalAPI](src/Abblix.SharedSignals.MinimalApi/README.md), [.Redis](src/Abblix.SharedSignals.Redis/README.md)|OpenID Shared Signals Framework 1.0 transmitter and receiver, its endpoints, and a Redis event outbox for several replicas|
 |[Abblix.SecurityEvents.CAEP](src/Abblix.SecurityEvents.CAEP/README.md), [.RISC](src/Abblix.SecurityEvents.RISC/README.md), [.MinimalAPI](src/Abblix.SecurityEvents.MinimalApi/README.md)|The CAEP and RISC security event types, and endpoints receiving security events|
@@ -165,10 +165,10 @@ Version 3.0 changes how a host registers and configures the server. The changes 
 - An MVC host maps the endpoints with `app.MapOidcControllers()`, a Minimal API host with `app.MapOidcEndpoints()`.
 - A host chooses how end-user consent is obtained, or it does not start: it registers its own `IUserConsentsProvider`, or calls `AddConsentGrantedForEveryClient()`.
 - Neither logout channel is served unless the host registers it, with `AddBackChannelLogout()` or `AddFrontChannelLogout()`.
-- Refresh token reuse is set by `RefreshTokenOptions.ReusePolicy`, and a client gets refresh tokens only as its `ClientInfo.OfflineAccess` allows.
-- Every JWT validation states the token types it accepts in `ValidationParameters.TokenTypes`.
-- A client signing its own authentication JWT names the issuer as its only audience, as RFC 10070 requires.
-- What 2.x stored is not read by 3.0, so end users sign in again and earlier grants end once.
+- Refresh token reuse is set by `RefreshTokenOptions.ReusePolicy`, and a client gets refresh tokens only as its `ClientInfo.OfflineAccess` allows, which is disabled unless set.
+- Code that validates a JWT through the library states the token types it accepts in `ValidationParameters.TokenTypes`.
+- A client signing its own authentication JWT names the issuer as its only audience, as RFC 10070 requires. While a client moves off the token endpoint address or an audience array, the host can let that one client keep its form with `ClientInfo.ClientAssertionAudiences`, and dynamically registered clients with `NewClientOptions.ClientAssertionAudiences`, except under FAPI 2.0.
+- What 2.x stored is not read by 3.0, so end users sign in again, and grants, dynamic client registrations and minted keys of 2.x end once.
 
 The complete list, with what each change asks of a host, is in the [3.0 release notes](https://github.com/Abblix/Oidc.Server/releases/tag/v3.0). The [Upgrading to 3.0](https://docs.abblix.com/docs/upgrading-to-3-0) guide walks a 2.x deployment through the move, including how to keep the signing keys it minted.
 
