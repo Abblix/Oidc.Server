@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -28,8 +29,8 @@ public static class SecurityProfileConsistency
     /// types from satisfying the effective profile, or an empty list when the configuration is
     /// self-consistent. The check operates on response types because that is the one part of a FAPI
     /// client the profile cannot silently fix at request time: a client using the authorization endpoint
-    /// that never permits the authorization-code response type, or that permits an implicit/hybrid one,
-    /// is misconfigured rather than merely tightened. A client registering no response type does not use
+    /// that never permits the authorization-code response type, or that permits any other one - implicit,
+    /// hybrid or none - is misconfigured rather than merely tightened. A client registering no response type does not use
     /// the authorization endpoint and is not judged by its response types.
     /// </summary>
     /// <param name="allowedResponseTypes">The response-type combinations the client is registered for, empty for a
@@ -83,22 +84,20 @@ public static class SecurityProfileConsistency
         if (!requirements.RequireCodeResponseTypeOnly || allowedResponseTypes.Count == 0)
             return violations;
 
-        // A single-element "code" entry, matched case-insensitively to stay consistent with the
-        // token-bearing check below (both ultimately use HasFlag's OrdinalIgnoreCase comparison).
-        var allowsCode = allowedResponseTypes.Any(
-            responseType => responseType is { Length: 1 } && responseType.HasFlag(ResponseTypes.Code));
-        if (!allowsCode)
+        if (!allowedResponseTypes.Any(responseType => responseType.IsCodeAlone()))
         {
             violations.Add(
                 "the client's security profile requires the authorization-code response type, " +
                 "but the client does not allow it");
         }
 
-        if (allowedResponseTypes.Any(responseType => responseType.ReturnsTokenFromAuthorization()))
+        // "shall require the value of response_type ... to be code": an implicit or hybrid response type, and none
+        // as well, which returns no token and is refused all the same
+        if (!allowedResponseTypes.All(responseType => responseType.IsCodeAlone()))
         {
             violations.Add(
-                "the client's security profile forbids implicit and hybrid response types, " +
-                "but the client allows a response type that returns a token from the authorization endpoint");
+                "the client's security profile admits the code response type alone, " +
+                "but the client allows another response type");
         }
 
         return violations;
@@ -273,7 +272,10 @@ public static class SecurityProfileConsistency
     /// do nothing about. A userinfo or introspection response configured <c>none</c> is plain JSON and carries no
     /// JWS unless the client registered userinfo encryption, which makes it an unsigned JWT; a logout token
     /// without an algorithm of its own takes the ID token's, so neither is named; an ID token
-    /// or authorization response configured <c>none</c> is an unsigned JWS, and is.
+    /// or authorization response configured <c>none</c> is an unsigned JWS, and is. An ID token or authorization
+    /// response the client can never be issued is not judged at all, so a resource server or a client of the client
+    /// credentials grant is not refused for algorithms nothing is ever signed with; registration asks the same
+    /// question of the metadata it is sent.
     /// </remarks>
     /// <param name="client">The client whose configuration is checked.</param>
     /// <param name="requirements">The control bundle the client is held to, floor included.</param>
@@ -282,8 +284,11 @@ public static class SecurityProfileConsistency
         SecurityProfileRequirements requirements)
         => FindSigningAlgorithmViolations(
             [
-                (nameof(ClientInfo.IdentityTokenSignedResponseAlgorithm), client.IdentityTokenSignedResponseAlgorithm),
-                (nameof(ClientInfo.AuthorizationSignedResponseAlgorithm), client.AuthorizationSignedResponseAlgorithm),
+                (nameof(ClientInfo.IdentityTokenSignedResponseAlgorithm), IdentityTokenSignature(
+                    client.EffectiveResponseTypes, client.EffectiveGrantTypes, client.BackChannelLogout is not null,
+                    client.IdentityTokenSignedResponseAlgorithm)),
+                (nameof(ClientInfo.AuthorizationSignedResponseAlgorithm), AuthorizationResponseSignature(
+                    client.EffectiveResponseTypes, client.RedirectUris, client.AuthorizationSignedResponseAlgorithm)),
                 (nameof(ClientInfo.LogoutTokenSignedResponseAlgorithm), client.LogoutTokenSignedResponseAlgorithm),
                 (nameof(ClientInfo.UserInfoSignedResponseAlgorithm), UserInfoSignature(
                     client.UserInfoSignedResponseAlgorithm, client.UserInfoEncryptedResponseAlgorithm)),
@@ -448,6 +453,52 @@ public static class SecurityProfileConsistency
     /// <param name="encryptedResponseAlgorithm">The registered <c>userinfo_encrypted_response_alg</c>.</param>
     public static string? UserInfoSignature(string? signedResponseAlgorithm, string? encryptedResponseAlgorithm)
         => encryptedResponseAlgorithm is null ? SignedOrNull(signedResponseAlgorithm) : signedResponseAlgorithm;
+
+    /// <summary>
+    /// The signature algorithm the client's ID tokens are judged by, or null where it can be issued none. A client
+    /// registering any response type uses the authorization endpoint, whose code is redeemed for an ID token (OpenID
+    /// Connect Core 1.0 section 3.1.3.3, "id_token ID Token value associated with the authenticated session"), whose
+    /// implicit and hybrid responses carry one, and where it joins the user's session, which a logout token signed with
+    /// the ID token's algorithm ends. Without one, an ID token comes only from a grant the token endpoint answers with
+    /// one (<see cref="TokenRequestProcessor.MayIssueDerivedTokens"/>): CIBA Core 1.0 section 10.1.1 answers "as
+    /// specified in Section 3.1.3.3 of [OpenID.Core]", and so do the device, password, JWT bearer and refresh token
+    /// grants here - a refresh token issued while the client had a response type outlives a change to its
+    /// registration. The authorization code grant redeems a code only the authorization endpoint hands out, so it
+    /// does not count by itself. A client registering back-channel logout is judged as well: a session it joined
+    /// while it had a response type outlives a change to its registration, and the logout token ending that session
+    /// is signed with the ID token's algorithm unless the client names one for it.
+    /// </summary>
+    /// <param name="responseTypes">The response-type combinations the client is registered for.</param>
+    /// <param name="grantTypes">The grant types the client is registered for.</param>
+    /// <param name="backChannelLogout">Whether the client registers a back-channel logout URI.</param>
+    /// <param name="algorithm">The algorithm the client's ID tokens are signed with.</param>
+    internal static string? IdentityTokenSignature(
+        IReadOnlyCollection<string[]> responseTypes,
+        IEnumerable<string> grantTypes,
+        bool backChannelLogout,
+        string? algorithm)
+        => responseTypes.Count > 0 || backChannelLogout || grantTypes.Any(IssuesIdentityTokensByItself)
+            ? algorithm
+            : null;
+
+    /// <summary>
+    /// The signature algorithm the client's authorization responses are judged by, or null where it is sent none. A
+    /// response is sent to a redirect URI the client registered: a client registering a response type is answered with
+    /// one, and a client registering only a redirect URI can still be sent an error response, which a JWT response mode
+    /// signs with this algorithm.
+    /// </summary>
+    /// <param name="responseTypes">The response-type combinations the client is registered for.</param>
+    /// <param name="redirectUris">The redirect URIs the client registers.</param>
+    /// <param name="algorithm">The algorithm the client's authorization responses are signed with.</param>
+    internal static string? AuthorizationResponseSignature(
+        IReadOnlyCollection<string[]> responseTypes,
+        IReadOnlyCollection<Uri> redirectUris,
+        string? algorithm)
+        => responseTypes.Count > 0 || redirectUris.Count > 0 ? algorithm : null;
+
+    private static bool IssuesIdentityTokensByItself(string grantType)
+        => grantType != GrantTypes.AuthorizationCode &&
+           TokenRequestProcessor.MayIssueDerivedTokens(grantType);
 
     /// <summary>
     /// The client authentication methods that prove possession of a key rather than of a shared

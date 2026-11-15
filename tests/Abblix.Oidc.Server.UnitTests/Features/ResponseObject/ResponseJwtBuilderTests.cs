@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -64,6 +65,7 @@ public class ResponseJwtBuilderTests
         // The builder now delegates signing/encryption to a real ClientJwtFormatter built over the same mocks,
         // so the assertions on IJsonWebTokenCreator.IssueAsync continue to exercise the end-to-end JARM behavior.
         var clientJwtFormatter = new ClientJwtFormatter(
+            NullLogger<ClientJwtFormatter>.Instance,
             new ProfiledJwtIssuer(_jwtCreator.Object),
             new ClientEncryptionKeyResolver(
                 new ProfiledJwtIssuer(_jwtCreator.Object), _clientKeys.Object, TimeProvider.System),
@@ -223,6 +225,7 @@ public class ResponseJwtBuilderTests
         var builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             new ClientJwtFormatter(
+                NullLogger<ClientJwtFormatter>.Instance,
                 new ProfiledJwtIssuer(_jwtCreator.Object),
                 new ClientEncryptionKeyResolver(
                     new ProfiledJwtIssuer(_jwtCreator.Object), _clientKeys.Object, TimeProvider.System),
@@ -332,5 +335,24 @@ public class ResponseJwtBuilderTests
     public void ToDeliveryMode_MapsToPlaintextMode(string responseMode, bool carriesTokens, string expectedDeliveryMode)
     {
         Assert.Equal(expectedDeliveryMode, responseMode.ToDeliveryMode(carriesTokens));
+    }
+
+    /// <summary>
+    /// An authorization response the server cannot sign for the client - its algorithm produced by no key of the tenant,
+    /// or not admitted by its security profile - is the builder's failure, which the encoder answers with
+    /// unauthorized_client in the plain mode the JWT mode delivers through, rather than with a server error.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.ES256, null)]
+    [InlineData(SigningAlgorithms.RS256, ClientSecurityProfile.Fapi2)]
+    public async Task BuildAsync_AResponseTheServerCannotSign_IsRefused(string algorithm, ClientSecurityProfile? profile)
+    {
+        _client.AuthorizationSignedResponseAlgorithm = algorithm;
+        _client.SecurityProfile = profile;
+
+        var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+
+        Assert.True(result.TryGetFailure(out var refusal));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
     }
 }

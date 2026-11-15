@@ -391,24 +391,26 @@ public class SecurityProfileClientAuthenticatorTests
 
     /// <summary>
     /// FAPI 2.0 section 5.3.2.2 binds the response type "for flows that use the authorization endpoint": a resource
-    /// server registering no response type, which only calls introspection, authenticates there under FAPI 2.0.
+    /// server registering no response type, which only calls introspection, authenticates there under FAPI 2.0. It does
+    /// so at the RS256 defaults of the ID token and authorization response algorithms, since it is issued neither JWT;
+    /// a client of the CIBA grant, issued ID tokens at the token endpoint, does not.
     /// </summary>
-    [Fact]
-    public async Task StoredClientRegisteringNoResponseType_Authenticates()
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(GrantTypes.Ciba, false)]
+    public async Task StoredClientRegisteringNoResponseType_Authenticates(string? grantType, bool authenticated)
     {
         var (authenticator, inner) = CreateAuthenticator();
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
-            AllowedGrantTypes = [],
+            AllowedGrantTypes = grantType is null ? [] : [grantType],
             AllowedResponseTypes = [],
-            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
-            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         });
 
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
-        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(authenticated, result.TryGetSuccess(out _));
     }
 
     /// <summary>

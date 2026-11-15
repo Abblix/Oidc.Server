@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -812,6 +813,52 @@ public class FlowTypeValidatorTests
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.UnsupportedResponseType, result.Error);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.2: "For flows that use the authorization endpoint, authorization servers
+    /// shall require the value of response_type described in [RFC6749] to be code", and the Message Signing profiles keep
+    /// that provision (its section 5: "All provisions of the [FAPI2_Security_Profile] apply to the Message Signing Profile
+    /// as well"). So response_type=none is refused with unauthorized_client on a server that enables the none flow, for a
+    /// client registered for it. FAPI 1.0 Part 2 section 5.2.2 admits only code id_token or code with the jwt response
+    /// mode, and refuses none as a response nothing signs; with no profile the none flow runs.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, ErrorCodes.UnauthorizedClient)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests, ErrorCodes.UnauthorizedClient)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ErrorCodes.UnauthorizedClient)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, ErrorCodes.UnauthorizedClient)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(ClientSecurityProfile.None, null)]
+    public async Task ValidateAsync_NoneResponseType_UnderAProfile(ClientSecurityProfile profile, string? expectedError)
+    {
+        var context = CreateContext(
+            [ResponseTypes.None],
+            [[ResponseTypes.Code], [ResponseTypes.None]],
+            securityProfile: profile);
+
+        var result = await NoneEnabledValidator().ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
+    /// Under FAPI 2.0 a response type the server does not support is answered with the unsupported_response_type RFC
+    /// 6749 section 4.1.2.1 reserves for it, not with the profile's refusal; a repeated code part is not the value code
+    /// the profile requires, and is refused by it even for a client registered for code, which that request matches
+    /// as a set.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { "unknown" }, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code, "unknown" }, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code, ResponseTypes.Code }, ErrorCodes.UnauthorizedClient)]
+    public async Task ValidateAsync_Fapi2_ResponseTypeOtherThanCode(string[] responseType, string expectedError)
+    {
+        var context = CreateContext(responseType, [responseType.Distinct().ToArray()], securityProfile: ClientSecurityProfile.Fapi2);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(expectedError, result?.Error);
     }
 
     /// <summary>

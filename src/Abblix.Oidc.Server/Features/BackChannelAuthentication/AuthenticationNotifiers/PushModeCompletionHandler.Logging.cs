@@ -27,9 +27,8 @@ partial class PushModeCompletionHandler
 
     [LoggerMessage(
         EventId = LogEvents.Device.PushModeCompletionHandler.TokenGenerationFailed,
-        Level = LogLevel.Error,
         Message = "Failed to generate tokens for CIBA push mode, auth_req_id: {AuthReqId}, Error: {ErrorCode}")]
-    private partial void LogTokenGenerationFailed(Fingerprint AuthReqId, string ErrorCode);
+    private partial void LogTokenGenerationFailed(LogLevel level, Fingerprint AuthReqId, string ErrorCode);
 
     [LoggerMessage(
         EventId = LogEvents.Device.PushModeCompletionHandler.PushDeliveryFailed,

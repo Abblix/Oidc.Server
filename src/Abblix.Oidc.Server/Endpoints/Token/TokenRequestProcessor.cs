@@ -183,8 +183,10 @@ public class TokenRequestProcessor(
 	/// scope (inherited from a subject_token, or placed by the host in the client's AllowedScopes)
 	/// cannot mint a credential these grants must never produce. All user-facing grants
 	/// (authorization_code, refresh_token, password, CIBA, device_code, jwt-bearer) fall through unchanged.
+	/// The security profile check judges a client's ID token algorithm by this same answer, so what it judges is
+	/// what can be issued.
 	/// </remarks>
-	private static bool MayIssueDerivedTokens(string grantType)
+	internal static bool MayIssueDerivedTokens(string grantType)
 		=> grantType != GrantTypes.ClientCredentials &&
 		   grantType != GrantTypes.TokenExchange;
 

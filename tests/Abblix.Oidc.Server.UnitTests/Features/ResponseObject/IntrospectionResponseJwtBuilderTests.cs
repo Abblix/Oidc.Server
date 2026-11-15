@@ -84,30 +84,27 @@ public class IntrospectionResponseJwtBuilderTests
     }
 
     /// <summary>
-    /// Without a profile the default is RS256 alone: a tenant whose keys cannot produce it, holding a P-256 key, signs
-    /// with nothing else and answers that the JWT is not available.
+    /// A response no key of the tenant can sign is handed to the formatter with the algorithm it would be signed with,
+    /// so that the formatter refuses it as the tenant's missing key and logs it as such, and that refusal is answered as
+    /// a JWT that is not available: without a profile the RS256 default alone, which a tenant holding a P-256 key
+    /// cannot produce; a registered algorithm as registered; under a profile whose algorithms no key of the tenant
+    /// produces, the first of them.
     /// </summary>
-    [Fact]
-    public async Task WithoutAProfile_ATenantWithoutAnRsaKey_IsNotAcceptable()
+    [Theory]
+    [InlineData(ClientSecurityProfile.None, SigningAlgorithms.None, SigningAlgorithms.RS256)]
+    [InlineData(ClientSecurityProfile.None, SigningAlgorithms.PS384, SigningAlgorithms.PS384)]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.None, SigningAlgorithms.PS256)]
+    public async Task ATenantWithoutTheSigningKey_IsTheFormattersRefusalAnsweredAsNotAcceptable(
+        ClientSecurityProfile profile, string registered, string expected)
     {
-        var result = await Builder(Ec()).BuildAsync(Tenant(ClientSecurityProfile.None), Client(), new JsonObject());
+        _formatted = new ClientJwtRefusal(ClientJwtRefusalCause.NoTenantSigningKey, "no signing key");
 
-        Assert.True(result.TryGetFailure(out var error));
-        Assert.IsType<NotAcceptableError>(error);
-        Assert.Null(_signed);
-    }
-
-    /// <summary>
-    /// Under a profile, a tenant whose keys produce none of the algorithms it admits answers the same way.
-    /// </summary>
-    [Fact]
-    public async Task UnderAFapiProfile_ATenantWithoutAKeyForAnAdmittedAlgorithm_IsNotAcceptable()
-    {
         var result = await Builder(JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P384, SigningAlgorithms.ES384))
-            .BuildAsync(Tenant(ClientSecurityProfile.Fapi2), Client(), new JsonObject());
+            .BuildAsync(Tenant(profile), Client(registered), new JsonObject());
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.IsType<NotAcceptableError>(error);
+        Assert.Equal(expected, _signed?.Header.Algorithm);
     }
 
     /// <summary>
@@ -128,13 +125,17 @@ public class IntrospectionResponseJwtBuilderTests
     }
 
     /// <summary>
-    /// A refusal of the client JWT formatter - a client with no key its registered encryption algorithm can encrypt
-    /// to - is the builder's answer as it stands, for the adapter to map, and not an exception.
+    /// A refusal of the client JWT formatter other than the tenant's missing key - a client with no key its registered
+    /// encryption algorithm can encrypt to, or registered for an algorithm its profile does not admit - is the builder's
+    /// answer as it stands, for the adapter to answer as a refusal: it is not turned into the JSON fallback, which would
+    /// send the response in the clear to a client that registered it encrypted.
     /// </summary>
-    [Fact]
-    public async Task AFormatterRefusal_IsTheBuildersResult()
+    [Theory]
+    [InlineData(ClientJwtRefusalCause.NoClientEncryptionKey)]
+    [InlineData(ClientJwtRefusalCause.AlgorithmOutsideProfile)]
+    public async Task AFormatterRefusal_IsTheBuildersResult(ClientJwtRefusalCause cause)
     {
-        var refusal = new OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to");
+        var refusal = new ClientJwtRefusal(cause, "cannot be issued");
         _formatted = refusal;
 
         var result = await Builder(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature))

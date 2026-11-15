@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server;
 /// so a class needing one more takes a second window rather than displacing anybody.
 ///
 /// The library's packages log into one process, so their numbers come from one space, and each package
-/// keeps its own window: Abblix.Jwt 1000-1199; this assembly 2000-11099, less the two windows below;
+/// keeps its own window: Abblix.Jwt 1000-1199; this assembly 2000-11199, less the two windows below;
 /// Abblix.Oidc.Server.AspNetCore 10500-10599; Abblix.Oidc.Server.SharedSignals 10800-10899;
 /// Abblix.Jwt.Vault 12000-12299; Abblix.Jwt.Azure 13000-13199; Abblix.SecurityEvents 14000-14199;
 /// Abblix.SharedSignals 15000-15099. A new package takes the next free thousand. A package's window moves only in a
@@ -454,6 +454,7 @@ internal static class LogEvents
             public const int SecretGenerated = Base + 1;
             public const int ValidationFailed = Base + 2;
         }
+
     }
 
     /// <summary>
@@ -1089,6 +1090,17 @@ internal static class LogEvents
             private const int Base = 11100;
 
             public const int AudienceKeyRefused = Base;
+        }
+
+        /// <summary>
+        /// <c>Features/Tokens/Formatters/ClientJwtFormatter.cs</c> - a JWT not issued to a client, signed or encrypted
+        /// for it (sub-range 11110-11119).
+        /// </summary>
+        public static class ClientJwtFormatter
+        {
+            private const int Base = 11110;
+
+            public const int JwtNotIssued = Base;
         }
     }
 

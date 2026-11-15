@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
@@ -106,6 +107,20 @@ public class SecurityProfileValidatorTests
     }
 
     /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.2: the server "shall require the value of response_type described in
+    /// [RFC6749] to be code", so a registration for none beside code is refused with invalid_client_metadata.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ServerDefaultFapi2CodePlusNone_ShouldReturnError()
+    {
+        var context = CreateContext([[ResponseTypes.Code], [ResponseTypes.None]]);
+
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
     /// FAPI 2.0 section 5.3.2.2 binds the response type "for flows that use the authorization endpoint", and RFC 7591
     /// section 2.1 correlates the client credentials grant with no response type: a registration under a FAPI profile
     /// for that grant alone, or for no grant at all as a resource server calling introspection, registers no response
@@ -127,6 +142,77 @@ public class SecurityProfileValidatorTests
         var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(profile), context);
 
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// The algorithms a registration names are judged only where the client can be issued the JWT they sign, the same
+    /// answer startup gives: a client of the client credentials grant alone, registering no response type, is never
+    /// issued an ID token or an authorization response, so RS256 named for both passes; a client of the CIBA grant is
+    /// issued ID tokens at the token endpoint, so RS256 named for them is refused, and named for the authorization
+    /// response alone it passes.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.ClientCredentials, SigningAlgorithms.RS256, SigningAlgorithms.RS256, null)]
+    [InlineData(GrantTypes.Ciba, SigningAlgorithms.RS256, null, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(GrantTypes.Ciba, null, SigningAlgorithms.RS256, null)]
+    public async Task ValidateAsync_Fapi2_NoResponseTypes_JudgesOnlyTheJwtsTheClientIsIssued(
+        string grantType, string? idTokenAlgorithm, string? authorizationResponseAlgorithm, string? expectedError)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            ResponseTypes = [],
+            GrantTypes = [grantType],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdTokenSignedResponseAlg = idTokenAlgorithm,
+            AuthorizationSignedResponseAlg = authorizationResponseAlgorithm,
+        });
+
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
+    /// A registration naming no response type but a back-channel logout URI can still be sent a logout token for a
+    /// session the client joined before its registration changed, signed with the ID token's algorithm, so RS256 named
+    /// for the ID token is refused.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi2_NoResponseTypesButBackChannelLogout_JudgesTheIdToken()
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            BackChannelLogoutUri = new Uri("https://client.example.com/logout"),
+            ResponseTypes = [],
+            GrantTypes = [GrantTypes.ClientCredentials],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdTokenSignedResponseAlg = SigningAlgorithms.RS256,
+        });
+
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
+    /// A registration naming no response type but a redirect URI can still be sent an authorization error response,
+    /// which a JWT response mode signs with the authorization response algorithm, so RS256 named for it is refused.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi2_NoResponseTypesButARedirectUri_JudgesTheAuthorizationResponse()
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [],
+            GrantTypes = [GrantTypes.ClientCredentials],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AuthorizationSignedResponseAlg = SigningAlgorithms.RS256,
+        });
+
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
     }
 
     /// <summary>

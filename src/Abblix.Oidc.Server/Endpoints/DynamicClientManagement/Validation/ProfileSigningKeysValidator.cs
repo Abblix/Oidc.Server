@@ -50,8 +50,12 @@ public class ProfileSigningKeysValidator(IAuthServiceKeysProvider keys) : IClien
 
         var unproduced = new[]
             {
-                (Parameters.IdTokenSignedResponseAlg, request.IdTokenSignedResponseAlg),
-                (Parameters.AuthorizationSignedResponseAlg, request.AuthorizationSignedResponseAlg),
+                // Only what can be issued to the client, the answer startup and the profile's algorithm check give
+                (Parameters.IdTokenSignedResponseAlg, SecurityProfileConsistency.IdentityTokenSignature(
+                    request.ResponseTypes, request.GrantTypes, request.BackChannelLogoutUri is not null,
+                    request.IdTokenSignedResponseAlg)),
+                (Parameters.AuthorizationSignedResponseAlg, SecurityProfileConsistency.AuthorizationResponseSignature(
+                    request.ResponseTypes, request.RedirectUris ?? [], request.AuthorizationSignedResponseAlg)),
                 (Parameters.UserInfoSignedResponseAlg, SecurityProfileConsistency.SignedOrNull(request.UserInfoSignedResponseAlg)),
                 (Parameters.IntrospectionSignedResponseAlg,
                     SecurityProfileConsistency.SignedOrNull(request.IntrospectionSignedResponseAlg)),
