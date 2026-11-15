@@ -12,8 +12,9 @@ using Abblix.Oidc.Server.Common.Constants;
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
 /// <summary>
-/// The two ways <see cref="IClientAuthenticator.TryAuthenticateClientAsync"/> answers a request it does not
-/// authenticate, both <c>invalid_client</c> (RFC 6749 section 5.2) and told apart by their type.
+/// The ways <see cref="IClientAuthenticator.TryAuthenticateClientAsync"/> answers a request it does not authenticate,
+/// told apart by their type: two <c>invalid_client</c> (RFC 6749 section 5.2), and the <c>invalid_request</c> of a
+/// request using more than one method.
 /// </summary>
 public static class ClientAuthenticationFailures
 {
@@ -28,4 +29,11 @@ public static class ClientAuthenticationFailures
     /// </summary>
     public static OidcError InvalidCredential { get; } =
         new(ErrorCodes.InvalidClient, "The client credential does not authenticate a client");
+
+    /// <summary>
+    /// The request presents credentials in more than one place (<see cref="IClientAuthenticator.FindPresentedCredentialsAsync"/>),
+    /// so it uses more than one client authentication method, which RFC 6749 section 2.3 forbids.
+    /// </summary>
+    public static OidcError MoreThanOneMethod { get; } =
+        new MoreThanOneClientAuthenticationMethodError("The request uses more than one client authentication method");
 }

@@ -97,7 +97,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.False(result.TryGetSuccess(out _));
+        Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
     }
 
     /// <summary>
@@ -121,7 +121,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.False(result.TryGetSuccess(out _));
+        Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
     }
 
     /// <summary>
@@ -153,7 +153,7 @@ public class TlsMetadataClientAuthenticatorTests
         var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
 
         // Assert
-        Assert.False(result.TryGetSuccess(out _));
+        Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
     }
 
     /// <summary>
@@ -792,5 +792,72 @@ public class TlsMetadataClientAuthenticatorTests
             SingleIssuer.Tenant, new ClientRequest { ClientId = "client" });
 
         Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
+    }
+
+    /// <summary>
+    /// RFC 8705 sections 2 and 4: a certificate is a client credential only for a client registered for mutual-TLS
+    /// client authentication, and binds the tokens of any other. So the certificate of a client registered for another
+    /// method is not presented to this authenticator, and is not counted as a second method beside that one.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretPost)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretJwt)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt)]
+    [InlineData(ClientAuthenticationMethods.None)]
+    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth)]
+    public async Task CertificateOfAClientRegisteredForAnotherMethod_PresentsNoCredential(string authMethod)
+    {
+        var request = new ClientRequest { ClientId = "test-client", ClientCertificate = CreateCertificate("CN=test-client") };
+        _clientInfoProviderMock
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
+            .ReturnsAsync(new ClientInfo("test-client") { TokenEndpointAuthMethod = authMethod });
+
+        Assert.Empty(await _authenticator.FindPresentedCredentialsAsync(SingleIssuer.Tenant, request));
+        var result = await _authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, request);
+        Assert.IsType<UnauthenticatedCallerError>(result.GetFailure());
+    }
+
+    /// <summary>
+    /// The certificate of a client registered for this method is the credential it presents, named by the request
+    /// member it is read from.
+    /// </summary>
+    [Fact]
+    public async Task CertificateOfAClientRegisteredForThisMethod_IsPresented()
+    {
+        var request = new ClientRequest { ClientId = "test-client", ClientCertificate = CreateCertificate("CN=test-client") };
+        _clientInfoProviderMock
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "test-client"))
+            .ReturnsAsync(new ClientInfo("test-client") { TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth });
+
+        Assert.Equal(
+            [nameof(ClientRequest.ClientCertificate)],
+            await _authenticator.FindPresentedCredentialsAsync(SingleIssuer.Tenant, request));
+    }
+
+    /// <summary>
+    /// RFC 8705 section 2 has the client include client_id with mutual-TLS client authentication, so a certificate
+    /// without one presents no credential.
+    /// </summary>
+    [Fact]
+    public async Task CertificateWithoutClientId_IsNotPresented()
+    {
+        var request = new ClientRequest { ClientCertificate = CreateCertificate("CN=test-client") };
+
+        Assert.Empty(await _authenticator.FindPresentedCredentialsAsync(SingleIssuer.Tenant, request));
+    }
+
+    /// <summary>
+    /// A certificate beside a client_id naming no client presents no credential, so it is not counted as a method.
+    /// </summary>
+    [Fact]
+    public async Task CertificateOfAnUnknownClient_IsNotPresented()
+    {
+        var request = new ClientRequest { ClientId = "unknown-client", ClientCertificate = CreateCertificate("CN=Test Client") };
+        _clientInfoProviderMock
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, "unknown-client"))
+            .ReturnsAsync((ClientInfo?)null);
+
+        Assert.Empty(await _authenticator.FindPresentedCredentialsAsync(SingleIssuer.Tenant, request));
     }
 }

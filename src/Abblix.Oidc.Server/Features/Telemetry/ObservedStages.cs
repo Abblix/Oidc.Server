@@ -49,5 +49,7 @@ using Abblix.Oidc.Server.Features.Telemetry;
 [assembly: ObservedStage(typeof(IUpdateClientRequestValidator), TelemetryStages.Validation)]
 [assembly: ObservedStage(typeof(IUpdateClientRequestProcessor), TelemetryStages.Processing)]
 [assembly: ObservedStage(typeof(IRemoveClientRequestProcessor), TelemetryStages.Processing)]
-[assembly: ObservedStage(typeof(IClientAuthenticator), TelemetryStages.ClientAuthentication)]
+// NeverRefuses speaks only for the member naming where credentials are presented, which answers a list rather than a
+// refusal; authentication itself returns a Result, whose refusal the span reads as before
+[assembly: ObservedStage(typeof(IClientAuthenticator), TelemetryStages.ClientAuthentication, NeverRefuses = true)]
 [assembly: ObservedStage(typeof(IAuthorizationGrantHandler), TelemetryStages.Grant)]

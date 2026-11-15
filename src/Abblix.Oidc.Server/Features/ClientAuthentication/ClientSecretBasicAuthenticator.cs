@@ -59,10 +59,7 @@ public class ClientSecretBasicAuthenticator(
 	/// </returns>
 	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
-		// Any Authorization header line is an attempt to authenticate through it, whatever its scheme and whether or not
-		// it parses: RFC 6749 section 5.2 answers a client that "attempted to authenticate via the Authorization
-		// request header field" with 401
-		if (request.AuthorizationHeaderLines is not { Count: > 0 })
+		if (!IsPresented(request))
 			return ClientAuthenticationFailures.NoCredential;
 
 		if (request.AuthorizationHeader is not { Parameter: { } parameter } header || !header.HasScheme(TokenTypes.Basic))
@@ -90,4 +87,16 @@ public class ClientSecretBasicAuthenticator(
 			secret: value[(colonIndex + 1)..],
 			ClientAuthenticationMethods.ClientSecretBasic);
 	}
+
+	/// <inheritdoc />
+	public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+		=> Task.FromResult<IEnumerable<string>>(
+			IsPresented(request) ? [nameof(ClientRequest.AuthorizationHeaderLines)] : []);
+
+	/// <summary>
+	/// Any Authorization header line is an attempt to authenticate through it, whatever its scheme and whether or not
+	/// it parses: RFC 6749 section 5.2 answers a client that "attempted to authenticate via the Authorization request
+	/// header field" with 401.
+	/// </summary>
+	private static bool IsPresented(ClientRequest request) => request.AuthorizationHeaderLines is { Count: > 0 };
 }

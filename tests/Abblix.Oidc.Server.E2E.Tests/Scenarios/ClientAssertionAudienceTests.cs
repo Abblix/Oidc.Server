@@ -6,13 +6,10 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Text;
 using System.Text.Json.Nodes;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
-using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -25,17 +22,6 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// </summary>
 public class ClientAssertionAudienceTests(TestFactory factory) : TestBase(factory)
 {
-    private static readonly IServiceProvider JwtServices = BuildJwtServices();
-
-    private static ServiceProvider BuildJwtServices()
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton(TimeProvider.System);
-        services.AddLogging();
-        services.AddJsonWebTokens();
-        return services.BuildServiceProvider();
-    }
-
     [Fact]
     public async Task AnAssertionNamingTheIssuerAlone_IsIssuedAToken()
     {
@@ -71,33 +57,11 @@ public class ClientAssertionAudienceTests(TestFactory factory) : TestBase(factor
 
     private static async Task<Dictionary<string, string>> FormAsync(string[] audiences)
     {
-        var now = TimeProvider.System.GetUtcNow();
-        var token = new JsonWebToken
-        {
-            Header = { Algorithm = SigningAlgorithms.HS256, Type = JsonWebTokenTypes.ClientAuthentication },
-            Payload =
-            {
-                JwtId = Guid.NewGuid().ToString("N"),
-                Issuer = TestConstants.ClientSecretJwtClientId,
-                Subject = TestConstants.ClientSecretJwtClientId,
-                Audiences = audiences,
-                IssuedAt = now,
-                NotBefore = now,
-                ExpiresAt = now.AddMinutes(1),
-            },
-        };
-        var key = new OctetJsonWebKey
-        {
-            Algorithm = SigningAlgorithms.HS256,
-            KeyValue = Encoding.UTF8.GetBytes(TestConstants.ClientSecretJwtSecret),
-        };
-
         return new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
             [ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer,
-            [ClientRequest.Parameters.ClientAssertion] =
-                await JwtServices.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, key),
+            [ClientRequest.Parameters.ClientAssertion] = await ClientSecretJwtAssertion.IssueAsync(audiences),
         };
     }
 }

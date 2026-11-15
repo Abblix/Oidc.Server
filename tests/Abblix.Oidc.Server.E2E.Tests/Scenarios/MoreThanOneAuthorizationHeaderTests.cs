@@ -257,13 +257,11 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
     }
 
     /// <summary>
-    /// One Authorization line beside the same credentials in the body is still served, as it was before the lines were
-    /// counted. RFC 6749 section 2.3 says "The client MUST NOT use more than one authentication method in each
-    /// request", and the server does not refuse this pair today; the row pins that answer, so changing it is a decision
-    /// made visibly rather than a side effect of counting lines.
+    /// One Authorization line beside the same credentials in the body is one line, and still two methods: RFC 6749
+    /// section 2.3 says "The client MUST NOT use more than one authentication method in each request".
     /// </summary>
     [Fact]
-    public async Task Token_endpoint_with_one_basic_line_and_a_body_secret_is_answered_as_before()
+    public async Task Token_endpoint_with_one_basic_line_and_a_body_secret_is_an_invalid_request()
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
@@ -276,7 +274,7 @@ public class MoreThanOneAuthorizationHeaderTests(TestFactory factory) : TestBase
 
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await AssertInvalidRequestAsync(response);
     }
 
     /// <summary>

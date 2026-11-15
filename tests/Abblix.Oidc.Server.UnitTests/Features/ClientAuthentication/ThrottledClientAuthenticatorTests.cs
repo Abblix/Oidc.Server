@@ -99,6 +99,40 @@ public class ThrottledClientAuthenticatorTests
     }
 
     /// <summary>
+    /// A request using more than one client authentication method is refused before any credential is looked at, as a
+    /// repeated Authorization header is, so it spends nothing the budget prices and is not charged to it: a sender
+    /// repeating it past the budget is still answered each time, and the budget is still whole for a credential that
+    /// is then refused.
+    /// </summary>
+    [Fact]
+    public async Task ARequestUsingMoreThanOneMethod_IsNotChargedToTheBudget()
+    {
+        // Arrange
+        var authenticator = CreateAuthenticator(permitLimit: 1);
+        _inner
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.MoreThanOneMethod));
+
+        // Act
+        for (var request = 0; request < RequestsWellPastTheBudget; request++)
+        {
+            var result = await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest());
+            Assert.Same(ClientAuthenticationFailures.MoreThanOneMethod, result.GetFailure());
+        }
+
+        _inner
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .Returns(Task.FromResult<Result<ClientInfo, OidcError>>(ClientAuthenticationFailures.InvalidCredential));
+
+        // Assert
+        Assert.Same(
+            ClientAuthenticationFailures.InvalidCredential,
+            (await authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest())).GetFailure());
+        await Assert.ThrowsAsync<TooManyAuthenticationFailuresException>(
+            () => authenticator.TryAuthenticateClientAsync(SingleIssuer.Tenant, CreateRequest()));
+    }
+
+    /// <summary>
     /// And two senders have two budgets. The address is what separates them, so a name that stopped
     /// separating them would turn a budget meant to price one sender's guessing into one bucket for
     /// everybody: a single sender could then close client authentication to every client of the server.
