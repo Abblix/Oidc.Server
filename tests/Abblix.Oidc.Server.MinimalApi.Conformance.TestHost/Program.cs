@@ -151,6 +151,7 @@ builder.Services.AddOidcServices(options =>
 builder.Services.Decorate<IClientInfoManager, PkceOptionalForRegisteredClients>();
 builder.Services.Decorate<IEndSessionResponseFormatter<IResult>, EndSessionPages>();
 builder.Services.Decorate<IAuthServiceKeysProvider, RotatingSigningKeys>();
+builder.Services.Decorate<IUserConsentsProvider, RefusedAuthorizations>();
 
 // Every client the suite registers keeps its key set, request objects and logout endpoints on the suite's host,
 // which sits at a private address on this network: name that one destination instead of lifting the refusal
@@ -203,6 +204,7 @@ app.MapPost("/login", async (
         [FromForm] string email,
         [FromForm] string password,
         [FromForm] string requestUri,
+        [FromForm] string? action,
         IAuthSessionService authService,
         IOidcEndpointResolver endpointResolver,
         ISessionIdGenerator sessionIdGenerator,
@@ -229,6 +231,11 @@ app.MapPost("/login", async (
         {
             AuthContextClassRef = pending?.AcrValues?.FirstOrDefault(),
         });
+
+        // Refusing still takes the user's sign-in: the server asks for consent only of a signed-in user, and a consent
+        // granting nothing is how the refusal reaches the client
+        if (action == "deny")
+            RefusedAuthorizations.Refuse(requestUri);
 
         var authorizeUrl = new UriBuilder(endpointResolver.Resolve(OidcEndpoints.Authorize)!)
             { Query = { [AuthorizationRequest.Parameters.RequestUri] = requestUri } };
@@ -316,7 +323,8 @@ static string LoginPage(string requestUri, string? error, ClientInfo? client)
                 <input type="hidden" name="requestUri" value="{WebUtility.HtmlEncode(requestUri)}" />
                 <p><label>Email: <input type="email" name="email" autofocus /></label></p>
                 <p><label>Password: <input type="password" name="password" /></label></p>
-                <button type="submit" id="sign-in">Sign in</button>
+                <button type="submit" id="sign-in" name="action" value="allow">Sign in</button>
+                <button type="submit" id="deny" name="action" value="deny">Sign in and refuse</button>
             </form>
         </body>
         </html>
