@@ -10,6 +10,7 @@ using System.Net.Http.Headers;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -80,6 +81,26 @@ public class RegistrationAccessTokenValidatorTests
 
         Assert.True(result.TryGetSuccess(out var tokenId));
         Assert.Equal("jti-current", tokenId);
+    }
+
+    /// <summary>
+    /// RFC 6750 section 3.1: a request that "lacks any authentication information (e.g., the client was unaware that
+    /// authentication is necessary or attempted using an unsupported authentication method)" is answered with no error
+    /// code, which the marker tells the challenge builder. Nothing is validated, so the strict validator is not called.
+    /// </summary>
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(TokenTypes.Basic, "credentials")]
+    [InlineData(TokenTypes.Basic, null)]
+    public async Task ARequestLackingAuthentication_IsAnsweredWithTheMarker(string? scheme, string? credentials)
+    {
+        var validator = new RegistrationAccessTokenValidator(new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict).Object);
+        var header = scheme is null ? null : new AuthenticationHeaderValue(scheme, credentials);
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, header, ClientId);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsType<MissingAuthenticationError>(error);
     }
 
     /// <summary>

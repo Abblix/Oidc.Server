@@ -11,6 +11,7 @@ using System;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
@@ -111,28 +112,36 @@ public class InitialAccessTokenValidatorTests
         Assert.Null(result);
     }
 
+    /// <summary>
+    /// RFC 6750 section 3.1: a request that "lacks any authentication information" is answered with no error code,
+    /// which the marker tells the challenge builder.
+    /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithNoAuthorizationHeader_ShouldReturnInvalidToken()
+    public async Task ValidateAsync_WithNoAuthorizationHeader_ShouldReturnMissingAuthentication()
     {
         var context = CreateContext(authHeader: null);
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidToken, result.Error);
-        Assert.Contains("Authorization", result.ErrorDescription);
+        var missing = Assert.IsType<MissingAuthenticationError>(result);
+        Assert.Contains("Authorization", missing.ErrorDescription);
     }
 
-    [Fact]
-    public async Task ValidateAsync_WithWrongScheme_ShouldReturnInvalidToken()
+    /// <summary>
+    /// RFC 6750 section 3.1 counts a request "attempted using an unsupported authentication method" among those lacking
+    /// authentication information, whether or not the other scheme carries credentials.
+    /// </summary>
+    [Theory]
+    [InlineData("credentials")]
+    [InlineData(null)]
+    public async Task ValidateAsync_WithWrongScheme_ShouldReturnMissingAuthentication(string? credentials)
     {
-        var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Basic, "credentials"));
+        var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Basic, credentials));
 
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidToken, result.Error);
-        Assert.Contains(TokenTypes.Basic, result.ErrorDescription);
+        var missing = Assert.IsType<MissingAuthenticationError>(result);
+        Assert.Contains(TokenTypes.Basic, missing.ErrorDescription);
     }
 
     [Fact]

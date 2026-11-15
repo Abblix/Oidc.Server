@@ -42,17 +42,24 @@ public class InitialAccessTokenValidator(
         if (context.Request.HasMoreThanOneAuthorizationHeader)
             return Common.Validation.ErrorFactory.MoreThanOneBearerAuthorizationHeader;
 
+        // RFC 6750 section 3.1: a request that "lacks any authentication information (e.g., the client was unaware that
+        // authentication is necessary or attempted using an unsupported authentication method)" gets no error code, so
+        // the typed marker has the challenge builder leave the error attributes out. A token in the query is not read
+        // here at all, so the request carrying one lacks it alike
         var header = context.Request.AuthorizationHeader;
-        if (header?.Parameter == null)
+        if (header == null)
         {
-            return new OidcError(ErrorCodes.InvalidToken,
+            return new MissingAuthenticationError(
                 $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
         }
 
         if (!header.HasScheme(TokenTypes.Bearer))
+            return new MissingAuthenticationError($"The scheme name '{header.Scheme}' is not supported");
+
+        if (header.Parameter == null)
         {
             return new OidcError(ErrorCodes.InvalidToken,
-                $"The scheme name '{header.Scheme}' is not supported");
+                $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
         }
 
         // The audience is required and checked. An initial access token authorizes registration at this

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -20,7 +21,7 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <summary>
 /// Formatter for responses to client removal requests.
 /// </summary>
-public class RemoveClientResponseFormatter : IRemoveClientResponseFormatter<ActionResult>
+public class RemoveClientResponseFormatter(ITenantAccessor tenantAccessor) : IRemoveClientResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Asynchronously formats the response for a client removal request.
@@ -35,5 +36,6 @@ public class RemoveClientResponseFormatter : IRemoveClientResponseFormatter<Acti
         Result<RemoveClientSuccessfulResponse, OidcError> response)
         => Task.FromResult(response.Match<ActionResult>(
             onSuccess: _ => new NoContentResult(),
-            onFailure: error => error.Format(StatusCodes.Status400BadRequest)));
+            onFailure: error => error.Format(
+                StatusCodes.Status400BadRequest, ClientManagementRealm.Of(error, tenantAccessor))));
 }
