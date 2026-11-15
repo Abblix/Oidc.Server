@@ -63,9 +63,8 @@ public class ClientManagementController : ControllerBase
     [HttpPost]
     [ActionName(nameof(RegisterClientAsync))]
     [Produces(MediaTypeNames.Application.Json)]
-    [Consumes(MediaTypeNames.Application.Json)]
     [LimitsRegistrationRequestSize]
-    [RefusesUnreadableClientMetadata]
+    [RefusesRegistrationMetadataAfterTheToken]
     public async Task<ActionResult> RegisterClientAsync(
         [FromServices] IRegisterClientHandler handler,
         [FromServices] IRegisterClientResponseFormatter<ActionResult> formatter,
@@ -129,9 +128,8 @@ public class ClientManagementController : ControllerBase
     [HttpPut]
     [ActionName(nameof(UpdateClientAsync))]
     [Produces(MediaTypeNames.Application.Json)]
-    [Consumes(MediaTypeNames.Application.Json)]
     [LimitsRegistrationRequestSize]
-    [RefusesUnreadableClientMetadata]
+    [RefusesUpdateMetadataAfterTheToken]
     public async Task<ActionResult> UpdateClientAsync(
         [FromServices] IUpdateClientHandler handler,
         [FromServices] IUpdateClientResponseFormatter<ActionResult> formatter,

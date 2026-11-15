@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Abblix.Oidc.Server.AspNetCore.Formatters;
@@ -21,7 +22,10 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// Provides a response formatter for reading client responses.
 /// </summary>
 /// <param name="clientUriBuilder">Builds the URL of the client's configuration endpoint.</param>
-public class ReadClientResponseFormatter(RegistrationClientUriBuilder clientUriBuilder) : IReadClientResponseFormatter<ActionResult>
+/// <param name="tenantAccessor">Names the tenant the request is served at, whose issuer is the realm of a bare challenge.</param>
+public class ReadClientResponseFormatter(
+    RegistrationClientUriBuilder clientUriBuilder,
+    ITenantAccessor tenantAccessor) : IReadClientResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Formats a response for reading a client asynchronously.
@@ -46,6 +50,6 @@ public class ReadClientResponseFormatter(RegistrationClientUriBuilder clientUriB
                     ? clientUriBuilder.Build(success.ClientId)
                     : null
             }),
-            error => error.Format(StatusCodes.Status404NotFound)));
+            error => error.Format(StatusCodes.Status404NotFound, ClientManagementRealm.Of(error, tenantAccessor))));
     }
 }

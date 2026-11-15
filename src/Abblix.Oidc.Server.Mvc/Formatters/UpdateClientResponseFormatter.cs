@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
@@ -22,7 +23,10 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// Provides a response formatter for update client responses per RFC 7592 Section 2.2.
 /// </summary>
 /// <param name="clientUriBuilder">Builds the URL of the client's configuration endpoint.</param>
-public class UpdateClientResponseFormatter(RegistrationClientUriBuilder clientUriBuilder) : IUpdateClientResponseFormatter<ActionResult>
+/// <param name="tenantAccessor">Names the tenant the request is served at, whose issuer is the realm of a bare challenge.</param>
+public class UpdateClientResponseFormatter(
+    RegistrationClientUriBuilder clientUriBuilder,
+    ITenantAccessor tenantAccessor) : IUpdateClientResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Formats a response for updating a client asynchronously.
@@ -43,6 +47,6 @@ public class UpdateClientResponseFormatter(RegistrationClientUriBuilder clientUr
                         ? clientUriBuilder.Build(success.ClientId)
                         : null
                 }),
-            error => error.Format(StatusCodes.Status400BadRequest)));
+            error => error.Format(StatusCodes.Status400BadRequest, ClientManagementRealm.Of(error, tenantAccessor))));
     }
 }
