@@ -725,10 +725,10 @@ public class RefreshTokenServiceTests
 
     /// <summary>
     /// By default a refresh token is reused only by a client whose every access token is bound to a key it proves:
-    /// one authenticating by certificate whose tokens are bound to it - registered for certificate-bound tokens
-    /// (RFC 8705 section 3.4) or held to FAPI 1.0 Advanced, which issues no other - or requiring DPoP - or one
-    /// authenticating with private_key_jwt while requiring DPoP. Every other client rotates, a certificate client whose tokens nothing
-    /// binds and a shared-secret client requiring DPoP included.
+    /// one authenticating by certificate that requires DPoP, registers for certificate-bound tokens (RFC 8705 section
+    /// 3.4) or is held to FAPI 1.0 Advanced, which issues no other, and one authenticating with private_key_jwt while
+    /// requiring DPoP. Every other client rotates, a certificate client whose tokens nothing binds and a shared-secret
+    /// client requiring DPoP included.
     /// </summary>
     [Theory]
     [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, false, null, true)]
