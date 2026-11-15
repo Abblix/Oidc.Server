@@ -195,7 +195,12 @@ public class BackChannelAuthenticationRequestProcessor(
 			ClientNotificationToken = request.Model.ClientNotificationToken,
 		};
 
-		var authenticationRequestId = await storage.StoreAsync(tenant, backChannelRequest, request.ExpiresIn);
+		// Kept for one more lifetime past its expiry, so a poll arriving after expires_in still finds the request and
+		// is answered expired_token (CIBA Core 1.0 section 11, "The auth_req_id has expired"), not the invalid_grant an
+		// identifier the server never issued gets. The record's own ExpiresAt, not its presence, is what refuses it
+		// from then on, so the store holds a request at most twice the lifetime the client was told
+		var authenticationRequestId = await storage.StoreAsync(
+			tenant, backChannelRequest, request.ExpiresIn + request.ExpiresIn);
 
 		return new BackChannelAuthenticationSuccess
 		{

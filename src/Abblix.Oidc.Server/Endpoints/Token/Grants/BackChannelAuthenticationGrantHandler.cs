@@ -119,7 +119,8 @@ public class BackChannelAuthenticationGrantHandler(
         return authenticationRequest switch
         {
             // CIBA Core section 11: "If the auth_req_id is invalid or was issued to another Client, an
-            // invalid_grant error MUST be returned". One evicted on expiry cannot be told from one never issued.
+            // invalid_grant error MUST be returned". A request is kept past its expiry, so a late poll reaches the
+            // expired_token answer below; one evicted after that cannot be told from one never issued.
             null => new OidcError(ErrorCodes.InvalidGrant, "The authentication request is not recognized"),
 
             // If the client making the request is not the same as the one that initiated the authentication

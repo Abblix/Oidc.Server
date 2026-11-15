@@ -191,10 +191,15 @@ public class AuthenticationCompletionRouterTests
             storage.Object);
     }
 
+    /// <summary>
+    /// The expiry of a stored request still waiting for its answer, later than the system clock the handlers read.
+    /// </summary>
+    private static DateTimeOffset StillPendingUntil => TimeProvider.System.GetUtcNow().AddHours(1);
+
     private static BackChannelAuthenticationRequest RequestFor(string clientId) =>
         new(
             new AuthorizedGrant(
                 new AuthSession("user-1", "session-1", DateTimeOffset.UnixEpoch, "test"),
                 new AuthorizationContext(clientId, [Scopes.OpenId], null)),
-            DateTimeOffset.UnixEpoch.AddHours(1));
+            StillPendingUntil);
 }

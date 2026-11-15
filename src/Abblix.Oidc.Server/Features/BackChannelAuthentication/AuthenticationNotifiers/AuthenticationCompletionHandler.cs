@@ -295,8 +295,10 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="answered">What the caller was doing, for the message: completed or denied.</param>
     private async Task<BackChannelAuthenticationRequest> ReadPendingAsync(TenantDefinition tenant, [Credential] string authenticationRequestId, string answered)
     {
+        // A pending record outlives its expiry so a late poll is told expired_token, so its presence no longer says it
+        // may still be answered: one whose ExpiresAt has come is refused as one that is gone
         var stored = await storage.TryGetAsync(tenant, authenticationRequestId);
-        if (stored is { Status: BackChannelAuthenticationStatus.Pending })
+        if (stored is { Status: BackChannelAuthenticationStatus.Pending } && clock.GetUtcNow() < stored.ExpiresAt)
             return stored;
 
         LogNotPendingOnCompletion(FingerprintOf(authenticationRequestId), answered, stored?.Status.ToString());
@@ -320,13 +322,17 @@ public abstract partial class AuthenticationCompletionHandler(
     /// The refusal of an answer to a request that is not pending, worded once for every caller.
     /// </summary>
     /// <param name="answered">What the caller was doing: completed or denied.</param>
-    /// <param name="stored">The record found, or null when there was none.</param>
+    /// <param name="stored">The record found, or null when there was none. One still reading pending is refused
+    /// because its expiry has come.</param>
     internal static InvalidOperationException NotPending(string answered, BackChannelAuthenticationRequest? stored)
         => new(
             $"The authentication request cannot be {answered}: the stored record "
-            + (stored is null
-                ? "is not there"
-                : $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}")
+            + stored switch
+            {
+                null => "is not there",
+                { Status: BackChannelAuthenticationStatus.Pending } => "has expired",
+                _ => $"reads {stored.Status} rather than {BackChannelAuthenticationStatus.Pending}",
+            }
             + ". Only a pending request can be answered. Recovering from a failed delivery means "
             + "asking the end user again rather than answering the same request twice.");
 

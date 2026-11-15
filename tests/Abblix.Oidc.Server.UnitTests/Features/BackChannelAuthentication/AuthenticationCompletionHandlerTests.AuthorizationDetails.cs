@@ -42,7 +42,7 @@ public partial class AuthenticationCompletionHandlerTests
                 {
                     AuthorizationDetails = Details(grantedTypes),
                 }),
-            DateTimeOffset.UnixEpoch.AddHours(1))
+            StillPendingUntil)
         {
             ClientNotificationToken = NotificationToken,
             RequestedAuthorizationDetails = Details(requestedTypes),
