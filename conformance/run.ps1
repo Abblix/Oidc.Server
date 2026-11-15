@@ -5,8 +5,9 @@ Runs OpenID Foundation conformance test plans against the conformance test host,
 
 .DESCRIPTION
 Starts the suite from its published images, publishes the test host and runs it as a container on the suite's
-network, runs the suite's own plan runner, then removes what it started. The exit code is the runner's: zero when
-every module passed or waits only for a reviewer to look at a screenshot, non-zero on any unexpected failure.
+network, runs the suite's own plan runner, then removes what it started. The exit code is zero when every module passed,
+waits only for a reviewer to look at a screenshot, or was skipped as expected-skips.json lists for its configuration,
+and non-zero on any unexpected failure or skip, or on a module the suite did not let finish.
 
 Without -SuitePath the run takes the suite's newest numbered release: its scripts from the git tag and its images
 under the same tag. A release that is tagged but whose images are not published yet stops the run, naming it, rather
@@ -225,24 +226,39 @@ function Split-PlanConfiguration {
 }
 
 function Select-ExpectedSkips {
-    # The entries of expected-skips.json whose configuration-filename, a shell-style pattern as the runner matches it,
-    # names one of the configuration files a plan of this run reads; always an array, so an empty selection is written
-    # as [] and a single entry is not unwrapped
+    # The entries of expected-skips.json that a plan of this run can meet: its configuration file matches the entry's
+    # configuration-filename, one of the modules it runs matches the entry's test-name, both shell-style patterns as the
+    # runner matches them, and no variant the plan names differs from the entry's. The runner fails a run on a listed
+    # skip that no module reached, so an entry for another configuration, for a module the plan leaves out or for one
+    # the suite's release does not have would fail it. Always an array, so an empty selection is written as [] and a
+    # single entry is not unwrapped
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $Entries,
-        [Parameter(Mandatory)] [AllowEmptyCollection()] [string[]] $Configurations
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $Runs
     )
     , @($Entries | Where-Object {
-            $pattern = $_.'configuration-filename'
-            $pattern -and @($Configurations | Where-Object { $_ -like $pattern })
+            $entry = $_
+            @($Runs | Where-Object {
+                    $run = $_
+                    $variants = @{}
+                    foreach ($match in [regex]::Matches(($run.Runner -split ':', 2)[0], '\[([^=\]]+)=([^\]]*)\]')) {
+                        $variants[$match.Groups[1].Value] = $match.Groups[2].Value
+                    }
+                    $entry.'configuration-filename' -and $run.Configuration -like $entry.'configuration-filename' -and
+                    @($run.Modules | Where-Object { $_ -like $entry.'test-name' }) -and
+                    -not @($entry.variant.PSObject.Properties | Where-Object {
+                            $variants.ContainsKey($_.Name) -and $variants[$_.Name] -ne $_.Value
+                        })
+                })
         })
 }
 
 function Split-KeyRotation {
     # The plan specification the runner gets, without the key rotation module, and whether the plan had that module.
     # The runner starts the module the moment it is configured, before anyone can rotate the server's keys, so it
-    # runs in a step of its own; a specification already naming its modules keeps the others it names
+    # runs in a step of its own; a specification already naming its modules keeps the others it names. Also the modules
+    # the runner runs, for whatever is decided by them
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [string] $Specification,
@@ -263,10 +279,10 @@ function Split-KeyRotation {
     }
 
     if ($modules -notcontains $KeyRotationModule) {
-        return [pscustomobject]@{ Runner = $Specification; KeyRotation = $false }
+        return [pscustomobject]@{ Runner = $Specification; KeyRotation = $false; Modules = $modules }
     }
     $others = @($modules | Where-Object { $_ -ne $KeyRotationModule })
-    return [pscustomobject]@{ Runner = "$($parts[0]):$($others -join ',')"; KeyRotation = $true }
+    return [pscustomobject]@{ Runner = "$($parts[0]):$($others -join ',')"; KeyRotation = $true; Modules = $others }
 }
 
 function Get-SuiteTime {
@@ -494,10 +510,8 @@ try {
     # arguments go in a file, one per line, which the container reads into its own argument list
     $argumentsDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-arguments'
     New-Item -ItemType Directory -Force $argumentsDirectory | Out-Null
-    # Only the expected skips of the configurations this run uses: the runner fails a run on a listed skip no module of it
-    # reached, so the FAPI entries would fail a run of the OpenID Connect plans
     $expectedSkips = Select-ExpectedSkips -Entries @(Get-Content -Raw (Join-Path $PSScriptRoot 'expected-skips.json') |
-            ConvertFrom-Json) -Configurations @($split | ForEach-Object Configuration)
+            ConvertFrom-Json) -Runs $split
     [IO.File]::WriteAllText((Join-Path $argumentsDirectory 'expected-skips.json'),
         (ConvertTo-Json -InputObject $expectedSkips -Depth 5))
     $runnerArguments = @(
@@ -578,7 +592,7 @@ try {
     $unfinished = @(Get-UnfinishedModules -Since $plansSince -ExpectedPlans ($Plan.Count + $keyRotationPlans.Count))
     if ($unfinished) {
         $unfinished | Format-Table -AutoSize | Out-String | Write-Host
-        Write-Host "$($unfinished.Count) module(s) did not finish with PASSED or REVIEW" -ForegroundColor Red
+        Write-Host "$($unfinished.Count) module(s) did not finish with PASSED, REVIEW or SKIPPED" -ForegroundColor Red
         if ($exitCode -eq 0) {
             $exitCode = 1
         }
