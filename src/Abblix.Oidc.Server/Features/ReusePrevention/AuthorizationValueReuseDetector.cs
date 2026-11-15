@@ -18,7 +18,7 @@ namespace Abblix.Oidc.Server.Features.ReusePrevention;
 
 /// <summary>
 /// Default <see cref="IAuthorizationValueReuseDetector"/> implementation backed by <see cref="IEntityStorage"/>.
-/// It records a SHA-256 hash of each value under a per-client, per-kind key with a time-to-live equal to the
+/// It reserves a SHA-256 hash of each value under a per-client, per-kind key with a time-to-live equal to the
 /// configured detection window, so a raw code_challenge or nonce never lands in the cache and entries expire
 /// on their own.
 /// </summary>
@@ -40,12 +40,12 @@ public class AuthorizationValueReuseDetector(
     }
 
     /// <inheritdoc />
-    public async Task RecordAsync(TenantDefinition tenant, string clientId, string valueKind, string value)
+    public Task<bool> TryReserveAsync(TenantDefinition tenant, string clientId, string valueKind, string value)
     {
         if (options.Value.PkceAndNonceReuseDetectionInterval is not { } interval)
-            return;
+            return Task.FromResult(true);
 
-        await storage.SetAsync(
+        return storage.TrySetIfAbsentAsync(
             KeyOf(tenant, clientId, valueKind, value),
             Marker,
             new StorageOptions { AbsoluteExpirationRelativeToNow = interval });
