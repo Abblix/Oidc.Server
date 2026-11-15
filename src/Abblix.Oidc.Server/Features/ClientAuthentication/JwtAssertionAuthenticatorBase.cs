@@ -136,6 +136,8 @@ public abstract partial class JwtAssertionAuthenticatorBase(
     /// the set admits: this tenant's issuer identifier, or, for a client granted
     /// <see cref="ClientAssertionAudiences.TokenEndpoint"/>, the token endpoint URL or its mutual-TLS alias, for one
     /// granted <see cref="ClientAssertionAudiences.BackChannelAuthenticationEndpoint"/>, the backchannel authentication
+    /// endpoint URL or its alias, for one granted
+    /// <see cref="ClientAssertionAudiences.PushedAuthorizationRequestEndpoint"/>, the pushed authorization request
     /// endpoint URL or its alias, each as a string, or in an array of strings beside others for a client granted
     /// <see cref="ClientAssertionAudiences.AllowArray"/>.
     /// </summary>
@@ -167,20 +169,32 @@ public abstract partial class JwtAssertionAuthenticatorBase(
             return true;
         }
 
-        // Resolved only now, since it takes a scope of its own, which a client naming the issuer never needs
-        if (audiences.HasFlag(ClientAssertionAudiences.TokenEndpoint) &&
-            tenant.EndpointSpellings(serviceProvider, OidcEndpoints.Token) is var tokenEndpoint &&
-            Names(audience, allowArray, written => tokenEndpoint.Contains(written, StringComparer.Ordinal)))
+        if (NamesGrantedEndpoint(
+                tenant, audience, audiences, ClientAssertionAudiences.TokenEndpoint, OidcEndpoints.Token))
         {
             LogTokenEndpointAudienceAccepted(clientInfo.ClientId);
             return true;
         }
 
-        if (audiences.HasFlag(ClientAssertionAudiences.BackChannelAuthenticationEndpoint) &&
-            tenant.EndpointSpellings(serviceProvider, OidcEndpoints.BackChannelAuthentication) is var backChannel &&
-            Names(audience, allowArray, written => backChannel.Contains(written, StringComparer.Ordinal)))
+        if (NamesGrantedEndpoint(
+                tenant,
+                audience,
+                audiences,
+                ClientAssertionAudiences.BackChannelAuthenticationEndpoint,
+                OidcEndpoints.BackChannelAuthentication))
         {
             LogBackChannelAuthenticationEndpointAudienceAccepted(clientInfo.ClientId);
+            return true;
+        }
+
+        if (NamesGrantedEndpoint(
+                tenant,
+                audience,
+                audiences,
+                ClientAssertionAudiences.PushedAuthorizationRequestEndpoint,
+                OidcEndpoints.PushedAuthorizationRequest))
+        {
+            LogPushedAuthorizationRequestEndpointAudienceAccepted(clientInfo.ClientId);
             return true;
         }
 
@@ -189,6 +203,31 @@ public abstract partial class JwtAssertionAuthenticatorBase(
         LogAudienceIsNotOneTheClientMayName(
             clientInfo.ClientId, Sanitized.Value(audience?.ToJsonString()), audiences, issuerIdentifier);
         return false;
+    }
+
+    /// <summary>
+    /// Answers whether <paramref name="audiences"/> hold <paramref name="grant"/> and the audience claim names a
+    /// spelling of <paramref name="endpoint"/>, as a string or, when the set allows one, in an array.
+    /// </summary>
+    /// <remarks>
+    /// The spellings are resolved only once the grant is found, since they take a scope of their own, which a client
+    /// naming the issuer never needs.
+    /// </remarks>
+    private bool NamesGrantedEndpoint(
+        TenantDefinition tenant,
+        JsonNode? audience,
+        ClientAssertionAudiences audiences,
+        ClientAssertionAudiences grant,
+        OidcEndpoints endpoint)
+    {
+        if (!audiences.HasFlag(grant))
+            return false;
+
+        var spellings = tenant.EndpointSpellings(serviceProvider, endpoint);
+        return Names(
+            audience,
+            audiences.HasFlag(ClientAssertionAudiences.AllowArray),
+            written => spellings.Contains(written, StringComparer.Ordinal));
     }
 
     /// <summary>

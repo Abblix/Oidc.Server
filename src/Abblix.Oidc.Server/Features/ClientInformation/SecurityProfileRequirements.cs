@@ -76,7 +76,7 @@ public sealed record SecurityProfileRequirements
     /// <summary>
     /// The profile requires a sender-constrained access token, satisfied by either a DPoP proof
     /// (RFC 9449) or a certificate-bound token over mutual TLS (RFC 8705 section 3). Enforced by
-    /// <c>Endpoints.Token.Validation.DPoPBindingValidator</c>.
+    /// <c>Endpoints.Token.Validation.DPoPTokenEndpointValidator</c>.
     /// </summary>
     public bool RequireSenderConstrainedTokens { get; init; }
 
@@ -424,9 +424,9 @@ public sealed record SecurityProfileRequirements
 
     /// <summary>
     /// The profile accepts in the audience of a client authentication assertion only the issuer identifier, as a
-    /// string, whatever <see cref="ClientInfo.ClientAssertionAudiences"/> the host allows the client: neither the
-    /// token endpoint URL nor an array. Enforced by <c>Features.ClientAuthentication.JwtAssertionAuthenticatorBase</c>,
-    /// and refused in the client's configuration by <see cref="SecurityProfileConsistency"/>.
+    /// string, whatever <see cref="ClientInfo.ClientAssertionAudiences"/> the host allows the client: no endpoint URL
+    /// and no array. Enforced by <c>Features.ClientAuthentication.JwtAssertionAuthenticatorBase</c>, and refused in
+    /// the client's configuration by <see cref="SecurityProfileConsistency"/>.
     /// </summary>
     public bool RequireStringAudienceInClientAssertion { get; init; }
 

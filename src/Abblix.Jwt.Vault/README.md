@@ -172,7 +172,7 @@ With `UseKeysInProcess`, the server rotates on the `RotateEvery` schedule with n
 
 With `UseKeysInCustodian`, every issued token costs at least two Transit round-trips: one to list the signing key's versions, one to sign. Decrypting an inbound encrypted request object or client assertion adds an unwrap; issuing an encrypted token adds nothing, because it is wrapped to the recipient's public key locally. Nothing here is cached, and Transit is a hard dependency of token issuance, so size it for your peak token rate. Set an explicit HTTP timeout: a hung call is otherwise bounded only by `HttpClient.Timeout`, which defaults to 100 seconds.
 
-With `UseKeysInProcess`, token issuance makes no Transit call: the server signs locally and reaches Transit only to open a sealed key when a pod loads or refreshes its ring, and, for the winning key of each new period, on any pod that did not mint it. Minting needs Transit only for the key-encryption key's public half, which the server caches. The full picture is in [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md).
+With `UseKeysInProcess`, token issuance makes no Transit call: the server signs locally and reaches Transit on every refresh of the ring, at half the propagation window: one read of the key-encryption key's versions and one unwrap for every key the ring holds, for each tenant. Each mint also reads the key-encryption key's public half, so a pod cannot mint while Transit is unreachable. The full picture is in [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md).
 
 ## Supported algorithms
 

@@ -22,8 +22,9 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// It is one when the client the request's client_id names is registered for that method. RFC 8705 section 2 has the
 /// requirement of mutual TLS for client authentication "determined by the authorization server, based on policy or
 /// configuration for the given client", and section 4 has mutual-TLS client authentication and certificate-bound
-/// tokens "used independently of each other", so the certificate of a client registered for another method binds its
-/// tokens and is not a second credential beside that method. Section 2 also has the client include client_id in every
+/// tokens "used independently of each other", so the certificate of a client registered for another method is not a
+/// second credential beside that method; it binds the client's tokens only when the client registered
+/// tls_client_certificate_bound_access_tokens or its profile issues certificate-bound tokens only. Section 2 also has the client include client_id in every
 /// request using mutual-TLS client authentication, so without one the certificate authenticates nobody.
 /// <para>
 /// So the answer depends on how the named client is registered, and a caller holding any certificate can tell whether a
