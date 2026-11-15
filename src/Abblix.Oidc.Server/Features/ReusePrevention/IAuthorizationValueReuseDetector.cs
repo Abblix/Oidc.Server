@@ -21,6 +21,21 @@ namespace Abblix.Oidc.Server.Features.ReusePrevention;
 public interface IAuthorizationValueReuseDetector
 {
     /// <summary>
+    /// Reports whether a value of the given kind has already been reserved for this client within the
+    /// detection window - that is, whether the client is repeating a value that must be unique per request.
+    /// Read while the request is validated, so a repeated value is refused before the end user signs in or
+    /// consents; <see cref="TryReserveAsync"/> decides between requests presenting one value together.
+    /// </summary>
+    /// <param name="tenant">The tenant the client belongs to.</param>
+    /// <param name="clientId">The client presenting the value.</param>
+    /// <param name="valueKind">A discriminator for the value's role (for example the parameter name), so
+    /// a <c>code_challenge</c> and a <c>nonce</c> that happen to coincide are tracked separately.</param>
+    /// <param name="value">The raw value; only a hash of it is ever stored.</param>
+    /// <returns><c>true</c> when the value was reserved before within the window; otherwise <c>false</c>.
+    /// Always <c>false</c> when detection is disabled.</returns>
+    Task<bool> IsReusedAsync(TenantDefinition tenant, string clientId, string valueKind, string value);
+
+    /// <summary>
     /// Reserves a value of the given kind for this client for the detection window, answering whether this is its
     /// first use there. Deciding and reserving are one step, so of two requests presenting one value together, one
     /// is told it is the first. Called once per authorization code, before the code is issued, rather than on every

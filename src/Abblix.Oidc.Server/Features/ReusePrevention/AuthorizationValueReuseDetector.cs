@@ -9,41 +9,51 @@
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
-using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.ReusePrevention;
 
 /// <summary>
-/// Default <see cref="IAuthorizationValueReuseDetector"/> implementation, reserving in the replay cache. It reserves
-/// a SHA-256 hash of each value under a per-client, per-kind name for the configured detection window, so a raw
-/// code_challenge or nonce never lands in the cache and reservations expire on their own.
+/// Default <see cref="IAuthorizationValueReuseDetector"/> implementation backed by <see cref="IEntityStorage"/>.
+/// It reserves a SHA-256 hash of each value under a per-client, per-kind key with a time-to-live equal to the
+/// configured detection window, so a raw code_challenge or nonce never lands in the cache and entries expire
+/// on their own.
 /// </summary>
-/// <param name="replayCache">The store every tenant's reservations are kept in, each under names of its own. The
-/// store itself rather than the server's form of it, which keeps for longer than asked and keeps by the tenant the
-/// request runs in, while the window here is the configured one and the tenant is named by the caller.</param>
-/// <param name="keyFactory">Names the reservation.</param>
-/// <param name="options">The detection window.</param>
-/// <param name="clock">Where the window starts.</param>
 public class AuthorizationValueReuseDetector(
-    [FromKeyedServices(TenantServiceKeys.Shared)] IReplayCache replayCache,
+    IEntityStorage storage,
     IEntityStorageKeyFactory keyFactory,
-    IOptions<OidcOptions> options,
-    TimeProvider clock) : IAuthorizationValueReuseDetector
+    IOptions<OidcOptions> options) : IAuthorizationValueReuseDetector
 {
+    private const string Marker = "used";
+
+    /// <inheritdoc />
+    public async Task<bool> IsReusedAsync(TenantDefinition tenant, string clientId, string valueKind, string value)
+    {
+        if (options.Value.PkceAndNonceReuseDetectionInterval is null)
+            return false;
+
+        var seen = await storage.GetAsync<string>(KeyOf(tenant, clientId, valueKind, value), removeOnRetrieval: false);
+        return seen is not null;
+    }
+
     /// <inheritdoc />
     public Task<bool> TryReserveAsync(TenantDefinition tenant, string clientId, string valueKind, string value)
     {
         if (options.Value.PkceAndNonceReuseDetectionInterval is not { } interval)
             return Task.FromResult(true);
 
+        return storage.TrySetIfAbsentAsync(
+            KeyOf(tenant, clientId, valueKind, value),
+            Marker,
+            new StorageOptions { AbsoluteExpirationRelativeToNow = interval });
+    }
+
+    private string KeyOf(TenantDefinition tenant, string clientId, string valueKind, string value)
+    {
         var hash = Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-        return replayCache.TryReserveAsync(
-            keyFactory.AuthorizationValueReuseKey(tenant, clientId, valueKind, hash),
-            clock.GetUtcNow() + interval);
+        return keyFactory.AuthorizationValueReuseKey(tenant, clientId, valueKind, hash);
     }
 }

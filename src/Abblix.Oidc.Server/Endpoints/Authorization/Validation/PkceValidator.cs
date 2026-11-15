@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Utils;
 using Microsoft.Extensions.Options;
 using static Abblix.Oidc.Server.Model.AuthorizationRequest;
@@ -25,7 +26,10 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// particularly in public clients. It ensures that the authorization request conforms to
 /// the standards defined in RFC 7636 (specifically, see Section 4.3 for client validation requirements).
 /// </summary>
-public class PkceValidator : IAuthorizationContextValidator
+/// <param name="reuseDetector">Detects a client repeating a code_challenge across authorization requests
+/// when reuse detection is enabled (RFC 9700 Section 2.1.1).</param>
+public class PkceValidator(
+	IAuthorizationValueReuseDetector reuseDetector) : IAuthorizationContextValidator
 {
 	/// <summary>
 	/// The code challenge methods the token endpoint can verify a code verifier against.
@@ -45,10 +49,7 @@ public class PkceValidator : IAuthorizationContextValidator
 	/// An AuthorizationRequestValidationError if the validation fails due to non-compliance with PKCE requirements,
 	/// or null if the request is valid. Refer to Section 4.3 of RFC 7636 for more details.
 	/// </returns>
-	public Task<AuthorizationRequestValidationError?> ValidateAsync(TenantDefinition tenant, AuthorizationValidationContext context)
-		=> Task.FromResult(Validate(tenant, context));
-
-	private static AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
+	public async Task<AuthorizationRequestValidationError?> ValidateAsync(TenantDefinition tenant, AuthorizationValidationContext context)
 	{
 		// RFC 7636 section 4.4.1: "If the server supporting PKCE does not support the requested transformation, the
 		// authorization endpoint MUST return the authorization error response with "error" value set to
@@ -65,17 +66,19 @@ public class PkceValidator : IAuthorizationContextValidator
 		var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
 
 		return context.Request.CodeChallenge is { } codeChallenge && codeChallenge.HasValue()
-			? ValidatePresentedChallenge(context, profile)
+			? await ValidatePresentedChallengeAsync(tenant, context, profile, codeChallenge)
 			: ValidateMissingChallenge(context, profile);
 	}
 
 	/// <summary>
-	/// The rule a request carrying a code_challenge answers to: the method the profile and the client allow. A
-	/// value used before is refused where the code is issued, which reserves it.
+	/// The rules a request carrying a code_challenge answers to: the method the profile and the client allow,
+	/// and a value not used before.
 	/// </summary>
-	private static AuthorizationRequestValidationError? ValidatePresentedChallenge(
+	private async Task<AuthorizationRequestValidationError?> ValidatePresentedChallengeAsync(
+		TenantDefinition tenant,
 		AuthorizationValidationContext context,
-		SecurityProfileRequirements profile)
+		SecurityProfileRequirements profile,
+		string codeChallenge)
 	{
 		// Under a profile that pins the method (FAPI 2.0 names S256), anything other than S256 is
 		// rejected - including plain and the non-standard S512 - before the per-client plain check,
@@ -92,6 +95,13 @@ public class PkceValidator : IAuthorizationContextValidator
 		    !context.ClientInfo.PlainPkceAllowed)
 		{
 			return context.InvalidRequest("The client is not allowed PKCE plain method");
+		}
+
+		// A code_challenge must be transaction-specific (RFC 9700 section 2.1.1). When reuse detection is on,
+		// reject a value this client already used for a previously issued authorization code.
+		if (await reuseDetector.IsReusedAsync(tenant, context.ClientInfo.ClientId, Parameters.CodeChallenge, codeChallenge))
+		{
+			return context.InvalidRequest("The PKCE code_challenge must be unique per authorization request");
 		}
 
 		return null;

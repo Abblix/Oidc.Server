@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.ReusePrevention;
 using Moq;
 using Xunit;
 
@@ -39,7 +40,34 @@ public class PkceValidatorTests
         _validator = CreateValidator();
     }
 
-    private static PkceValidator CreateValidator() => new();
+    private static PkceValidator CreateValidator(IAuthorizationValueReuseDetector? reuseDetector = null)
+        => new(
+            reuseDetector ?? Mock.Of<IAuthorizationValueReuseDetector>());
+
+    /// <summary>
+    /// Verifies that a code_challenge the client already used for a previously issued authorization code is
+    /// rejected when reuse detection is enabled - a code_challenge must be transaction-specific (RFC 9700
+    /// Section 2.1.1). A structurally valid S256 challenge would otherwise pass.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithReusedCodeChallenge_ShouldFail()
+    {
+        // Arrange
+        var reuseDetector = new Mock<IAuthorizationValueReuseDetector>();
+        reuseDetector
+            .Setup(d => d.IsReusedAsync(TestTenant.Matched, ClientId, It.IsAny<string>(), CodeChallengeS256))
+            .ReturnsAsync(true);
+        var validator = CreateValidator(reuseDetector: reuseDetector.Object);
+        var context = CreateContext(
+            codeChallenge: CodeChallengeS256,
+            codeChallengeMethod: CodeChallengeMethods.S256);
+
+        // Act
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        // Assert
+        Assert.NotNull(result);
+    }
 
     /// <summary>
     /// Creates an AuthorizationValidationContext for testing.
