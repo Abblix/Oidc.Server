@@ -264,9 +264,10 @@ function Select-ExpectedSkips {
 function Split-KeyRotation {
     # The plan specification the runner gets, without the key rotation module, and whether the plan had that module.
     # The runner starts the module the moment it is configured, before anyone can rotate the server's keys, so it
-    # runs in a step of its own; a specification already naming its modules keeps the others it names. Also the modules
-    # the runner runs, for whatever is decided by them: those of the suite's plan, or of them the ones the specification
-    # names, since the runner passes over a named module its plan does not have
+    # runs in a step of its own; a specification already naming its modules keeps the others it names. Also Modules:
+    # the plan's modules as /api/plan/available lists them, or of those the ones the specification names, since the
+    # runner passes over a named module its plan does not have. The listing is not narrowed by the plan's variants, so
+    # a module the suite leaves out for them is still among these
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [string] $Specification,
