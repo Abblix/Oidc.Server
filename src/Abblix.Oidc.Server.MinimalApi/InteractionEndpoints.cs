@@ -84,9 +84,15 @@ internal static class InteractionEndpoints
     /// resource" answered with that field, a request the binder refused included.
     /// </summary>
     private static Task<IResult> FormatUserInfoRefusalAsync(HttpContext context, OidcError error)
-        // The refused request has no token the formatter could read, and a failure is formatted from the error alone
+        // The refused request has no token the formatter could read, and a failure is formatted from the error alone,
+        // beside the x-fapi-interaction-id header the binder never reached, which the response echoes
         => context.RequestServices.GetRequiredService<IUserInfoResponseFormatter<IResult>>()
-            .FormatResponseAsync(new Core.UserInfoRequest(), error);
+            .FormatResponseAsync(
+                new Core.UserInfoRequest
+                {
+                    FapiInteractionId = context.Request.Headers[HttpRequestHeaders.FapiInteractionId],
+                },
+                error);
 
     /// <summary>
     /// Ends the user's session (OpenID Connect RP-Initiated Logout). The request is bound from the query string or the

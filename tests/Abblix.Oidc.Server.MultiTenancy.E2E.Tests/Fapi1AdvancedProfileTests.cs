@@ -359,6 +359,34 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// FAPI 1.0 Part 1 section 6.2.1 has the protected resource "set the response header x-fapi-interaction-id to the
+    /// value received from the corresponding FAPI client request header", and a UserInfo request the binder refuses
+    /// before any token is read is answered under the tenant's profile with the value the client sent, and with a
+    /// UUID of the server's own where it sent none.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AUserInfoRequestRefusedAtBinding_CarriesTheInteractionId(bool clientSendsOne)
+    {
+        const string interactionId = "c770aef3-6784-41f7-8e0e-ff5f97bddb3a";
+        const string accessToken = UserInfoRequest.Parameters.AccessToken;
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get, $"{Acme}/connect/userinfo?{accessToken}=one&{accessToken}=two");
+        if (clientSendsOne)
+            request.Headers.Add(HttpRequestHeaders.FapiInteractionId, interactionId);
+
+        var response = await _http!.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.False(response.IsSuccessStatusCode);
+        var answered = Assert.Single(response.Headers.GetValues(HttpRequestHeaders.FapiInteractionId));
+        if (clientSendsOne)
+            Assert.Equal(interactionId, answered);
+        else
+            Assert.True(Guid.TryParseExact(answered, "D", out _), answered);
+    }
+
+    /// <summary>
     /// FAPI 1.0 Part 2 section 5.2.2 requires "the aud claim in the request object to be, or to be an array
     /// containing, the OP's Issuer Identifier URL", so an object naming no audience is refused.
     /// </summary>
