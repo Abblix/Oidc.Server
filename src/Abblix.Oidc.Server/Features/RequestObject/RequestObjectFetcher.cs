@@ -248,7 +248,7 @@ public partial class RequestObjectFetcher(
                 // (FAPI 1.0 Part 2 section 5.2.2) commits the client the same way.
                 var profile = SecurityProfileRequirements.For(validJwt.Client, tenant.DefaultSecurityProfile);
                 if ((validJwt.Client.RequireSignedRequestObject || profile.RequireSignedRequestObject) &&
-                    string.Equals(validJwt.Token.Header.Algorithm, SigningAlgorithms.None, StringComparison.Ordinal))
+                    UnsecuredToken.Is(validJwt.Token))
                 {
                     return new OidcError(
                         ErrorCodes.InvalidRequestObject,
