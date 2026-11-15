@@ -1,0 +1,18 @@
+[
+  {
+    "test-name": "fapi2-security-profile-final-ensure-holder-of-key-required-at-non-alias-token-endpoint",
+    "variant": {
+      "client_auth_type": "private_key_jwt",
+      "sender_constrain": "dpop"
+    },
+    "configuration-filename": "*/abblix-fapi2-pkjwt-dpop.json"
+  },
+  {
+    "test-name": "fapi2-security-profile-final-ensure-holder-of-key-required-at-non-alias-token-endpoint",
+    "variant": {
+      "client_auth_type": "private_key_jwt",
+      "sender_constrain": "dpop"
+    },
+    "configuration-filename": "*/abblix-fapi2-ms-pkjwt-dpop.json"
+  }
+]

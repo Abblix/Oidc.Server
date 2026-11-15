@@ -224,6 +224,21 @@ function Split-PlanConfiguration {
     return [pscustomobject]@{ Plan = $Line.Substring(0, $separator).Trim(); Configuration = $alias }
 }
 
+function Select-ExpectedSkips {
+    # The entries of expected-skips.json whose configuration-filename, a shell-style pattern as the runner matches it,
+    # names one of the configuration files a plan of this run reads; always an array, so an empty selection is written
+    # as [] and a single entry is not unwrapped
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $Entries,
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [string[]] $Configurations
+    )
+    , @($Entries | Where-Object {
+            $pattern = $_.'configuration-filename'
+            $pattern -and @($Configurations | Where-Object { $_ -like $pattern })
+        })
+}
+
 function Split-KeyRotation {
     # The plan specification the runner gets, without the key rotation module, and whether the plan had that module.
     # The runner starts the module the moment it is configured, before anyone can rotate the server's keys, so it
@@ -268,10 +283,12 @@ function Get-SuiteTime {
 }
 
 function Get-UnfinishedModules {
-    # Every module of the plans started since $Since that ran and did not end FINISHED with PASSED or REVIEW. The suite's
-    # runner counts a module the suite INTERRUPTED as complete and passes it when its log holds no FAILURE entry, so
-    # the outcome is read from the suite itself. A module that never ran is not judged here: each plan deliberately
-    # leaves some out, and the runner already reports a module it meant to run and did not.
+    # Every module of the plans started since $Since that ran and did not end FINISHED with PASSED, REVIEW or SKIPPED. The
+    # suite's runner counts a module the suite INTERRUPTED as complete and passes it when its log holds no FAILURE entry,
+    # so the outcome is read from the suite itself. A module that never ran is not judged here: each plan deliberately
+    # leaves some out, and the runner already reports a module it meant to run and did not. SKIPPED is the suite's
+    # "test can not be completed" for the server's configuration, which the runner judges against expected-skips.json and
+    # fails the run on when the skip is not listed there, so it is not judged a second time here.
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [DateTimeOffset] $Since,
@@ -296,7 +313,7 @@ function Get-UnfinishedModules {
     foreach ($plan in $plans) {
         $detail = Invoke-RestMethod -Uri "${SuiteUrl}api/plan/$($plan._id)" -SkipCertificateCheck
         foreach ($module in @($detail.modules | ForEach-Object { $_ } | Where-Object { $_.status })) {
-            if ($module.status -ne 'FINISHED' -or $module.result -notin 'PASSED', 'REVIEW') {
+            if ($module.status -ne 'FINISHED' -or $module.result -notin 'PASSED', 'REVIEW', 'SKIPPED') {
                 [pscustomobject]@{ Plan = $detail.planName; Module = $module.testModule; Status = $module.status; Result = $module.result }
             }
         }
@@ -477,7 +494,15 @@ try {
     # arguments go in a file, one per line, which the container reads into its own argument list
     $argumentsDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-arguments'
     New-Item -ItemType Directory -Force $argumentsDirectory | Out-Null
-    $runnerArguments = @('--expected-failures-file', '/config/expected-failures.json')
+    # Only the expected skips of the configurations this run uses: the runner fails a run on a listed skip no module of it
+    # reached, so the FAPI entries would fail a run of the OpenID Connect plans
+    $expectedSkips = Select-ExpectedSkips -Entries @(Get-Content -Raw (Join-Path $PSScriptRoot 'expected-skips.json') |
+            ConvertFrom-Json) -Configurations @($split | ForEach-Object Configuration)
+    [IO.File]::WriteAllText((Join-Path $argumentsDirectory 'expected-skips.json'),
+        (ConvertTo-Json -InputObject $expectedSkips -Depth 5))
+    $runnerArguments = @(
+        '--expected-failures-file', '/config/expected-failures.json',
+        '--expected-skips-file', '/arguments/expected-skips.json')
     $exportMount = @()
     if ($ResultsPath) {
         $exportDirectory = (New-Item -ItemType Directory -Force (Join-Path $ResultsPath 'export')).FullName
