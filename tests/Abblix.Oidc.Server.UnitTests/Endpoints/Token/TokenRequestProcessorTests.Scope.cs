@@ -45,7 +45,7 @@ public partial class TokenRequestProcessorTests
             [],
             []);
         _contextEvaluator
-            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Setup(e => e.EvaluateAuthorizationContext(It.IsAny<TenantDefinition>(), request))
             .Returns(new AuthorizationContext(TestConstants.DefaultClientId, [requested], null));
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
@@ -78,7 +78,7 @@ public partial class TokenRequestProcessorTests
             [],
             []);
         _contextEvaluator
-            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Setup(e => e.EvaluateAuthorizationContext(It.IsAny<TenantDefinition>(), request))
             .Returns(new AuthorizationContext(TestConstants.DefaultClientId, [AccessTokenScope], null));
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
@@ -113,7 +113,7 @@ public partial class TokenRequestProcessorTests
             new ClientInfo(TestConstants.DefaultClientId),
             [],
             []);
-        _contextEvaluator.Setup(e => e.EvaluateAuthorizationContext(request)).Returns(context);
+        _contextEvaluator.Setup(e => e.EvaluateAuthorizationContext(It.IsAny<TenantDefinition>(), request)).Returns(context);
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(
                 TestTenant.Matched, It.IsAny<AuthSession>(), It.IsAny<AuthorizationContext>(),
@@ -134,7 +134,7 @@ public partial class TokenRequestProcessorTests
     {
         var request = CreateValidTokenRequest([]);
         _contextEvaluator
-            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Setup(e => e.EvaluateAuthorizationContext(It.IsAny<TenantDefinition>(), request))
             .Returns(new AuthorizationContext(TestConstants.DefaultClientId, [], null));
         _accessTokenService
             .Setup(s => s.CreateAccessTokenAsync(

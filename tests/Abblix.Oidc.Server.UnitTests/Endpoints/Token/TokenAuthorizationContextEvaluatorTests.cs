@@ -28,7 +28,8 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token;
 /// <see cref="TokenAuthorizationContextEvaluator"/>: a refreshed token stays bound to the
 /// certificate the original token was bound to (RFC 8705 section 4 - the AS SHOULD bind the refresh
 /// token to the certificate and check that binding), and an initial token binds to the
-/// certificate presented at issuance (section 3). The invariant the refresh tests pin is that a
+/// certificate presented at issuance only for a client registered for it or held to a profile
+/// requiring it (sections 3 and 3.4). The invariant the refresh tests pin is that a
 /// refresh neither drops the binding (when no certificate is re-presented) nor silently
 /// rebinds to a different certificate.
 /// </summary>
@@ -48,7 +49,7 @@ public class TokenAuthorizationContextEvaluatorTests
             boundThumbprint: OriginalThumbprint,
             clientCertificate: null);
 
-        var result = Evaluator.EvaluateAuthorizationContext(request);
+        var result = Evaluator.EvaluateAuthorizationContext(SingleIssuer.Tenant, request);
 
         Assert.Equal(OriginalThumbprint, result.CertificateSha256Thumbprint);
     }
@@ -63,25 +64,80 @@ public class TokenAuthorizationContextEvaluatorTests
             boundThumbprint: OriginalThumbprint,
             clientCertificate: rotatedCertificate);
 
-        var result = Evaluator.EvaluateAuthorizationContext(request);
+        var result = Evaluator.EvaluateAuthorizationContext(SingleIssuer.Tenant, request);
 
         Assert.Equal(OriginalThumbprint, result.CertificateSha256Thumbprint);
     }
 
-    [Fact]
-    public void InitialIssuance_WithClientCertificate_BindsToPresentedCertificate()
+    /// <summary>
+    /// RFC 8705 section 3.4: tls_client_certificate_bound_access_tokens conveys "the client's intention to use
+    /// mutual-TLS client certificate-bound access tokens. If omitted, the default value is false." So at initial
+    /// issuance the token is bound to the presented certificate for a client that registered it, whatever it
+    /// authenticates with, and for a client held to a profile issuing certificate-bound tokens only (FAPI 1.0 Part 2
+    /// section 5.2.2: "shall only issue sender-constrained access tokens" with MTLS the mechanism), and for no other:
+    /// authenticating with mutual TLS binds nothing by itself, and FAPI 2.0 leaves the sender constraint to the client.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, null, false)]
+    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth, false, null, false)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, ClientSecurityProfile.Fapi2, false)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, true, null, true)]
+    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth, true, null, true)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, ClientSecurityProfile.Fapi1Advanced, true)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, ClientSecurityProfile.Fapi1Advanced, true)]
+    public void InitialIssuance_WithClientCertificate_BindsOnlyWhenRegisteredOrRequiredByTheProfile(
+        string authMethod, bool certificateBoundAccessTokens, ClientSecurityProfile? securityProfile, bool bound)
     {
-        // Initial issuance: the grant carries no prior binding, the client authenticated via
-        // mTLS, so the issued token binds to the presented certificate's SHA-256 thumbprint.
         using var certificate = CreateCertificate();
-        var expectedThumbprint = Base64Url.EncodeToString(SHA256.HashData(certificate.RawData));
         var request = CreateRefreshRequest(
             boundThumbprint: null,
-            clientCertificate: certificate);
+            clientCertificate: certificate,
+            authMethod: authMethod,
+            certificateBoundAccessTokens: certificateBoundAccessTokens,
+            securityProfile: securityProfile);
 
-        var result = Evaluator.EvaluateAuthorizationContext(request);
+        var result = Evaluator.EvaluateAuthorizationContext(SingleIssuer.Tenant, request);
 
-        Assert.Equal(expectedThumbprint, result.CertificateSha256Thumbprint);
+        Assert.Equal(
+            bound ? Base64Url.EncodeToString(SHA256.HashData(certificate.RawData)) : null,
+            result.CertificateSha256Thumbprint);
+    }
+
+    /// <summary>
+    /// A client naming no profile is held to its tenant's default, so a tenant defaulting to FAPI 1.0 Advanced binds
+    /// the token of a mutual-TLS client not registered for certificate-bound tokens.
+    /// </summary>
+    [Fact]
+    public void InitialIssuance_UnderTenantDefaultFapi1Advanced_BindsToPresentedCertificate()
+    {
+        using var certificate = CreateCertificate();
+        var request = CreateRefreshRequest(boundThumbprint: null, clientCertificate: certificate);
+        var tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced }.ToTenant();
+
+        var result = Evaluator.EvaluateAuthorizationContext(tenant, request);
+
+        Assert.Equal(
+            Base64Url.EncodeToString(SHA256.HashData(certificate.RawData)),
+            result.CertificateSha256Thumbprint);
+    }
+
+    /// <summary>
+    /// RFC 8705 section 3.4 leaves a token request of a client registered for certificate-bound tokens that arrives
+    /// without mutual TLS "at the authorization server's discretion as to whether to return an error or issue an
+    /// unbound token": nothing is bound here, and a profile requiring a sender-constrained token refuses the request
+    /// before it reaches this step.
+    /// </summary>
+    [Fact]
+    public void InitialIssuance_RegisteredForBindingWithoutCertificate_DoesNotBind()
+    {
+        var request = CreateRefreshRequest(
+            boundThumbprint: null,
+            clientCertificate: null,
+            certificateBoundAccessTokens: true);
+
+        var result = Evaluator.EvaluateAuthorizationContext(SingleIssuer.Tenant, request);
+
+        Assert.Null(result.CertificateSha256Thumbprint);
     }
 
     [Fact]
@@ -94,7 +150,7 @@ public class TokenAuthorizationContextEvaluatorTests
             grantResources: null,
             requestedResources: [new Uri("https://api.example/c")]);
 
-        var result = Evaluator.EvaluateAuthorizationContext(request);
+        var result = Evaluator.EvaluateAuthorizationContext(SingleIssuer.Tenant, request);
 
         Assert.True(result.Resources is null or { Length: 0 });
     }
@@ -108,7 +164,7 @@ public class TokenAuthorizationContextEvaluatorTests
             grantResources: [new Uri("https://api.example/a"), new Uri("https://api.example/b")],
             requestedResources: [new Uri("https://api.example/c")]);
 
-        var result = Evaluator.EvaluateAuthorizationContext(request);
+        var result = Evaluator.EvaluateAuthorizationContext(SingleIssuer.Tenant, request);
 
         Assert.Empty(result.Resources!);
     }
@@ -122,7 +178,7 @@ public class TokenAuthorizationContextEvaluatorTests
             grantResources: [a, new Uri("https://api.example/b")],
             requestedResources: [a]);
 
-        var result = Evaluator.EvaluateAuthorizationContext(request);
+        var result = Evaluator.EvaluateAuthorizationContext(SingleIssuer.Tenant, request);
 
         Assert.Equal([a], result.Resources!);
     }
@@ -165,7 +221,7 @@ public class TokenAuthorizationContextEvaluatorTests
             authMethod: ClientAuthenticationMethods.PrivateKeyJwt,
             certificateBoundAccessTokens: true);
 
-        var result = Evaluator.EvaluateAuthorizationContext(request);
+        var result = Evaluator.EvaluateAuthorizationContext(SingleIssuer.Tenant, request);
 
         Assert.Equal(expectedThumbprint, result.CertificateSha256Thumbprint);
     }
@@ -185,7 +241,7 @@ public class TokenAuthorizationContextEvaluatorTests
             authMethod: ClientAuthenticationMethods.PrivateKeyJwt,
             certificateBoundAccessTokens: false);
 
-        var result = Evaluator.EvaluateAuthorizationContext(request);
+        var result = Evaluator.EvaluateAuthorizationContext(SingleIssuer.Tenant, request);
 
         Assert.Null(result.CertificateSha256Thumbprint);
     }
@@ -194,7 +250,8 @@ public class TokenAuthorizationContextEvaluatorTests
         string? boundThumbprint,
         X509Certificate2? clientCertificate,
         string authMethod = ClientAuthenticationMethods.TlsClientAuth,
-        bool certificateBoundAccessTokens = false)
+        bool certificateBoundAccessTokens = false,
+        ClientSecurityProfile? securityProfile = null)
     {
         var fixedTime = DateTimeOffset.Parse("2026-01-01T00:00:00Z", CultureInfo.InvariantCulture);
         var session = new AuthSession("user-123", "session-456", fixedTime, "local");
@@ -207,6 +264,7 @@ public class TokenAuthorizationContextEvaluatorTests
         {
             TokenEndpointAuthMethod = authMethod,
             TlsClientCertificateBoundAccessTokens = certificateBoundAccessTokens,
+            SecurityProfile = securityProfile,
         };
 
         return new ValidTokenRequest(

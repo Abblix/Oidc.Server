@@ -29,15 +29,16 @@ public static class RefreshTokenRotationPolicy
 	/// drops it for whatever client the host sets it on.
 	/// </remarks>
 	public static bool Rotates(TenantDefinition tenant, ClientInfo clientInfo)
-		=> !ReusesRefreshTokens(clientInfo) && !ProfileForbidsRotation(tenant, clientInfo);
+		=> !ReusesRefreshTokens(tenant, clientInfo) && !ProfileForbidsRotation(tenant, clientInfo);
 
 	/// <summary>
 	/// Whether <paramref name="clientInfo"/> reuses its refresh tokens under its
 	/// <see cref="RefreshTokenOptions.ReusePolicy"/>.
 	/// </summary>
-	private static bool ReusesRefreshTokens(ClientInfo clientInfo) => clientInfo.RefreshToken.ReusePolicy switch
+	private static bool ReusesRefreshTokens(TenantDefinition tenant, ClientInfo clientInfo)
+		=> clientInfo.RefreshToken.ReusePolicy switch
 	{
-		RefreshTokenReusePolicy.WhenSenderConstrained => IsAlwaysSenderConstrained(clientInfo),
+		RefreshTokenReusePolicy.WhenSenderConstrained => IsAlwaysSenderConstrained(tenant, clientInfo),
 		RefreshTokenReusePolicy.Reuse => true,
 		RefreshTokenReusePolicy.Rotate => false,
 		var policy => throw new InvalidOperationException(
@@ -62,12 +63,16 @@ public static class RefreshTokenRotationPolicy
 	/// Whether every access token of <paramref name="clientInfo"/> is bound to a key the client proves, as
 	/// <see cref="RefreshTokenReusePolicy.WhenSenderConstrained"/> explains.
 	/// </summary>
-	private static bool IsAlwaysSenderConstrained(ClientInfo clientInfo)
+	private static bool IsAlwaysSenderConstrained(TenantDefinition tenant, ClientInfo clientInfo)
 	{
 		if (ReceivesTokensOutsideTheTokenEndpoint(clientInfo))
 			return false;
 
-		return BindsEveryTokenRequest(clientInfo.TokenEndpointAuthMethod, clientInfo.RequireDPoP);
+		return BindsEveryTokenRequest(
+			clientInfo.TokenEndpointAuthMethod,
+			clientInfo.RequireDPoP,
+			CertificateBoundAccessTokens.AreIssuedTo(
+				clientInfo, SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile)));
 	}
 
 	/// <summary>
@@ -81,11 +86,13 @@ public static class RefreshTokenRotationPolicy
 
 	// The set of authentication methods is open, since a host registers its own authenticators, so the catch-all arm
 	// is the rule rather than a fallback: a method this library cannot name is not known to bind its tokens, and
-	// keeps rotating
-	private static bool BindsEveryTokenRequest(string tokenEndpointAuthMethod, bool requireDPoP)
+	// keeps rotating. A certificate authenticates every request of a mutual-TLS client, but binds its token only when
+	// the client is bound to certificate-bound tokens; otherwise a required DPoP proof binds it
+	private static bool BindsEveryTokenRequest(string tokenEndpointAuthMethod, bool requireDPoP, bool certificateBound)
 		=> tokenEndpointAuthMethod switch
 		{
-			ClientAuthenticationMethods.TlsClientAuth or ClientAuthenticationMethods.SelfSignedTlsClientAuth => true,
+			ClientAuthenticationMethods.TlsClientAuth or ClientAuthenticationMethods.SelfSignedTlsClientAuth =>
+				certificateBound || requireDPoP,
 			ClientAuthenticationMethods.PrivateKeyJwt => requireDPoP,
 			_ => false,
 		};
