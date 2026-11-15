@@ -94,10 +94,11 @@ public partial class DPoPTokenEndpointValidator(
         // A high-assurance profile (FAPI 2.0) requires a sender-constrained token, satisfied by a DPoP proof or
         // a certificate-bound token over mutual TLS (RFC 8705 section 3). Without a proof the requirement is met
         // only when the token will be certificate-bound, and that is decided by the client's registration and
-        // the certificate on this request, never by the grant: a token is bound to a certificate only for a
-        // client registered to bind it. So the answer is given here, before a device code or a backchannel
-        // authentication request is spent. The profile tightens, and the granular RequireDPoP toggle cannot
-        // weaken it.
+        // the certificate on this request, not by the grant. So the answer is given here, before a device code or
+        // a backchannel authentication request is spent. A grant bound to a certificate for a client not bound as
+        // the registration now stands - one issued while authenticating with mutual TLS bound by itself - is
+        // therefore refused here on refresh without a proof, although the evaluator would keep its binding. The
+        // profile tightens, and the granular RequireDPoP toggle cannot weaken it.
         if (profile.RequireSenderConstrainedTokens && !WillIssueCertificateBoundToken(context, profile))
         {
             LogProofRequiredButMissing("security profile");
@@ -145,9 +146,10 @@ public partial class DPoPTokenEndpointValidator(
     /// Whether the access token about to be issued will be certificate-bound (RFC 8705 section 3), and
     /// therefore sender-constrained via mutual TLS rather than DPoP: a certificate is presented by a client
     /// whose tokens <see cref="CertificateBoundAccessTokens"/> binds. The binding decision in
-    /// TokenAuthorizationContextEvaluator also keeps a grant already bound to a certificate bound; such a grant
-    /// was issued to a client bound as above, so the two part only for a registration changed since, and
-    /// then the profile is held to the registration as it stands.
+    /// TokenAuthorizationContextEvaluator also keeps a grant already bound to a certificate bound, and the two part
+    /// for a grant bound to a client not bound as above: one whose registration changed since, and one issued while
+    /// authenticating with mutual TLS bound a token by itself. The profile is then held to the registration as it
+    /// stands, so refreshing such a grant without a proof is refused.
     /// </summary>
     private static bool WillIssueCertificateBoundToken(
         TokenValidationContext context, SecurityProfileRequirements profile)
