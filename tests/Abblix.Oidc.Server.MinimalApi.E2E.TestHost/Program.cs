@@ -142,7 +142,19 @@ builder.Services.AddOptions<TestTenantSettings>().Configure(tenant =>
         {
             ClientSecrets = [new ClientSecret { Value = TestConstants.ClientSecretJwtSecret }],
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
-            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            AllowedGrantTypes = [GrantTypes.ClientCredentials, GrantTypes.AuthorizationCode],
+            PkceRequired = true,
+            RedirectUris = [redirect],
+        },
+        new ClientInfo(TestConstants.PushedAuthorizationRequestAudienceClientId)
+        {
+            ClientSecrets = [new ClientSecret { Value = TestConstants.ClientSecretJwtSecret }],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretJwt,
+            AllowedGrantTypes = [GrantTypes.AuthorizationCode],
+            PkceRequired = true,
+            RedirectUris = [redirect],
+            ClientAssertionAudiences =
+                ClientAssertionAudiences.Issuer | ClientAssertionAudiences.PushedAuthorizationRequestEndpoint,
         },
         new ClientInfo(TestConstants.DefaultScopeClientId)
         {

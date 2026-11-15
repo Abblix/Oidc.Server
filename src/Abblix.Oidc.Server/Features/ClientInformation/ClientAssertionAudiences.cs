@@ -16,8 +16,9 @@ namespace Abblix.Oidc.Server.Features.ClientInformation;
 /// RFC 10070 section 4 makes the authorization server "reject any JWT that does not contain its issuer identifier as
 /// its sole audience value", so <see cref="Issuer"/> alone is the value every client is held to: an unset set reads as
 /// it, and a configured set without it is refused at startup. <see cref="TokenEndpoint"/>,
-/// <see cref="BackChannelAuthenticationEndpoint"/> and <see cref="AllowArray"/> are the transition section 6 of the
-/// same RFC expects, granted by the host to a client that cannot change yet.
+/// <see cref="BackChannelAuthenticationEndpoint"/>, <see cref="PushedAuthorizationRequestEndpoint"/> and
+/// <see cref="AllowArray"/> are the transition section 6 of the same RFC expects, granted by the host to a client that
+/// cannot change yet.
 /// </remarks>
 [Flags]
 public enum ClientAssertionAudiences
@@ -32,7 +33,7 @@ public enum ClientAssertionAudiences
     /// The token endpoint URL, as a string, as OpenID Connect Core 1.0 section 9 recommends: the path the
     /// endpoint is served at on the issuer identifier's scheme, host and port, written either as the issuer identifier
     /// writes them or normalized, never the host a request names, and never the pushed authorization request endpoint
-    /// URL. For a tenant with a mutual-TLS address, the same path on that address, in either spelling, is accepted too:
+    /// URL, which <see cref="PushedAuthorizationRequestEndpoint"/> grants. For a tenant with a mutual-TLS address, the same path on that address, in either spelling, is accepted too:
     /// it is the endpoint's alias, which RFC 8705 section 5 has a client doing mutual TLS use in preference to the
     /// ordinary endpoint.
     /// </summary>
@@ -72,4 +73,20 @@ public enum ClientAssertionAudiences
     /// <see cref="TokenEndpoint"/> gives.
     /// </remarks>
     BackChannelAuthenticationEndpoint = 1 << 3,
+
+    /// <summary>
+    /// The pushed authorization request endpoint URL, as a string, which RFC 9126 section 2 had the server accept
+    /// before RFC 10070 section 5 replaced that paragraph: "the authorization server MUST accept its issuer
+    /// identifier, token endpoint URL, or pushed authorization request endpoint URL as values that identify it as an
+    /// intended audience". Spelled as <see cref="TokenEndpoint"/> is, on the issuer identifier's scheme, host and port
+    /// and on the tenant's mutual-TLS address, and accepted wherever the client authenticates, as the token endpoint
+    /// URL is.
+    /// </summary>
+    /// <remarks>
+    /// RFC 10070 section 5 now has the issuer identifier "used as the sole value of the audience" and the server
+    /// "reject any such JWT that does not contain its own issuer identifier as the sole audience value", so it is
+    /// granted by the host to a client written to the replaced paragraph, and removed when the client is changed. A
+    /// client held to FAPI 2.0 cannot have it, for the reason <see cref="TokenEndpoint"/> gives.
+    /// </remarks>
+    PushedAuthorizationRequestEndpoint = 1 << 4,
 }

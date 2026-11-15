@@ -370,7 +370,9 @@ public record ClientInfo(string ClientId)
     /// RFC 10070 section 4 requires, as a string, and for a client the host lets keep an older form while it changes,
     /// the token endpoint URL (<see cref="ClientAssertionAudiences.TokenEndpoint"/>), the backchannel authentication
     /// endpoint URL CIBA Core 1.0 section 7.1 names
-    /// (<see cref="ClientAssertionAudiences.BackChannelAuthenticationEndpoint"/>), an array holding any of them beside
+    /// (<see cref="ClientAssertionAudiences.BackChannelAuthenticationEndpoint"/>), the pushed authorization request
+    /// endpoint URL RFC 9126 section 2 named before RFC 10070 section 5 replaced it
+    /// (<see cref="ClientAssertionAudiences.PushedAuthorizationRequestEndpoint"/>), an array holding any of them beside
     /// other values (<see cref="ClientAssertionAudiences.AllowArray"/>), or several of these.
     /// </summary>
     /// <remarks>

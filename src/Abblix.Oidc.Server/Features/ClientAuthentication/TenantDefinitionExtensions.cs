@@ -15,8 +15,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
 /// <summary>
-/// The URL of one of the tenant's endpoints, the token or the backchannel authentication endpoint, in each way a client
-/// allowed it as its assertion's audience may write it.
+/// The URL of one of the tenant's endpoints, the token, the backchannel authentication or the pushed authorization
+/// request endpoint, in each way a client allowed it as its assertion's audience may write it.
 /// </summary>
 /// <remarks>
 /// Every spelling is compared as written: the path the transport serves the endpoint at on the issuer identifier's
