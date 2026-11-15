@@ -55,6 +55,7 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
     private const string Acme = "/tenants/acme";
     private const string Globex = "/tenants/globex";
     private const string ClientId = "password-client";
+    private const string MachineClientId = "machine-client";
     [SuppressMessage("Minor Code Smell", "S1075",
         Justification = "Canonical test redirect_uri a registration names; not a deployment URL.")]
     private const string RedirectUri = "https://client.example.com/callback";
@@ -119,6 +120,11 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
         var clients = _app.Services.GetRequiredService<IClientInfoManager>();
         Assert.True(await clients.TryAddClientAsync(FapiTenant, new RegisteredClient(PasswordClient(), "acme-rat-id")));
         Assert.True(await clients.TryAddClientAsync(PlainTenant, new RegisteredClient(PasswordClient(), "globex-rat-id")));
+        Assert.True(await clients.TryAddClientAsync(
+            FapiTenant,
+            new RegisteredClient(
+                PasswordClient(MachineClientId) with { AllowedGrantTypes = [GrantTypes.ClientCredentials] },
+                "acme-machine-rat-id")));
 
         _http = _app.GetTestClient();
         _http.BaseAddress = new Uri(Host);
@@ -135,7 +141,7 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
     /// A client of the password grant alone, authenticating with a private key JWT and binding its tokens with DPoP, so
     /// that the only part of it the FAPI 2.0 profile refuses is the grant.
     /// </summary>
-    private static ClientInfo PasswordClient() => new(ClientId)
+    private static ClientInfo PasswordClient(string clientId = ClientId) => new(clientId)
     {
         TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
         Jwks = new JsonWebKeySet([ClientKey.Sanitize(includePrivateKeys: false)]),
@@ -157,23 +163,48 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
     public async Task ThePasswordGrant_IsRefusedAtTheFapi2Tenant(
         string tenant, HttpStatusCode expected, string? expectedError)
     {
-        var endpoint = new Uri(Host + tenant + "/connect/token");
-        using var proofKey = new DPoPProofGenerator();
-        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
-        request.Headers.Add(HttpRequestHeaders.DPoP, proofKey.BuildProof(HttpMethods.Post, endpoint));
-        request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        var response = await TokenRequestAsync(tenant, ClientId, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.Password,
             [TokenRequest.Parameters.Username] = "user-1",
             [TokenRequest.Parameters.Password] = "any-password",
-            [ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer,
-            [ClientRequest.Parameters.ClientAssertion] = await AssertionAsync(Host + tenant),
         });
-
-        var response = await _http!.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, response.StatusCode);
         Assert.Equal(expectedError, await ErrorResponseReader.ErrorCodeOf(response));
+    }
+
+    /// <summary>
+    /// The same client configured for the client credentials grant instead is issued a token at the FAPI 2.0 tenant,
+    /// so the password client's refusal there is its grant's and not its authentication, binding or algorithms.
+    /// </summary>
+    [Fact]
+    public async Task TheSameClientWithoutThePasswordGrant_IsIssuedATokenAtTheFapi2Tenant()
+    {
+        var response = await TokenRequestAsync(Acme, MachineClientId, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>
+    /// A token request at <paramref name="tenant"/> carrying <paramref name="parameters"/>, authenticated by a private
+    /// key JWT of <paramref name="clientId"/> and bound by a DPoP proof.
+    /// </summary>
+    private async Task<HttpResponseMessage> TokenRequestAsync(
+        string tenant, string clientId, Dictionary<string, string> parameters)
+    {
+        var endpoint = new Uri(Host + tenant + "/connect/token");
+        using var proofKey = new DPoPProofGenerator();
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+        request.Headers.Add(HttpRequestHeaders.DPoP, proofKey.BuildProof(HttpMethods.Post, endpoint));
+        parameters[ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer;
+        parameters[ClientRequest.Parameters.ClientAssertion] = await AssertionAsync(Host + tenant, clientId);
+        request.Content = new FormUrlEncodedContent(parameters);
+
+        return await _http!.SendAsync(request, TestContext.Current.CancellationToken);
     }
 
     /// <summary>
@@ -235,10 +266,10 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A private key JWT the client authenticates with at <paramref name="issuer"/>, naming it as the audience as a
+    /// A private key JWT <paramref name="clientId"/> authenticates with at <paramref name="issuer"/>, naming it as the audience as a
     /// string, which FAPI 2.0 section 5.3.2.1 requires.
     /// </summary>
-    private async Task<string> AssertionAsync(string issuer)
+    private async Task<string> AssertionAsync(string issuer, string clientId)
     {
         var now = TimeProvider.System.GetUtcNow();
         return await _app!.Services.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(
@@ -247,8 +278,8 @@ public sealed class Fapi2PasswordGrantTests : IAsyncLifetime
                 Header = { Algorithm = SigningAlgorithms.PS256, KeyId = ClientKey.KeyId },
                 Payload =
                 {
-                    Issuer = ClientId,
-                    Subject = ClientId,
+                    Issuer = clientId,
+                    Subject = clientId,
                     Audiences = [issuer],
                     JwtId = Guid.NewGuid().ToString("N"),
                     IssuedAt = now,
