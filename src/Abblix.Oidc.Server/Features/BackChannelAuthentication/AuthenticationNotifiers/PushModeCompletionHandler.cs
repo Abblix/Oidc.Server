@@ -215,8 +215,10 @@ public partial class PushModeCompletionHandler(
             },
             async error =>
             {
+                // A JWT the formatter refused is logged there at the level of its cause; this record adds the request
+                // it was for, and stays an error for any other failure, which nothing else logs
                 LogTokenGenerationFailed(
-                    ClientJwtRefusal.LogLevelOf(error, LogLevel.Error),
+                    error is ClientJwtRefusal ? LogLevel.Information : LogLevel.Error,
                     FingerprintOf(authenticationRequestId),
                     error.Error);
                 await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);

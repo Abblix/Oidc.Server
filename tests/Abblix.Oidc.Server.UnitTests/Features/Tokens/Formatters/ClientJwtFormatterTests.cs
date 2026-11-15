@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Common.Constants;
 using System;
 using System.Linq;
@@ -40,10 +41,21 @@ public class ClientJwtFormatterTests
     private readonly Mock<IClientKeysProvider> _clientKeysProvider;
     private readonly Mock<IAuthServiceKeysProvider> _serviceKeysProvider;
     private readonly ClientJwtFormatter _formatter;
+    private readonly RecordingLoggerFactory _loggers = new();
 
     private readonly JsonWebKey _signingKeyRS256;
     private readonly JsonWebKey _clientEncryptionKey;
     private readonly ClientInfo _clientInfo;
+
+    /// <summary>
+    /// The one record the formatter wrote of its refusal. Every client JWT is signed here, so this is where a refusal is
+    /// logged at the level of its cause: a warning where the client's registration or keys are wrong, an error where
+    /// the tenant has no signing key for the algorithm, which every endpoint then shows the same way.
+    /// </summary>
+    private LogRecord RefusalLogged()
+        => Assert.Single(
+            _loggers.Entries,
+            entry => entry.EventId.Id == LogEvents.Tokens.ClientJwtFormatter.JwtNotIssued);
 
     /// <summary>What the client registered for UserInfo, which is also what an ID token uses.</summary>
     private static ClientJwtEncryption UserInfoPolicy(ClientInfo client)
@@ -69,6 +81,7 @@ public class ClientJwtFormatterTests
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
         _formatter = new ClientJwtFormatter(
+            _loggers.CreateLogger<ClientJwtFormatter>(),
             new ProfiledJwtIssuer(_jwtCreator.Object),
             new ClientEncryptionKeyResolver(
                 new ProfiledJwtIssuer(_jwtCreator.Object), _clientKeysProvider.Object, TimeProvider.System),
@@ -339,6 +352,7 @@ public class ClientJwtFormatterTests
         Assert.Equal(
             ClientJwtRefusalCause.NoTenantSigningKey,
             Assert.IsType<ClientJwtRefusal>(refusal).Cause);
+        Assert.Equal(LogLevel.Error, RefusalLogged().Level);
     }
 
     /// <summary>
@@ -369,6 +383,7 @@ public class ClientJwtFormatterTests
         Assert.Equal(
             ClientJwtRefusalCause.AlgorithmOutsideProfile,
             Assert.IsType<ClientJwtRefusal>(refusal).Cause);
+        Assert.Equal(LogLevel.Warning, RefusalLogged().Level);
     }
 
     /// <summary>
@@ -641,6 +656,7 @@ public class ClientJwtFormatterTests
         Assert.Equal(
             ClientJwtRefusalCause.NoClientEncryptionKey,
             Assert.IsType<ClientJwtRefusal>(refusal).Cause);
+        Assert.Equal(LogLevel.Warning, RefusalLogged().Level);
     }
 
     /// <summary>

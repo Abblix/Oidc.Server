@@ -63,16 +63,16 @@ public class BackChannelLogoutNotifierTests
     }
 
     /// <summary>
-    /// A logout token not sent is logged by why it could not be signed: the client registered an algorithm its profile
-    /// does not admit, or its key set leaves nothing to encrypt to, is the client's configuration and a warning; no
-    /// signing key of the tenant performing the algorithm is the server's own and an error.
+    /// A logout token not sent is recorded as information, whatever the cause: the formatter that refused it has
+    /// already logged the cause at its level, and this record adds what that one cannot - that the user's logout did
+    /// not reach this client - without raising the same failure twice.
     /// </summary>
     [Theory]
-    [InlineData(ClientJwtRefusalCause.AlgorithmOutsideProfile, LogLevel.Warning)]
-    [InlineData(ClientJwtRefusalCause.NoTenantSigningKey, LogLevel.Error)]
-    [InlineData(ClientJwtRefusalCause.NoClientEncryptionKey, LogLevel.Warning)]
-    [InlineData(null, LogLevel.Warning)]
-    public async Task NotifyClientAsync_ALogoutTokenNotIssued_IsLoggedByItsCause(
+    [InlineData(ClientJwtRefusalCause.AlgorithmOutsideProfile, LogLevel.Information)]
+    [InlineData(ClientJwtRefusalCause.NoTenantSigningKey, LogLevel.Information)]
+    [InlineData(ClientJwtRefusalCause.NoClientEncryptionKey, LogLevel.Information)]
+    [InlineData(null, LogLevel.Information)]
+    public async Task NotifyClientAsync_ALogoutTokenNotIssued_IsRecordedAsInformation(
         ClientJwtRefusalCause? cause, LogLevel expected)
     {
         var clientInfo = CreateClientInfoWithBackChannelLogout();

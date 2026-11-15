@@ -378,7 +378,7 @@ internal static class LogEvents
     }
 
     /// <summary>
-    /// Range 5000-5099: <c>Features/Tokens</c> - validation, issuance, revocation.
+    /// Range 5000-5199: <c>Features/Tokens</c> - validation, issuance, revocation.
     /// Each source class lives in its own nested static class with a packed sub-range
     /// inside the feature window.
     /// </summary>
@@ -453,6 +453,17 @@ internal static class LogEvents
 
             public const int SecretGenerated = Base + 1;
             public const int ValidationFailed = Base + 2;
+        }
+
+        /// <summary>
+        /// <c>Features/Tokens/Formatters/ClientJwtFormatter.cs</c> - signing and encrypting every JWT issued to a client
+        /// (sub-range 5100-5119).
+        /// </summary>
+        public static class ClientJwtFormatter
+        {
+            private const int Base = 5100;
+
+            public const int JwtNotIssued = Base + 1;
         }
     }
 

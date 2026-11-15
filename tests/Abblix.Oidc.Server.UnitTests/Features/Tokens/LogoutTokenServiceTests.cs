@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -644,6 +645,7 @@ public class LogoutTokenServiceTests
             new FakeTimeProvider(_currentTime),
             _subjectTypeConverter.Object,
             new ClientJwtFormatter(
+                NullLogger<ClientJwtFormatter>.Instance,
                 new ProfiledJwtIssuer(creator.Object),
                 new ClientEncryptionKeyResolver(
                     new ProfiledJwtIssuer(creator.Object),

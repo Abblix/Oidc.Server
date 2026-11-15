@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -53,8 +52,7 @@ public partial class BackChannelLogoutNotifier(
         // read, and a token sent in the clear would ignore the encryption it registered, so the notification is not sent
         if (created.TryGetFailure(out var refusal))
         {
-            LogLogoutTokenNotIssued(
-                ClientJwtRefusal.LogLevelOf(refusal, LogLevel.Warning), clientInfo.ClientId, refusal.ErrorDescription);
+            LogLogoutTokenNotIssued(clientInfo.ClientId, refusal.ErrorDescription);
             return;
         }
 

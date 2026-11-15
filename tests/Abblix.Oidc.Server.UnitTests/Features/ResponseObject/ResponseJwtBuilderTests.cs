@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -64,6 +65,7 @@ public class ResponseJwtBuilderTests
         // The builder now delegates signing/encryption to a real ClientJwtFormatter built over the same mocks,
         // so the assertions on IJsonWebTokenCreator.IssueAsync continue to exercise the end-to-end JARM behavior.
         var clientJwtFormatter = new ClientJwtFormatter(
+            NullLogger<ClientJwtFormatter>.Instance,
             new ProfiledJwtIssuer(_jwtCreator.Object),
             new ClientEncryptionKeyResolver(
                 new ProfiledJwtIssuer(_jwtCreator.Object), _clientKeys.Object, TimeProvider.System),
@@ -223,6 +225,7 @@ public class ResponseJwtBuilderTests
         var builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             new ClientJwtFormatter(
+                NullLogger<ClientJwtFormatter>.Instance,
                 new ProfiledJwtIssuer(_jwtCreator.Object),
                 new ClientEncryptionKeyResolver(
                     new ProfiledJwtIssuer(_jwtCreator.Object), _clientKeys.Object, TimeProvider.System),

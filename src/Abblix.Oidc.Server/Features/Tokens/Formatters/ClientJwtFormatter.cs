@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common;
 using Abblix.Utils;
@@ -23,11 +24,13 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// Provides functionality to format JSON Web Tokens (JWTs) issued to clients by the authentication service.
 /// This class handles the signing of JWTs and, if configured, their encryption, based on the needs of each client.
 /// </summary>
+/// <param name="logger">Logs each JWT refused, at the level of its cause.</param>
 /// <param name="issuer">Issues the JWT once the client's profile admits its algorithms.</param>
 /// <param name="encryptionKeyResolver">Chooses the key the JWT is encrypted to under the algorithm the client
 /// registered.</param>
 /// <param name="serviceKeysProvider">Provider for service signing keys.</param>
-public class ClientJwtFormatter(
+public partial class ClientJwtFormatter(
+    ILogger<ClientJwtFormatter> logger,
     ProfiledJwtIssuer issuer,
     ClientEncryptionKeyResolver encryptionKeyResolver,
     IAuthServiceKeysProvider serviceKeysProvider) : IClientJwtFormatter
@@ -57,7 +60,7 @@ public class ClientJwtFormatter(
         var algorithm = token.Header.Algorithm;
         var signingCredentials = await SigningKeyAsync(tenant, algorithm);
         if (WhyItCannotBeSigned(clientInfo, profile, algorithm, signingCredentials) is { } refusal)
-            return refusal;
+            return Refused(clientInfo, refusal);
 
         // OpenID Connect Dynamic Client Registration 1.0 section 2, id_token_encrypted_response_alg: "JWE alg algorithm
         // [JWA] REQUIRED for encrypting the ID Token issued to this Client" and "The default, if omitted, is that no encryption
@@ -78,10 +81,10 @@ public class ClientJwtFormatter(
         {
             // unauthorized_client rather than invalid_client: the client is who it says, and it is the JWT it asked
             // for that cannot be issued (RFC 6749 section 5.2)
-            return new ClientJwtRefusal(
+            return Refused(clientInfo, new ClientJwtRefusal(
                 ClientJwtRefusalCause.NoClientEncryptionKey,
                 $"The client {clientInfo.ClientId} has no key its registered {keyEncryptionAlgorithm} can encrypt to " +
-                "under its security profile");
+                "under its security profile"));
         }
 
         if (signingCredentials is null && encryption.UnsignedIsClaimsSet)
@@ -97,6 +100,17 @@ public class ClientJwtFormatter(
             encryptingCredentials,
             keyEncryptionAlgorithm,
             contentEncryptionAlgorithm);
+    }
+
+    /// <summary>
+    /// Logs <paramref name="refusal"/> at the level of its cause and returns it. Every JWT issued to a client is refused
+    /// here, so a tenant without the signing key a client needs is an error whichever endpoint met it, and the callers
+    /// that record the refusal with their own context do not log its cause again.
+    /// </summary>
+    private ClientJwtRefusal Refused(ClientInfo clientInfo, ClientJwtRefusal refusal)
+    {
+        LogJwtNotIssued(refusal.LogLevel, clientInfo.ClientId, refusal.Cause, refusal.ErrorDescription);
+        return refusal;
     }
 
     /// <summary>

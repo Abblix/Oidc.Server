@@ -25,23 +25,14 @@ public sealed record ClientJwtRefusal(ClientJwtRefusalCause Cause, string ErrorD
     : OidcError(ErrorCodes.UnauthorizedClient, ErrorDescription)
 {
     /// <summary>
-    /// The level a refusal of what was to be issued to a client is logged at: a warning where the client's
-    /// registration or keys are what is wrong, an error where the tenant's signing keys are, and
-    /// <paramref name="otherwise"/> for any other refusal, whose level its logging site knows.
+    /// The level the refusal is logged at where the JWT is refused: a warning where the client's registration or keys
+    /// are what is wrong, an error where the tenant's signing keys are.
     /// </summary>
-    /// <param name="refusal">The refusal.</param>
-    /// <param name="otherwise">The level of a refusal of another kind.</param>
-    public static LogLevel LogLevelOf(OidcError refusal, LogLevel otherwise)
+    internal LogLevel LogLevel => Cause switch
     {
-        if (refusal is not ClientJwtRefusal { Cause: var cause })
-            return otherwise;
-
-        return cause switch
-        {
-            ClientJwtRefusalCause.AlgorithmOutsideProfile => LogLevel.Warning,
-            ClientJwtRefusalCause.NoTenantSigningKey => LogLevel.Error,
-            ClientJwtRefusalCause.NoClientEncryptionKey => LogLevel.Warning,
-            _ => throw new ArgumentOutOfRangeException(nameof(refusal), cause, "A refusal cause without a log level."),
-        };
-    }
+        ClientJwtRefusalCause.AlgorithmOutsideProfile => LogLevel.Warning,
+        ClientJwtRefusalCause.NoTenantSigningKey => LogLevel.Error,
+        ClientJwtRefusalCause.NoClientEncryptionKey => LogLevel.Warning,
+        _ => throw new ArgumentOutOfRangeException(nameof(Cause), Cause, "A refusal cause without a log level."),
+    };
 }

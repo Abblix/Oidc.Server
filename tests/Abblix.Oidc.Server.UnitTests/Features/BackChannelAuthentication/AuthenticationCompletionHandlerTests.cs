@@ -591,18 +591,16 @@ public partial class AuthenticationCompletionHandlerTests
     }
 
     /// <summary>
-    /// Tokens a push request cannot be issued are logged by why: an ID token the client registered an algorithm for
-    /// that its profile does not admit, or an encryption it publishes no key for, is the client's configuration and a
-    /// warning; no signing key of the tenant
-    /// performing it, like any other failure to issue, is the server's and an error. The client is told the
-    /// transaction failed either way.
+    /// Tokens a push request cannot be issued are recorded with the request they were for: as information where the
+    /// formatter refused a JWT for the client, since it has already logged the cause at its level, and as an error for
+    /// any other failure to issue, which nothing else logs. The client is told the transaction failed either way.
     /// </summary>
     [Theory]
-    [InlineData(ClientJwtRefusalCause.AlgorithmOutsideProfile, LogLevel.Warning)]
-    [InlineData(ClientJwtRefusalCause.NoTenantSigningKey, LogLevel.Error)]
-    [InlineData(ClientJwtRefusalCause.NoClientEncryptionKey, LogLevel.Warning)]
+    [InlineData(ClientJwtRefusalCause.AlgorithmOutsideProfile, LogLevel.Information)]
+    [InlineData(ClientJwtRefusalCause.NoTenantSigningKey, LogLevel.Information)]
+    [InlineData(ClientJwtRefusalCause.NoClientEncryptionKey, LogLevel.Information)]
     [InlineData(null, LogLevel.Error)]
-    public async Task CompleteAuthenticationAsync_PushMode_TokensNotIssued_AreLoggedByTheirCause(
+    public async Task CompleteAuthenticationAsync_PushMode_TokensNotIssued_AreRecordedWithTheRequest(
         ClientJwtRefusalCause? cause, LogLevel expected)
     {
         var authSession = new AuthSession(UserId, "session_123", TimeProvider.System.GetUtcNow(), "backchannel");
