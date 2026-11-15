@@ -27,8 +27,8 @@ namespace Abblix.Oidc.Server.Features.DPoP;
 /// access token (RFC 9449 section 6.1) - the role-name «proof key thumbprint» reflects the
 /// protocol-level meaning, while the wire-level cnf-member retains the RFC's
 /// <c>jkt</c> spelling.</param>
-/// <param name="JwtId">The <c>jti</c> claim of the proof. The validator does not check it
-/// against any cache; the layered replay-cache slice consumes this value.</param>
+/// <param name="JwtId">The <c>jti</c> claim of the proof as the client wrote it; the validator
+/// has already reserved its digest against replay.</param>
 /// <param name="IssuedAt">The <c>iat</c> claim of the proof, parsed from the JWT
 /// numeric-date.</param>
 public sealed record Proof(

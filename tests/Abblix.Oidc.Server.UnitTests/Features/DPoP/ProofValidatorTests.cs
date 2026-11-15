@@ -369,6 +369,32 @@ public class ProofValidatorTests
         Assert.Equal(ProofErrorReasons.ReplayDetected, error.Reason);
     }
 
+    [Fact]
+    public async Task ValidateAsync_LongJtisDifferingOnlyAtTheEnd_AreBothFresh()
+    {
+        // The reservation holds a digest of the whole jti, so two proofs sharing every character but
+        // the last are two identifiers, not one cut short.
+        var common = new string('j', 16 * 1024);
+        var first = new DPoPProofBuilder(_time.GetUtcNow()) { Jti = common + "1" }.Build();
+        var second = new DPoPProofBuilder(_time.GetUtcNow()) { Jti = common + "2" }.Build();
+
+        Assert.True((await _sut.ValidateAsync(Unprofiled, first, cancellationToken: Ct)).TryGetSuccess(out var proof));
+        Assert.True((await _sut.ValidateAsync(Unprofiled, second, cancellationToken: Ct)).TryGetSuccess(out _));
+        Assert.Equal(common + "1", proof.JwtId);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_JtisDifferingOnlyInANonAsciiCharacter_AreBothFresh()
+    {
+        // The digest is taken over the jti's UTF-8 bytes: an encoding that folds characters it cannot
+        // represent would make the second, fresh proof read as a replay of the first.
+        var first = new DPoPProofBuilder(_time.GetUtcNow()) { Jti = "jti-with-accent-\u00e9-0123456789" }.Build();
+        var second = new DPoPProofBuilder(_time.GetUtcNow()) { Jti = "jti-with-accent-\u00e8-0123456789" }.Build();
+
+        Assert.True((await _sut.ValidateAsync(Unprofiled, first, cancellationToken: Ct)).TryGetSuccess(out _));
+        Assert.True((await _sut.ValidateAsync(Unprofiled, second, cancellationToken: Ct)).TryGetSuccess(out _));
+    }
+
     [Theory]
     [InlineData("not.a.jwt.with.too.many.parts")]
     [InlineData("only.two")]

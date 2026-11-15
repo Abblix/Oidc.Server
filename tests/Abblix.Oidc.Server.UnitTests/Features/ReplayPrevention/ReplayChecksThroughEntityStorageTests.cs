@@ -7,7 +7,9 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Buffers.Text;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -116,8 +118,14 @@ public class ReplayChecksThroughEntityStorageTests
         Assert.Null(lifetime.SlidingExpiration);
     }
 
-    [Fact]
-    public async Task ADPoPProofPresentedTwice_IsRefusedByTheStorage()
+    /// <summary>
+    /// A DPoP proof's identifier is reserved under its digest rather than as the client wrote it, so the key stays
+    /// one length however long an identifier a client chooses (RFC 9449 section 11.1, "store only a hash thereof").
+    /// </summary>
+    [Theory]
+    [InlineData(32)]
+    [InlineData(16 * 1024)]
+    public async Task ADPoPProofPresentedTwice_IsRefusedByTheStorageUnderItsDigest(int jtiLength)
     {
         var requestInfo = new Mock<IRequestInfoProvider>();
         requestInfo.SetupGet(p => p.RequestMethod).Returns("POST");
@@ -130,14 +138,15 @@ public class ReplayChecksThroughEntityStorageTests
         await using var provider = services.BuildServiceProvider();
         var validator = provider.GetRequiredService<IProofValidator>();
 
-        var builder = new DPoPProofBuilder(TimeProvider.System.GetUtcNow());
+        var builder = new DPoPProofBuilder(TimeProvider.System.GetUtcNow()) { Jti = new string('j', jtiLength) };
         var proof = builder.Build();
         var ct = TestContext.Current.CancellationToken;
 
         Assert.True((await validator.ValidateAsync(Unprofiled, proof, cancellationToken: ct)).TryGetSuccess(out _));
         Assert.True((await validator.ValidateAsync(Unprofiled, proof, cancellationToken: ct)).TryGetFailure(out var error));
         Assert.Equal(ProofErrorReasons.ReplayDetected, error.Reason);
-        Assert.Equal([Prefix + builder.Jti, Prefix + builder.Jti], _storage.Claimed);
+        var key = Prefix + Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(builder.Jti)));
+        Assert.Equal([key, key], _storage.Claimed);
     }
 
     [Fact]
