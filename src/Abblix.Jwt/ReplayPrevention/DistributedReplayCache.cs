@@ -26,6 +26,11 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// deployment relying on that rejection takes a <see cref="ReplayCacheBase"/> over a store
 /// that decides and writes in one operation.
 /// <para>
+/// This is the store a receiver of security event tokens or logout tokens gets on its own. Beside
+/// the OpenID Connect server, the server's store over its entity storage serves in its place, the
+/// receiver's reservations included.
+/// </para>
+/// <para>
 /// A caller that gives a reservation back after its work failed widens the same race: when two
 /// instances both hear "new" for one identifier and one of them releases, the entry the other
 /// one's success rests on is gone, and the next presentation of the token passes as fresh.
