@@ -23,7 +23,9 @@ public interface IConsumedRequestUriRegistry
 {
     /// <summary>
     /// Ends the flow begun with <paramref name="requestUri"/>, answering whether this call is the one that ended it.
-    /// Deciding and recording are one step, so of two pages of one flow ending it together, one is told it did.
+    /// The entity storage decides between two pages of one flow ending it together, one being told it did: the
+    /// default storage decides within one process only, and across several nodes only an <c>IEntityStorage</c>
+    /// built on the store's own primitive, such as Redis <c>SET NX</c> or a unique-key insert, decides.
     /// </summary>
     /// <param name="tenant">The tenant the request URI belongs to.</param>
     /// <param name="requestUri">The URN the flow began with.</param>

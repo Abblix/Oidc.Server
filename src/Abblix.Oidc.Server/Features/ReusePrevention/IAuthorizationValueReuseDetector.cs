@@ -37,8 +37,10 @@ public interface IAuthorizationValueReuseDetector
 
     /// <summary>
     /// Reserves a value of the given kind for this client for the detection window, answering whether this is its
-    /// first use there. Deciding and reserving are one step, so of two requests presenting one value together, one
-    /// is told it is the first. Called once per authorization code, before the code is issued, rather than on every
+    /// first use there. The entity storage decides between two requests presenting one value together, one being
+    /// told it is the first: the default storage decides within one process only, and across several nodes only
+    /// an <c>IEntityStorage</c> built on the store's own primitive, such as Redis <c>SET NX</c> or a unique-key
+    /// insert, decides. Called once per authorization code, before the code is issued, rather than on every
     /// authorization request, so one request processed again across a login or consent redirect is not refused.
     /// </summary>
     /// <param name="tenant">The tenant the client belongs to.</param>

@@ -41,7 +41,8 @@ public sealed class LogoutConfirmationStore(
         // fresh value here would let a request arriving while the end user reads the page void the answer they
         // are about to give. A value is written only where the session has none, and the storage decides that
         // between concurrent callers: of two first requests that overlap, one writes and the other reads back what
-        // it wrote. A value answered or expired between that losing write and the read leaves the session with no
+        // it wrote. The default storage decides within one process only; across nodes that takes a storage built on
+        // the store's own set-if-absent. A value answered or expired between that losing write and the read leaves the session with no
         // question, and the next pass asks afresh.
         for (var attempt = 0; attempt < IssuingAttempts; attempt++)
         {
