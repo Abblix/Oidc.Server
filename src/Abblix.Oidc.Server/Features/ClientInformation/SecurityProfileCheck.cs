@@ -58,6 +58,7 @@ public sealed class SecurityProfileCheck : ITenantsCheck
                         client.TokenEndpointAuthMethod,
                         client.ClientAssertionAudiences,
                         requirements)
+                    .Concat(SecurityProfileConsistency.FindGrantTypeViolations(client.EffectiveGrantTypes, requirements))
                     .Concat(SecurityProfileConsistency.FindAlgorithmViolations(client, requirements))
                     .Concat(SecurityProfileConsistency.FindRedirectUriViolations(client.RedirectUris, requirements))
                     .Concat(SecurityProfileConsistency.FindJwksUriViolations(client.JwksUri, requirements))

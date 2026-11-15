@@ -484,6 +484,34 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.1: authorization servers "shall reject requests using the resource owner
+    /// password credentials grant". A stored client configured for that grant, registered while no profile was in
+    /// force, does not authenticate once its tenant is held to FAPI 2.0, and so is issued no token by it; the same
+    /// client without the grant authenticates.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task StoredClientConfiguredForThePasswordGrant_DoesNotAuthenticateUnderFapi2(
+        bool password, bool authenticated)
+    {
+        var (authenticator, inner) = CreateAuthenticator();
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedGrantTypes = password
+                ? [GrantTypes.AuthorizationCode, GrantTypes.Password]
+                : [GrantTypes.AuthorizationCode],
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
+
+        Assert.Equal(authenticated, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
     /// FAPI 1.0 Part 2 section 8.2 has access tokens sender-constrained via MTLS only, so a stored client requiring
     /// DPoP (RFC 9449 section 5.2), or one no certificate-bound token can be issued to, does not authenticate.
     /// </summary>
