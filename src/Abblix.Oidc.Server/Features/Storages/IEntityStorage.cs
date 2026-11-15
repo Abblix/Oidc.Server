@@ -15,9 +15,52 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// in-process or distributed.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Implementations must support atomic get-and-remove semantics when
 /// <c>removeOnRetrieval</c> is true so that single-use credentials (authorization codes, PAR
 /// request URIs) cannot be replayed across concurrent token requests.
+/// </para>
+/// <para>
+/// Every operation that decides between callers - the read with removal,
+/// <see cref="TrySetIfAbsentAsync{T}"/>, <see cref="TryReplaceAsync{T}"/> and <see cref="TryExtendAsync"/> -
+/// is exactly as atomic as the store behind it makes it. The shipped <see cref="DistributedCacheStorage"/>
+/// rides <c>IDistributedCache</c>, which has no conditional write, so it decides between the callers of one
+/// process under a per-key gate; two requests that reach different nodes can both be told they came first.
+/// A deployment with several nodes registers a storage that maps each of these operations to one command of
+/// its store, so the decision is made by the store and holds for every node. In Redis:
+/// </para>
+/// <list type="bullet">
+/// <item><description><see cref="TrySetIfAbsentAsync{T}"/> is <c>SET key value NX</c> with <c>PX</c> for a
+/// relative expiry or <c>PXAT</c> for an absolute one, writing the value and its lifetime together, so no key
+/// is ever left without its expiry. A sliding expiry has no such command and is not covered
+/// here.</description></item>
+/// <item><description>The read with removal is <c>GETDEL</c>.</description></item>
+/// <item><description><see cref="TryExtendAsync"/> is <c>PEXPIRE</c> or <c>PEXPIREAT</c>, which leave a key
+/// that is gone alone.</description></item>
+/// <item><description><see cref="TryReplaceAsync{T}"/> is an optimistic transaction: <c>WATCH</c> the key,
+/// <c>GET</c> it, compare the values in the process as that method requires, then <c>MULTI</c>, <c>SET</c>,
+/// <c>EXEC</c>, an aborted <c>EXEC</c> answering false. A script comparing inside Redis sees only stored
+/// bytes, so it fits only a serialization that writes one value as one byte sequence.</description></item>
+/// </list>
+/// <para>
+/// With such a storage, the decisions built on these operations hold across nodes as well: the logout
+/// confirmation question two overlapping end-session requests share, the reuse check of a PKCE code challenge
+/// or a nonce, the end of a pushed authorization flow, single-use codes and request URIs, the token registry,
+/// the revocation cutoff, the registry of clients in a session and the device user code rate limit. Redeeming
+/// the logout confirmation answer reads, compares and removes in separate steps, so it is not one of them.
+/// </para>
+/// <para>
+/// Other stores have the same primitive, provided an entry past its expiry but not yet purged counts as
+/// absent, both when claiming a key and when reading it. In SQL that is
+/// <c>INSERT ... ON CONFLICT (key) DO UPDATE ... WHERE expires_at &lt;= now()</c>, the affected row count
+/// answering whether this caller wrote; in DynamoDB a conditional put on
+/// <c>attribute_not_exists(pk) OR expiresAt &lt; :now</c>, since its TTL deletion runs late; in etcd a
+/// transaction on a key's create revision with a lease, which expires the key itself. A plain
+/// <c>ON CONFLICT DO NOTHING</c> keeps refusing a key whose entry has expired until the purge runs.
+/// Replay detection of presented tokens (DPoP proofs, client assertions, JWT bearer grant assertions, security
+/// event tokens) is not kept here: it goes through <c>IReplayCache</c>, which takes its own implementation of
+/// the same primitive.
+/// </para>
 /// </remarks>
 public interface IEntityStorage
 {
