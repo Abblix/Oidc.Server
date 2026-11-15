@@ -369,6 +369,20 @@ public class ProofValidatorTests
         Assert.Equal(ProofErrorReasons.ReplayDetected, error.Reason);
     }
 
+    [Fact]
+    public async Task ValidateAsync_LongJtisDifferingOnlyAtTheEnd_AreBothFresh()
+    {
+        // The reservation holds a digest of the whole jti, so two proofs sharing every character but
+        // the last are two identifiers, not one cut short.
+        var common = new string('j', 16 * 1024);
+        var first = new DPoPProofBuilder(_time.GetUtcNow()) { Jti = common + "1" }.Build();
+        var second = new DPoPProofBuilder(_time.GetUtcNow()) { Jti = common + "2" }.Build();
+
+        Assert.True((await _sut.ValidateAsync(Unprofiled, first, cancellationToken: Ct)).TryGetSuccess(out var proof));
+        Assert.True((await _sut.ValidateAsync(Unprofiled, second, cancellationToken: Ct)).TryGetSuccess(out _));
+        Assert.Equal(common + "1", proof.JwtId);
+    }
+
     [Theory]
     [InlineData("not.a.jwt.with.too.many.parts")]
     [InlineData("only.two")]
