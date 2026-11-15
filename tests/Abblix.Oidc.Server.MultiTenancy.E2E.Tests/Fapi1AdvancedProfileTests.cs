@@ -355,7 +355,7 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         var request = ConformantRequest();
         request.Remove(AuthorizationRequest.Parameters.ResponseMode);
 
-        Assert.Equal(ErrorCodes.UnsupportedResponseType, await ErrorOf(await AuthorizeAsync(request)));
+        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorOf(await AuthorizeAsync(request)));
     }
 
     /// <summary>
