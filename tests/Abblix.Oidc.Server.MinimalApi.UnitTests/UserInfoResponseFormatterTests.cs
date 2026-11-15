@@ -89,7 +89,7 @@ public class UserInfoResponseFormatterTests
         var clientJwtFormatter = new Mock<IClientJwtFormatter>();
         clientJwtFormatter
             .Setup(f => f.FormatAsync(Served, It.IsAny<JsonWebToken>(), client, It.IsAny<ClientJwtEncryption>()))
-            .ReturnsAsync(new OidcError(ErrorCodes.InvalidClient, "the client's key set"));
+            .ReturnsAsync(new OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to"));
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
         options.Setup(o => o.Value).Returns(new OidcOptions());
         var formatter = new UserInfoResponseFormatter(
@@ -123,5 +123,100 @@ public class UserInfoResponseFormatterTests
         var response = await FormatErrorAsync(errorCode);
 
         Assert.Equal(expectedStatusCode, response.StatusCode);
+    }
+
+    /// <summary>
+    /// OpenID Connect Core 1.0 section 5.3.2: "The response MAY be encrypted without also being signed", and "If the
+    /// UserInfo Response is signed and/or encrypted, then the Claims are returned in a JWT". A client that registered
+    /// userinfo_encrypted_response_alg alone is answered with a JWT, not the plain document.
+    /// </summary>
+    [Fact]
+    public async Task An_encrypted_only_response_is_a_jwt()
+    {
+        var client = new ClientInfo("client")
+        {
+            UserInfoEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
+        };
+        var clientJwtFormatter = new Mock<IClientJwtFormatter>(MockBehavior.Strict);
+        clientJwtFormatter
+            .Setup(f => f.FormatAsync(
+                Served,
+                It.Is<JsonWebToken>(token => token.Header.Algorithm == SigningAlgorithms.None),
+                client,
+                It.Is<ClientJwtEncryption>(encryption =>
+                    encryption.KeyManagementAlgorithm == EncryptionAlgorithms.KeyManagement.RsaOaep256)))
+            .ReturnsAsync("header.encrypted-key.iv.ciphertext.tag");
+        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
+        options.Setup(o => o.Value).Returns(new OidcOptions());
+        var formatter = new UserInfoResponseFormatter(
+            TimeProvider.System, clientJwtFormatter.Object, new ServedBy(Served), options.Object);
+        Result<UserInfoFoundResponse, OidcError> found =
+            new UserInfoFoundResponse(new JsonObject(), client, Served.Issuer.OriginalString);
+
+        var response = await HttpResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), found));
+
+        Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
+        Assert.StartsWith(MediaTypes.Jwt, response.Headers.ContentType.ToString());
+    }
+
+    /// <summary>
+    /// The response a client that registered userinfo_encrypted_response_alg alone receives is the claims encrypted to
+    /// its key, as RFC 7519 section 3 has an encrypted JWT ("the JWT Claims Set being the plaintext encrypted by the
+    /// JWE"), with no unsigned JWS inside: the client opens it with its own key and reads the claims, and this
+    /// library's validator accepts it where signatures are not required.
+    /// </summary>
+    [Fact]
+    public async Task An_encrypted_only_response_opens_with_the_clients_key()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton(services, TimeProvider.System);
+        Microsoft.Extensions.DependencyInjection.LoggingServiceCollectionExtensions.AddLogging(services);
+        Abblix.Jwt.ServiceCollectionExtensions.AddJsonWebTokens(services);
+        await using var provider = Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions
+            .BuildServiceProvider(services);
+        T Get<T>() where T : notnull
+            => Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<T>(provider);
+
+        var tenant = new TenantDefinition { Id = "main", Issuer = new Uri("https://auth.example.com") };
+        var tenantAccessor = Mock.Of<ITenantAccessor>(accessor => accessor.Current == new TenantContext { Tenant = tenant });
+        var client = new ClientInfo("client")
+        {
+            UserInfoEncryptedResponseAlgorithm = Abblix.Jwt.EncryptionAlgorithms.KeyManagement.RsaOaep256,
+        };
+        var clientKey = Abblix.Jwt.JsonWebKeyFactory.CreateRsa(Abblix.Jwt.PublicKeyUsages.Encryption);
+        var clientKeys = new Mock<IClientKeysProvider>();
+        clientKeys.Setup(k => k.GetEncryptionKeys(client))
+            .Returns(new Abblix.Jwt.JsonWebKey[] { clientKey }.ToAsyncEnumerable());
+        var serviceKeys = new Mock<Abblix.Oidc.Server.Common.Interfaces.IAuthServiceKeysProvider>();
+        serviceKeys.Setup(k => k.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()))
+            .Returns(System.Linq.AsyncEnumerable.Empty<Abblix.Jwt.JsonWebKey>());
+        var issuer = new ProfiledJwtIssuer(Get<Abblix.Jwt.IJsonWebTokenCreator>());
+        var clientJwtFormatter = new ClientJwtFormatter(
+            issuer, new ClientEncryptionKeyResolver(issuer, clientKeys.Object, TimeProvider.System), serviceKeys.Object);
+        var options = new Mock<IOptionsSnapshot<OidcOptions>>();
+        options.Setup(o => o.Value).Returns(new OidcOptions());
+        var formatter = new UserInfoResponseFormatter(TimeProvider.System, clientJwtFormatter, tenantAccessor, options.Object);
+        Result<UserInfoFoundResponse, OidcError> found = new UserInfoFoundResponse(
+            new System.Text.Json.Nodes.JsonObject { [Abblix.Jwt.IanaClaimTypes.Sub] = "user-1" },
+            client,
+            tenant.Issuer.OriginalString);
+
+        var response = await HttpResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), found));
+
+        Assert.StartsWith(MediaTypes.Jwt, response.Headers.ContentType.ToString());
+        var jwt = response.Body;
+
+        var header = System.Text.Json.Nodes.JsonNode.Parse(
+            System.Buffers.Text.Base64Url.DecodeFromChars(jwt.Split('.')[0]))!.AsObject();
+        Assert.False(header.ContainsKey(Abblix.Jwt.JwtClaimTypes.ContentType));
+
+        var opened = await Get<Abblix.Jwt.IJsonWebTokenValidator>().ValidateAsync(jwt, new Abblix.Jwt.ValidationParameters
+        {
+            TokenTypes = Abblix.Jwt.TokenTypePolicy.CheckedByCaller,
+            Options = default,
+            ResolveTokenDecryptionKeys = _ => clientKey.ToAsync(),
+        });
+        Assert.True(opened.TryGetSuccess(out var token));
+        Assert.Equal("user-1", token.Payload.Subject);
     }
 }

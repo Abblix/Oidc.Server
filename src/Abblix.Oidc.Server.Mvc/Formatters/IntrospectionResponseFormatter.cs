@@ -90,15 +90,23 @@ public class IntrospectionResponseFormatter(
     }
 
     /// <summary>
-    /// The answer where the JWT cannot be produced: the JSON document where the caller accepts it too (RFC 9110 content
-    /// negotiation), the refusal otherwise.
+    /// The answer where the JWT cannot be produced: where no signing key produces it, the JSON document if the caller
+    /// accepts it too (RFC 9110 content negotiation) and the refusal otherwise; where the client cannot be encrypted
+    /// to, the refusal.
     /// </summary>
     private ActionResult FormatJwtFailure(
         OidcError error,
         IntrospectionRepresentation representation,
         JsonObject introspectionResponse)
     {
-        if (error is NotAcceptableError && representation.JsonAcceptable)
+        if (error is not NotAcceptableError)
+        {
+            // The JWT was refused for this client, not the representation: RFC 6749 section 5.2 answers it with 400,
+            // and the plain document is not sent in its place, as the client registered the JWT encrypted
+            return error.Format(StatusCodes.Status400BadRequest, tenantAccessor.CurrentTenant().Issuer.OriginalString);
+        }
+
+        if (representation.JsonAcceptable)
             return new JsonResult(introspectionResponse);
 
         return FormatFailure(error);

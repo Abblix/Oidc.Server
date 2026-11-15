@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
@@ -146,37 +147,55 @@ public static class SecurityProfileConsistency
     }
 
     /// <summary>
-    /// Names a client key set the profile leaves nothing to encrypt to, or an empty list: FAPI 1.0 Part 2 section
-    /// 8.6.1, "For JWE, both clients and authorization servers shall not use the RSA1_5 algorithm". A client that
-    /// publishes encryption keys has what is issued to it encrypted, and is not sent it in the clear because every key
-    /// declares an algorithm its profile forbids.
+    /// Names each JWT the client registered an encryption algorithm for that it has no key to be encrypted to under,
+    /// or an empty list: FAPI 1.0 Part 2 section 8.6.1, "For JWE, both clients and authorization servers shall not use
+    /// the RSA1_5 algorithm", so a client held to it is refused before anything is issued to it rather than when a
+    /// token would have to be sent in the clear. A client that registered no encryption algorithm is sent nothing
+    /// encrypted and is not judged.
     /// </summary>
-    /// <param name="clientKeysProvider">Supplies the encryption keys the client publishes.</param>
+    /// <remarks>
+    /// The key is the one <see cref="ClientEncryptionKeyResolver"/> chooses where the JWT is encrypted, so the two
+    /// answers cannot differ. Asked only where the profile restricts key management; elsewhere the refusal is the
+    /// formatter's, where the JWT is issued.
+    /// </remarks>
+    /// <param name="encryptionKeyResolver">Chooses the key a JWT for the client is encrypted to.</param>
     /// <param name="client">The client.</param>
+    /// <param name="options">Supplies the content encryption algorithm a client that registered none is sent.</param>
     /// <param name="requirements">The control bundle the client is held to.</param>
     public static async Task<IReadOnlyList<string>> FindEncryptionKeyViolationsAsync(
-        IClientKeysProvider clientKeysProvider,
+        ClientEncryptionKeyResolver encryptionKeyResolver,
         ClientInfo client,
+        OidcOptions options,
         SecurityProfileRequirements requirements)
     {
-        // Fetched only where the profile forbids an algorithm a key may declare
         if (!requirements.ForbidRsa1_5KeyManagement)
             return [];
 
-        var keys = await clientKeysProvider.GetEncryptionKeys(client).ToArrayAsync();
+        (string Name, ClientJwtEncryption Encryption)[] encrypted =
+        [
+            (nameof(ClientInfo.IdentityTokenEncryptedResponseAlgorithm), ClientJwtEncryption.ForIdentityToken(client, options)),
+            (nameof(ClientInfo.UserInfoEncryptedResponseAlgorithm), ClientJwtEncryption.ForUserInfo(client, options)),
+            (nameof(ClientInfo.IntrospectionEncryptedResponseAlgorithm), ClientJwtEncryption.ForIntrospection(client, options)),
+            (nameof(ClientInfo.AuthorizationEncryptedResponseAlgorithm), ClientJwtEncryption.ForJarm(client, options)),
+        ];
 
-        // A key declaring no algorithm can be used with any the profile admits
-        if (keys.Length == 0 || keys.Any(key => key.Algorithm is not { } declared ||
-                                               requirements.PermitsKeyManagementAlgorithm(declared)))
+        var violations = new List<string>();
+        foreach (var (name, encryption) in encrypted)
         {
-            return [];
+            if (encryption.KeyManagementAlgorithm is not { } algorithm)
+                continue;
+
+            var key = await encryptionKeyResolver.ResolveAsync(
+                requirements, client, algorithm, encryption.ContentEncryptionAlgorithmInUse);
+            if (key is null)
+            {
+                violations.Add(
+                    $"the client registers {name} {algorithm}, but has no key that algorithm can encrypt to under its " +
+                    "security profile");
+            }
         }
 
-        return
-        [
-            "the client's key set publishes only encryption keys declaring an algorithm its security profile " +
-            $"forbids ({string.Join(", ", keys.Select(key => key.Algorithm).Distinct())})",
-        ];
+        return violations;
     }
 
     /// <summary>
@@ -248,7 +267,8 @@ public static class SecurityProfileConsistency
     /// The client's configuration is what the server signs with, so it is judged here rather than when a token is
     /// issued, where the only answers left would be a token signed against the profile or a failure the client could
     /// do nothing about. A userinfo or introspection response configured <c>none</c> is plain JSON and carries no
-    /// JWS, and a logout token without an algorithm of its own takes the ID token's, so neither is named; an ID token
+    /// JWS unless the client registered userinfo encryption, which makes it an unsigned JWT; a logout token
+    /// without an algorithm of its own takes the ID token's, so neither is named; an ID token
     /// or authorization response configured <c>none</c> is an unsigned JWS, and is.
     /// </remarks>
     /// <param name="client">The client whose configuration is checked.</param>
@@ -261,7 +281,8 @@ public static class SecurityProfileConsistency
                 (nameof(ClientInfo.IdentityTokenSignedResponseAlgorithm), client.IdentityTokenSignedResponseAlgorithm),
                 (nameof(ClientInfo.AuthorizationSignedResponseAlgorithm), client.AuthorizationSignedResponseAlgorithm),
                 (nameof(ClientInfo.LogoutTokenSignedResponseAlgorithm), client.LogoutTokenSignedResponseAlgorithm),
-                (nameof(ClientInfo.UserInfoSignedResponseAlgorithm), SignedOrNull(client.UserInfoSignedResponseAlgorithm)),
+                (nameof(ClientInfo.UserInfoSignedResponseAlgorithm), UserInfoSignature(
+                    client.UserInfoSignedResponseAlgorithm, client.UserInfoEncryptedResponseAlgorithm)),
                 (nameof(ClientInfo.IntrospectionSignedResponseAlgorithm),
                     SignedOrNull(client.IntrospectionSignedResponseAlgorithm)),
                 (nameof(ClientInfo.RequestObjectSigningAlgorithm), client.RequestObjectSigningAlgorithm),
@@ -413,6 +434,16 @@ public static class SecurityProfileConsistency
     /// <param name="algorithm">The algorithm the client is configured for.</param>
     public static string? SignedOrNull(string? algorithm)
         => algorithm == SigningAlgorithms.None ? null : algorithm;
+
+    /// <summary>
+    /// The signature algorithm a userinfo response is judged by, or null where it is plain JSON: OpenID Connect Core
+    /// 1.0 section 5.3.2, "If the UserInfo Response is signed and/or encrypted, then the Claims are returned in a JWT",
+    /// so a response registered for encryption is a JWT even when signed with none, and none is then judged.
+    /// </summary>
+    /// <param name="signedResponseAlgorithm">The registered <c>userinfo_signed_response_alg</c>.</param>
+    /// <param name="encryptedResponseAlgorithm">The registered <c>userinfo_encrypted_response_alg</c>.</param>
+    public static string? UserInfoSignature(string? signedResponseAlgorithm, string? encryptedResponseAlgorithm)
+        => encryptedResponseAlgorithm is null ? SignedOrNull(signedResponseAlgorithm) : signedResponseAlgorithm;
 
     /// <summary>
     /// The client authentication methods that prove possession of a key rather than of a shared

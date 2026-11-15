@@ -55,8 +55,8 @@ public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
         var responseType = request.Model.ResponseType;
         var standalone = !responseType.HasFlag(ResponseTypes.Code) && !responseType.HasFlag(ResponseTypes.Token);
 
-        // A key set nothing can be encrypted to is refused by the formatter, which the authorization endpoint answers as
-        // the client's error rather than as a server one
+        // A client with no key its registered encryption algorithm can encrypt to is refused by the formatter, which the
+        // authorization endpoint answers as the client's error rather than as a server one
         var created = await identityTokenService.CreateIdentityTokenAsync(
             tenant,
             new IdentityTokenRequest(

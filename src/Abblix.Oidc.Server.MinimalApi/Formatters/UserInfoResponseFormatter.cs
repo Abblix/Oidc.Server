@@ -71,8 +71,13 @@ public class UserInfoResponseFormatter(
 
     private async Task<IResult> FormatSuccessAsync(UserInfoFoundResponse found)
     {
-        if (found.ClientInfo.UserInfoSignedResponseAlgorithm == SigningAlgorithms.None)
+        // OpenID Connect Core 1.0 section 5.3.2: "If the UserInfo Response is signed and/or encrypted, then the Claims
+        // are returned in a JWT" and "The response MAY be encrypted without also being signed"
+        if (found.ClientInfo is
+            { UserInfoSignedResponseAlgorithm: SigningAlgorithms.None, UserInfoEncryptedResponseAlgorithm: null })
+        {
             return Results.Json(found.User);
+        }
 
         var token = new JsonWebToken
         {
@@ -94,8 +99,9 @@ public class UserInfoResponseFormatter(
             ClientJwtEncryption.ForUserInfo(found.ClientInfo, options.Value));
 
         // RFC 6750 section 3.1, invalid_token: "The access token provided is expired, revoked, malformed, or invalid
-        // for other reasons". The token's client has a key set its profile leaves nothing in to encrypt to, so the token
-        // cannot be answered, and a response sent in the clear would be one the profile forbids
+        // for other reasons". The token's client registered userinfo_encrypted_response_alg and has no key it can be
+        // encrypted to under it, so the token cannot be answered, and a response sent in the clear would ignore what the
+        // client registered
         if (formatted.TryGetFailure(out var refusal))
         {
             return FormatError(new OidcError(ErrorCodes.InvalidToken, refusal.ErrorDescription)

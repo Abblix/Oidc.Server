@@ -21,8 +21,8 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 
 /// <summary>
 /// Default <see cref="IIntrospectionResponseJwtBuilder"/>: assembles the RFC 9701 section 5 JWT and hands it to
-/// <see cref="IClientJwtFormatter"/> for signing and, where the resource server published encryption keys,
-/// encryption to them (a Nested JWT).
+/// <see cref="IClientJwtFormatter"/> for signing and, where the resource server registered
+/// <c>introspection_encrypted_response_alg</c>, encryption under it (a Nested JWT).
 /// </summary>
 /// <param name="clientJwtFormatter">Signs and optionally encrypts the assembled JWT.</param>
 /// <param name="timeProvider">Supplies the current time for the <c>iat</c> claim.</param>
@@ -68,8 +68,8 @@ public class IntrospectionResponseJwtBuilder(
             },
         };
 
-        // The client's key set was judged against its profile where the client was resolved in this request, so a
-        // refusal here is a key set changed in between, answered as the formatter refuses it
+        // A client that registered introspection_encrypted_response_alg and has no key it can be encrypted to under it
+        // is refused by the formatter, which the adapter answers
         return await clientJwtFormatter.FormatAsync(
             tenant,
             token,

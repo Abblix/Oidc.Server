@@ -18,50 +18,55 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// supplies its own policy via the static factories below.
 /// </summary>
 /// <param name="KeyManagementAlgorithm">The client's registered <c>*_encrypted_response_alg</c>, or <c>null</c> when
-/// the client did not register one.</param>
+/// the client did not register one. Only a registered algorithm asks for encryption, and the JWT is then encrypted under
+/// exactly it (OpenID Connect Dynamic Client Registration 1.0 section 2: "The default, if omitted, is that no encryption
+/// is performed").</param>
 /// <param name="ContentEncryptionAlgorithm">The client's registered <c>*_encrypted_response_enc</c>, or <c>null</c>
 /// to fall back to <see cref="DefaultContentEncryptionAlgorithm"/>.</param>
 /// <param name="DefaultContentEncryptionAlgorithm">The content-encryption algorithm to use when the client did not
 /// register one.</param>
-/// <param name="RequireRegisteredAlgorithm">When <c>true</c> the JWT is encrypted only if the client registered a
-/// key-management algorithm (and the client's encryption keys are not even resolved otherwise) - the JARM section 2.2 / section 3
-/// opt-in rule. When <c>false</c> the JWT is encrypted whenever the client published encryption keys.</param>
+/// <param name="UnsignedIsClaimsSet">Whether a JWT registered unsigned is encrypted as its claims set (RFC 7519 section
+/// 3) rather than as an unsigned JWS inside the JWE: OpenID Connect Core 1.0 section 5.3.2 has a UserInfo response that
+/// "MAY be encrypted without also being signed", while section 2 has an encrypted ID token "signed then encrypted, with
+/// the result being a Nested JWT".</param>
 public sealed record ClientJwtEncryption(
 	string? KeyManagementAlgorithm,
 	string? ContentEncryptionAlgorithm,
 	string DefaultContentEncryptionAlgorithm,
-	bool RequireRegisteredAlgorithm)
+	bool UnsignedIsClaimsSet = false)
 {
 	/// <summary>
-	/// Policy for a signed/encrypted UserInfo response (OIDC Core section 5.3.2): encrypts whenever the client published
-	/// encryption keys, using its <c>userinfo_encrypted_response_*</c> metadata.
+	/// The content-encryption algorithm the JWT is encrypted with: the registered one, else the default.
+	/// </summary>
+	public string ContentEncryptionAlgorithmInUse => ContentEncryptionAlgorithm ?? DefaultContentEncryptionAlgorithm;
+
+	/// <summary>
+	/// Policy for a signed/encrypted UserInfo response (OIDC Core section 5.3.2): encrypts when the client registered
+	/// <c>userinfo_encrypted_response_alg</c>, using its <c>userinfo_encrypted_response_*</c> metadata.
 	/// </summary>
 	public static ClientJwtEncryption ForUserInfo(ClientInfo clientInfo, OidcOptions options) => new(
 		clientInfo.UserInfoEncryptedResponseAlgorithm,
 		clientInfo.UserInfoEncryptedResponseEncryption,
 		options.DefaultContentEncryptionAlgorithm,
-		RequireRegisteredAlgorithm: false);
+		UnsignedIsClaimsSet: true);
 
 	/// <summary>
-	/// Policy for an ID token or logout token: encrypts whenever the client published encryption keys, using its
-	/// <c>id_token_encrypted_response_*</c> metadata.
+	/// Policy for an ID token or logout token: encrypts when the client registered
+	/// <c>id_token_encrypted_response_alg</c>, using its <c>id_token_encrypted_response_*</c> metadata.
 	/// </summary>
 	public static ClientJwtEncryption ForIdentityToken(ClientInfo clientInfo, OidcOptions options) => new(
 		clientInfo.IdentityTokenEncryptedResponseAlgorithm,
 		clientInfo.IdentityTokenEncryptedResponseEncryption,
-		options.DefaultContentEncryptionAlgorithm,
-		RequireRegisteredAlgorithm: false);
+		options.DefaultContentEncryptionAlgorithm);
 
 	/// <summary>
-	/// Policy for a signed/encrypted token introspection response (RFC 9701): encrypts only when the client registered
-	/// <c>introspection_encrypted_response_alg</c>, since RFC 9701 section 6 has "The default, if omitted, is that no
-	/// encryption is performed", whatever keys the client publishes.
+	/// Policy for a signed/encrypted token introspection response (RFC 9701): encrypts when the client registered
+	/// <c>introspection_encrypted_response_alg</c>, using its <c>introspection_encrypted_response_*</c> metadata.
 	/// </summary>
 	public static ClientJwtEncryption ForIntrospection(ClientInfo clientInfo, OidcOptions options) => new(
 		clientInfo.IntrospectionEncryptedResponseAlgorithm,
 		clientInfo.IntrospectionEncryptedResponseEncryption,
-		options.DefaultContentEncryptionAlgorithm,
-		RequireRegisteredAlgorithm: true);
+		options.DefaultContentEncryptionAlgorithm);
 
 	/// <summary>
 	/// Policy for a JARM authorization response JWT: encrypts only when the client registered
@@ -78,6 +83,5 @@ public sealed record ClientJwtEncryption(
 	public static ClientJwtEncryption ForJarm(ClientInfo clientInfo, OidcOptions options) => new(
 		clientInfo.AuthorizationEncryptedResponseAlgorithm,
 		clientInfo.AuthorizationEncryptedResponseEncryption,
-		options.DefaultAuthorizationResponseEncryptionAlgorithm,
-		RequireRegisteredAlgorithm: true);
+		options.DefaultAuthorizationResponseEncryptionAlgorithm);
 }

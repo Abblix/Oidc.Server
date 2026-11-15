@@ -48,8 +48,8 @@ public partial class BackChannelLogoutNotifier(
         // Create the logout token specific to the logout event and client
         var created = await logoutTokenService.CreateLogoutTokenAsync(tenant, clientInfo, logoutContext);
 
-        // A client whose key set its profile leaves nothing in to encrypt to cannot be sent a logout token it can read,
-        // and a token sent in the clear would be one its profile forbids, so the notification is not sent
+        // A client with no key its registered encryption algorithm can encrypt to cannot be sent a logout token it can
+        // read, and a token sent in the clear would ignore the encryption it registered, so the notification is not sent
         if (created.TryGetFailure(out var refusal))
         {
             LogLogoutTokenNotIssued(clientInfo.ClientId, refusal.ErrorDescription);

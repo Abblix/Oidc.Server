@@ -129,13 +129,13 @@ public class IntrospectionResponseJwtBuilderTests
     }
 
     /// <summary>
-    /// A refusal of the client JWT formatter, such as a key set the client changed after it was resolved, is the
-    /// builder's answer as it stands, for the adapter to map, and not an exception.
+    /// A refusal of the client JWT formatter - a client with no key its registered encryption algorithm can encrypt
+    /// to - is the builder's answer as it stands, for the adapter to map, and not an exception.
     /// </summary>
     [Fact]
     public async Task AFormatterRefusal_IsTheBuildersResult()
     {
-        var refusal = new OidcError(ErrorCodes.InvalidClient, "the key set changed");
+        var refusal = new OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to");
         _formatted = refusal;
 
         var result = await Builder(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature))

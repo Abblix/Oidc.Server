@@ -71,15 +71,18 @@ public class ProfileSigningKeysValidator(IAuthServiceKeysProvider keys) : IClien
     /// <paramref name="request"/> with each algorithm the server signs with for the client and it named none for given
     /// the first admitted one <paramref name="signingKeys"/> produce, or null where it named none and no key produces
     /// one. The introspection algorithm is among them: RFC 9701 section 6 makes RS256 the default of an omitted one,
-    /// which the profile refuses, so the registration says which algorithm the server signs with instead.
+    /// which the profile refuses, so the registration says which algorithm the server signs with instead. So is the
+    /// userinfo algorithm of a client that registered userinfo encryption alone, whose response is a JWT (OpenID Connect
+    /// Core 1.0 section 5.3.2) the profile would refuse unsigned.
     /// </summary>
     private static ClientRegistrationRequest? WithUnnamedAlgorithmsGiven(
         ClientRegistrationRequest request,
         JsonWebKey[] signingKeys)
     {
         var introspectionAlgorithm = SecurityProfileConsistency.SignedOrNull(request.IntrospectionSignedResponseAlg);
+        var userInfoUnsigned = request is { UserInfoSignedResponseAlg: null, UserInfoEncryptedResponseAlg: not null };
         if (request is { IdTokenSignedResponseAlg: not null, AuthorizationSignedResponseAlg: not null } &&
-            introspectionAlgorithm is not null)
+            introspectionAlgorithm is not null && !userInfoUnsigned)
         {
             return request;
         }
@@ -92,6 +95,7 @@ public class ProfileSigningKeysValidator(IAuthServiceKeysProvider keys) : IClien
             IdTokenSignedResponseAlg = request.IdTokenSignedResponseAlg ?? given,
             AuthorizationSignedResponseAlg = request.AuthorizationSignedResponseAlg ?? given,
             IntrospectionSignedResponseAlg = introspectionAlgorithm ?? given,
+            UserInfoSignedResponseAlg = userInfoUnsigned ? given : request.UserInfoSignedResponseAlg,
         };
     }
 }

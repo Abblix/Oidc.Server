@@ -31,8 +31,8 @@ public interface IClientJwtFormatter
     /// <param name="token">The JWT token to format.</param>
     /// <param name="clientInfo">The client information.</param>
     /// <param name="encryption">The encryption policy governing whether and how the JWT is encrypted.</param>
-    /// <returns>The formatted JWT string, or a refusal naming the client's key set where the security profile in force
-    /// leaves nothing in it to encrypt to.</returns>
+    /// <returns>The formatted JWT string, or a refusal where the client registered an encryption algorithm and has no
+    /// key it can encrypt to under the security profile in force.</returns>
     Task<Result<string, OidcError>> FormatAsync(
         TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption);
 }

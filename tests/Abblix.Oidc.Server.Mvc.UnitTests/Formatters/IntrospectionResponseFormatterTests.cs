@@ -233,4 +233,25 @@ public class IntrospectionResponseFormatterTests
         Assert.Equal("user_123", introspection[IanaClaimTypes.Sub]!.GetValue<string>());
         Assert.True(introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
     }
+
+    /// <summary>
+    /// A client that registered introspection_encrypted_response_alg and has no key it can be encrypted to under it is
+    /// refused the JWT as unauthorized_client with HTTP 400 (RFC 6749 section 5.2), and the plain document is not
+    /// sent in its place, though the caller accepts it too.
+    /// </summary>
+    [Theory]
+    [InlineData(MediaTypes.TokenIntrospectionJwt)]
+    [InlineData(MediaTypes.TokenIntrospectionJwt + ", " + System.Net.Mime.MediaTypeNames.Application.Json)]
+    public async Task FormatResponseAsync_AClientThatCannotBeEncryptedTo_IsRefusedTheResponse(string accept)
+    {
+        _clientJwtFormatter
+            .Setup(f => f.FormatAsync(
+                It.IsAny<TenantDefinition>(), It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ClientJwtEncryption>()))
+            .ReturnsAsync(new OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to"));
+
+        var result = await FormatAsync(ActiveResponse(SigningAlgorithms.RS256), accept);
+
+        var refused = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal(ErrorCodes.UnauthorizedClient, Assert.IsType<ErrorResponse>(refused.Value).Error);
+    }
 }

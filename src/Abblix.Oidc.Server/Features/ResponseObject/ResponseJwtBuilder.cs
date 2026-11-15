@@ -71,8 +71,8 @@ public class ResponseJwtBuilder(
         }
 
         // JARM section 2.2 / section 3: encrypt only when the client registered authorization_encrypted_response_alg, defaulting
-        // the content-encryption to A128CBC-HS256 when authorization_encrypted_response_enc is omitted. A key set nothing
-        // can be encrypted to is the formatter's refusal, which the caller answers
+        // the content-encryption to A128CBC-HS256 when authorization_encrypted_response_enc is omitted. A client with no
+        // key that algorithm can encrypt to is the formatter's refusal, which the caller answers
         return await clientJwtFormatter.FormatAsync(
             tenant,
             token,

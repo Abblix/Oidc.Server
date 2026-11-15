@@ -122,12 +122,16 @@ public partial class RegisterClientRequestProcessor(
             .Build();
 
     /// <summary>
+    /// Whether a client registered with <paramref name="tokenEndpointAuthMethod"/> has its secret kept itself rather
+    /// than only its hash: client_secret_jwt alone, since verifying the client's HMAC-signed assertion needs it; every
+    /// other method is verified against the hash.
+    /// </summary>
+    internal static bool KeepsSecretValue(string tokenEndpointAuthMethod)
+        => tokenEndpointAuthMethod == ClientAuthenticationMethods.ClientSecretJwt;
+
+    /// <summary>
     /// The secrets a newly registered client authenticates with, or null when its method uses none.
     /// </summary>
-    /// <remarks>
-    /// Only client_secret_jwt keeps the secret itself, since verifying the client's HMAC-signed assertion
-    /// needs it; every other method is verified against the hash.
-    /// </remarks>
     private static ClientSecret[]? ToClientSecrets(string tokenEndpointAuthMethod, ClientCredentials credentials)
     {
         if (!credentials.ClientSecret.HasValue())
@@ -137,11 +141,7 @@ public partial class RegisterClientRequestProcessor(
         [
             new ClientSecret
             {
-                Value = tokenEndpointAuthMethod switch
-                {
-                    ClientAuthenticationMethods.ClientSecretJwt => credentials.ClientSecret,
-                    _ => null,
-                },
+                Value = KeepsSecretValue(tokenEndpointAuthMethod) ? credentials.ClientSecret : null,
                 Sha512Hash = credentials.Sha512Hash,
                 ExpiresAt = credentials.ExpiresAt,
             }

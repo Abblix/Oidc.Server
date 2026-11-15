@@ -145,6 +145,32 @@ public class JwtAlgorithmsProviderTests
         Assert.Equal(keyManagement, result);
     }
 
+    /// <summary>
+    /// A JWT this server encrypts to a client under a symmetric algorithm uses the key OpenID Connect Core 1.0 section
+    /// 10.2 derives from the client secret, which it defines "for the AES key wrapping or direct encryption algorithm
+    /// used" alone. A password-based algorithm has no such key, so registration refuses it for every client, and the
+    /// JWT authorization and introspection response lists leave it out; AES key wrapping and dir stay.
+    /// </summary>
+    [Fact]
+    public void ClientAddressedEncryptionAlgValues_LeaveOutAlgorithmsNoClientKeyServes()
+    {
+        string[] keyManagement =
+        [
+            EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            EncryptionAlgorithms.KeyManagement.Aes128KW,
+            EncryptionAlgorithms.KeyManagement.Aes256Gcmkw,
+            EncryptionAlgorithms.KeyManagement.Dir,
+            EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW,
+            EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW,
+            EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW,
+        ];
+        string[] served = keyManagement[..4];
+        _validator.Setup(v => v.EncryptionAlgorithmsSupported).Returns(keyManagement);
+
+        Assert.Equal(served, CreateProvider().AuthorizationEncryptionAlgValuesSupported.ToArray());
+        Assert.Equal(served, CreateProvider().IntrospectionEncryptionAlgValuesSupported.ToArray());
+    }
+
     [Fact]
     public void AuthorizationEncryptionEncValuesSupported_ForwardsValidatorContentEncryptionAlgorithms()
     {
