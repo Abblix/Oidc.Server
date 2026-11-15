@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.MinimalApi.UnitTests;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Net.Http.Headers;
@@ -36,6 +37,12 @@ public class ActionResultErrorShapeTests
 {
     private const string Realm = "https://auth.example.com";
     private static readonly string[] DPoPAlgs = [SigningAlgorithms.RS256, SigningAlgorithms.ES256];
+
+	/// <summary>A code carrying a character RFC 6750 section 3 keeps out of the <c>error</c> attribute.</summary>
+	private const string CodeOutsideTheChallengeSet = "host_defined_\u00e9rror";
+
+	/// <summary>A scope carrying a character RFC 6750 section 3 keeps out of the <c>scope</c> attribute.</summary>
+	private const string ScopeOutsideTheChallengeSet = "openid caf\u00e9";
 
     private static string Challenge(ActionResultRunner.Response response)
         => response.Headers[HeaderNames.WWWAuthenticate].ToString();
@@ -273,4 +280,48 @@ public class ActionResultErrorShapeTests
         Assert.Equal(StatusCodes.Status429TooManyRequests, response.StatusCode);
         Assert.False(response.Headers.ContainsKey(HeaderNames.RetryAfter));
     }
+
+	/// <summary>
+	/// The RFC 6750 section 3 character set is a rule about the Bearer challenge, so it holds where that challenge is
+	/// sent and nowhere else: "Values for the "error" and "error_description" attributes ... MUST NOT include
+	/// characters outside the set %x20-21 / %x23-5B / %x5D-7E", and the same of "scope". An error answered with no
+	/// challenge - the token endpoint's 400, introspection's 401, a client read's 404 - keeps its own status whatever
+	/// its code is made of, instead of failing as a 500 on a header it never sends.
+	/// </summary>
+	[Theory]
+	[InlineData(StatusCodes.Status400BadRequest)]
+	[InlineData(StatusCodes.Status401Unauthorized)]
+	[InlineData(StatusCodes.Status404NotFound)]
+	public async Task An_error_answered_without_a_challenge_keeps_its_status_whatever_its_code_holds(
+		int fallbackStatusCode)
+	{
+		var error = new OidcError(CodeOutsideTheChallengeSet, "Something the client must read");
+
+		var response = await ActionResultRunner.RunAsync(error.Format(fallbackStatusCode, Realm));
+
+		Assert.Equal(fallbackStatusCode, response.StatusCode);
+		Assert.False(response.Headers.ContainsKey(HeaderNames.WWWAuthenticate));
+	}
+
+	/// <summary>
+	/// The two arms an error code cannot reach are reached by a scope: a client-authentication failure answered with
+	/// a Basic challenge, which carries no scope attribute (RFC 7617 section 2), and an invalid_request answered with
+	/// no challenge at all.
+	/// </summary>
+	[Theory]
+	[InlineData(ErrorCodes.InvalidClient, StatusCodes.Status401Unauthorized, TokenTypes.Basic)]
+	[InlineData(ErrorCodes.InvalidRequest, StatusCodes.Status400BadRequest, null)]
+	public async Task An_error_answered_without_a_bearer_challenge_keeps_its_status_whatever_its_scope_holds(
+		string errorCode, int expectedStatusCode, string? expectedScheme)
+	{
+		var error = new OidcError(errorCode, "Something the client must read") { RequiredScope = ScopeOutsideTheChallengeSet };
+
+		var response = await ActionResultRunner.RunAsync(error.Format(StatusCodes.Status401Unauthorized, Realm));
+
+		string[] expectedSchemes = expectedScheme is null ? [] : [expectedScheme];
+		Assert.Equal(expectedStatusCode, response.StatusCode);
+		Assert.Equal(
+			expectedSchemes,
+			response.Headers[HeaderNames.WWWAuthenticate].Select(challenge => ChallengeReader.Parse(challenge).Scheme));
+	}
 }
