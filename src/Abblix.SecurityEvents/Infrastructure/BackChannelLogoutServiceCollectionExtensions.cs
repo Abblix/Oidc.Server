@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using Abblix.Jwt;
 using Abblix.SecurityEvents.BackChannelLogout;
 using Abblix.SecurityEvents.BackChannelLogout.Steps;
 using Abblix.SecurityEvents.Validation.Steps;

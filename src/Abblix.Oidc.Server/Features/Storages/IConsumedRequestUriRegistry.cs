@@ -22,12 +22,17 @@ namespace Abblix.Oidc.Server.Features.Storages;
 public interface IConsumedRequestUriRegistry
 {
     /// <summary>
-    /// Records that the flow begun with <paramref name="requestUri"/> has ended.
+    /// Ends the flow begun with <paramref name="requestUri"/>, answering whether this call is the one that ended it.
+    /// The entity storage decides between two pages of one flow ending it together, one being told it did: the
+    /// default storage decides within one process only, and across several nodes only an <c>IEntityStorage</c>
+    /// built on the store's own primitive, such as Redis <c>SET NX</c> or a unique-key insert, decides.
     /// </summary>
     /// <param name="tenant">The tenant the request URI belongs to.</param>
     /// <param name="requestUri">The URN the flow began with.</param>
     /// <param name="expiresAt">When no page of the flow can be presented any more.</param>
-    Task MarkConsumedAsync(TenantDefinition tenant, Uri requestUri, DateTimeOffset expiresAt);
+    /// <returns><c>true</c> when the flow had not ended and this call ended it; <c>false</c> when it had ended
+    /// already.</returns>
+    Task<bool> TryConsumeAsync(TenantDefinition tenant, Uri requestUri, DateTimeOffset expiresAt);
 
     /// <summary>
     /// Whether the flow begun with <paramref name="requestUri"/> has ended.

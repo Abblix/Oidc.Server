@@ -510,7 +510,7 @@ public partial class AuthorizationRequestProcessorTests
             [
                 new IdTokenResponseBuilder(_identityTokenService.Object),
                 new TokenResponseBuilder(_accessTokenService.Object),
-                new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>()),
+                new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>(detector => detector.TryReserveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()) == Task.FromResult(true))),
             ]);
 
         var request = CreateRequest(responseType: [ResponseTypes.Code, ResponseTypes.IdToken, ResponseTypes.Token]);

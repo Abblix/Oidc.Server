@@ -97,7 +97,7 @@ public partial class AuthorizationRequestProcessorTests
         => ProcessorWith(
             consentConstraintEnforcer,
             [
-                new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>()),
+                new AuthorizationCodeBuilder(_authorizationCodeService.Object, Mock.Of<IAuthorizationValueReuseDetector>(detector => detector.TryReserveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()) == System.Threading.Tasks.Task.FromResult(true))),
                 new TokenResponseBuilder(_accessTokenService.Object),
                 new IdTokenResponseBuilder(_identityTokenService.Object),
             ]);
