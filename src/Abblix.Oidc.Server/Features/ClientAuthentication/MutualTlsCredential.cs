@@ -25,6 +25,15 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// tokens "used independently of each other", so the certificate of a client registered for another method binds its
 /// tokens and is not a second credential beside that method. Section 2 also has the client include client_id in every
 /// request using mutual-TLS client authentication, so without one the certificate authenticates nobody.
+/// <para>
+/// So the answer depends on how the named client is registered, and a caller holding any certificate can tell whether
+/// a client_id is registered for a mutual-TLS method: beside a body secret the certificate of such a client makes two
+/// methods, answered 400 invalid_request, while that of any other client leaves the secret to be checked, a wrong one
+/// refused 401; at
+/// introspection a certificate alone is a credential for such a client, a wrong one refused 401, and no credential,
+/// 400, for any other. That fact is all the difference tells, and the client_id it is told of is not a secret (RFC 6749 section
+/// 2.2).
+/// </para>
 /// </remarks>
 /// <param name="clientInfoProvider">Finds the client the request's client_id names.</param>
 /// <param name="authenticationMethod">The mutual-TLS method the certificate has to be a credential of.</param>
