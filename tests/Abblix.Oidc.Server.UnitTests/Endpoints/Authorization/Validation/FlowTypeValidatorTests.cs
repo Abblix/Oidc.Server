@@ -734,6 +734,21 @@ public class FlowTypeValidatorTests
         Assert.Contains("security profile", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// A client registering no response type, which a FAPI 2.0 tenant admits because it never uses the authorization
+    /// endpoint, is refused there with unauthorized_client: the endpoint stays closed to it under the profile.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi2_ClientRegisteringNoResponseType_IsRefusedTheCode()
+    {
+        var context = CreateContext([ResponseTypes.Code], []);
+
+        var result = await _validator.ValidateAsync(
+            new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), context);
+
+        Assert.Equal(ErrorCodes.UnauthorizedClient, result?.Error);
+    }
+
     private static FlowTypeValidator NoneEnabledValidator()
     {
         var logger = new Mock<ILogger<FlowTypeValidator>>(MockBehavior.Loose);

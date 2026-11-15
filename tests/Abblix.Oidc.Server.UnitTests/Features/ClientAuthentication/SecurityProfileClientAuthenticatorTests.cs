@@ -390,6 +390,28 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     /// <summary>
+    /// FAPI 2.0 section 5.3.2.2 binds the response type "for flows that use the authorization endpoint": a resource
+    /// server registering no response type, which only calls introspection, authenticates there under FAPI 2.0.
+    /// </summary>
+    [Fact]
+    public async Task StoredClientRegisteringNoResponseType_Authenticates()
+    {
+        var (authenticator, inner) = CreateAuthenticator();
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedGrantTypes = [],
+            AllowedResponseTypes = [],
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
+
+        Assert.True(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
     /// A store the HOST writes can hand back a profile value the enum does not define, and no
     /// startup check can reach a host's store. Such a value resolves to the strictest bundle, so a
     /// client that cannot satisfy it is refused here like any other - the refusal is not special.
