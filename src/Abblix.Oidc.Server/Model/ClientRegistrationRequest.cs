@@ -24,6 +24,13 @@ namespace Abblix.Oidc.Server.Model;
 /// </summary>
 /// <remarks>
 /// See the OpenID Connect Registration specification at https://openid.net/specs/openid-connect-registration-1_0.html.
+/// <para>
+/// <see cref="ResponseTypes"/>, <see cref="GrantTypes"/>, <see cref="ApplicationType"/>,
+/// <see cref="TokenEndpointAuthMethod"/> and <see cref="PostLogoutRedirectUris"/> read their default back for an
+/// explicit JSON <c>null</c> too, which the deserializer assigns whatever the annotation says. At registration RFC 7591
+/// section 2 lets the server "reject any requested client metadata values by replacing requested values with suitable
+/// defaults"; at update RFC 7592 section 2.2 treats an omitted field as a null one.
+/// </para>
 /// </remarks>
 [ExternalInput]
 public record ClientRegistrationRequest
@@ -82,7 +89,7 @@ public record ClientRegistrationRequest
     /// </remarks>
     [JsonPropertyName(Parameters.ResponseTypes)]
     [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
-    public string[][] ResponseTypes { get; init; } = [[Abblix.Oidc.ResponseTypes.Code]];
+    public string[][] ResponseTypes { get => field ??= [[Abblix.Oidc.ResponseTypes.Code]]; init; }
 
     /// <summary>
     /// The <c>response_modes</c> the client may use, which FAPI 2.0 Message Signing section 5.3.3 introduces:
@@ -103,7 +110,7 @@ public record ClientRegistrationRequest
     /// union the server actually supports and advertises in its discovery document.
     /// </remarks>
     [JsonPropertyName(Parameters.GrantTypes)]
-    public string[] GrantTypes { get; init; } = [Abblix.Oidc.GrantTypes.AuthorizationCode];
+    public string[] GrantTypes { get => field ??= [Abblix.Oidc.GrantTypes.AuthorizationCode]; init; }
 
     /// <summary>
     /// The <c>application_type</c> declared at registration (OIDC Dynamic Client Registration section 2),
@@ -111,7 +118,7 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.ApplicationType)]
     [AllowedValues(ApplicationTypes.Web, ApplicationTypes.Native)]
-    public string ApplicationType { get; init; } = ApplicationTypes.Web;
+    public string ApplicationType { get => field ?? ApplicationTypes.Web; init; }
 
     /// <summary>
     /// The <c>contacts</c> array (RFC 7591 section 2): email addresses of people responsible for this client,
@@ -391,7 +398,7 @@ public record ClientRegistrationRequest
     /// methods the server actually supports and announces in its discovery document.
     /// </remarks>
     [JsonPropertyName(Parameters.TokenEndpointAuthMethod)]
-    public string TokenEndpointAuthMethod { get; init; } = ClientAuthenticationMethods.ClientSecretBasic;
+    public string TokenEndpointAuthMethod { get => field ?? ClientAuthenticationMethods.ClientSecretBasic; init; }
 
     /// <summary>
     /// The <c>token_endpoint_auth_signing_alg</c>: the JWS algorithm the client uses when signing
@@ -622,7 +629,7 @@ public record ClientRegistrationRequest
     /// </summary>
     [JsonPropertyName(Parameters.PostLogoutRedirectUris)]
     [ElementsRequired]
-    public Uri[] PostLogoutRedirectUris { get; init; } = [];
+    public Uri[] PostLogoutRedirectUris { get => field ??= []; init; }
 
     /// <summary>
     /// The backchannel token delivery mode to be used by this client. This determines how tokens are delivered

@@ -181,7 +181,7 @@ public class SubjectTypeValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("different hosts", result.ErrorDescription);
     }
 

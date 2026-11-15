@@ -45,6 +45,25 @@ public class UpdateClientRequestValidatorTests
         Assert.True(result.TryGetSuccess(out _));
     }
 
+    /// <summary>
+    /// RFC 7592 section 2.2: the body's client_id "MUST be the same as its currently issued client identifier". An
+    /// invalid field is answered with the RFC 7591 section 3.2.2 errors, which give a request as such no code.
+    /// </summary>
+    [Theory]
+    [InlineData("another-client")]
+    [InlineData(null)]
+    public async Task AnUpdateNamingAnotherClientId_IsInvalidClientMetadata(string? bodyClientId)
+    {
+        var update = new UpdateClientRequest(
+            new ClientRequest { ClientId = ClientId },
+            new ClientRegistrationRequest { ClientId = bodyClientId! });
+
+        var result = await Validator(StoredSector).ValidateAsync(SingleIssuer.Tenant, update);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
+    }
+
     private static UpdateClientRequest Update()
         => new(new ClientRequest { ClientId = ClientId }, new ClientRegistrationRequest { ClientId = ClientId });
 
