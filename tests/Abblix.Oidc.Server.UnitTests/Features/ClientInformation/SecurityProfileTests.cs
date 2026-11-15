@@ -304,11 +304,12 @@ public class SecurityProfileTests
     /// FAPI 2.0 section 5.3.2.2 binds the response type "for flows that use the authorization endpoint", and RFC 7591
     /// section 2 defines response_types as those "the client can use at the authorization endpoint". A client
     /// registering none never uses it, as a resource server calling only introspection or a client of the client
-    /// credentials, CIBA or device grant, and every FAPI profile takes it as it is.
+    /// credentials, CIBA or device grant, and the FAPI 2.0 profiles take it as it is.
     /// </summary>
     [Theory]
     [InlineData(ClientSecurityProfile.Fapi2)]
     [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
+    // The control: FAPI 1.0 Advanced never held a client to the code-only rule, so this row passes with or without it
     [InlineData(ClientSecurityProfile.Fapi1Advanced)]
     public void FindViolations_NoResponseTypes_NoViolations(ClientSecurityProfile profile)
     {
