@@ -51,6 +51,7 @@ public class SecurityProfileValidator : SyncClientRegistrationContextValidator
                 assertionAudiences: ClientAssertionAudiences.Issuer,
                 requirements),
             ..FindGrantTypeViolations(request.GrantTypes, requirements),
+            ..FindTokenDeliveryViolations(request.BackChannelTokenDeliveryMode, requirements),
             ..SecurityProfileConsistency.FindSigningAlgorithmViolations(
                 [
                     (Parameters.IdTokenSignedResponseAlg, IdentityTokenSignature(

@@ -395,6 +395,91 @@ public class SecurityProfileTests
     }
 
     /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.1 and FAPI 1.0 Part 2 section 5.2.2: the server "shall only issue
+    /// sender-constrained access tokens", and the FAPI CIBA profile section 5.2.2 has it "not support CIBA push mode".
+    /// A push mode client is handed its tokens with no token request to bind them to, so it is named under every FAPI
+    /// profile, and the same client in the poll or ping mode is not.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
+    public void FindTokenDeliveryViolations_Fapi_NamesThePushMode(ClientSecurityProfile profile)
+    {
+        var requirements = SecurityProfileRequirements.Resolve(profile);
+
+        Assert.Single(SecurityProfileConsistency.FindTokenDeliveryViolations(
+            BackchannelTokenDeliveryModes.Push, requirements));
+        Assert.Empty(SecurityProfileConsistency.FindTokenDeliveryViolations(
+            BackchannelTokenDeliveryModes.Poll, requirements));
+        Assert.Empty(SecurityProfileConsistency.FindTokenDeliveryViolations(
+            BackchannelTokenDeliveryModes.Ping, requirements));
+        Assert.Empty(SecurityProfileConsistency.FindTokenDeliveryViolations(null, requirements));
+    }
+
+    /// <summary>
+    /// A client held to no profile is issued bearer tokens in any mode, the push mode included.
+    /// </summary>
+    [Fact]
+    public void FindTokenDeliveryViolations_NoProfile_LeavesThePushMode()
+        => Assert.Empty(SecurityProfileConsistency.FindTokenDeliveryViolations(
+            BackchannelTokenDeliveryModes.Push, SecurityProfileRequirements.Resolve(ClientSecurityProfile.None)));
+
+    /// <summary>
+    /// The same at startup, whether the client is held to a FAPI profile by its tenant or names it itself at a tenant
+    /// held to no profile: a CIBA client in the push mode keeps the tenant from starting, and the same client in the
+    /// ping mode does not. The client authenticates by mutual TLS and signs its ID tokens PS256, so every FAPI profile
+    /// admits it but for its delivery mode.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, null, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, null, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, true)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, false)]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, true)]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, false)]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi1Advanced, true)]
+    public void Check_FapiClientInThePushMode_Refuses(
+        ClientSecurityProfile tenantProfile,
+        ClientSecurityProfile? clientProfile,
+        bool push)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            SecurityProfile = clientProfile,
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
+            AllowedGrantTypes = [GrantTypes.Ciba],
+            AllowedResponseTypes = [],
+            BackChannelTokenDeliveryMode = push ? BackchannelTokenDeliveryModes.Push : BackchannelTokenDeliveryModes.Ping,
+            BackChannelClientNotificationEndpoint = new Uri("https://client.example.com/ciba"),
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        };
+
+        Assert.Equal(push, Check(Tenant(tenantProfile, client)).Count > 0);
+    }
+
+    /// <summary>
+    /// The same client in the push mode at a tenant held to no profile, naming none itself, starts.
+    /// </summary>
+    [Fact]
+    public void Check_UnprofiledClientInThePushMode_Starts()
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
+            AllowedGrantTypes = [GrantTypes.Ciba],
+            AllowedResponseTypes = [],
+            BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Push,
+            BackChannelClientNotificationEndpoint = new Uri("https://client.example.com/ciba"),
+        };
+
+        Assert.Empty(Check(Tenant(ClientSecurityProfile.None, client)));
+    }
+
+    /// <summary>
     /// The same at startup: a FAPI 2.0 tenant does not start with a client registered for none beside code, and starts
     /// with the same client registered for code alone.
     /// </summary>

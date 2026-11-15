@@ -19,6 +19,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Endpoints.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
+using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
@@ -362,6 +363,59 @@ public class ConfigurationHandlerTests
     }
 
     /// <summary>
+    /// The token delivery modes the document lists are exactly those a CIBA client of the tenant can be registered for
+    /// and still authenticate: FAPI 2.0 Security Profile section 5.3.2.1 and FAPI 1.0 Part 2 section 5.2.2 have the
+    /// server "only issue sender-constrained access tokens", the FAPI CIBA profile section 5.2.2 has it "not support
+    /// CIBA push mode", and a client in that mode does not authenticate at a tenant held to a FAPI profile. CIBA Core
+    /// 1.0 section 4 lists "one or more of" the modes, so the document lists the others alone.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None)]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
+    public async Task TheDocument_ListsExactlyTheTokenDeliveryModesAClientCanAuthenticateIn(ClientSecurityProfile profile)
+    {
+        string[] deliveryModes =
+        [
+            BackchannelTokenDeliveryModes.Poll,
+            BackchannelTokenDeliveryModes.Ping,
+            BackchannelTokenDeliveryModes.Push,
+        ];
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+
+        var accepted = new List<string>();
+        foreach (var deliveryMode in deliveryModes)
+        {
+            var client = new ClientInfo(TestConstants.DefaultClientId)
+            {
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
+                AllowedGrantTypes = [GrantTypes.Ciba],
+                AllowedResponseTypes = [],
+                BackChannelTokenDeliveryMode = deliveryMode,
+                IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+                AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            };
+            var authenticated = await AuthenticatorOver(client).TryAuthenticateClientAsync(tenant, new ClientRequest());
+            if (authenticated.TryGetSuccess(out _))
+                accepted.Add(deliveryMode);
+        }
+
+        var ciba = new Mock<IAuthenticationCompletionHandler>();
+        ciba.Setup(c => c.TokenDeliveryModesSupported).Returns(deliveryModes);
+        var handler = HandlerFor(
+            Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
+            Mock.Of<IAuthorizationMetadataProvider>(),
+            cibaCompletionHandler: ciba.Object);
+
+        var document = await handler.HandleAsync(tenant);
+
+        Assert.Equal(accepted, document.BackChannelTokenDeliveryModesSupported);
+    }
+
+    /// <summary>
     /// The profile check every client meets where it authenticates at the token endpoint, over an authenticator whose
     /// credential check <paramref name="client"/> passes. The service tokens are signed PS256, which every profile
     /// admits.
@@ -486,7 +540,8 @@ public class ConfigurationHandlerTests
     private static ConfigurationHandler HandlerFor(
         IAuthServiceKeysProvider keys,
         IAuthorizationMetadataProvider metadata,
-        IScopesAndClaimsProvider? scopesAndClaims = null)
+        IScopesAndClaimsProvider? scopesAndClaims = null,
+        IAuthenticationCompletionHandler? cibaCompletionHandler = null)
     {
         var algorithms = new Mock<IJwtAlgorithmsProvider>();
         algorithms.Setup(a => a.RequestObjectEncryptionAlgValuesSupported).Returns(
@@ -514,7 +569,7 @@ public class ConfigurationHandlerTests
             scopesAndClaims ?? Mock.Of<IScopesAndClaimsProvider>(),
             algorithms.Object,
             keys,
-            [],
+            cibaCompletionHandler is null ? [] : [cibaCompletionHandler],
             Mock.Of<IAcrMetadataProvider>(),
             Mock.Of<IAuthorizationDetailsMetadataProvider>());
     }

@@ -135,11 +135,12 @@ public partial class PushModeCompletionHandler(
         if (await TakeRequestAsync(tenant, authenticationRequestId) is null)
             throw ClaimLost(authenticationRequestId);
 
-        // The revocation checks the token endpoint makes before redeeming a grant, asked HERE for the same reason as
-        // the per-type validators below: a push client never redeems, so without them a request whose session or
+        // The client's profile and the revocation checks, both of which the token endpoint asks before redeeming a
+        // grant, asked HERE for the same reason as the per-type validators below: a push client never redeems, so
+        // without them a request whose client a raised profile no longer admits in this mode, whose session or
         // subject was revoked, or which the end user approved before withdrawing consent from this client, would be
         // answered with tokens in push mode and refused in poll or ping.
-        if (await RefusedAsRevokedAsync(tenant, authenticationRequestId, request, clientInfo))
+        if (await RefusedBeforeRedeemingAsync(tenant, authenticationRequestId, request, clientInfo))
             return;
 
         // The per-type validators, asked HERE because this is where a push grant is spent. Poll and ping
@@ -224,6 +225,49 @@ public partial class PushModeCompletionHandler(
                 await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
                 return null;
             });
+    }
+
+    /// <summary>
+    /// Refuses a taken request the token endpoint would refuse a poll or ping client redeeming it: its client's profile
+    /// first, then a revocation; answers whether it refused.
+    /// </summary>
+    private async Task<bool> RefusedBeforeRedeemingAsync(
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
+        BackChannelAuthenticationRequest request,
+        ClientInfo clientInfo)
+        => await RefusedByProfileAsync(tenant, authenticationRequestId, request, clientInfo) ||
+           await RefusedAsRevokedAsync(tenant, authenticationRequestId, request, clientInfo);
+
+    /// <summary>
+    /// Refuses a taken request whose client its profile no longer admits in the push mode, telling the client the
+    /// transaction failed; answers whether it refused.
+    /// </summary>
+    /// <remarks>
+    /// The client was admitted when it started the request, at the backchannel authentication endpoint, and the
+    /// tenant's default or the client's own profile can be raised before the end user approves. A poll or ping client
+    /// meets its profile again where it redeems the request; a push client never redeems, so this is where it does.
+    /// FAPI 2.0 Security Profile section 5.3.2.1 and FAPI 1.0 Part 2 section 5.2.2 have the server "only issue
+    /// sender-constrained access tokens", which a push delivery cannot bind. CIBA Core 1.0 section 12 keeps
+    /// access_denied for "The end-user denied the authorization request" and has transaction_failed for a transaction
+    /// "unsuccessful for reasons other than those explicitly defined by access_denied and expired_token".
+    /// </remarks>
+    private async Task<bool> RefusedByProfileAsync(
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
+        BackChannelAuthenticationRequest request,
+        ClientInfo clientInfo)
+    {
+        var requirements = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile);
+        if (SecurityProfileConsistency.FindTokenDeliveryViolations(
+                clientInfo.BackChannelTokenDeliveryMode, requirements).Count == 0)
+        {
+            return false;
+        }
+
+        LogDeliveryRefusedByProfile(FingerprintOf(authenticationRequestId), clientInfo.ClientId);
+        await SendErrorAsync(authenticationRequestId, request, TokensNotIssued);
+        return true;
     }
 
     /// <summary>

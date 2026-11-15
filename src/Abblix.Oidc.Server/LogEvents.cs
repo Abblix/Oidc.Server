@@ -603,6 +603,7 @@ internal static class LogEvents
         {
             private const int Base = 7050;
 
+            public const int DeliveryRefusedByProfile = Base;
             public const int GeneratingTokens = Base + 1;
             public const int TokensDelivered = Base + 2;
             public const int TokenGenerationFailed = Base + 3;
