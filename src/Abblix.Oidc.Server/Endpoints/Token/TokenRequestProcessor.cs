@@ -65,7 +65,7 @@ public class TokenRequestProcessor(
 	{
 		var clientInfo = request.ClientInfo;
 
-		var requestedContext = tokenContextEvaluator.EvaluateAuthorizationContext(request);
+		var requestedContext = tokenContextEvaluator.EvaluateAuthorizationContext(tenant, request);
 
 		var grantedContext = OfflineAccessIgnoredUnlessAllowed(clientInfo, requestedContext);
 

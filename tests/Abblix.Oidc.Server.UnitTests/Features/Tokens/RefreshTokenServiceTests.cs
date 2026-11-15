@@ -725,23 +725,30 @@ public class RefreshTokenServiceTests
 
     /// <summary>
     /// By default a refresh token is reused only by a client whose every access token is bound to a key it proves:
-    /// one authenticating by certificate, or with private_key_jwt while requiring DPoP. Every other client rotates,
-    /// a shared-secret client requiring DPoP included.
+    /// one authenticating by certificate whose tokens are bound to it - registered for certificate-bound tokens
+    /// (RFC 8705 section 3.4) or held to FAPI 1.0 Advanced, which issues no other - or one authenticating with
+    /// private_key_jwt while requiring DPoP. Every other client rotates, a certificate client whose tokens nothing
+    /// binds and a shared-secret client requiring DPoP included.
     /// </summary>
     [Theory]
-    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, false)]
-    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth, false, false)]
-    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, false)]
-    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, true)]
-    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, true, true)]
-    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, false, true)]
-    [InlineData(ClientAuthenticationMethods.ClientSecretPost, false, true)]
-    [InlineData(ClientAuthenticationMethods.ClientSecretJwt, false, true)]
-    [InlineData(ClientAuthenticationMethods.None, false, true)]
-    [InlineData("urn:example:host-defined", true, true)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, false, null, true)]
+    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth, false, false, null, true)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, true, null, false)]
+    [InlineData(ClientAuthenticationMethods.SelfSignedTlsClientAuth, false, true, null, false)]
+    [InlineData(ClientAuthenticationMethods.TlsClientAuth, false, false, ClientSecurityProfile.Fapi1Advanced, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, true, false, null, false)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false, false, null, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, true, false, null, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretBasic, false, false, null, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretPost, false, false, null, true)]
+    [InlineData(ClientAuthenticationMethods.ClientSecretJwt, false, false, null, true)]
+    [InlineData(ClientAuthenticationMethods.None, false, false, null, true)]
+    [InlineData("urn:example:host-defined", true, false, null, true)]
     public async Task TrySpend_ByDefault_RotatesUnlessTheClientIsAlwaysSenderConstrained(
         string tokenEndpointAuthMethod,
         bool requireDPoP,
+        bool certificateBoundAccessTokens,
+        ClientSecurityProfile? securityProfile,
         bool supersedesTheOldToken)
     {
         var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
@@ -750,6 +757,8 @@ public class RefreshTokenServiceTests
         });
         clientInfo.TokenEndpointAuthMethod = tokenEndpointAuthMethod;
         clientInfo.RequireDPoP = requireDPoP;
+        clientInfo.TlsClientCertificateBoundAccessTokens = certificateBoundAccessTokens;
+        clientInfo.SecurityProfile = securityProfile;
         var oldToken = new JsonWebToken
         {
             Payload =
@@ -775,7 +784,8 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
-    /// A certificate client keeps reusing its refresh tokens when every access token it can receive still comes from
+    /// A certificate client registered for certificate-bound tokens keeps reusing its refresh tokens when every access
+    /// token it can receive still comes from
     /// the token endpoint: one using CIBA ping or poll delivery, and one whose response types return no access token
     /// from the authorization endpoint.
     /// </summary>
@@ -792,6 +802,7 @@ public class RefreshTokenServiceTests
             AbsoluteExpiresIn = TimeSpan.FromHours(8),
         });
         clientInfo.TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth;
+        clientInfo.TlsClientCertificateBoundAccessTokens = true;
         clientInfo.BackChannelTokenDeliveryMode = deliveryMode;
         if (codeAndIdToken)
             clientInfo.AllowedResponseTypes = [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]];

@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using System.Security.Cryptography;
 
 using System.Buffers.Text;
@@ -24,7 +25,7 @@ namespace Abblix.Oidc.Server.Endpoints.Token;
 public class TokenAuthorizationContextEvaluator : ITokenAuthorizationContextEvaluator
 {
     /// <inheritdoc />
-    public AuthorizationContext EvaluateAuthorizationContext(ValidTokenRequest request)
+    public AuthorizationContext EvaluateAuthorizationContext(TenantDefinition tenant, ValidTokenRequest request)
     {
         var authContext = request.AuthorizedGrant.Context;
 
