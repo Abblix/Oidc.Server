@@ -227,16 +227,23 @@ function Split-PlanConfiguration {
 
 function Select-ExpectedSkips {
     # The entries of expected-skips.json that a plan of this run can meet: its configuration file matches the entry's
-    # configuration-filename, one of the modules it runs matches the entry's test-name, both shell-style patterns as the
-    # runner matches them, and no variant the plan names differs from the entry's. The runner fails a run on a listed
-    # skip that no module reached, so an entry for another configuration, for a module the plan leaves out or for one
-    # the suite's release does not have would fail it. Always an array, so an empty selection is written as [] and a
-    # single entry is not unwrapped
+    # configuration-filename, one of the modules it runs matches the entry's test-name, and no variant the plan names
+    # differs from the entry's. The two patterns are matched as the runner's fnmatch matches them on Linux, case-sensitive
+    # with *, ? and [...]; -clike has no [!...], so an entry using it is refused rather than read another way. The runner
+    # fails a run on a listed skip that no module reached, so an entry for another configuration, for a module the plan
+    # leaves out or for one the suite's release does not have would fail it. Always an array, so an empty selection is
+    # written as [] and a single entry is not unwrapped
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $Entries,
         [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $Runs
     )
+    foreach ($entry in $Entries) {
+        if ("$($entry.'configuration-filename') $($entry.'test-name')".Contains('[!')) {
+            throw "The expected skip of '$($entry.'test-name')' for '$($entry.'configuration-filename')' uses [!...], " +
+                'which this script cannot match as the runner does; list the characters to match instead'
+        }
+    }
     , @($Entries | Where-Object {
             $entry = $_
             @($Runs | Where-Object {
@@ -245,8 +252,8 @@ function Select-ExpectedSkips {
                     foreach ($match in [regex]::Matches(($run.Runner -split ':', 2)[0], '\[([^=\]]+)=([^\]]*)\]')) {
                         $variants[$match.Groups[1].Value] = $match.Groups[2].Value
                     }
-                    $entry.'configuration-filename' -and $run.Configuration -like $entry.'configuration-filename' -and
-                    @($run.Modules | Where-Object { $_ -like $entry.'test-name' }) -and
+                    $entry.'configuration-filename' -and $run.Configuration -clike $entry.'configuration-filename' -and
+                    @($run.Modules | Where-Object { $_ -clike $entry.'test-name' }) -and
                     -not @($entry.variant.PSObject.Properties | Where-Object {
                             $variants.ContainsKey($_.Name) -and $variants[$_.Name] -ne $_.Value
                         })
@@ -258,7 +265,8 @@ function Split-KeyRotation {
     # The plan specification the runner gets, without the key rotation module, and whether the plan had that module.
     # The runner starts the module the moment it is configured, before anyone can rotate the server's keys, so it
     # runs in a step of its own; a specification already naming its modules keeps the others it names. Also the modules
-    # the runner runs, for whatever is decided by them
+    # the runner runs, for whatever is decided by them: those of the suite's plan, or of them the ones the specification
+    # names, since the runner passes over a named module its plan does not have
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [string] $Specification,
@@ -266,16 +274,17 @@ function Split-KeyRotation {
     )
     $parts = $Specification -split ':', 2
     $name = ($parts[0] -split '\[', 2)[0].Trim()
+    $available = $AvailablePlans | Where-Object { $_.planName -is [string] -and $_.planName -eq $name } |
+        Select-Object -First 1
+    if (-not $available) {
+        throw "The suite has no test plan named '$name'"
+    }
+    $planModules = @($available.modules | ForEach-Object { $_.testModule })
     $modules = if ($parts.Count -eq 2) {
-        @($parts[1] -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        @($parts[1] -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -cin $planModules })
     }
     else {
-        $available = $AvailablePlans | Where-Object { $_.planName -is [string] -and $_.planName -eq $name } |
-            Select-Object -First 1
-        if (-not $available) {
-            throw "The suite has no test plan named '$name'"
-        }
-        @($available.modules | ForEach-Object { $_.testModule })
+        $planModules
     }
 
     if ($modules -notcontains $KeyRotationModule) {
