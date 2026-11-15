@@ -386,7 +386,8 @@ public partial class MultiTenancyRegistrationTests
     /// </summary>
     private static ServiceProvider KeysInACustodian(
         IEnumerable<TenantDefinition> tenants,
-        CustodianHeldKeys? serverWideKeys = null)
+        CustodianHeldKeys? serverWideKeys = null,
+        Action<IServiceCollection>? host = null)
     {
         var custodian = new Moq.Mock<IKeyCustodian>();
         custodian
@@ -412,6 +413,7 @@ public partial class MultiTenancyRegistrationTests
             services.RequireKeyPlacement().UseKeysInCustodian();
         else
             services.RequireKeyPlacement().UseKeysInCustodian(serverWideKeys);
+        host?.Invoke(services);
         services.AddServerStorage().ServeTenants(options =>
         {
             foreach (var tenant in tenants)

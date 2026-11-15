@@ -135,6 +135,108 @@ public partial class MultiTenancyRegistrationTests
         Assert.Empty(KeysCheckOf(provider).Check([Acme], new OidcOptions()));
     }
 
+    /// <summary>
+    /// A key provider of the host's own in front of the library's, as the short-lived cache a host puts before a
+    /// custodian is.
+    /// </summary>
+    private sealed class WrappingKeysProvider(IAuthServiceKeysProvider inner) : IAuthServiceKeysProvider
+    {
+        public IAsyncEnumerable<JsonWebKey> GetEncryptionKeys(TenantDefinition tenant, bool includePrivateKeys = false)
+            => inner.GetEncryptionKeys(tenant, includePrivateKeys);
+
+        public IAsyncEnumerable<JsonWebKey> GetSigningKeys(TenantDefinition tenant, bool includePrivateKeys = false)
+            => inner.GetSigningKeys(tenant, includePrivateKeys);
+    }
+
+    /// <summary>
+    /// Registers a provider wrapping the library's on the collection the server was added to, as a host caching
+    /// the custodian's keys does.
+    /// </summary>
+    private static void WrapTheKeyProvider(IServiceCollection services)
+    {
+        var library = services.Last(descriptor =>
+            descriptor.ServiceType == typeof(IAuthServiceKeysProvider) && !descriptor.IsKeyedService);
+        var create = library.ImplementationFactory!;
+        services.AddSingleton<IAuthServiceKeysProvider>(serviceProvider =>
+            new WrappingKeysProvider((IAuthServiceKeysProvider)create(serviceProvider)));
+    }
+
+    /// <summary>
+    /// A provider of the host's own in front of the custodian still serves the keys each tenant names there, so a
+    /// tenant naming none is refused at startup as without it.
+    /// </summary>
+    [Fact]
+    public void AWrappedProviderOverACustodian_RefusesATenantNamingNoCustodianKey()
+    {
+        using var provider = KeysInACustodian([Acme], host: WrapTheKeyProvider);
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains("Tenant 'acme': The keys are held by a custodian, and none is named", refusal.Message,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Behind a provider of the host's own, two tenants naming one custodian key are refused at startup.
+    /// </summary>
+    [Fact]
+    public void AWrappedProviderOverACustodian_RefusesTwoTenantsNamingOneKey()
+    {
+        using var provider = KeysInACustodian(
+            [NamingInTheCustodian("acme", "shared-sign"), NamingInTheCustodian("globex", "shared-sign")],
+            host: WrapTheKeyProvider);
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains("The custodian key 'shared-sign' is named by the tenants 'acme', 'globex'", refusal.Message,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Behind a provider of the host's own, a tenant encrypting under an algorithm the custodian does not serve is
+    /// refused at startup.
+    /// </summary>
+    [Fact]
+    public void AWrappedProviderOverACustodian_RefusesAnAlgorithmTheCustodianDoesNotServe()
+    {
+        using var provider = KeysInACustodian(
+        [
+            new TenantDefinition
+            {
+                Id = "acme",
+                Issuer = new Uri(AcmeIssuer),
+                CustodianKeys = new CustodianHeldKeys
+                {
+                    SigningKeyName = "acme-sign",
+                    EncryptionKeyName = "acme-encrypt",
+                    EncryptionAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep,
+                },
+            },
+        ], host: WrapTheKeyProvider);
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.RsaOaep + "'", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Behind a provider of the host's own, a tenant naming its key in the custodian starts and publishes that key
+    /// through the wrapper.
+    /// </summary>
+    [Fact]
+    public async Task AWrappedProviderOverACustodian_ServesATenantNamingItsKey()
+    {
+        var acme = NamingInTheCustodian("acme", "acme-sign");
+        using var provider = KeysInACustodian([acme], host: WrapTheKeyProvider);
+
+        Assert.NotEmpty(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
+        var keys = Assert.IsType<WrappingKeysProvider>(provider.GetRequiredService<IAuthServiceKeysProvider>());
+
+        EnterTenant(provider, acme);
+        var signing = await keys.GetSigningKeys(Entered(provider)).ToArrayAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("acme-sign", Assert.Single(signing).KeyId);
+    }
+
     private static TenantKeysCheck KeysCheckOf(IServiceProvider provider)
         => provider.GetServices<ITenantsCheck>().OfType<TenantKeysCheck>().Single();
 }

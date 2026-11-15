@@ -15,16 +15,19 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Abblix.Oidc.Server.Features.MultiTenancy;
 
 /// <summary>
-/// Refuses a tenant declaring keys its server's placement never reads; with the keys coming from each tenant's
+/// Refuses a tenant declaring keys the library's key provider never reads; with the keys coming from each tenant's
 /// settings, a tenant declaring no signing key, a key lacking a member its type requires, or a key another tenant
-/// declares; and, with the keys held by a custodian, a tenant naming no key there or one another tenant names.
+/// declares; and, with the keys held by a custodian, whether or not a key provider of the host's own stands in front
+/// of the library's, a tenant naming no key there or one another tenant names.
 /// </summary>
 /// <param name="serviceProvider">Tells which key provider serves the keys, and resolves the custodian.</param>
 public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenantsCheck
 {
     /// <inheritdoc />
     public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options)
-        => serviceProvider.GetService<KeyProviderRegistration>()?.Kind switch
+    {
+        var registration = serviceProvider.GetService<KeyProviderRegistration>();
+        return registration?.Kind switch
         {
             KeyProviderKind.Settings => Unread(tenants, "the keys come from each tenant's settings",
                     nameof(TenantDefinition.SigningKeys), nameof(TenantDefinition.EncryptionKeys))
@@ -34,12 +37,16 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
 
             KeyProviderKind.Custodian => Unread(tenants, "the keys are held by a custodian",
                     nameof(TenantDefinition.CustodianKeys))
-                .Concat(CustodianKeysOf(tenants))
-                .Concat(UnservedEncryptionOf(tenants, serviceProvider.GetRequiredService<IKeyCustodian>())),
+                .Concat(NamedInTheCustodianOf(tenants)),
 
             KeyProviderKind.Minted => Unread(tenants, "the server mints the keys"),
 
-            // A key provider of the host's own answers for each tenant's keys itself, so nothing here judges them
+            // A provider of the host's own in front of the custodian, as the cache a host keeps there, still serves
+            // the keys each tenant names in it; what the provider reads of the settings is its own
+            KeyProviderKind.Host when registration is { Placed: KeyProviderKind.Custodian }
+                => NamedInTheCustodianOf(tenants),
+
+            // Over any other placement a key provider of the host's own answers for each tenant's keys itself
             KeyProviderKind.Host => [],
 
             // No key provider is registered, so no tenant's keys are read
@@ -47,6 +54,15 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
 
             var unknown => throw new InvalidOperationException($"Unexpected {nameof(KeyProviderKind)} '{unknown}'."),
         };
+    }
+
+    /// <summary>
+    /// The keys each tenant names in the custodian: named at all, by no other tenant, and for encryption under an
+    /// algorithm the custodian serves.
+    /// </summary>
+    private IEnumerable<TenantRefusal> NamedInTheCustodianOf(IReadOnlyCollection<TenantDefinition> tenants)
+        => CustodianKeysOf(tenants)
+            .Concat(UnservedEncryptionOf(tenants, serviceProvider.GetRequiredService<IKeyCustodian>()));
 
     /// <summary>
     /// A tenant whose keys come from its settings and that declares no signing key cannot issue a single token and
