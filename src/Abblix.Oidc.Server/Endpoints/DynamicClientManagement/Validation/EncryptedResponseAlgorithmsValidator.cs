@@ -63,8 +63,42 @@ public class EncryptedResponseAlgorithmsValidator(
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
-        => ValidateSupported(context.Request, await RequestObjectAlgorithmsAsync(tenant, context.Request))
+        => ValidatePairs(context.Request)
+           ?? ValidateSupported(context.Request, await RequestObjectAlgorithmsAsync(tenant, context.Request))
            ?? await ValidateKeySourcesAsync(tenant, context);
+
+    /// <summary>
+    /// Refuses a content encryption algorithm registered without its key management algorithm. OpenID Connect Dynamic
+    /// Client Registration 1.0 section 2: "When id_token_encrypted_response_enc is included,
+    /// id_token_encrypted_response_alg MUST also be provided", and the same of the userinfo and request object pairs;
+    /// RFC 9701 section 6: "This parameter MUST NOT be specified without setting introspection_encrypted_response_alg";
+    /// JARM section 3: "When authorization_encrypted_response_enc is included, authorization_encrypted_response_alg
+    /// MUST also be provided".
+    /// </summary>
+    private static OidcError? ValidatePairs(Model.ClientRegistrationRequest request)
+    {
+        (string? Method, string MethodName, string? Algorithm, string AlgorithmName)[] pairs =
+        [
+            (request.IdTokenEncryptedResponseEnc, Parameters.IdTokenEncryptedResponseEnc,
+                request.IdTokenEncryptedResponseAlg, Parameters.IdTokenEncryptedResponseAlg),
+            (request.UserInfoEncryptedResponseEnc, Parameters.UserInfoEncryptedResponseEnc,
+                request.UserInfoEncryptedResponseAlg, Parameters.UserInfoEncryptedResponseAlg),
+            (request.IntrospectionEncryptedResponseEnc, Parameters.IntrospectionEncryptedResponseEnc,
+                request.IntrospectionEncryptedResponseAlg, Parameters.IntrospectionEncryptedResponseAlg),
+            (request.RequestObjectEncryptionEnc, Parameters.RequestObjectEncryptionEnc,
+                request.RequestObjectEncryptionAlg, Parameters.RequestObjectEncryptionAlg),
+            (request.AuthorizationEncryptedResponseEnc, Parameters.AuthorizationEncryptedResponseEnc,
+                request.AuthorizationEncryptedResponseAlg, Parameters.AuthorizationEncryptedResponseAlg),
+        ];
+
+        foreach (var (method, methodName, algorithm, algorithmName) in pairs)
+        {
+            if (method is not null && algorithm is null)
+                return ErrorFactory.InvalidClientMetadata($"The {methodName} is registered without {algorithmName}");
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// The key management algorithms a request object to <paramref name="tenant"/> is opened under: the same answer

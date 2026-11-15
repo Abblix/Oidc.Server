@@ -247,6 +247,46 @@ public class EncryptedResponseAlgorithmsValidatorTests
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
     }
 
+    /// <summary>
+    /// Dynamic Client Registration 1.0 section 2, RFC 9701 section 6 and JARM section 3 each demand the key management
+    /// algorithm wherever its content encryption algorithm is registered, so one registered alone is refused, a
+    /// supported value included; registered together they pass (the positive control).
+    /// </summary>
+    [Theory]
+    [InlineData(ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseEnc, false)]
+    [InlineData(ClientRegistrationRequest.Parameters.UserInfoEncryptedResponseEnc, false)]
+    [InlineData(ClientRegistrationRequest.Parameters.IntrospectionEncryptedResponseEnc, false)]
+    [InlineData(ClientRegistrationRequest.Parameters.RequestObjectEncryptionEnc, false)]
+    [InlineData(ClientRegistrationRequest.Parameters.AuthorizationEncryptedResponseEnc, false)]
+    [InlineData(ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseEnc, true)]
+    [InlineData(ClientRegistrationRequest.Parameters.UserInfoEncryptedResponseEnc, true)]
+    [InlineData(ClientRegistrationRequest.Parameters.IntrospectionEncryptedResponseEnc, true)]
+    [InlineData(ClientRegistrationRequest.Parameters.RequestObjectEncryptionEnc, true)]
+    [InlineData(ClientRegistrationRequest.Parameters.AuthorizationEncryptedResponseEnc, true)]
+    public async Task ValidateAsync_AContentEncryptionAlgorithm_IsRefusedWithoutItsKeyManagementAlgorithm(
+        string wireName, bool withAlgorithm)
+    {
+        var alg = withAlgorithm ? SupportedAlg : null;
+        var request = wireName switch
+        {
+            ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseEnc =>
+                Request() with { IdTokenEncryptedResponseEnc = SupportedEnc, IdTokenEncryptedResponseAlg = alg },
+            ClientRegistrationRequest.Parameters.UserInfoEncryptedResponseEnc =>
+                Request() with { UserInfoEncryptedResponseEnc = SupportedEnc, UserInfoEncryptedResponseAlg = alg },
+            ClientRegistrationRequest.Parameters.IntrospectionEncryptedResponseEnc =>
+                Request() with { IntrospectionEncryptedResponseEnc = SupportedEnc, IntrospectionEncryptedResponseAlg = alg },
+            ClientRegistrationRequest.Parameters.RequestObjectEncryptionEnc =>
+                Request() with { RequestObjectEncryptionEnc = SupportedEnc, RequestObjectEncryptionAlg = alg },
+            ClientRegistrationRequest.Parameters.AuthorizationEncryptedResponseEnc =>
+                Request() with { AuthorizationEncryptedResponseEnc = SupportedEnc, AuthorizationEncryptedResponseAlg = alg },
+            _ => throw new ArgumentOutOfRangeException(nameof(wireName), wireName, null),
+        };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
+
+        Assert.Equal(withAlgorithm ? null : ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
     /// <summary>The request registering <paramref name="algorithm"/> for the JWT <paramref name="wireName"/> names.</summary>
     private static ClientRegistrationRequest Registering(ClientRegistrationRequest request, string wireName, string algorithm)
         => wireName switch
