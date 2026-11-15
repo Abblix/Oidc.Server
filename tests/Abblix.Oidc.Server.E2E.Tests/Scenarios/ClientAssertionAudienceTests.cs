@@ -18,10 +18,9 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
 /// <summary>
 /// RFC 10070 section 4, case B, as a client meets it at the token endpoint, and section 5 at the pushed
-/// authorization request endpoint: a client authentication assertion
-/// carries the server's issuer identifier as its sole audience, and one naming the token endpoint URL - which
-/// that section says "MUST NOT be used as an audience value" - or the issuer beside another recipient is
-/// refused as from a client that cannot authenticate.
+/// authorization request endpoint: a client authentication assertion carries the server's issuer identifier as its
+/// sole audience, and one naming an endpoint URL - section 4 says the token endpoint URL "MUST NOT be used as an
+/// audience value" - or the issuer beside another recipient is refused as from a client that cannot authenticate.
 /// </summary>
 public class ClientAssertionAudienceTests(TestFactory factory) : TestBase(factory)
 {
