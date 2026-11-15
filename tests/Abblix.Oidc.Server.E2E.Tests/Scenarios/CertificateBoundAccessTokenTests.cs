@@ -52,13 +52,15 @@ public class CertificateBoundAccessTokenTests(TestFactory factory) : DPoPTestBas
 
         var accessToken = await ObtainAccessTokenAsync(withCertificate, discovery, UnregisteredClientId, proofKey);
 
-        var confirmation = ConfirmationOf(accessToken);
-        Assert.Equal(proofKey.Thumbprint, confirmation[IanaClaimTypes.ConfirmationMethods.JwkThumbprint]?.GetValue<string>());
-        Assert.Null(confirmation[IanaClaimTypes.ConfirmationMethods.CertificateSha256Thumbprint]);
-
+        // The resource call with the proof and no certificate comes first: it is what a client of this kind does, and
+        // a token bound to the certificate as well fails it with 401 before the claims below are read
         using var response = await SendUserInfoAsync(withoutCertificate, discovery, accessToken, proofKey);
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(response.StatusCode == HttpStatusCode.OK, $"{(int)response.StatusCode}: {body}");
+
+        var confirmation = ConfirmationOf(accessToken);
+        Assert.Equal(proofKey.Thumbprint, confirmation[IanaClaimTypes.ConfirmationMethods.JwkThumbprint]?.GetValue<string>());
+        Assert.Null(confirmation[IanaClaimTypes.ConfirmationMethods.CertificateSha256Thumbprint]);
     }
 
     [Fact]

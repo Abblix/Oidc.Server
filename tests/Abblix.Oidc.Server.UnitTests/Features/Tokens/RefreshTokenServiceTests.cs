@@ -786,10 +786,41 @@ public class RefreshTokenServiceTests
     }
 
     /// <summary>
+    /// A certificate client naming no profile is held to its tenant's default, so under a tenant defaulting to FAPI 1.0
+    /// Advanced, which binds every token to the certificate, it keeps reusing its refresh tokens by default although it
+    /// neither registered for certificate-bound tokens nor requires DPoP.
+    /// </summary>
+    [Fact]
+    public async Task TrySpend_ByDefault_UnderTenantDefaultFapi1Advanced_KeepsReusingACertificateClientsTokens()
+    {
+        var clientInfo = CreateClientInfo(refreshTokenOptions: new RefreshTokenOptions
+        {
+            AbsoluteExpiresIn = TimeSpan.FromHours(8),
+        });
+        clientInfo.TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth;
+        var tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced }.ToTenant();
+
+        var oldToken = new JsonWebToken
+        {
+            Payload =
+            {
+                JwtId = OldTokenId,
+                IssuedAt = _currentTime.AddHours(-1),
+                ExpiresAt = _currentTime.AddHours(7),
+            },
+        };
+
+        await _service.TrySpendAsync(tenant, oldToken, clientInfo);
+
+        _tokenRegistry.Verify(
+            registry => registry.TrySetStatusAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>(), It.IsAny<JsonWebTokenStatus>(), It.IsAny<DateTimeOffset>()),
+            Times.Never);
+    }
+
+    /// <summary>
     /// A certificate client registered for certificate-bound tokens keeps reusing its refresh tokens when every access
-    /// token it can receive still comes from
-    /// the token endpoint: one using CIBA ping or poll delivery, and one whose response types return no access token
-    /// from the authorization endpoint.
+    /// token it can receive still comes from the token endpoint: one using CIBA ping or poll delivery, and one whose
+    /// response types return no access token from the authorization endpoint.
     /// </summary>
     [Theory]
     [InlineData(BackchannelTokenDeliveryModes.Ping, false)]
