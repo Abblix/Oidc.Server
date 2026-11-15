@@ -89,6 +89,10 @@ public class EncryptedResponseAlgorithmsValidatorTests
         Assert.Null(result);
     }
 
+    /// <summary>
+    /// RFC 7591 section 3.2.2: an algorithm the server does not support is a client metadata value it rejects, answered
+    /// with <c>invalid_client_metadata</c> rather than <c>invalid_request</c>.
+    /// </summary>
     [Theory]
     [InlineData(ClientRegistrationRequest.Parameters.IdTokenEncryptedResponseAlg)]
     [InlineData(ClientRegistrationRequest.Parameters.UserInfoEncryptedResponseAlg)]
@@ -110,7 +114,7 @@ public class EncryptedResponseAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains(wireName, result.ErrorDescription);
     }
 
@@ -126,7 +130,7 @@ public class EncryptedResponseAlgorithmsValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(request));
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains(ClientRegistrationRequest.Parameters.AuthorizationEncryptedResponseEnc, result.ErrorDescription);
     }
 

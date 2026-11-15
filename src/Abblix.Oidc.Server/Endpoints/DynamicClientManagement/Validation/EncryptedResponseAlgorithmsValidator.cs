@@ -140,15 +140,18 @@ public class EncryptedResponseAlgorithmsValidator(
 
         return null;
     }
+
     /// <summary>
     /// Validates a JWE key-management (<c>alg</c>) value against the server's supported key-management algorithms.
+    /// A value outside them is client metadata the server rejects, which RFC 7591 section 3.2.2 answers with
+    /// <c>invalid_client_metadata</c>: "The value of one of the client metadata fields is invalid and the server has
+    /// rejected this request".
     /// </summary>
     private OidcError? ValidateAlg(string? alg, string description)
     {
         if (alg is not null && !jwtValidator.EncryptionAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
         {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
+            return ErrorFactory.InvalidClientMetadata(
                 $"The encryption key-management algorithm for {description} is not supported");
         }
 
@@ -163,9 +166,7 @@ public class EncryptedResponseAlgorithmsValidator(
     {
         if (enc is not null && !jwtValidator.EncryptionMethodsSupported.Contains(enc, StringComparer.Ordinal))
         {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
-                $"The encryption method for {description} is not supported");
+            return ErrorFactory.InvalidClientMetadata($"The encryption method for {description} is not supported");
         }
 
         return null;
