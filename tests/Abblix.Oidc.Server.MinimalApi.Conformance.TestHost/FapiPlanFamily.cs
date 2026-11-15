@@ -61,10 +61,11 @@ public sealed record FapiPlanFamily(
     /// FAPI 1.0 Advanced, whose tokens are always bound to the client certificate (Part 2 section 5.2.2).
     /// </summary>
     /// <remarks>
-    /// The plan's client assertions name the token endpoint, and one of its modules names the pushed authorization
-    /// request endpoint at that endpoint, as RFC 9126 section 2 had the server accept before RFC 10070 section 5
-    /// replaced it: the clients are granted both, as a host grants a client that cannot change yet. An array holding
-    /// the issuer beside another value, which another module sends, is not granted: RFC 10070 section 4 refuses it.
+    /// The plan's client assertions name the token endpoint, one of its modules names the pushed authorization request
+    /// endpoint at that endpoint, as RFC 9126 section 2 had the server accept before RFC 10070 section 5 replaced it,
+    /// and another sends an array holding the issuer beside another value, which RFC 7523 section 3 allowed before RFC
+    /// 10070 section 4 closed it. The server refuses all three by default, and the private key JWT clients are granted
+    /// them, as a host grants a client written to the replaced texts that cannot change yet.
     /// </remarks>
     public static FapiPlanFamily Fapi1Advanced { get; } = new(
         ClientSecurityProfile.Fapi1Advanced,
@@ -73,7 +74,7 @@ public sealed record FapiPlanFamily(
             new SuitePlan("abblix-fapi1-pkjwt", AuthenticatesByMutualTls: false, BindsTokensByMutualTls: true),
             new SuitePlan("abblix-fapi1-mtls", AuthenticatesByMutualTls: true, BindsTokensByMutualTls: true),
         ],
-        (client, _, _) =>
+        (client, plan, _) =>
         {
             // code id_token for the plain response variant, code alone with the jwt response mode for the JARM one
             client.AllowedResponseTypes = [[ResponseTypes.Code, ResponseTypes.IdToken], [ResponseTypes.Code]];
@@ -81,6 +82,8 @@ public sealed record FapiPlanFamily(
             client.ClientAssertionAudiences = ClientAssertionAudiences.Issuer |
                                               ClientAssertionAudiences.TokenEndpoint |
                                               ClientAssertionAudiences.PushedAuthorizationRequestEndpoint;
+            if (!plan.AuthenticatesByMutualTls)
+                client.ClientAssertionAudiences |= ClientAssertionAudiences.AllowArray;
 
             // Part 2 section 5.2.2 asks PKCE only of a pushed request, which the profile enforces by itself
             client.PkceRequired = false;
