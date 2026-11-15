@@ -48,6 +48,18 @@ MAX_STEPS_PER_VISIT = 15
 # The most sign-ins one visit may perform: a third login form means the credentials are not accepted
 MAX_SIGN_INS_PER_VISIT = 2
 
+# Modules whose end user signs in and then refuses the request, which the host's login page offers as #deny: the
+# module expects access_denied back from the authorization endpoint
+REFUSING_MODULE_SUFFIX = "-user-rejects-authentication"
+
+# Modules that open the authorization endpoint twice with one request_uri and want no sign-in on the first visit
+# (FAPI 2.0 Security Profile section 5.3.2.2, note 3): the first visit stops at the login page
+ABANDONING_MODULE_SUFFIX = "-par-ensure-reused-request-uri-prior-to-auth-completion-succeeds"
+
+# The FAPI modules: one that waits for a screenshot asks a reviewer to confirm the error page the server showed the end
+# user instead of redirecting back, whatever the request it refused
+FAPI_MODULE_PREFIXES = ("fapi1-advanced-final-", "fapi2-security-profile-final-")
+
 
 class ModuleFailure(Exception):
     """A state the driver does not know how to continue from; fails the current module."""
@@ -155,7 +167,8 @@ def expectation_for(module: str):
         return "a link to the client's terms", lambda shot: bool(shot.facts.client_terms)
     if module in ("oidcc-ensure-redirect-uri-in-authorization-request", "oidcc-redirect-uri-query-mismatch",
                   "oidcc-redirect-uri-query-added", "oidcc-ensure-registered-redirect-uri") \
-            or module.startswith("oidcc-rp-initiated-logout"):
+            or module.startswith("oidcc-rp-initiated-logout") \
+            or module.startswith(FAPI_MODULE_PREFIXES):
         return "a page of the server that is not a login form", \
             lambda shot: shot.kind == "server page" and not shot.facts.login_form
     return None
@@ -241,7 +254,9 @@ class ModuleDriver:
         self.browser = browser
         self.scope = test_id
         self.module_name = ""
-        self.marked_urls: set[str] = set()
+        # How many times each URL was marked visited, compared with the suite's own record of visits
+        self.marked_urls: dict[str, int] = {}
+        self.abandoned_login = False
         self.filled_placeholders: set[str] = set()
         self.last_visit: VisitResult | None = None
         self.upload_ready_polls = 0
@@ -279,7 +294,8 @@ class ModuleDriver:
                 if pending:
                     self.upload_ready_polls = 0
                     target = pending[0]
-                    await self.visit(context, target["url"], (target.get("method") or "GET").upper())
+                    await self.visit(context, target["url"], (target.get("method") or "GET").upper(),
+                                     browser_state.get("visited"))
                     continue
 
                 uploads_required = int(browser_state.get("uploadsRequired") or 0)
@@ -297,13 +313,17 @@ class ModuleDriver:
         finally:
             await context.close()
 
-    async def visit(self, context: BrowserContext, url: str, method: str) -> None:
-        if url in self.marked_urls:
+    async def visit(self, context: BrowserContext, url: str, method: str, visited: list | None) -> None:
+        # A module may publish a URL it already had visited, to open it again (a request_uri used twice). The suite
+        # records every visit in browser.visited, so a URL listed again after each earlier mark was recorded there is a
+        # new request; one the suite has not recorded as often as it was marked is a mark that did not take
+        marks = self.marked_urls.get(url, 0)
+        if marks and (not isinstance(visited, list) or visited.count(url) < marks):
             raise ModuleFailure(f"the suite still lists {url} after it was marked visited")
         log(self.scope, "visit", f"{method} {url}")
         # The suite's own runner marks the URL visited before it opens it (BrowserControl.WebRunner.call)
         await self.api.mark_visited(self.test_id, url)
-        self.marked_urls.add(url)
+        self.marked_urls[url] = marks + 1
 
         page = await context.new_page()
         try:
@@ -350,6 +370,10 @@ class ModuleDriver:
                                             f"the server under test does not accept LOGIN_EMAIL and LOGIN_PASSWORD")
                     # Taken before the form is filled: the logo, policy, terms and second-login modules want this page
                     last_server_page = await self.capture(page, "login page")
+                    if self.module_name.endswith(ABANDONING_MODULE_SUFFIX) and not self.abandoned_login:
+                        self.abandoned_login = True
+                        log(self.scope, "stop", f"login page left without signing in, as the module asks, at {current}")
+                        return VisitResult(last_server_page)
                     await self.sign_in(page)
                     continue
                 if await page.locator("#sign-out").count() > 0:
@@ -396,7 +420,13 @@ class ModuleDriver:
         log(self.scope, "sign-in", f"as {self.settings.login_email} on {page.url}")
         await page.locator("input[name='email']").first.fill(self.settings.login_email)
         await page.locator("input[name='password']").first.fill(self.settings.login_password)
-        submit = page.locator("#sign-in")
+        refusing = self.module_name.endswith(REFUSING_MODULE_SUFFIX)
+        submit = page.locator("#deny" if refusing else "#sign-in")
+        if refusing:
+            if await submit.count() == 0:
+                raise ModuleFailure(f"the module expects the end user to refuse, and the login page at {page.url} "
+                                    f"offers no #deny")
+            log(self.scope, "click", f"deny on {page.url}")
         if await submit.count() == 0:
             submit = page.locator("form button[type='submit'], form input[type='submit']")
         if await submit.count() == 0:
