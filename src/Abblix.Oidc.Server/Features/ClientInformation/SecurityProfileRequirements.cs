@@ -333,6 +333,15 @@ public sealed record SecurityProfileRequirements
     public bool ForbidRsa1_5KeyManagement { get; init; }
 
     /// <summary>
+    /// The profile refuses the resource owner password credentials grant (RFC 6749 section 4.3). FAPI 2.0 Security
+    /// Profile section 5.3.2.1: authorization servers "shall reject requests using the resource owner password
+    /// credentials grant". Held by <see cref="SecurityProfileConsistency"/> on the grant types a client is configured
+    /// or registers for, at startup, at registration and where the client authenticates, so no client held to the
+    /// profile reaches the grant: the token endpoint admits only a grant type the client is configured for.
+    /// </summary>
+    public bool ForbidPasswordGrant { get; init; }
+
+    /// <summary>
     /// Whether a JWE layer encrypted with the key management algorithm <paramref name="algorithm"/> is one this profile
     /// admits.
     /// </summary>
@@ -464,6 +473,9 @@ public sealed record SecurityProfileRequirements
         // FAPI 2.0 section 5.4.1: "adhere to [RFC8725]", whose section 3.2 reads "Avoid all RSA-PKCS1 v1.5 encryption
         // algorithms"
         ForbidRsa1_5KeyManagement = true,
+
+        // FAPI 2.0 section 5.3.2.1: "shall reject requests using the resource owner password credentials grant"
+        ForbidPasswordGrant = true,
     };
 
     /// <summary>
@@ -706,6 +718,7 @@ public sealed record SecurityProfileRequirements
         RequireStringAudienceInClientAssertion = true,
         RequireFapiSigningAlgorithms = true,
         ForbidRsa1_5KeyManagement = true,
+        ForbidPasswordGrant = true,
     };
 
     /// <summary>
@@ -833,8 +846,8 @@ public sealed record SecurityProfileRequirements
         };
 
     /// <summary>
-    /// This bundle with the controls on the tokens the client is issued, and on the algorithms they and the client's
-    /// own JWTs use, tightened by <paramref name="other"/>.
+    /// This bundle with the controls on the tokens the client is issued and the grants it is issued them by, and on the
+    /// algorithms they and the client's own JWTs use, tightened by <paramref name="other"/>.
     /// </summary>
     private SecurityProfileRequirements WithTokenControlsTightenedBy(SecurityProfileRequirements other)
         => this with
@@ -847,6 +860,7 @@ public sealed record SecurityProfileRequirements
             ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
             RequireFapiSigningAlgorithms = RequireFapiSigningAlgorithms || other.RequireFapiSigningAlgorithms,
             ForbidRsa1_5KeyManagement = ForbidRsa1_5KeyManagement || other.ForbidRsa1_5KeyManagement,
+            ForbidPasswordGrant = ForbidPasswordGrant || other.ForbidPasswordGrant,
         };
 
     /// <summary>

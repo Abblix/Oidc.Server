@@ -6,6 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Buffers.Text;
+using System.Security.Cryptography;
+using System.Text;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Jwt;
@@ -101,8 +104,12 @@ internal sealed class ProofValidator(
         // TryAddAsync is single-call by contract - atomic-capable backends close the
         // read-then-write race natively; the default IDistributedCache fallback retains
         // the documented probabilistic guarantee accepted under RFC 9449 section 11.1.
+        // The jti is reserved as its digest, which section 11.1 offers against memory exhaustion: "a server that is
+        // tracking jti values should reject DPoP proof JWTs with unnecessarily large jti values or store only a hash
+        // thereof". The digest is the one a PKCE code_challenge or a nonce is kept under against reuse, and it
+        // refuses no client, where a length limit would have to guess what every client generates.
         var fresh = await replayCache.TryReserveAsync(
-            jwtId,
+            Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(jwtId))),
             issuedAt + options.CurrentValue.DPoP.IssuedAtTolerance,
             cancellationToken);
 
@@ -184,8 +191,7 @@ internal sealed class ProofValidator(
 
     /// <summary>
     /// Extracts the <c>jti</c> claim, requiring a non-empty string per RFC 7519 section 4.1.7
-    /// and at least <see cref="MinJwtIdLengthInBits"/> bits of entropy. The downstream
-    /// replay-cache uses the value as its key.
+    /// and at least <see cref="MinJwtIdLengthInBits"/> bits of entropy.
     /// </summary>
     private static ProofError? TryGetJti(JsonWebTokenPayload payload, out string jti)
     {

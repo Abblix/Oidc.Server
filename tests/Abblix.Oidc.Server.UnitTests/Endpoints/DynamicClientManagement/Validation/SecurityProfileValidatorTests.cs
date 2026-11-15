@@ -145,6 +145,40 @@ public class SecurityProfileValidatorTests
     }
 
     /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.1: authorization servers "shall reject requests using the resource owner
+    /// password credentials grant", so a registration for that grant beside the authorization code grant is refused
+    /// with invalid_client_metadata at a tenant held to FAPI 2.0 or Message Signing, and the same registration without
+    /// it, or at a tenant held to FAPI 1.0 Advanced or no profile, passes.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, true, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientSecurityProfile.Fapi2, false, null)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, true, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, true, null)]
+    [InlineData(ClientSecurityProfile.None, true, null)]
+    public async Task ValidateAsync_ThePasswordGrant_IsRefusedUnderFapi2(
+        ClientSecurityProfile profile, bool password, string? expectedError)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            GrantTypes = password
+                ? [GrantTypes.AuthorizationCode, GrantTypes.Password]
+                : [GrantTypes.AuthorizationCode],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+
+            // FAPI 1.0 Part 2 section 8.2 issues certificate-bound access tokens only, so the FAPI 1.0 Advanced row is
+            // refused for nothing but what it is about
+            TlsClientCertificateBoundAccessTokens = true,
+        });
+
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(profile), context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
     /// The algorithms a registration names are judged only where the client can be issued the JWT they sign, the same
     /// answer startup gives: a client of the client credentials grant alone, registering no response type, is never
     /// issued an ID token or an authorization response, so RS256 named for both passes; a client of the CIBA grant is

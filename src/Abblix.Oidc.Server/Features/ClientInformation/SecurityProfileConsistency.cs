@@ -437,6 +437,22 @@ public static class SecurityProfileConsistency
             : [];
 
     /// <summary>
+    /// Names a grant type the profile refuses, or nothing: FAPI 2.0 Security Profile section 5.3.2.1 has authorization
+    /// servers "reject requests using the resource owner password credentials grant", so a client held to it and
+    /// configured for that grant could be issued tokens only against the profile.
+    /// </summary>
+    /// <param name="grantTypes">The grant types the client is configured or registers for.</param>
+    /// <param name="requirements">The control bundle the client is held to, floor included.</param>
+    public static IReadOnlyList<string> FindGrantTypeViolations(
+        IEnumerable<string> grantTypes,
+        SecurityProfileRequirements requirements)
+        // Ignoring case, as the token endpoint does when it picks the handler of a grant type: a client configured for
+        // "Password" that sends that value is answered by the password grant
+        => requirements.ForbidPasswordGrant && grantTypes.Contains(GrantTypes.Password, StringComparer.OrdinalIgnoreCase)
+            ? ["the client's security profile refuses the password grant, but the client is allowed it"]
+            : [];
+
+    /// <summary>
     /// The algorithm of a response that may also go unsigned, or null where it does: for userinfo and introspection
     /// <c>none</c> is a plain JSON response rather than an unsigned JWS.
     /// </summary>
