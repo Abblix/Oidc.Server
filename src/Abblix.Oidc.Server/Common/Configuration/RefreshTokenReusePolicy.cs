@@ -15,8 +15,9 @@ public enum RefreshTokenReusePolicy
 {
 	/// <summary>
 	/// Refresh tokens are reused only by a client that authenticates by certificate (<c>tls_client_auth</c>,
-	/// <c>self_signed_tls_client_auth</c>) and has its tokens bound to it, or with <c>private_key_jwt</c> while
-	/// requiring DPoP, and that receives its access tokens only from the token endpoint. Every other client rotates them.
+	/// <c>self_signed_tls_client_auth</c>) and has its tokens bound to it or requires DPoP, or with
+	/// <c>private_key_jwt</c> while requiring DPoP, and that receives its access tokens only from the token endpoint.
+	/// Every other client rotates them.
 	/// </summary>
 	/// <remarks>
 	/// Rotation adds nothing for a confidential client whose access tokens are sender-constrained, and costs a client

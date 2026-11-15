@@ -104,6 +104,24 @@ public class TokenAuthorizationContextEvaluatorTests
     }
 
     /// <summary>
+    /// A client naming no profile is held to its tenant's default, so a tenant defaulting to FAPI 1.0 Advanced binds
+    /// the token of a mutual-TLS client not registered for certificate-bound tokens.
+    /// </summary>
+    [Fact]
+    public void InitialIssuance_UnderTenantDefaultFapi1Advanced_BindsToPresentedCertificate()
+    {
+        using var certificate = CreateCertificate();
+        var request = CreateRefreshRequest(boundThumbprint: null, clientCertificate: certificate);
+        var tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced }.ToTenant();
+
+        var result = Evaluator.EvaluateAuthorizationContext(tenant, request);
+
+        Assert.Equal(
+            Base64Url.EncodeToString(SHA256.HashData(certificate.RawData)),
+            result.CertificateSha256Thumbprint);
+    }
+
+    /// <summary>
     /// RFC 8705 section 3.4 leaves a token request of a client registered for certificate-bound tokens that arrives
     /// without mutual TLS "at the authorization server's discretion as to whether to return an error or issue an
     /// unbound token": nothing is bound here, and a profile requiring a sender-constrained token refuses the request

@@ -87,12 +87,12 @@ public static class RefreshTokenRotationPolicy
 	// The set of authentication methods is open, since a host registers its own authenticators, so the catch-all arm
 	// is the rule rather than a fallback: a method this library cannot name is not known to bind its tokens, and
 	// keeps rotating. A certificate authenticates every request of a mutual-TLS client, but binds its token only when
-	// the client is bound to certificate-bound tokens
+	// the client is bound to certificate-bound tokens; otherwise a required DPoP proof binds it
 	private static bool BindsEveryTokenRequest(string tokenEndpointAuthMethod, bool requireDPoP, bool certificateBound)
 		=> tokenEndpointAuthMethod switch
 		{
 			ClientAuthenticationMethods.TlsClientAuth or ClientAuthenticationMethods.SelfSignedTlsClientAuth =>
-				certificateBound,
+				certificateBound || requireDPoP,
 			ClientAuthenticationMethods.PrivateKeyJwt => requireDPoP,
 			_ => false,
 		};
