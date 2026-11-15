@@ -34,7 +34,7 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 /// including one that does not implement <c>IHttpMaxRequestBodySizeFeature</c>, and it produces a normal 413
 /// result instead of an exception thrown mid-action - but it buffers the body in managed memory to do so,
 /// where the metadata route costs nothing. A declared length over the limit is refused without reading
-/// anything, so only a body that hides its length behind chunked encoding is ever buffered.
+/// anything, so a body is buffered only up to the limit and one byte past it.
 /// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method)]

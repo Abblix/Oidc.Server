@@ -12,8 +12,8 @@ namespace Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 
 /// <summary>
 /// A request body holding one valid JSON object whose single string member makes it <paramref name="length"/> bytes
-/// long, produced as it is read and counting how much of it was taken, so a test tells a body the server read from
-/// one it left unread whatever status it answered. Valid throughout, so a JSON reader taking it never stops early.
+/// long, produced as it is read and counting how much of it the client transport pulled, which is what the server
+/// read plus whatever the transport buffers ahead of it. Valid throughout, so a JSON reader taking it never stops early.
 /// </summary>
 /// <param name="member">The name of the string member.</param>
 /// <param name="length">The length of the whole document in bytes.</param>

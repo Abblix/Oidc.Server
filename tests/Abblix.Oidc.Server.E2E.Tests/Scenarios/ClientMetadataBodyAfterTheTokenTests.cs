@@ -180,6 +180,8 @@ public class ClientMetadataBodyAfterTheTokenTests(TestFactory factory) : TestBas
 
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
+        // The in-memory transport pulls part of an unread body ahead by itself, so the ceiling is the bound, which a
+        // read bounded by it still crosses by the one byte it takes to tell the body is over it
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.True(body.Produced <= limit.Value, $"{body.Produced} bytes of the body were read");
     }
