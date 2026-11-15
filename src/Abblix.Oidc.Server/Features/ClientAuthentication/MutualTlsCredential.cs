@@ -26,13 +26,12 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// tokens and is not a second credential beside that method. Section 2 also has the client include client_id in every
 /// request using mutual-TLS client authentication, so without one the certificate authenticates nobody.
 /// <para>
-/// So the answer depends on how the named client is registered, and a caller holding any certificate can tell whether
-/// a client_id is registered for a mutual-TLS method: beside a body secret the certificate of such a client makes two
-/// methods, answered 400 invalid_request, while that of any other client leaves the secret to be checked, a wrong one
-/// refused 401; at
-/// introspection a certificate alone is a credential for such a client, a wrong one refused 401, and no credential,
-/// 400, for any other. That fact is all the difference tells, and the client_id it is told of is not a secret (RFC 6749 section
-/// 2.2).
+/// So the answer depends on how the named client is registered, and a caller holding any certificate can tell whether a
+/// client_id is registered for a mutual-TLS method: beside another credential the certificate of such a client makes
+/// two methods, answered 400 invalid_request, while for any other client_id the other credential is checked alone, a
+/// wrong one refused 401; at introspection a certificate alone is a credential for such a client, a wrong one refused
+/// 401, and no credential, 400, for any other client_id. That fact is all the difference tells, and the client_id it is
+/// told of is not a secret (RFC 6749 section 2.2).
 /// </para>
 /// </remarks>
 /// <param name="clientInfoProvider">Finds the client the request's client_id names.</param>
@@ -48,7 +47,8 @@ internal sealed class MutualTlsCredential(IClientInfoProvider clientInfoProvider
     public async Task<(ClientInfo Client, X509Certificate2 Certificate)?> FindAsync(
         TenantDefinition tenant, ClientRequest request, Action<string>? clientNotFound = null)
     {
-        if (request is not { ClientCertificate: { } certificate, ClientId: var clientId } || !clientId.NotNullOrWhiteSpace())
+        if (request is not { ClientCertificate: { } certificate, ClientId: var clientId } ||
+            !clientId.NotNullOrWhiteSpace())
             return null;
 
         var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
