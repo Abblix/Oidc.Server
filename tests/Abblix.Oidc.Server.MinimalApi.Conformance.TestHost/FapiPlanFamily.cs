@@ -61,11 +61,10 @@ public sealed record FapiPlanFamily(
     /// FAPI 1.0 Advanced, whose tokens are always bound to the client certificate (Part 2 section 5.2.2).
     /// </summary>
     /// <remarks>
-    /// The plan's client assertions name the token endpoint, and at the pushed authorization request endpoint an
-    /// array holding the issuer beside another value, which the suite expects accepted as RFC 7523 section 3 allowed
-    /// before RFC 10070 section 4 closed it: the clients are granted both, as a host grants a client that cannot change
-    /// yet. The pushed authorization request endpoint URL as the audience, which the suite expects accepted too, has
-    /// no grant: RFC 10070 section 5 has the server reject it, so that module fails whatever the host sets.
+    /// The plan's client assertions name the token endpoint, and one of its modules names the pushed authorization
+    /// request endpoint at that endpoint, as RFC 9126 section 2 had the server accept before RFC 10070 section 5
+    /// replaced it: the clients are granted both, as a host grants a client that cannot change yet. An array holding
+    /// the issuer beside another value, which another module sends, is not granted: RFC 10070 section 4 refuses it.
     /// </remarks>
     public static FapiPlanFamily Fapi1Advanced { get; } = new(
         ClientSecurityProfile.Fapi1Advanced,
@@ -81,7 +80,7 @@ public sealed record FapiPlanFamily(
             client.RequestObjectSigningAlgorithm = SigningAlgorithms.PS256;
             client.ClientAssertionAudiences = ClientAssertionAudiences.Issuer |
                                               ClientAssertionAudiences.TokenEndpoint |
-                                              ClientAssertionAudiences.AllowArray;
+                                              ClientAssertionAudiences.PushedAuthorizationRequestEndpoint;
 
             // Part 2 section 5.2.2 asks PKCE only of a pushed request, which the profile enforces by itself
             client.PkceRequired = false;
