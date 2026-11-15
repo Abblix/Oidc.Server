@@ -6,8 +6,9 @@ Runs OpenID Foundation conformance test plans against the conformance test host,
 .DESCRIPTION
 Starts the suite from its published images, publishes the test host and runs it as a container on the suite's
 network, runs the suite's own plan runner, then removes what it started. The exit code is zero when every module passed,
-waits only for a reviewer to look at a screenshot, or was skipped as expected-skips.json lists for its configuration,
-and non-zero on any unexpected failure or skip, or on a module the suite did not let finish.
+waits only for a reviewer to look at a screenshot, or was skipped or failed as expected-skips.json or
+expected-failures.json lists for its configuration, and non-zero on any unexpected failure, warning or skip, or on a
+module the suite did not let finish.
 
 Without -SuitePath the run takes the suite's newest numbered release: its scripts from the git tag and its images
 under the same tag. A release that is tagged but whose images are not published yet stops the run, naming it, rather
@@ -225,14 +226,15 @@ function Split-PlanConfiguration {
     return [pscustomobject]@{ Plan = $Line.Substring(0, $separator).Trim(); Configuration = $alias }
 }
 
-function Select-ExpectedSkips {
-    # The entries of expected-skips.json that a plan of this run can meet: its configuration file matches the entry's
+function Select-ExpectedEntries {
+    # The entries of expected-skips.json or expected-failures.json that a plan of this run can meet: its configuration
+    # file matches the entry's
     # configuration-filename, one of the modules it runs matches the entry's test-name, and no variant the plan names
-    # differs from the entry's. The two patterns are matched as the runner's fnmatch matches them on Linux, case-sensitive
-    # with *, ? and [...]; -clike has no [!...], so an entry using it is refused rather than read another way. The runner
-    # fails a run on a listed skip that no module reached, so an entry for another configuration, for a module the plan
-    # leaves out or for one the suite's release does not have would fail it. Always an array, so an empty selection is
-    # written as [] and a single entry is not unwrapped
+    # differs from the entry's, a variant of "*" naming none. The two patterns are matched as the runner's fnmatch
+    # matches them on Linux, case-sensitive with *, ? and [...]; -clike has no [!...], so an entry using it is refused
+    # rather than read another way. The runner fails a run on a listed skip or failure that no module reached, so an
+    # entry for another configuration, for a module the plan leaves out or for one the suite's release does not have
+    # would fail it. Always an array, so an empty selection is written as [] and a single entry is not unwrapped
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $Entries,
@@ -240,7 +242,7 @@ function Select-ExpectedSkips {
     )
     foreach ($entry in $Entries) {
         if ("$($entry.'configuration-filename') $($entry.'test-name')".Contains('[!')) {
-            throw "The expected skip of '$($entry.'test-name')' for '$($entry.'configuration-filename')' uses [!...], " +
+            throw "The expected entry of '$($entry.'test-name')' for '$($entry.'configuration-filename')' uses [!...], " +
                 'which this script cannot match as the runner does; list the characters to match instead'
         }
     }
@@ -254,9 +256,9 @@ function Select-ExpectedSkips {
                     }
                     $entry.'configuration-filename' -and $run.Configuration -clike $entry.'configuration-filename' -and
                     @($run.Modules | Where-Object { $_ -clike $entry.'test-name' }) -and
-                    -not @($entry.variant.PSObject.Properties | Where-Object {
+                    ($entry.variant -eq '*' -or -not @($entry.variant.PSObject.Properties | Where-Object {
                             $variants.ContainsKey($_.Name) -and $variants[$_.Name] -ne $_.Value
-                        })
+                        }))
                 })
         })
 }
@@ -309,12 +311,12 @@ function Get-SuiteTime {
 }
 
 function Get-UnfinishedModules {
-    # Every module of the plans started since $Since that ran and did not end FINISHED with PASSED, REVIEW or SKIPPED. The
-    # suite's runner counts a module the suite INTERRUPTED as complete and passes it when its log holds no FAILURE entry,
-    # so the outcome is read from the suite itself. A module that never ran is not judged here: each plan deliberately
-    # leaves some out, and the runner already reports a module it meant to run and did not. SKIPPED is the suite's
-    # "test can not be completed" for the server's configuration, which the runner judges against expected-skips.json and
-    # fails the run on when the skip is not listed there, so it is not judged a second time here.
+    # Every module of the plans started since $Since that ran and did not end FINISHED with a verdict. The suite's runner
+    # counts a module the suite INTERRUPTED as complete and passes it when its log holds no FAILURE entry, so the outcome
+    # is read from the suite itself. A module that never ran is not judged here: each plan deliberately leaves some out,
+    # and the runner already reports a module it meant to run and did not. Which verdict passes is the runner's to say:
+    # it judges each FAILED, WARNING or SKIPPED module against expected-failures.json and expected-skips.json and fails
+    # the run on one they do not list, so a finished module's verdict is not judged a second time here.
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [DateTimeOffset] $Since,
@@ -339,7 +341,7 @@ function Get-UnfinishedModules {
     foreach ($plan in $plans) {
         $detail = Invoke-RestMethod -Uri "${SuiteUrl}api/plan/$($plan._id)" -SkipCertificateCheck
         foreach ($module in @($detail.modules | ForEach-Object { $_ } | Where-Object { $_.status })) {
-            if ($module.status -ne 'FINISHED' -or $module.result -notin 'PASSED', 'REVIEW', 'SKIPPED') {
+            if ($module.status -ne 'FINISHED' -or $module.result -notin 'PASSED', 'REVIEW', 'SKIPPED', 'WARNING', 'FAILED') {
                 [pscustomobject]@{ Plan = $detail.planName; Module = $module.testModule; Status = $module.status; Result = $module.result }
             }
         }
@@ -520,12 +522,13 @@ try {
     # arguments go in a file, one per line, which the container reads into its own argument list
     $argumentsDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-arguments'
     New-Item -ItemType Directory -Force $argumentsDirectory | Out-Null
-    $expectedSkips = Select-ExpectedSkips -Entries @(Get-Content -Raw (Join-Path $PSScriptRoot 'expected-skips.json') |
-            ConvertFrom-Json) -Runs $split
-    [IO.File]::WriteAllText((Join-Path $argumentsDirectory 'expected-skips.json'),
-        (ConvertTo-Json -InputObject $expectedSkips -Depth 5))
+    foreach ($list in 'expected-failures.json', 'expected-skips.json') {
+        $selected = Select-ExpectedEntries -Entries @(Get-Content -Raw (Join-Path $PSScriptRoot $list) |
+                ConvertFrom-Json) -Runs $split
+        [IO.File]::WriteAllText((Join-Path $argumentsDirectory $list), (ConvertTo-Json -InputObject $selected -Depth 5))
+    }
     $runnerArguments = @(
-        '--expected-failures-file', '/config/expected-failures.json',
+        '--expected-failures-file', '/arguments/expected-failures.json',
         '--expected-skips-file', '/arguments/expected-skips.json')
     $exportMount = @()
     if ($ResultsPath) {
@@ -602,7 +605,7 @@ try {
     $unfinished = @(Get-UnfinishedModules -Since $plansSince -ExpectedPlans ($Plan.Count + $keyRotationPlans.Count))
     if ($unfinished) {
         $unfinished | Format-Table -AutoSize | Out-String | Write-Host
-        Write-Host "$($unfinished.Count) module(s) did not finish with PASSED, REVIEW or SKIPPED" -ForegroundColor Red
+        Write-Host "$($unfinished.Count) module(s) did not finish with a verdict" -ForegroundColor Red
         if ($exitCode -eq 0) {
             $exitCode = 1
         }
