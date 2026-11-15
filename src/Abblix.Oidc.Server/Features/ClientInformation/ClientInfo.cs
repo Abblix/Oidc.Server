@@ -370,15 +370,19 @@ public record ClientInfo(string ClientId)
     /// RFC 10070 section 4 requires, as a string, and for a client the host lets keep an older form while it changes,
     /// the token endpoint URL (<see cref="ClientAssertionAudiences.TokenEndpoint"/>), the backchannel authentication
     /// endpoint URL CIBA Core 1.0 section 7.1 names
-    /// (<see cref="ClientAssertionAudiences.BackChannelAuthenticationEndpoint"/>), an array holding any of them beside
+    /// (<see cref="ClientAssertionAudiences.BackChannelAuthenticationEndpoint"/>), the pushed authorization request
+    /// endpoint URL RFC 9126 section 2 named before RFC 10070 section 5 replaced it
+    /// (<see cref="ClientAssertionAudiences.PushedAuthorizationRequestEndpoint"/>), an array holding any of them beside
     /// other values (<see cref="ClientAssertionAudiences.AllowArray"/>), or several of these.
     /// </summary>
     /// <remarks>
     /// RFC 10070 makes the authorization server "reject any JWT that does not contain its issuer identifier as its sole
     /// audience value", which a client written to Core's "The Audience SHOULD be the URL of the Authorization Server's
-    /// Token Endpoint", or to RFC 7523's array, does not meet. Section 6 of the same RFC expects such clients to need time
-    /// to change, and the values beyond <see cref="ClientAssertionAudiences.Issuer"/> are that time, given to one client
-    /// at a time while every other client stays held to the rule.
+    /// Token Endpoint", or to RFC 7523's array, does not meet. A value beyond
+    /// <see cref="ClientAssertionAudiences.Issuer"/> departs from that MUST for the one client granted it, while every
+    /// other client stays held to the rule. Section 6 of that RFC permits no such departure: it only warns that such
+    /// clients "may not interoperate with authorization servers that strictly enforce the updated requirements", which
+    /// is why a host may choose it.
     /// <para>
     /// A value left unset, zero, reads as <see cref="ClientAssertionAudiences.Issuer"/>, so a host that stores its
     /// clients itself and has no value for this one holds the client to the rule. A configured set without

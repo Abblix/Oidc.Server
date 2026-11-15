@@ -35,6 +35,13 @@ internal static class ClientSecretJwtAssertion
     /// The assertion naming <paramref name="audiences"/>, signed with the client's secret.
     /// </summary>
     public static Task<string> IssueAsync(params string[] audiences)
+        => IssueAsAsync(TestConstants.ClientSecretJwtClientId, audiences);
+
+    /// <summary>
+    /// The assertion of <paramref name="clientId"/>, a client sharing the secret of
+    /// <see cref="TestConstants.ClientSecretJwtClientId"/>, naming <paramref name="audiences"/>.
+    /// </summary>
+    public static Task<string> IssueAsAsync(string clientId, params string[] audiences)
     {
         var now = TimeProvider.System.GetUtcNow();
         var token = new JsonWebToken
@@ -43,8 +50,8 @@ internal static class ClientSecretJwtAssertion
             Payload =
             {
                 JwtId = Guid.NewGuid().ToString("N"),
-                Issuer = TestConstants.ClientSecretJwtClientId,
-                Subject = TestConstants.ClientSecretJwtClientId,
+                Issuer = clientId,
+                Subject = clientId,
                 Audiences = audiences,
                 IssuedAt = now,
                 NotBefore = now,

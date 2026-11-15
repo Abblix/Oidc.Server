@@ -36,7 +36,8 @@ public sealed class ClientAssertionAudiencesCheck : ITenantsCheck
                 $"'{client.ClientAssertionAudiences}', which is not a set this server accepts: it holds " +
                 $"{nameof(ClientAssertionAudiences.Issuer)} and may add " +
                 $"{nameof(ClientAssertionAudiences.TokenEndpoint)}, " +
-                $"{nameof(ClientAssertionAudiences.BackChannelAuthenticationEndpoint)} and " +
+                $"{nameof(ClientAssertionAudiences.BackChannelAuthenticationEndpoint)}, " +
+                $"{nameof(ClientAssertionAudiences.PushedAuthorizationRequestEndpoint)} and " +
                 $"{nameof(ClientAssertionAudiences.AllowArray)}.");
 
     /// <summary>
@@ -53,5 +54,6 @@ public sealed class ClientAssertionAudiencesCheck : ITenantsCheck
         ClientAssertionAudiences.Issuer |
         ClientAssertionAudiences.TokenEndpoint |
         ClientAssertionAudiences.BackChannelAuthenticationEndpoint |
+        ClientAssertionAudiences.PushedAuthorizationRequestEndpoint |
         ClientAssertionAudiences.AllowArray;
 }

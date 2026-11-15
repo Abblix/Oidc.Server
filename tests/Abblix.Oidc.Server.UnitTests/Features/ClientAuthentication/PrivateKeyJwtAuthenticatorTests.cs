@@ -988,6 +988,86 @@ public class PrivateKeyJwtAuthenticatorTests
         };
     }
 
+    /// <summary>
+    /// A client written to RFC 9126 section 2 before RFC 10070 section 5 replaced it, naming the pushed authorization
+    /// request endpoint URL as its audience, is accepted only where the host granted it that URL: on the issuer's
+    /// authority either way it is written and on the mutual-TLS alias, as a string, or in an array for a client also
+    /// allowed one. The token endpoint grant does not admit it, its grant does not admit the token endpoint, FAPI 2.0
+    /// refuses it while FAPI 1.0 Advanced keeps it, and where no transport maps the endpoint nothing matches.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(PushedAuthorizationRequestEndpointAudiences))]
+    public async Task PushedAuthorizationRequestEndpointAudience_IsAcceptedOnlyForAClientGrantedIt(
+        ClientAssertionAudiences audiences, ClientSecurityProfile profile, bool mapped, JsonNode audience, bool accepted)
+    {
+        var (authenticator, mocks) = CreateAuthenticator(
+            new Uri(TokenEndpoint), pushedAuthorizationRequestMapped: mapped);
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            ClientAssertionAudiences = audiences,
+        };
+        var token = CreateValidJwtTokenWithJtiAndExp(
+            ClientId, ClientId, "pushed-authorization-request-endpoint",
+            DateTimeOffset.Parse("2027-01-01T00:00:00Z", CultureInfo.InvariantCulture));
+        token.Payload.Json[JwtClaimTypes.Audience] = audience;
+
+        mocks.ClientJwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, JwtAssertion, It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new ValidJsonWebToken(token, clientInfo));
+
+        var tenant = new TestIssuer
+        {
+            Issuer = new Uri(IssuerIdentifier),
+            DefaultSecurityProfile = profile,
+            MtlsBaseUri = new Uri(MtlsBaseUriAsWritten),
+        }.ToTenant();
+        var result = await authenticator.TryAuthenticateClientAsync(tenant, new ClientRequest
+        {
+            ClientAssertionType = ClientAssertionTypes.JwtBearer,
+            ClientAssertion = JwtAssertion,
+        });
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+        if (!accepted)
+            AssertRefusedForItsAudience(mocks);
+    }
+
+    public static TheoryData<ClientAssertionAudiences, ClientSecurityProfile, bool, JsonNode, bool>
+        PushedAuthorizationRequestEndpointAudiences()
+    {
+        const ClientAssertionAudiences issuer = ClientAssertionAudiences.Issuer;
+        const ClientAssertionAudiences withTokenEndpoint = issuer | ClientAssertionAudiences.TokenEndpoint;
+        const ClientAssertionAudiences withBackChannel =
+            issuer | ClientAssertionAudiences.BackChannelAuthenticationEndpoint;
+        const ClientAssertionAudiences withPushed =
+            issuer | ClientAssertionAudiences.PushedAuthorizationRequestEndpoint;
+        const ClientAssertionAudiences withPushedAndArray = withPushed | ClientAssertionAudiences.AllowArray;
+        const ClientSecurityProfile none = ClientSecurityProfile.None;
+        const string another = "https://another.example.com";
+        const string mtlsPushed = "https://mtls.example.com/connect/par";
+
+        return new()
+        {
+            { withPushed, none, true, JsonValue.Create(PushedAuthorizationRequestEndpoint), true },
+            { withPushed, none, true, JsonValue.Create("https://ISSUER.example.com/connect/par"), false },
+            { withPushed, none, true, JsonValue.Create(mtlsPushed), true },
+            { withPushed, none, true, JsonValue.Create(MtlsBaseUriAsWritten + "/connect/par"), true },
+            { withPushed, none, true, JsonValue.Create("https://other-as.example/connect/par"), false },
+            { withPushed, none, true, JsonValue.Create(IssuerIdentifier), true },
+            { withPushed, none, true, JsonValue.Create(TokenEndpoint), false },
+            { withPushed, none, true, JsonValue.Create(BackChannelAuthenticationEndpoint), false },
+            { withPushed, none, true, new JsonArray(PushedAuthorizationRequestEndpoint), false },
+            { withPushedAndArray, none, true, new JsonArray(another, PushedAuthorizationRequestEndpoint), true },
+            { issuer, none, true, JsonValue.Create(PushedAuthorizationRequestEndpoint), false },
+            { withTokenEndpoint, none, true, JsonValue.Create(PushedAuthorizationRequestEndpoint), false },
+            { withBackChannel, none, true, JsonValue.Create(PushedAuthorizationRequestEndpoint), false },
+            { withPushed, ClientSecurityProfile.Fapi2, true, JsonValue.Create(PushedAuthorizationRequestEndpoint), false },
+            { withPushed, ClientSecurityProfile.Fapi1Advanced, true, JsonValue.Create(PushedAuthorizationRequestEndpoint), true },
+            { withPushed, none, false, JsonValue.Create(PushedAuthorizationRequestEndpoint), false },
+        };
+    }
+
     private const string MtlsBaseUriAsWritten = "https://MTLS.example.com:443";
     private const string MtlsTokenEndpoint = "https://mtls.example.com/connect/token";
 
@@ -1115,7 +1195,10 @@ public class PrivateKeyJwtAuthenticatorTests
     /// endpoint, or over a host with no resolver registered at all.
     /// </summary>
     private (PrivateKeyJwtAuthenticator authenticator, Mocks mocks) CreateAuthenticator(
-        Uri? tokenEndpoint, bool resolverRegistered = true, bool backChannelAuthenticationMapped = true)
+        Uri? tokenEndpoint,
+        bool resolverRegistered = true,
+        bool backChannelAuthenticationMapped = true,
+        bool pushedAuthorizationRequestMapped = true)
     {
         var logger = new Mock<ILogger<PrivateKeyJwtAuthenticator>>();
         logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
@@ -1131,7 +1214,7 @@ public class PrivateKeyJwtAuthenticatorTests
         var endpointResolver = new Mock<IOidcEndpointResolver>();
         endpointResolver.Setup(r => r.Resolve(OidcEndpoints.Token)).Returns(tokenEndpoint);
         endpointResolver.Setup(r => r.Resolve(OidcEndpoints.PushedAuthorizationRequest))
-            .Returns(new Uri(PushedAuthorizationRequestEndpoint));
+            .Returns(pushedAuthorizationRequestMapped ? new Uri(PushedAuthorizationRequestEndpoint) : null);
         endpointResolver.Setup(r => r.Resolve(OidcEndpoints.BackChannelAuthentication))
             .Returns(backChannelAuthenticationMapped ? new Uri(BackChannelAuthenticationEndpoint) : null);
 
