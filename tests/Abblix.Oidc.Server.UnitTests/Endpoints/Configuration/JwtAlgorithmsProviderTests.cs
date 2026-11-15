@@ -182,7 +182,6 @@ public class JwtAlgorithmsProviderTests
         Assert.Equal(served, CreateProvider().IntrospectionEncryptionAlgValuesSupported.ToArray());
     }
 
-
     /// <summary>
     /// RFC 8414 section 2 / OIDC Discovery 1.0 section 3: token_endpoint_auth_signing_alg_values_supported MUST
     /// NOT contain "none". HS* stay because client_secret_jwt keys on the client secret.

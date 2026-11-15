@@ -120,7 +120,6 @@ public class EncryptedResponseAlgorithmsValidator(
         Model.ClientRegistrationRequest request,
         IEnumerable<string> requestObjectAlgorithms)
     {
-
         var responseAlgorithms = jwtAlgorithms.EncryptedResponseAlgorithmsSupported;
         var responseMethods = jwtAlgorithms.EncryptedResponseMethodsSupported;
 

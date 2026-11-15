@@ -21,9 +21,11 @@ public interface IJwtAlgorithmsProvider
 	/// <summary>
 	/// Lists the JWE key-management algorithms (the <c>alg</c> values) a JWT this server sends a client - an ID token,
 	/// a UserInfo, introspection or JARM authorization response - can be encrypted under: those the JWT creator
-	/// encrypts with that a key the client holds can serve. Registration accepts a client's
-	/// <c>*_encrypted_response_alg</c> from this list, and discovery advertises it for the JARM and introspection
-	/// responses, so neither promises an algorithm issuance cannot carry out.
+	/// encrypts with, less the symmetric ones no key is derived for from the client secret. Registration accepts a
+	/// client's <c>*_encrypted_response_alg</c> from this list, and discovery advertises it for the JARM and
+	/// introspection responses. Being listed does not make an algorithm servable: one a host registered beyond the
+	/// key type table of <see cref="Abblix.Jwt.AlgorithmSupportExtensions"/> is listed once its encryptor is registered,
+	/// yet no client key is ever found to carry it, so a JWT is never encrypted under it.
 	/// </summary>
 	IEnumerable<string> EncryptedResponseAlgorithmsSupported { get; }
 
