@@ -64,8 +64,9 @@ public sealed record FapiPlanFamily(
     /// The plan's client assertions name the token endpoint, one of its modules names the pushed authorization request
     /// endpoint at that endpoint, as RFC 9126 section 2 had the server accept before RFC 10070 section 5 replaced it,
     /// and another sends an array holding the issuer beside another value, which RFC 7523 section 3 allowed before RFC
-    /// 10070 section 4 closed it. The server refuses all three by default, and the private key JWT clients are granted
-    /// them, as a host grants a client written to the replaced texts that cannot change yet.
+    /// 10070 section 4 closed it. The server refuses all three by default; as a host grants a client written to the
+    /// replaced texts that cannot change yet, every client of the family is granted the token and pushed authorization
+    /// request endpoint URLs, and the private key JWT clients the array as well.
     /// </remarks>
     public static FapiPlanFamily Fapi1Advanced { get; } = new(
         ClientSecurityProfile.Fapi1Advanced,

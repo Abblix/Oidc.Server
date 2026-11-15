@@ -315,8 +315,9 @@ function Get-UnfinishedModules {
     # counts a module the suite INTERRUPTED as complete and passes it when its log holds no FAILURE entry, so the outcome
     # is read from the suite itself. A module that never ran is not judged here: each plan deliberately leaves some out,
     # and the runner already reports a module it meant to run and did not. Which verdict passes is the runner's to say:
-    # it judges each FAILED, WARNING or SKIPPED module against expected-failures.json and expected-skips.json and fails
-    # the run on one they do not list, so a finished module's verdict is not judged a second time here.
+    # it judges every FAILURE and WARNING entry of each module's log against expected-failures.json, and a SKIPPED
+    # result against expected-skips.json, and fails the run on one they do not list, so a finished module's verdict is
+    # not judged a second time here.
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [DateTimeOffset] $Since,
