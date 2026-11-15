@@ -9,6 +9,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization;
@@ -16,6 +17,7 @@ using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResponseObject;
+using Abblix.Oidc.Server.Features.Tokens;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Utils;
@@ -87,6 +89,40 @@ public class AuthorizationResponseEncoderTests
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
         Assert.Equal(ResponseModes.Query, error.ResponseMode);
         Assert.Null(error.ResponseJwt);
+    }
+
+    /// <summary>
+    /// RFC 6749 section 4.2.2 defines the scope response parameter as "The scope of the access token", and OpenID
+    /// Connect Core 1.0 sections 3.1.2.5, 3.2.2.5 and 3.3.2.5 list no scope for a response returning no access token.
+    /// So it rides only a response carrying an access token: code id_token gets none, code token does.
+    /// </summary>
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, "openid profile")]
+    public async Task TheScope_RidesOnlyAResponseCarryingAnAccessToken(bool accessToken, string? expectedScope)
+    {
+        var model = new AuthorizationRequest
+        {
+            ClientId = TestConstants.DefaultClientId,
+            ResponseType = accessToken
+                ? [ResponseTypes.Code, ResponseTypes.Token]
+                : [ResponseTypes.Code, ResponseTypes.IdToken],
+            RedirectUri = TestConstants.DefaultRedirectUri,
+            State = State,
+        };
+        var success = new SuccessfullyAuthenticated(model, ResponseModes.Fragment, "session", [])
+        {
+            Code = "code",
+            IdToken = accessToken ? null : new EncodedJsonWebToken(new JsonWebToken(), "id_token_jwt"),
+            AccessToken = accessToken ? new EncodedJsonWebToken(new JsonWebToken(), "access_token_jwt") : null,
+            SessionPersistence = Abblix.Oidc.Server.Features.UserAuthentication.SessionPersistence.BrowserSession,
+            GrantedScopes = [Scopes.OpenId, Scopes.Profile],
+        };
+
+        var encoded = await Encoder(new Mock<IResponseJwtBuilder>(MockBehavior.Strict).Object)
+            .EncodeAsync(SingleIssuer.Tenant, success);
+
+        Assert.Equal(expectedScope, Assert.IsType<SuccessfullyAuthenticated>(encoded).Scope);
     }
 
     private static IResponseJwtBuilder Refusing()
