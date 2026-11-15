@@ -28,8 +28,8 @@ public static class SecurityProfileConsistency
     /// types from satisfying the effective profile, or an empty list when the configuration is
     /// self-consistent. The check operates on response types because that is the one part of a FAPI
     /// client the profile cannot silently fix at request time: a client using the authorization endpoint
-    /// that never permits the authorization-code response type, or that permits an implicit/hybrid one,
-    /// is misconfigured rather than merely tightened. A client registering no response type does not use
+    /// that never permits the authorization-code response type, or that permits any other one - implicit,
+    /// hybrid or none - is misconfigured rather than merely tightened. A client registering no response type does not use
     /// the authorization endpoint and is not judged by its response types.
     /// </summary>
     /// <param name="allowedResponseTypes">The response-type combinations the client is registered for, empty for a
@@ -83,22 +83,20 @@ public static class SecurityProfileConsistency
         if (!requirements.RequireCodeResponseTypeOnly || allowedResponseTypes.Count == 0)
             return violations;
 
-        // A single-element "code" entry, matched case-insensitively to stay consistent with the
-        // token-bearing check below (both ultimately use HasFlag's OrdinalIgnoreCase comparison).
-        var allowsCode = allowedResponseTypes.Any(
-            responseType => responseType is { Length: 1 } && responseType.HasFlag(ResponseTypes.Code));
-        if (!allowsCode)
+        if (!allowedResponseTypes.Any(responseType => responseType.IsCodeAlone()))
         {
             violations.Add(
                 "the client's security profile requires the authorization-code response type, " +
                 "but the client does not allow it");
         }
 
-        if (allowedResponseTypes.Any(responseType => responseType.ReturnsTokenFromAuthorization()))
+        // "shall require the value of response_type ... to be code": an implicit or hybrid response type, and none
+        // as well, which returns no token and is refused all the same
+        if (!allowedResponseTypes.All(responseType => responseType.IsCodeAlone()))
         {
             violations.Add(
-                "the client's security profile forbids implicit and hybrid response types, " +
-                "but the client allows a response type that returns a token from the authorization endpoint");
+                "the client's security profile admits the code response type alone, " +
+                "but the client allows another response type");
         }
 
         return violations;

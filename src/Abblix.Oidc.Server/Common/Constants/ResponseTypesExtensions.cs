@@ -20,9 +20,22 @@ public static class ResponseTypesExtensions
     /// Determines whether a <c>response_type</c> combination returns a token directly from the
     /// authorization endpoint - that is, whether it contains the <c>token</c> or <c>id_token</c> part
     /// and is therefore an implicit or hybrid flow rather than the plain authorization code flow. The
-    /// single definition of "token-bearing response type" used by both the flow-type validator and
-    /// the security-profile consistency check.
+    /// single definition of "token-bearing response type" the flow-type validator derives the flow and
+    /// the error response mode from.
     /// </summary>
     internal static bool ReturnsTokenFromAuthorization(this string[]? responseType)
         => responseType.HasFlag(ResponseTypes.Token) || responseType.HasFlag(ResponseTypes.IdToken);
+
+    /// <summary>
+    /// Determines whether a <c>response_type</c> combination is <c>code</c> and nothing else, the one value FAPI 2.0
+    /// Security Profile section 5.3.2.2 admits: "authorization servers shall require the value of response_type
+    /// described in [RFC6749] to be code". A repeated <c>code</c> part is still that value, as the client's registered
+    /// combinations are matched as sets. The single definition used by both the flow-type validator and the
+    /// security-profile consistency check.
+    /// </summary>
+    internal static bool IsCodeAlone(this string[]? responseType)
+        => responseType is { Length: > 0 } &&
+           Array.TrueForAll(
+               responseType,
+               part => string.Equals(part, ResponseTypes.Code, StringComparison.OrdinalIgnoreCase));
 }

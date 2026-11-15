@@ -152,8 +152,9 @@ public sealed record SecurityProfileRequirements
         => (configured ?? DefaultClockSkew).BoundedBy(MaxClockSkew);
 
     /// <summary>
-    /// The profile permits only the authorization-code response type, rejecting any implicit or
-    /// hybrid response type that returns a token or id_token from the authorization endpoint.
+    /// The profile permits only the authorization-code response type, rejecting every other one: an implicit or
+    /// hybrid response type that returns a token or id_token from the authorization endpoint, and none, which returns
+    /// no token - section 5.3.2.2 has the server "require the value of response_type described in [RFC6749] to be code".
     /// Enforced by <c>Endpoints.Authorization.Validation.FlowTypeValidator</c> at request time and
     /// by <see cref="SecurityProfileConsistency"/> as a fail-loud registration/startup check.
     /// FAPI 2.0 section 5.3.2.2 states it "for flows that use the authorization endpoint", so it binds

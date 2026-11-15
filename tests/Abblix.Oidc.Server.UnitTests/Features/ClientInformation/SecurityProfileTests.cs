@@ -301,6 +301,48 @@ public class SecurityProfileTests
     }
 
     /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.2: "For flows that use the authorization endpoint, authorization servers
+    /// shall require the value of response_type described in [RFC6749] to be code". The Message Signing profiles keep it
+    /// (its section 5: "All provisions of the [FAPI2_Security_Profile] apply to the Message Signing Profile as well"), so
+    /// a client registered for none beside code is named under each of them, at startup as at registration.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
+    public void FindViolations_Fapi2CodePlusNone_FlagsNone(ClientSecurityProfile profile)
+    {
+        var violations = SecurityProfileConsistency.FindViolations(
+            [[ResponseTypes.Code], [ResponseTypes.None]],
+            ClientAuthenticationMethods.PrivateKeyJwt,
+            assertionAudiences: ClientAssertionAudiences.Issuer,
+            SecurityProfileRequirements.Resolve(profile));
+
+        Assert.Single(violations);
+    }
+
+    /// <summary>
+    /// The same at startup: a FAPI 2.0 tenant does not start with a client registered for none beside code, and starts
+    /// with the same client registered for code alone.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Check_Fapi2ClientRegisteredForNone_Refuses(bool none)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedResponseTypes = none ? [[ResponseTypes.Code], [ResponseTypes.None]] : [[ResponseTypes.Code]],
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        };
+
+        Assert.Equal(none, Check(Tenant(ClientSecurityProfile.Fapi2, client)).Count > 0);
+    }
+
+    /// <summary>
     /// FAPI 2.0 section 5.3.2.2 binds the response type "for flows that use the authorization endpoint", and RFC 7591
     /// section 2 defines response_types as those "the client can use at the authorization endpoint". A client
     /// registering none never uses it, as a resource server calling only introspection or a client of the client

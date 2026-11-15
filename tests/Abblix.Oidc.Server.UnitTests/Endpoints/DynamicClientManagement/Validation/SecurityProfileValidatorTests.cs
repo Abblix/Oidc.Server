@@ -106,6 +106,20 @@ public class SecurityProfileValidatorTests
     }
 
     /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.2: the server "shall require the value of response_type described in
+    /// [RFC6749] to be code", so a registration for none beside code is refused with invalid_client_metadata.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ServerDefaultFapi2CodePlusNone_ShouldReturnError()
+    {
+        var context = CreateContext([[ResponseTypes.Code], [ResponseTypes.None]]);
+
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
     /// FAPI 2.0 section 5.3.2.2 binds the response type "for flows that use the authorization endpoint", and RFC 7591
     /// section 2.1 correlates the client credentials grant with no response type: a registration under a FAPI profile
     /// for that grant alone, or for no grant at all as a resource server calling introspection, registers no response
