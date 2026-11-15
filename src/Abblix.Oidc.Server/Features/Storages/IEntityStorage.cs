@@ -15,9 +15,39 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// in-process or distributed.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Implementations must support atomic get-and-remove semantics when
 /// <c>removeOnRetrieval</c> is true so that single-use credentials (authorization codes, PAR
 /// request URIs) cannot be replayed across concurrent token requests.
+/// </para>
+/// <para>
+/// Every operation that decides between callers - the read with removal,
+/// <see cref="TrySetIfAbsentAsync{T}"/>, <see cref="TryReplaceAsync{T}"/> and <see cref="TryExtendAsync"/> -
+/// is exactly as atomic as the store behind it makes it. The shipped <see cref="DistributedCacheStorage"/>
+/// rides <c>IDistributedCache</c>, which has no conditional write, so it decides between the callers of one
+/// process under a per-key gate; two requests that reach different nodes can both be told they came first.
+/// A deployment with several nodes registers a storage that maps each of these operations to one command of
+/// its store, so the decision is made by the store and holds for every node. In Redis:
+/// </para>
+/// <list type="bullet">
+/// <item><description><see cref="TrySetIfAbsentAsync{T}"/> is <c>SET key value NX PX ttl</c>, writing the
+/// value and its lifetime together, so no key is ever left without its expiry.</description></item>
+/// <item><description>The read with removal is <c>GETDEL</c>.</description></item>
+/// <item><description><see cref="TryExtendAsync"/> is <c>PEXPIRE</c> or <c>PEXPIREAT</c>, which leave a key
+/// that is gone alone.</description></item>
+/// <item><description><see cref="TryReplaceAsync{T}"/> is a short script that compares and writes in one
+/// step, comparing values as that method requires.</description></item>
+/// </list>
+/// <para>
+/// With such a storage, the decisions built on these operations hold across nodes as well: the logout
+/// confirmation question two overlapping end-session requests share, the reuse check of a PKCE code challenge
+/// or a nonce, the end of a pushed authorization flow, single-use codes and request URIs, and the token
+/// registry. Other stores offer the same primitive: SQL <c>INSERT ... ON CONFLICT DO NOTHING</c> on a row
+/// carrying its expiry, a conditional put with <c>attribute_not_exists</c> and a TTL attribute in DynamoDB, a
+/// create that fails on an existing id in Cosmos DB, an etcd transaction on a key's create revision with a
+/// lease. Replay detection of presented tokens (DPoP proofs, client assertions, security event tokens) is not
+/// kept here: it goes through <c>IReplayCache</c>, which takes its own implementation of the same primitive.
+/// </para>
 /// </remarks>
 public interface IEntityStorage
 {

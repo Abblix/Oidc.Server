@@ -19,8 +19,9 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// three steps that another caller slips between. Whether the reservation is strictly atomic is
 /// the implementation's promise, not this interface's: the shipped
 /// <see cref="DistributedReplayCache"/> rides <c>IDistributedCache</c>, which exposes only Get
-/// and Set, so its answer is probabilistic within one cache round trip. A deployment that needs
-/// strict single-use takes a backend-native primitive behind this same interface, which is what
+/// and Set, so it decides between the callers of one process under a per-key gate, and two nodes
+/// can both answer that a token is new. A deployment with several nodes takes a backend-native
+/// primitive behind this same interface, which is what
 /// <see cref="ReplayCacheBase"/> is for: it holds everything around the primitive and leaves the
 /// primitive itself to a subclass - Redis <c>SET NX PX</c>, SQL
 /// <c>INSERT ... ON CONFLICT DO NOTHING</c>, and their equivalents.
