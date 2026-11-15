@@ -10,6 +10,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -23,9 +24,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <c>id_token_encrypted_response_alg</c>/<c>enc</c> and <c>userinfo_encrypted_response_alg</c>/<c>enc</c>
 /// (OIDC Core), <c>introspection_encrypted_response_alg</c>/<c>enc</c> (RFC 9701),
 /// <c>request_object_encryption_alg</c>/<c>enc</c> (RFC 9101) and
-/// <c>authorization_encrypted_response_alg</c>/<c>enc</c> (JARM section 3). Each key-management (<c>alg</c>) value
-/// must appear in the server's supported key-management algorithms and each content-encryption (<c>enc</c>)
-/// value in its supported content-encryption algorithms; and each algorithm a JWT this server sends is encrypted under
+/// <c>authorization_encrypted_response_alg</c>/<c>enc</c> (JARM section 3). Each algorithm of a JWT this server sends
+/// must be one issuance encrypts with (<see cref="IJwtAlgorithmsProvider.EncryptedResponseAlgorithmsSupported"/> and
+/// <see cref="IJwtAlgorithmsProvider.EncryptedResponseMethodsSupported"/>), and each algorithm of a request object one
+/// the server decrypts with; and each algorithm a JWT this server sends is encrypted under
 /// must have a key the client will hold, so a registration that could never be sent the JWT it asked to have encrypted
 /// is answered with <c>invalid_client_metadata</c> instead of every such JWT being refused afterwards.
 /// </summary>
@@ -40,13 +42,14 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <c>jwks_uri</c> carries the algorithm is not, since the client can change that document after registration, so it is
 /// decided where the JWT is encrypted.
 /// </remarks>
-/// <param name="jwtValidator">Source of the JWE algorithms the server supports (the registered encryptors).</param>
+/// <param name="jwtAlgorithms">The JWE algorithms the server encrypts and decrypts with, as discovery advertises
+/// them.</param>
 /// <param name="options">Supplies the content encryption algorithm a client that registered none is sent, which fixes
 /// the length of a key used directly as the content encryption key.</param>
 /// <param name="clientInfoProvider">Supplies the stored client an update keeps the secrets of.</param>
 /// <param name="timeProvider">Supplies the time a stored secret's expiry is judged against.</param>
 public class EncryptedResponseAlgorithmsValidator(
-    IJsonWebTokenValidator jwtValidator,
+    IJwtAlgorithmsProvider jwtAlgorithms,
     IOptions<OidcOptions> options,
     IClientInfoProvider clientInfoProvider,
     TimeProvider timeProvider) : IClientRegistrationContextValidator
@@ -56,16 +59,31 @@ public class EncryptedResponseAlgorithmsValidator(
         => ValidateSupported(context.Request) ?? await ValidateKeySourcesAsync(tenant, context);
 
     private OidcError? ValidateSupported(Model.ClientRegistrationRequest request)
-        => ValidateAlg(request.IdTokenEncryptedResponseAlg, Parameters.IdTokenEncryptedResponseAlg)
-            ?? ValidateEnc(request.IdTokenEncryptedResponseEnc, Parameters.IdTokenEncryptedResponseEnc)
-            ?? ValidateAlg(request.UserInfoEncryptedResponseAlg, Parameters.UserInfoEncryptedResponseAlg)
-            ?? ValidateEnc(request.UserInfoEncryptedResponseEnc, Parameters.UserInfoEncryptedResponseEnc)
-            ?? ValidateAlg(request.IntrospectionEncryptedResponseAlg, Parameters.IntrospectionEncryptedResponseAlg)
-            ?? ValidateEnc(request.IntrospectionEncryptedResponseEnc, Parameters.IntrospectionEncryptedResponseEnc)
-            ?? ValidateAlg(request.RequestObjectEncryptionAlg, Parameters.RequestObjectEncryptionAlg)
-            ?? ValidateEnc(request.RequestObjectEncryptionEnc, Parameters.RequestObjectEncryptionEnc)
-            ?? ValidateAlg(request.AuthorizationEncryptedResponseAlg, Parameters.AuthorizationEncryptedResponseAlg)
-            ?? ValidateEnc(request.AuthorizationEncryptedResponseEnc, Parameters.AuthorizationEncryptedResponseEnc);
+    {
+        var responseAlgorithms = jwtAlgorithms.EncryptedResponseAlgorithmsSupported;
+        var responseMethods = jwtAlgorithms.EncryptedResponseMethodsSupported;
+
+        return ValidateAlg(request.IdTokenEncryptedResponseAlg, Parameters.IdTokenEncryptedResponseAlg, responseAlgorithms)
+            ?? ValidateEnc(request.IdTokenEncryptedResponseEnc, Parameters.IdTokenEncryptedResponseEnc, responseMethods)
+            ?? ValidateAlg(request.UserInfoEncryptedResponseAlg, Parameters.UserInfoEncryptedResponseAlg, responseAlgorithms)
+            ?? ValidateEnc(request.UserInfoEncryptedResponseEnc, Parameters.UserInfoEncryptedResponseEnc, responseMethods)
+            ?? ValidateAlg(
+                request.IntrospectionEncryptedResponseAlg, Parameters.IntrospectionEncryptedResponseAlg, responseAlgorithms)
+            ?? ValidateEnc(
+                request.IntrospectionEncryptedResponseEnc, Parameters.IntrospectionEncryptedResponseEnc, responseMethods)
+            ?? ValidateAlg(
+                request.RequestObjectEncryptionAlg,
+                Parameters.RequestObjectEncryptionAlg,
+                jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported)
+            ?? ValidateEnc(
+                request.RequestObjectEncryptionEnc,
+                Parameters.RequestObjectEncryptionEnc,
+                jwtAlgorithms.RequestObjectEncryptionEncValuesSupported)
+            ?? ValidateAlg(
+                request.AuthorizationEncryptedResponseAlg, Parameters.AuthorizationEncryptedResponseAlg, responseAlgorithms)
+            ?? ValidateEnc(
+                request.AuthorizationEncryptedResponseEnc, Parameters.AuthorizationEncryptedResponseEnc, responseMethods);
+    }
 
     /// <summary>
     /// Refuses the first algorithm a JWT this server sends is encrypted under that the client will have no key for. The
@@ -142,14 +160,15 @@ public class EncryptedResponseAlgorithmsValidator(
     }
 
     /// <summary>
-    /// Validates a JWE key-management (<c>alg</c>) value against the server's supported key-management algorithms.
+    /// Validates a JWE key-management (<c>alg</c>) value against the key-management algorithms
+    /// <paramref name="supported"/>.
     /// A value outside them is client metadata the server rejects, which RFC 7591 section 3.2.2 answers with
     /// <c>invalid_client_metadata</c>: "The value of one of the client metadata fields is invalid and the server has
     /// rejected this request".
     /// </summary>
-    private OidcError? ValidateAlg(string? alg, string description)
+    private static OidcError? ValidateAlg(string? alg, string description, IEnumerable<string> supported)
     {
-        if (alg is not null && !jwtValidator.EncryptionAlgorithmsSupported.Contains(alg, StringComparer.Ordinal))
+        if (alg is not null && !supported.Contains(alg, StringComparer.Ordinal))
         {
             return ErrorFactory.InvalidClientMetadata(
                 $"The encryption key-management algorithm for {description} is not supported");
@@ -159,12 +178,12 @@ public class EncryptedResponseAlgorithmsValidator(
     }
 
     /// <summary>
-    /// Validates a JWE content-encryption (<c>enc</c>) value against the server's supported content-encryption
-    /// algorithms.
+    /// Validates a JWE content-encryption (<c>enc</c>) value against the content-encryption algorithms
+    /// <paramref name="supported"/>.
     /// </summary>
-    private OidcError? ValidateEnc(string? enc, string description)
+    private static OidcError? ValidateEnc(string? enc, string description, IEnumerable<string> supported)
     {
-        if (enc is not null && !jwtValidator.EncryptionMethodsSupported.Contains(enc, StringComparer.Ordinal))
+        if (enc is not null && !supported.Contains(enc, StringComparer.Ordinal))
         {
             return ErrorFactory.InvalidClientMetadata($"The encryption method for {description} is not supported");
         }

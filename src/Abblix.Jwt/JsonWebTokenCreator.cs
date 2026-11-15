@@ -35,6 +35,9 @@ internal sealed class JsonWebTokenCreator(
     /// </summary>
     public IEnumerable<string> EncryptedResponseAlgorithmsSupported => encryptionAlgorithmsProvider.KeyManagementAlgorithms;
 
+    /// <inheritdoc />
+    public IEnumerable<string> EncryptedResponseMethodsSupported => encryptionAlgorithmsProvider.ContentEncryptionAlgorithms;
+
     /// <summary>
     /// Asynchronously issues a JWT based on the specified JsonWebToken, signing key, and optional encryption key.
     /// </summary>
