@@ -196,6 +196,45 @@ public class ConfigurationHandlerTests
             document.ResponseTypesSupported);
     }
 
+    /// <summary>
+    /// The implicit grant type is what a client registers for a response type returning a token or an ID token from
+    /// the authorization endpoint (RFC 7591 section 2.1), which FAPI 2.0 Security Profile section 5.3.2.2 refuses, so
+    /// the document of a tenant held to any profile of the FAPI 2.0 family does not list it (OpenID Connect Discovery
+    /// 1.0 section 3, RFC 8414 section 2: the grant types "that this authorization server supports"). FAPI 1.0 Advanced
+    /// admits code id_token, a hybrid response type, and so keeps it, as does a tenant held to no profile.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, false)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests, false)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, false)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, true)]
+    [InlineData(ClientSecurityProfile.None, true)]
+    public async Task TheDocument_ListsTheImplicitGrantType_OnlyWhereTheTenantsProfileAdmitsAnImplicitResponse(
+        ClientSecurityProfile profile,
+        bool implicitListed)
+    {
+        string[] grantTypes =
+        [
+            GrantTypes.AuthorizationCode,
+            GrantTypes.Implicit,
+            GrantTypes.RefreshToken,
+            GrantTypes.ClientCredentials,
+        ];
+        var scopesAndClaims = new Mock<IScopesAndClaimsProvider>();
+        scopesAndClaims.Setup(p => p.GrantTypesSupported).Returns(grantTypes);
+        var handler = HandlerFor(
+            Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
+            Mock.Of<IAuthorizationMetadataProvider>(),
+            scopesAndClaims.Object);
+
+        var document = await handler.HandleAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant());
+
+        Assert.Equal(
+            implicitListed ? grantTypes : grantTypes.Where(grantType => grantType != GrantTypes.Implicit),
+            document.GrantTypesSupported);
+    }
+
     private const string RsaDeclaringOaep256 = nameof(RsaDeclaringOaep256);
     private const string RsaDeclaringNone = nameof(RsaDeclaringNone);
     private const string EllipticCurveDeclaringNone = nameof(EllipticCurveDeclaringNone);
@@ -294,7 +333,10 @@ public class ConfigurationHandlerTests
     /// A handler over <paramref name="metadata"/> and a server registering a fixed set of request object encryption
     /// algorithms.
     /// </summary>
-    private static ConfigurationHandler HandlerFor(IAuthServiceKeysProvider keys, IAuthorizationMetadataProvider metadata)
+    private static ConfigurationHandler HandlerFor(
+        IAuthServiceKeysProvider keys,
+        IAuthorizationMetadataProvider metadata,
+        IScopesAndClaimsProvider? scopesAndClaims = null)
     {
         var algorithms = new Mock<IJwtAlgorithmsProvider>();
         algorithms.Setup(a => a.RequestObjectEncryptionAlgValuesSupported).Returns(
@@ -319,7 +361,7 @@ public class ConfigurationHandlerTests
             Mock.Of<ILogoutNotifier>(),
             clientAuthenticator.Object,
             metadata,
-            Mock.Of<IScopesAndClaimsProvider>(),
+            scopesAndClaims ?? Mock.Of<IScopesAndClaimsProvider>(),
             algorithms.Object,
             keys,
             [],

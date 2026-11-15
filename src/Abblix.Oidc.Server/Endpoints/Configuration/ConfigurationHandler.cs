@@ -68,7 +68,7 @@ public sealed class ConfigurationHandler(
 
 			ScopesSupported = scopesAndClaims.ScopesSupported(tenant),
 			ClaimsSupported = scopesAndClaims.ClaimsSupported(tenant),
-			GrantTypesSupported = scopesAndClaims.GrantTypesSupported,
+			GrantTypesSupported = AdmittedGrantTypes(tenant, scopesAndClaims.GrantTypesSupported),
 			SubjectTypesSupported = scopesAndClaims.SubjectTypesSupported(tenant),
 
 			ClaimsParameterSupported = authorizationMetadata.ClaimsParameterSupported,
@@ -162,6 +162,19 @@ public sealed class ConfigurationHandler(
 			.ToArray();
 
 		return algorithms.Length > 0 ? algorithms : null;
+	}
+
+	/// <summary>
+	/// The grant types of <paramref name="grantTypes"/> the tenant's profile admits. The implicit grant type is what a
+	/// client registers for a response type returning a token or an ID token from the authorization endpoint (RFC 7591
+	/// section 2.1), and a profile requiring the code response type (FAPI 2.0 Security Profile section 5.3.2.2) refuses
+	/// every such response type for every client of the tenant, so OpenID Connect Discovery 1.0 section 3 and RFC 8414
+	/// section 2, which list the grant types "that this authorization server supports", do not list it.
+	/// </summary>
+	private static IEnumerable<string> AdmittedGrantTypes(TenantDefinition tenant, IEnumerable<string> grantTypes)
+	{
+		var profile = SecurityProfileRequirements.For(tenant, client: null);
+		return grantTypes.Where(grantType => !profile.RequireCodeResponseTypeOnly || grantType != GrantTypes.Implicit);
 	}
 
 	/// <summary>

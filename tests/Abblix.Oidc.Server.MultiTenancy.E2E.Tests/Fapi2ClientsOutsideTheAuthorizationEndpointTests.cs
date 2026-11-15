@@ -190,20 +190,24 @@ public sealed class Fapi2ClientsOutsideTheAuthorizationEndpointTests : IAsyncLif
 
     /// <summary>
     /// FAPI 2.0 Security Profile section 5.3.2.2 has the server "require the value of response_type described in
-    /// [RFC6749] to be code", so the FAPI 2.0 tenant's discovery document lists code alone, while the tenant holding its
-    /// clients to no profile lists every response type the server makes up.
+    /// [RFC6749] to be code", so the FAPI 2.0 tenant's discovery document lists code alone and not the implicit grant
+    /// type a client registers for any other (RFC 7591 section 2.1), while the tenant holding its clients to no profile
+    /// lists every response type the server makes up and the implicit grant type with them.
     /// </summary>
     [Fact]
     public async Task TheDiscoveryDocument_ListsTheResponseTypesTheTenantsProfileAdmits()
     {
-        async Task<string[]> ResponseTypesListedAtAsync(string tenant)
+        async Task<string[]> ListedAtAsync(string tenant, string parameter)
         {
             var document = JsonNode.Parse(await _http!.GetStringAsync(
                 tenant + "/.well-known/openid-configuration", TestContext.Current.CancellationToken))!;
-            return document[ConfigurationResponse.Parameters.ResponseTypesSupported]!.AsArray()
-                .Select(responseType => responseType!.GetValue<string>())
+            return document[parameter]!.AsArray()
+                .Select(value => value!.GetValue<string>())
                 .ToArray();
         }
+
+        Task<string[]> ResponseTypesListedAtAsync(string tenant)
+            => ListedAtAsync(tenant, ConfigurationResponse.Parameters.ResponseTypesSupported);
 
         Assert.Equal([ResponseTypes.Code], await ResponseTypesListedAtAsync(Acme));
         Assert.Equal(
@@ -218,6 +222,13 @@ public sealed class Fapi2ClientsOutsideTheAuthorizationEndpointTests : IAsyncLif
                 $"{ResponseTypes.Code} {ResponseTypes.Token} {ResponseTypes.IdToken}",
             ],
             await ResponseTypesListedAtAsync(Globex));
+
+        var grantTypesAtAcme = await ListedAtAsync(Acme, ConfigurationResponse.Parameters.GrantTypesSupported);
+        Assert.Contains(GrantTypes.AuthorizationCode, grantTypesAtAcme);
+        Assert.DoesNotContain(GrantTypes.Implicit, grantTypesAtAcme);
+        Assert.Contains(
+            GrantTypes.Implicit,
+            await ListedAtAsync(Globex, ConfigurationResponse.Parameters.GrantTypesSupported));
     }
 
     /// <summary>
