@@ -223,19 +223,21 @@ app.MapPost("/login", async (
         // be sent straight back here. A password is the one factor this host has, and it is taken as whichever
         // level the client named first.
         var pending = await pendingRequests.TryGetAsync(tenant, new Uri(requestUri));
+        var sessionId = sessionIdGenerator.GenerateSessionId();
+
+        // Refusing still takes the user's sign-in: the server asks for consent only of a signed-in user, and a consent
+        // granting nothing is how the refusal reaches the client
+        if (action == "deny")
+            RefusedAuthorizations.RefuseIn(sessionId);
+
         await authService.SignInAsync(new AuthSession(
             ConformanceUser.Subject,
-            sessionIdGenerator.GenerateSessionId(),
+            sessionId,
             timeProvider.GetUtcNow(),
             CookieAuthenticationDefaults.AuthenticationScheme)
         {
             AuthContextClassRef = pending?.AcrValues?.FirstOrDefault(),
         });
-
-        // Refusing still takes the user's sign-in: the server asks for consent only of a signed-in user, and a consent
-        // granting nothing is how the refusal reaches the client
-        if (action == "deny")
-            RefusedAuthorizations.Refuse(requestUri);
 
         var authorizeUrl = new UriBuilder(endpointResolver.Resolve(OidcEndpoints.Authorize)!)
             { Query = { [AuthorizationRequest.Parameters.RequestUri] = requestUri } };
