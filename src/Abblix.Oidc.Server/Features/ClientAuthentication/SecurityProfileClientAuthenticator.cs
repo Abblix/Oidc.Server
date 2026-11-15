@@ -49,6 +49,9 @@ internal partial class SecurityProfileClientAuthenticator(
     public IEnumerable<string> ClientAuthenticationMethodsSupported
         => inner.ClientAuthenticationMethodsSupported;
 
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+        => inner.FindPresentedCredentialsAsync(tenant, request);
+
     public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
         var result = await inner.TryAuthenticateClientAsync(tenant, request);

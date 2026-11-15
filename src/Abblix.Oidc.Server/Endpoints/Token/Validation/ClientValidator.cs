@@ -52,6 +52,11 @@ public class ClientValidator(IClientAuthenticator clientAuthenticator)
             tenant, clientRequest);
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
+            // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
+            // client" an invalid_request, not a failed authentication
+            if (authenticated.GetFailure() is MoreThanOneClientAuthenticationMethodError moreThanOneMethod)
+                return moreThanOneMethod;
+
             return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
         }
 

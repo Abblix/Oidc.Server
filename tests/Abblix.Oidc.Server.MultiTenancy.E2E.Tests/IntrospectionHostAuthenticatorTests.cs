@@ -53,15 +53,23 @@ public sealed class IntrospectionHostAuthenticatorTests : IAsyncLifetime
     {
         public IEnumerable<string> ClientAuthenticationMethodsSupported => [];
 
+        public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+            => Task.FromResult<IEnumerable<string>>(PresentedKey() is null ? [] : [ApiKeyHeader]);
+
         public Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
             => Task.FromResult(Authenticate(tenant));
 
+        /// <summary>
+        /// The host's own reading of "presented": its header, which no authenticator of the library reads.
+        /// </summary>
+        private string? PresentedKey()
+            => httpContextAccessor.HttpContext!.Request.Headers.TryGetValue(ApiKeyHeader, out var presented)
+                ? presented.ToString()
+                : null;
+
         private Result<ClientInfo, OidcError> Authenticate(TenantDefinition tenant)
         {
-            var headers = httpContextAccessor.HttpContext!.Request.Headers;
-
-            // The host's own reading of "presented": its header, which no authenticator of the library reads
-            if (!headers.TryGetValue(ApiKeyHeader, out var presented))
+            if (PresentedKey() is not { } presented)
                 return ClientAuthenticationFailures.NoCredential;
 
             if (presented != ApiKey)
@@ -129,15 +137,19 @@ public sealed class IntrospectionHostAuthenticatorTests : IAsyncLifetime
             await _app.DisposeAsync();
     }
 
-    private async Task<HttpResponseMessage> IntrospectAsync(string? apiKey)
+    private async Task<HttpResponseMessage> IntrospectAsync(string? apiKey, string? clientSecret = null)
     {
+        var form = new Dictionary<string, string>
+        {
+            [IntrospectionRequest.Parameters.Token] = "any-token",
+            [ClientRequest.Parameters.ClientId] = ClientId,
+        };
+        if (clientSecret is not null)
+            form[ClientRequest.Parameters.ClientSecret] = clientSecret;
+
         using var request = new HttpRequestMessage(HttpMethod.Post, Acme + "/connect/introspect")
         {
-            Content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                [IntrospectionRequest.Parameters.Token] = "any-token",
-                [ClientRequest.Parameters.ClientId] = ClientId,
-            }),
+            Content = new FormUrlEncodedContent(form),
         };
         if (apiKey is not null)
             request.Headers.Add(ApiKeyHeader, apiKey);
@@ -163,6 +175,22 @@ public sealed class IntrospectionHostAuthenticatorTests : IAsyncLifetime
     public async Task AWrongKeyInTheHostsHeader_Is401()
     {
         Assert.Equal(HttpStatusCode.Unauthorized, (await IntrospectAsync("not-the-key")).StatusCode);
+    }
+
+    /// <summary>
+    /// The host's method counts as a method: its key beside the client's own body secret is two methods in one request,
+    /// which RFC 6749 section 2.3 forbids and section 5.2 answers as invalid_request.
+    /// </summary>
+    [Fact]
+    public async Task TheHostsKeyBesideABodySecret_IsAnInvalidRequest()
+    {
+        var response = await IntrospectAsync(ApiKey, clientSecret: "unused");
+
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
+        Assert.Equal(
+            ErrorCodes.InvalidRequest,
+            System.Text.Json.Nodes.JsonNode.Parse(raw)![ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>

@@ -31,6 +31,8 @@ public partial class TlsMetadataClientAuthenticator(
     ILogger<TlsMetadataClientAuthenticator> logger,
     IClientInfoProvider clientInfoProvider) : IClientAuthenticator
 {
+    private readonly MutualTlsCredential _credential = new(clientInfoProvider, ClientAuthenticationMethods.TlsClientAuth);
+
     /// <summary>
     /// OID for Subject Alternative Name extension (RFC 5280 section 4.2.1.6).
     /// </summary>
@@ -54,8 +56,9 @@ public partial class TlsMetadataClientAuthenticator(
     /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the certificate and client ID to authenticate.</param>
     /// <returns>
-    /// A task that returns the authenticated <see cref="ClientInfo"/>, or why it is not one: no certificate presented,
-    /// or one presented whose client is not found, does not use this method, or whose certificate does not match.
+    /// A task that returns the authenticated <see cref="ClientInfo"/>, or why it is not one: no certificate presented
+    /// as a credential (none at all, no client_id, or a client_id naming no client registered for this method), or one
+    /// that does not match the client's metadata.
     /// </returns>
     /// <remarks>
     /// This method implements RFC 8705 tls_client_auth by:
@@ -67,20 +70,8 @@ public partial class TlsMetadataClientAuthenticator(
     /// </remarks>
     public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
-        var certificate = request.ClientCertificate;
-        if (certificate == null)
+        if (await _credential.FindAsync(tenant, request) is not (var client, var certificate))
             return ClientAuthenticationFailures.NoCredential;
-
-        var clientId = request.ClientId;
-        if (!clientId.NotNullOrWhiteSpace())
-            return ClientAuthenticationFailures.InvalidCredential;
-
-        var client = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
-        if (client == null)
-            return ClientAuthenticationFailures.InvalidCredential;
-
-        if (client.TokenEndpointAuthMethod != ClientAuthenticationMethods.TlsClientAuth)
-            return ClientAuthenticationFailures.InvalidCredential;
 
         var options = client.TlsClientAuth;
         if (options == null)
@@ -98,6 +89,10 @@ public partial class TlsMetadataClientAuthenticator(
         LogAuthenticated(client.ClientId);
         return client;
     }
+
+    /// <inheritdoc />
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+        => _credential.FindPresentedAsync(tenant, request);
 
     /// <summary>
     /// Validates the certificate's Subject Distinguished Name against the required DN.

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
@@ -69,7 +70,14 @@ public class PushedAuthorizationHandler(
 
         var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
         if (!authenticated.TryGetSuccess(out var clientInfo))
+        {
+            // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
+            // client" an invalid_request, not a failed authentication
+            if (authenticated.GetFailure() is MoreThanOneClientAuthenticationMethodError moreThanOneMethod)
+                return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidRequest(moreThanOneMethod.ErrorDescription));
+
             return new AuthorizationError(authorizationRequest, ErrorFactory.InvalidClient("The client is not authorized"));
+        }
 
         // The object is read for the client the request names, which has to be the one that authenticated
         if (authorizationRequest.ClientId is { } named && named != clientInfo.ClientId)

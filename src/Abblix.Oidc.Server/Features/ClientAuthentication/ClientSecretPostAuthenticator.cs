@@ -56,7 +56,7 @@ public class ClientSecretPostAuthenticator(
 	/// </returns>
 	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
-		if (!request.ClientSecret.HasValue())
+		if (!IsPresented(request))
 			return ClientAuthenticationFailures.NoCredential;
 
 		if (!request.ClientId.NotNullOrWhiteSpace())
@@ -68,4 +68,14 @@ public class ClientSecretPostAuthenticator(
 			request.ClientSecret,
 			ClientAuthenticationMethods.ClientSecretPost);
 	}
+
+	/// <inheritdoc />
+	public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+		=> Task.FromResult<IEnumerable<string>>(
+			IsPresented(request) ? [nameof(ClientRequest.ClientSecret)] : []);
+
+	/// <summary>
+	/// A client_secret in the body is the credential, whatever accompanies it.
+	/// </summary>
+	private static bool IsPresented(ClientRequest request) => request.ClientSecret.HasValue();
 }

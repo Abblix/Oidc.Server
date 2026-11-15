@@ -76,4 +76,10 @@ public partial class NoneClientAuthenticator(
                 return ClientAuthenticationFailures.NoCredential;
         }
     }
+
+    /// <summary>
+    /// None: the method this authenticator serves presents no credential, a client_id being an identifier.
+    /// </summary>
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+        => Task.FromResult<IEnumerable<string>>([]);
 }

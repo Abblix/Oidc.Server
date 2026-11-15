@@ -70,16 +70,7 @@ public partial class IntrospectionRequestValidator(
 
 		var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
 		if (!authenticated.TryGetSuccess(out var clientInfo))
-		{
-			// RFC 9701 section 5: "An AS compliant with this specification MUST refuse to serve introspection
-			// requests that don't authenticate the caller and return an HTTP status code 400", where no
-			// authenticator, a host's own included, found a credential in the request
-			if (authenticated.GetFailure() is UnauthenticatedCallerError noCredential)
-				return noCredential;
-
-			// RFC 7662 section 2.3: a credential presented and invalid is answered 401, as RFC 6749 section 5.2 has it
-			return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
-		}
+			return RefusalOf(authenticated.GetFailure());
 
 		// RFC 7662 section 2.1: the introspection endpoint MUST require some form of authorization to
 		// prevent token scanning. A public client (auth method "none") presents only its client_id,
@@ -146,4 +137,22 @@ public partial class IntrospectionRequestValidator(
 				return ValidIntrospectionRequest.InvalidToken(introspectionRequest, clientInfo);
 			});
 	}
+
+	/// <summary>
+	/// The answer to a caller the authenticator did not authenticate, by why it did not.
+	/// </summary>
+	private static OidcError RefusalOf(OidcError failure) => failure switch
+	{
+		// RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the client"
+		// an invalid_request, not a failed authentication
+		MoreThanOneClientAuthenticationMethodError => failure,
+
+		// RFC 9701 section 5: "An AS compliant with this specification MUST refuse to serve introspection requests
+		// that don't authenticate the caller and return an HTTP status code 400", where no authenticator, a host's
+		// own included, found a credential in the request
+		UnauthenticatedCallerError => failure,
+
+		// RFC 7662 section 2.3: a credential presented and invalid is answered 401, as RFC 6749 section 5.2 has it
+		_ => new OidcError(ErrorCodes.InvalidClient, "The client is not authorized"),
+	};
 }

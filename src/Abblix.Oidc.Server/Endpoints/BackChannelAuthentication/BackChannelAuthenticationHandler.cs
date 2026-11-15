@@ -63,6 +63,11 @@ public class BackChannelAuthenticationHandler(
         var authenticated = await clientAuthenticator.TryAuthenticateClientAsync(tenant, clientRequest);
         if (!authenticated.TryGetSuccess(out var clientInfo))
         {
+            // RFC 6749 section 5.2 names a request that "utilizes more than one mechanism for authenticating the
+            // client" an invalid_request, not a failed authentication
+            if (authenticated.GetFailure() is MoreThanOneClientAuthenticationMethodError moreThanOneMethod)
+                return moreThanOneMethod;
+
             // CIBA Core 1.0 section 13 lists invalid_client under HTTP 401: "Client authentication failed"
             return new OidcError(ErrorCodes.InvalidClient, "The client is not authorized");
         }
