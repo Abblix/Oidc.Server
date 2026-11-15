@@ -80,6 +80,34 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
         Assert.False(string.IsNullOrEmpty(nonceValues.First()));
     }
 
+    /// <summary>
+    /// The nonce refusal answers a request that presented its token over DPoP, so it is the DPoP challenge that says
+    /// so, and the Bearer one beside it stays bare. RFC 9449 section 9: "The error signaling is performed as described
+    /// in Section 7.1. Resource servers use an HTTP 401 (Unauthorized) error code with an accompanying
+    /// WWW-Authenticate: DPoP value and DPoP-Nonce value to accomplish this." Section 7.2: "If the mechanism used to
+    /// attempt authentication could be established unambiguously, then the corresponding challenge SHOULD be used to
+    /// deliver error information."
+    /// </summary>
+    [Fact]
+    public async Task UserInfo_nonce_refusal_carries_its_error_on_the_dpop_challenge_and_none_on_the_bearer_one()
+    {
+        using var proofKey = new DPoPProofGenerator();
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var accessToken = (await ObtainDPoPBoundTokenViaNonceFlowAsync(client, discovery, proofKey))
+            [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+
+        var proofWithoutNonce = proofKey.BuildProof(
+            HttpMethods.Get, discovery.UserInfoEndpoint!, accessToken: accessToken);
+        var response = await SendUserInfoAsync(client, discovery, accessToken, proofWithoutNonce);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var (dpop, bearer) = DualChallengeReader.Challenges(response);
+        Assert.Equal(ErrorCodes.UseDPoPNonce, dpop.Parameters[ErrorResponse.Parameters.Error]);
+        Assert.DoesNotContain(ErrorResponse.Parameters.Error, bearer.Parameters.Keys);
+        Assert.DoesNotContain(ErrorResponse.Parameters.ErrorDescription, bearer.Parameters.Keys);
+    }
+
     [Fact]
     public async Task UserInfo_retry_with_nonce_from_challenge_succeeds()
     {
