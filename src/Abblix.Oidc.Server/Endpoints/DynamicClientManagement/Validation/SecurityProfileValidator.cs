@@ -55,7 +55,7 @@ public class SecurityProfileValidator : SyncClientRegistrationContextValidator
                     (Parameters.IdTokenSignedResponseAlg, IdentityTokenSignature(
                         request.ResponseTypes, request.GrantTypes, request.IdTokenSignedResponseAlg)),
                     (Parameters.AuthorizationSignedResponseAlg, AuthorizationResponseSignature(
-                        request.ResponseTypes, request.AuthorizationSignedResponseAlg)),
+                        request.ResponseTypes, request.RedirectUris ?? [], request.AuthorizationSignedResponseAlg)),
                     (Parameters.UserInfoSignedResponseAlg, UserInfoSignature(
                         request.UserInfoSignedResponseAlg, request.UserInfoEncryptedResponseAlg)),
                     (Parameters.IntrospectionSignedResponseAlg, SignedOrNull(request.IntrospectionSignedResponseAlg)),

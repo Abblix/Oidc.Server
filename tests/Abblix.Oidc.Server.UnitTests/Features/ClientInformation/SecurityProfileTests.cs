@@ -1009,20 +1009,20 @@ public class SecurityProfileTests
     /// <summary>
     /// An algorithm is judged only where the client can be issued the JWT it signs. A client registering no response
     /// type is never sent an authorization response, nor joins a session that a logout token would end; it is issued an
-    /// ID token only by a grant that answers with one at the token endpoint by itself: CIBA Core 1.0 section 11 answers
-    /// "as specified in Section 3.1.3.3 of [OpenID.Core]", whose response carries "id_token ID Token value associated
-    /// with the authenticated session", and this server answers the device, password and JWT bearer grants the same
-    /// way. The client credentials and token exchange grants are issued none; the authorization code grant redeems a code
-    /// only the authorization endpoint hands out, and the refresh token grant a token only another grant issues. So at
-    /// the RS256 defaults a client of a grant issuing an ID token is named for that algorithm alone, and any other is
-    /// not named.
+    /// ID token only by a grant that answers with one at the token endpoint: CIBA Core 1.0 section 10.1.1 answers "as
+    /// specified in Section 3.1.3.3 of [OpenID.Core]", whose response carries "id_token ID Token value associated with
+    /// the authenticated session", and this server answers the device, password, JWT bearer and refresh token grants
+    /// the same way - a refresh token issued while the client had a response type outlives a change to its
+    /// registration. The client credentials and token exchange grants are issued none, and the authorization code
+    /// grant redeems a code only the authorization endpoint hands out. So at the RS256 defaults a client of a grant
+    /// issuing an ID token is named for that algorithm alone, and any other is not named.
     /// </summary>
     [Theory]
     [InlineData(new string[0], 0)]
     [InlineData(new[] { GrantTypes.AuthorizationCode }, 0)]
     [InlineData(new[] { GrantTypes.ClientCredentials }, 0)]
     [InlineData(new[] { GrantTypes.TokenExchange }, 0)]
-    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.RefreshToken }, 0)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.RefreshToken }, 1)]
     [InlineData(new[] { GrantTypes.Ciba }, 1)]
     [InlineData(new[] { GrantTypes.DeviceAuthorization, GrantTypes.RefreshToken }, 1)]
     [InlineData(new[] { GrantTypes.Password }, 1)]
@@ -1040,6 +1040,27 @@ public class SecurityProfileTests
             client, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced));
 
         Assert.Equal(expected, violations.Count);
+    }
+
+    /// <summary>
+    /// A client registering no response type but a redirect URI can still be sent an authorization error response,
+    /// which a JWT response mode signs with the client's authorization response algorithm: that one is judged, the ID
+    /// token's is not.
+    /// </summary>
+    [Fact]
+    public void FindSigningAlgorithmViolations_NoResponseTypesButARedirectUri_JudgesTheAuthorizationResponse()
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            AllowedResponseTypes = [],
+            AllowedGrantTypes = [GrantTypes.ClientCredentials],
+            RedirectUris = [new Uri("https://client.example.com/cb")],
+        };
+
+        var violations = SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            client, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced));
+
+        Assert.Single(violations);
     }
 
     /// <summary>

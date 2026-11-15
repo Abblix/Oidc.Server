@@ -56,4 +56,27 @@ public class ProfileSigningKeysCheckTests
             [Tenant(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature), Client(SigningAlgorithms.PS256))],
             options).ToList());
     }
+
+    /// <summary>
+    /// The algorithms are judged only where the client can be issued what they sign, by the same answer the
+    /// consistency check gives: a client of the client credentials grant alone, registering neither a response type
+    /// nor a redirect URI, is never issued an ID token or an authorization response, so its RS256 defaults pass at a
+    /// tenant holding only a P-256 key; the same client of the CIBA grant is issued ID tokens and is refused.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.ClientCredentials, false)]
+    [InlineData(GrantTypes.Ciba, true)]
+    public void AClientNeverIssuedTheJwt_IsNotJudgedForItsAlgorithm(string grantType, bool refused)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedResponseTypes = [],
+            AllowedGrantTypes = [grantType],
+        };
+
+        var refusals = new ProfileSigningKeysCheck().Check([Tenant(Ec(), client)], new OidcOptions()).ToList();
+
+        Assert.Equal(refused, refusals.Count > 0);
+    }
 }

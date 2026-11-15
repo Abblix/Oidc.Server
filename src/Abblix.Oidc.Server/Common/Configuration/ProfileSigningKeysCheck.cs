@@ -45,8 +45,11 @@ public sealed class ProfileSigningKeysCheck(IKeyCustodian? custodian = null) : I
 
     private static (string Name, string? Algorithm)[] SignedForTheClient(ClientInfo client) =>
     [
-        (nameof(ClientInfo.IdentityTokenSignedResponseAlgorithm), client.IdentityTokenSignedResponseAlgorithm),
-        (nameof(ClientInfo.AuthorizationSignedResponseAlgorithm), client.AuthorizationSignedResponseAlgorithm),
+        // Only what can be issued to the client, by the answer the consistency check judges the profile's algorithms by
+        (nameof(ClientInfo.IdentityTokenSignedResponseAlgorithm), SecurityProfileConsistency.IdentityTokenSignature(
+            client.EffectiveResponseTypes, client.EffectiveGrantTypes, client.IdentityTokenSignedResponseAlgorithm)),
+        (nameof(ClientInfo.AuthorizationSignedResponseAlgorithm), SecurityProfileConsistency.AuthorizationResponseSignature(
+            client.EffectiveResponseTypes, client.RedirectUris, client.AuthorizationSignedResponseAlgorithm)),
         (nameof(ClientInfo.LogoutTokenSignedResponseAlgorithm), client.LogoutTokenSignedResponseAlgorithm),
         (nameof(ClientInfo.UserInfoSignedResponseAlgorithm),
             SecurityProfileConsistency.SignedOrNull(client.UserInfoSignedResponseAlgorithm)),

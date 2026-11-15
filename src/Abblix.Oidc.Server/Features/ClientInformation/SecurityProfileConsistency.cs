@@ -287,7 +287,7 @@ public static class SecurityProfileConsistency
                 (nameof(ClientInfo.IdentityTokenSignedResponseAlgorithm), IdentityTokenSignature(
                     client.EffectiveResponseTypes, client.EffectiveGrantTypes, client.IdentityTokenSignedResponseAlgorithm)),
                 (nameof(ClientInfo.AuthorizationSignedResponseAlgorithm), AuthorizationResponseSignature(
-                    client.EffectiveResponseTypes, client.AuthorizationSignedResponseAlgorithm)),
+                    client.EffectiveResponseTypes, client.RedirectUris, client.AuthorizationSignedResponseAlgorithm)),
                 (nameof(ClientInfo.LogoutTokenSignedResponseAlgorithm), client.LogoutTokenSignedResponseAlgorithm),
                 (nameof(ClientInfo.UserInfoSignedResponseAlgorithm), UserInfoSignature(
                     client.UserInfoSignedResponseAlgorithm, client.UserInfoEncryptedResponseAlgorithm)),
@@ -459,10 +459,11 @@ public static class SecurityProfileConsistency
     /// Connect Core 1.0 section 3.1.3.3, "id_token ID Token value associated with the authenticated session"), whose
     /// implicit and hybrid responses carry one, and where it joins the user's session, which a logout token signed with
     /// the ID token's algorithm ends. Without one, an ID token comes only from a grant the token endpoint answers with
-    /// one by itself (<see cref="TokenRequestProcessor.MayIssueDerivedTokens"/>): CIBA Core 1.0 section 11 answers "as specified in
-    /// Section 3.1.3.3 of [OpenID.Core]", and so do the device, password and JWT bearer grants here. The authorization
-    /// code grant redeems a code only the authorization endpoint hands out, and the refresh token grant a token only
-    /// another grant issues, so neither counts by itself.
+    /// one (<see cref="TokenRequestProcessor.MayIssueDerivedTokens"/>): CIBA Core 1.0 section 10.1.1 answers "as
+    /// specified in Section 3.1.3.3 of [OpenID.Core]", and so do the device, password, JWT bearer and refresh token
+    /// grants here - a refresh token issued while the client had a response type outlives a change to its
+    /// registration. The authorization code grant redeems a code only the authorization endpoint hands out, so it
+    /// does not count by itself.
     /// </summary>
     /// <param name="responseTypes">The response-type combinations the client is registered for.</param>
     /// <param name="grantTypes">The grant types the client is registered for.</param>
@@ -474,16 +475,22 @@ public static class SecurityProfileConsistency
         => responseTypes.Count > 0 || grantTypes.Any(IssuesIdentityTokensByItself) ? algorithm : null;
 
     /// <summary>
-    /// The signature algorithm the client's authorization responses are judged by, or null where it is sent none: only
-    /// a client registering a response type is answered at the authorization endpoint.
+    /// The signature algorithm the client's authorization responses are judged by, or null where it is sent none. A
+    /// response is sent to a redirect URI the client registered: a client registering a response type is answered with
+    /// one, and a client registering only a redirect URI can still be sent an error response, which a JWT response mode
+    /// signs with this algorithm.
     /// </summary>
     /// <param name="responseTypes">The response-type combinations the client is registered for.</param>
+    /// <param name="redirectUris">The redirect URIs the client registers.</param>
     /// <param name="algorithm">The algorithm the client's authorization responses are signed with.</param>
-    internal static string? AuthorizationResponseSignature(IReadOnlyCollection<string[]> responseTypes, string? algorithm)
-        => responseTypes.Count > 0 ? algorithm : null;
+    internal static string? AuthorizationResponseSignature(
+        IReadOnlyCollection<string[]> responseTypes,
+        IReadOnlyCollection<Uri> redirectUris,
+        string? algorithm)
+        => responseTypes.Count > 0 || redirectUris.Count > 0 ? algorithm : null;
 
     private static bool IssuesIdentityTokensByItself(string grantType)
-        => grantType is not (GrantTypes.AuthorizationCode or GrantTypes.RefreshToken) &&
+        => grantType != GrantTypes.AuthorizationCode &&
            TokenRequestProcessor.MayIssueDerivedTokens(grantType);
 
     /// <summary>

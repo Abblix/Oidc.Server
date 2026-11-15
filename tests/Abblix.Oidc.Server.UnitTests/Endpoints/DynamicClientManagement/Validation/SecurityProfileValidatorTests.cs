@@ -172,6 +172,27 @@ public class SecurityProfileValidatorTests
     }
 
     /// <summary>
+    /// A registration naming no response type but a redirect URI can still be sent an authorization error response,
+    /// which a JWT response mode signs with the authorization response algorithm, so RS256 named for it is refused.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi2_NoResponseTypesButARedirectUri_JudgesTheAuthorizationResponse()
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [],
+            GrantTypes = [GrantTypes.ClientCredentials],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AuthorizationSignedResponseAlg = SigningAlgorithms.RS256,
+        });
+
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
     /// OpenID Connect Core 1.0 section 5.3.2: a userinfo response registered for encryption is a JWT, so naming none for
     /// its signature under FAPI 1.0 Part 2 section 8.6 is refused; none without encryption is plain JSON and passes, as
     /// does encryption with no signature named, which is given one later.
