@@ -160,6 +160,10 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton(new Mock<IRequestInfoProvider>().Object);
         services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
         services.AddSingleton<ProfiledJwtValidator>();
+        services.AddSingleton(new Mock<IJsonWebTokenCreator>().Object);
+        services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ProfiledJwtIssuer>();
+        services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ClientEncryptionKeyResolver>();
+        services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
         services.AddSingleton(new Mock<IClientJwtValidator>().Object);
         services.AddSingleton(SingleIssuer.Accessor);
@@ -200,6 +204,10 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton(new Mock<IRequestInfoProvider>().Object);
         services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
         services.AddSingleton<ProfiledJwtValidator>();
+        services.AddSingleton(new Mock<IJsonWebTokenCreator>().Object);
+        services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ProfiledJwtIssuer>();
+        services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ClientEncryptionKeyResolver>();
+        services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
         services.AddSingleton(new Mock<IClientJwtValidator>().Object);
         var fapi2 = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 };
@@ -243,6 +251,10 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton(new Mock<IRequestInfoProvider>().Object);
         services.AddSingleton(new Mock<IJsonWebTokenValidator>().Object);
         services.AddSingleton<ProfiledJwtValidator>();
+        services.AddSingleton(new Mock<IJsonWebTokenCreator>().Object);
+        services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ProfiledJwtIssuer>();
+        services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ClientEncryptionKeyResolver>();
+        services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
         services.AddSingleton(new Mock<IClientJwtValidator>().Object);
         services.AddSingleton(SingleIssuer.Accessor);

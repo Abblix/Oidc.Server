@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using System.Linq;
 using Abblix.Jwt;
 using System;
@@ -68,10 +69,14 @@ public class SecurityProfileClientAuthenticatorTests
         options.ServiceTokens.RefreshToken.Signing.Algorithm = serviceTokenAlgorithm;
         var keys = new Mock<IClientKeysProvider>();
         keys.Setup(k => k.GetEncryptionKeys(It.IsAny<ClientInfo>())).Returns(encryptionKeys.ToAsyncEnumerable());
+        var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
+        creator
+            .Setup(c => c.EncryptedResponseAlgorithmsSupported)
+            .Returns([EncryptionAlgorithms.KeyManagement.Rsa1_5, EncryptionAlgorithms.KeyManagement.RsaOaep256]);
         var authenticator = new SecurityProfileClientAuthenticator(
             inner.Object,
             logger,
-            keys.Object,
+            new ClientEncryptionKeyResolver(new ProfiledJwtIssuer(creator.Object), keys.Object, TimeProvider.System),
             Options.Create(options));
 
         return (authenticator, inner);
@@ -104,13 +109,16 @@ public class SecurityProfileClientAuthenticatorTests
 
     /// <summary>
     /// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
-    /// algorithm". A client publishing only RSA1_5 encryption keys has nothing left to be encrypted to, and does not
-    /// authenticate; one also publishing an RSA-OAEP-256 key does.
+    /// algorithm". A client that registered RSA-OAEP-256 for its ID tokens and publishes only RSA1_5 encryption keys has
+    /// nothing to be encrypted to, and does not authenticate; one also publishing an RSA-OAEP-256 key does, and so does
+    /// one that registered no encryption algorithm, which is sent nothing encrypted.
     /// </summary>
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, true)]
-    public async Task AKeySetLeavingNothingToEncryptTo_DoesNotAuthenticate(bool withOaep, bool authenticated)
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, false, false)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, true, true)]
+    [InlineData(null, false, true)]
+    public async Task ARegisteredAlgorithmWithNoKeyToEncryptTo_DoesNotAuthenticate(
+        string? registered, bool withOaep, bool authenticated)
     {
         JsonWebKey[] keys = withOaep
             ?
@@ -127,6 +135,7 @@ public class SecurityProfileClientAuthenticatorTests
             IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
             TlsClientCertificateBoundAccessTokens = true,
+            IdentityTokenEncryptedResponseAlgorithm = registered,
         });
 
         var result = await authenticator.TryAuthenticateClientAsync(
@@ -651,5 +660,58 @@ public class SecurityProfileClientAuthenticatorTests
             TenantAt(ClientSecurityProfile.None), new ClientRequest { ClientId = named });
 
         Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>The client registering <paramref name="algorithm"/> for the JWT <paramref name="setting"/> names.</summary>
+    private static ClientInfo Registering(ClientInfo client, string setting, string algorithm) => setting switch
+    {
+        nameof(ClientInfo.IdentityTokenEncryptedResponseAlgorithm) => client with { IdentityTokenEncryptedResponseAlgorithm = algorithm },
+        nameof(ClientInfo.UserInfoEncryptedResponseAlgorithm) => client with { UserInfoEncryptedResponseAlgorithm = algorithm },
+        nameof(ClientInfo.IntrospectionEncryptedResponseAlgorithm) => client with { IntrospectionEncryptedResponseAlgorithm = algorithm },
+        nameof(ClientInfo.AuthorizationEncryptedResponseAlgorithm) => client with { AuthorizationEncryptedResponseAlgorithm = algorithm },
+        _ => throw new ArgumentOutOfRangeException(nameof(setting), setting, null),
+    };
+
+    /// <summary>
+    /// Each JWT a client registered an encryption algorithm for is judged: a client registering RSA-OAEP-256 for its ID
+    /// tokens, userinfo, introspection or authorization responses with only RSA1_5 keys does not authenticate under FAPI
+    /// 1.0 Part 2 section 8.6.1, and does once it publishes an RSA-OAEP-256 key.
+    /// </summary>
+    [Theory]
+    [InlineData(nameof(ClientInfo.IdentityTokenEncryptedResponseAlgorithm), false)]
+    [InlineData(nameof(ClientInfo.IdentityTokenEncryptedResponseAlgorithm), true)]
+    [InlineData(nameof(ClientInfo.UserInfoEncryptedResponseAlgorithm), false)]
+    [InlineData(nameof(ClientInfo.UserInfoEncryptedResponseAlgorithm), true)]
+    [InlineData(nameof(ClientInfo.IntrospectionEncryptedResponseAlgorithm), false)]
+    [InlineData(nameof(ClientInfo.IntrospectionEncryptedResponseAlgorithm), true)]
+    [InlineData(nameof(ClientInfo.AuthorizationEncryptedResponseAlgorithm), false)]
+    [InlineData(nameof(ClientInfo.AuthorizationEncryptedResponseAlgorithm), true)]
+    public async Task EachRegisteredEncryption_IsJudged(string setting, bool withKey)
+    {
+        JsonWebKey[] keys = withKey
+            ?
+            [
+                new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 },
+                new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 },
+            ]
+            : [new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 }];
+        var (authenticator, inner) = CreateAuthenticator(
+            NullLogger<SecurityProfileClientAuthenticator>.Instance, SigningAlgorithms.PS256, keys);
+        Authenticates(inner, Registering(
+            new ClientInfo(ClientId)
+            {
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+                IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+                AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+                UserInfoSignedResponseAlgorithm = SigningAlgorithms.PS256,
+                TlsClientCertificateBoundAccessTokens = true,
+            },
+            setting,
+            EncryptionAlgorithms.KeyManagement.RsaOaep256));
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest());
+
+        Assert.Equal(withKey, result.TryGetSuccess(out _));
     }
 }

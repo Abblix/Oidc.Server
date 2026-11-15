@@ -69,6 +69,10 @@ public static class CommonServiceCollectionExtensions
         // holding the algorithms to the security profile in force, registered with what they guard
         services.TryAddSingleton<ProfiledJwtIssuer>();
         services.TryAddSingleton<ProfiledJwtValidator>();
+
+        // The one answer to which key a client-addressed JWT is encrypted to, asked where it is encrypted and where the
+        // client is judged against its profile ahead of that
+        services.TryAddSingleton<ClientEncryptionKeyResolver>();
         return services
             .AddJsonWebTokens()
             .AddTelemetryDecorator<IJsonWebTokenSigner, MeasuredJsonWebTokenSigner>();

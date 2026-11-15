@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
@@ -70,8 +71,16 @@ public sealed class JwtAlgorithmsProvider(
 	/// <inheritdoc />
 	public IEnumerable<string> AuthorizationSigningAlgValuesSupported => ClientAddressedSigningAlgorithms;
 
+	/// <summary>
+	/// The key management algorithms a JWT this server sends a client can be encrypted under: those it performs, less
+	/// the symmetric ones OpenID Connect Core 1.0 section 10.2 derives no key for from the client secret (it covers "the
+	/// AES key wrapping or direct encryption algorithm used"), which registration refuses for every client.
+	/// </summary>
+	private IEnumerable<string> ClientAddressedEncryptionAlgorithms
+		=> jwtValidator.EncryptionAlgorithmsSupported.Where(ClientSecretEncryptionKey.CanBeServed);
+
 	/// <inheritdoc />
-	public IEnumerable<string> AuthorizationEncryptionAlgValuesSupported => jwtValidator.EncryptionAlgorithmsSupported;
+	public IEnumerable<string> AuthorizationEncryptionAlgValuesSupported => ClientAddressedEncryptionAlgorithms;
 
 	/// <inheritdoc />
 	public IEnumerable<string> AuthorizationEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;
@@ -80,7 +89,7 @@ public sealed class JwtAlgorithmsProvider(
 	public IEnumerable<string> IntrospectionSigningAlgValuesSupported => ClientAddressedSigningAlgorithms;
 
 	/// <inheritdoc />
-	public IEnumerable<string> IntrospectionEncryptionAlgValuesSupported => jwtValidator.EncryptionAlgorithmsSupported;
+	public IEnumerable<string> IntrospectionEncryptionAlgValuesSupported => ClientAddressedEncryptionAlgorithms;
 
 	/// <inheritdoc />
 	public IEnumerable<string> IntrospectionEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;

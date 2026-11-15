@@ -69,7 +69,8 @@ public class ClientJwtFormatterTests
 
         _formatter = new ClientJwtFormatter(
             new ProfiledJwtIssuer(_jwtCreator.Object),
-            _clientKeysProvider.Object,
+            new ClientEncryptionKeyResolver(
+                new ProfiledJwtIssuer(_jwtCreator.Object), _clientKeysProvider.Object, TimeProvider.System),
             _serviceKeysProvider.Object);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
@@ -143,6 +144,8 @@ public class ClientJwtFormatterTests
             .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(EncodedJwt);
+
+        _clientInfo.IdentityTokenEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep;
 
         // Act
         await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, LogoutTokenPolicy(_clientInfo));
@@ -256,6 +259,8 @@ public class ClientJwtFormatterTests
             .Setup(c => c.IssueAsync(token, _signingKeyRS256, _clientEncryptionKey, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(EncodedJwt);
 
+        _clientInfo.IdentityTokenEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep;
+
         // Act
         var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, LogoutTokenPolicy(_clientInfo));
 
@@ -355,7 +360,7 @@ public class ClientJwtFormatterTests
             Header = { Algorithm = SigningAlgorithms.PS256 },
             Payload = { Subject = "user123", Audiences = [ClientId] },
         };
-        var client = new ClientInfo(ClientId) { SecurityProfile = profile };
+        var client = new ClientInfo(ClientId) { SecurityProfile = profile, UserInfoEncryptedResponseAlgorithm = expectedAlgorithm };
         var pkcs1 = new RsaJsonWebKey { KeyId = "pkcs1", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 };
         var oaep = new RsaJsonWebKey { KeyId = "oaep", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
         var signing = new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.PS256 };
@@ -413,6 +418,8 @@ public class ClientJwtFormatterTests
                 (_, _, key, algorithm, _) => (usedKey, usedAlgorithm) = (key, algorithm))
             .ReturnsAsync(EncodedJwt);
 
+        _clientInfo.UserInfoEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+
         await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, UserInfoPolicy(_clientInfo));
 
         Assert.Same(oaep, usedKey);
@@ -452,10 +459,157 @@ public class ClientJwtFormatterTests
                 (_, _, key, algorithm, _) => (usedKey, usedAlgorithm) = (key, algorithm))
             .ReturnsAsync(EncodedJwt);
 
+        _clientInfo.UserInfoEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+
         await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, UserInfoPolicy(_clientInfo));
 
         Assert.Same(rsa, usedKey);
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, usedAlgorithm);
+    }
+
+    /// <summary>
+    /// OpenID Connect Dynamic Client Registration 1.0 section 2, id_token_encrypted_response_alg: "The default, if
+    /// omitted, is that no encryption is performed." A client that registered no algorithm gets a signed token,
+    /// whatever its key set holds, a key without use included.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(SigningAlgorithms.RS256)]
+    public async Task FormatAsync_NoRegisteredAlgorithm_SignsOnlyWhateverTheKeys(string? keyAlgorithm)
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.RS256 },
+            Payload = { Subject = "user123", Audiences = [ClientId] },
+        };
+        JsonWebKey? usedKey = new RsaJsonWebKey();
+        _serviceKeysProvider
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
+        _clientKeysProvider
+            .Setup(p => p.GetEncryptionKeys(_clientInfo))
+            .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "k", Algorithm = keyAlgorithm } }.ToAsyncEnumerable());
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, key, _, _) => usedKey = key)
+            .ReturnsAsync(EncodedJwt);
+
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, LogoutTokenPolicy(_clientInfo));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Null(usedKey);
+    }
+
+    /// <summary>
+    /// id_token_encrypted_response_alg is the "JWE alg algorithm REQUIRED for encrypting the ID Token issued to this
+    /// Client": the token is encrypted under it alone, to the first key declaring it or none whose material carries it
+    /// out.
+    /// </summary>
+    [Fact]
+    public async Task FormatAsync_EncryptsUnderTheRegisteredAlgorithm_ToTheFirstKeyThatCarriesIt()
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.RS256 },
+            Payload = { Subject = "user123", Audiences = [ClientId] },
+        };
+        var other = new RsaJsonWebKey { KeyId = "other", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep };
+        var ec = new EllipticCurveJsonWebKey { KeyId = "ec", Curve = EllipticCurveTypes.P256 };
+        var rsa = new RsaJsonWebKey { KeyId = "rsa" };
+        JsonWebKey? usedKey = null;
+        string? usedAlgorithm = null;
+        _serviceKeysProvider
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
+        _clientKeysProvider
+            .Setup(p => p.GetEncryptionKeys(_clientInfo))
+            .Returns(new JsonWebKey[] { other, ec, rsa }.ToAsyncEnumerable());
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>(
+                (_, _, key, algorithm, _) => (usedKey, usedAlgorithm) = (key, algorithm))
+            .ReturnsAsync(EncodedJwt);
+        _clientInfo.IdentityTokenEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+
+        await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, LogoutTokenPolicy(_clientInfo));
+
+        Assert.Same(rsa, usedKey);
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, usedAlgorithm);
+    }
+
+    /// <summary>
+    /// A JWT registered unsigned and encrypted takes the form its specification names: an ID token stays a Nested JWT,
+    /// "signed then encrypted" (OpenID Connect Core 1.0 section 2), an unsigned JWS inside the JWE; a UserInfo response,
+    /// which "MAY be encrypted without also being signed" (section 5.3.2), is its claims set encrypted.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FormatAsync_AnUnsignedEncryptedJwt_TakesTheFormItsSpecificationNames(bool userInfo)
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.None },
+            Payload = { Subject = "user123", Audiences = [ClientId] },
+        };
+        var rsa = new RsaJsonWebKey { KeyId = "rsa" };
+        var nested = false;
+        var claimsSet = false;
+        _serviceKeysProvider
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
+        _clientKeysProvider
+            .Setup(p => p.GetEncryptionKeys(_clientInfo))
+            .Returns(new JsonWebKey[] { rsa }.ToAsyncEnumerable());
+        _jwtCreator
+            .Setup(c => c.IssueAsync(token, null, rsa, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback(() => nested = true)
+            .ReturnsAsync(EncodedJwt);
+        _jwtCreator
+            .Setup(c => c.EncryptClaimsAsync(token, rsa, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback(() => claimsSet = true)
+            .ReturnsAsync(EncodedJwt);
+        _clientInfo.IdentityTokenEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+        _clientInfo.UserInfoEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+
+        await _formatter.FormatAsync(
+            SingleIssuer.Tenant,
+            token,
+            _clientInfo,
+            userInfo ? UserInfoPolicy(_clientInfo) : LogoutTokenPolicy(_clientInfo));
+
+        Assert.Equal(!userInfo, nested);
+        Assert.Equal(userInfo, claimsSet);
+    }
+
+    /// <summary>
+    /// A registered algorithm no published key can be used with, an empty key set included (a jwks_uri that could
+    /// not be read), is the refusal, never a token sent signed only.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task FormatAsync_ARegisteredAlgorithmNoKeyCanBeUsedWith_IsRefused(bool keyDeclaringAnother)
+    {
+        var token = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.RS256 },
+            Payload = { Subject = "user123", Audiences = [ClientId] },
+        };
+        _serviceKeysProvider
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
+        _clientKeysProvider
+            .Setup(p => p.GetEncryptionKeys(_clientInfo))
+            .Returns((keyDeclaringAnother
+                ? new JsonWebKey[] { new RsaJsonWebKey { KeyId = "other", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep } }
+                : []).ToAsyncEnumerable());
+        _clientInfo.IdentityTokenEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+
+        var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, _clientInfo, LogoutTokenPolicy(_clientInfo));
+
+        Assert.True(result.TryGetFailure(out var refusal));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
     }
 
     /// <summary>
@@ -471,7 +625,11 @@ public class ClientJwtFormatterTests
             Header = { Algorithm = SigningAlgorithms.PS256 },
             Payload = { Subject = "user123", Audiences = [ClientId] },
         };
-        var client = new ClientInfo(ClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
+        var client = new ClientInfo(ClientId)
+        {
+            SecurityProfile = ClientSecurityProfile.Fapi1Advanced,
+            UserInfoEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
+        };
         _serviceKeysProvider
             .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
             .Returns(new[] { new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }.ToAsyncEnumerable());

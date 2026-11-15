@@ -101,6 +101,33 @@ public class ProfileSigningKeysValidatorTests
     }
 
     /// <summary>
+    /// OpenID Connect Core 1.0 section 5.3.2: a userinfo response registered for encryption is a JWT, which the profile
+    /// refuses unsigned, so a registration naming userinfo encryption and no userinfo signature is given one; one
+    /// naming no encryption is left as plain JSON, and a named signature is kept.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, null, SigningAlgorithms.PS256)]
+    [InlineData(null, null, null)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, SigningAlgorithms.ES256, SigningAlgorithms.ES256)]
+    public async Task TheUserInfoAlgorithm_IsGivenWhereEncryptedAndUnsigned(
+        string? encryption, string? named, string? expected)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            IdTokenSignedResponseAlg = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlg = SigningAlgorithms.PS256,
+            IntrospectionSignedResponseAlg = SigningAlgorithms.PS256,
+            UserInfoEncryptedResponseAlg = encryption,
+            UserInfoSignedResponseAlg = named,
+        });
+
+        Assert.Null(await Validator(Rsa(), Ec()).ValidateAsync(Tenant(ClientSecurityProfile.Fapi1Advanced), context));
+
+        Assert.Equal(expected, context.Request.UserInfoSignedResponseAlg);
+    }
+
+    /// <summary>
     /// A tenant whose only key declares RS256 can produce neither, so the registration is refused with
     /// invalid_client_metadata instead of accepted and failing with a 500 when the first ID token is signed.
     /// </summary>

@@ -65,6 +65,50 @@ public partial class JarRichAuthorizationRequestsTests
     }
 
     /// <summary>
+    /// RFC 9101 section 10.5: a client registered with require_signed_request_object committed to signed request
+    /// objects, so a request object encrypted to the server without being signed - its claims set as the JWE plaintext
+    /// (RFC 7519 section 3) - is refused as invalid_request_object, while the same parameters signed then encrypted are
+    /// accepted.
+    /// </summary>
+    [Fact]
+    public async Task EncryptedUnsignedRequestObject_IsRefusedForAClientCommittedToSigning()
+    {
+        var serverKey = JsonWebKeyFactory.CreateRsa(
+            PublicKeyUsages.Encryption,
+            EncryptionAlgorithms.KeyManagement.RsaOaep256);
+        await using var host = CreateHostWithEncryptionKeys(serverKey);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var signing = await RegisterSigningClientAsync(client, discovery);
+        var publicKey = serverKey.Sanitize(includePrivateKeys: false);
+
+        var signed = await PushEncryptedAsync(
+            client, discovery, signing, publicKey, EncryptionAlgorithms.KeyManagement.RsaOaep256);
+        Assert.True(signed.StatusCode == HttpStatusCode.Created, await DescribeAsync(signed));
+
+        var signedObject = await SignRequestObjectAsync(discovery, signing, GeneratePkcePair().Challenge);
+        var claimsSet = System.Buffers.Text.Base64Url.DecodeFromChars(signedObject.Split('.')[1]);
+        var unsigned = await JwtServices.GetRequiredService<IJsonWebTokenEncryptor>().EncryptAsync(
+            claimsSet,
+            publicKey,
+            tokenType: null,
+            contentType: null,
+            EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+            TestContext.Current.CancellationToken);
+        var refused = await FormPostHelpers.PostFormAsync(client, discovery.PushedAuthorizationRequestEndpoint!, new Dictionary<string, string>
+        {
+            [AuthorizationRequest.Parameters.ClientId] = signing.ClientId,
+            [ClientRequest.Parameters.ClientSecret] = signing.ClientSecret,
+            [AuthorizationRequest.Parameters.Request] = unsigned,
+        });
+
+        Assert.True(refused.StatusCode == HttpStatusCode.BadRequest, await DescribeAsync(refused));
+        var error = JsonNode.Parse(await refused.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(ErrorCodes.InvalidRequestObject, error[ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
     /// A tenant whose RSA encryption key declares no algorithm lists the RSA key management algorithms its material
     /// performs that the host registers - RSA1_5 is opt-in and left out - and no algorithm of another key type.
     /// </summary>

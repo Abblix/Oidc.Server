@@ -76,6 +76,43 @@ public sealed class ProfiledJwtIssuer(IJsonWebTokenCreator creator)
     }
 
     /// <summary>
+    /// Issues <paramref name="token"/> encrypted to <paramref name="encryptionKey"/> without a signature, as its claims
+    /// set (<see cref="IJsonWebTokenCreator.EncryptClaimsAsync"/>), once <paramref name="profile"/> admits an unsigned
+    /// token and the key management algorithm.
+    /// </summary>
+    /// <param name="profile">The controls in force for what is issued.</param>
+    /// <param name="token">The token, its header naming no signature algorithm but none.</param>
+    /// <param name="encryptionKey">The key to encrypt to.</param>
+    /// <param name="keyEncryptionAlgorithm">The key management algorithm.</param>
+    /// <param name="contentEncryptionAlgorithm">The content encryption algorithm.</param>
+    /// <exception cref="AlgorithmRefusedByProfileException">The profile admits one of the algorithms not.</exception>
+    public Task<string> EncryptClaimsAsync(
+        SecurityProfileRequirements profile,
+        JsonWebToken token,
+        JsonWebKey encryptionKey,
+        string keyEncryptionAlgorithm,
+        string contentEncryptionAlgorithm)
+    {
+        if (!profile.PermitsSigningAlgorithm(SigningAlgorithms.None))
+        {
+            throw new AlgorithmRefusedByProfileException(
+                "The token would be issued unsigned, which the security profile in force does not admit",
+                SigningAlgorithms.None,
+                encryptionKey: null);
+        }
+
+        if (!profile.PermitsKeyManagementAlgorithm(keyEncryptionAlgorithm))
+        {
+            throw new AlgorithmRefusedByProfileException(
+                $"The token would be encrypted with {keyEncryptionAlgorithm}, which the security profile in force forbids",
+                keyEncryptionAlgorithm,
+                encryptionKey);
+        }
+
+        return creator.EncryptClaimsAsync(token, encryptionKey, keyEncryptionAlgorithm, contentEncryptionAlgorithm);
+    }
+
+    /// <summary>
     /// The key management algorithm a token would be encrypted to <paramref name="key"/> under, a key another party
     /// publishes, or null when it cannot be: the algorithm the key declares, else <paramref name="defaultAlgorithm"/>,
     /// provided this server performs it, the key's material can carry it out, and <paramref name="profile"/> admits

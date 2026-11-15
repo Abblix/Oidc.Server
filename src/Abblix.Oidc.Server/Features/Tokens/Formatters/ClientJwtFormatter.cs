@@ -23,11 +23,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// This class handles the signing of JWTs and, if configured, their encryption, based on the needs of each client.
 /// </summary>
 /// <param name="issuer">Issues the JWT once the client's profile admits its algorithms.</param>
-/// <param name="clientKeysProvider">Provider for client encryption keys.</param>
+/// <param name="encryptionKeyResolver">Chooses the key the JWT is encrypted to under the algorithm the client
+/// registered.</param>
 /// <param name="serviceKeysProvider">Provider for service signing keys.</param>
 public class ClientJwtFormatter(
     ProfiledJwtIssuer issuer,
-    IClientKeysProvider clientKeysProvider,
+    ClientEncryptionKeyResolver encryptionKeyResolver,
     IAuthServiceKeysProvider serviceKeysProvider) : IClientJwtFormatter
 {
     /// <summary>
@@ -38,8 +39,8 @@ public class ClientJwtFormatter(
     /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="token">The JSON Web Token (JWT) to be formatted for the client.</param>
     /// <param name="clientInfo">Information about the client to which the JWT is issued.</param>
-    /// <param name="encryption">The encryption policy: which registered client metadata governs encryption, the
-    /// content-encryption default, and whether encryption requires a registered key-management algorithm.</param>
+    /// <param name="encryption">The encryption policy: the key management and content encryption algorithms the
+    /// client registered for this JWT, and the content-encryption default.</param>
     /// <returns>A task that returns a JWT string formatted and ready for use by the client.</returns>
     public async Task<Result<string, OidcError>> FormatAsync(
         TenantDefinition tenant, JsonWebToken token, ClientInfo clientInfo, ClientJwtEncryption encryption)
@@ -48,35 +49,36 @@ public class ClientJwtFormatter(
         var signingCredentials = await serviceKeysProvider.GetSigningKeys(tenant, true)
             .FirstByAlgorithmAsync(token.Header.Algorithm);
 
-        // JARM section 2.2 / section 3 opt-in: when the policy requires a registered key-management algorithm and the client has
-        // not registered one, the response is signed only - the client's encryption keys are not even resolved.
-        if (encryption is { RequireRegisteredAlgorithm: true, KeyManagementAlgorithm: null })
+        // OpenID Connect Dynamic Client Registration 1.0 section 2, id_token_encrypted_response_alg: "JWE alg algorithm
+        // [JWA] REQUIRED for encrypting the ID Token issued to this Client" and "The default, if omitted, is that no encryption
+        // is performed"; JARM section 3 and the userinfo and introspection members say the same. Only a registered
+        // algorithm asks for encryption, and the token is encrypted under exactly that algorithm
+        if (encryption.KeyManagementAlgorithm is not { } keyEncryptionAlgorithm)
             return await issuer.IssueAsync(profile, token, signingCredentials);
 
-        // FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
-        // algorithm". The key and the algorithm are chosen together, so a key the profile forbids is passed over, as is
-        // one nothing can be encrypted to (a key declaring a signing algorithm, one the host did not register, or one
-        // whose material the default algorithm does not fit); the keys sit at a jwks_uri the client can change after
-        // registration, so this is decided here, where the key is chosen
-        var defaultAlgorithm = NotForbidden(encryption.KeyManagementAlgorithm, profile.ForbidRsa1_5KeyManagement)
-            ?? EncryptionAlgorithms.KeyManagement.RsaOaep256;
-        var clientKeys = await clientKeysProvider.GetEncryptionKeys(clientInfo).ToArrayAsync();
-        var (encryptingCredentials, keyEncryptionAlgorithm) = clientKeys
-            .Select(key => (Key: key, Algorithm: issuer.EncryptionAlgorithmFor(profile, key, defaultAlgorithm)))
-            .FirstOrDefault(candidate => candidate.Algorithm is not null);
+        // The key is chosen here, where the token is issued, because the keys sit at a jwks_uri the client can change
+        // after registration and a client secret can expire in between
+        var contentEncryptionAlgorithm = encryption.ContentEncryptionAlgorithmInUse;
+        var encryptingCredentials = await encryptionKeyResolver.ResolveAsync(
+            profile, clientInfo, keyEncryptionAlgorithm, contentEncryptionAlgorithm);
 
-        // A client that publishes encryption keys expects what is issued to it encrypted, so a token is not sent in
-        // the clear because no key it publishes is one the server can use under its profile
-        if (encryptingCredentials == null && clientKeys.Length > 0)
+        // A client that registered an algorithm expects what is issued to it encrypted, so a token is not sent in the
+        // clear because the client has no key (or none could be read) that algorithm can encrypt to
+        if (encryptingCredentials == null)
         {
+            // unauthorized_client rather than invalid_client: the client is who it says, and it is the JWT it asked
+            // for that cannot be issued (RFC 6749 section 5.2)
             return new OidcError(
-                ErrorCodes.InvalidClient,
-                $"The key set of the client {clientInfo.ClientId} holds no encryption key the server can use under " +
-                "its security profile");
+                ErrorCodes.UnauthorizedClient,
+                $"The client {clientInfo.ClientId} has no key its registered {keyEncryptionAlgorithm} can encrypt to " +
+                "under its security profile");
         }
 
-        var contentEncryptionAlgorithm = encryption.ContentEncryptionAlgorithm
-            ?? encryption.DefaultContentEncryptionAlgorithm;
+        if (signingCredentials is null && encryption.UnsignedIsClaimsSet)
+        {
+            return await issuer.EncryptClaimsAsync(
+                profile, token, encryptingCredentials, keyEncryptionAlgorithm, contentEncryptionAlgorithm);
+        }
 
         return await issuer.IssueAsync(
             profile,
@@ -86,11 +88,4 @@ public class ClientJwtFormatter(
             keyEncryptionAlgorithm,
             contentEncryptionAlgorithm);
     }
-
-    /// <summary>
-    /// The registered key management algorithm, or null where it is RSA1_5 and the profile forbids it - which the
-    /// client's configuration checks refuse before here, so it is reached only by a client stored with it.
-    /// </summary>
-    private static string? NotForbidden(string? algorithm, bool forbidRsa1_5)
-        => forbidRsa1_5 && algorithm == EncryptionAlgorithms.KeyManagement.Rsa1_5 ? null : algorithm;
 }

@@ -106,6 +106,34 @@ public class SecurityProfileValidatorTests
     }
 
     /// <summary>
+    /// OpenID Connect Core 1.0 section 5.3.2: a userinfo response registered for encryption is a JWT, so naming none for
+    /// its signature under FAPI 1.0 Part 2 section 8.6 is refused; none without encryption is plain JSON and passes, as
+    /// does encryption with no signature named, which is given one later.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, SigningAlgorithms.None, false)]
+    [InlineData(null, SigningAlgorithms.None, true)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, null, true)]
+    public async Task ValidateAsync_Fapi1Advanced_AnEncryptedUserInfoSignedWithNone_IsRefused(
+        string? encryption, string? signature, bool accepted)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+            ResponseTypes = [[ResponseTypes.Code]],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            TlsClientCertificateBoundAccessTokens = true,
+            UserInfoEncryptedResponseAlg = encryption,
+            UserInfoSignedResponseAlg = signature,
+        });
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi1Advanced), context);
+
+        Assert.Equal(accepted ? null : ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
     /// FAPI 1.0 Part 2 section 8.6: a registration under that profile naming RS256 for its ID tokens is refused with
     /// invalid_client_metadata, while one naming PS256 or naming none - which is given PS256 - passes.
     /// </summary>
