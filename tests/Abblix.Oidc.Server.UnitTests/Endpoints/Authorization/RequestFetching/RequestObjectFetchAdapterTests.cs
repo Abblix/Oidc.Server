@@ -12,6 +12,7 @@ using Abblix.Jwt;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.RequestFetching;
+using Abblix.Oidc.Server.Endpoints.PushedAuthorization;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.RequestObject;
 using Abblix.Oidc.Server.Model;
@@ -60,13 +61,11 @@ public class RequestObjectFetchAdapterTests
     }
 
     /// <summary>
-    /// RFC 9101 section 6.3: "The client ID values in the "client_id" request parameter and in the Request Object
-    /// "client_id" claim MUST be identical", and section 4 has the object contain every parameter but "request" and
-    /// "request_uri". The object is merged over the request without its client_id, so what comes back names only the
-    /// client the object itself names.
+    /// The object is merged over the request as received, so an unsecured object that leaves its client_id out keeps
+    /// the one beside it, as OpenID Connect Core 1.0 section 6.1 admits ("if present").
     /// </summary>
     [Fact]
-    public async Task FetchAsync_MergesTheObjectOverTheRequestWithoutItsClientId()
+    public async Task FetchAsync_MergesTheObjectOverTheRequestAsReceived()
     {
         SetupFetcher(CreateRequest());
 
@@ -74,9 +73,75 @@ public class RequestObjectFetchAdapterTests
 
         _requestObjectFetcher.Verify(
             f => f.FetchAsync(
-                TestTenant.Matched, _namedClient, It.Is<AuthorizationRequest>(r => r.ClientId == null), RequestJwt,
+                TestTenant.Matched, _namedClient, It.Is<AuthorizationRequest>(r => r.ClientId == ClientId), RequestJwt,
                 It.IsAny<Func<ClientInfo, string?>?>(), It.IsAny<string[]>(), It.IsAny<Func<JsonWebToken, string?>>()),
             Times.Once);
+    }
+
+    /// <summary>
+    /// RFC 9101 section 6.3: "The client ID values in the "client_id" request parameter and in the Request Object
+    /// "client_id" claim MUST be identical", which reaches a signed object only: section 5 admits "JWS signed" objects
+    /// alone, and OpenID Connect Core 1.0 section 6.1 has the client_id outside an unsecured one "match those in the
+    /// Request Object, if present".
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, false, true)]
+    [InlineData(SigningAlgorithms.RS256, true, false)]
+    [InlineData(SigningAlgorithms.None, false, false)]
+    [InlineData(SigningAlgorithms.None, true, false)]
+    public async Task FetchAsync_RefusesOnlyASignedObjectNamingNoClient(string algorithm, bool namesClient, bool refused)
+    {
+        var whyRefused = await RuleHandedToTheFetcherAsync(_adapter);
+
+        Assert.Equal(refused, whyRefused(RequestObject(algorithm, namesClient)) is not null);
+    }
+
+    /// <summary>
+    /// RFC 9126 section 3 step 3: a pushed request is rejected "if the authenticated "client_id" does not match the
+    /// "client_id" claim in the Request Object", an unsecured object included.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, false, true)]
+    [InlineData(SigningAlgorithms.RS256, true, false)]
+    [InlineData(SigningAlgorithms.None, false, true)]
+    [InlineData(SigningAlgorithms.None, true, false)]
+    public async Task FetchAsync_APushedObject_IsRefusedNamingNoClient(string algorithm, bool namesClient, bool refused)
+    {
+        var clients = new Mock<IClientInfoProvider>();
+        clients.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_namedClient);
+        var adapter = new PushedRequestObjectFetchAdapter(_requestObjectFetcher.Object, clients.Object);
+
+        var whyRefused = await RuleHandedToTheFetcherAsync(adapter);
+
+        Assert.Equal(refused, whyRefused(RequestObject(algorithm, namesClient)) is not null);
+    }
+
+    /// <summary>
+    /// The rule <paramref name="adapter"/> hands the fetcher to judge the validated request object by.
+    /// </summary>
+    private async Task<Func<JsonWebToken, string?>> RuleHandedToTheFetcherAsync(RequestObjectFetchAdapter adapter)
+    {
+        Func<JsonWebToken, string?>? captured = null;
+        _requestObjectFetcher
+            .Setup(f => f.FetchAsync(
+                TestTenant.Matched, It.IsAny<ClientInfo?>(), It.IsAny<AuthorizationRequest>(), RequestJwt,
+                It.IsAny<Func<ClientInfo, string?>?>(), It.IsAny<string[]>(), It.IsAny<Func<JsonWebToken, string?>>()))
+            .Callback((TenantDefinition _, ClientInfo? _, AuthorizationRequest _, string? _, Func<ClientInfo, string?>? _,
+                string[] _, Func<JsonWebToken, string?> whyRefused) => captured = whyRefused)
+            .ReturnsAsync(CreateRequest());
+
+        await adapter.FetchAsync(SingleIssuer.Tenant, CreateRequest());
+
+        return captured ?? throw new InvalidOperationException("The fetcher was handed no rule");
+    }
+
+    private static JsonWebToken RequestObject(string algorithm, bool namesClient)
+    {
+        var token = new JsonWebToken { Header = { Algorithm = algorithm } };
+        if (namesClient)
+            token.Payload.Json[AuthorizationRequest.Parameters.ClientId] = ClientId;
+
+        return token;
     }
 
     private static AuthorizationRequest CreateRequest(
