@@ -117,7 +117,7 @@ public class TokenEndpointAuthMethodValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("not supported", result.ErrorDescription);
         Assert.Contains(ClientAuthenticationMethods.PrivateKeyJwt, result.ErrorDescription);
     }
@@ -141,7 +141,7 @@ public class TokenEndpointAuthMethodValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -274,7 +274,7 @@ public class TokenEndpointAuthMethodValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("custom_auth_method", result.ErrorDescription);
     }
 

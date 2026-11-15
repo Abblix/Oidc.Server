@@ -48,11 +48,12 @@ public class UpdateClientRequestValidator(
 
         var clientInfo = validClientRequest.GetSuccess();
 
-        // RFC 7592 Section 2.2: client_id in request body must match authenticated client
+        // RFC 7592 Section 2.2: client_id in request body must match authenticated client. The section names no code of
+        // its own and sends an invalid field to the RFC 7591 section 3.2.2 errors, which name none for the request as such
         if (request.RegistrationRequest.ClientId != clientInfo.Client.ClientInfo.ClientId)
         {
             return new OidcError(
-                ErrorCodes.InvalidRequest,
+                ErrorCodes.InvalidClientMetadata,
                 "The client_id in the request body must match the authenticated client");
         }
 

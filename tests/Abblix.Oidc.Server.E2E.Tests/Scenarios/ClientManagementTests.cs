@@ -185,6 +185,98 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// A metadata value the server does not support is refused with the code RFC 7591 section 3.2.2 gives it: "The
+    /// value of one of the client metadata fields is invalid and the server has rejected this request".
+    /// </summary>
+    [Theory]
+    [InlineData(RequestMembers.IdTokenSignedResponseAlg, "XS256")]
+    [InlineData(RequestMembers.AuthorizationSignedResponseAlg, SigningAlgorithms.None)]
+    [InlineData(RequestMembers.RequestObjectSigningAlg, "XS256")]
+    [InlineData(RequestMembers.TokenEndpointAuthMethod, "no_such_method")]
+    [InlineData(RequestMembers.PostLogoutRedirectUris, "https://client.example.com/logout#fragment")]
+    public async Task An_unsupported_metadata_value_is_invalid_client_metadata(string member, string value)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata($"unsupported-{member}");
+        metadata[member] = member == RequestMembers.PostLogoutRedirectUris ? new JsonArray(value) : value;
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// An application type nobody defined, from a client that registers no redirect URI but a post-logout one, is
+    /// refused rather than answered as a fault of the server.
+    /// </summary>
+    [Fact]
+    public async Task An_unknown_application_type_with_only_a_post_logout_uri_is_refused()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("post-logout-only-unknown-type");
+        metadata.Remove(RequestMembers.RedirectUris);
+        metadata[RequestMembers.GrantTypes] = new JsonArray(GrantTypes.Ciba);
+        metadata[RequestMembers.ResponseTypes] = new JsonArray();
+        metadata[RequestMembers.ApplicationType] = "service";
+        metadata[RequestMembers.PostLogoutRedirectUris] = new JsonArray("https://client.example.com/logout");
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A software statement this server cannot accept is refused with the code RFC 7591 section 3.2.2 reserves for it.
+    /// </summary>
+    [Fact]
+    public async Task An_unusable_software_statement_is_invalid_software_statement()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("unusable-software-statement");
+        metadata[RequestMembers.SoftwareStatement] = "not.a.statement";
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(
+            ErrorCodes.InvalidSoftwareStatement,
+            (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// An update is answered with the same codes: a value the server does not support, and a client_id other than
+    /// the one issued, which RFC 7592 section 2.2 requires to be "the same as its currently issued client identifier"
+    /// and answers, as every invalid field, with the RFC 7591 errors.
+    /// </summary>
+    [Theory]
+    [InlineData(RequestMembers.TokenEndpointAuthMethod, "no_such_method")]
+    [InlineData(RequestMembers.ClientId, "another-client")]
+    public async Task An_invalid_value_in_an_update_is_invalid_client_metadata(string member, string value)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var registration = await RegisterAsync(client, discovery, $"invalid-on-update-{member}");
+        var updated = NewClientMetadata($"invalid-on-update-{member}");
+        updated[RequestMembers.ClientId] = registration.ClientId;
+        updated[member] = value;
+
+        var update = Request(HttpMethod.Put, registration.ConfigurationUri, registration.AccessToken);
+        update.Content = JsonContent.Create(updated);
+        var response = await client.SendAsync(update, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
     private static HttpRequestMessage Request(HttpMethod method, Uri uri, string? accessToken)
     {
         var request = new HttpRequestMessage(method, uri);

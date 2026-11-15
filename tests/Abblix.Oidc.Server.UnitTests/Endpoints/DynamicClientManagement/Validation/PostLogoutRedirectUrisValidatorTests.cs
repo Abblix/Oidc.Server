@@ -8,6 +8,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
@@ -93,7 +94,7 @@ public class PostLogoutRedirectUrisValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("fragment", result.ErrorDescription);
         Assert.Contains("post_logout_redirect_uris", result.ErrorDescription);
     }
@@ -115,7 +116,7 @@ public class PostLogoutRedirectUrisValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("secure", result.ErrorDescription);
         Assert.Contains("https", result.ErrorDescription);
     }
@@ -137,7 +138,7 @@ public class PostLogoutRedirectUrisValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("localhost", result.ErrorDescription);
     }
 
@@ -158,7 +159,7 @@ public class PostLogoutRedirectUrisValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -222,7 +223,7 @@ public class PostLogoutRedirectUrisValidatorTests
         Assert.Equal(accepted, result == null);
         if (!accepted)
         {
-            Assert.Equal(ErrorCodes.InvalidRedirectUri, result!.Error);
+            Assert.Equal(ErrorCodes.InvalidClientMetadata, result!.Error);
             Assert.Contains("localhost", result.ErrorDescription);
             Assert.Contains("127.0.0.1", result.ErrorDescription);
             Assert.Contains("[::1]", result.ErrorDescription);
@@ -267,7 +268,7 @@ public class PostLogoutRedirectUrisValidatorTests
 
         Assert.Equal(accepted, result == null);
         if (!accepted)
-            Assert.Equal(ErrorCodes.InvalidRedirectUri, result!.Error);
+            Assert.Equal(ErrorCodes.InvalidClientMetadata, result!.Error);
     }
 
     /// <summary>
@@ -287,7 +288,7 @@ public class PostLogoutRedirectUrisValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("localhost", result.ErrorDescription);
     }
 
@@ -308,8 +309,26 @@ public class PostLogoutRedirectUrisValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("custom URI schemes", result.ErrorDescription);
+    }
+
+    /// <summary>
+    /// An application type the server does not know comes from the request body, so it is refused rather than
+    /// thrown on, also for a client that registers no redirect URI and so never meets that validator's refusal.
+    /// </summary>
+    [Theory]
+    [InlineData("service")]
+    [InlineData(null)]
+    public async Task ValidateAsync_UnknownApplicationType_IsInvalidClientMetadata(string? applicationType)
+    {
+        var context = CreateContext(
+            postLogoutRedirectUris: [new Uri("https://example.com/logout")],
+            applicationType: applicationType!);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, Assert.IsType<OidcError>(result).Error);
     }
 
     /// <summary>
