@@ -24,9 +24,13 @@ internal sealed class AddIfAbsentOnlyStorage : IEntityStorage
 {
     private readonly ConcurrentDictionary<string, object?> _entries = new();
     private readonly ConcurrentQueue<string> _claimed = new();
+    private readonly ConcurrentQueue<StorageOptions> _lifetimes = new();
 
     /// <summary>The key of every add-if-absent call, in the order they came.</summary>
     public IReadOnlyCollection<string> Claimed => _claimed.ToArray();
+
+    /// <summary>The expiration policy of every add-if-absent call, in the order they came.</summary>
+    public IReadOnlyCollection<StorageOptions> Lifetimes => _lifetimes.ToArray();
 
     /// <summary>The keys held now.</summary>
     public IReadOnlyCollection<string> Held => [.. _entries.Keys];
@@ -35,6 +39,7 @@ internal sealed class AddIfAbsentOnlyStorage : IEntityStorage
         string key, T value, StorageOptions options, CancellationToken? token = null)
     {
         _claimed.Enqueue(key);
+        _lifetimes.Enqueue(options);
         return Task.FromResult(_entries.TryAdd(key, value));
     }
 

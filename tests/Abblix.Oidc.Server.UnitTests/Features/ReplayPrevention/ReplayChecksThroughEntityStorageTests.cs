@@ -92,6 +92,30 @@ public class ReplayChecksThroughEntityStorageTests
         Assert.True(await replayCache.TryReserveAsync("one-token", expiresAt, ct));
     }
 
+    /// <summary>
+    /// A reservation is kept until the moment its caller named, widened by the server's default clock skew of five
+    /// minutes, and no longer; one whose widened moment has already passed is still kept for the floor of ten
+    /// seconds, so the store is never handed a lifetime it would refuse.
+    /// </summary>
+    [Theory]
+    [InlineData(480, 780)]
+    [InlineData(-400, 10)]
+    public async Task AReservation_IsKeptUntilTheMomentTheCallerNamed(int secondsLeft, int secondsKept)
+    {
+        var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var services = Services();
+        services.AddSingleton<TimeProvider>(new Microsoft.Extensions.Time.Testing.FakeTimeProvider(now));
+        await using var provider = services.BuildServiceProvider();
+
+        Assert.True(await provider.GetRequiredService<IReplayCache>().TryReserveAsync(
+            "one-token", now.AddSeconds(secondsLeft), TestContext.Current.CancellationToken));
+
+        var lifetime = Assert.Single(_storage.Lifetimes);
+        Assert.Equal(TimeSpan.FromSeconds(secondsKept), lifetime.AbsoluteExpirationRelativeToNow);
+        Assert.Null(lifetime.AbsoluteExpiration);
+        Assert.Null(lifetime.SlidingExpiration);
+    }
+
     [Fact]
     public async Task ADPoPProofPresentedTwice_IsRefusedByTheStorage()
     {

@@ -23,8 +23,9 @@ public static class ReplayCacheServiceCollectionExtensions
     /// accept, for the length of the retention window, every token the instances still running had refused.
     /// </summary>
     /// <remarks>
-    /// The OpenID Connect server writes its own store's entries under it too, so an instance of the previous release
-    /// and one of this release, sharing one cache during a rolling upgrade, read each other's reservations.
+    /// The OpenID Connect server writes its own store's entries under it too, so where the server's entity storage is
+    /// the shipped one over the same cache, an instance reserving through this store and one reserving through the
+    /// server's read each other's reservations.
     /// </remarks>
     internal const string CacheKeyPrefix = "Abblix.Oidc.Server.Features.ReplayPrevention:";
 

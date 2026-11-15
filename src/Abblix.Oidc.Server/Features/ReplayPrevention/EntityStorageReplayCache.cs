@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 
 /// <summary>
 /// The server's replay cache, kept in the entity storage the server's other stores use, so a reservation is decided by
-/// the same store command as a single-use code is.
+/// the storage's add-if-absent, as the end of a pushed authorization flow is.
 /// </summary>
 /// <remarks>
 /// A host whose storage makes <see cref="IEntityStorage.TrySetIfAbsentAsync{T}"/> one command of a store every node
@@ -22,8 +22,8 @@ namespace Abblix.Oidc.Server.Features.ReplayPrevention;
 /// </remarks>
 /// <param name="storage">The storage the server's stores use.</param>
 /// <param name="clock">The clock the retention window is measured against.</param>
-/// <param name="keyPrefix">The prefix of every reservation's key, the one an instance of the previous release
-/// writes under, so the two read each other's reservations from one cache.</param>
+/// <param name="keyPrefix">The prefix of every reservation's key, the one <see cref="DistributedReplayCache"/>
+/// writes under, so over the shipped storage the two read each other's reservations from one cache.</param>
 internal sealed class EntityStorageReplayCache(IEntityStorage storage, TimeProvider clock, string keyPrefix)
     : ReplayCacheBase(clock, keyPrefix)
 {

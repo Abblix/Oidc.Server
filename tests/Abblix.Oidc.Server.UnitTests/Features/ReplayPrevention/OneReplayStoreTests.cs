@@ -161,31 +161,31 @@ public class OneReplayStoreTests
     }
 
     /// <summary>
-    /// An instance of the previous release, whose store wrote straight into the host's cache, and one of this
-    /// release, sharing that cache during a rolling upgrade, each refuse what the other reserved, and an identifier
-    /// one of them gives back is fresh to the other.
+    /// An instance reserving through the store over the host's cache and one reserving through the server's store
+    /// over the shipped entity storage on that cache each refuse what the other reserved, and an identifier one of
+    /// them gives back is fresh to the other.
     /// </summary>
     [Fact]
-    public async Task ThePreviousReleasesStore_AndThisOne_ReadEachOthersReservations()
+    public async Task TheDistributedStore_AndTheServersStore_ReadEachOthersReservations()
     {
         var cache = new RecordingCache();
         var services = Host(cache);
         services.AddReplayPrevention();
         using var provider = services.BuildServiceProvider();
 
-        var current = provider.GetRequiredService<IReplayCache>();
-        var previous = new DistributedReplayCache(cache, new FakeTimeProvider(Now), Prefix);
+        var server = provider.GetRequiredService<IReplayCache>();
+        var distributed = new DistributedReplayCache(cache, new FakeTimeProvider(Now), Prefix);
         var expiresAt = Now.AddMinutes(5);
         var ct = TestContext.Current.CancellationToken;
 
-        Assert.True(await previous.TryReserveAsync("reserved-by-the-previous", expiresAt, ct));
-        Assert.False(await current.TryReserveAsync("reserved-by-the-previous", expiresAt, ct));
+        Assert.True(await distributed.TryReserveAsync("reserved-by-the-distributed", expiresAt, ct));
+        Assert.False(await server.TryReserveAsync("reserved-by-the-distributed", expiresAt, ct));
 
-        Assert.True(await current.TryReserveAsync("reserved-by-this", expiresAt, ct));
-        Assert.False(await previous.TryReserveAsync("reserved-by-this", expiresAt, ct));
+        Assert.True(await server.TryReserveAsync("reserved-by-the-server", expiresAt, ct));
+        Assert.False(await distributed.TryReserveAsync("reserved-by-the-server", expiresAt, ct));
 
-        await current.ReleaseAsync("reserved-by-the-previous", ct);
-        Assert.True(await previous.TryReserveAsync("reserved-by-the-previous", expiresAt, ct));
+        await server.ReleaseAsync("reserved-by-the-distributed", ct);
+        Assert.True(await distributed.TryReserveAsync("reserved-by-the-distributed", expiresAt, ct));
     }
 
     /// <summary>
