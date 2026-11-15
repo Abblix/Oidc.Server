@@ -21,9 +21,9 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// which applies the same rule to <c>response_types</c>.
 /// </summary>
 /// <param name="grantTypeInformers">All registered <see cref="IGrantTypeInformer"/>
-/// contributors. Their union is the same <c>grant_types_supported</c> set the discovery
-/// endpoint advertises, so registration gating, run-time gating, and discovery share one
-/// source of truth. Notable contributors: the authorization endpoint yields
+/// contributors. Their union is the <c>grant_types_supported</c> set the discovery endpoint
+/// narrows by each tenant's security profile before advertising it, so registration gating,
+/// run-time gating, and discovery share one source of truth. Notable contributors: the authorization endpoint yields
 /// <c>implicit</c> only when the host has called <c>EnableImplicitFlow()</c>; the composite
 /// token-endpoint grant handler yields every registered token-endpoint grant such as
 /// <c>authorization_code</c>, <c>refresh_token</c>, <c>client_credentials</c>,
