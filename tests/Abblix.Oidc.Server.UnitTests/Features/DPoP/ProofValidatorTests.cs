@@ -383,6 +383,18 @@ public class ProofValidatorTests
         Assert.Equal(common + "1", proof.JwtId);
     }
 
+    [Fact]
+    public async Task ValidateAsync_JtisDifferingOnlyInANonAsciiCharacter_AreBothFresh()
+    {
+        // The digest is taken over the jti's UTF-8 bytes: an encoding that folds characters it cannot
+        // represent would make the second, fresh proof read as a replay of the first.
+        var first = new DPoPProofBuilder(_time.GetUtcNow()) { Jti = "jti-with-accent-\u00e9-0123456789" }.Build();
+        var second = new DPoPProofBuilder(_time.GetUtcNow()) { Jti = "jti-with-accent-\u00e8-0123456789" }.Build();
+
+        Assert.True((await _sut.ValidateAsync(Unprofiled, first, cancellationToken: Ct)).TryGetSuccess(out _));
+        Assert.True((await _sut.ValidateAsync(Unprofiled, second, cancellationToken: Ct)).TryGetSuccess(out _));
+    }
+
     [Theory]
     [InlineData("not.a.jwt.with.too.many.parts")]
     [InlineData("only.two")]
