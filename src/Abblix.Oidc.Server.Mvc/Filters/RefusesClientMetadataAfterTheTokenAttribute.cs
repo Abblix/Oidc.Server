@@ -28,7 +28,8 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 /// </summary>
 /// <remarks>
 /// Takes the place of <see cref="ConsumesAttribute"/>, whose 415 routing answers before any filter runs, and declares
-/// the same media type to the API description.
+/// the same media type to the API description. A body of another media type, or over the bound, is refused and left
+/// unread by <see cref="LimitsRegistrationRequestSizeAttribute"/> ahead of binding, and answered here.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method)]
 internal abstract class RefusesClientMetadataAfterTheTokenAttribute
@@ -37,8 +38,6 @@ internal abstract class RefusesClientMetadataAfterTheTokenAttribute
 	// Ahead of the framework's filter answering an unsupported content type (order -3000), so the token comes first
 	// for that refusal too
 	private const int OrderBeforeUnsupportedContentType = -3001;
-
-	private static readonly MediaType Json = new(MediaTypeNames.Application.Json);
 
 	/// <inheritdoc />
 	public int Order => OrderBeforeUnsupportedContentType;
@@ -49,13 +48,6 @@ internal abstract class RefusesClientMetadataAfterTheTokenAttribute
 		contentTypes.Clear();
 		contentTypes.Add(MediaTypeNames.Application.Json);
 	}
-
-	/// <summary>
-	/// Whether the request declares the one media type the client metadata is read in, as <see cref="ConsumesAttribute"/>
-	/// decides it.
-	/// </summary>
-	public static bool DeclaresJson(HttpRequest request)
-		=> request.ContentType is { } contentType && new MediaType(contentType).IsSubsetOf(Json);
 
 	/// <inheritdoc />
 	public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
@@ -77,12 +69,9 @@ internal abstract class RefusesClientMetadataAfterTheTokenAttribute
 
 	private static ActionResult? BodyRefusal(ActionExecutingContext context)
 	{
-		// A refusal decided before the body was bound, such as a body over the bound
+		// A refusal decided before the body was bound: another media type, or a body over the bound
 		if (context.HttpContext.Features.Get<ClientMetadataRefusal>() is { Result: var recorded })
 			return recorded;
-
-		if (!DeclaresJson(context.HttpContext.Request))
-			return new UnsupportedMediaTypeResult();
 
 		var body = context.ActionDescriptor.Parameters
 			.Single(parameter => parameter.BindingInfo?.BindingSource == BindingSource.Body);

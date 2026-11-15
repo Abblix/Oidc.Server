@@ -39,6 +39,9 @@ public class ClientMetadataBodyAfterTheTokenTests(TestFactory factory) : TestBas
 {
     private const string RealmAttribute = "realm";
 
+    // A media type the framework's JSON reader takes beside application/json
+    private const string TextJson = "text/json";
+
     private const string NotJson = nameof(NotJson);
     private const string RedirectUrisNotAnArray = nameof(RedirectUrisNotAnArray);
     private const string TextPlain = nameof(TextPlain);
@@ -46,6 +49,7 @@ public class ClientMetadataBodyAfterTheTokenTests(TestFactory factory) : TestBas
     private const string NotAMediaType = nameof(NotAMediaType);
     private const string UndecodableCharset = nameof(UndecodableCharset);
     private const string DeclaredOverTheBound = nameof(DeclaredOverTheBound);
+    private const string ChunkedOverTheBound = nameof(ChunkedOverTheBound);
 
     private const string NoToken = nameof(NoToken);
     private const string ValidToken = nameof(ValidToken);
@@ -59,7 +63,7 @@ public class ClientMetadataBodyAfterTheTokenTests(TestFactory factory) : TestBas
             NotJson, RedirectUrisNotAnArray, TextPlain, NoMediaType, NotAMediaType, UndecodableCharset,
 #if !MINIMAL_API_TRANSPORT
             // The Minimal API host leaves the bound to the server, which the in-memory test server does not enforce
-            DeclaredOverTheBound,
+            DeclaredOverTheBound, ChunkedOverTheBound,
 #endif
         ];
         foreach (var body in bodies)
@@ -144,11 +148,47 @@ public class ClientMetadataBodyAfterTheTokenTests(TestFactory factory) : TestBas
         }
     }
 
+    /// <summary>
+    /// A body of a media type the metadata is not read in is refused without being read, even where a JSON reader
+    /// of the framework takes that media type too: read ahead of the token, a body up to the server's own limit
+    /// would be parsed for a caller with no token at all.
+    /// </summary>
+    [Fact]
+    public async Task A_body_of_another_media_type_is_never_read()
+    {
+        await using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
+                    new PostConfigureOptions<OidcOptions>(
+                        Options.DefaultName,
+                        options => options.RequireInitialAccessToken = true))));
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var limit = host.Services.GetRequiredService<IOptions<OidcOptions>>().Value.MaxRegistrationRequestSize;
+        Assert.NotNull(limit);
+
+        // Several times the bound, without a declared length, in a media type the framework's JSON reader also takes
+        var body = new MeteredJsonStream(RequestMembers.ClientName, limit.Value * 4);
+        using var content = new StreamContent(body);
+        content.Headers.ContentType = new MediaTypeHeaderValue(TextJson);
+        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.RegistrationEndpoint) { Content = content };
+
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.True(body.Produced <= limit.Value, $"{body.Produced} bytes of the body were read");
+    }
+
     private static HttpStatusCode BodyRefusal(string body) => body switch
     {
         NotJson or RedirectUrisNotAnArray => HttpStatusCode.BadRequest,
         TextPlain or NoMediaType or NotAMediaType or UndecodableCharset => HttpStatusCode.UnsupportedMediaType,
-        DeclaredOverTheBound => HttpStatusCode.RequestEntityTooLarge,
+        DeclaredOverTheBound or ChunkedOverTheBound => HttpStatusCode.RequestEntityTooLarge,
         _ => throw new ArgumentOutOfRangeException(nameof(body), body, null),
     };
 
@@ -187,6 +227,14 @@ public class ClientMetadataBodyAfterTheTokenTests(TestFactory factory) : TestBas
                     $$"""{"{{RequestMembers.ClientName}}": "{{new string('a', (int)limit.Value)}}"}""",
                     Encoding.UTF8,
                     MediaTypeNames.Application.Json);
+
+            case ChunkedOverTheBound:
+                // No declared length, so the bound is known to be passed only by reading one byte past it
+                var bound = services.GetRequiredService<IOptions<OidcOptions>>().Value.MaxRegistrationRequestSize;
+                Assert.NotNull(bound);
+                var chunked = new StreamContent(new MeteredJsonStream(RequestMembers.ClientName, bound.Value + 1));
+                chunked.Headers.ContentType = new MediaTypeHeaderValue(MediaTypeNames.Application.Json);
+                return chunked;
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(body), body, null);

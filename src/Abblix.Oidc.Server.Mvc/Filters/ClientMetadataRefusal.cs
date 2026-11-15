@@ -12,8 +12,8 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 
 /// <summary>
 /// The request feature carrying the refusal of a client registration or update body decided before the body is bound,
-/// such as a body over the bound: <see cref="RefusesClientMetadataAfterTheTokenAttribute"/> answers it once the token
-/// is judged.
+/// a body of another media type or one over the bound: <see cref="RefusesClientMetadataAfterTheTokenAttribute"/>
+/// answers it once the token is judged.
 /// </summary>
 /// <param name="Result">The refusal.</param>
 internal sealed record ClientMetadataRefusal(ActionResult Result);
