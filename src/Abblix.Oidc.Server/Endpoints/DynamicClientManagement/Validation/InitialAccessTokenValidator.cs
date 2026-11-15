@@ -56,9 +56,11 @@ public class InitialAccessTokenValidator(
         if (!header.HasScheme(TokenTypes.Bearer))
             return new MissingAuthenticationError($"The scheme name '{header.Scheme}' is not supported");
 
+        // RFC 6750 section 2.1: the credentials are "Bearer" 1*SP b64token, so the scheme alone is a malformed request,
+        // which section 3.1 names invalid_request, rather than a token found invalid
         if (header.Parameter == null)
         {
-            return new OidcError(ErrorCodes.InvalidToken,
+            return new BearerRequestError(
                 $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
         }
 

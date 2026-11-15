@@ -104,6 +104,22 @@ public class RegistrationAccessTokenValidatorTests
     }
 
     /// <summary>
+    /// RFC 6750 section 2.1: the scheme alone is not the credentials it defines, a malformed request section 3.1 names
+    /// invalid_request.
+    /// </summary>
+    [Fact]
+    public async Task TheBearerSchemeWithoutAToken_IsAnInvalidRequest()
+    {
+        var validator = new RegistrationAccessTokenValidator(new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict).Object);
+
+        var result = await validator.ValidateAsync(
+            SingleIssuer.Tenant, new AuthenticationHeaderValue(TokenTypes.Bearer), ClientId);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsType<BearerRequestError>(error);
+    }
+
+    /// <summary>
     /// A token without a jti binds to no registration, so it manages none.
     /// </summary>
     [Fact]

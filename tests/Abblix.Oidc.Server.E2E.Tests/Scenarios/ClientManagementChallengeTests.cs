@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.MinimalApi.UnitTests;
+using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,6 +54,7 @@ public class ClientManagementChallengeTests(TestFactory factory) : TestBase(fact
     private const string BasicCredentials = nameof(BasicCredentials);
     private const string BasicSchemeAlone = nameof(BasicSchemeAlone);
     private const string TokenInTheQuery = nameof(TokenInTheQuery);
+    private const string BearerSchemeAlone = nameof(BearerSchemeAlone);
 
     /// <summary>
     /// RFC 6750 section 3.1: "If the request lacks any authentication information (e.g., the client was unaware that
@@ -92,6 +94,45 @@ public class ClientManagementChallengeTests(TestFactory factory) : TestBase(fact
         Assert.Equal(
             [new KeyValuePair<string, string>(RealmAttribute, discovery.Issuer.OriginalString)],
             challenge.Parameters);
+    }
+
+    public static TheoryData<string> Methods() => ["GET", "PUT", "DELETE", "POST"];
+
+    /// <summary>
+    /// RFC 6750 section 2.1: the credentials are "Bearer" 1*SP b64token, so the scheme alone is a malformed request,
+    /// which section 3.1 names invalid_request ("missing a required parameter ... or is otherwise malformed", "SHOULD
+    /// respond with the HTTP 400"), carried on the challenge section 3 requires.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Methods))]
+    public async Task The_bearer_scheme_without_a_token_is_an_invalid_request(string method)
+    {
+        var registration = method == HttpMethod.Post.Method;
+        await using var host = registration
+            ? Factory.WithWebHostBuilder(builder =>
+                builder.ConfigureTestServices(services =>
+                    services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
+                        new PostConfigureOptions<OidcOptions>(
+                            Options.DefaultName,
+                            options => options.RequireInitialAccessToken = true))))
+            : null;
+        var client = host?.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        }) ?? CreateClient();
+
+        var (_, request) = await PrepareAsync(client, method, BearerSchemeAlone);
+
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
+        Assert.Equal(ErrorCodes.InvalidRequest, JsonNode.Parse(raw)![ErrorResponse.Parameters.Error]!.GetValue<string>());
+
+        var challenge = ChallengeReader.Parse(Assert.Single(response.Headers.WwwAuthenticate).ToString());
+        Assert.Equal(TokenTypes.Bearer, challenge.Scheme);
+        Assert.Equal(ErrorCodes.InvalidRequest, challenge.Parameters[ErrorResponse.Parameters.Error]);
     }
 
     private static async Task<(DiscoveryDocument Discovery, HttpRequestMessage Request)> PrepareAsync(
@@ -143,6 +184,10 @@ public class ClientManagementChallengeTests(TestFactory factory) : TestBase(fact
 
             case BasicSchemeAlone:
                 Assert.True(request.Headers.TryAddWithoutValidation(HttpRequestHeaders.Authorization, TokenTypes.Basic));
+                break;
+
+            case BearerSchemeAlone:
+                Assert.True(request.Headers.TryAddWithoutValidation(HttpRequestHeaders.Authorization, TokenTypes.Bearer));
                 break;
 
             default:

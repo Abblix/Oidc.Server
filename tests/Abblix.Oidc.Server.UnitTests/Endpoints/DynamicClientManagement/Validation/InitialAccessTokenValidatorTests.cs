@@ -144,6 +144,20 @@ public class InitialAccessTokenValidatorTests
         Assert.Contains(TokenTypes.Basic, missing.ErrorDescription);
     }
 
+    /// <summary>
+    /// RFC 6750 section 2.1: the scheme alone is not the credentials it defines, a malformed request section 3.1 names
+    /// invalid_request.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithBearerSchemeAlone_ShouldReturnInvalidRequest()
+    {
+        var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.IsType<BearerRequestError>(result);
+    }
+
     [Fact]
     public async Task ValidateAsync_WithInvalidJwt_ShouldReturnInvalidToken()
     {
