@@ -135,7 +135,9 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     /// Copies every member of <see cref="ClientInfo"/> the registration metadata has no member for and nothing else
     /// on this builder sets. <see cref="ClientInfo.ClientAssertionAudiences"/> and
     /// <see cref="ClientInfo.AllowOfflineAccessWithUserAgentAccessToken"/> are not among them: the host grants those
-    /// through <see cref="Common.Configuration.NewClientOptions"/>, set on this builder.
+    /// through <see cref="Common.Configuration.NewClientOptions"/>, set on this builder. The logout token lifetime
+    /// within <see cref="ClientInfo.BackChannelLogout"/> is carried where those options are built, since a client
+    /// omitting its back-channel logout URI drops them whole.
     /// </summary>
     private void ApplyHostSettings(ClientInfo clientInfo)
     {
@@ -278,6 +280,10 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
             clientInfo.BackChannelLogout = new (
                 model.BackChannelLogoutUri,
                 model.BackChannelLogoutSessionRequired ?? false);
+
+            // The logout token lifetime is the host's, which no registration metadata carries
+            if (_hostSettings.BackChannelLogout is { } stored)
+                clientInfo.BackChannelLogout.LogoutTokenExpiresIn = stored.LogoutTokenExpiresIn;
         }
 
         if (model.FrontChannelLogoutUri != null)

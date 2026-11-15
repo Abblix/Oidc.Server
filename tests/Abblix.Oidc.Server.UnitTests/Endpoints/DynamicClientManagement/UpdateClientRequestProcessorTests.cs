@@ -182,8 +182,16 @@ public class UpdateClientRequestProcessorTests
             DefaultScope = [Scopes.Profile],
             RequireScope = true,
             ExpiresAfter = TimeSpan.FromDays(3),
+            BackChannelLogout = new(new Uri("https://client.example.com/logout"))
+            {
+                LogoutTokenExpiresIn = TimeSpan.FromSeconds(29),
+            },
         };
-        var model = new ClientRegistrationRequest { RedirectUris = [new Uri("https://client.example.com/cb")] };
+        var model = new ClientRegistrationRequest
+        {
+            RedirectUris = [new Uri("https://client.example.com/cb")],
+            BackChannelLogoutUri = new Uri("https://client.example.com/logout"),
+        };
         var request = new ValidUpdateClientRequest(
             new UpdateClientRequest(new ClientRequest(), model), new RegisteredClient(hostSet, "jti-current"), model);
 
@@ -208,6 +216,7 @@ public class UpdateClientRequestProcessorTests
         Assert.Equal(hostSet.DefaultScope, saved.DefaultScope);
         Assert.Equal(hostSet.RequireScope, saved.RequireScope);
         Assert.Equal(hostSet.ExpiresAfter, saved.ExpiresAfter);
+        Assert.Equal(hostSet.BackChannelLogout.LogoutTokenExpiresIn, saved.BackChannelLogout?.LogoutTokenExpiresIn);
     }
 
     /// <summary>
