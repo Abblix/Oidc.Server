@@ -86,6 +86,15 @@ partial class PushModeCompletionHandler
                   "client was sent access_denied and no tokens were issued")]
     private partial void LogGrantRevoked(Fingerprint AuthReqId, string ClientId);
 
+    // Warning: the host raised the tenant's or the client's profile while the request was pending, and the client
+    // has to move to the poll or ping mode
+    [LoggerMessage(
+        EventId = LogEvents.Device.PushModeCompletionHandler.DeliveryRefusedByProfile,
+        Level = LogLevel.Warning,
+        Message = "The security profile of client {ClientId} does not admit the push mode, so the request " +
+                  "auth_req_id {AuthReqId} was answered with access_denied and no tokens were issued")]
+    private partial void LogDeliveryRefusedByProfile(Fingerprint AuthReqId, string ClientId);
+
     [LoggerMessage(
         EventId = LogEvents.Device.PushModeCompletionHandler.RevocationCheckFaulted,
         Level = LogLevel.Error,
