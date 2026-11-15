@@ -144,6 +144,34 @@ public class SecurityProfileValidatorTests
     }
 
     /// <summary>
+    /// The algorithms a registration names are judged only where the client can be issued the JWT they sign, the same
+    /// answer startup gives: a client of the client credentials grant alone, registering no response type, is never
+    /// issued an ID token or an authorization response, so RS256 named for both passes; a client of the CIBA grant is
+    /// issued ID tokens at the token endpoint, so RS256 named for them is refused, and named for the authorization
+    /// response alone it passes.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.ClientCredentials, SigningAlgorithms.RS256, SigningAlgorithms.RS256, null)]
+    [InlineData(GrantTypes.Ciba, SigningAlgorithms.RS256, null, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(GrantTypes.Ciba, null, SigningAlgorithms.RS256, null)]
+    public async Task ValidateAsync_Fapi2_NoResponseTypes_JudgesOnlyTheJwtsTheClientIsIssued(
+        string grantType, string? idTokenAlgorithm, string? authorizationResponseAlgorithm, string? expectedError)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            ResponseTypes = [],
+            GrantTypes = [grantType],
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdTokenSignedResponseAlg = idTokenAlgorithm,
+            AuthorizationSignedResponseAlg = authorizationResponseAlgorithm,
+        });
+
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
     /// OpenID Connect Core 1.0 section 5.3.2: a userinfo response registered for encryption is a JWT, so naming none for
     /// its signature under FAPI 1.0 Part 2 section 8.6 is refused; none without encryption is plain JSON and passes, as
     /// does encryption with no signature named, which is given one later.

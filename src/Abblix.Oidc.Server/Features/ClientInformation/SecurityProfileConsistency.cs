@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.Token;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -271,7 +272,10 @@ public static class SecurityProfileConsistency
     /// do nothing about. A userinfo or introspection response configured <c>none</c> is plain JSON and carries no
     /// JWS unless the client registered userinfo encryption, which makes it an unsigned JWT; a logout token
     /// without an algorithm of its own takes the ID token's, so neither is named; an ID token
-    /// or authorization response configured <c>none</c> is an unsigned JWS, and is.
+    /// or authorization response configured <c>none</c> is an unsigned JWS, and is. An ID token or authorization
+    /// response the client can never be issued is not judged at all, so a resource server or a client of the client
+    /// credentials grant is not refused for algorithms nothing is ever signed with; registration asks the same
+    /// question of the metadata it is sent.
     /// </remarks>
     /// <param name="client">The client whose configuration is checked.</param>
     /// <param name="requirements">The control bundle the client is held to, floor included.</param>
@@ -280,8 +284,10 @@ public static class SecurityProfileConsistency
         SecurityProfileRequirements requirements)
         => FindSigningAlgorithmViolations(
             [
-                (nameof(ClientInfo.IdentityTokenSignedResponseAlgorithm), client.IdentityTokenSignedResponseAlgorithm),
-                (nameof(ClientInfo.AuthorizationSignedResponseAlgorithm), client.AuthorizationSignedResponseAlgorithm),
+                (nameof(ClientInfo.IdentityTokenSignedResponseAlgorithm), IdentityTokenSignature(
+                    client.EffectiveResponseTypes, client.EffectiveGrantTypes, client.IdentityTokenSignedResponseAlgorithm)),
+                (nameof(ClientInfo.AuthorizationSignedResponseAlgorithm), AuthorizationResponseSignature(
+                    client.EffectiveResponseTypes, client.AuthorizationSignedResponseAlgorithm)),
                 (nameof(ClientInfo.LogoutTokenSignedResponseAlgorithm), client.LogoutTokenSignedResponseAlgorithm),
                 (nameof(ClientInfo.UserInfoSignedResponseAlgorithm), UserInfoSignature(
                     client.UserInfoSignedResponseAlgorithm, client.UserInfoEncryptedResponseAlgorithm)),
@@ -446,6 +452,39 @@ public static class SecurityProfileConsistency
     /// <param name="encryptedResponseAlgorithm">The registered <c>userinfo_encrypted_response_alg</c>.</param>
     public static string? UserInfoSignature(string? signedResponseAlgorithm, string? encryptedResponseAlgorithm)
         => encryptedResponseAlgorithm is null ? SignedOrNull(signedResponseAlgorithm) : signedResponseAlgorithm;
+
+    /// <summary>
+    /// The signature algorithm the client's ID tokens are judged by, or null where it can be issued none. A client
+    /// registering any response type uses the authorization endpoint, whose code is redeemed for an ID token (OpenID
+    /// Connect Core 1.0 section 3.1.3.3, "id_token ID Token value associated with the authenticated session"), whose
+    /// implicit and hybrid responses carry one, and where it joins the user's session, which a logout token signed with
+    /// the ID token's algorithm ends. Without one, an ID token comes only from a grant the token endpoint answers with
+    /// one by itself (<see cref="TokenRequestProcessor.MayIssueDerivedTokens"/>): CIBA Core 1.0 section 11 answers "as specified in
+    /// Section 3.1.3.3 of [OpenID.Core]", and so do the device, password and JWT bearer grants here. The authorization
+    /// code grant redeems a code only the authorization endpoint hands out, and the refresh token grant a token only
+    /// another grant issues, so neither counts by itself.
+    /// </summary>
+    /// <param name="responseTypes">The response-type combinations the client is registered for.</param>
+    /// <param name="grantTypes">The grant types the client is registered for.</param>
+    /// <param name="algorithm">The algorithm the client's ID tokens are signed with.</param>
+    internal static string? IdentityTokenSignature(
+        IReadOnlyCollection<string[]> responseTypes,
+        IEnumerable<string> grantTypes,
+        string? algorithm)
+        => responseTypes.Count > 0 || grantTypes.Any(IssuesIdentityTokensByItself) ? algorithm : null;
+
+    /// <summary>
+    /// The signature algorithm the client's authorization responses are judged by, or null where it is sent none: only
+    /// a client registering a response type is answered at the authorization endpoint.
+    /// </summary>
+    /// <param name="responseTypes">The response-type combinations the client is registered for.</param>
+    /// <param name="algorithm">The algorithm the client's authorization responses are signed with.</param>
+    internal static string? AuthorizationResponseSignature(IReadOnlyCollection<string[]> responseTypes, string? algorithm)
+        => responseTypes.Count > 0 ? algorithm : null;
+
+    private static bool IssuesIdentityTokensByItself(string grantType)
+        => grantType is not (GrantTypes.AuthorizationCode or GrantTypes.RefreshToken) &&
+           TokenRequestProcessor.MayIssueDerivedTokens(grantType);
 
     /// <summary>
     /// The client authentication methods that prove possession of a key rather than of a shared

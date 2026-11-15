@@ -372,21 +372,25 @@ public class SecurityProfileTests
     [Fact]
     public void Check_Fapi2_AdmitsClientsThatNeverUseTheAuthorizationEndpoint()
     {
+        // At the RS256 defaults of the ID token and authorization response algorithms: neither JWT is ever issued to
+        // these clients, so neither algorithm is judged. The one whose grant types are left unset has the
+        // authorization code grant, whose code only the authorization endpoint it is closed to hands out
         var resourceServer = new ClientInfo("resource-server")
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             AllowedGrantTypes = [],
             AllowedResponseTypes = [],
-            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
-            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        };
+        var defaultGrants = new ClientInfo("default-grants")
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedResponseTypes = [],
         };
         var machine = new ClientInfo("machine")
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             AllowedGrantTypes = [GrantTypes.ClientCredentials],
             AllowedResponseTypes = [],
-            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
-            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         };
         var hybrid = new ClientInfo("hybrid")
         {
@@ -396,9 +400,9 @@ public class SecurityProfileTests
             AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         };
 
-        Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi2, resourceServer, machine)));
+        Assert.Empty(Check(Tenant(ClientSecurityProfile.Fapi2, resourceServer, defaultGrants, machine)));
 
-        var refusals = Check(Tenant(ClientSecurityProfile.Fapi2, resourceServer, machine, hybrid));
+        var refusals = Check(Tenant(ClientSecurityProfile.Fapi2, resourceServer, defaultGrants, machine, hybrid));
         Assert.NotEmpty(refusals);
         Assert.All(refusals, refusal => Assert.Contains("Client 'hybrid'", refusal.Message));
     }
@@ -1000,6 +1004,62 @@ public class SecurityProfileTests
         Assert.Empty(SecurityProfileConsistency.FindSigningAlgorithmViolations(conformant, requirements));
         Assert.Empty(SecurityProfileConsistency.FindSigningAlgorithmViolations(
             everyOneRs256, SecurityProfileRequirements.Resolve(ClientSecurityProfile.None)));
+    }
+
+    /// <summary>
+    /// An algorithm is judged only where the client can be issued the JWT it signs. A client registering no response
+    /// type is never sent an authorization response, nor joins a session that a logout token would end; it is issued an
+    /// ID token only by a grant that answers with one at the token endpoint by itself: CIBA Core 1.0 section 11 answers
+    /// "as specified in Section 3.1.3.3 of [OpenID.Core]", whose response carries "id_token ID Token value associated
+    /// with the authenticated session", and this server answers the device, password and JWT bearer grants the same
+    /// way. The client credentials and token exchange grants are issued none; the authorization code grant redeems a code
+    /// only the authorization endpoint hands out, and the refresh token grant a token only another grant issues. So at
+    /// the RS256 defaults a client of a grant issuing an ID token is named for that algorithm alone, and any other is
+    /// not named.
+    /// </summary>
+    [Theory]
+    [InlineData(new string[0], 0)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode }, 0)]
+    [InlineData(new[] { GrantTypes.ClientCredentials }, 0)]
+    [InlineData(new[] { GrantTypes.TokenExchange }, 0)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.RefreshToken }, 0)]
+    [InlineData(new[] { GrantTypes.Ciba }, 1)]
+    [InlineData(new[] { GrantTypes.DeviceAuthorization, GrantTypes.RefreshToken }, 1)]
+    [InlineData(new[] { GrantTypes.Password }, 1)]
+    [InlineData(new[] { GrantTypes.JwtBearer }, 1)]
+    public void FindSigningAlgorithmViolations_NoResponseTypes_JudgesTheIdTokenOnlyForAGrantIssuingOne(
+        string[] grantTypes, int expected)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            AllowedResponseTypes = [],
+            AllowedGrantTypes = grantTypes,
+        };
+
+        var violations = SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            client, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced));
+
+        Assert.Equal(expected, violations.Count);
+    }
+
+    /// <summary>
+    /// A client registering any response type uses the authorization endpoint, so both algorithms stay judged at the
+    /// RS256 defaults whatever its grant types: a response type of none still joins the user's session, which a logout
+    /// token signed with the ID token's algorithm ends.
+    /// </summary>
+    [Theory]
+    [InlineData(ResponseTypes.Code)]
+    [InlineData(ResponseTypes.None)]
+    public void FindSigningAlgorithmViolations_AResponseType_JudgesBothAlgorithms(string responseType)
+    {
+        var client = new ClientInfo(TestConstants.DefaultClientId)
+        {
+            AllowedResponseTypes = [[responseType]],
+            AllowedGrantTypes = [],
+        };
+
+        Assert.Equal(2, SecurityProfileConsistency.FindSigningAlgorithmViolations(
+            client, SecurityProfileRequirements.Resolve(ClientSecurityProfile.Fapi1Advanced)).Count);
     }
 
     /// <summary>
