@@ -281,21 +281,4 @@ public class ClientIdValidatorTests
         // Assert
         Assert.Null(result);
     }
-
-    /// <summary>
-    /// An update hands the client it found to the later steps, which judge the update under the profile that client
-    /// is held to.
-    /// </summary>
-    [Fact]
-    public async Task AnUpdate_HandsTheStoredClientToTheLaterSteps()
-    {
-        var stored = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi2 };
-        var context = CreateContext(TestConstants.DefaultClientId) with { Operation = DynamicClientOperation.Update };
-        _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, TestConstants.DefaultClientId))
-            .ReturnsAsync(stored);
-
-        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
-        Assert.Same(stored, context.StoredClient);
-    }
 }

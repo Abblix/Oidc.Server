@@ -38,10 +38,8 @@ public partial class ClientIdValidator(
         var clientInfo = await clientInfoProvider.TryFindClientAsync(tenant, clientId);
         switch (context.Operation)
         {
-            // For UPDATE: client MUST exist, and the later steps judge the update under the profile it is held to
+            // For UPDATE: client MUST exist
             case DynamicClientOperation.Update when clientInfo is not null:
-                context.StoredClient = clientInfo;
-                break;
 
             // For new registration: client must NOT exist
             case DynamicClientOperation.Register when clientInfo is null:

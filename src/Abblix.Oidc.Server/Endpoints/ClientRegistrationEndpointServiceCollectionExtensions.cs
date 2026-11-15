@@ -35,7 +35,6 @@ internal static class ClientRegistrationEndpointServiceCollectionExtensions
         services.AddTelemetryDecorator<IRegisterClientHandler, ObservedRegisterClientHandler>();
         services.TryAddScoped<IRegisterClientRequestValidator, RegisterClientRequestValidator>();
         services.AddTelemetryDecorator<IRegisterClientRequestValidator, ObservedRegisterClientRequestValidator>();
-        services.TryAddKeyedScoped<IRegisterClientRequestValidator, UpdateClientRegistrationValidator>(UpdateClientRequestValidator.RegistrationKey);
         services.TryAddScoped<IRegisterClientRequestProcessor, RegisterClientRequestProcessor>();
         services.AddTelemetryDecorator<IRegisterClientRequestProcessor, ObservedRegisterClientRequestProcessor>();
 

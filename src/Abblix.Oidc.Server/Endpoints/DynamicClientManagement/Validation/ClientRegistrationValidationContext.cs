@@ -39,8 +39,8 @@ public record ClientRegistrationValidationContext(ClientRegistrationRequest Requ
 	public DynamicClientOperation Operation { get; set; } = DynamicClientOperation.Register;
 
 	/// <summary>
-	/// The stored client an update replaces, set by <see cref="ClientIdValidator"/> once it has found it; never set
-	/// for a new registration.
+	/// The stored client an update replaces: the registration the update was authenticated against, which the update
+	/// is then built from and written over. Never set for a new registration.
 	/// </summary>
 	public ClientInfo? StoredClient { get; set; }
 
@@ -57,7 +57,7 @@ public record ClientRegistrationValidationContext(ClientRegistrationRequest Requ
 		DynamicClientOperation.Update => SecurityProfileRequirements.For(
 			tenant,
 			StoredClient ?? throw new InvalidOperationException(
-				$"An update reached a step judging it before {nameof(ClientIdValidator)} found the client it replaces")),
+				$"An update is judged without the {nameof(StoredClient)} it replaces")),
 
 		_ => throw new InvalidOperationException($"Unsupported dynamic client operation: {Operation}"),
 	};
