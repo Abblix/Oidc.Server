@@ -66,12 +66,6 @@ public class DiscoveryControllerMtlsTests
     /// section 3 marks REQUIRED, and nothing else. These tests are about mTLS aliases, so every other field is
     /// left absent on purpose - which is now expressible, because absent and empty are different states.
     /// </summary>
-    private async Task<ModelResponse> FormatAsync(EndpointResponse response)
-    {
-        var result = Assert.IsType<ObjectResult>(await _formatter.FormatResponseAsync(response));
-        return Assert.IsType<ModelResponse>(result.Value);
-    }
-
     private static ConfigurationResponse MinimalResponse() => new()
     {
         Issuer = new Uri("https://example.com"),
@@ -79,6 +73,12 @@ public class DiscoveryControllerMtlsTests
         IdTokenSigningAlgValuesSupported = ["RS256"],
         SubjectTypesSupported = ["public"],
     };
+
+    private async Task<ModelResponse> FormatAsync(EndpointResponse response)
+    {
+        var result = Assert.IsType<ObjectResult>(await _formatter.FormatResponseAsync(response));
+        return Assert.IsType<ModelResponse>(result.Value);
+    }
 
     /// <summary>
     /// Verifies no mTLS aliases when no MtlsBaseUri is configured.

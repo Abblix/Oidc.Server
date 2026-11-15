@@ -8,11 +8,13 @@
 
 using System.Text.Json.Serialization.Metadata;
 using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
@@ -73,6 +75,14 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to add the services to.</param>
     /// <returns>The same <see cref="IServiceCollection"/> so calls can be chained.</returns>
+    /// <exception cref="InvalidOperationException">The MVC adapter is already registered, or a response
+    /// formatter is registered under a shared contract closed over a result type other than
+    /// <see cref="IResult"/>.</exception>
+    /// <remarks>
+    /// A host replaces a response formatter by registering it under the shared contract closed over
+    /// <see cref="IResult"/>, such as <c>ITokenResponseFormatter&lt;IResult&gt;</c>. Only a formatter registered
+    /// before this call is checked for its result type: one registered after it is not seen here.
+    /// </remarks>
     public static IServiceCollection AddOidcMinimalApi(this IServiceCollection services)
     {
         // Both adapters registered means both will serve the OIDC endpoints, and the host finds out only when
@@ -88,6 +98,11 @@ public static class ServiceCollectionExtensions
             "together with the " +
             "Abblix.OIDC.Server.MVC package reference, or this one together with the " +
             "Abblix.OIDC.Server.MinimalApi package reference.");
+        // What the MVC adapter's check finds. A marker rather than any contract this adapter happens to declare,
+        // since its contracts move to the assembly both adapters share.
+        services.TryAddSingleton<MinimalApiAdapterMarker>();
+
+        ResponseFormatterClosure.ThrowIfClosedOverAnotherResult(services, typeof(IResult));
 
         services.AddTenantResolution();
         services.AddOptions<OidcRouteOptions>();

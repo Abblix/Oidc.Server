@@ -7,8 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.AspNetCore.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
@@ -81,6 +83,14 @@ public static class ServiceCollectionExtensions
 	/// </summary>
 	/// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
 	/// <returns>The <see cref="IServiceCollection"/> so additional calls can be chained.</returns>
+	/// <exception cref="InvalidOperationException">The Minimal API adapter is already registered, or a response
+	/// formatter is registered under a shared contract closed over a result type other than
+	/// <see cref="ActionResult"/>.</exception>
+	/// <remarks>
+	/// A host replaces a response formatter by registering it under the shared contract closed over
+	/// <see cref="ActionResult"/>, such as <c>ITokenResponseFormatter&lt;ActionResult&gt;</c>. Only a formatter
+	/// registered before this call is checked for its result type: one registered after it is not seen here.
+	/// </remarks>
     public static IServiceCollection AddOidcMvc(
         this IServiceCollection services)
     {
@@ -97,6 +107,11 @@ public static class ServiceCollectionExtensions
 			"registration " +
 			"together with the Abblix.OIDC.Server.MinimalApi package reference, or this one together with " +
 			"the Abblix.OIDC.Server.MVC package reference.");
+		// What the Minimal API adapter's check finds. A marker rather than any contract this adapter happens to
+		// declare, since its contracts move to the assembly both adapters share.
+		services.TryAddSingleton<MvcAdapterMarker>();
+
+		ResponseFormatterClosure.ThrowIfClosedOverAnotherResult(services, typeof(ActionResult));
 
 		services
 			.AddOidcControllers()

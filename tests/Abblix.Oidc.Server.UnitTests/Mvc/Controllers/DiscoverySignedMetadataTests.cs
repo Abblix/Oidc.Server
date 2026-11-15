@@ -73,12 +73,6 @@ public class DiscoverySignedMetadataTests
     /// section 3 marks REQUIRED, and nothing else. These tests are about the signed_metadata field, so every
     /// other field is left absent on purpose.
     /// </summary>
-    private async Task<ModelResponse> FormatAsync(EndpointResponse response)
-    {
-        var result = Assert.IsType<ObjectResult>(await _formatter.FormatResponseAsync(response));
-        return Assert.IsType<ModelResponse>(result.Value);
-    }
-
     private static EndpointResponse MinimalResponse() => new()
     {
         Issuer = new Uri(Issuer),
@@ -86,6 +80,12 @@ public class DiscoverySignedMetadataTests
         IdTokenSigningAlgValuesSupported = ["RS256"],
         SubjectTypesSupported = ["public"],
     };
+
+    private async Task<ModelResponse> FormatAsync(EndpointResponse response)
+    {
+        var result = Assert.IsType<ObjectResult>(await _formatter.FormatResponseAsync(response));
+        return Assert.IsType<ModelResponse>(result.Value);
+    }
 
     /// <summary>
     /// When the opt-in flag is off, the discovery document carries no <c>signed_metadata</c>
