@@ -1251,6 +1251,57 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(hostHeldProfile, stored?.ClientInfo.SecurityProfile);
     }
 
+    /// <summary>
+    /// A client the host holds to FAPI 2.0 at a tenant held to none updating to metadata that profile admits is
+    /// accepted, and the stored client is still held to the profile.
+    /// </summary>
+    [Fact]
+    public async Task A_conforming_update_keeps_the_profile_the_host_holds_the_client_to()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = new JsonObject
+        {
+            [RequestMembers.ClientName] = "held-to-fapi",
+            [RequestMembers.RedirectUris] = new JsonArray("https://client.example.com/callback"),
+            [RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode),
+            [RequestMembers.ResponseTypes] = new JsonArray(ResponseTypes.Code),
+            [RequestMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.PrivateKeyJwt,
+            [RequestMembers.TokenEndpointAuthSigningAlg] = SigningAlgorithms.PS256,
+            [RequestMembers.JwksUri] = "https://client.example.com/jwks",
+            [RequestMembers.DpopBoundAccessTokens] = true,
+            [RequestMembers.IdTokenSignedResponseAlg] = SigningAlgorithms.PS256,
+            [RequestMembers.AuthorizationSignedResponseAlg] = SigningAlgorithms.PS256,
+        };
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+        var clientId = registered[ResponseMembers.ClientId]!.GetValue<string>();
+        var tenant = TestTenant.Of(Factory.Services);
+        var clients = Factory.Services.GetRequiredService<IClientInfoManager>();
+        var stored = await clients.TryFindRegisteredClientAsync(tenant, clientId);
+        Assert.NotNull(stored);
+        Assert.True(await clients.TryUpdateClientAsync(
+            tenant,
+            stored,
+            stored with { ClientInfo = stored.ClientInfo with { SecurityProfile = ClientSecurityProfile.Fapi2 } }));
+
+        var updated = metadata.DeepClone().AsObject();
+        updated[RequestMembers.ClientId] = clientId;
+        updated[RequestMembers.ClientName] = "held-to-fapi-renamed";
+        var update = Request(
+            HttpMethod.Put,
+            new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute),
+            registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>());
+        update.Content = JsonContent.Create(updated);
+        var response = await client.SendAsync(update, TestContext.Current.CancellationToken);
+
+        Assert.True(
+            response.StatusCode == HttpStatusCode.OK,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        var after = await clients.TryFindRegisteredClientAsync(tenant, clientId);
+        Assert.Equal("held-to-fapi-renamed", after?.ClientInfo.ClientName);
+        Assert.Equal(ClientSecurityProfile.Fapi2, after?.ClientInfo.SecurityProfile);
+    }
+
     [Fact]
     public async Task One_clients_token_does_not_open_anothers_registration()
     {
