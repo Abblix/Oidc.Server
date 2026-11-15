@@ -1013,6 +1013,58 @@ public partial class TokenRequestProcessorTests
     }
 
     /// <summary>
+    /// An ID token the client's registered encryption cannot be served for is answered with the refusal, and the
+    /// refresh token minted for the same response is dropped with it: the presented token stays unspent, so the
+    /// client still holds a usable one after a response that handed it nothing.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_WhenTheIdentityTokenIsRefused_SpendsNothing()
+    {
+        var scopes = new[] { Scopes.OpenId, Scopes.OfflineAccess };
+        var existingRefreshToken = new Jwt.JsonWebToken { Payload = { GrantId = ExistingGrantId } };
+        var authSession = CreateAuthSession();
+        var authContext = new AuthorizationContext(TestConstants.DefaultClientId, scopes, null);
+        var request = new ValidTokenRequest(
+            CreateTokenRequest(),
+            new RefreshTokenAuthorizedGrant(authSession, authContext, existingRefreshToken),
+            new ClientInfo(TestConstants.DefaultClientId) { OfflineAccess = OfflineAccess.ConsentRequired },
+            [],
+            []);
+        var accessToken = CreateAccessToken();
+        var refreshToken = CreateRefreshToken();
+
+        _contextEvaluator
+            .Setup(e => e.EvaluateAuthorizationContext(request))
+            .Returns(authContext);
+        _accessTokenService
+            .Setup(s => s.CreateAccessTokenAsync(TestTenant.Matched, authSession, authContext, request.ClientInfo, ExistingGrantId, null))
+            .ReturnsAsync(accessToken);
+        _refreshTokenService
+            .Setup(s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
+                authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId))
+            .ReturnsAsync(refreshToken);
+        _identityTokenService
+            .Setup(s => s.CreateIdentityTokenAsync(TestTenant.Matched, IdentityTokenRequestArg.For(request.ClientInfo, false, null, accessToken.EncodedJwt, null, null, authContext)))
+            .ReturnsAsync(new OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to"));
+        _refreshTokenService
+            .Setup(s => s.TrySpendAsync(TestTenant.Matched, existingRefreshToken, request.ClientInfo))
+            .ReturnsAsync(true);
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, error.Error);
+        _refreshTokenService.Verify(
+            s => s.CreateRefreshTokenAsync(
+                TestTenant.Matched,
+                authSession, authContext, request.ClientInfo, existingRefreshToken, ExistingGrantId),
+            Times.Once);
+        _refreshTokenService.Verify(
+            s => s.TrySpendAsync(TestTenant.Matched, It.IsAny<Jwt.JsonWebToken>(), It.IsAny<ClientInfo>()), Times.Never);
+    }
+
+    /// <summary>
     /// A renewal the expiry rules refuse issues no refresh token, so it spends nothing and the presented token stays
     /// usable for as long as it is valid.
     /// </summary>

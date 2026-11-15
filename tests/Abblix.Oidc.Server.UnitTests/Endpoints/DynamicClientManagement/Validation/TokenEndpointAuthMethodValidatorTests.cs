@@ -45,12 +45,16 @@ public class TokenEndpointAuthMethodValidatorTests
 
     /// <summary>
     /// Verifies validation succeeds when auth method is not specified.
-    /// Per OIDC DCR, token_endpoint_auth_method has a default value.
+    /// Per OIDC DCR, token_endpoint_auth_method has a default value, which a null reads as and which is held to
+    /// the supported methods as a named one is.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithNoAuthMethod_ShouldReturnNull()
     {
         // Arrange
+        _clientAuthenticator
+            .Setup(a => a.ClientAuthenticationMethodsSupported)
+            .Returns([ClientAuthenticationMethods.ClientSecretBasic]);
         var context = CreateContext(tokenEndpointAuthMethod: null);
 
         // Act
@@ -117,7 +121,7 @@ public class TokenEndpointAuthMethodValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("not supported", result.ErrorDescription);
         Assert.Contains(ClientAuthenticationMethods.PrivateKeyJwt, result.ErrorDescription);
     }
@@ -141,7 +145,7 @@ public class TokenEndpointAuthMethodValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -274,7 +278,7 @@ public class TokenEndpointAuthMethodValidatorTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("custom_auth_method", result.ErrorDescription);
     }
 

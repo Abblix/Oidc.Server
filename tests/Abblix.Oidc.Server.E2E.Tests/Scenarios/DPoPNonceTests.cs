@@ -60,17 +60,9 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
     [Fact]
     public async Task UserInfo_with_dpop_proof_lacking_nonce_returns_use_dpop_nonce_challenge()
     {
-        using var proofKey = new DPoPProofGenerator();
-        var client = CreateClient();
-        var discovery = await FetchDiscoveryAsync(client);
-        var accessToken = (await ObtainDPoPBoundTokenViaNonceFlowAsync(client, discovery, proofKey))
-            [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
-
-        // First UserInfo call: no nonce on the proof - RS issues a fresh nonce challenge
+        // No nonce on the proof - RS issues a fresh nonce challenge
         // (RFC 9449 section 9 + section 7.1 SHOULD WWW-Authenticate: DPoP).
-        var proofWithoutNonce = proofKey.BuildProof(
-            HttpMethods.Get, discovery.UserInfoEndpoint!, accessToken: accessToken);
-        var response = await SendUserInfoAsync(client, discovery, accessToken, proofWithoutNonce);
+        var response = await SendUserInfoWithoutNonceAsync();
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Contains(response.Headers.WwwAuthenticate,
@@ -78,6 +70,26 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
         Assert.True(response.Headers.TryGetValues(HttpRequestHeaders.DPoPNonce, out var nonceValues),
             "UserInfo challenge response missing DPoP-Nonce header");
         Assert.False(string.IsNullOrEmpty(nonceValues.First()));
+    }
+
+    /// <summary>
+    /// The nonce refusal answers a request that presented its token over DPoP, so it is the DPoP challenge that says
+    /// so, and the Bearer one beside it stays bare. RFC 9449 section 9: "The error signaling is performed as described
+    /// in Section 7.1. Resource servers use an HTTP 401 (Unauthorized) error code with an accompanying
+    /// WWW-Authenticate: DPoP value and DPoP-Nonce value to accomplish this." Section 7.2: "If the mechanism used to
+    /// attempt authentication could be established unambiguously, then the corresponding challenge SHOULD be used to
+    /// deliver error information."
+    /// </summary>
+    [Fact]
+    public async Task UserInfo_nonce_refusal_carries_its_error_on_the_dpop_challenge_and_none_on_the_bearer_one()
+    {
+        var response = await SendUserInfoWithoutNonceAsync();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var (dpop, bearer) = DualChallengeReader.Challenges(response);
+        Assert.Equal(ErrorCodes.UseDPoPNonce, dpop.Parameters[ErrorResponse.Parameters.Error]);
+        Assert.DoesNotContain(ErrorResponse.Parameters.Error, bearer.Parameters.Keys);
+        Assert.DoesNotContain(ErrorResponse.Parameters.ErrorDescription, bearer.Parameters.Keys);
     }
 
     [Fact]
@@ -184,6 +196,23 @@ public class DPoPNonceTests(NonceEnabledTestFactory factory) : TestBase(factory)
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         };
         return await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, form, proofJwt);
+    }
+
+    /// <summary>
+    /// Obtains a DPoP-bound access token through the token endpoint's nonce flow, then presents it at /userinfo with a
+    /// proof carrying no nonce, which the resource server answers with its own nonce challenge (RFC 9449 section 9).
+    /// </summary>
+    private async Task<HttpResponseMessage> SendUserInfoWithoutNonceAsync()
+    {
+        using var proofKey = new DPoPProofGenerator();
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var accessToken = (await ObtainDPoPBoundTokenViaNonceFlowAsync(client, discovery, proofKey))
+            [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+
+        var proofWithoutNonce = proofKey.BuildProof(
+            HttpMethods.Get, discovery.UserInfoEndpoint!, accessToken: accessToken);
+        return await SendUserInfoAsync(client, discovery, accessToken, proofWithoutNonce);
     }
 
     /// <summary>

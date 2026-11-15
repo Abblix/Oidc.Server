@@ -282,7 +282,10 @@ public partial class SubjectTypeValidator(
         var hosts = redirectUris.Select(uri => uri.Host).Distinct().ToArray();
         if (hosts.Length > 1)
         {
-            return ErrorFactory.InvalidRedirectUri(
+            // invalid_client_metadata, as for every other pairwise refusal here: the redirect URIs are valid, and what
+            // OIDC Core section 8.1 asks of this client is another field - "If there are multiple hostnames in the
+            // registered redirect_uris, the Client MUST register a sector_identifier_uri"
+            return ErrorFactory.InvalidClientMetadata(
                 "The client specified pairwise subject type, but provides several redirect URIs with different hosts");
         }
 

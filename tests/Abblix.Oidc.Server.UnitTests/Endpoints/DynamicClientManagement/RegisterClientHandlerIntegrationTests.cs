@@ -469,7 +469,7 @@ public class RegisterClientHandlerIntegrationTests
         var result = await handler.HandleAsync(provider.GetRequiredService<ITenantAccessor>().CurrentTenant(), request);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, error.Error);
     }
 
     /// <summary>

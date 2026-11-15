@@ -63,5 +63,5 @@ public class SigningAlgorithmsValidator(IJwtAlgorithmsProvider jwtAlgorithms) : 
     }
 
     private static OidcError NotSupported(string description)
-        => new(ErrorCodes.InvalidRequest, $"The signing algorithm for {description} is not supported");
+        => ErrorFactory.InvalidClientMetadata($"The signing algorithm for {description} is not supported");
 }

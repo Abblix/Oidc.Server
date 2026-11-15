@@ -42,7 +42,7 @@ public class SupportedResponseTypeValidator(
     {
         // An empty string names no response type; registered, it would be a combination no authorization request
         // can match, and the client would be refused on every request after a successful registration
-        if (context.Request.ResponseTypes.Any(combination => combination.Length == 0))
+        if (context.Request.ResponseTypes.Any(combination => combination is not { Length: > 0 }))
             return ErrorFactory.InvalidClientMetadata("An empty value is not a response type");
 
         var unsupported = context.Request.ResponseTypes

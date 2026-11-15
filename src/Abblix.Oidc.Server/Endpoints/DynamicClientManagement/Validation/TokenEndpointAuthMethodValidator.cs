@@ -39,8 +39,7 @@ public class TokenEndpointAuthMethodValidator(IClientAuthenticator clientAuthent
             !clientAuthenticator.ClientAuthenticationMethodsSupported.Contains(
                 request.TokenEndpointAuthMethod, StringComparer.Ordinal))
         {
-            return new OidcError(
-                ErrorCodes.InvalidRequest,
+            return ErrorFactory.InvalidClientMetadata(
                 $"The specified token endpoint authentication method '{request.TokenEndpointAuthMethod}' is not supported");
         }
 
