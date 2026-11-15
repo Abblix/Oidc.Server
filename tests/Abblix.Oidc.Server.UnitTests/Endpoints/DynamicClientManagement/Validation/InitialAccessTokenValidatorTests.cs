@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Features.ClientInformation;
 using System;
+using System.Collections.Generic;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using Abblix.Jwt;
@@ -49,18 +50,8 @@ public class InitialAccessTokenValidatorTests
             optionsMonitor.Object);
     }
 
-    private static ClientRegistrationValidationContext CreateContext(
-        AuthenticationHeaderValue? authHeader = null,
-        DynamicClientOperation operation = DynamicClientOperation.Register)
-    {
-        var request = new ClientRegistrationRequest
-        {
-            RedirectUris = [TestConstants.DefaultRedirectUri],
-            AuthorizationHeaderLines = authHeader is { } header ? [header.ToString()] : null,
-        };
-
-        return new ClientRegistrationValidationContext(request) { Operation = operation };
-    }
+    private static IReadOnlyList<string>? LinesOf(AuthenticationHeaderValue? authHeader = null)
+        => authHeader is { } header ? [header.ToString()] : null;
 
     private static JsonWebToken CreateValidToken(
         string tokenType = JwtTypes.InitialAccessToken,
@@ -80,12 +71,12 @@ public class InitialAccessTokenValidatorTests
     [Fact]
     public async Task ValidateAsync_WithMissingIdentifier_ShouldReturnInvalidToken()
     {
-        var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
+        var lines = LinesOf(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(CreateValidToken(jwtId: null));
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidToken, result.Error);
@@ -95,19 +86,9 @@ public class InitialAccessTokenValidatorTests
     public async Task ValidateAsync_WhenFeatureDisabled_ShouldSkip()
     {
         _options.RequireInitialAccessToken = false;
-        var context = CreateContext();
+        var lines = LinesOf();
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
-
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public async Task ValidateAsync_WhenUpdateOperation_ShouldSkip()
-    {
-        var context = CreateContext(operation: DynamicClientOperation.Update);
-
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
 
         Assert.Null(result);
     }
@@ -119,9 +100,9 @@ public class InitialAccessTokenValidatorTests
     [Fact]
     public async Task ValidateAsync_WithNoAuthorizationHeader_ShouldReturnMissingAuthentication()
     {
-        var context = CreateContext(authHeader: null);
+        var lines = LinesOf(authHeader: null);
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
 
         var missing = Assert.IsType<MissingAuthenticationError>(result);
         Assert.Contains("Authorization", missing.ErrorDescription);
@@ -136,9 +117,9 @@ public class InitialAccessTokenValidatorTests
     [InlineData(null)]
     public async Task ValidateAsync_WithWrongScheme_ShouldReturnMissingAuthentication(string? credentials)
     {
-        var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Basic, credentials));
+        var lines = LinesOf(new AuthenticationHeaderValue(TokenTypes.Basic, credentials));
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
 
         var missing = Assert.IsType<MissingAuthenticationError>(result);
         Assert.Contains(TokenTypes.Basic, missing.ErrorDescription);
@@ -151,9 +132,9 @@ public class InitialAccessTokenValidatorTests
     [Fact]
     public async Task ValidateAsync_WithBearerSchemeAlone_ShouldReturnInvalidRequest()
     {
-        var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer));
+        var lines = LinesOf(new AuthenticationHeaderValue(TokenTypes.Bearer));
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
 
         Assert.IsType<BearerRequestError>(result);
     }
@@ -161,13 +142,13 @@ public class InitialAccessTokenValidatorTests
     [Fact]
     public async Task ValidateAsync_WithInvalidJwt_ShouldReturnInvalidToken()
     {
-        var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "bad-jwt"));
+        var lines = LinesOf(new AuthenticationHeaderValue(TokenTypes.Bearer, "bad-jwt"));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "bad-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token is expired"));
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidToken, result.Error);
@@ -181,7 +162,7 @@ public class InitialAccessTokenValidatorTests
     [Fact]
     public async Task ValidateAsync_WithWrongTokenType_ShouldReturnInvalidToken()
     {
-        var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
+        var lines = LinesOf(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(
@@ -190,7 +171,7 @@ public class InitialAccessTokenValidatorTests
                 It.IsAny<ValidationOptions>()))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidToken, result.Error);
@@ -201,14 +182,14 @@ public class InitialAccessTokenValidatorTests
     [InlineData("")]
     public async Task ValidateAsync_WithMissingSubject_ShouldReturnInvalidToken(string? subject)
     {
-        var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
+        var lines = LinesOf(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
         var token = CreateValidToken(subject: subject);
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "jwt-token", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidToken, result.Error);
@@ -225,14 +206,14 @@ public class InitialAccessTokenValidatorTests
     public async Task ValidateAsync_WithValidToken_ShouldReturnNull(bool schemeInLowerCase)
     {
         var scheme = schemeInLowerCase ? TokenTypes.Bearer.ToLowerInvariant() : TokenTypes.Bearer;
-        var context = CreateContext(new AuthenticationHeaderValue(scheme, "valid-jwt"));
+        var lines = LinesOf(new AuthenticationHeaderValue(scheme, "valid-jwt"));
         var token = CreateValidToken();
 
         _jwtValidator
             .Setup(v => v.ValidateAsync(TestTenant.Matched, null, "valid-jwt", It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
-        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
 
         Assert.Null(result);
     }
@@ -244,7 +225,7 @@ public class InitialAccessTokenValidatorTests
     [Fact]
     public async Task ValidateAsync_ShouldRequireAndValidateAudience()
     {
-        var context = CreateContext(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
+        var lines = LinesOf(new AuthenticationHeaderValue(TokenTypes.Bearer, "jwt-token"));
         var token = CreateValidToken();
 
         ValidationOptions? capturedOptions = null;
@@ -253,7 +234,7 @@ public class InitialAccessTokenValidatorTests
             .Callback(new Action<TenantDefinition, ClientInfo?, string, TokenTypePolicy, ValidationOptions>((_, _, _, _, opts) => capturedOptions = opts))
             .ReturnsAsync(token);
 
-        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, lines);
 
         Assert.NotNull(capturedOptions);
 

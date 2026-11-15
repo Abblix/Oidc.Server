@@ -38,14 +38,9 @@ namespace Abblix.Oidc.Server.Mvc.Filters;
 internal sealed class LimitsRegistrationRequestSizeAttribute : Attribute, IAsyncResourceFilter, IOrderedFilter
 {
 	/// <summary>
-	/// Runs after <see cref="ConsumesAttribute"/>, which is also a resource filter of the same scope.
+	/// Stated rather than left to the default, so its place among the resource filters of the same scope does not fall
+	/// through to the order reflection happens to return attributes in, which is not guaranteed.
 	/// </summary>
-	/// <remarks>
-	/// Stated rather than left to the default, because both would otherwise sit at order 0 in the same scope
-	/// and their relative position would fall through to the order reflection happens to return attributes in,
-	/// which is not guaranteed. The order matters to what a caller is told: a body of the wrong content type
-	/// should be answered 415 without reading a byte, not buffered to the limit and answered 413.
-	/// </remarks>
 	public int Order => 1;
 
 	/// <inheritdoc />
@@ -55,8 +50,9 @@ internal sealed class LimitsRegistrationRequestSizeAttribute : Attribute, IAsync
 			.GetRequiredService<IOptions<OidcOptions>>().Value.MaxRegistrationRequestSize;
 
 		// A cleared option means the deployment bounds the body elsewhere - at the server, or at a reverse
-		// proxy in front of it - and asked us not to add one of our own.
-		if (limit is not { } maxBytes)
+		// proxy in front of it - and asked us not to add one of our own. A body of the wrong content type is answered
+		// 415 without reading a byte, not buffered to the limit and answered 413
+		if (limit is not { } maxBytes || !RefusesClientMetadataAfterTheTokenAttribute.DeclaresJson(context.HttpContext.Request))
 		{
 			await next();
 			return;
@@ -69,7 +65,7 @@ internal sealed class LimitsRegistrationRequestSizeAttribute : Attribute, IAsync
 		// is not one anybody makes to get further in.
 		if (request.ContentLength > maxBytes)
 		{
-			context.Result = new StatusOnlyResult(StatusCodes.Status413PayloadTooLarge);
+			await RefuseAsync(context, next);
 			return;
 		}
 
@@ -82,7 +78,7 @@ internal sealed class LimitsRegistrationRequestSizeAttribute : Attribute, IAsync
 		var copied = await CopyAtMostAsync(request.Body, buffer, maxBytes + 1, context.HttpContext.RequestAborted);
 		if (copied > maxBytes)
 		{
-			context.Result = new StatusOnlyResult(StatusCodes.Status413PayloadTooLarge);
+			await RefuseAsync(context, next);
 			return;
 		}
 
@@ -90,6 +86,22 @@ internal sealed class LimitsRegistrationRequestSizeAttribute : Attribute, IAsync
 		buffer.Position = 0;
 		request.Body = buffer;
 		request.ContentLength = copied;
+
+		await next();
+	}
+
+	/// <summary>
+	/// Records the body as over the bound and leaves it unread, so the 413 is answered once the token is judged: the
+	/// token decides first whether the request may be answered about its body at all.
+	/// </summary>
+	private static async Task RefuseAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
+	{
+		context.HttpContext.Features.Set(
+			new ClientMetadataRefusal(new StatusOnlyResult(StatusCodes.Status413PayloadTooLarge)));
+
+		var request = context.HttpContext.Request;
+		request.Body = Stream.Null;
+		request.ContentLength = 0;
 
 		await next();
 	}
