@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using Abblix.Oidc.Server.AspNetCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using MinimalApiRegistration = Abblix.Oidc.Server.MinimalApi.ServiceCollectionExtensions;
@@ -15,27 +16,35 @@ using MvcRegistration = Abblix.Oidc.Server.Mvc.ServiceCollectionExtensions;
 namespace Abblix.Oidc.Server.UnitTests.Features.DependencyInjection;
 
 /// <summary>
-/// The real registration of each transport adapter refuses to run after the other one's, in either order, since both
-/// would then serve the same OIDC endpoints; one adapter alone is never refused.
+/// The real registration of each transport adapter leaves what the other adapter's conflict check finds, so the
+/// second adapter is refused in either order; one adapter alone is never refused.
 /// </summary>
+/// <remarks>
+/// The conflict check is asked directly rather than through the second adapter's registration, since that
+/// registration refuses the first adapter's formatters on other grounds as well, which would hide a missing mark.
+/// </remarks>
 public class TransportAdapterRegistrationTests
 {
+    private const string Message = "Both adapters are registered.";
+
     [Fact]
-    public void TheMvcAdapterAddedAfterTheMinimalApiAdapter_IsRefused()
+    public void TheMinimalApiAdapterRegistration_IsFoundByTheMvcAdapterCheck()
     {
         var services = new ServiceCollection();
         MinimalApiRegistration.AddOidcMinimalApi(services);
 
-        Assert.Throws<InvalidOperationException>(() => MvcRegistration.AddOidcMvc(services));
+        Assert.Throws<InvalidOperationException>(() => TransportAdapterConflict.ThrowIfRegistered(
+            services, TransportAdapterConflict.MinimalApiAdapterAssemblyName, Message));
     }
 
     [Fact]
-    public void TheMinimalApiAdapterAddedAfterTheMvcAdapter_IsRefused()
+    public void TheMvcAdapterRegistration_IsFoundByTheMinimalApiAdapterCheck()
     {
         var services = new ServiceCollection();
         MvcRegistration.AddOidcMvc(services);
 
-        Assert.Throws<InvalidOperationException>(() => MinimalApiRegistration.AddOidcMinimalApi(services));
+        Assert.Throws<InvalidOperationException>(() => TransportAdapterConflict.ThrowIfRegistered(
+            services, TransportAdapterConflict.MvcAdapterAssemblyName, Message));
     }
 
     [Fact]
