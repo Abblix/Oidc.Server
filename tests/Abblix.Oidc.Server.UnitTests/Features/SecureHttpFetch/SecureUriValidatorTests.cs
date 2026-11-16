@@ -7,8 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
-using System.Net;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -22,7 +22,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.SecureHttpFetch;
 public class SecureUriValidatorTests
 {
     private static ISecureUriValidator CreateValidator(SecureHttpFetchOptions options)
-        => new SecureUriValidator(Options.Create(options));
+        => new SecureUriValidator(Options.Create(options), NullLogger<SecureUriValidator>.Instance);
 
     // Secure defaults: https-only, private networks blocked.
     private static SecureHttpFetchOptions SecureDefaults => new();
@@ -80,32 +80,6 @@ public class SecureUriValidatorTests
             BlockPrivateNetworks = false,
         };
         Assert.Null(CreateValidator(options).Validate(new Uri("http://example.com/api")));
-    }
-
-    // Reserved ranges are asserted against IsPrivateOrReservedAddress directly rather than through Validate(Uri):
-    // Uri canonicalises an IPv6 literal host, so ::ffff:127.0.0.1 would never survive to the classifier as-typed.
-    [Theory]
-    [InlineData("0.0.0.0")]                 // "this host on this network" 0.0.0.0/8 (routes to loopback on Linux)
-    [InlineData("0.1.2.3")]                 // 0.0.0.0/8
-    [InlineData("100.64.0.1")]              // carrier-grade NAT 100.64.0.0/10 (RFC 6598)
-    [InlineData("100.127.255.255")]         // CGNAT upper bound
-    [InlineData("::ffff:127.0.0.1")]        // IPv4-mapped IPv6 reaching loopback (RFC 4291 section 2.5.5)
-    [InlineData("::ffff:169.254.169.254")]  // IPv4-mapped IPv6 reaching cloud metadata
-    [InlineData("::ffff:10.0.0.1")]         // IPv4-mapped IPv6 reaching a private range
-    [InlineData("::")]                       // IPv6 unspecified address
-    public void IsPrivateOrReservedAddress_ReservedRange_ReturnsTrue(string ip)
-    {
-        Assert.True(SecureUriValidator.IsPrivateOrReservedAddress(IPAddress.Parse(ip)));
-    }
-
-    [Theory]
-    [InlineData("203.0.113.10")]   // public documentation range, treated as routable
-    [InlineData("8.8.8.8")]        // public
-    [InlineData("100.63.255.255")] // one below the CGNAT range - must stay routable
-    [InlineData("100.128.0.0")]    // one above the CGNAT range - must stay routable
-    public void IsPrivateOrReservedAddress_PublicAddress_ReturnsFalse(string ip)
-    {
-        Assert.False(SecureUriValidator.IsPrivateOrReservedAddress(IPAddress.Parse(ip)));
     }
 
     // A named destination lifts both refusals at once - the scheme allow-list and the private-network block -

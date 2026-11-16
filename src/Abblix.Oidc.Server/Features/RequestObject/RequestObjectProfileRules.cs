@@ -37,7 +37,7 @@ internal static class RequestObjectProfileRules
     /// profile bounds no lifetime.
     /// </summary>
     /// <remarks>
-    /// The timestamps are read through <see cref="JsonWebTokenPayload.TryReadTimestamps"/> rather than the
+    /// The timestamps are read through <see cref="JsonWebTokenExtensions.TryReadTimestamps"/> rather than the
     /// accessors: the validator that passed the object is the host's to replace, and one that never read these
     /// claims must not turn an unreadable one into an exception here.
     /// </remarks>

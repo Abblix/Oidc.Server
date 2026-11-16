@@ -242,6 +242,14 @@ public class GrantedRevalidationTests
             TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 
     /// <summary>Accepts a granted entry only when the request carried an entry of its type.</summary>
@@ -282,6 +290,14 @@ public class GrantedRevalidationTests
 
             return Task.FromResult<Result<AuthorizationDetail, OidcError>>(new AuthorizationDetail(sorted));
         }
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 
     /// <summary>Enforces a ceiling by capping rather than by refusing.</summary>
@@ -298,6 +314,14 @@ public class GrantedRevalidationTests
 
             return Task.FromResult<Result<AuthorizationDetail, OidcError>>(new AuthorizationDetail(capped));
         }
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 
     /// <summary>A dispatch of the shape a host may register: edits what it is handed, answers an empty set.</summary>
@@ -312,6 +336,14 @@ public class GrantedRevalidationTests
 
             return Task.FromResult<Result<JsonArray, OidcError>>(new JsonArray());
         }
+
+        public Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
+            TenantDefinition tenant,
+            JsonArray? granted,
+            JsonArray? requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ApplyAsync(tenant, granted, client, token);
     }
 
     /// <summary>A dispatch that leaves its input alone and answers with every entry removed.</summary>
@@ -321,6 +353,14 @@ public class GrantedRevalidationTests
             TenantDefinition tenant,
             JsonArray? raw, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<JsonArray, OidcError>>(new JsonArray());
+
+        public Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
+            TenantDefinition tenant,
+            JsonArray? granted,
+            JsonArray? requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ApplyAsync(tenant, granted, client, token);
     }
 
     /// <summary>
@@ -339,5 +379,13 @@ public class GrantedRevalidationTests
 
             return Task.FromResult<Result<JsonArray, OidcError>>(asGiven);
         }
+
+        public Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
+            TenantDefinition tenant,
+            JsonArray? granted,
+            JsonArray? requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ApplyAsync(tenant, granted, client, token);
     }
 }

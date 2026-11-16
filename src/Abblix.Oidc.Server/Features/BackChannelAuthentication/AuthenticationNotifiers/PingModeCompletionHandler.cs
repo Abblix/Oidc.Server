@@ -40,7 +40,7 @@ public partial class PingModeCompletionHandler(
     ISubjectTypeConverter subjectTypeConverter,
     INotificationDeliveryService notificationService,
     TimeProvider clock,
-    IBackChannelLongPollingService? statusNotifier = null)
+    IBackChannelLongPollingService? statusNotifier)
     : AuthenticationCompletionHandler(
         logger, fingerprints, storage, subjectTypeConverter, clock, statusNotifier)
 {

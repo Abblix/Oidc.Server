@@ -11,22 +11,11 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 namespace Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 
 /// <summary>
-/// Provides metadata about supported scopes, claims, grants, and subject types for OpenID Connect discovery.
+/// Provides metadata about supported grants and subject types for OpenID Connect discovery. The scopes and claims
+/// are read from <see cref="Features.UserInfo.IScopeClaimsProvider"/>.
 /// </summary>
 public interface IScopesAndClaimsProvider
 {
-	/// <summary>
-	/// Lists the scopes the tenant supports.
-	/// </summary>
-	/// <param name="tenant">The tenant the request is served at.</param>
-	IEnumerable<string> ScopesSupported(TenantDefinition tenant);
-
-	/// <summary>
-	/// Lists the claims the tenant supports.
-	/// </summary>
-	/// <param name="tenant">The tenant the request is served at.</param>
-	IEnumerable<string> ClaimsSupported(TenantDefinition tenant);
-
 	/// <summary>
 	/// Lists the grant types supported by the OpenID Provider.
 	/// </summary>

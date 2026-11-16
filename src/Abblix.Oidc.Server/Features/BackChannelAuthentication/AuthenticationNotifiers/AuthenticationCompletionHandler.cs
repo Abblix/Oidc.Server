@@ -37,9 +37,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="storage">Storage for persisting authentication request state.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
-/// <param name="statusNotifier">Wakes a client waiting on a long poll. Optional, and defaulted so a
-/// handler outside this library keeps compiling - a deployment that registered none simply has nobody
-/// to wake.</param>
+/// <param name="statusNotifier">Wakes a client waiting on a long poll, or null for a mode whose clients
+/// never wait on one.</param>
 /// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
 public abstract partial class AuthenticationCompletionHandler(
     ILogger<AuthenticationCompletionHandler> logger,
@@ -47,7 +46,7 @@ public abstract partial class AuthenticationCompletionHandler(
     IBackChannelRequestStorage storage,
     ISubjectTypeConverter subjectTypeConverter,
     TimeProvider clock,
-    IBackChannelLongPollingService? statusNotifier = null)
+    IBackChannelLongPollingService? statusNotifier)
 {
     /// <summary>
     /// The fingerprint that stands for a CIBA request id in this handler's and its delivery mode's records.
@@ -476,8 +475,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// </para>
     /// <para>
     /// Whether anybody IS waiting is not this method's question either. Push never writes through it:
-    /// it takes the request instead, and no push client is ever a waiter. A deployment that registered no
-    /// notifier skips the call.
+    /// it takes the request instead, and no push client is ever a waiter, so push hands no notifier.
     /// </para>
     /// </remarks>
     /// <param name="tenant">The tenant the request is completed at.</param>

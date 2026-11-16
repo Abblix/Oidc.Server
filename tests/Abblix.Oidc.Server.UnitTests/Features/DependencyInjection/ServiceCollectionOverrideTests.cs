@@ -79,39 +79,6 @@ public class ServiceCollectionOverrideTests
     }
 
     [Fact]
-    public void AddAuthServiceJwt_HostPreregisteredKeysStore_Wins()
-    {
-        // The write-role store is segregated from the reader; a host that persists keys elsewhere
-        // registers its own, and the library's fail-loud default must not shadow it.
-        var services = new ServiceCollection();
-        var stub = new Mock<IAuthServiceKeysStore>().Object;
-        services.AddSingleton<IAuthServiceKeysStore>(stub);
-
-        services.AddAuthServiceJwt();
-
-        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IAuthServiceKeysStore));
-        Assert.Same(stub, descriptor.ImplementationInstance);
-    }
-
-    [Fact]
-    public async Task DefaultKeysStore_AddAsync_FailsLoud()
-    {
-        // With no persistent store registered, the default cannot save a generated key and must fail
-        // clearly rather than dropping it silently.
-        var services = new ServiceCollection();
-        services.AddAuthServiceJwt();
-        await using var provider = services.BuildServiceProvider();
-
-        var store = provider.GetRequiredService<IAuthServiceKeysStore>();
-        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
-        var descriptor = new AuthServiceKeyDescriptor(
-            key, KeyLifecycleStatus.Active, DateTimeOffset.MinValue, DateTimeOffset.MaxValue, DateTimeOffset.MaxValue);
-
-        await Assert.ThrowsAsync<NotSupportedException>(
-            () => store.AddAsync(descriptor, TestContext.Current.CancellationToken));
-    }
-
-    [Fact]
     public void AddAuthServiceJwt_InvokedTwice_DefaultsRegisteredOnce()
     {
         // TryAdd* guarantees the library's own default doesn't accumulate on repeated calls.

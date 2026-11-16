@@ -18,6 +18,7 @@ public class PrivateNetworksTests
 {
     [Theory]
     [InlineData("0.0.0.0", true)]
+    [InlineData("0.1.2.3", true)]
     [InlineData("0.255.255.255", true)]
     [InlineData("1.0.0.0", false)]
     [InlineData("9.255.255.255", false)]
@@ -45,6 +46,7 @@ public class PrivateNetworksTests
     [InlineData("192.168.255.255", true)]
     [InlineData("192.169.0.0", false)]
     [InlineData("8.8.8.8", false)]
+    [InlineData("203.0.113.10", false)]
     [InlineData("223.255.255.255", false)]
     [InlineData("224.0.0.0", true)]
     [InlineData("239.255.255.255", true)]
@@ -72,6 +74,9 @@ public class PrivateNetworksTests
     [InlineData("ffff:ffff::", true)]
     [InlineData("fe80::1%5", true)]
     [InlineData("::ffff:192.168.1.1", true)]
+    [InlineData("::ffff:127.0.0.1", true)]
+    [InlineData("::ffff:169.254.169.254", true)]
+    [InlineData("::ffff:10.0.0.1", true)]
     [InlineData("::ffff:8.8.8.8", false)]
     public void IPv6Address_IsJudgedByItsRange(string address, bool expected)
         => Assert.Equal(expected, PrivateNetworks.IsPrivateOrReservedAddress(IPAddress.Parse(address)));

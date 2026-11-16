@@ -26,9 +26,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.AuthenticationNo
 /// <param name="storage">Storage for authentication requests.</param>
 /// <param name="subjectTypeConverter">Seals a session's subject the way the requesting client sees it,
 /// so the end user who authenticated can be compared against the one the request named.</param>
-/// <param name="statusNotifier">Wakes a client waiting on a long poll. Nullable because a deployment may
-/// register none, NOT because long-polling is off: the default registration is unconditional, so this is
-/// normally present even where the setting is disabled - the waiting is what the setting decides, and a
+/// <param name="statusNotifier">Wakes a client waiting on a long poll. The registration is unconditional, so
+/// it is present even where long-polling is disabled - the waiting is what the setting decides, and a
 /// notification nobody waits for is a no-op.</param>
 /// <param name="clock">Stamps when the end user approved the request, which a revocation at its client is measured against.</param>
 public partial class PollModeCompletionHandler(

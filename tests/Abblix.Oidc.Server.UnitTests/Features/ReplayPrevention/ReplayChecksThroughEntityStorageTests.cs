@@ -18,18 +18,22 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints;
+using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.JwtBearer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.Features.DPoP;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
@@ -173,18 +177,56 @@ public class ReplayChecksThroughEntityStorageTests
         Assert.Equal([Prefix + jwtId, Prefix + jwtId], _storage.Claimed);
     }
 
+    /// <summary>
+    /// The grant handler reserves a bearer assertion's jti in the replay cache the server registers, so the second
+    /// presentation is refused by the storage's add-if-absent.
+    /// </summary>
     [Fact]
     public async Task AJwtBearerAssertionPresentedTwice_IsRefusedByTheStorage()
     {
         var services = Services();
         services.AddJwtBearerGrant();
         await using var provider = services.BuildServiceProvider();
-        var issuers = ActivatorUtilities.CreateInstance<JwtBearerIssuerProvider>(
-            provider, new Mock<ISecureHttpFetcher>().Object);
-        var expiresAt = TimeProvider.System.GetUtcNow().AddMinutes(5);
 
-        Assert.False(await issuers.IsReplayedAsync("bearer-jti", expiresAt));
-        Assert.True(await issuers.IsReplayedAsync("bearer-jti", expiresAt));
+        var now = TimeProvider.System.GetUtcNow();
+        var assertion = new JsonWebToken
+        {
+            Header = { Algorithm = SigningAlgorithms.RS256 },
+            Payload =
+            {
+                JwtId = "bearer-jti",
+                Issuer = "https://idp.example.com",
+                Subject = "user",
+                IssuedAt = now,
+                ExpiresAt = now.AddMinutes(5),
+            },
+        };
+        var validator = new Mock<IJsonWebTokenValidator>();
+        validator
+            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationParameters>()))
+            .ReturnsAsync((Result<JsonWebToken, JwtValidationError>)assertion);
+        var issuers = new Mock<IJwtBearerIssuerProvider>();
+        issuers.SetupGet(p => p.Options).Returns(new JwtBearerOptions { RequireJti = true });
+        var requestInfo = new Mock<IRequestInfoProvider>();
+        requestInfo.SetupGet(p => p.RequestUri).Returns(new Uri("https://auth.example.com/token"));
+        requestInfo.SetupGet(p => p.ApplicationUri).Returns(new Uri("https://auth.example.com"));
+        var sessions = new Mock<ISessionIdGenerator>();
+        sessions.Setup(g => g.GenerateSessionId()).Returns("session");
+
+        var handler = ActivatorUtilities.CreateInstance<JwtBearerGrantHandler>(
+            provider,
+            new ProfiledJwtValidator(validator.Object),
+            issuers.Object,
+            requestInfo.Object,
+            sessions.Object,
+            SingleIssuer.LicensedCatalog);
+        var request = new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = "assertion" };
+        var client = new ClientInfo(ClientId);
+        var ct = TestContext.Current.CancellationToken;
+
+        Assert.True((await handler.AuthorizeAsync(SingleIssuer.Tenant, request, client, ct)).TryGetSuccess(out _));
+        Assert.True((await handler.AuthorizeAsync(SingleIssuer.Tenant, request, client, ct)).TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
         Assert.Equal([Prefix + "bearer-jti", Prefix + "bearer-jti"], _storage.Claimed);
     }
 

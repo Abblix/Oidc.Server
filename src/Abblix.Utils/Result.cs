@@ -150,22 +150,6 @@ public union Result<TSuccess, TFailure>(TSuccess, TFailure)
         };
 
     /// <summary>
-    /// Maps both success and failure values to new types.
-    /// </summary>
-    /// <typeparam name="TNewSuccess">The type to map the success value to.</typeparam>
-    /// <typeparam name="TNewFailure">The type to map the failure value to.</typeparam>
-    /// <param name="onSuccess">The function to apply if the result is successful.</param>
-    /// <param name="onFailure">The function to apply if the result is a failure.</param>
-    /// <returns>A new result with both success and failure values mapped to new types.</returns>
-    public Result<TNewSuccess, TNewFailure> Map<TNewSuccess, TNewFailure>(
-        Func<TSuccess, TNewSuccess> onSuccess,
-        Func<TFailure, TNewFailure> onFailure)
-        => Match<Result<TNewSuccess, TNewFailure>>(
-            success => onSuccess(success),
-            failure => onFailure(failure)
-        );
-
-    /// <summary>
     /// Determines whether the result is a success.
     /// </summary>
     /// <param name="value">When this method returns, contains the success value if the result is successful;

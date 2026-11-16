@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
-using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
@@ -19,21 +18,15 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 
 /// <summary>
 /// Default implementation of <see cref="IJwtBearerIssuerProvider"/> that loads trusted issuers
-/// from <see cref="OidcOptions.JwtBearer"/> configuration, fetches JWKS with SSRF protection,
-/// and provides JWT replay protection.
+/// from <see cref="OidcOptions.JwtBearer"/> configuration and fetches JWKS with SSRF protection.
 /// </summary>
 /// <param name="logger">Logger for recording JWKS fetch operations and errors.</param>
 /// <param name="oidcOptions">OIDC configuration options containing JWT Bearer trusted issuers.</param>
-/// <param name="replayCache">Cache for JWT replay protection per RFC 7523 Section 3.</param>
 /// <param name="secureFetcher">HTTP fetcher with SSRF protection and caching.</param>
-/// <param name="timeProvider">Dates the fallback retention window for an assertion without an
-/// expiry.</param>
 public partial class JwtBearerIssuerProvider(
 	ILogger<JwtBearerIssuerProvider> logger,
 	IOptionsMonitor<OidcOptions> oidcOptions,
-	IReplayCache replayCache,
-	[FromKeyedServices(KeySetOwners.Issuer)] ISecureHttpFetcher secureFetcher,
-	TimeProvider timeProvider) : IJwtBearerIssuerProvider
+	[FromKeyedServices(KeySetOwners.Issuer)] ISecureHttpFetcher secureFetcher) : IJwtBearerIssuerProvider
 {
 	/// <inheritdoc />
 	public JwtBearerOptions Options => oidcOptions.CurrentValue.JwtBearer;
@@ -112,13 +105,4 @@ public partial class JwtBearerIssuerProvider(
 			yield return key;
 		}
 	}
-
-	/// <inheritdoc />
-	public async Task<bool> IsReplayedAsync(string jti, DateTimeOffset? expiresAt)
-		// An assertion carrying no expiry names no window to remember it for, so the identifier is
-		// held for the fallback the cache publishes. The guess is made here, where the reason for it
-		// is visible, rather than inside the cache where a caller cannot see what it got.
-		=> !await replayCache.TryReserveAsync(
-			jti,
-			expiresAt ?? timeProvider.GetUtcNow() + ReplayPrevention.ConfiguredReplayCache.DefaultExpiration);
 }

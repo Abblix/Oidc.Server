@@ -56,8 +56,9 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
     /// deployment speaks. A profile may be tighter: the CAEP Interoperability Profile 1.0 says "The
     /// 'events' claim of the SET MUST contain only one event", and a deployment claiming it sets this.
     /// <para>
-    /// Refused at the second statement - through either <see cref="WithEvent(string, JsonObject)"/> or
-    /// <see cref="WithEvent{TPayload}"/> - rather than at <see cref="Build"/>, so the failure names the
+    /// Refused at the second statement - through <see cref="WithEvent(string, JsonObject)"/>, which the typed
+    /// <see cref="SecurityEventTokenBuilderExtensions.WithEvent{TPayload}"/> calls too - rather than at
+    /// <see cref="Build"/>, so the failure names the
     /// call that broke the rule instead of the one that noticed.
     /// </para>
     /// </remarks>
@@ -210,48 +211,6 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
     /// A second statement was added while <see cref="SingleEventStatement"/> is set.</exception>
     public SecurityEventTokenBuilder WithEvent(string eventType, JsonObject? payload = null)
         => AddStatement(eventType, payload);
-
-    /// <summary>
-    /// Adds an event statement whose payload is a typed model, serialized here so the caller
-    /// works in terms of the profiling specification's type rather than raw JSON.
-    /// </summary>
-    /// <typeparam name="TPayload">The type modelling the event's payload.</typeparam>
-    /// <param name="eventType">The event identifier URI.</param>
-    /// <param name="payload">The payload value.</param>
-    /// <param name="serializerOptions">
-    /// Options for payload serialization; null takes the serializer's defaults. A receiver reads
-    /// the payload back with the options its <see cref="EventTypeRegistry"/> holds, so a
-    /// transmitter and receiver sharing a dictionary package agree by construction.</param>
-    /// <exception cref="ArgumentException">
-    /// A statement with the same event identifier was already added, or the payload serialized
-    /// into something other than a JSON object, which RFC 8417 Section 2.2 requires the value to
-    /// be.</exception>
-    /// <exception cref="InvalidOperationException">
-    /// A second statement was added while <see cref="SingleEventStatement"/> is set.</exception>
-    public SecurityEventTokenBuilder WithEvent<TPayload>(
-        string eventType,
-        TPayload payload,
-        JsonSerializerOptions? serializerOptions = null)
-        where TPayload : IEventPayload
-    {
-        ArgumentNullException.ThrowIfNull(payload);
-
-        // A passthrough payload re-transmits what arrived, not a serialization of the wrapper:
-        // the wrapper is this package's shape, while its Json is the event's.
-        var node = payload is UnknownEventPayload unknown
-            ? unknown.Json.DeepClone()
-            : JsonSerializer.SerializeToNode(payload, payload.GetType(), serializerOptions);
-
-        if (node is not JsonObject payloadObject)
-        {
-            throw new ArgumentException(
-                $"The payload of event '{eventType}' serialized into {node?.GetValueKind().ToString() ?? "null"}, "
-                + "but an event payload must be a JSON object (RFC 8417 Section 2.2).",
-                nameof(payload));
-        }
-
-        return AddStatement(eventType, payloadObject);
-    }
 
     /// <summary>
     /// The one door to the "events" claim, so the count is decided in a single place.
@@ -416,18 +375,5 @@ public sealed class SecurityEventTokenBuilder(TimeProvider? clock = null)
         payload.SetProperty(IanaClaimTypes.Events, _events.Json.DeepClone());
 
         return new SecurityEventToken(token);
-    }
-
-    /// <summary>
-    /// Materializes the SET and hands it to the signer, returning the compact serialization a
-    /// transmitter delivers.
-    /// </summary>
-    /// <param name="signer">The signer owning key and algorithm choice.</param>
-    /// <param name="cancellationToken">Cancels the signing operation mid-flight.</param>
-    public Task<string> SignAsync(ISecurityEventTokenSigner signer, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(signer);
-
-        return signer.SignAsync(Build(), cancellationToken);
     }
 }

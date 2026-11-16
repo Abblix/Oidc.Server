@@ -152,17 +152,6 @@ public abstract record JsonWebKey
     }
 
     /// <summary>
-    /// Computes the JWK Thumbprint of this key per RFC 7638 section 3 and returns the
-    /// base64url-encoded form, which is the wire shape used by DPoP <c>cnf.jkt</c> and
-    /// the <c>dpop_jkt</c> authorization-request parameter.
-    /// </summary>
-    /// <returns>The base64url-encoded SHA-256 digest of the canonical-JSON form.</returns>
-    /// <exception cref="InvalidOperationException">A required member
-    /// (per RFC 7638 section 3.2) is missing on this key.</exception>
-    public string ComputeJwkThumbprintBase64Url()
-        => Base64Url.EncodeToString(ComputeJwkThumbprint());
-
-    /// <summary>
     /// Throws if a required byte-array member is missing on the key, otherwise returns its base64url-encoded form.
     /// </summary>
     /// <param name="name">The JWK wire name of the member being encoded

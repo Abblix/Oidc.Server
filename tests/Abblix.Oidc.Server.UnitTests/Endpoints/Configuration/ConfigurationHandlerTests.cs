@@ -24,6 +24,7 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.UserInfo;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Utils;
@@ -48,9 +49,10 @@ public class ConfigurationHandlerTests
     [Fact]
     public async Task TheDocument_ListsTheScopesClaimsAndSubjectTypesOfTheTenantItIsBuiltFor()
     {
+        var scopeClaims = new Mock<IScopeClaimsProvider>();
+        scopeClaims.Setup(p => p.ScopesSupported(TestTenant.Matched)).Returns([Scopes.OpenId, "orders"]);
+        scopeClaims.Setup(p => p.ClaimsSupported(TestTenant.Matched)).Returns(["sub", "order_id"]);
         var scopesAndClaims = new Mock<IScopesAndClaimsProvider>();
-        scopesAndClaims.Setup(p => p.ScopesSupported(TestTenant.Matched)).Returns([Scopes.OpenId, "orders"]);
-        scopesAndClaims.Setup(p => p.ClaimsSupported(TestTenant.Matched)).Returns(["sub", "order_id"]);
         scopesAndClaims.Setup(p => p.SubjectTypesSupported(TestTenant.Matched)).Returns(["public", "pairwise"]);
         var acr = new Mock<IAcrMetadataProvider>();
         acr.Setup(p => p.AcrValuesSupported(TestTenant.Matched)).Returns(["urn:example:acr:strong"]);
@@ -66,6 +68,7 @@ public class ConfigurationHandlerTests
             Mock.Of<ILogoutNotifier>(),
             clientAuthenticator.Object,
             Mock.Of<IAuthorizationMetadataProvider>(),
+            scopeClaims.Object,
             scopesAndClaims.Object,
             Mock.Of<IJwtAlgorithmsProvider>(),
             Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
@@ -119,6 +122,7 @@ public class ConfigurationHandlerTests
             Mock.Of<ILogoutNotifier>(),
             clientAuthenticator.Object,
             metadata.Object,
+            Mock.Of<IScopeClaimsProvider>(),
             Mock.Of<IScopesAndClaimsProvider>(),
             algorithms.Object,
             keys,
@@ -566,6 +570,7 @@ public class ConfigurationHandlerTests
             Mock.Of<ILogoutNotifier>(),
             clientAuthenticator.Object,
             metadata,
+            Mock.Of<IScopeClaimsProvider>(),
             scopesAndClaims ?? Mock.Of<IScopesAndClaimsProvider>(),
             algorithms.Object,
             keys,

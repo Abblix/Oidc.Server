@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -50,7 +51,7 @@ public class SsrfValidatingHttpMessageHandlerTests
     private sealed class Judge : SsrfValidatingHttpMessageHandler
     {
         private Judge(IOptions<SecureHttpFetchOptions> options, ResolveHostDelegate resolveHost)
-            : base(options, new SecureUriValidator(options), resolveHost)
+            : base(options, new SecureUriValidator(options, NullLogger<SecureUriValidator>.Instance), resolveHost)
         {
         }
 
@@ -524,7 +525,7 @@ public class SsrfValidatingHttpMessageHandlerTests
         var transport = new CountingTransport();
         var handler = new SsrfValidatingHttpMessageHandler(
             accessor,
-            new SecureUriValidator(accessor),
+            new SecureUriValidator(accessor, NullLogger<SecureUriValidator>.Instance),
             RefusesToResolve);
 
         // Releasing the transport the handler built for itself: this is the last moment anything holds it, because
