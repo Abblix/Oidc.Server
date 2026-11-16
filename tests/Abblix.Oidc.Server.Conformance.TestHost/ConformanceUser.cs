@@ -11,7 +11,7 @@ using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Features.UserInfo;
 
-namespace Abblix.Oidc.Server.MinimalApi.Conformance.TestHost;
+namespace Abblix.Oidc.Server.Conformance.TestHost;
 
 /// <summary>
 /// The one end user the conformance suite signs in as, carrying every standard claim, since the suite's

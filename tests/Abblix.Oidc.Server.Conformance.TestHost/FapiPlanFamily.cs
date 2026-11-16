@@ -12,7 +12,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 
-namespace Abblix.Oidc.Server.MinimalApi.Conformance.TestHost;
+namespace Abblix.Oidc.Server.Conformance.TestHost;
 
 /// <summary>
 /// One family of FAPI or CIBA plans: the security profile its clients are held to, and the static clients of each

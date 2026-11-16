@@ -10,7 +10,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Abblix.Jwt;
 
-namespace Abblix.Oidc.Server.MinimalApi.Conformance.TestHost;
+namespace Abblix.Oidc.Server.Conformance.TestHost;
 
 /// <summary>
 /// What the suite proves it is one static client with: a key it signs client assertions, request objects and DPoP

@@ -38,8 +38,15 @@ took, and the logs of the host and the driver.
 .PARAMETER KeepRunning
 Leaves the suite and the host running afterwards, so a failed module can be opened in the suite's web interface.
 
+.PARAMETER Adapter
+The transport adapter the host serves the protocol endpoints through: MinimalApi, the default, or Mvc. Both hosts
+are the same server apart from it, so a module failing on one adapter only is that adapter's defect.
+
 .EXAMPLE
 ./conformance/run.ps1
+
+.EXAMPLE
+./conformance/run.ps1 -Adapter Mvc -PlanFile conformance/fapi-plans.txt
 
 .EXAMPLE
 ./conformance/run.ps1 -SuitePath ../conformance-suite -Plan 'oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=dynamic_client]:oidcc-server'
@@ -57,7 +64,10 @@ param(
 
     [string] $ResultsPath,
 
-    [switch] $KeepRunning
+    [switch] $KeepRunning,
+
+    [ValidateSet('MinimalApi', 'Mvc')]
+    [string] $Adapter = 'MinimalApi'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -85,8 +95,15 @@ $ProbeImage = 'curlimages/curl:8.10.1'
 $RunnerImage = 'python:3.12-slim'
 
 $RepositoryRoot = Split-Path -Parent $PSScriptRoot
-$HostProject = Join-Path $RepositoryRoot 'tests/Abblix.Oidc.Server.MinimalApi.Conformance.TestHost'
-$HostAssembly = 'Abblix.Oidc.Server.MinimalApi.Conformance.TestHost.dll'
+$HostName = switch ($Adapter) {
+    'MinimalApi' { 'Abblix.Oidc.Server.MinimalApi.Conformance.TestHost' }
+    'Mvc' { 'Abblix.Oidc.Server.Mvc.Conformance.TestHost' }
+    default { throw "No conformance host serves the $Adapter adapter" }
+}
+$HostProject = Join-Path $RepositoryRoot "tests/$HostName"
+$HostAssembly = "$HostName.dll"
+# The settings both hosts start with, kept in the library they share
+$HostSettingsFile = Join-Path $RepositoryRoot 'tests/Abblix.Oidc.Server.Conformance.TestHost/appsettings.json'
 $PublishDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-host'
 # Where the host writes the configuration of each plan run with static clients, private keys included, and where the
 # runner reads it from
@@ -101,6 +118,15 @@ $RunnerInstall = 'pip install -q --root-user-action=ignore --only-binary :all: -
 
 function Write-Step([string] $Message) {
     Write-Host "==> $Message" -ForegroundColor Cyan
+}
+
+# 32 random bytes in base64url without padding, which an environment variable and a form post carry unchanged
+function New-UserPassword {
+    [CmdletBinding()]
+    param()
+
+    [Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).
+        TrimEnd('=').Replace('+', '-').Replace('/', '_')
 }
 
 function Assert-LastExit([string] $What) {
@@ -431,6 +457,8 @@ if ($ResultsPath) {
 }
 
 $imageTagBefore = $env:IMAGE_TAG
+$userPasswordBefore = $env:Conformance__UserPassword
+$loginPasswordBefore = $env:LOGIN_PASSWORD
 $ComposeFile = $null
 $exitCode = 1
 try {
@@ -459,7 +487,7 @@ try {
     Assert-LastExit 'docker compose up'
     Wait-Until -What 'The conformance suite' -Condition { Test-SuiteReady }
 
-    Write-Step 'Publishing the conformance test host'
+    Write-Step "Publishing the conformance test host on the $Adapter adapter"
     dotnet publish $HostProject -c Release -o $PublishDirectory --nologo -v quiet
     Assert-LastExit 'dotnet publish'
 
@@ -468,9 +496,15 @@ try {
     # Emptied first, so a configuration the host no longer writes is not read from an earlier run
     Remove-PlanConfigurations
     New-Item -ItemType Directory $PlanConfigurationsDirectory | Out-Null
+    # The conformance user's password is fresh for every run and kept nowhere. The host and the browser driver take it
+    # from this process's environment by name, so it is on no command line, and the finally block puts back what the
+    # environment held before
+    $env:Conformance__UserPassword = New-UserPassword
+    $env:LOGIN_PASSWORD = $env:Conformance__UserPassword
     docker run -d --name $HostContainer --network $Network --network-alias $HostMtlsAlias `
         -v "${PublishDirectory}:/app:ro" -v "${PlanConfigurationsDirectory}:${PlanConfigurationsMount}" -w /app `
         -e "Conformance__PlanConfigurations=$PlanConfigurationsMount" `
+        -e Conformance__UserPassword `
         $RuntimeImage dotnet $HostAssembly | Out-Null
     Assert-LastExit 'docker run (host)'
     try {
@@ -495,7 +529,7 @@ try {
     Write-Step 'Starting the browser driver'
     docker build -q -t $BrowserImage (Join-Path $PSScriptRoot 'browser') | Out-Null
     Assert-LastExit 'docker build (browser driver)'
-    $hostSettings = (Get-Content -Raw (Join-Path $HostProject 'appsettings.json') | ConvertFrom-Json).Conformance
+    $hostSettings = (Get-Content -Raw -LiteralPath $HostSettingsFile | ConvertFrom-Json).Conformance
     docker rm -f $BrowserContainer 2>$null | Out-Null
     # The screenshots stay inside the container and are copied out at the end, so whoever owns the results
     # directory does not decide whether the driver can write them
@@ -503,7 +537,7 @@ try {
         -e "CONFORMANCE_SERVER=$SuiteUrl" `
         -e "HOST_ORIGIN=$($hostSettings.Issuer)" `
         -e "LOGIN_EMAIL=$($hostSettings.UserEmail)" `
-        -e "LOGIN_PASSWORD=$($hostSettings.UserPassword)" `
+        -e LOGIN_PASSWORD `
         -e 'DRIVER_DEADLINE_SECONDS=14400' `
         -e "DRIVER_SCREENSHOT_DIR=$BrowserScreenshots" `
         $BrowserImage | Out-Null
@@ -615,6 +649,8 @@ try {
 }
 finally {
     $env:IMAGE_TAG = $imageTagBefore
+    $env:Conformance__UserPassword = $userPasswordBefore
+    $env:LOGIN_PASSWORD = $loginPasswordBefore
     # Collecting the evidence must neither hide why the run failed nor stop the cleanup after it
     try {
         Save-Evidence
@@ -626,6 +662,9 @@ finally {
         Write-Step "Left running: the suite at $SuiteUrl and the host as $HostContainer; stop them with"
         $stopSuite = if ($ComposeFile) { "; docker compose -f `"$ComposeFile`" -p $ProjectName down" } else { '' }
         Write-Host "  docker rm -f $HostContainer$stopSuite"
+        # The password was made for this run only, so the one copy left is in the host's environment
+        Write-Host "Signing in by hand takes the conformance user's password, which this prints:"
+        Write-Host "  docker exec $HostContainer printenv Conformance__UserPassword"
     }
     else {
         Write-Step 'Removing the host and the suite'

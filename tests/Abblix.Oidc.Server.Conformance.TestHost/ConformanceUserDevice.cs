@@ -15,7 +15,7 @@ using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Utils;
 
-namespace Abblix.Oidc.Server.MinimalApi.Conformance.TestHost;
+namespace Abblix.Oidc.Server.Conformance.TestHost;
 
 /// <summary>
 /// The conformance user's device for the FAPI-CIBA plans: a request naming the user is left pending, and the suite
