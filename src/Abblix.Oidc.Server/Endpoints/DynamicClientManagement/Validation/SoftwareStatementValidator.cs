@@ -69,6 +69,11 @@ public partial class SoftwareStatementValidator(
         string? refusedIssuer = null;
         async Task<bool> TrustsAsync(string issuer)
         {
+            // The key lookup is asked again on an unfamiliar kid: an issuer already refused is not judged, nor logged,
+            // twice
+            if (issuer == refusedIssuer)
+                return false;
+
             if (await IsTrustedAsync(softwareStatementOptions, issuer))
                 return true;
 

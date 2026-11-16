@@ -21,6 +21,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -152,6 +153,48 @@ public class SoftwareStatementValidatorTests
 
         Assert.NotNull(result);
         Assert.Equal(expected, result.Error);
+    }
+
+    /// <summary>
+    /// The key lookup is asked again when the statement names a kid the first answer lacked: an issuer refused at the
+    /// first lookup is not judged, nor recorded as untrusted, a second time.
+    /// </summary>
+    [Fact]
+    public async Task AnUntrustedIssuer_IsJudgedOnce_WhenItsKeysAreAskedAgain()
+    {
+        _oidcOptions.SoftwareStatement.TrustedIssuers =
+        [
+            new TrustedIssuer
+            {
+                Issuer = "https://trusted-issuer.example.com",
+                JwksUri = new Uri("https://trusted-issuer.example.com/.well-known/jwks.json"),
+            },
+        ];
+        const string untrusted = "https://untrusted-issuer.example.com";
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("eyJ.statement.jwt", It.IsAny<ValidationParameters>()))
+            .Returns(async (string _, ValidationParameters parameters) =>
+            {
+                await parameters.ResolveIssuerSigningKeys!(untrusted).ToArrayAsync(TestContext.Current.CancellationToken);
+                await parameters.RefetchIssuerSigningKeys!(untrusted).ToArrayAsync(TestContext.Current.CancellationToken);
+                return new JwtValidationError(JwtError.InvalidToken, "Signature verification failed");
+            });
+        var logs = new RecordingLoggerFactory();
+        var optionsMonitor = new Mock<IOptionsMonitor<OidcOptions>>();
+        optionsMonitor.Setup(m => m.CurrentValue).Returns(() => _oidcOptions);
+        var validator = new SoftwareStatementValidator(
+            logs.CreateLogger<SoftwareStatementValidator>(),
+            new ProfiledJwtValidator(_jwtValidator.Object),
+            optionsMonitor.Object,
+            _secureFetcher.Object,
+            SingleIssuer.LicensedCatalog);
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.statement.jwt"));
+
+        Assert.Equal(ErrorCodes.UnapprovedSoftwareStatement, result?.Error);
+        Assert.Single(
+            logs.Entries,
+            entry => entry.EventId.Id == LogEvents.DynamicClientManagement.SoftwareStatementValidator.IssuerNotTrusted);
     }
 
     [Fact]
