@@ -382,6 +382,10 @@ public class SecurityProfileClientAuthenticatorTests
             // also trip the clause requiring the code type, and the row would stay green if the
             // clause its name points at were deleted.
             AllowedResponseTypes = [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]],
+            // At the RS256 defaults the FAPI 2.0 signing clause would refuse the client as well, and the row would
+            // stay green with the response-type clause deleted
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         });
 
         var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
