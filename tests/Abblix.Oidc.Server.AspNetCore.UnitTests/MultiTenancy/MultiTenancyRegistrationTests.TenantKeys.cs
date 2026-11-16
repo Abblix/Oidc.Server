@@ -529,6 +529,48 @@ public partial class MultiTenancyRegistrationTests
     }
 
     /// <summary>
+    /// A key is tried on an inbound JWE only under an algorithm the host registers for it, so a custodian key published
+    /// under one the custodian serves but the host never registered, RSA1_5 without its opt-in, would open nothing:
+    /// startup refuses it, naming the algorithm, and passes it once the host opts in.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ATenantEncryptingUnderAnAlgorithmTheHostDoesNotRegister_IsRefusedAtStartup(bool optedIn)
+    {
+        using var provider = KeysInACustodian(
+            [
+                new TenantDefinition
+                {
+                    Id = "acme",
+                    Issuer = new Uri(AcmeIssuer),
+                    CustodianKeys = new CustodianHeldKeys
+                    {
+                        SigningKeyName = "acme-sign",
+                        EncryptionKeyName = "acme-encrypt",
+                        EncryptionAlgorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5,
+                    },
+                },
+            ],
+            host: services =>
+            {
+                services.AddSingleton(Moq.Mock.Of<IKeyCustodian>(c => c.ServesKeyManagement(Moq.It.IsAny<string>())));
+                if (optedIn)
+                    services.AddRsaPkcs1KeyManagement();
+            });
+
+        if (optedIn)
+        {
+            Assert.NotEmpty(provider.GetRequiredService<IOptions<OidcOptions>>().Value.Tenants);
+            return;
+        }
+
+        var refusal = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
+        Assert.Contains(EncryptionAlgorithms.KeyManagement.Rsa1_5 + "'", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Keys a tenant declares for a placement its server does not use are never read, so startup refuses them,
     /// naming the tenant and the setting, rather than let them read as the keys the tenant produces with.
     /// </summary>

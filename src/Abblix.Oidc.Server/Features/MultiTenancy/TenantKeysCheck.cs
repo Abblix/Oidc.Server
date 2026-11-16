@@ -63,7 +63,10 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
     /// </summary>
     private IEnumerable<TenantRefusal> NamedInTheCustodianOf(IReadOnlyCollection<TenantDefinition> tenants)
         => CustodianKeysOf(tenants)
-            .Concat(UnservedEncryptionOf(tenants, serviceProvider.GetRequiredService<IKeyCustodian>()));
+            .Concat(UnservedEncryptionOf(
+                tenants,
+                serviceProvider.GetRequiredService<IKeyCustodian>(),
+                serviceProvider.GetRequiredService<EncryptionAlgorithmsProvider>()));
 
     /// <summary>
     /// A tenant whose keys come from its settings and that declares no signing key cannot issue a single token and
@@ -201,21 +204,42 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
 
     /// <summary>
     /// A tenant whose encryption key the custodian holds publishes it with a key management algorithm the custodian
-    /// serves: a client encrypts exactly as the published key says, so under any other every token sent to the
+    /// serves and the host registers: a client encrypts exactly as the published key says, and an inbound JWE is
+    /// tried with a key only under an algorithm registered for it, so under any other every token sent to the
     /// tenant would fail to open.
     /// </summary>
     private static IEnumerable<TenantRefusal> UnservedEncryptionOf(
         IReadOnlyCollection<TenantDefinition> tenants,
-        IKeyCustodian custodian)
+        IKeyCustodian custodian,
+        EncryptionAlgorithmsProvider encryptionAlgorithms)
         =>
             from tenant in tenants
-            where tenant.CustodianKeys is { EncryptionKeyName: not null } keys &&
-                  !custodian.ServesKeyManagement(keys.EncryptionAlgorithm)
+            where tenant.CustodianKeys is { EncryptionKeyName: not null }
+            let algorithm = tenant.CustodianKeys!.EncryptionAlgorithm
+            let unserved = WhoDoesNotServe(algorithm, custodian, encryptionAlgorithms)
+            where unserved is not null
             select TenantRefusal.Of(
                 tenant,
-                $"Tenant '{tenant.Id}': the key custodian {custodian.GetType().Name} does not serve the key " +
-                $"management algorithm '{tenant.CustodianKeys!.EncryptionAlgorithm}' that " +
+                $"Tenant '{tenant.Id}': {unserved} the key management algorithm '{algorithm}' that " +
                 $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.CustodianKeys)}." +
                 $"{nameof(CustodianHeldKeys.EncryptionAlgorithm)} names, so no token encrypted to the tenant could be " +
                 "opened.");
+
+    /// <summary>
+    /// Which of the two parties an inbound JWE under <paramref name="algorithm"/> needs fails it, said as the start of
+    /// the refusal, or null where both serve it.
+    /// </summary>
+    private static string? WhoDoesNotServe(
+        string algorithm,
+        IKeyCustodian custodian,
+        EncryptionAlgorithmsProvider encryptionAlgorithms)
+    {
+        if (!custodian.ServesKeyManagement(algorithm))
+            return $"the key custodian {custodian.GetType().Name} does not serve";
+
+        if (!encryptionAlgorithms.KeyManagementAlgorithms.Contains(algorithm, StringComparer.Ordinal))
+            return "the host registers no implementation of";
+
+        return null;
+    }
 }
