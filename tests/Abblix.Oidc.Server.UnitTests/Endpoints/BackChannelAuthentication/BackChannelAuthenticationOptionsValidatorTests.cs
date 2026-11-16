@@ -36,34 +36,56 @@ public class BackChannelAuthenticationOptionsValidatorTests
     private static readonly TimeSpan OneSecond = TimeSpan.FromSeconds(1);
 
     /// <summary>
-    /// A lifetime of no length or below it, a default longer than the maximum a client may ask for, and a maximum
-    /// so long that a pending request's retention, its lifetime plus the maximum, cannot be computed or stored.
+    /// A default of no length or below it, or longer than the maximum a client may ask for.
     /// </summary>
-    public static TheoryData<TimeSpan, TimeSpan, string> Refused => new()
+    public static TheoryData<TimeSpan, TimeSpan> RefusedDefaults => new()
     {
-        { TimeSpan.Zero, TimeSpan.FromMinutes(30), nameof(BackChannelAuthenticationOptions.DefaultExpiry) },
-        { -OneSecond, TimeSpan.FromMinutes(30), nameof(BackChannelAuthenticationOptions.DefaultExpiry) },
-        { TimeSpan.FromMinutes(5), TimeSpan.Zero, nameof(BackChannelAuthenticationOptions.MaximumExpiry) },
-        { TimeSpan.FromMinutes(5), -OneSecond, nameof(BackChannelAuthenticationOptions.MaximumExpiry) },
-        { TimeSpan.FromMinutes(5), TimeSpan.MaxValue, nameof(BackChannelAuthenticationOptions.MaximumExpiry) },
-        {
-            TimeSpan.FromMinutes(5),
-            BackChannelAuthenticationOptionsValidator.LongestMaximumExpiry + TimeSpan.FromTicks(1),
-            nameof(BackChannelAuthenticationOptions.MaximumExpiry)
-        },
-        { TimeSpan.FromMinutes(31), TimeSpan.FromMinutes(30), nameof(BackChannelAuthenticationOptions.DefaultExpiry) },
+        { TimeSpan.Zero, TimeSpan.FromMinutes(30) },
+        { -OneSecond, TimeSpan.FromMinutes(30) },
+        { TimeSpan.FromMinutes(31), TimeSpan.FromMinutes(30) },
+    };
+
+    /// <summary>
+    /// A maximum of no length or below it, or so long that a pending request's retention, its lifetime plus the
+    /// maximum, cannot be computed or stored. The default is valid in every case.
+    /// </summary>
+    public static TheoryData<TimeSpan> RefusedMaximums => new()
+    {
+        TimeSpan.Zero,
+        -OneSecond,
+        TimeSpan.MaxValue,
+        BackChannelAuthenticationOptionsValidator.LongestMaximumExpiry + TimeSpan.FromTicks(1),
     };
 
     [Theory]
-    [MemberData(nameof(Refused))]
-    public void ALifetimeTheServerCannotServeIsRefusedNamingTheSetting(
-        TimeSpan defaultExpiry, TimeSpan maximumExpiry, string named)
+    [MemberData(nameof(RefusedDefaults))]
+    public void ADefaultTheServerCannotServeIsRefusedNamingIt(TimeSpan defaultExpiry, TimeSpan maximumExpiry)
+    {
+        var failure = RefusalOf(defaultExpiry, maximumExpiry);
+
+        Assert.Contains(nameof(BackChannelAuthenticationOptions.DefaultExpiry), failure.Message);
+    }
+
+    /// <remarks>
+    /// The refusal of a default names the maximum too, so the message is also held to NOT naming the default: a
+    /// maximum let through to the default's rule would otherwise still pass as named.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(RefusedMaximums))]
+    public void AMaximumTheServerCannotServeIsRefusedNamingIt(TimeSpan maximumExpiry)
+    {
+        var failure = RefusalOf(TimeSpan.FromMinutes(5), maximumExpiry);
+
+        Assert.Contains(nameof(BackChannelAuthenticationOptions.MaximumExpiry), failure.Message);
+        Assert.DoesNotContain(nameof(BackChannelAuthenticationOptions.DefaultExpiry), failure.Message);
+    }
+
+    private static OptionsValidationException RefusalOf(TimeSpan defaultExpiry, TimeSpan maximumExpiry)
     {
         var provider = BuildProvider(defaultExpiry, maximumExpiry);
 
-        var failure = Assert.Throws<OptionsValidationException>(
+        return Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<OidcOptions>>().Value);
-        Assert.Contains(named, failure.Message);
     }
 
     /// <summary>
