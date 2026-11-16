@@ -11,7 +11,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 
-namespace Abblix.Oidc.Server.MinimalApi.Conformance.TestHost;
+namespace Abblix.Oidc.Server.Conformance.TestHost;
 
 /// <summary>
 /// Puts the signing keys this host mints on request ahead of the tenant's own, so the server signs with the newest

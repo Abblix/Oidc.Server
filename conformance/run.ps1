@@ -38,8 +38,15 @@ took, and the logs of the host and the driver.
 .PARAMETER KeepRunning
 Leaves the suite and the host running afterwards, so a failed module can be opened in the suite's web interface.
 
+.PARAMETER Adapter
+The transport adapter the host serves the protocol endpoints through: MinimalApi, the default, or Mvc. Both hosts
+are the same server apart from it, so a module failing on one adapter only is that adapter's defect.
+
 .EXAMPLE
 ./conformance/run.ps1
+
+.EXAMPLE
+./conformance/run.ps1 -Adapter Mvc -PlanFile conformance/fapi-plans.txt
 
 .EXAMPLE
 ./conformance/run.ps1 -SuitePath ../conformance-suite -Plan 'oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=dynamic_client]:oidcc-server'
@@ -57,7 +64,10 @@ param(
 
     [string] $ResultsPath,
 
-    [switch] $KeepRunning
+    [switch] $KeepRunning,
+
+    [ValidateSet('MinimalApi', 'Mvc')]
+    [string] $Adapter = 'MinimalApi'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -85,8 +95,15 @@ $ProbeImage = 'curlimages/curl:8.10.1'
 $RunnerImage = 'python:3.12-slim'
 
 $RepositoryRoot = Split-Path -Parent $PSScriptRoot
-$HostProject = Join-Path $RepositoryRoot 'tests/Abblix.Oidc.Server.MinimalApi.Conformance.TestHost'
-$HostAssembly = 'Abblix.Oidc.Server.MinimalApi.Conformance.TestHost.dll'
+$HostName = switch ($Adapter) {
+    'MinimalApi' { 'Abblix.Oidc.Server.MinimalApi.Conformance.TestHost' }
+    'Mvc' { 'Abblix.Oidc.Server.Mvc.Conformance.TestHost' }
+    default { throw "No conformance host serves the $Adapter adapter" }
+}
+$HostProject = Join-Path $RepositoryRoot "tests/$HostName"
+$HostAssembly = "$HostName.dll"
+# The settings both hosts start with, kept in the library they share
+$HostSettingsFile = Join-Path $RepositoryRoot 'tests/Abblix.Oidc.Server.Conformance.TestHost/appsettings.json'
 $PublishDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-host'
 # Where the host writes the configuration of each plan run with static clients, private keys included, and where the
 # runner reads it from
@@ -459,7 +476,7 @@ try {
     Assert-LastExit 'docker compose up'
     Wait-Until -What 'The conformance suite' -Condition { Test-SuiteReady }
 
-    Write-Step 'Publishing the conformance test host'
+    Write-Step "Publishing the conformance test host on the $Adapter adapter"
     dotnet publish $HostProject -c Release -o $PublishDirectory --nologo -v quiet
     Assert-LastExit 'dotnet publish'
 
@@ -495,7 +512,7 @@ try {
     Write-Step 'Starting the browser driver'
     docker build -q -t $BrowserImage (Join-Path $PSScriptRoot 'browser') | Out-Null
     Assert-LastExit 'docker build (browser driver)'
-    $hostSettings = (Get-Content -Raw (Join-Path $HostProject 'appsettings.json') | ConvertFrom-Json).Conformance
+    $hostSettings = (Get-Content -Raw -LiteralPath $HostSettingsFile | ConvertFrom-Json).Conformance
     docker rm -f $BrowserContainer 2>$null | Out-Null
     # The screenshots stay inside the container and are copied out at the end, so whoever owns the results
     # directory does not decide whether the driver can write them

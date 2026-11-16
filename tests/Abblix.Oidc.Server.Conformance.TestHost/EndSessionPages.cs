@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Microsoft.AspNetCore.Http;
 using System.Net;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
@@ -16,7 +15,7 @@ using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using EndSessionRequest = Abblix.Oidc.Server.Model.EndSessionRequest;
 
-namespace Abblix.Oidc.Server.MinimalApi.Conformance.TestHost;
+namespace Abblix.Oidc.Server.Conformance.TestHost;
 
 /// <summary>
 /// The two logout pages the server leaves to its host: asking the end user to confirm a logout no client vouched for,
@@ -24,13 +23,16 @@ namespace Abblix.Oidc.Server.MinimalApi.Conformance.TestHost;
 /// </summary>
 /// <remarks>
 /// The confirmation page sends the request back as it came, with the value the server issued for it, which is how
-/// the server learns the end user agreed. Every other answer is the library's own.
+/// the server learns the end user agreed. Every other answer is the library's own. Each transport adapter answers
+/// with its own result type, so each host derives these pages for its adapter and says how a page becomes a result.
 /// </remarks>
-public sealed class EndSessionPages(
-    IEndSessionResponseFormatter<IResult> inner,
-    IOidcEndpointResolver endpointResolver) : IEndSessionResponseFormatter<IResult>
+/// <typeparam name="TResult">The result type of the host's transport adapter.</typeparam>
+public abstract class EndSessionPages<TResult>(
+    IEndSessionResponseFormatter<TResult> inner,
+    IOidcEndpointResolver endpointResolver) : IEndSessionResponseFormatter<TResult>
+    where TResult : class
 {
-    public Task<IResult> FormatResponseAsync(
+    public Task<TResult> FormatResponseAsync(
         EndSessionRequest request, Result<IEndSessionResponse, OidcError> response)
     {
         if (response.TryGetSuccess(out var success))
@@ -89,5 +91,7 @@ public sealed class EndSessionPages(
         </html>
         """;
 
-    private static IResult Html(string content) => Results.Content(content, "text/html");
+    /// <summary>The adapter's result carrying an HTML page.</summary>
+    /// <param name="content">The page.</param>
+    protected abstract TResult Html(string content);
 }

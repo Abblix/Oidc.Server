@@ -7,9 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net.Security;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
 
-namespace Abblix.Oidc.Server.MinimalApi.Conformance.TestHost;
+namespace Abblix.Oidc.Server.Conformance.TestHost;
 
 /// <summary>
 /// Accepts the conformance suite's self-signed certificate on the server's outgoing calls to the suite: a client's
