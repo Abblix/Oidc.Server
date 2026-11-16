@@ -31,7 +31,8 @@ public class BackChannelRequestStorage(
 	/// </summary>
 	/// <param name="tenant">The tenant the request belongs to.</param>
 	/// <param name="authenticationRequest">The backchannel authentication request to store.</param>
-	/// <param name="expiresIn">The duration after which the stored request will expire.</param>
+	/// <param name="expiresIn">How long the record is kept, which may be longer than the request's own
+	/// <see cref="BackChannelAuthenticationRequest.ExpiresAt"/>.</param>
 	/// <returns>
 	/// A task that returns the unique ID of the stored authentication request.
 	/// </returns>

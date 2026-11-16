@@ -33,4 +33,11 @@ public static class HttpRequestHeaders
 	/// one place; consumers are response formatters writing it onto outbound responses.
 	/// </summary>
 	public const string DPoPNonce = "DPoP-Nonce";
+
+	/// <summary>
+	/// The "x-fapi-interaction-id" header correlating one interaction between a client and a protected resource (FAPI
+	/// 1.0 Part 1 sections 6.2.1 and 6.2.2). The same name travels in both directions: the client may send it, and the
+	/// resource answers with it.
+	/// </summary>
+	public const string FapiInteractionId = "x-fapi-interaction-id";
 }

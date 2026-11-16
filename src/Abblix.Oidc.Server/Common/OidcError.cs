@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Common;
@@ -47,4 +48,11 @@ public record OidcError(string Error, string ErrorDescription)
     /// <c>scope</c> attribute (RFC 6750 section 3.1); null where the refusal names none.
     /// </summary>
     public string? RequiredScope { get; init; }
+
+    /// <summary>
+    /// The security profile the client the refused access token was issued to names for itself, which a protected
+    /// resource answers the refusal under; null where that client names none or is not known, the tenant's default
+    /// profile then deciding.
+    /// </summary>
+    public ClientSecurityProfile? SecurityProfile { get; init; }
 }

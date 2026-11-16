@@ -99,6 +99,8 @@ internal partial class SecurityProfileClientAuthenticator(
                 clientInfo.ClientAssertionAudiences,
                 requirements),
             ..SecurityProfileConsistency.FindGrantTypeViolations(clientInfo.EffectiveGrantTypes, requirements),
+            ..SecurityProfileConsistency.FindTokenDeliveryViolations(
+                clientInfo.BackChannelTokenDeliveryMode, requirements),
             ..SecurityProfileConsistency.FindAlgorithmViolations(clientInfo, requirements),
             ..SecurityProfileConsistency.FindJwksUriViolations(clientInfo.JwksUri, requirements),
             ..SecurityProfileConsistency.FindResponseModeViolations(

@@ -56,7 +56,7 @@ public class UserInfoHandler(
         // validator's refusals are once that client is known, which the validator alone sees on a refusal of its own
         var result = await validationResult.BindAsync(async request =>
             (await processor.ProcessAsync(tenant, request))
-            .MapFailure(error => error.NamingTheAlgorithmsOf(tenant, request.ClientInfo)));
+            .MapFailure(error => error.NamingTheAlgorithmsOf(tenant, request.ClientInfo) with { SecurityProfile = request.ClientInfo.SecurityProfile }));
 
         // RFC 9449 section 7.2: every refusal, the validator's, the processor's and one made while the found response
         // is formatted, carries its error on the challenge of the scheme the token was presented with

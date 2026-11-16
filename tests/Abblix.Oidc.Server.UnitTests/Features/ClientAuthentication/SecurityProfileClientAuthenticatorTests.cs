@@ -512,6 +512,41 @@ public class SecurityProfileClientAuthenticatorTests
     }
 
     /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.1 and FAPI 1.0 Part 2 section 5.2.2 have the server "only issue
+    /// sender-constrained access tokens", and the FAPI CIBA profile section 5.2.2 has it "not support CIBA push mode".
+    /// A stored CIBA client in the push mode, registered while no profile was in force, does not authenticate once its
+    /// tenant is held to a FAPI profile, or once it names one itself at a tenant held to none, so it starts no
+    /// backchannel authentication and is pushed no token; the same client in the ping mode authenticates.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, null, BackchannelTokenDeliveryModes.Push, false)]
+    [InlineData(ClientSecurityProfile.Fapi2, null, BackchannelTokenDeliveryModes.Ping, true)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, BackchannelTokenDeliveryModes.Push, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, BackchannelTokenDeliveryModes.Ping, true)]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, BackchannelTokenDeliveryModes.Push, false)]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, BackchannelTokenDeliveryModes.Ping, true)]
+    public async Task StoredClientInThePushMode_DoesNotAuthenticateUnderFapi(
+        ClientSecurityProfile profile, ClientSecurityProfile? clientProfile, string deliveryMode, bool authenticated)
+    {
+        var (authenticator, inner) = CreateAuthenticator();
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            SecurityProfile = clientProfile,
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
+            AllowedGrantTypes = [GrantTypes.Ciba],
+            AllowedResponseTypes = [],
+            BackChannelTokenDeliveryMode = deliveryMode,
+            BackChannelClientNotificationEndpoint = new Uri("https://client.example.com/ciba"),
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest());
+
+        Assert.Equal(authenticated, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
     /// FAPI 1.0 Part 2 section 8.2 has access tokens sender-constrained via MTLS only, so a stored client requiring
     /// DPoP (RFC 9449 section 5.2), or one no certificate-bound token can be issued to, does not authenticate.
     /// </summary>

@@ -22,7 +22,8 @@ public interface IBackChannelRequestStorage
 	/// </summary>
 	/// <param name="tenant">The tenant the request belongs to.</param>
 	/// <param name="authenticationRequest">The backchannel authentication request to store.</param>
-	/// <param name="expiresIn">The duration after which the stored request will expire.</param>
+	/// <param name="expiresIn">How long the record is kept. The request's own expiry is its
+	/// <see cref="BackChannelAuthenticationRequest.ExpiresAt"/>, which the record may outlive.</param>
 	/// <returns>
 	/// A task that returns the ID of the stored authentication request.
 	/// </returns>

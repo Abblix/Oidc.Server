@@ -139,13 +139,22 @@ public partial class FlowTypeValidator(
 
         // FAPI 1.0 Part 2 section 5.2.2: "code id_token", whose ID token signs the response, or "code" with the
         // response mode "jwt"; FAPI 2.0 Message Signing section 5.4.1: signed responses "via JWT Secured
-        // Authorization Response Mode", any of its modes. A response nothing signs is refused, with the
-        // unsupported_response_type RFC 6749 section 4.1.2.1 has for a method the server will not use here
+        // Authorization Response Mode", any of its modes. A response nothing signs is refused
         if (profile.SignedAuthorizationResponseModes is { } signedModes && !IsSignedResponse(request, signedModes))
-            return (ErrorCodes.UnsupportedResponseType, SignedResponseRequired(profile, signedModes));
+            return (RefusalOfAnUnsignedResponse(request), SignedResponseRequired(profile, signedModes));
 
         return null;
     }
+
+    /// <summary>
+    /// The error code of a response nothing signs, by which parameter is at fault. Code alone is a response type the
+    /// profile admits, so what fails is the response mode, missing or of another value: RFC 6749 section 4.1.2.1 has
+    /// invalid_request for a request "missing a required parameter, includes an invalid parameter value". Any other
+    /// response type is one the server will not use here: unsupported_response_type, "The authorization server does
+    /// not support obtaining an authorization code using this method".
+    /// </summary>
+    private static string RefusalOfAnUnsignedResponse(Model.AuthorizationRequest request)
+        => request.ResponseType.IsCodeAlone() ? ErrorCodes.InvalidRequest : ErrorCodes.UnsupportedResponseType;
 
     /// <summary>
     /// The reason a response nothing signs is refused, naming code id_token only where the profile admits it.

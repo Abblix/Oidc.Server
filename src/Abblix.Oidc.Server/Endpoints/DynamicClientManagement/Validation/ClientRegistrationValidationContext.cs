@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -35,4 +37,28 @@ public record ClientRegistrationValidationContext(ClientRegistrationRequest Requ
 	/// <see cref="ClientIdValidator"/> branch on this value.
 	/// </summary>
 	public DynamicClientOperation Operation { get; set; } = DynamicClientOperation.Register;
+
+	/// <summary>
+	/// The stored client an update replaces: the registration the update was authenticated against, which the update
+	/// is then built from and written over. Never set for a new registration.
+	/// </summary>
+	public ClientInfo? StoredClient { get; set; }
+
+	/// <summary>
+	/// The control bundle the metadata is judged under at <paramref name="tenant"/>: the tenant's default for a new
+	/// registration, which cannot name a profile, and for an update the bundle the stored client is held to, its own
+	/// profile tightening the tenant's, as startup and authentication resolve it.
+	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
+	public SecurityProfileRequirements SecurityProfileRequirementsAt(TenantDefinition tenant) => Operation switch
+	{
+		DynamicClientOperation.Register => SecurityProfileRequirements.For(tenant, client: null),
+
+		DynamicClientOperation.Update => SecurityProfileRequirements.For(
+			tenant,
+			StoredClient ?? throw new InvalidOperationException(
+				$"An update is judged without the {nameof(StoredClient)} it replaces")),
+
+		_ => throw new InvalidOperationException($"Unsupported dynamic client operation: {Operation}"),
+	};
 }

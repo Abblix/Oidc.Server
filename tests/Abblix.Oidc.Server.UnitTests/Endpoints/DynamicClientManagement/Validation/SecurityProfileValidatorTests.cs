@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
@@ -171,6 +172,39 @@ public class SecurityProfileValidatorTests
             // FAPI 1.0 Part 2 section 8.2 issues certificate-bound access tokens only, so the FAPI 1.0 Advanced row is
             // refused for nothing but what it is about
             TlsClientCertificateBoundAccessTokens = true,
+        });
+
+        var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(profile), context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.1 and FAPI 1.0 Part 2 section 5.2.2 have the server "only issue
+    /// sender-constrained access tokens", and the FAPI CIBA profile section 5.2.2 has it "not support CIBA push mode".
+    /// A CIBA registration in the push mode is refused with invalid_client_metadata (RFC 7591 section 3.2.2, "The value
+    /// of one of the client metadata fields is invalid") at a tenant held to any FAPI profile, and the same registration
+    /// in the ping mode, or at a tenant held to no profile, passes.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, BackchannelTokenDeliveryModes.Push, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientSecurityProfile.Fapi2, BackchannelTokenDeliveryModes.Ping, null)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, BackchannelTokenDeliveryModes.Push, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, BackchannelTokenDeliveryModes.Push, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, BackchannelTokenDeliveryModes.Ping, null)]
+    [InlineData(ClientSecurityProfile.None, BackchannelTokenDeliveryModes.Push, null)]
+    public async Task ValidateAsync_ThePushMode_IsRefusedUnderFapi(
+        ClientSecurityProfile profile, string deliveryMode, string? expectedError)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            ResponseTypes = [],
+            GrantTypes = [GrantTypes.Ciba],
+            BackChannelTokenDeliveryMode = deliveryMode,
+            BackChannelClientNotificationEndpoint = new Uri("https://client.example.com/ciba"),
+
+            // A key-based method certificate-bound tokens come with, which every FAPI profile admits
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
         });
 
         var result = await new SecurityProfileValidator().ValidateAsync(TenantHolding(profile), context);
@@ -467,5 +501,42 @@ public class SecurityProfileValidatorTests
             .ValidateAsync(TenantHolding(ClientSecurityProfile.Fapi2), context);
 
         Assert.Equal(accepted ? null : ErrorCodes.InvalidClientMetadata, result?.Error);
+    }
+
+    /// <summary>
+    /// An update is judged under the profile the stored client is held to, its own profile tightening the tenant's, as
+    /// startup and authentication judge it: a client held to FAPI 2.0 at a tenant held to none cannot update itself to
+    /// metadata the FAPI 2.0 rules refuse, while a client with no profile of its own is judged by the tenant's alone.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(null, null)]
+    public async Task AnUpdate_IsJudgedUnderTheStoredClientsOwnProfile(
+        ClientSecurityProfile? ownProfile,
+        string? expectedError)
+    {
+        var context = CreateContext([[ResponseTypes.IdToken]]) with
+        {
+            Operation = DynamicClientOperation.Update,
+            StoredClient = new ClientInfo(TestConstants.DefaultClientId) { SecurityProfile = ownProfile },
+        };
+
+        var result = await new SecurityProfileValidator()
+            .ValidateAsync(TenantHolding(ClientSecurityProfile.None), context);
+
+        Assert.Equal(expectedError, result?.Error);
+    }
+
+    /// <summary>
+    /// An update reaching this step without the stored client it replaces comes from a pipeline missing the step that
+    /// finds it, and fails loudly rather than being judged under the tenant's profile alone.
+    /// </summary>
+    [Fact]
+    public async Task AnUpdateWithoutItsStoredClient_Throws()
+    {
+        var context = CreateContext([[ResponseTypes.Code]]) with { Operation = DynamicClientOperation.Update };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new SecurityProfileValidator().ValidateAsync(TenantHolding(ClientSecurityProfile.None), context));
     }
 }

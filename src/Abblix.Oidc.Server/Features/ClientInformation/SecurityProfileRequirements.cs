@@ -76,7 +76,8 @@ public sealed record SecurityProfileRequirements
     /// <summary>
     /// The profile requires a sender-constrained access token, satisfied by either a DPoP proof
     /// (RFC 9449) or a certificate-bound token over mutual TLS (RFC 8705 section 3). Enforced by
-    /// <c>Endpoints.Token.Validation.DPoPTokenEndpointValidator</c>.
+    /// <c>Endpoints.Token.Validation.DPoPTokenEndpointValidator</c>, and by <see cref="SecurityProfileConsistency"/>
+    /// on a client registered for the CIBA push mode, whose tokens reach it without a token request to bind them to.
     /// </summary>
     public bool RequireSenderConstrainedTokens { get; init; }
 
@@ -96,6 +97,16 @@ public sealed record SecurityProfileRequirements
     /// query alone. Enforced by <c>Endpoints.UserInfo.UserInfoRequestValidator</c>.
     /// </summary>
     public bool RequireAccessTokenOutsideQuery { get; init; }
+
+    /// <summary>
+    /// The profile has the protected resource answer with the <c>x-fapi-interaction-id</c> response header and log it,
+    /// as FAPI 1.0 Part 1 section 6.2.1 requires: it "shall set the response header x-fapi-interaction-id to the value
+    /// received from the corresponding FAPI client request header or to a RFC4122 UUID value if the request header was
+    /// not provided to track the interaction" and "shall log the value of x-fapi-interaction-id in the log entry".
+    /// FAPI 2.0 Security Profile has no such clause. Enforced by
+    /// <c>Endpoints.UserInfo.FapiInteractionIdResolver</c>, the library's own protected resource being UserInfo.
+    /// </summary>
+    public bool RequireFapiInteractionId { get; init; }
 
     /// <summary>
     /// The furthest either clock window may reach under this profile, or null where the profile
@@ -244,6 +255,20 @@ public sealed record SecurityProfileRequirements
     /// object, and every parameter it names is used as sent.
     /// </remarks>
     public bool RequireSignedRequestObject { get; init; }
+
+    /// <summary>
+    /// The profile requires every backchannel authentication request to arrive as a signed authentication request
+    /// (CIBA Core 1.0 section 7.1.1) in the request parameter; plain parameters are refused. FAPI-CIBA section 5.2.2
+    /// has the server "require Backchannel Authentication Endpoint requests to be signed as described in [CIBA] 7.1.1",
+    /// and that profile builds on FAPI 1.0 Part 2, so FAPI 1.0 Advanced carries it. Enforced by
+    /// <c>Endpoints.BackChannelAuthentication.RequestFetching.RequestObjectFetchAdapter</c>.
+    /// </summary>
+    /// <remarks>
+    /// Apart from <see cref="RequireSignedRequestObject"/> because the two are not the same requirement: FAPI 2.0 has
+    /// no CIBA clause, and its profiles requiring signed request objects require them of the authorization request at
+    /// the PAR endpoint, not of the backchannel authentication request.
+    /// </remarks>
+    public bool RequireSignedBackChannelAuthenticationRequest { get; init; }
 
     /// <summary>
     /// The longest a request object may live under this profile, or null where the profile requires no lifetime
@@ -495,6 +520,7 @@ public sealed record SecurityProfileRequirements
         RequireSenderConstrainedTokens = true,
         RequireStrictRequestObjectProcessing = true,
         RequireSignedRequestObject = true,
+        RequireSignedBackChannelAuthenticationRequest = true,
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
         RequireIssuerAudienceInRequestObject = true,
         SignedAuthorizationResponseModes = LiteralJwtResponseMode,
@@ -508,6 +534,7 @@ public sealed record SecurityProfileRequirements
         RequireMatchingClientIdentifiers = true,
         RequireCertificateBoundTokens = true,
         RequireAccessTokenOutsideQuery = true,
+        RequireFapiInteractionId = true,
         RequireFapiSigningAlgorithms = true,
         ForbidRsa1_5KeyManagement = true,
     };
@@ -704,6 +731,7 @@ public sealed record SecurityProfileRequirements
         SignedAuthorizationResponseModes = LiteralJwtResponseMode,
         RequireStrictRequestObjectProcessing = true,
         RequireSignedRequestObject = true,
+        RequireSignedBackChannelAuthenticationRequest = true,
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
         RequireIssuerAudienceInRequestObject = true,
         RequireNonceWithOpenIdScope = true,
@@ -716,6 +744,7 @@ public sealed record SecurityProfileRequirements
         RequireMatchingClientIdentifiers = true,
         RequireCertificateBoundTokens = true,
         RequireStringAudienceInClientAssertion = true,
+        RequireFapiInteractionId = true,
         RequireFapiSigningAlgorithms = true,
         ForbidRsa1_5KeyManagement = true,
         ForbidPasswordGrant = true,
@@ -741,13 +770,7 @@ public sealed record SecurityProfileRequirements
     /// <param name="client">The client whose effective profile is being resolved.</param>
     /// <param name="defaultProfile">The profile the deployment holds every client to.</param>
     public static SecurityProfileRequirements For(ClientInfo client, ClientSecurityProfile defaultProfile)
-    {
-        var deployment = Resolve(defaultProfile);
-
-        return client.SecurityProfile is not { } chosen
-            ? deployment
-            : deployment.TightenedBy(Resolve(chosen));
-    }
+        => ForProfileNamed(client.SecurityProfile, defaultProfile);
 
     /// <summary>
     /// The control bundle in force for <paramref name="client"/> at <paramref name="tenant"/>, or the one the tenant
@@ -758,6 +781,24 @@ public sealed record SecurityProfileRequirements
     /// <param name="client">The client the bundle is for, or null where none is known yet.</param>
     public static SecurityProfileRequirements For(TenantDefinition tenant, ClientInfo? client)
         => client is null ? Resolve(tenant.DefaultSecurityProfile) : For(client, tenant.DefaultSecurityProfile);
+
+    /// <summary>
+    /// The control bundle a client naming <paramref name="clientProfile"/> for itself is held to, which is all of the
+    /// client the resolution reads: a caller holding that value alone gets the answer <see cref="For(ClientInfo,
+    /// ClientSecurityProfile)"/> gives for the client.
+    /// </summary>
+    /// <param name="clientProfile">The profile the client names for itself, or null where it names none.</param>
+    /// <param name="defaultProfile">The profile the deployment holds every client to.</param>
+    internal static SecurityProfileRequirements ForProfileNamed(
+        ClientSecurityProfile? clientProfile,
+        ClientSecurityProfile defaultProfile)
+    {
+        var deployment = Resolve(defaultProfile);
+
+        return clientProfile is not { } chosen
+            ? deployment
+            : deployment.TightenedBy(Resolve(chosen));
+    }
 
     /// <summary>
     /// The profile value <paramref name="client"/> is governed by at <paramref name="tenant"/> before any bundle is
@@ -824,6 +865,8 @@ public sealed record SecurityProfileRequirements
             RequireStrictRequestObjectProcessing =
                 RequireStrictRequestObjectProcessing || other.RequireStrictRequestObjectProcessing,
             RequireSignedRequestObject = RequireSignedRequestObject || other.RequireSignedRequestObject,
+            RequireSignedBackChannelAuthenticationRequest =
+                RequireSignedBackChannelAuthenticationRequest || other.RequireSignedBackChannelAuthenticationRequest,
             MaxRequestObjectLifetime = Tighter(MaxRequestObjectLifetime, other.MaxRequestObjectLifetime),
             RequireIssuerAudienceInRequestObject =
                 RequireIssuerAudienceInRequestObject || other.RequireIssuerAudienceInRequestObject,
@@ -857,6 +900,7 @@ public sealed record SecurityProfileRequirements
             RequireCertificateBoundTokens = RequireCertificateBoundTokens || other.RequireCertificateBoundTokens,
             RequireAccessTokenOutsideQuery =
                 RequireAccessTokenOutsideQuery || other.RequireAccessTokenOutsideQuery,
+            RequireFapiInteractionId = RequireFapiInteractionId || other.RequireFapiInteractionId,
             ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
             RequireFapiSigningAlgorithms = RequireFapiSigningAlgorithms || other.RequireFapiSigningAlgorithms,
             ForbidRsa1_5KeyManagement = ForbidRsa1_5KeyManagement || other.ForbidRsa1_5KeyManagement,

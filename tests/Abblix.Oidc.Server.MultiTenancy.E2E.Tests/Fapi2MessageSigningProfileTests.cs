@@ -331,8 +331,8 @@ public sealed class Fapi2MessageSigningProfileTests : IAsyncLifetime
     /// push; every JARM mode is accepted.
     /// </summary>
     [Theory]
-    [InlineData(ResponseModes.Query, ErrorCodes.UnsupportedResponseType)]
-    [InlineData(null, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(ResponseModes.Query, ErrorCodes.InvalidRequest)]
+    [InlineData(null, ErrorCodes.InvalidRequest)]
     [InlineData(ResponseModes.Jwt, null)]
     [InlineData(ResponseModes.QueryJwt, null)]
     [InlineData(ResponseModes.FormPostJwt, null)]

@@ -86,7 +86,7 @@ public partial class AuthenticationCompletionHandlerTests
             new AuthorizedGrant(
                 new AuthSession(UserId, "stored_session", DateTimeOffset.UnixEpoch, "test"),
                 new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
-            DateTimeOffset.UnixEpoch.AddHours(1))
+            StillPendingUntil)
         {
             Status = present,
         };
@@ -95,6 +95,12 @@ public partial class AuthenticationCompletionHandlerTests
     }
 
     private static readonly DateTimeOffset ApprovedAt = new(2024, 1, 15, 11, 30, 0, TimeSpan.Zero);
+
+    /// <summary>
+    /// The expiry of a stored request still waiting for its answer: later than both clocks the handlers here read,
+    /// <see cref="ApprovedAt"/> and the system's.
+    /// </summary>
+    private static DateTimeOffset StillPendingUntil => TimeProvider.System.GetUtcNow().AddHours(1);
 
     private PollModeCompletionHandler CreatePollModeHandler() =>
         new(Mock.Of<ILogger<PollModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
@@ -1049,7 +1055,7 @@ public partial class AuthenticationCompletionHandlerTests
                     AuthContextClassRef = authenticated,
                 },
                 new AuthorizationContext(ClientId, [Scopes.OpenId], EssentialAcr(required))),
-            DateTimeOffset.UnixEpoch.AddHours(1))
+            StillPendingUntil)
         {
             ClientNotificationToken = NotificationToken,
         };
@@ -1120,7 +1126,7 @@ public partial class AuthenticationCompletionHandlerTests
             new AuthorizedGrant(
                 new AuthSession(authenticated, "session_1", DateTimeOffset.UnixEpoch, "test"),
                 new AuthorizationContext(ClientId, [Scopes.OpenId], null)),
-            DateTimeOffset.UnixEpoch.AddHours(1))
+            StillPendingUntil)
         {
             RequestedSubjects = requested is null ? null : [requested],
             ClientNotificationToken = NotificationToken,

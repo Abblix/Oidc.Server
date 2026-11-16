@@ -33,7 +33,7 @@ public class ProfileSigningKeysValidator(IAuthServiceKeysProvider keys) : IClien
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
-        var requirements = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile);
+        var requirements = context.SecurityProfileRequirementsAt(tenant);
         if (!requirements.RequireFapiSigningAlgorithms)
             return null;
 

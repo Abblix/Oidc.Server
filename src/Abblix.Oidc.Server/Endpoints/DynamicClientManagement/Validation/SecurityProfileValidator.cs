@@ -23,7 +23,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// per-request rejection the client has to reverse-engineer later. Whether a client is held to a
 /// profile is a server-side policy decision: a dynamically registered client cannot declare one, so it
 /// inherits the default profile of the issuer it registers with, its tenant's
-/// <see cref="Features.MultiTenancy.TenantDefinition.DefaultSecurityProfile"/>.
+/// <see cref="Features.MultiTenancy.TenantDefinition.DefaultSecurityProfile"/>. An update is judged under the
+/// profile the host holds the stored client to on top of that default, so a client cannot update itself out of it.
 /// </summary>
 public class SecurityProfileValidator : SyncClientRegistrationContextValidator
 {
@@ -34,7 +35,7 @@ public class SecurityProfileValidator : SyncClientRegistrationContextValidator
     /// </summary>
     protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
-        var requirements = SecurityProfileRequirements.Resolve(tenant.DefaultSecurityProfile);
+        var requirements = context.SecurityProfileRequirementsAt(tenant);
         var request = context.Request;
 
         // RFC 7591 section 3.2.2 names its own error for a redirect URI the server does not admit
@@ -51,6 +52,7 @@ public class SecurityProfileValidator : SyncClientRegistrationContextValidator
                 assertionAudiences: ClientAssertionAudiences.Issuer,
                 requirements),
             ..FindGrantTypeViolations(request.GrantTypes, requirements),
+            ..FindTokenDeliveryViolations(request.BackChannelTokenDeliveryMode, requirements),
             ..SecurityProfileConsistency.FindSigningAlgorithmViolations(
                 [
                     (Parameters.IdTokenSignedResponseAlg, IdentityTokenSignature(

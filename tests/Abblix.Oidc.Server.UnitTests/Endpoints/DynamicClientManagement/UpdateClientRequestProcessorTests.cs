@@ -153,6 +153,99 @@ public class UpdateClientRequestProcessorTests
     }
 
     /// <summary>
+    /// What the host set on the client and no registration request can carry stays with the client through an
+    /// update: RFC 7592 section 2.2 replaces the client metadata, and these are not metadata. Its own security profile
+    /// among them, so the updated client is held to the profile the host holds it to.
+    /// </summary>
+    [Fact]
+    public async Task AnUpdate_KeepsWhatTheHostSetOnTheClient()
+    {
+        ClientInfo? saved = null;
+        var (processor, _, _, idGenerator) = CreateProcessor(c => saved = c.ClientInfo);
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+        var hostSet = new ClientInfo("client-1")
+        {
+            SecurityProfile = ClientSecurityProfile.Fapi2,
+            PlainPkceAllowed = true,
+            AuthorizationCodeExpiresIn = TimeSpan.FromSeconds(17),
+            AccessTokenExpiresIn = TimeSpan.FromSeconds(19),
+            SingleResourceAccessTokens = true,
+            RefreshToken = new() { AbsoluteExpiresIn = TimeSpan.FromHours(2), SlidingExpiresIn = null },
+            IdentityTokenExpiresIn = TimeSpan.FromSeconds(23),
+            LogoutTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            ForceUserClaimsInIdentityToken = true,
+            ForceAuthorizationDetailsInIdentityToken = true,
+            ResourceLocations = [new Uri("https://payments.example.com/")],
+            AllowCrossClientSubjectTokenExchange = true,
+            AllowCrossClientIntrospection = true,
+            ParseLoginHintTokenAsJwt = false,
+            DefaultScope = [Scopes.Profile],
+            RequireScope = true,
+            ExpiresAfter = TimeSpan.FromDays(3),
+            BackChannelLogout = new(new Uri("https://client.example.com/logout"))
+            {
+                LogoutTokenExpiresIn = TimeSpan.FromSeconds(29),
+            },
+        };
+        var model = new ClientRegistrationRequest
+        {
+            RedirectUris = [new Uri("https://client.example.com/cb")],
+            BackChannelLogoutUri = new Uri("https://client.example.com/logout"),
+        };
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), new RegisteredClient(hostSet, "jti-current"), model);
+
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.NotNull(saved);
+        Assert.Equal(hostSet.SecurityProfile, saved.SecurityProfile);
+        Assert.Equal(hostSet.PlainPkceAllowed, saved.PlainPkceAllowed);
+        Assert.Equal(hostSet.AuthorizationCodeExpiresIn, saved.AuthorizationCodeExpiresIn);
+        Assert.Equal(hostSet.AccessTokenExpiresIn, saved.AccessTokenExpiresIn);
+        Assert.Equal(hostSet.SingleResourceAccessTokens, saved.SingleResourceAccessTokens);
+        Assert.Equal(hostSet.RefreshToken, saved.RefreshToken);
+        Assert.Equal(hostSet.IdentityTokenExpiresIn, saved.IdentityTokenExpiresIn);
+        Assert.Equal(hostSet.LogoutTokenSignedResponseAlgorithm, saved.LogoutTokenSignedResponseAlgorithm);
+        Assert.Equal(hostSet.ForceUserClaimsInIdentityToken, saved.ForceUserClaimsInIdentityToken);
+        Assert.Equal(
+            hostSet.ForceAuthorizationDetailsInIdentityToken, saved.ForceAuthorizationDetailsInIdentityToken);
+        Assert.Equal(hostSet.ResourceLocations, saved.ResourceLocations);
+        Assert.Equal(hostSet.AllowCrossClientSubjectTokenExchange, saved.AllowCrossClientSubjectTokenExchange);
+        Assert.Equal(hostSet.AllowCrossClientIntrospection, saved.AllowCrossClientIntrospection);
+        Assert.Equal(hostSet.ParseLoginHintTokenAsJwt, saved.ParseLoginHintTokenAsJwt);
+        Assert.Equal(hostSet.DefaultScope, saved.DefaultScope);
+        Assert.Equal(hostSet.RequireScope, saved.RequireScope);
+        Assert.Equal(hostSet.ExpiresAfter, saved.ExpiresAfter);
+        Assert.Equal(hostSet.BackChannelLogout.LogoutTokenExpiresIn, saved.BackChannelLogout?.LogoutTokenExpiresIn);
+    }
+
+    /// <summary>
+    /// A client the host holds to FAPI 2.0 at a tenant held to none takes the assertion audiences the host grants new
+    /// clients only as far as its own profile admits them, the issuer alone, as it does at a tenant held to FAPI 2.0.
+    /// </summary>
+    [Fact]
+    public async Task AnUpdate_AdmitsTheAssertionAudiencesTheClientsOwnProfileAdmits()
+    {
+        ClientInfo? saved = null;
+        var (processor, _, _, idGenerator) = CreateProcessor(
+            c => saved = c.ClientInfo,
+            newClients: new NewClientOptions
+            {
+                ClientAssertionAudiences = ClientAssertionAudiences.Issuer | ClientAssertionAudiences.AllowArray,
+            });
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+        var model = new ClientRegistrationRequest { RedirectUris = [new Uri("https://client.example.com/cb")] };
+        var held = new RegisteredClient(
+            new ClientInfo("client-1") { SecurityProfile = ClientSecurityProfile.Fapi2 }, "jti-current");
+        var request = new ValidUpdateClientRequest(new UpdateClientRequest(new ClientRequest(), model), held, model);
+
+        await processor.ProcessAsync(
+            new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.None }.ToTenant(), request);
+
+        Assert.Equal(ClientAssertionAudiences.Issuer, saved!.ClientAssertionAudiences);
+    }
+
+    /// <summary>
     /// #27 regression: the update (a full replacement) must map the signed/encrypted response algorithms
     /// the register path maps, otherwise a resubmitted metadata set is silently reset to ClientInfo defaults
     /// (id_token → RS256, userinfo/introspection → none). A client registered with a non-default signing

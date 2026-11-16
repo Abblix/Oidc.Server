@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -40,10 +41,14 @@ internal sealed class ChallengesInvalidRequestAsUserInfoAttribute : Attribute, I
 			return;
 		}
 
-		// The refused request has no token the formatter could read, and a failure is formatted from the error alone
+		// The refused request has no token the formatter could read, and a failure is formatted from the error alone,
+		// beside the x-fapi-interaction-id header the binder never reached, which the response echoes
 		var formatter = context.HttpContext.RequestServices.GetRequiredService<IUserInfoResponseFormatter<ActionResult>>();
 		context.Result = await formatter.FormatResponseAsync(
-			new Core.UserInfoRequest(),
+			new Core.UserInfoRequest
+			{
+				FapiInteractionId = context.HttpContext.Request.Headers[HttpRequestHeaders.FapiInteractionId],
+			},
 			ReturnsOidcInvalidRequestAttribute.InvalidRequestOf(context.ModelState));
 	}
 }

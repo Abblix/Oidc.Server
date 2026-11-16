@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Serialization;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeBinding;
 using Abblix.Utils;
 
@@ -58,4 +59,13 @@ public record UserInfoRequest
     [JsonIgnore]
     [Credential]
     public string? AccessToken => AccessTokenInForm ?? AccessTokenInQuery;
+
+    /// <summary>
+    /// The <c>x-fapi-interaction-id</c> request header as received, unvalidated: FAPI 1.0 Part 1 section 6.2.2 has
+    /// the client "may send the x-fapi-interaction-id request header, in which case the value shall be a RFC4122
+    /// UUID", and the protected resource echoes it (section 6.2.1). Repeated, the values arrive joined by a comma.
+    /// </summary>
+    [JsonIgnore]
+    [RequestHeader(HttpRequestHeaders.FapiInteractionId)]
+    public string? FapiInteractionId { get; set; }
 }

@@ -864,13 +864,14 @@ public class FlowTypeValidatorTests
     /// <summary>
     /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require the response_type value code id_token, or the
     /// response_type value code in conjunction with the response_mode value jwt". Every other combination is
-    /// refused for a client held to that profile, with the unsupported_response_type RFC 6749 section 4.1.2.1 names,
-    /// and only those two pass.
+    /// refused for a client held to that profile, and only those two pass. Code alone fails by its response mode, an
+    /// invalid_request (RFC 6749 section 4.1.2.1, "includes an invalid parameter value"); any other response type is
+    /// the unsupported_response_type that section names.
     /// </summary>
     [Theory]
-    [InlineData(new[] { ResponseTypes.Code }, null, ErrorCodes.UnsupportedResponseType)]
-    [InlineData(new[] { ResponseTypes.Code }, ResponseModes.Query, ErrorCodes.UnsupportedResponseType)]
-    [InlineData(new[] { ResponseTypes.Code }, ResponseModes.QueryJwt, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(new[] { ResponseTypes.Code }, null, ErrorCodes.InvalidRequest)]
+    [InlineData(new[] { ResponseTypes.Code }, ResponseModes.Query, ErrorCodes.InvalidRequest)]
+    [InlineData(new[] { ResponseTypes.Code }, ResponseModes.QueryJwt, ErrorCodes.InvalidRequest)]
     [InlineData(new[] { ResponseTypes.Code, ResponseTypes.Token }, null, ErrorCodes.UnsupportedResponseType)]
     [InlineData(new[] { ResponseTypes.Code, ResponseTypes.IdToken, ResponseTypes.Token }, null, ErrorCodes.UnsupportedResponseType)]
     [InlineData(new[] { ResponseTypes.IdToken }, null, ErrorCodes.UnsupportedResponseType)]
@@ -919,11 +920,11 @@ public class FlowTypeValidatorTests
     [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ResponseModes.QueryJwt, null)]
     [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ResponseModes.FragmentJwt, null)]
     [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ResponseModes.FormPostJwt, null)]
-    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, null, ErrorCodes.UnsupportedResponseType)]
-    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ResponseModes.Query, ErrorCodes.UnsupportedResponseType)]
-    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ResponseModes.FormPost, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, null, ErrorCodes.InvalidRequest)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ResponseModes.Query, ErrorCodes.InvalidRequest)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses, ResponseModes.FormPost, ErrorCodes.InvalidRequest)]
     [InlineData(ClientSecurityProfile.Fapi2MessageSigning, ResponseModes.FormPostJwt, null)]
-    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, ResponseModes.Query, ErrorCodes.UnsupportedResponseType)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning, ResponseModes.Query, ErrorCodes.InvalidRequest)]
     [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests, ResponseModes.Query, null)]
     public async Task ValidateAsync_MessageSigning_AdmitsCodeInAnyJarmMode(
         ClientSecurityProfile profile, string? responseMode, string? expectedError)

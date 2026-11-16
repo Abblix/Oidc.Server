@@ -55,7 +55,7 @@ public partial class AuthenticationCompletionRouter(
     /// <param name="tenant">The tenant the request is completed at, which outside a request is the definition the tenant catalog returns.</param>
     /// <param name="authenticationRequestId">The auth_req_id to complete.</param>
     /// <param name="request">The authentication request to mark as completed.</param>
-    /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
+    /// <param name="expiresIn">How long the approved record is kept in the store. It does not extend the request: a poll after the request's own expiry is answered expired_token however long the record is kept.</param>
     public async Task CompleteAsync(
         TenantDefinition tenant,
         [Credential] string authenticationRequestId,
