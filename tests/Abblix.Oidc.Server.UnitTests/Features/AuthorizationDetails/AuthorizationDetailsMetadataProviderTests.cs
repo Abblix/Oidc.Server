@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -76,6 +77,14 @@ public class AuthorizationDetailsMetadataProviderTests
             TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 
     private sealed class AccountValidator : IAuthorizationDetailValidator
@@ -85,5 +94,13 @@ public class AuthorizationDetailsMetadataProviderTests
             TenantDefinition tenant,
             AuthorizationDetail detail, ClientInfo client, CancellationToken token)
             => Task.FromResult<Result<AuthorizationDetail, OidcError>>(detail);
+
+        public Task<Result<AuthorizationDetail, OidcError>> ValidateGrantedAsync(
+            TenantDefinition tenant,
+            AuthorizationDetail detail,
+            IReadOnlyList<AuthorizationDetail> requested,
+            ClientInfo client,
+            CancellationToken token)
+            => ValidateAsync(tenant, detail, client, token);
     }
 }
