@@ -49,7 +49,7 @@ Against a suite outside dev mode, set `CONFORMANCE_TOKEN` to an API token create
 
 - `CONFORMANCE_SERVER` (required): the suite's base URL.
 - `HOST_ORIGIN` (required): the origin of the server under test. Its pages are the ones the driver signs in on and captures.
-- `LOGIN_EMAIL`, `LOGIN_PASSWORD` (required): typed into the fields `email` and `password` before the button `sign-in` is pressed. `run.ps1` reads them from the test host's `appsettings.json`.
+- `LOGIN_EMAIL`, `LOGIN_PASSWORD` (required): typed into the fields `email` and `password` before the button `sign-in` is pressed. `run.ps1` reads them from the `appsettings.json` both test hosts share, in `tests/Abblix.Oidc.Server.Conformance.TestHost`.
 - `DRIVER_DEADLINE_SECONDS` (required): the driver exits with code 1 when this runs out, whatever is in progress.
 - `DRIVER_POLL_SECONDS` (default 2): the pause between two reads of the suite's state.
 - `DRIVER_PAGE_TIMEOUT_SECONDS` (default 30): the longest wait for a page to load, an element to appear or a page to stop navigating.
