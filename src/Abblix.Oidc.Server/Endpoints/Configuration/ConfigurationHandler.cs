@@ -18,6 +18,7 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.UserInfo;
 using Microsoft.Extensions.Options;
 
 using ConfigurationResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
@@ -36,6 +37,7 @@ public sealed class ConfigurationHandler(
 	ILogoutNotifier logoutNotifier,
 	IClientAuthenticator clientAuthenticator,
 	IAuthorizationMetadataProvider authorizationMetadata,
+	IScopeClaimsProvider scopeClaims,
 	IScopesAndClaimsProvider scopesAndClaims,
 	IJwtAlgorithmsProvider jwtAlgorithms,
 	IAuthServiceKeysProvider serviceKeys,
@@ -66,8 +68,8 @@ public sealed class ConfigurationHandler(
 			BackChannelLogoutSupported = logoutNotifier.BackChannelLogoutSupported,
 			BackChannelLogoutSessionSupported = logoutNotifier.BackChannelLogoutSessionSupported,
 
-			ScopesSupported = scopesAndClaims.ScopesSupported(tenant),
-			ClaimsSupported = scopesAndClaims.ClaimsSupported(tenant),
+			ScopesSupported = scopeClaims.ScopesSupported(tenant),
+			ClaimsSupported = scopeClaims.ClaimsSupported(tenant),
 			GrantTypesSupported = AdmittedGrantTypes(tenant, scopesAndClaims.GrantTypesSupported),
 			SubjectTypesSupported = scopesAndClaims.SubjectTypesSupported(tenant),
 
