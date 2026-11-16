@@ -77,6 +77,21 @@ public class FapiInteractionIdTests(TestFactory factory) : TestBase(factory)
         Assert.Empty(InteractionIdsOf(response));
     }
 
+    /// <summary>
+    /// The header goes on the resource's refusals too: a token the server issued to a client of FAPI 1.0 Advanced at a
+    /// tenant holding its clients to no profile, refused once read for lacking the openid scope, is answered with the
+    /// client's value.
+    /// </summary>
+    [Fact]
+    public async Task ARefusalAfterTheTokenNamedTheClient_EchoesTheClientsValue()
+    {
+        using var response = await UserInfoAsync(
+            ClientSecurityProfile.Fapi1Advanced, FapiClientId, [Scopes.Profile], ClientValue);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(ClientValue, Assert.Single(InteractionIdsOf(response)));
+    }
+
     private static IEnumerable<string> InteractionIdsOf(HttpResponseMessage response)
         => response.Headers.TryGetValues(HttpRequestHeaders.FapiInteractionId, out var values) ? values : [];
 
@@ -84,8 +99,16 @@ public class FapiInteractionIdTests(TestFactory factory) : TestBase(factory)
     /// Calls UserInfo with an access token the server issued to a client of <paramref name="profile"/>, sending each of
     /// <paramref name="interactionIds"/> as the request header.
     /// </summary>
-    private async Task<HttpResponseMessage> UserInfoAsync(
+    private Task<HttpResponseMessage> UserInfoAsync(
         ClientSecurityProfile? profile, string clientId, params string[] interactionIds)
+        => UserInfoAsync(profile, clientId, [Scopes.OpenId], interactionIds);
+
+    /// <summary>
+    /// Calls UserInfo with an access token for <paramref name="scope"/> the server issued to a client of
+    /// <paramref name="profile"/>, sending each of <paramref name="interactionIds"/> as the request header.
+    /// </summary>
+    private async Task<HttpResponseMessage> UserInfoAsync(
+        ClientSecurityProfile? profile, string clientId, string[] scope, params string[] interactionIds)
     {
         await using var host = HostSigningAccessTokensWithPs256();
         var services = host.Services;
@@ -100,7 +123,7 @@ public class FapiInteractionIdTests(TestFactory factory) : TestBase(factory)
             var issued = await services.GetRequiredService<IAccessTokenService>().CreateAccessTokenAsync(
                 tenant,
                 new AuthSession("user-1", "session-1", services.GetRequiredService<TimeProvider>().GetUtcNow(), "local"),
-                new AuthorizationContext(clientId, [Scopes.OpenId], requestedClaims: null),
+                new AuthorizationContext(clientId, scope, requestedClaims: null),
                 clientInfo,
                 grantId: null,
                 expiresNoLaterThan: null);

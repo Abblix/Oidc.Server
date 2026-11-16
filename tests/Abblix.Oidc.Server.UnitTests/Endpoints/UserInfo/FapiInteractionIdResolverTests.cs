@@ -9,7 +9,6 @@
 using System;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo;
-using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -32,7 +31,7 @@ public class FapiInteractionIdResolverTests
     [Fact]
     public void TheClientsValue_IsAnsweredAndLogged()
     {
-        var answered = Resolver().Resolve(SingleIssuer.Tenant, Fapi1Client(), ClientValue);
+        var answered = Resolver().Resolve(SingleIssuer.Tenant, ClientSecurityProfile.Fapi1Advanced, ClientValue);
 
         Assert.Equal(ClientValue, answered);
         var record = Assert.Single(_loggers.Entries);
@@ -49,7 +48,7 @@ public class FapiInteractionIdResolverTests
     {
         const string received = "forged\r\nline";
 
-        var answered = Resolver().Resolve(SingleIssuer.Tenant, Fapi1Client(), received);
+        var answered = Resolver().Resolve(SingleIssuer.Tenant, ClientSecurityProfile.Fapi1Advanced, received);
 
         Assert.True(Guid.TryParseExact(answered, "D", out _), answered);
         Assert.Contains(_loggers.Entries, record => record.Level == LogLevel.Warning);
@@ -60,7 +59,7 @@ public class FapiInteractionIdResolverTests
     [Fact]
     public void AClientUnderNoProfile_GetsNoValueAndNoLog()
     {
-        Assert.Null(Resolver().Resolve(SingleIssuer.Tenant, new ClientInfo(TestConstants.DefaultClientId), ClientValue));
+        Assert.Null(Resolver().Resolve(SingleIssuer.Tenant, null, ClientValue));
         Assert.Empty(_loggers.Entries);
     }
 
@@ -77,7 +76,4 @@ public class FapiInteractionIdResolverTests
 
         Assert.Equal(answered ? ClientValue : null, Resolver().Resolve(tenant, null, ClientValue));
     }
-
-    private static ClientInfo Fapi1Client()
-        => new(TestConstants.DefaultClientId) { SecurityProfile = ClientSecurityProfile.Fapi1Advanced };
 }

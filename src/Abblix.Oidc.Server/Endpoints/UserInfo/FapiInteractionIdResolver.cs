@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -29,9 +30,10 @@ public partial class FapiInteractionIdResolver(ILogger<FapiInteractionIdResolver
     private const string UuidFormat = "D";
 
     /// <inheritdoc />
-    public string? Resolve(TenantDefinition tenant, ClientInfo? client, string? received)
+    public string? Resolve(TenantDefinition tenant, ClientSecurityProfile? clientProfile, string? received)
     {
-        if (!SecurityProfileRequirements.For(tenant, client).RequireFapiInteractionId)
+        if (!SecurityProfileRequirements.ForProfileNamed(clientProfile, tenant.DefaultSecurityProfile)
+                .RequireFapiInteractionId)
             return null;
 
         if (received is null)

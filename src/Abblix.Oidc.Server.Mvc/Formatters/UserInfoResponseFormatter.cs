@@ -60,8 +60,8 @@ public class UserInfoResponseFormatter(
                 // left at a protected resource is invalid_request, which SHOULD be a 400
                 FormatError(error)));
 
-        var client = response.TryGetSuccess(out var served) ? served.ClientInfo : null;
-        return interactionIds.Resolve(tenantAccessor.CurrentTenant(), client, request.FapiInteractionId) is { } id
+        var clientProfile = response.Match(found => found.ClientInfo.SecurityProfile, error => error.SecurityProfile);
+        return interactionIds.Resolve(tenantAccessor.CurrentTenant(), clientProfile, request.FapiInteractionId) is { } id
             ? new ActionResultDecorator(result, httpResponse => httpResponse.Headers[HttpRequestHeaders.FapiInteractionId] = id)
             : result;
     }

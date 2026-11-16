@@ -754,13 +754,7 @@ public sealed record SecurityProfileRequirements
     /// <param name="client">The client whose effective profile is being resolved.</param>
     /// <param name="defaultProfile">The profile the deployment holds every client to.</param>
     public static SecurityProfileRequirements For(ClientInfo client, ClientSecurityProfile defaultProfile)
-    {
-        var deployment = Resolve(defaultProfile);
-
-        return client.SecurityProfile is not { } chosen
-            ? deployment
-            : deployment.TightenedBy(Resolve(chosen));
-    }
+        => ForProfileNamed(client.SecurityProfile, defaultProfile);
 
     /// <summary>
     /// The control bundle in force for <paramref name="client"/> at <paramref name="tenant"/>, or the one the tenant
@@ -771,6 +765,24 @@ public sealed record SecurityProfileRequirements
     /// <param name="client">The client the bundle is for, or null where none is known yet.</param>
     public static SecurityProfileRequirements For(TenantDefinition tenant, ClientInfo? client)
         => client is null ? Resolve(tenant.DefaultSecurityProfile) : For(client, tenant.DefaultSecurityProfile);
+
+    /// <summary>
+    /// The control bundle a client naming <paramref name="clientProfile"/> for itself is held to, which is all of the
+    /// client the resolution reads: a caller holding that value alone gets the answer <see cref="For(ClientInfo,
+    /// ClientSecurityProfile)"/> gives for the client.
+    /// </summary>
+    /// <param name="clientProfile">The profile the client names for itself, or null where it names none.</param>
+    /// <param name="defaultProfile">The profile the deployment holds every client to.</param>
+    internal static SecurityProfileRequirements ForProfileNamed(
+        ClientSecurityProfile? clientProfile,
+        ClientSecurityProfile defaultProfile)
+    {
+        var deployment = Resolve(defaultProfile);
+
+        return clientProfile is not { } chosen
+            ? deployment
+            : deployment.TightenedBy(Resolve(chosen));
+    }
 
     /// <summary>
     /// The profile value <paramref name="client"/> is governed by at <paramref name="tenant"/> before any bundle is
