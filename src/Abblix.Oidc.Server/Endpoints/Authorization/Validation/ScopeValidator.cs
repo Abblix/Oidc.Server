@@ -40,10 +40,11 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 	{
 		// A response type delivering an ID token exists only in OpenID Connect, so the request is an Authentication
 		// Request, whose scope OpenID Connect Core 1.0 section 3.1.2.1 has "REQUIRED. OpenID Connect requests MUST
-		// contain the openid scope value", and section 3.1.2.2 has the server "verify that all the REQUIRED parameters
-		// are present". A default the client never named does not stand in for it. RFC 6749 section 4.1.2.1 answers a
-		// missing required parameter with invalid_request. Under strict request object processing this is what refuses
-		// an object leaving its scope to the parameters outside it, which are not used
+		// contain the openid scope value. If the openid scope value is not present, the behavior is entirely
+		// unspecified." Refusing it is our choice within that unspecified behavior, and a default the client never named
+		// does not stand in for the scope. RFC 6749 section 4.1.2.1 answers with invalid_request: a request "missing a
+		// required parameter" where it names no scope, one that "includes an invalid parameter value" where its scope
+		// leaves openid out
 		if (context.Request.ResponseType.HasFlag(ResponseTypes.IdToken) && !context.ClientRequestsOpenId())
 		{
 			return context.InvalidRequest(

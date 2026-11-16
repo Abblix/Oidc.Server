@@ -1423,10 +1423,11 @@ public class RequestObjectFetcherTests
     /// <summary>
     /// Under strict processing the object is the whole request (RFC 9101 section 6.3: "MUST only use the parameters in
     /// the Request Object"; FAPI 1.0 Part 2 section 5.2.2: "shall only use the parameters included in the signed request
-    /// object"), so an object naming no scope is a request naming none, and RFC 6749 section 3.3 lets the server "fail
-    /// the request" rather than apply a default: it is refused as an invalid request object, for a profile processing
-    /// strictly and for a host turning strict processing on. Merge processing, where the scope outside the object
-    /// applies, is unchanged.
+    /// object"), so an object naming no scope is a request naming none, and RFC 6749 section 3.3 lets the server refuse
+    /// such a request rather than apply a default. The object is what is wrong, so it is refused with the
+    /// invalid_request_object RFC 9101 section 7 defines as "The request parameter contains an invalid Request Object",
+    /// for a profile processing strictly and for a host turning strict processing on. Merge processing, where the scope
+    /// outside the object applies, is unchanged.
     /// </summary>
     [Theory]
     [InlineData(ClientSecurityProfile.Fapi1Advanced, false, null, false)]

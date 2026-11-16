@@ -620,9 +620,10 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
 
     /// <summary>
     /// FAPI 1.0 Part 2 section 5.2.2 has the server "only use the parameters included in the signed request object", so
-    /// a scope sent only outside the object is not the request's, and RFC 6749 section 3.3 lets the server "fail the
-    /// request" rather than serve a default: the object is refused as invalid, by value with the scope outside it and
-    /// pushed with a code challenge, so the scope is all it lacks.
+    /// a scope sent only outside the object is not the request's, and RFC 6749 section 3.3 lets the server refuse a
+    /// request naming no scope rather than serve a default. The object is what is wrong, and RFC 9101 section 7 defines
+    /// invalid_request_object as "The request parameter contains an invalid Request Object": refused so by value with
+    /// the scope outside it, and pushed with a code challenge, so the scope is all it lacks.
     /// </summary>
     [Theory]
     [InlineData(false)]

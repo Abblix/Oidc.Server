@@ -42,9 +42,12 @@ internal static class StrictProcessing
     }
 
     /// <summary>
-    /// Why strict processing refuses the object's claims, or null. The object is the whole request, so one naming no
-    /// scope is a request naming none, and RFC 6749 section 3.3 lets the server "fail the request" rather than apply a
-    /// default.
+    /// Why strict processing refuses the object's claims, or null. The object is the whole request (FAPI 1.0 Part 2
+    /// section 5.2.2: the server "shall only use the parameters included in the signed request object"), so an object
+    /// naming no scope leaves the request with none, and RFC 6749 section 3.3 lets the server refuse such a request
+    /// rather than apply a default value. What is wrong is the object, which RFC 9101 section 7 answers with
+    /// invalid_request_object, "The request parameter contains an invalid Request Object". Our choice over the
+    /// invalid_scope section 3.3 names for a failed request: the scope is missing from the object rather than wrong.
     /// </summary>
     public static string? WhyRefused(JsonObject payload)
         => NamesNoScope(payload) ? $"The request object must include the {IanaClaimTypes.Scope} parameter" : null;
