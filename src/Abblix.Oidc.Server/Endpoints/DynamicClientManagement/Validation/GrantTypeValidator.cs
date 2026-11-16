@@ -17,8 +17,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// requesting <c>code</c> must register the <c>authorization_code</c> grant, and one requesting <c>token</c> or
 /// <c>id_token</c> the <c>implicit</c> grant (OIDC DCR 1.0 section 2); and a client registering either of those grants
 /// must request a response type carrying its part, since RFC 7591 section 2.1 pairs <c>authorization_code</c> with
-/// <c>code</c> and <c>implicit</c> with <c>token</c>, and has the server "ensure that a client cannot register itself
-/// into an inconsistent state". The grants the table pairs with no response type need none.
+/// <c>code</c> and <c>implicit</c> with <c>token</c>, and says a server "SHOULD take steps to ensure that a client
+/// cannot register itself into an inconsistent state". The grants the table pairs with no response type need none.
 /// </summary>
 public class GrantTypeValidator : SyncClientRegistrationContextValidator
 {

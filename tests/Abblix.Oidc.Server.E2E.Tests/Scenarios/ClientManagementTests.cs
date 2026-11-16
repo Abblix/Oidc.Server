@@ -344,8 +344,8 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// RFC 7591 section 2.1 pairs the authorization_code grant with the code response type and has the server "ensure
-    /// that a client cannot register itself into an inconsistent state": a client registering the grant with no
+    /// RFC 7591 section 2.1 pairs the authorization_code grant with the code response type and says a server "SHOULD
+    /// take steps to ensure that a client cannot register itself into an inconsistent state": a client registering the grant with no
     /// response type is refused, on registration and on an update. A client of a grant the table pairs with no
     /// response type registers none and is served.
     /// </summary>
