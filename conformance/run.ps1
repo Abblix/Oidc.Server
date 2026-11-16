@@ -566,7 +566,8 @@ try {
         # another - the report on all of them is what the run is for
         '-e', 'CONFORMANCE_MAX_CONSECUTIVE_FAILURES=1000',
         $RunnerImage,
-        'sh', '-c', "$RunnerInstall && $readArguments && exec python run-test-plan.py `"`$@`""
+        # Through run-plan.py, which reads a module's details only once the suite has recorded how it ended
+        'sh', '-c', "$RunnerInstall && $readArguments && exec python /config/run-plan.py `"`$@`""
     )
     docker @runner
     $exitCode = $LASTEXITCODE
