@@ -35,10 +35,7 @@ public static class ServiceCollectionExtensions
         // The registrations go to the host's ITenantClientRegistrationStore when it registers one, in any order, and
         // to memory otherwise. The in-memory store is not registered under that contract, so a host asking for one
         // learns whether it registered its own.
-        services.TryAddSingleton(provider => ActivatorUtilities.CreateInstance<ReloadableClientInfoStorage>(
-            provider,
-            provider.GetService<ITenantClientRegistrationStore>()
-            ?? ActivatorUtilities.CreateInstance<IssuerClientRegistrations>(provider)));
+        services.TryAddSingleton(ReloadableClientInfoStorage.Create);
         services.TryAddSingleton<IClientKeysProvider, ClientKeysProvider>();
 
         services.AddOidcOptionsValidators();

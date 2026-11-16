@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.MultiTenancy;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
@@ -48,6 +49,21 @@ internal partial class ReloadableClientInfoStorage(
     ITenantClientRegistrationStore registrations)
     : IClientInfoStore
 {
+    /// <summary>
+    /// The store over the host's <see cref="ITenantClientRegistrationStore"/> when it registers one, and over
+    /// registrations kept in memory otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Each argument is named rather than matched by type: a host class implementing both the registration store and
+    /// <see cref="ITenantCatalog"/> would otherwise be taken for the catalog.
+    /// </remarks>
+    public static ReloadableClientInfoStorage Create(IServiceProvider provider) => new(
+        provider.GetRequiredService<ILogger<ReloadableClientInfoStorage>>(),
+        provider.GetRequiredService<ITenantCatalog>(),
+        provider.GetRequiredService<IIssuerLocal<Dictionary<string, ClientInfo>>>(),
+        provider.GetService<ITenantClientRegistrationStore>()
+        ?? ActivatorUtilities.CreateInstance<IssuerClientRegistrations>(provider));
+
     private Dictionary<string, ClientInfo> ConfiguredAt(TenantDefinition tenant)
     {
         var clients = tenant.Clients;
