@@ -76,7 +76,11 @@ public class BackChannelAuthenticationRequestProcessorTests
     }
 
     private ValidBackChannelAuthenticationRequest Request(
-        string? hintedSubject, string? claimsJson = null, JsonArray? authorizationDetails = null, bool namesScope = true)
+        string? hintedSubject,
+        string? claimsJson = null,
+        JsonArray? authorizationDetails = null,
+        bool namesScope = true,
+        TimeSpan? expiresIn = null)
     {
         var hint = hintedSubject is null
             ? null
@@ -98,7 +102,7 @@ public class BackChannelAuthenticationRequestProcessorTests
             {
                 ClientInfo = new ClientInfo(ClientId),
                 Scope = [new ScopeDefinition(Scopes.OpenId)],
-                ExpiresIn = TimeSpan.FromMinutes(5),
+                ExpiresIn = expiresIn ?? TimeSpan.FromMinutes(5),
                 IdToken = hint,
                 AuthorizationDetails = authorizationDetails,
             });
@@ -378,6 +382,35 @@ public class BackChannelAuthenticationRequestProcessorTests
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
+    }
+
+    /// <summary>
+    /// A request is kept past its expiry for the same time whatever lifetime it was given, the longest lifetime the
+    /// server grants any request, so a late poll is answered expired_token (CIBA Core 1.0 section 11) however short
+    /// the requested expiry was.
+    /// </summary>
+    /// <remarks>
+    /// A client in ping mode polls when notified, and none need be sent for an expired request, so it may come long
+    /// after a short expiry has passed. A window proportional to the lifetime left such a request a few seconds.
+    /// </remarks>
+    [Theory]
+    [InlineData(10)]
+    [InlineData(300)]
+    public async Task ARequestIsKeptPastItsExpiryForTheLongestLifetimeGranted(int expiresInSeconds)
+    {
+        HostAuthenticates(Approved);
+
+        var expiresIn = TimeSpan.FromSeconds(expiresInSeconds);
+        TimeSpan? keptFor = null;
+        _storage
+            .Setup(s => s.StoreAsync(TestTenant.Matched, It.IsAny<StoredRequest>(), It.IsAny<TimeSpan>()))
+            .Callback((TenantDefinition _, StoredRequest _, TimeSpan retention) => keptFor = retention)
+            .ReturnsAsync("auth-req-id");
+
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, expiresIn: expiresIn));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(expiresIn + new OidcOptions().BackChannelAuthentication.MaximumExpiry, keptFor);
     }
 
     /// <summary>
