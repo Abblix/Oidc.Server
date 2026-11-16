@@ -47,6 +47,12 @@ public class BackChannelAuthenticationRequestProcessorTests
     private const string Approved = "user-who-approved";
     private const string ClientId = "ciba-client";
 
+    /// <summary>
+    /// Not the default, so a retention written with the default as a constant is told apart from one read from the
+    /// settings.
+    /// </summary>
+    private static readonly TimeSpan MaximumExpiry = TimeSpan.FromMinutes(7);
+
     private readonly Mock<IBackChannelRequestStorage> _storage = new();
     private readonly Mock<IUserDeviceAuthenticationHandler> _handler = new(MockBehavior.Strict);
     private readonly Mock<ISubjectTypeConverter> _subjectTypeConverter = new(MockBehavior.Strict);
@@ -55,7 +61,8 @@ public class BackChannelAuthenticationRequestProcessorTests
     public BackChannelAuthenticationRequestProcessorTests()
     {
         var options = new Mock<IOptionsSnapshot<OidcOptions>>();
-        options.SetupGet(o => o.Value).Returns(new OidcOptions());
+        options.SetupGet(o => o.Value).Returns(
+            new OidcOptions { BackChannelAuthentication = { MaximumExpiry = MaximumExpiry } });
 
         // A public client, so the session's subject is what the client sees. The pairwise direction is the
         // shared comparison's own business and is covered where it lives.
@@ -410,7 +417,7 @@ public class BackChannelAuthenticationRequestProcessorTests
         var result = await _processor.ProcessAsync(SingleIssuer.Tenant, Request(null, expiresIn: expiresIn));
 
         Assert.True(result.TryGetSuccess(out _));
-        Assert.Equal(expiresIn + new OidcOptions().BackChannelAuthentication.MaximumExpiry, keptFor);
+        Assert.Equal(expiresIn + MaximumExpiry, keptFor);
     }
 
     /// <summary>

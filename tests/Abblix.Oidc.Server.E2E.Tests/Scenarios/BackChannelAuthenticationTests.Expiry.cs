@@ -71,7 +71,7 @@ public partial class BackChannelAuthenticationTests
     /// The answer to an expired auth_req_id does not depend on how late the poll comes. A ping client polls when it is
     /// notified, and CIBA Core 1.0 section 10.2 needs no notification sent for an expired request, so its last poll can
     /// come well after a short expiry: polled at more than twice its expires_in, the request is still answered
-    /// expired_token rather than as one never issued.
+    /// expired_token rather than as one never issued. That answer is given once, and the request is gone after it.
     /// </summary>
     [Fact]
     public async Task An_auth_req_id_polled_long_after_a_short_expiry_is_answered_expired_token()
@@ -95,6 +95,12 @@ public partial class BackChannelAuthenticationTests
         var lateBody = await ReadJsonAsync(late);
         Assert.Equal(HttpStatusCode.BadRequest, late.StatusCode);
         Assert.Equal(ErrorCodes.ExpiredToken, lateBody[ErrorResponse.Parameters.Error]!.GetValue<string>());
+
+        // Told once: the client was sent to make a new request, and the expired one is gone after that answer
+        var again = await RedeemAsync(client, discovery, initiator, authRequestId);
+        var againBody = await ReadJsonAsync(again);
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidGrant, againBody[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     /// <summary>
