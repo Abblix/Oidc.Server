@@ -46,7 +46,8 @@ public static class ClientAuthenticationServiceCollectionExtensions
         // each authenticator's TryAuthenticateClientAsync already does - so keyed dispatch would
         // be circular and strictly more complex. Each authenticator self-selects by inspecting
         // the request for its own credential shape; the composite returns the first match, after refusing a request
-        // in which credentials are presented in more than one place (RFC 6749 section 2.3).
+        // in which credentials are presented in more than one place (RFC 6749 section 2.3), and where one is
+        // presented asks only the authenticators reading it, so none never serves a request carrying a credential.
         services.TryAddEnumerable([
             ServiceDescriptor.Singleton<IClientAuthenticator, NoneClientAuthenticator>(),
             ServiceDescriptor.Singleton<IClientAuthenticator, ClientSecretPostAuthenticator>(),

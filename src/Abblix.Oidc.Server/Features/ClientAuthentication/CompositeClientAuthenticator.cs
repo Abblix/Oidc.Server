@@ -47,18 +47,38 @@ internal class CompositeClientAuthenticator(params IClientAuthenticator[] client
 	/// about the request that may be used by authenticators to determine the client's identity.</param>
 	/// <returns><see cref="ClientAuthenticationFailures.MoreThanOneMethod"/> for a request presenting credentials in
 	/// more than one place, before any authenticator checks one; otherwise the client the first authenticator to
-	/// succeed proves; otherwise the refusal of the first one a credential was presented to, or, where none was
-	/// presented to any, <see cref="ClientAuthenticationFailures.NoCredential"/>.
+	/// succeed proves, where a credential is presented only those reading it being asked; otherwise the refusal of the
+	/// first one a credential was presented to, or, where none was presented to any,
+	/// <see cref="ClientAuthenticationFailures.NoCredential"/>.
 	/// </returns>
 	public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
 	{
+		var presented = new HashSet<string>(StringComparer.Ordinal);
+		var readingIt = new List<IClientAuthenticator>();
+		foreach (var clientAuthenticator in clientAuthenticators)
+		{
+			var places = (await clientAuthenticator.FindPresentedCredentialsAsync(tenant, request)).ToArray();
+			if (places.Length == 0)
+				continue;
+
+			presented.UnionWith(places);
+			readingIt.Add(clientAuthenticator);
+		}
+
 		// RFC 6749 section 2.3: "The client MUST NOT use more than one authentication method in each request". Asked
 		// before any authenticator runs, so a request refused for it has no secret compared and no assertion spent
-		if ((await FindPresentedCredentialsAsync(tenant, request)).Count() > 1)
+		if (presented.Count > 1)
 			return ClientAuthenticationFailures.MoreThanOneMethod;
 
+		// A presented credential is answered by the authenticators reading it alone. The none one reads nothing and
+		// would serve a public client on its client_id over the refusal of the credential it did present, while
+		// OpenID Connect Core 1.0 section 9 gives none only to "a Public Client with no Client Secret or other
+		// authentication mechanism" and RFC 6749 section 5.2 answers an "unsupported authentication method" with
+		// invalid_client
+		var asked = presented.Count > 0 ? readingIt.ToArray() : clientAuthenticators;
+
 		OidcError? refused = null;
-		foreach (var clientAuthenticator in clientAuthenticators)
+		foreach (var clientAuthenticator in asked)
 		{
 			var result = await clientAuthenticator.TryAuthenticateClientAsync(tenant, request);
 			if (result.TryGetSuccess(out var clientInfo))
