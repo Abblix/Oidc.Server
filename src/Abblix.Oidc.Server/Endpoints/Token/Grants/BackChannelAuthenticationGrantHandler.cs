@@ -131,7 +131,7 @@ public class BackChannelAuthenticationGrantHandler(
 
             // If the user has been authenticated, process mode-specific token retrieval
             { Status: BackChannelAuthenticationStatus.Authenticated } authenticated
-                => await _redeemer.RedeemAsync(tenant, 
+                => await RedeemUnlessExpiredAsync(tenant,
                     request.AuthenticationRequestId, authenticated, clientInfo, processor),
 
             // If the user has not yet been authenticated and the request is still pending, either
@@ -299,7 +299,7 @@ public class BackChannelAuthenticationGrantHandler(
         switch (updatedRequest)
         {
             case { Status: BackChannelAuthenticationStatus.Authenticated } authenticated:
-                return await _redeemer.RedeemAsync(tenant, 
+                return await RedeemUnlessExpiredAsync(tenant,
                     authenticationRequestId, authenticated, clientInfo, grantProcessor);
 
             case { Status: BackChannelAuthenticationStatus.Denied }:
@@ -318,6 +318,32 @@ public class BackChannelAuthenticationGrantHandler(
                     "The authorization request is still pending. " +
                     "The polling interval must be increased by at least 5 seconds for all subsequent requests.");
         }
+    }
+
+    /// <summary>
+    /// Redeems an approved request, unless its expiry has come.
+    /// </summary>
+    /// <remarks>
+    /// CIBA Core 1.0 section 7.3, on expires_in: "A Client calling the token endpoint with an expired auth_req_id will
+    /// receive an error". The end user approving in time does not stretch that lifetime, and the record of an approval
+    /// stays in the store for as long as the host completing it asked, which can be longer, so its presence says
+    /// nothing about expiry: the instant it carries, the request's own, decides. Judged on the record read for this
+    /// poll, so a completion written after the request expired is refused here as well.
+    /// </remarks>
+    private async Task<Result<AuthorizedGrant, OidcError>> RedeemUnlessExpiredAsync(
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
+        Features.BackChannelAuthentication.BackChannelAuthenticationRequest authenticated,
+        ClientInfo clientInfo,
+        IBackChannelGrantProcessor processor)
+    {
+        if (authenticated.ExpiresAt <= timeProvider.GetUtcNow())
+        {
+            await storage.TryRemoveAsync(tenant, authenticationRequestId);
+            return new OidcError(ErrorCodes.ExpiredToken, "The authentication request has expired");
+        }
+
+        return await _redeemer.RedeemAsync(tenant, authenticationRequestId, authenticated, clientInfo, processor);
     }
 
     /// <summary>

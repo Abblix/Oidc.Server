@@ -64,7 +64,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// own Status is not read: whether this request may still be answered is decided from the STORED
     /// record, so a caller cannot make the decision by setting a field on its own copy.</param>
     /// <param name="clientInfo">Client information including delivery mode configuration.</param>
-    /// <param name="expiresIn">How long the authenticated request remains valid.</param>
+    /// <param name="expiresIn">How long the approved record is kept in the store. It does not extend the request: a poll after the request's own expiry is answered expired_token however long the record is kept.</param>
     /// <returns>A task representing the asynchronous authentication completion operation.</returns>
     /// <remarks>
     /// This method:
@@ -115,7 +115,7 @@ public abstract partial class AuthenticationCompletionHandler(
         var stored = await ReadPendingAsync(tenant, authenticationRequestId, "completed");
 
         // What the request recorded when it arrived - whom it named, what it asked for, the levels it
-        // required, and where and with which token the client is to be notified - is the STORED record's,
+        // required, where and with which token the client is to be notified, and when it expires - is the STORED record's,
         // never the host's copy: a host answers with a record of its own, and one it builds with a
         // constructor carries none of it. Taken onto that copy rather than read beside it, because the copy
         // is what every check below judges, what each mode delivers from and writes back, and the token
@@ -129,6 +129,7 @@ public abstract partial class AuthenticationCompletionHandler(
                 .Match<string[]?>(levels => levels, _ => null);
         request.ClientNotificationEndpoint = stored.ClientNotificationEndpoint;
         request.ClientNotificationToken = stored.ClientNotificationToken;
+        request.ExpiresAt = stored.ExpiresAt;
 
         // The grant the host completes with is minted for the client its context names, so that has to be
         // the client the request came from. The grant itself cannot be taken from the stored record: it
@@ -395,7 +396,7 @@ public abstract partial class AuthenticationCompletionHandler(
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information including delivery mode configuration.</param>
-    /// <param name="expiresIn">How long the authenticated request remains valid.</param>
+    /// <param name="expiresIn">How long the approved record is kept in the store. It does not extend the request: a poll after the request's own expiry is answered expired_token however long the record is kept.</param>
     protected abstract Task HandleDeliveryAsync(
         TenantDefinition tenant,
         [Credential] string authenticationRequestId,

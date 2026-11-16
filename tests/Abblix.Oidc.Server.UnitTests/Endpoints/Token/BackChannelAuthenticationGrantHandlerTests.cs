@@ -634,6 +634,71 @@ public partial class BackChannelAuthenticationGrantHandlerTests
     }
 
     /// <summary>
+    /// CIBA Core 1.0 section 7.3: "A Client calling the token endpoint with an expired auth_req_id will receive an
+    /// error". An approved request polled after its expiry is answered expired_token and removed, and nothing is
+    /// redeemed, however long the host kept the approval in the store.
+    /// </summary>
+    [Fact]
+    public async Task AnAuthenticatedRequestPolledAfterItsExpiry_IsRemovedAndAnsweredExpired()
+    {
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        var grant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var authRequest = new BackChannelAuthenticationRequest(grant, _currentTime)
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+        };
+
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(authRequest);
+
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
+    }
+
+    /// <summary>
+    /// The approval a poll finds on its second read is judged by the expiry that record carries as well, so a
+    /// completion landing while the poll runs does not redeem a request whose expiry has come.
+    /// </summary>
+    [Fact]
+    public async Task AnApprovalFoundOnTheSecondReadAfterItsExpiry_IsRemovedAndAnsweredExpired()
+    {
+        var clientInfo = new ClientInfo(ClientId) { BackChannelTokenDeliveryMode = BackchannelTokenDeliveryModes.Poll };
+        var tokenRequest = new TokenRequest { AuthenticationRequestId = AuthReqId };
+
+        var grant = new AuthorizedGrant(
+            new AuthSession(UserId, "session_123", _currentTime, "backchannel"),
+            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
+
+        var pending = new BackChannelAuthenticationRequest(grant, _currentTime.AddSeconds(1))
+        {
+            Status = BackChannelAuthenticationStatus.Pending,
+        };
+        var approvedAfterItsExpiry = new BackChannelAuthenticationRequest(grant, _currentTime)
+        {
+            Status = BackChannelAuthenticationStatus.Authenticated,
+        };
+
+        _storage.SetupSequence(s => s.TryGetAsync(TestTenant.Matched, AuthReqId))
+            .ReturnsAsync(pending)
+            .ReturnsAsync(approvedAfterItsExpiry);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(approvedAfterItsExpiry);
+
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthReqId), Times.Once);
+    }
+
+    /// <summary>
     /// A completion landing between the poll's read and whatever the poll writes next survives.
     /// </summary>
     /// <remarks>

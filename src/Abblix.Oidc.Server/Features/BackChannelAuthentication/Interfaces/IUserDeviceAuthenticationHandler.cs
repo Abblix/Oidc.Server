@@ -70,9 +70,11 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///         var tenant = await _tenants.FindByIdAsync(tenantId, CancellationToken.None);
 ///         if (tenant == null) return;
 ///
-///         // Retrieve the stored authentication request
+///         // Retrieve the stored authentication request. A request the end user answered too late is kept
+///         // past its expiry, so a late poll can be told expired_token, and completion refuses it: an answer
+///         // after ExpiresAt has nothing left to complete
 ///         var storedRequest = await _storage.TryGetAsync(tenant, authReqId);
-///         if (storedRequest == null) return;
+///         if (storedRequest == null || storedRequest.ExpiresAt &lt;= _clock.GetUtcNow()) return;
 ///
 ///         // Create authenticated session, carrying the level the device interaction actually reached
 ///         var authSession = new AuthSession(
@@ -110,6 +112,10 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///     {
 ///         var tenant = await _tenants.FindByIdAsync(tenantId, CancellationToken.None);
 ///         if (tenant == null) return;
+///
+///         // A denial after the request's expiry has nothing left to deny, and is refused as completion is
+///         var storedRequest = await _storage.TryGetAsync(tenant, authReqId);
+///         if (storedRequest == null || storedRequest.ExpiresAt &lt;= _clock.GetUtcNow()) return;
 ///
 ///         // Denial tells the client the way its delivery mode learns anything: a poll client reads
 ///         // access_denied (and a long poll is woken), a ping client is told to come and read it, a push

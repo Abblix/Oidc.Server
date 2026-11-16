@@ -34,6 +34,12 @@ public record BackChannelAuthenticationRequest(AuthorizedGrant AuthorizedGrant, 
     public AuthorizedGrant AuthorizedGrant { get; set; } = AuthorizedGrant;
 
     /// <summary>
+    /// The absolute time this request expires. Settable, as <see cref="AuthorizedGrant"/> is, so completing the request
+    /// keeps the expiry the client was told on whatever copy the host answers with.
+    /// </summary>
+    public DateTimeOffset ExpiresAt { get; set; } = ExpiresAt;
+
+    /// <summary>
     /// Indicates the current status of the backchannel authentication request.
     /// Defaults to Pending, reflecting that the request has not yet been resolved.
     /// </summary>

@@ -92,6 +92,34 @@ public partial class AuthenticationCompletionHandlerTests
             Times.Never);
     }
 
+    /// <summary>
+    /// The request's expiry is the stored record's, whatever the host's copy names: the token endpoint judges an
+    /// approved request by the instant the record it reads carries, and the client was told expires_in when the
+    /// request arrived.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAuthenticationAsync_KeepsTheStoredExpiryOverTheHostsCopy()
+    {
+        var expiresAt = ApprovedAt.AddMinutes(1);
+        _storage.Setup(s => s.TryGetAsync(TestTenant.Matched, AuthReqId)).ReturnsAsync(PendingRecordExpiringAt(expiresAt));
+
+        var hostsCopy = PendingRecordExpiringAt(ApprovedAt.AddHours(1));
+        hostsCopy.Status = BackChannelAuthenticationStatus.Authenticated;
+        _storage.Setup(s => s.UpdateAsync(TestTenant.Matched, AuthReqId, hostsCopy, _expiresIn)).Returns(Task.CompletedTask);
+
+        await CreatePollModeHandler().CompleteAuthenticationAsync(
+            SingleIssuer.Tenant, AuthReqId, hostsCopy, PollClient(), _expiresIn);
+
+        _storage.Verify(
+            s => s.UpdateAsync(
+                TestTenant.Matched,
+                AuthReqId,
+                It.Is<BackChannelAuthenticationRequest>(written =>
+                    written.ExpiresAt == expiresAt && written.Status == BackChannelAuthenticationStatus.Authenticated),
+                _expiresIn),
+            Times.Once);
+    }
+
     private static BackChannelAuthenticationRequest PendingRecordExpiringAt(DateTimeOffset expiresAt)
         => new(
             new AuthorizedGrant(

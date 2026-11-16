@@ -35,7 +35,7 @@ public interface IAuthenticationCompletionHandler
     /// and authentication levels it asked for, the client's notification endpoint and token - is taken
     /// from the STORED record and written over this copy, so a caller cannot change any of it by setting a
     /// field on its own copy.</param>
-    /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
+    /// <param name="expiresIn">How long the approved record is kept in the store. It does not extend the request: a poll after the request's own expiry is answered expired_token however long the record is kept.</param>
     /// <returns>A task representing the asynchronous completion operation.</returns>
     /// <remarks>
     /// This method automatically:
