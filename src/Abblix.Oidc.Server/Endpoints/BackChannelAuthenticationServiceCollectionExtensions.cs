@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.RequestFetching;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
@@ -14,6 +15,7 @@ using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication;
 using Abblix.Oidc.Server.Features.Telemetry;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints;
 
@@ -39,6 +41,10 @@ public static class BackChannelAuthenticationServiceCollectionExtensions
         services.AddTelemetryDecorator<IBackChannelAuthenticationRequestValidator, ObservedBackChannelAuthenticationRequestValidator>();
         services.TryAddScoped<IBackChannelAuthenticationRequestProcessor, BackChannelAuthenticationRequestProcessor>();
         services.AddTelemetryDecorator<IBackChannelAuthenticationRequestProcessor, ObservedBackChannelAuthenticationRequestProcessor>();
+
+        // TryAddEnumerable because the options framework resolves every registered IValidateOptions
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OidcOptions>, BackChannelAuthenticationOptionsValidator>());
 
         return services;
     }
