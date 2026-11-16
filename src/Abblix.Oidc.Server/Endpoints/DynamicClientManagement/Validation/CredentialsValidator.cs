@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
@@ -73,6 +74,20 @@ public class CredentialsValidator : SyncClientRegistrationContextValidator
                     ErrorCodes.InvalidClientMetadata,
                     "Clients using 'self_signed_tls_client_auth' authentication must provide either TLS metadata fields " +
                     "('tls_client_auth_subject_dn', 'tls_client_auth_san_dns', etc.) or 'jwks'/'jwks_uri' to convey the client certificate.");
+        }
+
+        // RFC 7592 section 2.2 replaces the metadata, not the secret, and this server issues none on update: a client
+        // moved to a method its stored secrets cannot serve could no longer authenticate, an invalid value the section
+        // answers "with an error as described in [RFC7591]"
+        if (context.Operation == DynamicClientOperation.Update &&
+            !ClientSecretsCheck.HoldsSecretFor(
+                request.TokenEndpointAuthMethod,
+                (context.StoredClient ?? throw new InvalidOperationException(
+                    $"An update is judged without the {nameof(context.StoredClient)} it replaces")).ClientSecrets))
+        {
+            return ErrorFactory.InvalidClientMetadata(
+                $"The client holds no secret {request.TokenEndpointAuthMethod} can authenticate it with, and an " +
+                "update issues none");
         }
 
         return null;
