@@ -15,8 +15,8 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Validates that client authentication methods are consistent with the credentials provided during registration.
-/// Ensures clients using JWT-based or TLS authentication have the required credentials (JWKS for JWT methods,
-/// TLS metadata for TLS methods). JWKS may be provided by any client for encryption or request object signing.
+/// Ensures clients using key-based or TLS authentication have the required credentials (JWKS for private_key_jwt,
+/// TLS metadata or JWKS for the TLS methods). JWKS may be provided by any client for encryption or request object signing.
 /// </summary>
 public class CredentialsValidator : SyncClientRegistrationContextValidator
 {
@@ -44,11 +44,9 @@ public class CredentialsValidator : SyncClientRegistrationContextValidator
                     ErrorCodes.InvalidClientMetadata,
                     "Clients using 'private_key_jwt' authentication must provide either 'jwks' or 'jwks_uri'.");
 
-            // Client secret JWT - requires JWKS or JWKS URI for signature verification
-            case ClientAuthenticationMethods.ClientSecretJwt when !HasJwksCredentials(request):
-                return new OidcError(
-                    ErrorCodes.InvalidClientMetadata,
-                    "Clients using 'client_secret_jwt' authentication must provide either 'jwks' or 'jwks_uri'.");
+            // client_secret_jwt needs no keys: OpenID Connect Core 1.0 section 9 has the client compute the HMAC "using
+            // the octets of the UTF-8 representation of the client_secret as the shared key", the secret this server
+            // issues on registration
 
             // Note: Clients using client_secret_basic/post MAY optionally provide jwks/jwks_uri
             // for ID token encryption, UserInfo encryption, or request object signing.

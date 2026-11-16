@@ -386,6 +386,45 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// OpenID Connect Core 1.0 section 9 has a client_secret_jwt client compute the HMAC "using the octets of the UTF-8
+    /// representation of the client_secret as the shared key", so it registers no keys: registered without jwks or
+    /// jwks_uri, it is issued a secret and authenticates at the token endpoint with an assertion signed by it.
+    /// </summary>
+    [Fact]
+    public async Task A_client_secret_jwt_client_registers_without_keys_and_authenticates_with_its_secret()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("client-secret-jwt-without-keys");
+        metadata[RequestMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretJwt;
+        metadata[RequestMembers.GrantTypes] = new JsonArray(GrantTypes.ClientCredentials);
+        metadata[RequestMembers.ResponseTypes] = new JsonArray();
+
+        var registered = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+        var body = await ReadJsonAsync(registered);
+        Assert.True(registered.StatusCode == HttpStatusCode.Created, $"{(int)registered.StatusCode}: {body[DescriptionMember]}");
+
+        var clientId = body[ResponseMembers.ClientId]!.GetValue<string>();
+        var assertion = await ClientSecretJwtAssertion.IssueWithSecretAsync(
+            clientId, body[ResponseMembers.ClientSecret]!.GetValue<string>(), discovery.Issuer.OriginalString);
+
+        using var token = await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.TokenEndpoint,
+            new Dictionary<string, string>
+            {
+                [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+                [ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer,
+                [ClientRequest.Parameters.ClientAssertion] = assertion,
+            });
+
+        // The token response carries the access token, so only the error is quoted
+        var tokenBody = await ReadJsonAsync(token);
+        Assert.True(token.StatusCode == HttpStatusCode.OK, $"{(int)token.StatusCode}: {tokenBody[ErrorMember]}");
+    }
+
+    /// <summary>
     /// An update is answered with the same codes: a value the server does not support, and a client_id other than
     /// the one issued, which RFC 7592 section 2.2 requires to be "the same as its currently issued client identifier"
     /// and answers, as every invalid field, with the RFC 7591 errors.
