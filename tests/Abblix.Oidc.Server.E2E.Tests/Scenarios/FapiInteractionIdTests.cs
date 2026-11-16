@@ -92,6 +92,18 @@ public class FapiInteractionIdTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(ClientValue, Assert.Single(InteractionIdsOf(response)));
     }
 
+    /// <summary>
+    /// The negative control of the refusal above: the same refusal for a client under no profile carries no header.
+    /// </summary>
+    [Fact]
+    public async Task ARefusalForAClientUnderNoProfile_GetsNoHeader()
+    {
+        using var response = await UserInfoAsync(null, PlainClientId, [Scopes.Profile], ClientValue);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(InteractionIdsOf(response));
+    }
+
     private static IEnumerable<string> InteractionIdsOf(HttpResponseMessage response)
         => response.Headers.TryGetValues(HttpRequestHeaders.FapiInteractionId, out var values) ? values : [];
 

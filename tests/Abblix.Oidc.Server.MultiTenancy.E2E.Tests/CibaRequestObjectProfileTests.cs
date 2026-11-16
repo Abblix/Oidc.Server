@@ -217,6 +217,30 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A client held to FAPI 1.0 Advanced has its signed authentication request processed strictly, the object being
+    /// the whole request, so an object naming no scope is refused; CIBA Core 1.0 section 13 answers it with
+    /// invalid_request, "The request is missing a required parameter". The same object naming its scope is accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(true, HttpStatusCode.OK, null)]
+    [InlineData(false, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    public async Task AStrictlyProcessedRequestObject_MustNameItsScope(
+        bool namesItsScope, HttpStatusCode expectedStatus, string? expectedError)
+    {
+        var requestObject = await SignedRequestAsync(FapiClientId, token =>
+        {
+            if (!namesItsScope)
+                token.Payload.Json.Remove(CibaParameters.Scope);
+        });
+
+        using var response = await PostAsync(FapiClientId, requestObject);
+
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.True(expectedStatus == response.StatusCode, $"{response.StatusCode}: {body}");
+        Assert.Equal(expectedError, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
     /// CIBA Core 1.0 section 7.1.1: "The JWT MUST also contain the following [RFC7519] registered claims: aud ... iss ...
     /// exp ... iat ... nbf ... jti". A signed authentication request lacking any of them is refused; the same request
     /// carrying all of them is accepted.
