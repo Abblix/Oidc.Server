@@ -24,10 +24,6 @@ internal sealed class MintedKeysBuilder(IServiceCollection services, MintedKeys 
     public MintedKeys Policy { get; private set; } = policy;
 
     /// <inheritdoc />
-    public IMintedKeysBuilder AdoptExistingKeys(params JsonWebKey[] keys)
-        => AdoptExistingKeys(KeyRingOptions.DefaultPartition, keys);
-
-    /// <inheritdoc />
     public IMintedKeysBuilder AdoptExistingKeys(string partition, params JsonWebKey[] keys)
     {
         ArgumentNullException.ThrowIfNull(partition);
