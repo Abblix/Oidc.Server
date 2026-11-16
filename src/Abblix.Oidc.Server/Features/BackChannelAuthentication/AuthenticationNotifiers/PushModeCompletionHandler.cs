@@ -50,7 +50,7 @@ public partial class PushModeCompletionHandler(
     IAuthorizationDetailsPolicy authorizationDetailsPolicy,
     TimeProvider clock,
     IRevocationCutoffChecker cutoffChecker)
-    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, clock)
+    : AuthenticationCompletionHandler(logger, fingerprints, storage, subjectTypeConverter, clock, statusNotifier: null)
 {
     private readonly ILogger<AuthenticationCompletionHandler> _logger = logger;
 

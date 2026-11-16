@@ -108,7 +108,7 @@ public partial class AuthenticationCompletionHandlerTests
 
     private PingModeCompletionHandler CreatePingModeHandler() =>
         new(Mock.Of<ILogger<PingModeCompletionHandler>>(), TestFingerprints.Instance, _storage.Object, PublicSubjects(),
-            _notificationService.Object, new FakeTimeProvider(ApprovedAt));
+            _notificationService.Object, new FakeTimeProvider(ApprovedAt), null);
 
     private PushModeCompletionHandler CreatePushModeHandler(
         StubAuthorizationDetailsPolicy? policy = null,
