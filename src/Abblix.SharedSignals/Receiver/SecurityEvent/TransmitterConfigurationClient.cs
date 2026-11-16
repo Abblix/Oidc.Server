@@ -26,35 +26,12 @@ namespace Abblix.SharedSignals.Receiver.SecurityEvent;
 public sealed class TransmitterConfigurationClient(HttpClient httpClient)
 {
     /// <summary>
-    /// Fetches the Transmitter Configuration Metadata for <paramref name="issuer"/>.
-    /// </summary>
-    /// <param name="issuer">The transmitter's issuer identifier, from a trusted source
-    /// (SSF 1.0 Section 7.2).</param>
-    /// <param name="cancellationToken">Cancels the fetch.</param>
-    /// <returns>The metadata document, its issuer identity confirmed.</returns>
-    /// <exception cref="HttpRequestException">The transmitter answered with an error status.
-    /// </exception>
-    /// <exception cref="InvalidOperationException">
-    /// The document is empty, or asserts an issuer other than the one it was fetched for - the
-    /// SSF counterpart of the identity check every discovery protocol makes, without which a
-    /// document served on one issuer's path could impersonate another issuer of the same host.
-    /// </exception>
-    public Task<TransmitterConfiguration> GetAsync(
-        Uri issuer,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(issuer);
-
-        return GetAsync(issuer, TransmitterConfiguration.WellKnownAddress(issuer), cancellationToken);
-    }
-
-    /// <summary>
     /// Fetches the Transmitter Configuration Metadata for <paramref name="issuer"/> from an
     /// explicitly named address instead of the one the issuer resolves to.
     /// </summary>
     /// <remarks>
     /// The insertion-derived well-known address is the conformant location (SSF 1.0
-    /// Section 7.2) and the parameterless overload is the normal door. This one exists for
+    /// Section 7.2) and <see cref="TransmitterConfigurationClientExtensions.GetAsync"/> is the normal door. This one exists for
     /// transmitters that publish the document elsewhere - a non-conformant implementation, or a
     /// deployment quirk the receiver cannot fix from its side. Every check stays in force, the
     /// issuer identity above all: the address only says where the bytes come from, never who
