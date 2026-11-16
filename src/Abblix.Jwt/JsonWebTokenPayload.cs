@@ -76,35 +76,6 @@ public class JsonWebTokenPayload(JsonObject json)
 	}
 
 	/// <summary>
-	/// Reads the three timestamp claims at once, answering false with the reason instead of throwing
-	/// where one of them cannot be read.
-	/// </summary>
-	/// <remarks>
-	/// The typed accessors throw on a value that is not a NumericDate - a string, an object, a number
-	/// outside the range <see cref="DateTimeOffset"/> can hold - because a caller asking for a
-	/// timestamp has nowhere to put "the token lied". A validator does: a claim it cannot read is a
-	/// refusal of the token, never an exception out of the request. This is the read a validator
-	/// makes, and it names the claim, since the sender can fix only the one it is told about.
-	/// </remarks>
-	/// <param name="notBefore">The <c>nbf</c> claim, or null where the token carries none.</param>
-	/// <param name="expiresAt">The <c>exp</c> claim, or null where the token carries none.</param>
-	/// <param name="issuedAt">The <c>iat</c> claim, or null where the token carries none.</param>
-	/// <param name="whyUnreadable">Which claim could not be read and what it held, or null where all three were read.</param>
-	/// <returns>True where every timestamp the token carries was read.</returns>
-	public bool TryReadTimestamps(
-		out DateTimeOffset? notBefore,
-		out DateTimeOffset? expiresAt,
-		out DateTimeOffset? issuedAt,
-		[NotNullWhen(false)] out string? whyUnreadable)
-	{
-		notBefore = expiresAt = issuedAt = null;
-
-		return TryReadTimestamp(JwtClaimTypes.NotBefore, out notBefore, out whyUnreadable)
-		       && TryReadTimestamp(JwtClaimTypes.ExpiresAt, out expiresAt, out whyUnreadable)
-		       && TryReadTimestamp(JwtClaimTypes.IssuedAt, out issuedAt, out whyUnreadable);
-	}
-
-	/// <summary>
 	/// Reads one timestamp claim by name, answering false with the reason instead of throwing where
 	/// it cannot be read.
 	/// </summary>

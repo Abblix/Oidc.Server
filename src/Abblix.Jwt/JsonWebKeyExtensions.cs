@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Buffers.Text;
 using Abblix.Utils;
 
 namespace Abblix.Jwt;
@@ -109,4 +110,16 @@ public static class JsonWebKeyExtensions
     /// <param name="algorithm">The algorithm it would be used for.</param>
     public static bool CanPerform(this JsonWebKey key, string algorithm)
         => key.Algorithm is not null ? key.Algorithm == algorithm : key.SupportsAlgorithm(algorithm);
+
+    /// <summary>
+    /// Computes the JWK Thumbprint of a key per RFC 7638 section 3 and returns the
+    /// base64url-encoded form, which is the wire shape used by DPoP <c>cnf.jkt</c> and
+    /// the <c>dpop_jkt</c> authorization-request parameter.
+    /// </summary>
+    /// <param name="key">The key whose thumbprint is computed.</param>
+    /// <returns>The base64url-encoded SHA-256 digest of the canonical-JSON form.</returns>
+    /// <exception cref="InvalidOperationException">A required member
+    /// (per RFC 7638 section 3.2) is missing on the key.</exception>
+    public static string ComputeJwkThumbprintBase64Url(this JsonWebKey key)
+        => Base64Url.EncodeToString(key.ComputeJwkThumbprint());
 }
