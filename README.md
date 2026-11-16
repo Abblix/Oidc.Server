@@ -1,6 +1,6 @@
 <a name="top"></a>
 [![Abblix OIDC Server](https://resources.abblix.com/imgs/jpg/abblix-oidc-server-github-banner.jpg)](https://www.abblix.com/abblix-oidc-server)
-[![.NET](https://img.shields.io/badge/.NET-11.0-512BD4)](https://docs.abblix.com/docs/technical-requirements)
+[![.NET](https://img.shields.io/badge/.NET-10.0%20%7C%2011.0-512BD4)](https://docs.abblix.com/docs/technical-requirements)
 [![language](https://img.shields.io/badge/language-C%23-239120)](https://learn.microsoft.com/en-us/dotnet/csharp/tour-of-csharp/overview)
 [![OS](https://img.shields.io/badge/OS-linux%2C%20windows%2C%20macOS-0078D4)](https://docs.abblix.com/docs/technical-requirements)
 [![CPU](https://img.shields.io/badge/CPU-x86%2C%20x64%2C%20ARM%2C%20ARM64-FF8C00)](https://docs.abblix.com/docs/technical-requirements)
@@ -52,7 +52,7 @@ Abblix OIDC Server turns your ASP.NET Core application into a fully certified Op
 - Security profiles the server enforces per client or per tenant, not yet certified: FAPI 2.0, FAPI 2.0 Message Signing and FAPI 1.0 Advanced.
 - Many issuers in one deployment: each tenant has its own clients, keys and security profile, declared at startup or added while the server runs. The free tier allows one production issuer, see [License](#-license).
 - Engineering you can audit: over 11,000 passing tests, top SonarCloud security, reliability, and maintainability ratings, and a CodeQL scan of every push to the development branch.
-- Modern .NET, minimal friction: targets .NET 11, with drop-in adapters for both MVC and Minimal API.
+- Modern .NET, minimal friction: targets .NET 10 and .NET 11, with drop-in adapters for both MVC and Minimal API.
 - Observable through OpenTelemetry: each endpoint request gets its own span and metrics, and the structured logs the server writes carry the trace of the request they belong to.
 
 Under the hood, the library leans on modular and hexagonal architecture and the standard .NET DI container, which keeps it testable and easy to extend. It ships two ASP.NET Core integration adapters that expose the same OpenID Connect endpoints (one for MVC controllers and routing, one for Minimal API endpoint routing), so you adopt whichever hosting model your application already uses, without taking a dependency on the other.
@@ -158,7 +158,7 @@ Both adapters expose the same OpenID Connect endpoints and pull in the core `Abb
 
 Version 3.0 changes how a host registers and configures the server. The changes most hosts meet:
 
-- The library targets .NET 11 only.
+- The library targets .NET 10 and .NET 11. It no longer ships for .NET 8 or .NET 9.
 - Every server serves tenants. A deployment with one issuer declares one `TenantDefinition` in `OidcOptions.Tenants`, and the settings of an issuer (its clients, scopes, resources, keys, pages and security profile) move from `OidcOptions` into that definition.
 - The host's own services are told the tenant of each call: `IUserInfoProvider.GetUserInfoAsync`, `IClientInfoProvider` and the other registries take a `TenantDefinition` as their first parameter.
 - A host calls `app.UseMultiTenancy()` before its own routing when it serves several tenants, one tenant at an issuer with a path, or tenants from a store or catalog of its own. A host with one tenant at an issuer without a path does not need the call.
