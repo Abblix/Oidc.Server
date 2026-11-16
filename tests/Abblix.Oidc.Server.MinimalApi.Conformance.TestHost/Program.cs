@@ -167,7 +167,6 @@ builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
 
-app.UseFapiInteractionIdOnUserInfo();
 app.UseRouting();
 app.UseCors();
 app.UseAuthorization();
