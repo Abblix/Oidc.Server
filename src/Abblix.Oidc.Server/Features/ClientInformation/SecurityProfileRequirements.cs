@@ -241,20 +241,24 @@ public sealed record SecurityProfileRequirements
     /// authorization request runs through as well, and <c>Features.RequestObject.RequestObjectFetcher</c>.
     /// </summary>
     /// <remarks>
-    /// <para>
     /// Without it strict processing has nothing to apply to: a client sending plain parameters carries no request
     /// object, and every parameter it names is used as sent.
-    /// </para>
-    /// <para>
-    /// It holds the backchannel authentication request the same way: FAPI-CIBA section 5.2.2 has the server "require
-    /// Backchannel Authentication Endpoint requests to be signed as described in [CIBA] 7.1.1", and that profile builds
-    /// on FAPI 1.0 Part 2. FAPI 2.0 has no CIBA clause; its profiles requiring signed request objects are held to it
-    /// too, a choice rather than a requirement, so that a client signing every authorization request does not send its
-    /// backchannel one unsigned. Enforced by
-    /// <c>Endpoints.BackChannelAuthentication.RequestFetching.RequestObjectFetchAdapter</c>.
-    /// </para>
     /// </remarks>
     public bool RequireSignedRequestObject { get; init; }
+
+    /// <summary>
+    /// The profile requires every backchannel authentication request to arrive as a signed authentication request
+    /// (CIBA Core 1.0 section 7.1.1) in the request parameter; plain parameters are refused. FAPI-CIBA section 5.2.2
+    /// has the server "require Backchannel Authentication Endpoint requests to be signed as described in [CIBA] 7.1.1",
+    /// and that profile builds on FAPI 1.0 Part 2, so FAPI 1.0 Advanced carries it. Enforced by
+    /// <c>Endpoints.BackChannelAuthentication.RequestFetching.RequestObjectFetchAdapter</c>.
+    /// </summary>
+    /// <remarks>
+    /// Apart from <see cref="RequireSignedRequestObject"/> because the two are not the same requirement: FAPI 2.0 has
+    /// no CIBA clause, and its profiles requiring signed request objects require them of the authorization request at
+    /// the PAR endpoint, not of the backchannel authentication request.
+    /// </remarks>
+    public bool RequireSignedBackChannelAuthenticationRequest { get; init; }
 
     /// <summary>
     /// The longest a request object may live under this profile, or null where the profile requires no lifetime
@@ -506,6 +510,7 @@ public sealed record SecurityProfileRequirements
         RequireSenderConstrainedTokens = true,
         RequireStrictRequestObjectProcessing = true,
         RequireSignedRequestObject = true,
+        RequireSignedBackChannelAuthenticationRequest = true,
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
         RequireIssuerAudienceInRequestObject = true,
         SignedAuthorizationResponseModes = LiteralJwtResponseMode,
@@ -715,6 +720,7 @@ public sealed record SecurityProfileRequirements
         SignedAuthorizationResponseModes = LiteralJwtResponseMode,
         RequireStrictRequestObjectProcessing = true,
         RequireSignedRequestObject = true,
+        RequireSignedBackChannelAuthenticationRequest = true,
         MaxRequestObjectLifetime = FapiRequestObjectLifetime,
         RequireIssuerAudienceInRequestObject = true,
         RequireNonceWithOpenIdScope = true,
@@ -835,6 +841,8 @@ public sealed record SecurityProfileRequirements
             RequireStrictRequestObjectProcessing =
                 RequireStrictRequestObjectProcessing || other.RequireStrictRequestObjectProcessing,
             RequireSignedRequestObject = RequireSignedRequestObject || other.RequireSignedRequestObject,
+            RequireSignedBackChannelAuthenticationRequest =
+                RequireSignedBackChannelAuthenticationRequest || other.RequireSignedBackChannelAuthenticationRequest,
             MaxRequestObjectLifetime = Tighter(MaxRequestObjectLifetime, other.MaxRequestObjectLifetime),
             RequireIssuerAudienceInRequestObject =
                 RequireIssuerAudienceInRequestObject || other.RequireIssuerAudienceInRequestObject,

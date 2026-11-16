@@ -44,7 +44,7 @@ public class RequestObjectFetchAdapter(
         // request object's parameters are bound onto a fresh model, which carries no request parameter either way.
         // CIBA Core 1.0 section 13: invalid_request, "The request is missing a required parameter"
         if (!request.Request.HasValue() &&
-            SecurityProfileRequirements.For(tenant, client).RequireSignedRequestObject)
+            SecurityProfileRequirements.For(tenant, client).RequireSignedBackChannelAuthenticationRequest)
         {
             return new OidcError(
                 ErrorCodes.InvalidRequest,

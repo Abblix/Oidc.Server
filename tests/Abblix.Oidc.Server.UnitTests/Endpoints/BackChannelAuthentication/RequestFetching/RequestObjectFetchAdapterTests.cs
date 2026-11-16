@@ -86,17 +86,14 @@ public class RequestObjectFetchAdapterTests
 
     /// <summary>
     /// FAPI-CIBA section 5.2.2 has the server "require Backchannel Authentication Endpoint requests to be signed as
-    /// described in [CIBA] 7.1.1", and the profiles requiring signed request objects carry that requirement here. A
-    /// request of such a client sent as plain parameters is missing the request parameter, which CIBA Core 1.0 section
-    /// 13 answers invalid_request, "The request is missing a required parameter", and nothing of it is fetched.
+    /// described in [CIBA] 7.1.1", and that profile builds on FAPI 1.0 Advanced. A request of a client held to it sent
+    /// as plain parameters is missing the request parameter, which CIBA Core 1.0 section 13 answers invalid_request,
+    /// "The request is missing a required parameter", and nothing of it is fetched.
     /// </summary>
-    [Theory]
-    [InlineData(ClientSecurityProfile.Fapi1Advanced)]
-    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests)]
-    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
-    public async Task FetchAsync_PlainParametersOfAClientHeldToSignedRequests_AreInvalidRequest(
-        ClientSecurityProfile profile)
+    [Fact]
+    public async Task FetchAsync_PlainParametersOfAClientHeldToFapi1Advanced_AreInvalidRequest()
     {
+        const ClientSecurityProfile profile = ClientSecurityProfile.Fapi1Advanced;
         var outer = new BackChannelAuthenticationRequest { Scope = [Scopes.OpenId], LoginHint = "end-user" };
         var client = new ClientInfo("client-1") { SecurityProfile = profile };
 
@@ -110,8 +107,8 @@ public class RequestObjectFetchAdapterTests
     }
 
     /// <summary>
-    /// The profile a tenant holds every client to is a floor, so a client naming none is held to signed requests when
-    /// its tenant's default profile requires them.
+    /// The profile a tenant holds every client to is a floor, so a client naming none is held to signed backchannel
+    /// requests when its tenant's default profile requires them.
     /// </summary>
     [Fact]
     public async Task FetchAsync_PlainParametersAtATenantRequiringSignedRequests_AreInvalidRequest()
@@ -130,14 +127,17 @@ public class RequestObjectFetchAdapterTests
     }
 
     /// <summary>
-    /// A client held to no profile, or to a profile that requires no signed request object, may send its
-    /// authentication request as plain parameters: CIBA Core 1.0 section 7.2 validates the JWT only "If the
-    /// authentication request is signed".
+    /// A client held to no profile, or to a FAPI 2.0 profile, may send its authentication request as plain
+    /// parameters: CIBA Core 1.0 section 7.2 validates the JWT only "If the authentication request is signed", and
+    /// FAPI 2.0 has no CIBA clause. That includes the FAPI 2.0 profiles requiring signed authorization requests, whose
+    /// requirement is about the request object at the PAR endpoint.
     /// </summary>
     [Theory]
     [InlineData(null)]
     [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests)]
     [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
     public async Task FetchAsync_PlainParametersOfAClientNotHeldToSignedRequests_AreFetched(
         ClientSecurityProfile? profile)
     {
