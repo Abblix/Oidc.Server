@@ -43,7 +43,7 @@ public class AuthorizationDetailsTypesValidatorTests
             // contract that discovery and metadata projection rely on).
             services.AddKeyedSingleton<IAuthorizationDetailValidator>(
                 type,
-                (_, key) => new StubValidator((string)key));
+                (_, key) => new StubValidator((string?)key));
         }
         return new AuthorizationDetailsTypesValidator(services.BuildServiceProvider());
     }

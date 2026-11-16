@@ -191,12 +191,17 @@ public class ApiDescriptionTests(TestFactory factory) : TestBase(factory)
             await document.SerializeAsJsonAsync(version, TestContext.Current.CancellationToken));
     }
 
-    /// <summary>Every 3.x form of the document, since a host serves whichever its generator defaults to.</summary>
+    /// <summary>
+    /// Every 3.x form of the document, since a host serves whichever its generator defaults to. A .NET 10 host
+    /// generates with Microsoft.OpenApi 2, which has no 3.2 form to serve.
+    /// </summary>
     public static TheoryData<OpenApiSpecVersion> SpecVersions =>
     [
         OpenApiSpecVersion.OpenApi3_0,
         OpenApiSpecVersion.OpenApi3_1,
+#if NET11_0_OR_GREATER
         OpenApiSpecVersion.OpenApi3_2,
+#endif
     ];
 
     /// <summary>
