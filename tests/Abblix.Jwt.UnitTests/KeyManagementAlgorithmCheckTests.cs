@@ -6,6 +6,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using Abblix.Jwt.ExternalKeys;
+using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -182,6 +183,6 @@ public class KeyManagementAlgorithmCheckTests
     private static async Task StartAsync(IServiceCollection services)
     {
         await using var provider = services.BuildServiceProvider();
-        await provider.GetRequiredService<IAsyncStartupValidator>().ValidateAsync(TestContext.Current.CancellationToken);
+        await provider.ValidateStartupAsync(TestContext.Current.CancellationToken);
     }
 }

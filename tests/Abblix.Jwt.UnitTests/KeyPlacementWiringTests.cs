@@ -9,6 +9,7 @@ using System.Security.Cryptography;
 using Abblix.DependencyInjection;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Jwt.Signing;
+using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -63,8 +64,7 @@ public class KeyPlacementWiringTests
 
         using var provider = services.BuildServiceProvider();
 
-        await provider.GetRequiredService<IAsyncStartupValidator>()
-            .ValidateAsync(TestContext.Current.CancellationToken);
+        await provider.ValidateStartupAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -77,8 +77,7 @@ public class KeyPlacementWiringTests
         using var provider = services.BuildServiceProvider();
 
         var error = await Assert.ThrowsAsync<OptionsValidationException>(
-            () => provider.GetRequiredService<IAsyncStartupValidator>()
-                .ValidateAsync(TestContext.Current.CancellationToken));
+            () => provider.ValidateStartupAsync(TestContext.Current.CancellationToken));
 
         // The message must name a call the host can actually write. Asserting a substring of a message is only
         // worth anything when the substring is the method name, which the compiler then keeps honest.
@@ -112,8 +111,7 @@ public class KeyPlacementWiringTests
             provider.GetRequiredService<IOptions<KeyPlacementChoice>>().Value.ChosenPlacement);
 
         // And the positive branch of every startup validator both placements arm, which a refusal test cannot reach.
-        await provider.GetRequiredService<IAsyncStartupValidator>()
-            .ValidateAsync(TestContext.Current.CancellationToken);
+        await provider.ValidateStartupAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -270,8 +268,7 @@ public class KeyPlacementWiringTests
         var custodian = Assert.IsType<DependentCustodian>(provider.GetRequiredService<IKeyCustodian>());
         Assert.Same(provider.GetRequiredService<TimeProvider>(), custodian.TimeProvider);
 
-        await provider.GetRequiredService<IAsyncStartupValidator>()
-            .ValidateAsync(TestContext.Current.CancellationToken);
+        await provider.ValidateStartupAsync(TestContext.Current.CancellationToken);
     }
 
     [Theory]
@@ -313,7 +310,7 @@ public class KeyPlacementWiringTests
 
         using var provider = services.BuildServiceProvider();
 
-        await provider.GetRequiredService<IAsyncStartupValidator>().ValidateAsync(TestContext.Current.CancellationToken);
+        await provider.ValidateStartupAsync(TestContext.Current.CancellationToken);
         Assert.Equal(KeyPlacement.Custodian, provider.GetRequiredService<IOptions<KeyPlacementChoice>>().Value.ChosenPlacement);
         Assert.Null(provider.GetService<CustodianHeldKeys>());
     }
@@ -334,8 +331,7 @@ public class KeyPlacementWiringTests
             new ServiceProviderOptions { ValidateOnBuild = validateOnBuild });
 
         var error = await Assert.ThrowsAsync<OptionsValidationException>(
-            () => provider.GetRequiredService<IAsyncStartupValidator>()
-                .ValidateAsync(TestContext.Current.CancellationToken));
+            () => provider.ValidateStartupAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains(nameof(IKeyRingStore), Assert.Single(error.Failures));
     }
@@ -362,8 +358,7 @@ public class KeyPlacementWiringTests
 
         using var provider = services.BuildServiceProvider(
             new ServiceProviderOptions { ValidateOnBuild = validateOnBuild });
-        var validation = provider.GetRequiredService<IAsyncStartupValidator>()
-            .ValidateAsync(TestContext.Current.CancellationToken);
+        var validation = provider.ValidateStartupAsync(TestContext.Current.CancellationToken);
 
         if (withStore)
         {

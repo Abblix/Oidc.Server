@@ -35,4 +35,8 @@
         <ProjectReference Include="..\..\src\Abblix.Jwt\Abblix.Jwt.csproj" />
     </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../Shared/StartupValidation.cs" Link="Shared/StartupValidation.cs" />
+  </ItemGroup>
+
 </Project>

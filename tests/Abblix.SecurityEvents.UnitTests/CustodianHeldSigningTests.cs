@@ -13,6 +13,7 @@ using Abblix.Jwt.ExternalKeys;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
+using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -89,8 +90,7 @@ public class CustodianHeldSigningTests
         resolved = host;
 
         // Startup validation is satisfied: the guard the custodian registration armed has an answer.
-        await host.GetRequiredService<IAsyncStartupValidator>()
-            .ValidateAsync(TestContext.Current.CancellationToken);
+        await host.ValidateStartupAsync(TestContext.Current.CancellationToken);
 
         var compact = await new SecurityEventTokenBuilder()
             .WithIssuer(Issuer)

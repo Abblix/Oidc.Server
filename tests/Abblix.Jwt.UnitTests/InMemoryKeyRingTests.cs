@@ -7,6 +7,7 @@
 
 
 using Abblix.Jwt.ExternalKeys;
+using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Microsoft.Extensions.Options;
@@ -411,8 +412,7 @@ public class InMemoryKeyRingTests
         await using var provider = services.BuildServiceProvider();
 
         await Assert.ThrowsAsync<OptionsValidationException>(() => provider
-            .GetRequiredService<IAsyncStartupValidator>()
-            .ValidateAsync(TestContext.Current.CancellationToken));
+            .ValidateStartupAsync(TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -428,8 +428,7 @@ public class InMemoryKeyRingTests
         await using var provider = services.BuildServiceProvider();
 
         await provider
-            .GetRequiredService<IAsyncStartupValidator>()
-            .ValidateAsync(TestContext.Current.CancellationToken);
+            .ValidateStartupAsync(TestContext.Current.CancellationToken);
     }
 
     /// <summary>

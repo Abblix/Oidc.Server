@@ -18,6 +18,14 @@
     <EmbeddedResource Include="../Resources/test-license.jwt" Link="Resources/test-license.jwt" />
   </ItemGroup>
 
+  <!-- The architecture tests load every assembly built here into this process, and the documentation samples
+       and end-to-end suites run OpenTelemetry, which on .NET 10 brings DiagnosticSource 11. One process holds
+       one version of it, and loading theirs beside the framework's fails, so on .NET 10 this suite carries the
+       newer one too. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- Read by the architecture test that walks the library's own sources: the shape it looks for is
          an ORDER of statements inside one method, which a text search cannot see. Already managed for
@@ -49,6 +57,7 @@
     <ItemGroup>
         <!-- One statement of what a host is promised, compiled into every package's suite. -->
         <Compile Include="../Shared/HostResilienceProbe.cs" Link="Shared/HostResilienceProbe.cs" />
+        <Compile Include="../Shared/StartupValidation.cs" Link="Shared/StartupValidation.cs" />
         <Compile Include="../Shared/EntityStorageMock.cs" Link="Shared/EntityStorageMock.cs" />
         <Compile Include="..\Shared\FlakyOriginHandler.cs">
           <Link>Shared\FlakyOriginHandler.cs</Link>

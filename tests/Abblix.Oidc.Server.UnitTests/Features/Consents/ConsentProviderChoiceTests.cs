@@ -13,6 +13,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -66,7 +67,7 @@ public class ConsentProviderChoiceTests
 	}
 
 	private static Task StartAsync(ServiceProvider provider)
-		=> provider.GetRequiredService<IAsyncStartupValidator>().ValidateAsync(TestContext.Current.CancellationToken);
+		=> provider.ValidateStartupAsync(TestContext.Current.CancellationToken);
 
 	[Fact]
 	public async Task AHostChoosingNothing_DoesNotStart_AndIsToldBothChoices()
