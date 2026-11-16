@@ -33,10 +33,9 @@ jobs:
     # the host and the browser as containers on one network, which needs a Docker daemon, and the shared runners carry
     # none by design. The job holds no secret, and a pull request from a fork runs on a runner thrown away afterwards
     runs-on: ubuntu-latest
-    # The 43 plans take about 15 minutes on a workstation; there are no CI durations yet, so the ceilings are wide and
-    # are set again from five healthy runs. The job's is the sum of its steps', so a run stopped at the plans' own
-    # ceiling still collects and uploads its evidence
-    timeout-minutes: 65
+    # Run 43821147250 took 15m57s for this job, +20% (Kirill). It is below the sum of its steps' ceilings: the plans
+    # step stopping at its own still leaves about a minute for collecting and uploading the evidence, which take seconds
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -64,8 +63,8 @@ jobs:
         env:
           RESULTS: ${{ runner.temp }}/conformance-results
         run: ./conformance/run.ps1 -ResultsPath $env:RESULTS
-        # Inside the job's ceiling with room for the steps around it
-        timeout-minutes: 50
+        # Run 43821147250 took 15m35s for this step, +20% (Kirill)
+        timeout-minutes: 19
 
       # A step stopped at its ceiling may not finish its finally block, so the containers may still be there holding
       # the logs; what the script already saved is kept
@@ -105,10 +104,9 @@ jobs:
     # GitHub-hosted for the reason the certified plans' job gives; a runner of its own, so the fixed container names
     # and compose project run.ps1 uses never meet the other job's
     runs-on: ubuntu-latest
-    # The plans of fapi-plans.txt take about 11 minutes on a workstation, the suite's start and the host's publish
-    # included; there are no CI durations yet, so the ceilings are wide and are set again from five healthy runs. The
-    # job's is the sum of its steps', so a run stopped at the plans' own ceiling still collects and uploads its evidence
-    timeout-minutes: 45
+    # Run 43821147250 took 10m15s for this job, +20% (Kirill). It is below the sum of its steps' ceilings: the plans
+    # step stopping at its own still leaves about a minute for collecting and uploading the evidence, which take seconds
+    timeout-minutes: 13
     permissions:
       contents: read
     steps:
@@ -136,8 +134,8 @@ jobs:
         env:
           RESULTS: ${{ runner.temp }}/conformance-fapi-results
         run: ./conformance/run.ps1 -PlanFile ./conformance/fapi-plans.txt -ResultsPath $env:RESULTS
-        # Inside the job's ceiling with room for the steps around it
-        timeout-minutes: 30
+        # Run 43821147250 took 9m52s for this step, +20% (Kirill)
+        timeout-minutes: 12
 
       # A step stopped at its ceiling may not finish its finally block, so the containers may still be there holding
       # the logs; what the script already saved is kept
