@@ -1,11 +1,12 @@
 """Runs the suite's own plan runner, reading a module's details only once the suite has recorded how it ended.
 
-The runner waits for a module through the suite's wait-state endpoint, which answers on the status change itself, and
-then reads the module's details from the info endpoint, which answers with the stored record. The record can still
-carry the status the module had a moment before, so a module that ended is read as still waiting, and the runner fails
-the whole run as one that did not run to completion, before it judges any expected failure or warning. Here the details
-are read again while the module has not ended, for a few seconds at most, so a module that really is stuck is still
-reported as incomplete. Run from the suite's scripts directory, with the runner's arguments.
+The runner waits for a module through the suite's wait-state endpoint and then reads the module's details from the info
+endpoint, which answers with the stored record. The suite sets a module's status in memory a moment before it writes the
+record, and the wait-state endpoint can answer from memory in that moment, so the record still carries the previous
+status: a module that ended is read as still waiting, and the runner fails the whole run as one that did not run to
+completion, before it judges any expected failure or warning. Here the details are read again while the module has not
+ended, for about ten seconds at most, so a module that really is stuck is still reported as incomplete. Run from the
+suite's scripts directory, with the runner's arguments.
 Usage: python run-plan.py <runner arguments>...
 """
 import asyncio
