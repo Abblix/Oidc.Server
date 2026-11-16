@@ -324,10 +324,11 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// A software statement this server cannot accept is refused with the code RFC 7591 section 3.2.2 reserves for it.
+    /// A software statement sent to a server that trusts no statement issuer is refused with the code RFC 7591 section
+    /// 3.2.2 reserves for one "not approved for use by this authorization server": this host configures none.
     /// </summary>
     [Fact]
-    public async Task An_unusable_software_statement_is_invalid_software_statement()
+    public async Task A_software_statement_to_a_server_trusting_no_issuer_is_unapproved()
     {
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
@@ -339,7 +340,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(
-            ErrorCodes.InvalidSoftwareStatement,
+            ErrorCodes.UnapprovedSoftwareStatement,
             (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
     }
 
