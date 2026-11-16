@@ -9,6 +9,7 @@
 using System;
 using System.Net;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -22,7 +23,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.SecureHttpFetch;
 public class SecureUriValidatorTests
 {
     private static ISecureUriValidator CreateValidator(SecureHttpFetchOptions options)
-        => new SecureUriValidator(Options.Create(options));
+        => new SecureUriValidator(Options.Create(options), NullLogger<SecureUriValidator>.Instance);
 
     // Secure defaults: https-only, private networks blocked.
     private static SecureHttpFetchOptions SecureDefaults => new();

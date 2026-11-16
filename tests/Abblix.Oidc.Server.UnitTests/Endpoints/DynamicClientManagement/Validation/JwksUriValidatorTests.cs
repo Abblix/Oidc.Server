@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -29,7 +30,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validat
 public class JwksUriValidatorTests
 {
     private static JwksUriValidator CreateValidator(SecureHttpFetchOptions options)
-        => new(new SecureUriValidator(Options.Create(options)));
+        => new(new SecureUriValidator(Options.Create(options), NullLogger<SecureUriValidator>.Instance));
 
     // Secure defaults: https-only, private networks blocked.
     private static SecureHttpFetchOptions SecureDefaults => new();

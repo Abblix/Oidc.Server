@@ -32,13 +32,12 @@ public partial class SecureUriValidator : ISecureUriValidator
     /// states one.
     /// </summary>
     /// <param name="options">The fetch policy this validator enforces.</param>
-    /// <param name="logger">Carries the one-time report; absent in hosts that build the validator
-    /// by hand, where there is nowhere to report to.</param>
-    public SecureUriValidator(IOptions<SecureHttpFetchOptions> options, ILogger<SecureUriValidator>? logger = null)
+    /// <param name="logger">Carries the one-time report.</param>
+    public SecureUriValidator(IOptions<SecureHttpFetchOptions> options, ILogger<SecureUriValidator> logger)
     {
         this.options = options;
 
-        if (options.Value.AllowedSchemes is { Length: 0 } && logger != null)
+        if (options.Value.AllowedSchemes is { Length: 0 })
             LogSchemeRestrictionLifted(logger);
     }
 
