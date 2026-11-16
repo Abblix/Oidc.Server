@@ -344,6 +344,48 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
+    /// RFC 7591 section 2.1 pairs the authorization_code grant with the code response type and has the server "ensure
+    /// that a client cannot register itself into an inconsistent state": a client registering the grant with no
+    /// response type is refused, on registration and on an update. A client of a grant the table pairs with no
+    /// response type registers none and is served.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.AuthorizationCode, false, HttpStatusCode.BadRequest)]
+    [InlineData(GrantTypes.AuthorizationCode, true, HttpStatusCode.BadRequest)]
+    [InlineData(GrantTypes.ClientCredentials, false, HttpStatusCode.Created)]
+    [InlineData(GrantTypes.ClientCredentials, true, HttpStatusCode.OK)]
+    public async Task A_grant_type_is_registered_only_with_the_response_type_it_pairs_with(
+        string grantType, bool onUpdate, HttpStatusCode expected)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata($"no-response-type-{grantType}-{onUpdate}");
+        metadata[RequestMembers.GrantTypes] = new JsonArray(grantType);
+        metadata[RequestMembers.ResponseTypes] = new JsonArray();
+
+        HttpResponseMessage response;
+        if (onUpdate)
+        {
+            var registration = await RegisterAsync(client, discovery, $"no-response-type-{grantType}-{onUpdate}");
+            metadata[RequestMembers.ClientId] = registration.ClientId;
+            var update = Request(HttpMethod.Put, registration.ConfigurationUri, registration.AccessToken);
+            update.Content = JsonContent.Create(metadata);
+            response = await client.SendAsync(update, TestContext.Current.CancellationToken);
+        }
+        else
+        {
+            response = await client.PostAsJsonAsync(
+                discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+        }
+
+        var body = await ReadJsonAsync(response);
+        // The body of a success carries the registration's credentials, so only the error is quoted
+        Assert.True(response.StatusCode == expected, $"{(int)response.StatusCode}: {body[DescriptionMember]}");
+        if (expected == HttpStatusCode.BadRequest)
+            Assert.Equal(ErrorCodes.InvalidClientMetadata, body[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
     /// An update is answered with the same codes: a value the server does not support, and a client_id other than
     /// the one issued, which RFC 7592 section 2.2 requires to be "the same as its currently issued client identifier"
     /// and answers, as every invalid field, with the RFC 7591 errors.
