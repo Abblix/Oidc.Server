@@ -28,29 +28,42 @@ public class FapiInteractionIdResolverTests
 
     private FapiInteractionIdResolver Resolver() => new(new Logger<FapiInteractionIdResolver>(_loggers));
 
-    [Fact]
-    public void TheClientsValue_IsAnsweredAndLogged()
+    /// <summary>
+    /// The client's value is answered and logged as sent, in either case: RFC 4122 section 3 has the hexadecimal digits
+    /// "case insensitive on input".
+    /// </summary>
+    [Theory]
+    [InlineData(ClientValue)]
+    [InlineData("C770AEF3-6784-41F7-8E0E-FF5F97BDDB3A")]
+    public void TheClientsValue_IsAnsweredAndLogged(string received)
     {
-        var answered = Resolver().Resolve(SingleIssuer.Tenant, ClientSecurityProfile.Fapi1Advanced, ClientValue);
+        var answered = Resolver().Resolve(SingleIssuer.Tenant, ClientSecurityProfile.Fapi1Advanced, received);
 
-        Assert.Equal(ClientValue, answered);
+        Assert.Equal(received, answered);
         var record = Assert.Single(_loggers.Entries);
         Assert.Equal(LogLevel.Information, record.Level);
-        Assert.Equal(ClientValue, record.Value("InteractionId"));
+        Assert.Equal(received, record.Value("InteractionId"));
     }
 
     /// <summary>
-    /// A value that is no UUID is answered and logged as a UUID of the server's own, and never written to the log as
-    /// received.
+    /// A value that is no UUID in the RFC 4122 string form is answered and logged as a UUID of the server's own, and
+    /// never written to the log as received: text the platform's parser tolerates, a sign, a hex prefix or padding,
+    /// is not that form either.
     /// </summary>
-    [Fact]
-    public void AMalformedValue_IsReplacedAndNeverLogged()
+    [Theory]
+    [InlineData("forged\r\nline")]
+    [InlineData("+770aef3-6784-41f7-8e0e-ff5f97bddb3a")]
+    [InlineData("0x70aef3-6784-41f7-8e0e-ff5f97bddb3a")]
+    [InlineData("c770aef3-+784-41f7-8e0e-ff5f97bddb3a")]
+    [InlineData(" c770aef3-6784-41f7-8e0e-ff5f97bddb3a")]
+    [InlineData("c770aef3-6784-41f7-8e0e-ff5f97bddb3a ")]
+    [InlineData("\tc770aef3-6784-41f7-8e0e-ff5f97bddb3a")]
+    public void AMalformedValue_IsReplacedAndNeverLogged(string received)
     {
-        const string received = "forged\r\nline";
-
         var answered = Resolver().Resolve(SingleIssuer.Tenant, ClientSecurityProfile.Fapi1Advanced, received);
 
         Assert.True(Guid.TryParseExact(answered, "D", out _), answered);
+        Assert.NotEqual(received, answered);
         Assert.Contains(_loggers.Entries, record => record.Level == LogLevel.Warning);
         Assert.All(_loggers.Entries, record => Assert.DoesNotContain(received, record.Message));
         Assert.Equal(answered, _loggers.Entries[^1].Value("InteractionId"));

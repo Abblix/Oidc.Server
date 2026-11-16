@@ -39,7 +39,7 @@ public partial class FapiInteractionIdResolver(ILogger<FapiInteractionIdResolver
         if (received is null)
             return Answered(NewInteractionId());
 
-        if (Guid.TryParseExact(received, UuidFormat, out _))
+        if (IsUuid(received))
             return Answered(received);
 
         // Section 6.2.2 has the client's value "be a RFC4122 UUID", and section 6.2.1 lets the resource answer with the
@@ -50,6 +50,16 @@ public partial class FapiInteractionIdResolver(ILogger<FapiInteractionIdResolver
         LogMalformedInteractionIdReplaced(replacement);
         return Answered(replacement);
     }
+
+    /// <summary>
+    /// Whether <paramref name="value"/> is a UUID written in the RFC 4122 section 3 string form and nothing else. The
+    /// platform's parser also takes a sign, a hex prefix or padding inside that form, so the value counts only where it
+    /// is exactly the string the parsed UUID writes, case aside: the section has the hexadecimal digits "case
+    /// insensitive on input".
+    /// </summary>
+    private static bool IsUuid(string value)
+        => Guid.TryParseExact(value, UuidFormat, out var uuid) &&
+           string.Equals(uuid.ToString(UuidFormat), value, StringComparison.OrdinalIgnoreCase);
 
     private string Answered(string interactionId)
     {
