@@ -46,10 +46,10 @@ Add a certified OpenID Connect provider to your own ASP.NET Core app, one you em
 
 Abblix OIDC Server turns your ASP.NET Core application into a fully certified OpenID Connect provider. Rather than deploying and operating a separate identity server, you embed the protocol directly into your app, so your users, your data, and your UI stay inside your product.
 
-- Certified: all seven OpenID Provider profiles and all four logout profiles, 634 conformance tests passed with none skipped and no warnings. FAPI is not among them.
+- Certified in versions 1.x and 2.x: all seven OpenID Provider profiles and all four logout profiles; in the 2.x certification 634 conformance tests passed with none skipped and no warnings. Version 3.0 is being prepared for certification and passes the same plans before every release. FAPI is not among the certified profiles.
 - A library you own, not a server you run: the OpenID Connect endpoints live inside your app, so users, data, and UI never leave it.
 - Current with the modern security stack: DPoP, PAR, JARM, RAR, CIBA, device authorization, token exchange, certificate-bound tokens and JWT introspection responses, alongside the OAuth 2.0 and OpenID Connect core.
-- Security profiles the server enforces per client or per tenant, not yet certified: FAPI 2.0, FAPI 2.0 Message Signing and FAPI 1.0 Advanced.
+- Security profiles the server enforces per client or per tenant, not certified: FAPI 2.0, FAPI 2.0 Message Signing and FAPI 1.0 Advanced, which also holds CIBA clients to FAPI-CIBA. Every 3.0 release runs their OpenID Foundation conformance plans.
 - Many issuers in one deployment: each tenant has its own clients, keys and security profile, declared at startup or added while the server runs. The free tier allows one production issuer, see [License](#-license).
 - Engineering you can audit: over 11,000 passing tests, top SonarCloud security, reliability, and maintainability ratings, and a CodeQL scan of every push to the development branch.
 - Modern .NET, minimal friction: targets .NET 11, with drop-in adapters for both MVC and Minimal API.
@@ -101,9 +101,11 @@ This is the outline, not a complete application: the server also needs an `IDist
 
 [![OpenID Foundation Certification](https://resources.abblix.com/imgs/svg/abblix-oidc-server-openid-foundation-certification-mark.svg)](https://oidc.abblix.com/certified-profiles)
 
-We are certified in all profiles. During the certification process, we skipped ZERO tests and received NO warnings. All 634 tests ![Passed](https://img.shields.io/badge/PASSED-brightgreen). For more details, click the links ([Certified OpenID Providers & Profiles](https://oidc.abblix.com/certified-profiles), [Certified OpenID Providers for Logout Profiles](https://oidc.abblix.com/certified-logout-profiles)).
+Versions 1.x and 2.x are certified in all seven OpenID Provider profiles and all four logout profiles. In the 2.x certification we skipped no tests and received no warnings: all 634 tests ![Passed](https://img.shields.io/badge/PASSED-brightgreen). For more details, click the links ([Certified OpenID Providers & Profiles](https://oidc.abblix.com/certified-profiles), [Certified OpenID Providers for Logout Profiles](https://oidc.abblix.com/certified-logout-profiles)).
 
-For convenience, the certification information is provided in the tables below:
+Version 3.0 is being prepared for certification. Until then, every 3.0 release is held to the same suite: the release workflow runs the OpenID Foundation conformance plans for the certified OpenID Connect profiles and for FAPI 2.0, FAPI 2.0 Message Signing, FAPI 1.0 Advanced and FAPI-CIBA, and a release is not published unless they pass, apart from the few checks the suite cannot complete unattended, which the repository lists. The FAPI plans are run, not certified.
+
+The tables below are the results of the 2.x certification:
 
 ### Regular Profiles
 |OIDC Profile|Response Types (links to official OpenID Foundation test results)|Tests|
@@ -194,7 +196,7 @@ Prefer not to run the provider yourself? [Abblix Account](https://account.abblix
 
 ## 🤝 Feedback and Contributions
 
-The protocol surface is complete and certified, but the library is not finished. What you run into in your own application is what we cannot see from here.
+The protocol surface is complete and passes the OpenID Foundation conformance plans it is tested against, but the library is not finished. What you run into in your own application is what we cannot see from here.
 
 > [!IMPORTANT]
 > Whether you have feedback on features, have encountered any bugs, or have suggestions for enhancements, we're eager to hear from you. A report that names the flow and the client you were using is what turns a guess into a fix.
