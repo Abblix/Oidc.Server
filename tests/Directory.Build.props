@@ -14,11 +14,12 @@
        with the import and without it and nothing here can show it doing any work. -->
   <Import Project="$([MSBuild]::GetPathOfFileAbove($(MSBuildThisFile), $(MSBuildThisFileDirectory)..))" />
 
-  <!-- The suites run on one framework, named here for the same reason the shipped set is named
+  <!-- The suites run on every framework the packages ship for, since a framework the suites skip is
+       one whose build is shipped untested. Named here for the same reason the shipped set is named
        once under src/: a project added later inherits it, and a project missed by a change to it
-       would keep running the old one and stay green. -->
+       would keep running the old set and stay green. -->
   <PropertyGroup>
-    <TargetFramework>net11.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
   </PropertyGroup>
 
   <!-- The compiler resolves a <see cref="..."/> only while it is generating the documentation

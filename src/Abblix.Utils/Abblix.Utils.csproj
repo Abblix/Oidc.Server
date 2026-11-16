@@ -43,4 +43,10 @@
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
+  <!-- On .NET 11 these assemblies are part of the shared framework, so only .NET 10 references them
+       as packages. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
+  </ItemGroup>
+
 </Project>

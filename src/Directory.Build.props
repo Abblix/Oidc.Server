@@ -9,9 +9,15 @@
        per-project copy is an enumeration, and an enumeration is escaped silently: a project added
        later ships fewer frameworks than the rest and nothing says so, while a project MISSED by a
        change to the set keeps building the old one and stays green. The two source generators
-       override this - they load into the compiler and must be netstandard2.0. -->
+       override this - they load into the compiler and must be netstandard2.0.
+
+       What .NET 11 has and .NET 10 lacks reaches .NET 10 under the .NET 11 name, from a file of its
+       own guarded by !NET11_0_OR_GREATER, so every caller is one code path and the file compiles to
+       nothing on .NET 11: the union support types, plain AES key wrap, asynchronous object
+       validation. What .NET 11 moved into the shared framework, .NET 10 references as packages, in
+       a net10.0 ItemGroup of the project that uses it. -->
   <PropertyGroup>
-    <TargetFrameworks>net11.0</TargetFrameworks>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
   </PropertyGroup>
 
   <!-- What every assembly built here owes, whether or not it is packed on its own: a build that does

@@ -103,8 +103,9 @@
   <!-- The references MSBuild evaluated for this project, conditions applied, and the restore file NuGet
        wrote for it, both written into the assembly for EveryProjectIsBuiltFirstTests. Relative to this
        project's folder, so a build moved or reached under another spelling of the path reads the same.
-       Last in the file, because an item transform sees only the items defined above it. -->
-  <ItemGroup>
+       Last in the file, because an item transform sees only the items defined above it. Only in the build
+       of one framework: the outer build that dispatches to each has no restore file of its own to name. -->
+  <ItemGroup Condition="'$(TargetFramework)' != ''">
     <_BuildOrderReference Include="@(ProjectReference)">
       <RelativePath>$([MSBuild]::MakeRelative($(MSBuildProjectDirectory), %(FullPath)))</RelativePath>
     </_BuildOrderReference>

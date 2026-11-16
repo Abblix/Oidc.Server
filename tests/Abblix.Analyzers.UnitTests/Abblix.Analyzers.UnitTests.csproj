@@ -31,4 +31,10 @@
       <ProjectReference Include="..\..\src\Abblix.Utils\Abblix.Utils.csproj" />
     </ItemGroup>
 
+  <!-- On .NET 11 these assemblies are part of the shared framework, so only .NET 10 references them
+       as packages. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
 </Project>

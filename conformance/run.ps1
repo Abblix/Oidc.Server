@@ -69,7 +69,9 @@ $SuiteRepository = 'https://gitlab.com/openid/conformance-suite.git'
 $SuiteProjectApi = 'https://gitlab.com/api/v4/projects/openid%2Fconformance-suite'
 $SuiteImages = @('openid/conformance-suite', 'openid/conformance-suite/nginx')
 
+# The host builds for every framework the library ships for and is published for the one this image runs
 $RuntimeImage = 'mcr.microsoft.com/dotnet/aspnet:11.0'
+$HostFramework = 'net11.0'
 $ProbeImage = 'curlimages/curl:8.10.1'
 $RunnerImage = 'python:3.12-slim'
 
@@ -369,7 +371,7 @@ try {
     Wait-Until -What 'The conformance suite' -Condition { Test-SuiteReady }
 
     Write-Step 'Publishing the conformance test host'
-    dotnet publish $HostProject -c Release -o $PublishDirectory --nologo -v quiet
+    dotnet publish $HostProject -c Release -f $HostFramework -o $PublishDirectory --nologo -v quiet
     Assert-LastExit 'dotnet publish'
 
     Write-Step "Starting the host as $HostContainer on $Network"
