@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "test-name": "fapi-ciba-id1-ensure-authorization-request-with-potentially-bad-binding-message",
+    "variant": "*",
+    "configuration-filename": "*/abblix-ciba-*.json",
+    "current-block": "",
+    "condition": "ExpectBindingMessageCorrectDisplay",
+    "expected-result": "failure",
+    "comment": "Fails whenever automated_ciba_approval_url is set, since nobody looks at the consumption device; the suite's own .gitlab-ci/expected-failures-ciba.json lists it as always failing in automated tests"
+  },
+  {
+    "test-name": "fapi2-security-profile-final-test-claims-parameter-identity-claims",
+    "variant": "*",
+    "configuration-filename": "*/abblix-fapi2-*.json",
+    "current-block": "",
+    "condition": "CheckForUnexpectedClaimsInIdToken",
+    "expected-result": "warning",
+    "comment": "The claim the suite does not know is sid, which the ID token carries because the host enables front- and back-channel logout"
+  }
+]

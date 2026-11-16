@@ -105,6 +105,16 @@ jobs:
     needs: versioning
     uses: ./.github/workflows/test-shards.yml
 
+  # The OpenID Foundation conformance plans, the certified OpenID Connect ones and the FAPI and FAPI-CIBA ones, run
+  # against the release commit's own conformance host. create-release needs both before it creates the GitHub release
+  # and the packages are published, and for a pre-release before the tag is created; a stable release's tag is pushed
+  # by hand before this workflow starts, so a failed run leaves that tag in place. The called workflow is this commit's
+  # copy, so it needs no pin, and it is passed no secret: it holds none and reads the repository only, which the
+  # workflow's contents: read grants
+  conformance:
+    needs: versioning
+    uses: ./.github/workflows/conformance.yml
+
   build-and-pack:
     needs: [versioning, tests]
     runs-on: ubuntu-latest
@@ -277,7 +287,7 @@ jobs:
         timeout-minutes: 3
     timeout-minutes: 5
   create-release:
-    needs: [versioning, build-and-pack, test-getting-started]
+    needs: [versioning, build-and-pack, test-getting-started, conformance]
     runs-on: ubuntu-latest
     environment: release-approval
     permissions:

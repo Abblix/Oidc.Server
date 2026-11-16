@@ -5,8 +5,10 @@ Runs OpenID Foundation conformance test plans against the conformance test host,
 
 .DESCRIPTION
 Starts the suite from its published images, publishes the test host and runs it as a container on the suite's
-network, runs the suite's own plan runner, then removes what it started. The exit code is the runner's: zero when
-every module passed or waits only for a reviewer to look at a screenshot, non-zero on any unexpected failure.
+network, runs the suite's own plan runner, then removes what it started. The exit code is zero when every module passed,
+waits only for a reviewer to look at a screenshot, or was skipped or failed as expected-skips.json or
+expected-failures.json lists for its configuration, and non-zero on any unexpected failure, warning or skip, or on a
+module the suite did not let finish.
 
 Without -SuitePath the run takes the suite's newest numbered release: its scripts from the git tag and its images
 under the same tag. A release that is tagged but whose images are not published yet stops the run, naming it, rather
@@ -21,9 +23,13 @@ Test plans to run, each with its variants and optionally a module list after a c
 Several are passed from a PowerShell prompt or with the call operator; under pwsh -File a list arrives as one
 string, so there one plan goes here and several go in a file named by -PlanFile.
 
+A plan run with static clients - the FAPI and FAPI-CIBA plans - ends with ' @ ' and the alias of the configuration
+it runs with, which the host writes when it starts, with the clients' freshly minted keys and certificates. A plan
+without one runs with oidcc.json, whose clients the suite registers itself.
+
 .PARAMETER PlanFile
 A file with one plan per line, lines starting with # ignored. Used when -Plan is not given; by default the plans
-Abblix OIDC Server is certified against, certified-plans.txt.
+Abblix OIDC Server is certified against, certified-plans.txt. fapi-plans.txt holds the FAPI and FAPI-CIBA plans.
 
 .PARAMETER ResultsPath
 A directory to leave the evidence of the run in: the runner's exported results, the screenshots the browser driver
@@ -37,6 +43,9 @@ Leaves the suite and the host running afterwards, so a failed module can be open
 
 .EXAMPLE
 ./conformance/run.ps1 -SuitePath ../conformance-suite -Plan 'oidcc-basic-certification-test-plan[server_metadata=discovery][client_registration=dynamic_client]:oidcc-server'
+
+.EXAMPLE
+./conformance/run.ps1 -PlanFile conformance/fapi-plans.txt
 #>
 [CmdletBinding()]
 param(
@@ -58,6 +67,8 @@ $ErrorActionPreference = 'Stop'
 $ProjectName = 'abblix-oidf'
 $Network = "${ProjectName}_default"
 $HostContainer = 'oidc-host'
+# The host's mutual-TLS endpoint aliases, Conformance:MtlsBaseUrl in its settings
+$HostMtlsAlias = 'oidc-mtls'
 $SuiteUrl = 'https://localhost.emobix.co.uk:8443/'
 $SuiteMtlsUrl = 'https://localhost.emobix.co.uk:8444/'
 $DiscoveryUrl = 'https://oidc-host:9443/.well-known/openid-configuration'
@@ -77,6 +88,10 @@ $RepositoryRoot = Split-Path -Parent $PSScriptRoot
 $HostProject = Join-Path $RepositoryRoot 'tests/Abblix.Oidc.Server.MinimalApi.Conformance.TestHost'
 $HostAssembly = 'Abblix.Oidc.Server.MinimalApi.Conformance.TestHost.dll'
 $PublishDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-host'
+# Where the host writes the configuration of each plan run with static clients, private keys included, and where the
+# runner reads it from
+$PlanConfigurationsDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-plan-configurations'
+$PlanConfigurationsMount = '/plan-configurations'
 $BrowserContainer = 'oidf-browser'
 $BrowserImage = 'abblix-oidf-browser'
 $BrowserScreenshots = '/tmp/screenshots'
@@ -192,10 +207,69 @@ function Resolve-SuiteRelease {
     return $newest
 }
 
+function Split-PlanConfiguration {
+    # A plan line as the plan file or -Plan writes it, parted into the plan specification the runner gets and the
+    # alias of the configuration the plan runs with, or none for a plan that runs with oidcc.json. A plan
+    # specification holds no '@', so the last ' @ ' is the separator
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $Line
+    )
+    $separator = $Line.LastIndexOf(' @ ')
+    if ($separator -lt 0) {
+        return [pscustomobject]@{ Plan = $Line.Trim(); Configuration = $null }
+    }
+    $alias = $Line.Substring($separator + 3).Trim()
+    if ($alias -notmatch '^[A-Za-z0-9_-]+$') {
+        throw "'$alias' in '$Line' is not a configuration alias: letters, digits, '-' and '_' only"
+    }
+    return [pscustomobject]@{ Plan = $Line.Substring(0, $separator).Trim(); Configuration = $alias }
+}
+
+function Select-ExpectedEntries {
+    # The entries of expected-skips.json or expected-failures.json that a plan of this run can meet: its configuration
+    # file matches the entry's
+    # configuration-filename, one of the modules it runs matches the entry's test-name, and no variant the plan names
+    # differs from the entry's, a variant of "*" naming none. The two patterns are matched as the runner's fnmatch
+    # matches them on Linux, case-sensitive with *, ? and [...]; -clike has no [!...], so an entry using it is refused
+    # rather than read another way. The runner fails a run on a listed skip or failure that no module reached, so an
+    # entry for another configuration, for a module the plan leaves out or for one the suite's release does not have
+    # would fail it. Always an array, so an empty selection is written as [] and a single entry is not unwrapped
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $Entries,
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $Runs
+    )
+    foreach ($entry in $Entries) {
+        if ("$($entry.'configuration-filename') $($entry.'test-name')".Contains('[!')) {
+            throw "The expected entry of '$($entry.'test-name')' for '$($entry.'configuration-filename')' uses [!...], " +
+                'which this script cannot match as the runner does; list the characters to match instead'
+        }
+    }
+    , @($Entries | Where-Object {
+            $entry = $_
+            @($Runs | Where-Object {
+                    $run = $_
+                    $variants = @{}
+                    foreach ($match in [regex]::Matches(($run.Runner -split ':', 2)[0], '\[([^=\]]+)=([^\]]*)\]')) {
+                        $variants[$match.Groups[1].Value] = $match.Groups[2].Value
+                    }
+                    $entry.'configuration-filename' -and $run.Configuration -clike $entry.'configuration-filename' -and
+                    @($run.Modules | Where-Object { $_ -clike $entry.'test-name' }) -and
+                    ($entry.variant -eq '*' -or -not @($entry.variant.PSObject.Properties | Where-Object {
+                            $variants.ContainsKey($_.Name) -and $variants[$_.Name] -ne $_.Value
+                        }))
+                })
+        })
+}
+
 function Split-KeyRotation {
     # The plan specification the runner gets, without the key rotation module, and whether the plan had that module.
     # The runner starts the module the moment it is configured, before anyone can rotate the server's keys, so it
-    # runs in a step of its own; a specification already naming its modules keeps the others it names
+    # runs in a step of its own; a specification already naming its modules keeps the others it names. Also Modules:
+    # the plan's modules as /api/plan/available lists them, or of those the ones the specification names, since the
+    # runner passes over a named module its plan does not have. The listing is not narrowed by the plan's variants, so
+    # a module the suite leaves out for them is still among these
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [string] $Specification,
@@ -203,23 +277,24 @@ function Split-KeyRotation {
     )
     $parts = $Specification -split ':', 2
     $name = ($parts[0] -split '\[', 2)[0].Trim()
+    $available = $AvailablePlans | Where-Object { $_.planName -is [string] -and $_.planName -eq $name } |
+        Select-Object -First 1
+    if (-not $available) {
+        throw "The suite has no test plan named '$name'"
+    }
+    $planModules = @($available.modules | ForEach-Object { $_.testModule })
     $modules = if ($parts.Count -eq 2) {
-        @($parts[1] -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        @($parts[1] -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -cin $planModules })
     }
     else {
-        $available = $AvailablePlans | Where-Object { $_.planName -is [string] -and $_.planName -eq $name } |
-            Select-Object -First 1
-        if (-not $available) {
-            throw "The suite has no test plan named '$name'"
-        }
-        @($available.modules | ForEach-Object { $_.testModule })
+        $planModules
     }
 
     if ($modules -notcontains $KeyRotationModule) {
-        return [pscustomobject]@{ Runner = $Specification; KeyRotation = $false }
+        return [pscustomobject]@{ Runner = $Specification; KeyRotation = $false; Modules = $modules }
     }
     $others = @($modules | Where-Object { $_ -ne $KeyRotationModule })
-    return [pscustomobject]@{ Runner = "$($parts[0]):$($others -join ',')"; KeyRotation = $true }
+    return [pscustomobject]@{ Runner = "$($parts[0]):$($others -join ',')"; KeyRotation = $true; Modules = $others }
 }
 
 function Get-SuiteTime {
@@ -236,10 +311,13 @@ function Get-SuiteTime {
 }
 
 function Get-UnfinishedModules {
-    # Every module of the plans started since $Since that ran and did not end FINISHED with PASSED or REVIEW. The suite's
-    # runner counts a module the suite INTERRUPTED as complete and passes it when its log holds no FAILURE entry, so
-    # the outcome is read from the suite itself. A module that never ran is not judged here: each plan deliberately
-    # leaves some out, and the runner already reports a module it meant to run and did not.
+    # Every module of the plans started since $Since that ran and did not end FINISHED with a verdict. The suite's runner
+    # counts a module the suite INTERRUPTED as complete and passes it when its log holds no FAILURE entry, so the outcome
+    # is read from the suite itself. A module that never ran is not judged here: each plan deliberately leaves some out,
+    # and the runner already reports a module it meant to run and did not. Which verdict passes is the runner's to say:
+    # it judges every FAILURE and WARNING entry of each module's log against expected-failures.json, and a SKIPPED
+    # result against expected-skips.json, and fails the run on one they do not list, so a finished module's verdict is
+    # not judged a second time here.
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [DateTimeOffset] $Since,
@@ -264,7 +342,7 @@ function Get-UnfinishedModules {
     foreach ($plan in $plans) {
         $detail = Invoke-RestMethod -Uri "${SuiteUrl}api/plan/$($plan._id)" -SkipCertificateCheck
         foreach ($module in @($detail.modules | ForEach-Object { $_ } | Where-Object { $_.status })) {
-            if ($module.status -ne 'FINISHED' -or $module.result -notin 'PASSED', 'REVIEW') {
+            if ($module.status -ne 'FINISHED' -or $module.result -notin 'PASSED', 'REVIEW', 'SKIPPED', 'WARNING', 'FAILED') {
                 [pscustomobject]@{ Plan = $detail.planName; Module = $module.testModule; Status = $module.status; Result = $module.result }
             }
         }
@@ -297,6 +375,18 @@ function Remove-SuiteClone([string] $Path) {
     Remove-Item -LiteralPath $Path -Recurse -Force
 }
 
+function Remove-PlanConfigurations {
+    # The host writes the configurations as its container's user, which the user running this script may not be allowed
+    # to delete on Linux, so a container removes them first
+    if (-not (Test-Path -LiteralPath $PlanConfigurationsDirectory)) {
+        return
+    }
+    docker run --rm -v "${PlanConfigurationsDirectory}:/configurations" $RunnerImage `
+        sh -c 'rm -rf /configurations/* /configurations/.[!.]*' | Out-Null
+    Assert-LastExit 'docker run (removing the plan configurations of the previous host)'
+    Remove-Item -LiteralPath $PlanConfigurationsDirectory -Recurse -Force
+}
+
 if ($Plan) {
     # Quotes typed around a plan survive pwsh -File and would reach the runner as part of the name
     $Plan = @($Plan | ForEach-Object { $_.Trim().Trim("'", '"') } | Where-Object { $_ })
@@ -309,6 +399,7 @@ else {
 if (-not $Plan) {
     throw 'No test plan to run: -Plan is empty and so is the plan file'
 }
+$planLines = @($Plan | ForEach-Object { Split-PlanConfiguration -Line $_ })
 if (-not (Get-Command docker -CommandType Application -ErrorAction SilentlyContinue)) {
     throw 'docker was not found on PATH: the suite and the host both run in containers'
 }
@@ -374,7 +465,12 @@ try {
 
     Write-Step "Starting the host as $HostContainer on $Network"
     docker rm -f $HostContainer 2>$null | Out-Null
-    docker run -d --name $HostContainer --network $Network -v "${PublishDirectory}:/app:ro" -w /app `
+    # Emptied first, so a configuration the host no longer writes is not read from an earlier run
+    Remove-PlanConfigurations
+    New-Item -ItemType Directory $PlanConfigurationsDirectory | Out-Null
+    docker run -d --name $HostContainer --network $Network --network-alias $HostMtlsAlias `
+        -v "${PublishDirectory}:/app:ro" -v "${PlanConfigurationsDirectory}:${PlanConfigurationsMount}" -w /app `
+        -e "Conformance__PlanConfigurations=$PlanConfigurationsMount" `
         $RuntimeImage dotnet $HostAssembly | Out-Null
     Assert-LastExit 'docker run (host)'
     try {
@@ -383,6 +479,15 @@ try {
     catch {
         docker logs --tail 50 $HostContainer
         throw
+    }
+
+    # The host writes every configuration before it serves its first request, so one missing now is one it never writes
+    $missing = @($planLines | Where-Object { $_.Configuration } | Where-Object {
+            -not (Test-Path -LiteralPath (Join-Path $PlanConfigurationsDirectory "$($_.Configuration).json") -PathType Leaf)
+        } | ForEach-Object { $_.Configuration } | Sort-Object -Unique)
+    if ($missing) {
+        $written = @(Get-ChildItem -LiteralPath $PlanConfigurationsDirectory -Filter '*.json' | ForEach-Object BaseName)
+        throw "The host wrote no configuration named $($missing -join ', '); it wrote: $($written -join ', ')"
     }
 
     # A real browser plays the end user for every page the suite publishes, in place of the suite's own headless
@@ -407,14 +512,25 @@ try {
     # Invoke-RestMethod hands a JSON array on as one object, so it is enumerated here into the plans it holds
     $availablePlans = @(Invoke-RestMethod -Uri "${SuiteUrl}api/plan/available" -SkipCertificateCheck |
         ForEach-Object { $_ })
-    $split = @($Plan | ForEach-Object { Split-KeyRotation -Specification $_ -AvailablePlans $availablePlans })
+    $split = @($planLines | ForEach-Object {
+            $rotation = Split-KeyRotation -Specification $_.Plan -AvailablePlans $availablePlans
+            $configuration = if ($_.Configuration) { "$PlanConfigurationsMount/$($_.Configuration).json" } else { '/config/oidcc.json' }
+            $rotation | Add-Member -NotePropertyName Configuration -NotePropertyValue $configuration -PassThru
+        })
     $keyRotationPlans = @($split | Where-Object KeyRotation | ForEach-Object { ($_.Runner -split ':', 2)[0] })
 
     # A plan naming every module but one outgrows the command line Windows allows a process, so the runner's
     # arguments go in a file, one per line, which the container reads into its own argument list
     $argumentsDirectory = Join-Path ([IO.Path]::GetTempPath()) 'abblix-conformance-arguments'
     New-Item -ItemType Directory -Force $argumentsDirectory | Out-Null
-    $runnerArguments = @('--expected-failures-file', '/config/expected-failures.json')
+    foreach ($list in 'expected-failures.json', 'expected-skips.json') {
+        $selected = Select-ExpectedEntries -Entries @(Get-Content -Raw (Join-Path $PSScriptRoot $list) |
+                ConvertFrom-Json) -Runs $split
+        [IO.File]::WriteAllText((Join-Path $argumentsDirectory $list), (ConvertTo-Json -InputObject $selected -Depth 5))
+    }
+    $runnerArguments = @(
+        '--expected-failures-file', '/arguments/expected-failures.json',
+        '--expected-skips-file', '/arguments/expected-skips.json')
     $exportMount = @()
     if ($ResultsPath) {
         $exportDirectory = (New-Item -ItemType Directory -Force (Join-Path $ResultsPath 'export')).FullName
@@ -422,7 +538,7 @@ try {
         $runnerArguments += '--export-dir', '/export'
     }
     foreach ($spec in $split) {
-        $runnerArguments += $spec.Runner, '/config/oidcc.json'
+        $runnerArguments += $spec.Runner, $spec.Configuration
     }
     # Line feeds alone: the shell's read keeps a carriage return as part of the argument
     [IO.File]::WriteAllText((Join-Path $argumentsDirectory 'runner.txt'), (($runnerArguments -join "`n") + "`n"))
@@ -438,7 +554,8 @@ try {
         'run', '--rm', '--network', $Network,
         '-v', "${SuitePath}:/suite:ro",
         '-v', "${PSScriptRoot}:/config:ro",
-        '-v', "${argumentsDirectory}:/arguments:ro"
+        '-v', "${argumentsDirectory}:/arguments:ro",
+        '-v', "${PlanConfigurationsDirectory}:${PlanConfigurationsMount}:ro"
     ) + $exportMount + @(
         '-w', '/suite/scripts',
         '-e', "CONFORMANCE_SERVER=$SuiteUrl",
@@ -489,7 +606,7 @@ try {
     $unfinished = @(Get-UnfinishedModules -Since $plansSince -ExpectedPlans ($Plan.Count + $keyRotationPlans.Count))
     if ($unfinished) {
         $unfinished | Format-Table -AutoSize | Out-String | Write-Host
-        Write-Host "$($unfinished.Count) module(s) did not finish with PASSED or REVIEW" -ForegroundColor Red
+        Write-Host "$($unfinished.Count) module(s) did not finish with a verdict" -ForegroundColor Red
         if ($exitCode -eq 0) {
             $exitCode = 1
         }
@@ -512,6 +629,14 @@ finally {
     else {
         Write-Step 'Removing the host and the suite'
         Remove-Everything
+        # The configurations hold the private keys of the static clients, which nothing needs once the host is gone;
+        # a failure to remove them must not hide why the run failed
+        try {
+            Remove-PlanConfigurations
+        }
+        catch {
+            Write-Warning "The plan configurations were not removed from ${PlanConfigurationsDirectory}: $($_.Exception.Message)"
+        }
     }
 }
 
