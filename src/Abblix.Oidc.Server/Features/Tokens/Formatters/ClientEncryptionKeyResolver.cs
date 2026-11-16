@@ -28,10 +28,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="issuer">Decides whether the host performs an algorithm with a key and the profile admits it.</param>
 /// <param name="clientKeysProvider">Supplies the encryption keys the client publishes.</param>
 /// <param name="timeProvider">Supplies the time a client secret's expiry is judged against.</param>
+/// <param name="encryptionAlgorithms">Tells which key types a key management algorithm is carried out with.</param>
 public sealed class ClientEncryptionKeyResolver(
     ProfiledJwtIssuer issuer,
     IClientKeysProvider clientKeysProvider,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    EncryptionAlgorithmsProvider encryptionAlgorithms)
 {
     /// <summary>
     /// The key a JWT for <paramref name="client"/> is encrypted to under <paramref name="keyManagementAlgorithm"/>, or
@@ -50,10 +52,11 @@ public sealed class ClientEncryptionKeyResolver(
         string keyManagementAlgorithm,
         string contentEncryptionAlgorithm)
     {
-        if (!ClientSecretEncryptionKey.IsSymmetric(keyManagementAlgorithm))
+        if (!ClientSecretEncryptionKey.IsSymmetric(encryptionAlgorithms, keyManagementAlgorithm))
         {
             return await clientKeysProvider.GetEncryptionKeys(client).FirstOrDefaultAsync(key =>
-                Carries(key, keyManagementAlgorithm) && Usable(profile, key, keyManagementAlgorithm));
+                encryptionAlgorithms.CanPerform(key, keyManagementAlgorithm) &&
+                Usable(profile, key, keyManagementAlgorithm));
         }
 
         if (ClientSecretEncryptionKey.SizeInBytes(keyManagementAlgorithm, contentEncryptionAlgorithm) is not { } size ||
@@ -65,14 +68,6 @@ public sealed class ClientEncryptionKeyResolver(
         var derived = ClientSecretEncryptionKey.Derive(secret, keyManagementAlgorithm, size);
         return Usable(profile, derived, keyManagementAlgorithm) ? derived : null;
     }
-
-    /// <summary>
-    /// Whether a key the client publishes carries <paramref name="keyManagementAlgorithm"/>: it declares the algorithm
-    /// or none, and its material carries it out.
-    /// </summary>
-    internal static bool Carries(JsonWebKey key, string keyManagementAlgorithm)
-        => (key.Algorithm ?? keyManagementAlgorithm) == keyManagementAlgorithm &&
-           key.SupportsAlgorithm(keyManagementAlgorithm);
 
     private bool Usable(SecurityProfileRequirements profile, JsonWebKey key, string keyManagementAlgorithm)
         => issuer.EncryptionAlgorithmFor(profile, key, keyManagementAlgorithm) is not null;

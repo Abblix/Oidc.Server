@@ -61,7 +61,7 @@ public class EncryptedResponseAlgorithmsValidatorTests
             _jwtAlgorithms.Object,
             _serviceKeys.Object,
             _clientInfoProvider.Object,
-            TimeProvider.System);
+            TimeProvider.System, TestEncryptionAlgorithms.Every);
     }
 
     private static ClientRegistrationValidationContext CreateContext(ClientRegistrationRequest request)

@@ -129,6 +129,7 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton<ProfiledJwtValidator>();
         services.AddSingleton(new Mock<IJsonWebTokenCreator>().Object);
         services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ProfiledJwtIssuer>();
+        services.AddSingleton(Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestEncryptionAlgorithms.Every);
         services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ClientEncryptionKeyResolver>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
@@ -173,6 +174,7 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton<ProfiledJwtValidator>();
         services.AddSingleton(new Mock<IJsonWebTokenCreator>().Object);
         services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ProfiledJwtIssuer>();
+        services.AddSingleton(Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestEncryptionAlgorithms.Every);
         services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ClientEncryptionKeyResolver>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);
@@ -220,6 +222,7 @@ public class ServiceCollectionOverrideTests
         services.AddSingleton<ProfiledJwtValidator>();
         services.AddSingleton(new Mock<IJsonWebTokenCreator>().Object);
         services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ProfiledJwtIssuer>();
+        services.AddSingleton(Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestEncryptionAlgorithms.Every);
         services.AddSingleton<Abblix.Oidc.Server.Features.Tokens.Formatters.ClientEncryptionKeyResolver>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new Mock<Abblix.Oidc.Server.Features.Hashing.IHashService>().Object);

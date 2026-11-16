@@ -26,9 +26,11 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="issuer">Issues the JWT once the profile in force admits its algorithms.</param>
 /// <param name="serviceKeysProvider">The provider that supplies cryptographic keys used for signing and
 /// encrypting JWTs.</param>
+/// <param name="encryptionAlgorithms">Tells which server keys may be used with a key management algorithm.</param>
 public class AuthServiceJwtFormatter(
 	ProfiledJwtIssuer issuer,
-	IAuthServiceKeysProvider serviceKeysProvider) : IAuthServiceJwtFormatter
+	IAuthServiceKeysProvider serviceKeysProvider,
+	EncryptionAlgorithmsProvider encryptionAlgorithms) : IAuthServiceJwtFormatter
 {
 	/// <inheritdoc />
 	/// <remarks>
@@ -70,7 +72,8 @@ public class AuthServiceJwtFormatter(
 		var encryptingCredentials = encryption.Key
 			?? await serviceKeysProvider.GetEncryptionKeys(tenant)
 				.Where(key => key.Algorithm is not { } declared || profile.PermitsKeyManagementAlgorithm(declared))
-				.FirstByAlgorithmAsync(encryption.KeyManagementAlgorithm, encryption.KeyId);
+				.FirstByAlgorithmAsync(
+					encryption.KeyManagementAlgorithm, encryption.KeyId, encryptionAlgorithms.CanPerform);
 
 		if (encryptingCredentials is null)
 		{

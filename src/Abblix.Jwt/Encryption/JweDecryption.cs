@@ -6,7 +6,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using Abblix.Utils;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Jwt.Encryption;
 
@@ -14,12 +13,13 @@ namespace Abblix.Jwt.Encryption;
 /// Opens an inbound JWE with the first candidate key that recovers its content.
 /// </summary>
 /// <param name="log">Records an inbound JWE that no key opened.</param>
-/// <param name="serviceProvider">Resolves the content encryption algorithm by its 'enc' name.</param>
 /// <param name="keyAttempt">Opens the token with one candidate key.</param>
+/// <param name="encryptionAlgorithms">Resolves the content encryption algorithm by its 'enc' name, and tells which keys
+/// may be used with the JWE's key management algorithm.</param>
 internal sealed class JweDecryption(
     JweDecryptionLog log,
-    IServiceProvider serviceProvider,
-    JweKeyAttempt keyAttempt)
+    JweKeyAttempt keyAttempt,
+    EncryptionAlgorithmsProvider encryptionAlgorithms)
 {
     /// <summary>
     /// Validates and decrypts JWE tokens using decoded byte parts and original string parts.
@@ -51,8 +51,7 @@ internal sealed class JweDecryption(
         // Resolve the content decryptor by 'enc'. The registered set is the allow-list of content
         // encryption algorithms for incoming JWE - an unregistered 'enc' yields no decryptor and is
         // rejected outright.
-        var contentDecryptor = serviceProvider
-            .GetKeyedService<IContentEncryptionAlgorithm>(envelope.EncryptionAlgorithm);
+        var contentDecryptor = encryptionAlgorithms.FindContentEncryptionAlgorithm(envelope.EncryptionAlgorithm);
         if (contentDecryptor == null)
             return new JwtValidationError(JwtError.InvalidToken, "Unsupported 'enc' content encryption algorithm in JWE");
 
@@ -62,9 +61,9 @@ internal sealed class JweDecryption(
         {
             // RFC 8725 section 3.1: "each key MUST be used with exactly one algorithm, and this MUST be checked when
             // the cryptographic operation is performed". A key declaring its 'alg' opens only that algorithm, as on
-            // the JWS side; one declaring none, which RFC 7517 section 4.4 permits, opens what its material can
-            // perform. Discovery asks the same question of the same keys to say which algorithms it accepts.
-            if (!key.CanPerform(algorithm))
+            // the JWS side; one declaring none, which RFC 7517 section 4.4 permits, opens what is registered for its
+            // type. Discovery asks the same question of the same keys to say which algorithms it accepts.
+            if (!encryptionAlgorithms.CanPerform(key, algorithm))
             {
                 keysForAnotherAlgorithm++;
                 continue;

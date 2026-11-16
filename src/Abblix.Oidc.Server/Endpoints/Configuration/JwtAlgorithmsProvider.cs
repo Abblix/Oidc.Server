@@ -18,7 +18,8 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration;
 /// </summary>
 public sealed class JwtAlgorithmsProvider(
 	IJsonWebTokenCreator jwtCreator,
-	IJsonWebTokenValidator jwtValidator) : IJwtAlgorithmsProvider
+	IJsonWebTokenValidator jwtValidator,
+	EncryptionAlgorithmsProvider encryptionAlgorithms) : IJwtAlgorithmsProvider
 {
 	/// <summary>
 	/// HMAC algorithms are excluded from every client-addressed response-signing list: per
@@ -77,7 +78,8 @@ public sealed class JwtAlgorithmsProvider(
 	/// used"), which no client holds a key for.
 	/// </summary>
 	public IEnumerable<string> EncryptedResponseAlgorithmsSupported
-		=> jwtCreator.EncryptedResponseAlgorithmsSupported.Where(ClientSecretEncryptionKey.CanBeServed);
+		=> jwtCreator.EncryptedResponseAlgorithmsSupported.Where(
+			algorithm => ClientSecretEncryptionKey.CanBeServed(encryptionAlgorithms, algorithm));
 
 	/// <inheritdoc />
 	public IEnumerable<string> EncryptedResponseMethodsSupported => jwtCreator.EncryptedResponseMethodsSupported;

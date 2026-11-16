@@ -10,6 +10,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Jwt.Encryption;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -32,14 +33,32 @@ public class ClientEncryptionKeyResolverTests
 {
     private const string ClientSecret = "GfSpzT3oVvYx8qWk2LmN7bR4cJ9dH6eA";
 
+    /// <summary>The name a host registers an RSA key management algorithm of its own under.</summary>
+    private const string HostRsaAlgorithm = "X-HOST-RSA";
+
     private static readonly DateTimeOffset Now = new(2026, 11, 15, 12, 0, 0, TimeSpan.Zero);
 
     private static readonly SecurityProfileRequirements NoProfile = SecurityProfileRequirements.Resolve(ClientSecurityProfile.None);
 
     private readonly Mock<IClientKeysProvider> _clientKeys = new(MockBehavior.Strict);
 
+    /// <summary>
+    /// Every key management algorithm the library carries and one a host registers for RSA keys under its own name.
+    /// </summary>
+    private static readonly EncryptionAlgorithmsProvider Algorithms = TestEncryptionAlgorithms.With(services => services
+        .AddRsaPkcs1KeyManagement()
+        .AddPbes2KeyManagement()
+        .AddKeyedSingleton<IKeyManagementAlgorithm<RsaJsonWebKey>>(
+            HostRsaAlgorithm,
+            (serviceProvider, _) => serviceProvider.GetRequiredKeyedService<IKeyManagementAlgorithm<RsaJsonWebKey>>(
+                KeyManagement.RsaOaep256)));
+
     private ClientEncryptionKeyResolver Resolver(IJsonWebTokenCreator? creator = null)
-        => new(new ProfiledJwtIssuer(creator ?? EveryAlgorithm()), _clientKeys.Object, new FakeTimeProvider(Now));
+        => new(
+            new ProfiledJwtIssuer(creator ?? EveryAlgorithm(), Algorithms),
+            _clientKeys.Object,
+            new FakeTimeProvider(Now),
+            Algorithms);
 
     private static IJsonWebTokenCreator EveryAlgorithm()
     {
@@ -228,6 +247,30 @@ public class ClientEncryptionKeyResolverTests
 
         var key = await Resolver().ResolveAsync(
             NoProfile, clientInfo, KeyManagement.RsaOaep256, ContentEncryption.Aes128CbcHmacSha256);
+
+        Assert.Same(published, key);
+    }
+
+    /// <summary>
+    /// A key management algorithm the host registers under its own name for RSA keys is advertised from the registry,
+    /// so an RSA key the client publishes declaring it for encryption is the key a JWT is encrypted to under it.
+    /// </summary>
+    [Fact]
+    public async Task AHostsAlgorithm_EncryptsToAPublishedKeyDeclaringIt()
+    {
+        var published = new RsaJsonWebKey
+        {
+            KeyId = "rsa", Usage = PublicKeyUsages.Encryption, Algorithm = HostRsaAlgorithm,
+        };
+        var clientInfo = ClientHolding(new ClientSecret { Value = ClientSecret });
+        _clientKeys
+            .Setup(k => k.GetEncryptionKeys(clientInfo))
+            .Returns(new JsonWebKey[] { published }.ToAsyncEnumerable());
+        var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
+        creator.Setup(c => c.EncryptedResponseAlgorithmsSupported).Returns([HostRsaAlgorithm]);
+
+        var key = await Resolver(creator.Object).ResolveAsync(
+            NoProfile, clientInfo, HostRsaAlgorithm, ContentEncryption.Aes128CbcHmacSha256);
 
         Assert.Same(published, key);
     }

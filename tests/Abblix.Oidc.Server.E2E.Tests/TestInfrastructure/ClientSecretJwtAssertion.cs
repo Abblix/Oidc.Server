@@ -42,6 +42,13 @@ internal static class ClientSecretJwtAssertion
     /// <see cref="TestConstants.ClientSecretJwtClientId"/>, naming <paramref name="audiences"/>.
     /// </summary>
     public static Task<string> IssueAsAsync(string clientId, params string[] audiences)
+        => IssueWithSecretAsync(clientId, TestConstants.ClientSecretJwtSecret, audiences);
+
+    /// <summary>
+    /// The assertion of <paramref name="clientId"/> naming <paramref name="audiences"/>, signed with
+    /// <paramref name="secret"/>, as OpenID Connect Core 1.0 section 9 has a client_secret_jwt client sign it.
+    /// </summary>
+    public static Task<string> IssueWithSecretAsync(string clientId, string secret, params string[] audiences)
     {
         var now = TimeProvider.System.GetUtcNow();
         var token = new JsonWebToken
@@ -61,7 +68,7 @@ internal static class ClientSecretJwtAssertion
         var key = new OctetJsonWebKey
         {
             Algorithm = SigningAlgorithms.HS256,
-            KeyValue = Encoding.UTF8.GetBytes(TestConstants.ClientSecretJwtSecret),
+            KeyValue = Encoding.UTF8.GetBytes(secret),
         };
 
         return JwtServices.GetRequiredService<IJsonWebTokenCreator>().IssueAsync(token, key);

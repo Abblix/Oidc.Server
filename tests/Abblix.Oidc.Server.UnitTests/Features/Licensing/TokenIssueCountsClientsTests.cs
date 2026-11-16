@@ -104,7 +104,7 @@ public sealed class TokenIssueCountsClientsTests : IDisposable
                     new AudienceKeyResolver(
                 Mock.Of<IResourceManager>(),
                 Mock.Of<IResourceKeysProvider>(),
-                new ProfiledJwtIssuer(Mock.Of<IJsonWebTokenCreator>())),
+                new ProfiledJwtIssuer(Mock.Of<IJsonWebTokenCreator>(), TestEncryptionAlgorithms.Every)),
                     ScopeClaims.Of(),
             NullLogger<AccessTokenService>.Instance);
                 return clientId => access.CreateAccessTokenAsync(SingleIssuer.Tenant, session, Context(clientId), client, grantId: null, null);

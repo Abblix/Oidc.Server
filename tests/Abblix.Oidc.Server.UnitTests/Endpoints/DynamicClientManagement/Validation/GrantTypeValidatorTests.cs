@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -325,5 +326,47 @@ public class GrantTypeValidatorTests
 
         // Assert
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// The other direction of the RFC 7591 section 2.1 correspondence: a grant type the table pairs with a response
+    /// type needs a response type carrying it, authorization_code the code and implicit a token, which OpenID Connect
+    /// Dynamic Client Registration 1.0 section 2 extends to the id_token. A client registering the grant without it
+    /// is in the inconsistent state the section has the server keep it from, by invalid_client_metadata.
+    /// </summary>
+    [Theory]
+    [InlineData(new[] { GrantTypes.AuthorizationCode }, new string[0], GrantTypes.AuthorizationCode)]
+    [InlineData(new[] { GrantTypes.Implicit }, new string[0], GrantTypes.Implicit)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode, GrantTypes.Implicit }, new[] { ResponseTypes.Code }, GrantTypes.Implicit)]
+    [InlineData(new[] { GrantTypes.AuthorizationCode }, new[] { ResponseTypes.None }, GrantTypes.AuthorizationCode)]
+    public async Task GrantTypeWithoutItsResponseType_IsInvalidClientMetadata(
+        string[] grantTypes, string[] responseTypes, string unmatched)
+    {
+        var context = CreateContext(
+            responseTypes: [.. responseTypes.Select(responseType => new[] { responseType })],
+            grantTypes: grantTypes);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
+        Assert.Contains(unmatched, result.ErrorDescription);
+    }
+
+    /// <summary>
+    /// The control of the rows above: the table pairs no response type with the grants a client calls the token
+    /// endpoint alone with, so a client registering only those and no response type is consistent.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.ClientCredentials)]
+    [InlineData(GrantTypes.RefreshToken)]
+    [InlineData(GrantTypes.Ciba)]
+    [InlineData(GrantTypes.DeviceAuthorization)]
+    [InlineData(GrantTypes.JwtBearer)]
+    public async Task GrantTypeWithNoResponseType_NeedsNone(string grantType)
+    {
+        var context = CreateContext(responseTypes: [], grantTypes: [grantType]);
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 }

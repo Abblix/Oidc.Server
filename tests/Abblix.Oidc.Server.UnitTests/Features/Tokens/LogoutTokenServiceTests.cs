@@ -646,11 +646,11 @@ public class LogoutTokenServiceTests
             _subjectTypeConverter.Object,
             new ClientJwtFormatter(
                 NullLogger<ClientJwtFormatter>.Instance,
-                new ProfiledJwtIssuer(creator.Object),
+                new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every),
                 new ClientEncryptionKeyResolver(
-                    new ProfiledJwtIssuer(creator.Object),
+                    new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every),
                     new Mock<IClientKeysProvider>(MockBehavior.Strict).Object,
-                    TimeProvider.System),
+                    TimeProvider.System, TestEncryptionAlgorithms.Every),
                 serviceKeys.Object),
             _tokenIdGenerator.Object);
 

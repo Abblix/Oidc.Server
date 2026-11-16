@@ -66,9 +66,9 @@ public class ResponseJwtBuilderTests
         // so the assertions on IJsonWebTokenCreator.IssueAsync continue to exercise the end-to-end JARM behavior.
         var clientJwtFormatter = new ClientJwtFormatter(
             NullLogger<ClientJwtFormatter>.Instance,
-            new ProfiledJwtIssuer(_jwtCreator.Object),
+            new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every),
             new ClientEncryptionKeyResolver(
-                new ProfiledJwtIssuer(_jwtCreator.Object), _clientKeys.Object, TimeProvider.System),
+                new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every), _clientKeys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
             _serviceKeys.Object);
 
         _builder = new ResponseJwtBuilder(
@@ -226,9 +226,9 @@ public class ResponseJwtBuilderTests
             _clientInfoProvider.Object,
             new ClientJwtFormatter(
                 NullLogger<ClientJwtFormatter>.Instance,
-                new ProfiledJwtIssuer(_jwtCreator.Object),
+                new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every),
                 new ClientEncryptionKeyResolver(
-                    new ProfiledJwtIssuer(_jwtCreator.Object), _clientKeys.Object, TimeProvider.System),
+                    new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every), _clientKeys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
                 _serviceKeys.Object),
             _timeProvider,
             options);

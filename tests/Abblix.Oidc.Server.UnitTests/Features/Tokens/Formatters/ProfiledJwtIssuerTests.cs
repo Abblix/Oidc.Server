@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Formatters;
 
@@ -42,7 +43,7 @@ public class ProfiledJwtIssuerTests
                 It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey?>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(),
                 It.IsAny<string>()))
             .ReturnsAsync("issued");
-        return new ProfiledJwtIssuer(_creator.Object);
+        return new ProfiledJwtIssuer(_creator.Object, TestEncryptionAlgorithms.Every);
     }
 
     private static JsonWebToken Token(string algorithm) => new() { Header = { Algorithm = algorithm } };
@@ -148,7 +149,7 @@ public class ProfiledJwtIssuerTests
             .Setup(c => c.EncryptClaimsAsync(
                 It.IsAny<JsonWebToken>(), _encryptionKey, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync("issued");
-        var issuer = new ProfiledJwtIssuer(_creator.Object);
+        var issuer = new ProfiledJwtIssuer(_creator.Object, TestEncryptionAlgorithms.Every);
         Task<string> Issue(SecurityProfileRequirements profile) => issuer.EncryptClaimsAsync(
             profile,
             Token(SigningAlgorithms.None),

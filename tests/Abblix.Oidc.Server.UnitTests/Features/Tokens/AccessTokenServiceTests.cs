@@ -824,7 +824,7 @@ public class AccessTokenServiceTests
         creator
             .Setup(c => c.EncryptedResponseAlgorithmsSupported)
             .Returns([EncryptionAlgorithms.KeyManagement.RsaOaep, EncryptionAlgorithms.KeyManagement.RsaOaep256]);
-        return new ProfiledJwtIssuer(creator.Object);
+        return new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every);
     }
 
     /// <summary>
@@ -1139,11 +1139,11 @@ public class AccessTokenServiceTests
         var service = new AccessTokenService(
             new FakeTimeProvider(_currentTime),
             tokenIdGenerator.Object,
-            new AuthServiceJwtFormatter(new ProfiledJwtIssuer(creator.Object), serviceKeys.Object),
+            new AuthServiceJwtFormatter(new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every), serviceKeys.Object, TestEncryptionAlgorithms.Every),
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(options),
             SingleIssuer.LicensedCatalog,
-            new AudienceKeyResolver(manager.Object, resourceKeys.Object, new ProfiledJwtIssuer(creator.Object)),
+            new AudienceKeyResolver(manager.Object, resourceKeys.Object, new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every)),
             ScopeClaims.Of(),
             NullLogger<AccessTokenService>.Instance);
         var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
@@ -1212,11 +1212,11 @@ public class AccessTokenServiceTests
         var service = new AccessTokenService(
             new FakeTimeProvider(_currentTime),
             tokenIdGenerator.Object,
-            new AuthServiceJwtFormatter(new ProfiledJwtIssuer(creator), serviceKeys.Object),
+            new AuthServiceJwtFormatter(new ProfiledJwtIssuer(creator, TestEncryptionAlgorithms.Every), serviceKeys.Object, TestEncryptionAlgorithms.Every),
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(options),
             SingleIssuer.LicensedCatalog,
-            new AudienceKeyResolver(manager.Object, resourceKeys.Object, new ProfiledJwtIssuer(creator)),
+            new AudienceKeyResolver(manager.Object, resourceKeys.Object, new ProfiledJwtIssuer(creator, TestEncryptionAlgorithms.Every)),
             ScopeClaims.Of(),
             NullLogger<AccessTokenService>.Instance);
         var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();

@@ -50,7 +50,7 @@ public class AuthServiceJwtFormatterTests
         _jwtCreator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
         _keysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
-        _formatter = new AuthServiceJwtFormatter(new ProfiledJwtIssuer(_jwtCreator.Object), _keysProvider.Object);
+        _formatter = new AuthServiceJwtFormatter(new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every), _keysProvider.Object, TestEncryptionAlgorithms.Every);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
         _signingKeyRS256Alt = new RsaJsonWebKey { KeyId = "sig-rs256-alt", Algorithm = SigningAlgorithms.RS256 };
@@ -99,7 +99,7 @@ public class AuthServiceJwtFormatterTests
     public async Task FormatAsync_NamesTheTenantAndCreation_InARefreshTokenOnly(string type, string? named)
     {
         var created = new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, Generation = "g2" };
-        var formatter = new AuthServiceJwtFormatter(new ProfiledJwtIssuer(_jwtCreator.Object), _keysProvider.Object);
+        var formatter = new AuthServiceJwtFormatter(new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every), _keysProvider.Object, TestEncryptionAlgorithms.Every);
 
         var token = TokenWith();
         token.Header.Type = type;

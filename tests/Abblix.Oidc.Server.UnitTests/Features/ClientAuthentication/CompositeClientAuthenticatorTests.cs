@@ -486,4 +486,119 @@ public class CompositeClientAuthenticatorTests
 
         Assert.Same(ClientAuthenticationFailures.MoreThanOneMethod, result.GetFailure());
     }
+
+    /// <summary>
+    /// The client a public client's request names, with its secret authenticators and the none one composed in the
+    /// order the server registers them.
+    /// </summary>
+    private static IClientAuthenticator PublicClientComposite(out ClientInfo publicClient)
+    {
+        var client = new ClientInfo("public-client") { TokenEndpointAuthMethod = ClientAuthenticationMethods.None };
+        publicClient = client;
+        var clients = new Mock<IClientInfoProvider>();
+        clients
+            .Setup(x => x.TryFindClientAsync(TestTenant.Matched, client.ClientId))
+            .ReturnsAsync(client);
+
+        return CreateCompositeAuthenticator(
+            new NoneClientAuthenticator(NullLogger<NoneClientAuthenticator>.Instance, clients.Object),
+            new ClientSecretPostAuthenticator(
+                NullLogger<ClientSecretPostAuthenticator>.Instance,
+                clients.Object,
+                TimeProvider.System,
+                new Mock<IHashService>().Object),
+            new ClientSecretBasicAuthenticator(
+                NullLogger<ClientSecretBasicAuthenticator>.Instance,
+                clients.Object,
+                TimeProvider.System,
+                new Mock<IHashService>().Object),
+            new TlsMetadataClientAuthenticator(NullLogger<TlsMetadataClientAuthenticator>.Instance, clients.Object));
+    }
+
+    /// <summary>
+    /// OpenID Connect Core 1.0 section 9 defines none as "a Public Client with no Client Secret or other authentication
+    /// mechanism", so a request naming a public client and presenting a credential uses a method the client is not
+    /// registered for, which RFC 6749 section 5.2 answers invalid_client ("unsupported authentication method"): the
+    /// refusal of the authenticator reading the credential stands, and the client_id alone does not authenticate.
+    /// </summary>
+    [Fact]
+    public async Task PublicClientPresentingABodySecret_IsRefused()
+    {
+        var composite = PublicClientComposite(out var publicClient);
+
+        var result = await composite.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant,
+            new ClientRequest { ClientId = publicClient.ClientId, ClientSecret = "wrong-secret" });
+
+        Assert.Same(ClientAuthenticationFailures.InvalidCredential, result.GetFailure());
+    }
+
+    /// <summary>
+    /// The same through the Authorization header, the client_id in the body naming the public client.
+    /// </summary>
+    [Fact]
+    public async Task PublicClientPresentingABasicHeader_IsRefused()
+    {
+        var composite = PublicClientComposite(out var publicClient);
+        var credentials = Convert.ToBase64String(
+            System.Text.Encoding.UTF8.GetBytes($"{publicClient.ClientId}:wrong-secret"));
+
+        var result = await composite.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant,
+            new ClientRequest
+            {
+                ClientId = publicClient.ClientId,
+                AuthorizationHeaderLines = [$"{TokenTypes.Basic} {credentials}"],
+            });
+
+        Assert.Same(ClientAuthenticationFailures.InvalidCredential, result.GetFailure());
+    }
+
+    /// <summary>
+    /// The same for a credential of a host's own form: an authenticator naming no place where the request presents a
+    /// credential is not asked, whichever authenticator reads that credential.
+    /// </summary>
+    [Fact]
+    public async Task AuthenticatorShownNoPresentedCredential_DoesNotDecide()
+    {
+        var reader = Presenting(nameof(ClientRequest.ClientAssertion));
+        reader
+            .Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
+
+        // Strict and set up for no authentication: it would throw if asked
+        var bystander = Presenting();
+
+        var result = await CreateCompositeAuthenticator(bystander.Object, reader.Object)
+            .TryAuthenticateClientAsync(SingleIssuer.Tenant, new ClientRequest());
+
+        Assert.Same(ClientAuthenticationFailures.InvalidCredential, result.GetFailure());
+    }
+
+    /// <summary>
+    /// The control of the rows above: with no credential presented, the public client is served on its client_id, and a
+    /// TLS certificate on the connection is not a credential of a client registered for none (RFC 8705 section 4 has
+    /// certificate-bound tokens used without mutual-TLS client authentication), so it is served beside one too.
+    /// </summary>
+    [Fact]
+    public async Task PublicClientPresentingNoCredential_IsServed()
+    {
+        var composite = PublicClientComposite(out var publicClient);
+        using var key = System.Security.Cryptography.RSA.Create(2048);
+        using var certificate = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+                "CN=public-client",
+                key,
+                System.Security.Cryptography.HashAlgorithmName.SHA256,
+                System.Security.Cryptography.RSASignaturePadding.Pkcs1)
+            .CreateSelfSigned(TimeProvider.System.GetUtcNow().AddDays(-1), TimeProvider.System.GetUtcNow().AddDays(1));
+
+        var alone = await composite.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant, new ClientRequest { ClientId = publicClient.ClientId });
+        var besideACertificate = await composite.TryAuthenticateClientAsync(
+            SingleIssuer.Tenant,
+            new ClientRequest { ClientId = publicClient.ClientId, ClientCertificate = certificate });
+
+        Assert.Same(publicClient, alone.GetSuccess());
+        Assert.Same(publicClient, besideACertificate.GetSuccess());
+    }
 }

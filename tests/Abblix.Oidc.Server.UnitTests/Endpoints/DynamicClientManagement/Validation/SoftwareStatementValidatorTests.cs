@@ -21,6 +21,7 @@ using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -71,6 +72,11 @@ public class SoftwareStatementValidatorTests
         Assert.Null(result);
     }
 
+    /// <summary>
+    /// A required statement not sent is a missing metadata value, not a statement presented: RFC 7591 section 3.2.2
+    /// defines invalid_software_statement as "The software statement presented is invalid", and invalid_client_metadata
+    /// as "The value of one of the client metadata fields is invalid and the server has rejected this request".
+    /// </summary>
     [Fact]
     public async Task ValidateAsync_WithNoSoftwareStatement_WhenRequired_ShouldReturnError()
     {
@@ -79,9 +85,13 @@ public class SoftwareStatementValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext());
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidSoftwareStatement, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
+    /// <summary>
+    /// A server trusting no issuer approves no statement: RFC 7591 section 3.2.2, unapproved_software_statement, "The
+    /// software statement presented is not approved for use by this authorization server".
+    /// </summary>
     [Fact]
     public async Task ValidateAsync_WithSoftwareStatement_WhenNoTrustedIssuers_ShouldReturnError()
     {
@@ -90,8 +100,101 @@ public class SoftwareStatementValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.fake.jwt"));
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidSoftwareStatement, result.Error);
+        Assert.Equal(ErrorCodes.UnapprovedSoftwareStatement, result.Error);
         Assert.Contains("No trusted issuers", result.ErrorDescription);
+    }
+
+    /// <summary>
+    /// A statement of an issuer the server does not trust, or of one of its own tenants, is not approved for use by
+    /// this server (RFC 7591 section 3.2.2, unapproved_software_statement), whichever check of the validator asked
+    /// first: the keys are resolved for the issuer before its signature is verified, the issuer is judged after.
+    /// A trusted issuer's statement whose signature fails is invalid (invalid_software_statement), the control.
+    /// </summary>
+    [Theory]
+    [InlineData("https://untrusted-issuer.example.com", true, ErrorCodes.UnapprovedSoftwareStatement)]
+    [InlineData("https://untrusted-issuer.example.com", false, ErrorCodes.UnapprovedSoftwareStatement)]
+    [InlineData(null, true, ErrorCodes.UnapprovedSoftwareStatement)]
+    [InlineData(null, false, ErrorCodes.UnapprovedSoftwareStatement)]
+    [InlineData("https://trusted-issuer.example.com", true, ErrorCodes.InvalidSoftwareStatement)]
+    public async Task TheIssuerDecidesApproval_TheSignatureValidity(string? issuer, bool atKeys, string expected)
+    {
+        // null stands for the server's own tenant, trusted in the settings as well
+        var served = SingleIssuer.Tenant.Issuer.OriginalString;
+        var statementIssuer = issuer ?? served;
+        _oidcOptions.SoftwareStatement.TrustedIssuers =
+        [
+            new TrustedIssuer { Issuer = served, JwksUri = new Uri(served + "/.well-known/jwks.json") },
+            new TrustedIssuer
+            {
+                Issuer = "https://trusted-issuer.example.com",
+                JwksUri = new Uri("https://trusted-issuer.example.com/.well-known/jwks.json"),
+            },
+        ];
+        _secureFetcher
+            .Setup(f => f.FetchAsync<JsonWebKeySet>(It.IsAny<Uri>(), It.IsAny<bool>()))
+            .ReturnsAsync(new JsonWebKeySet([]));
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("eyJ.statement.jwt", It.IsAny<ValidationParameters>()))
+            .Returns(async (string _, ValidationParameters parameters) =>
+            {
+                if (atKeys)
+                {
+                    await parameters.ResolveIssuerSigningKeys!(statementIssuer)
+                        .ToArrayAsync(TestContext.Current.CancellationToken);
+                    return new JwtValidationError(JwtError.InvalidToken, "Signature verification failed");
+                }
+
+                return await parameters.ValidateIssuer!(statementIssuer)
+                    ? new JsonWebToken()
+                    : new JwtValidationError(JwtError.InvalidToken, "Invalid issuer");
+            });
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.statement.jwt"));
+
+        Assert.NotNull(result);
+        Assert.Equal(expected, result.Error);
+    }
+
+    /// <summary>
+    /// The key lookup is asked again when the statement names a kid the first answer lacked: an issuer refused at the
+    /// first lookup is not judged, nor recorded as untrusted, a second time.
+    /// </summary>
+    [Fact]
+    public async Task AnUntrustedIssuer_IsJudgedOnce_WhenItsKeysAreAskedAgain()
+    {
+        _oidcOptions.SoftwareStatement.TrustedIssuers =
+        [
+            new TrustedIssuer
+            {
+                Issuer = "https://trusted-issuer.example.com",
+                JwksUri = new Uri("https://trusted-issuer.example.com/.well-known/jwks.json"),
+            },
+        ];
+        const string untrusted = "https://untrusted-issuer.example.com";
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("eyJ.statement.jwt", It.IsAny<ValidationParameters>()))
+            .Returns(async (string _, ValidationParameters parameters) =>
+            {
+                await parameters.ResolveIssuerSigningKeys!(untrusted).ToArrayAsync(TestContext.Current.CancellationToken);
+                await parameters.RefetchIssuerSigningKeys!(untrusted).ToArrayAsync(TestContext.Current.CancellationToken);
+                return new JwtValidationError(JwtError.InvalidToken, "Signature verification failed");
+            });
+        var logs = new RecordingLoggerFactory();
+        var optionsMonitor = new Mock<IOptionsMonitor<OidcOptions>>();
+        optionsMonitor.Setup(m => m.CurrentValue).Returns(() => _oidcOptions);
+        var validator = new SoftwareStatementValidator(
+            logs.CreateLogger<SoftwareStatementValidator>(),
+            new ProfiledJwtValidator(_jwtValidator.Object),
+            optionsMonitor.Object,
+            _secureFetcher.Object,
+            SingleIssuer.LicensedCatalog);
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, CreateContext("eyJ.statement.jwt"));
+
+        Assert.Equal(ErrorCodes.UnapprovedSoftwareStatement, result?.Error);
+        Assert.Single(
+            logs.Entries,
+            entry => entry.EventId.Id == LogEvents.DynamicClientManagement.SoftwareStatementValidator.IssuerNotTrusted);
     }
 
     [Fact]

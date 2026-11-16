@@ -43,10 +43,13 @@ public partial class SoftwareStatementValidator(
         var softwareStatementOptions = options.CurrentValue.SoftwareStatement;
         var softwareStatement = context.Request.SoftwareStatement;
 
+        // RFC 7591 section 3.2.2 keeps invalid_software_statement for "The software statement presented is invalid"
+        // and unapproved_software_statement for one "not approved for use by this authorization server": a statement
+        // not sent is neither, but a metadata value the server requires and did not get, invalid_client_metadata
         if (string.IsNullOrEmpty(softwareStatement))
         {
             if (softwareStatementOptions.RequireSoftwareStatement)
-                return ErrorFactory.InvalidSoftwareStatement(
+                return ErrorFactory.InvalidClientMetadata(
                     "A software_statement is required for client registration");
 
             return null;
@@ -54,11 +57,13 @@ public partial class SoftwareStatementValidator(
 
         if (softwareStatementOptions.TrustedIssuers.Length == 0)
         {
-            return ErrorFactory.InvalidSoftwareStatement(
+            return ErrorFactory.UnapprovedSoftwareStatement(
                 "No trusted issuers configured for software statement validation");
         }
 
         var profile = context.SecurityProfileRequirementsAt(tenant);
+
+        var judgement = new IssuerJudgement(issuer => IsTrustedAsync(softwareStatementOptions, issuer));
 
         var validationParameters = new ValidationParameters
         {
@@ -72,9 +77,11 @@ public partial class SoftwareStatementValidator(
             // RFC 7591 Section 2.3 gives a software statement no type, so the type is judged below
             TokenTypes = TokenTypePolicy.CheckedByCaller,
 
-            ValidateIssuer = issuer => ValidateIssuer(softwareStatementOptions, issuer),
-            ResolveIssuerSigningKeys = issuer => ResolveSigningKeysAsync(softwareStatementOptions, issuer),
-            RefetchIssuerSigningKeys = issuer => ResolveSigningKeysAsync(softwareStatementOptions, issuer, refetch: true),
+            ValidateIssuer = judgement.TrustsAsync,
+            ResolveIssuerSigningKeys = issuer =>
+                ResolveSigningKeysAsync(softwareStatementOptions, issuer, judgement.TrustsAsync),
+            RefetchIssuerSigningKeys = issuer =>
+                ResolveSigningKeysAsync(softwareStatementOptions, issuer, judgement.TrustsAsync, refetch: true),
         };
 
         var result = await jwtValidator.ValidateAsync(profile, softwareStatement, validationParameters);
@@ -82,6 +89,12 @@ public partial class SoftwareStatementValidator(
         if (result.TryGetFailure(out var error))
         {
             LogValidationFailed(error.ErrorDescription);
+            if (judgement.RefusedIssuer is { } refusedIssuer)
+            {
+                return ErrorFactory.UnapprovedSoftwareStatement(
+                    $"The software_statement's issuer '{refusedIssuer}' is not trusted by this server");
+            }
+
             return ErrorFactory.InvalidSoftwareStatement(
                 $"The software_statement is invalid: {error.ErrorDescription}");
         }
@@ -102,7 +115,7 @@ public partial class SoftwareStatementValidator(
     /// <summary>
     /// Checks whether the software statement issuer is in the configured trusted issuers list.
     /// </summary>
-    private async Task<bool> ValidateIssuer(SoftwareStatementOptions statementOptions, string issuer)
+    private async Task<bool> IsTrustedAsync(SoftwareStatementOptions statementOptions, string issuer)
     {
         // A statement is validated as a token another issuer wrote, so nothing this server records about its own
         // tokens is read for it: one of its own tenants' tokens, revoked included, would pass as a statement
@@ -155,10 +168,10 @@ public partial class SoftwareStatementValidator(
     private async IAsyncEnumerable<JsonWebKey> ResolveSigningKeysAsync(
         SoftwareStatementOptions statementOptions,
         string issuer,
+        Func<string, Task<bool>> trusts,
         bool refetch = false)
     {
-        var trustedIssuer = FindTrustedIssuer(statementOptions, issuer);
-        if (trustedIssuer == null)
+        if (!await trusts(issuer) || FindTrustedIssuer(statementOptions, issuer) is not { } trustedIssuer)
             yield break;
 
         var keys = secureFetcher.FetchKeysAsync(
