@@ -63,23 +63,7 @@ public partial class SoftwareStatementValidator(
 
         var profile = context.SecurityProfileRequirementsAt(tenant);
 
-        // The issuer is judged where the validator first asks, which for a signed statement is the key lookup ahead of
-        // the signature: one refused there leaves the signature unverifiable, a statement not approved here rather than
-        // an invalid one
-        string? refusedIssuer = null;
-        async Task<bool> TrustsAsync(string issuer)
-        {
-            // The key lookup is asked again on an unfamiliar kid: an issuer already refused is not judged, nor logged,
-            // twice
-            if (issuer == refusedIssuer)
-                return false;
-
-            if (await IsTrustedAsync(softwareStatementOptions, issuer))
-                return true;
-
-            refusedIssuer = issuer;
-            return false;
-        }
+        var judgement = new IssuerJudgement(issuer => IsTrustedAsync(softwareStatementOptions, issuer));
 
         var validationParameters = new ValidationParameters
         {
@@ -93,10 +77,11 @@ public partial class SoftwareStatementValidator(
             // RFC 7591 Section 2.3 gives a software statement no type, so the type is judged below
             TokenTypes = TokenTypePolicy.CheckedByCaller,
 
-            ValidateIssuer = TrustsAsync,
-            ResolveIssuerSigningKeys = issuer => ResolveSigningKeysAsync(softwareStatementOptions, issuer, TrustsAsync),
+            ValidateIssuer = judgement.TrustsAsync,
+            ResolveIssuerSigningKeys = issuer =>
+                ResolveSigningKeysAsync(softwareStatementOptions, issuer, judgement.TrustsAsync),
             RefetchIssuerSigningKeys = issuer =>
-                ResolveSigningKeysAsync(softwareStatementOptions, issuer, TrustsAsync, refetch: true),
+                ResolveSigningKeysAsync(softwareStatementOptions, issuer, judgement.TrustsAsync, refetch: true),
         };
 
         var result = await jwtValidator.ValidateAsync(profile, softwareStatement, validationParameters);
@@ -104,7 +89,7 @@ public partial class SoftwareStatementValidator(
         if (result.TryGetFailure(out var error))
         {
             LogValidationFailed(error.ErrorDescription);
-            if (refusedIssuer is not null)
+            if (judgement.RefusedIssuer is { } refusedIssuer)
             {
                 return ErrorFactory.UnapprovedSoftwareStatement(
                     $"The software_statement's issuer '{refusedIssuer}' is not trusted by this server");
