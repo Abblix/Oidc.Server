@@ -52,13 +52,6 @@
       </PackageReference>
     </ItemGroup>
 
-    <!-- A response model omits its absent members through [JsonIgnore] on the TYPE, which System.Text.Json
-         accepts from version 11; the .NET 10 framework copy refuses it there (CS0592), so .NET 10 takes the
-         package, which ships an asset for it, and serializes the same document as .NET 11. -->
-    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-      <PackageReference Include="System.Text.Json" />
-    </ItemGroup>
-
     <ItemGroup>
       <PackageReference Include="Google.Protobuf" />
       <PackageReference Include="Grpc.Tools" PrivateAssets="All" />

@@ -18,7 +18,9 @@ namespace Abblix.Oidc.Server.Model;
 /// of the client configuration endpoint (RFC 7592) for subsequent management operations.
 /// Unregistered metadata is omitted from the JSON per RFC 7591 section 3.2.1, not emitted as an explicit null.
 /// </summary>
+#if NET11_0_OR_GREATER
 [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
 public record ClientRegistrationResponse : RegisteredClientMetadata
 {
     /// <summary>
@@ -40,6 +42,9 @@ public record ClientRegistrationResponse : RegisteredClientMetadata
     /// The unique Client Identifier. It must not be currently valid for any other registered client.
     /// This identifier is critical for client identification and for securing client-to-server communication.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [Required]
     [JsonPropertyName(Parameters.ClientId)]
     public required string ClientId { get; init; }
@@ -47,24 +52,36 @@ public record ClientRegistrationResponse : RegisteredClientMetadata
     /// <summary>
     /// The client secret. This value must not be assigned to multiple clients and is used for authenticating the client with the server.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.ClientSecret)]
     public string? ClientSecret { get; init; }
 
     /// <summary>
     /// The registration access token that can be used at the Client Configuration Endpoint to perform subsequent operations on the client registration.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.RegistrationAccessToken)]
     public string? RegistrationAccessToken { get; init; }
 
     /// <summary>
     /// The location of the Client Configuration Endpoint where the registration access token can be used for subsequent operations.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.RegistrationClientUri)]
     public Uri? RegistrationClientUri { get; init; }
 
     /// <summary>
     /// The time at which the Client Identifier was issued. Represented as the number of seconds since Unix Epoch (1970-01-01T0:0:0Z) in UTC.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.ClientIdIssuedAt)]
     [JsonConverter(typeof(DateTimeOffsetUnixTimeSecondsConverter))]
     public DateTimeOffset? ClientIdIssuedAt { get; init; }
@@ -81,6 +98,9 @@ public record ClientRegistrationResponse : RegisteredClientMetadata
     /// <summary>
     /// The software statement JWT echoed back per RFC 7591 Section 3.2.1.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(ClientRegistrationRequest.Parameters.SoftwareStatement)]
     public string? SoftwareStatement { get; init; }
 

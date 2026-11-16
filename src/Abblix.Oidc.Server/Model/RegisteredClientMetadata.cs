@@ -25,42 +25,65 @@ namespace Abblix.Oidc.Server.Model;
 /// reads back member by member. Built from the stored client by <see cref="Of"/>, the one place that maps one to the
 /// other, so the three responses cannot return different sets.
 /// </remarks>
+#if NET11_0_OR_GREATER
 [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
 public record RegisteredClientMetadata
 {
     /// <summary>The client authentication method at the token endpoint (RFC 7591 section 2).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(100)]
     [JsonPropertyName(Parameters.TokenEndpointAuthMethod)]
     public string? TokenEndpointAuthMethod { get; init; }
 
     /// <summary>The JWS algorithm of the client's authentication assertions (OpenID Connect Dynamic Client
     /// Registration 1.0 section 2).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(101)]
     [JsonPropertyName(Parameters.TokenEndpointAuthSigningAlg)]
     public string? TokenEndpointAuthSigningAlg { get; init; }
 
     /// <summary>The kind of application, web or native.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(102)]
     [JsonPropertyName(Parameters.ApplicationType)]
     public string? ApplicationType { get; init; }
 
     /// <summary>The redirection URIs (RFC 7591 section 2).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(103)]
     [JsonPropertyName(Parameters.RedirectUris)]
     public Uri[]? RedirectUris { get; init; }
 
     /// <summary>The URIs the end user may be sent to after logout (OpenID Connect RP-Initiated Logout 1.0
     /// section 3.1).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(104)]
     [JsonPropertyName(Parameters.PostLogoutRedirectUris)]
     public Uri[]? PostLogoutRedirectUris { get; init; }
 
     /// <summary>The grant types, the server's default included.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(105)]
     [JsonPropertyName(Parameters.GrantTypes)]
     public string[]? GrantTypes { get; init; }
 
     /// <summary>The response type combinations, each space-separated, the server's default included.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(106)]
     [JsonPropertyName(Parameters.ResponseTypes)]
     [JsonConverter(typeof(ArrayConverter<string[], SpaceSeparatedValuesConverter>))]
@@ -68,294 +91,465 @@ public record RegisteredClientMetadata
 
     /// <summary>The response modes the client may use (FAPI 2.0 Message Signing section 5.3.3), left out where it may
     /// use any the server supports.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(163)]
     [JsonPropertyName(Parameters.ResponseModes)]
     public string[]? ResponseModes { get; init; }
 
     /// <summary>The scope values the client may request, serialized space-separated.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(107)]
     [JsonPropertyName(Parameters.Scope)]
     [JsonConverter(typeof(SpaceSeparatedValuesConverter))]
     public string[]? Scope { get; init; }
 
     /// <summary>The name of the client shown to the end user.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(108)]
     [JsonPropertyName(Parameters.ClientName)]
     public string? ClientName { get; init; }
 
     /// <summary>The client's home page.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(109)]
     [JsonPropertyName(Parameters.ClientUri)]
     public Uri? ClientUri { get; init; }
 
     /// <summary>The client's logo.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(110)]
     [JsonPropertyName(Parameters.LogoUri)]
     public Uri? LogoUri { get; init; }
 
     /// <summary>The client's privacy policy.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(111)]
     [JsonPropertyName(Parameters.PolicyUri)]
     public Uri? PolicyUri { get; init; }
 
     /// <summary>The client's terms of service.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(112)]
     [JsonPropertyName(Parameters.TosUri)]
     public Uri? TermsOfServiceUri { get; init; }
 
     /// <summary>The people responsible for the client.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(113)]
     [JsonPropertyName(Parameters.Contacts)]
     public string[]? Contacts { get; init; }
 
     /// <summary>The address of the client's key set.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(114)]
     [JsonPropertyName(Parameters.JwksUri)]
     public Uri? JwksUri { get; init; }
 
     /// <summary>The client's key set, registered by value.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(115)]
     [JsonPropertyName(Parameters.Jwks)]
     public JsonWebKeySet? Jwks { get; init; }
 
     /// <summary>The kind of subject identifier the client receives, public or pairwise.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(116)]
     [JsonPropertyName(Parameters.SubjectType)]
     public string? SubjectType { get; init; }
 
     /// <summary>The address whose host groups the client's pairwise identifiers.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(117)]
     [JsonPropertyName(Parameters.SectorIdentifierUri)]
     public Uri? SectorIdentifierUri { get; init; }
 
     /// <summary>The JWS algorithm of the client's ID tokens.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(118)]
     [JsonPropertyName(Parameters.IdTokenSignedResponseAlg)]
     public string? IdTokenSignedResponseAlg { get; init; }
 
     /// <summary>The JWE key management algorithm of the client's ID tokens.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(119)]
     [JsonPropertyName(Parameters.IdTokenEncryptedResponseAlg)]
     public string? IdTokenEncryptedResponseAlg { get; init; }
 
     /// <summary>The JWE content encryption of the client's ID tokens.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(120)]
     [JsonPropertyName(Parameters.IdTokenEncryptedResponseEnc)]
     public string? IdTokenEncryptedResponseEnc { get; init; }
 
     /// <summary>The JWS algorithm of the client's UserInfo responses, absent when they are plain JSON.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(121)]
     [JsonPropertyName(Parameters.UserInfoSignedResponseAlg)]
     public string? UserInfoSignedResponseAlg { get; init; }
 
     /// <summary>The JWE key management algorithm of the client's UserInfo responses.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(122)]
     [JsonPropertyName(Parameters.UserInfoEncryptedResponseAlg)]
     public string? UserInfoEncryptedResponseAlg { get; init; }
 
     /// <summary>The JWE content encryption of the client's UserInfo responses.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(123)]
     [JsonPropertyName(Parameters.UserInfoEncryptedResponseEnc)]
     public string? UserInfoEncryptedResponseEnc { get; init; }
 
     /// <summary>The JWS algorithm of the client's introspection responses (RFC 9701 section 6), absent when they
     /// are plain JSON.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(124)]
     [JsonPropertyName(Parameters.IntrospectionSignedResponseAlg)]
     public string? IntrospectionSignedResponseAlg { get; init; }
 
     /// <summary>The JWE key management algorithm of the client's introspection responses.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(125)]
     [JsonPropertyName(Parameters.IntrospectionEncryptedResponseAlg)]
     public string? IntrospectionEncryptedResponseAlg { get; init; }
 
     /// <summary>The JWE content encryption of the client's introspection responses.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(126)]
     [JsonPropertyName(Parameters.IntrospectionEncryptedResponseEnc)]
     public string? IntrospectionEncryptedResponseEnc { get; init; }
 
     /// <summary>The JWS algorithm of the client's authorization responses (JARM).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(127)]
     [JsonPropertyName(Parameters.AuthorizationSignedResponseAlg)]
     public string? AuthorizationSignedResponseAlg { get; init; }
 
     /// <summary>The JWE key management algorithm of the client's authorization responses (JARM).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(128)]
     [JsonPropertyName(Parameters.AuthorizationEncryptedResponseAlg)]
     public string? AuthorizationEncryptedResponseAlg { get; init; }
 
     /// <summary>The JWE content encryption of the client's authorization responses (JARM).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(129)]
     [JsonPropertyName(Parameters.AuthorizationEncryptedResponseEnc)]
     public string? AuthorizationEncryptedResponseEnc { get; init; }
 
     /// <summary>The JWS algorithm the client signs its request objects with.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(130)]
     [JsonPropertyName(Parameters.RequestObjectSigningAlg)]
     public string? RequestObjectSigningAlg { get; init; }
 
     /// <summary>The JWE key management algorithm the client encrypts its request objects with.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(131)]
     [JsonPropertyName(Parameters.RequestObjectEncryptionAlg)]
     public string? RequestObjectEncryptionAlg { get; init; }
 
     /// <summary>The JWE content encryption the client encrypts its request objects with.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(132)]
     [JsonPropertyName(Parameters.RequestObjectEncryptionEnc)]
     public string? RequestObjectEncryptionEnc { get; init; }
 
     /// <summary>The default maximum authentication age, in seconds.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(133)]
     [JsonPropertyName(Parameters.DefaultMaxAge)]
     [JsonConverter(typeof(TimeSpanSecondsConverter))]
     public TimeSpan? DefaultMaxAge { get; init; }
 
     /// <summary>Whether the client's ID tokens always carry the authentication time.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(134)]
     [JsonPropertyName(Parameters.RequireAuthTime)]
     public bool? RequireAuthTime { get; init; }
 
     /// <summary>The default authentication context class references.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(135)]
     [JsonPropertyName(Parameters.DefaultAcrValues)]
     public string[]? DefaultAcrValues { get; init; }
 
     /// <summary>The address a third party can start a login at the client through.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(136)]
     [JsonPropertyName(Parameters.InitiateLoginUri)]
     public Uri? InitiateLoginUri { get; init; }
 
     /// <summary>The request object addresses the client registered.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(137)]
     [JsonPropertyName(Parameters.RequestUris)]
     public Uri[]? RequestUris { get; init; }
 
     /// <summary>The client's front-channel logout address (OpenID Connect Front-Channel Logout 1.0 section 2).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(138)]
     [JsonPropertyName(Parameters.FrontChannelLogoutUri)]
     public Uri? FrontChannelLogoutUri { get; init; }
 
     /// <summary>Whether the front-channel logout address receives the issuer and session identifier.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(139)]
     [JsonPropertyName(Parameters.FrontChannelLogoutSessionRequired)]
     public bool? FrontChannelLogoutSessionRequired { get; init; }
 
     /// <summary>The client's back-channel logout address (OpenID Connect Back-Channel Logout 1.0 section 2.2).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(140)]
     [JsonPropertyName(Parameters.BackChannelLogoutUri)]
     public Uri? BackChannelLogoutUri { get; init; }
 
     /// <summary>Whether the logout token sent to the back-channel logout address carries the session identifier.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(141)]
     [JsonPropertyName(Parameters.BackChannelLogoutSessionRequired)]
     public bool? BackChannelLogoutSessionRequired { get; init; }
 
     /// <summary>How the client receives the outcome of a decoupled authentication (CIBA Core 1.0 section 4).
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(142)]
     [JsonPropertyName(Parameters.BackChannelTokenDeliveryMode)]
     public string? BackChannelTokenDeliveryMode { get; init; }
 
     /// <summary>The address the server notifies of a decoupled authentication's outcome.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(143)]
     [JsonPropertyName(Parameters.BackChannelClientNotificationEndpoint)]
     public Uri? BackChannelClientNotificationEndpoint { get; init; }
 
     /// <summary>The JWS algorithm the client signs its decoupled authentication requests with.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(144)]
     [JsonPropertyName(Parameters.BackChannelAuthenticationRequestSigningAlg)]
     public string? BackChannelAuthenticationRequestSigningAlg { get; init; }
 
     /// <summary>Whether the client's decoupled authentication requests carry a user code.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(145)]
     [JsonPropertyName(Parameters.BackChannelUserCodeParameter)]
     public bool? BackChannelUserCodeParameter { get; init; }
 
     /// <summary>The exact subject distinguished name of the client's certificate (RFC 8705 section 2.1.2).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(146)]
     [JsonPropertyName(Parameters.TlsClientAuthSubjectDn)]
     public string? TlsClientAuthSubjectDn { get; init; }
 
     /// <summary>The DNS subject alternative names of the client's certificate.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(147)]
     [JsonPropertyName(Parameters.TlsClientAuthSanDns)]
     public string[]? TlsClientAuthSanDns { get; init; }
 
     /// <summary>The URI subject alternative names of the client's certificate.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(148)]
     [JsonPropertyName(Parameters.TlsClientAuthSanUri)]
     public Uri[]? TlsClientAuthSanUri { get; init; }
 
     /// <summary>The IP address subject alternative names of the client's certificate.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(149)]
     [JsonPropertyName(Parameters.TlsClientAuthSanIp)]
     public string[]? TlsClientAuthSanIp { get; init; }
 
     /// <summary>The email subject alternative names of the client's certificate.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(150)]
     [JsonPropertyName(Parameters.TlsClientAuthSanEmail)]
     public string[]? TlsClientAuthSanEmail { get; init; }
 
     /// <summary>Whether access tokens are bound to the client's certificate (RFC 8705 section 3.4).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(151)]
     [JsonPropertyName(Parameters.TlsClientCertificateBoundAccessTokens)]
     public bool? TlsClientCertificateBoundAccessTokens { get; init; }
 
     /// <summary>Whether access tokens are bound to the client's DPoP key (RFC 9449 section 5.2).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(152)]
     [JsonPropertyName(Parameters.DpopBoundAccessTokens)]
     public bool? DpopBoundAccessTokens { get; init; }
 
     /// <summary>Whether the client starts every authorization with a pushed request (RFC 9126 section 6).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(153)]
     [JsonPropertyName(Parameters.RequirePushedAuthorizationRequests)]
     public bool? RequirePushedAuthorizationRequests { get; init; }
 
     /// <summary>Whether the client sends its authorization parameters as a signed request object (RFC 9101
     /// section 10.5).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(154)]
     [JsonPropertyName(Parameters.RequireSignedRequestObject)]
     public bool? RequireSignedRequestObject { get; init; }
 
     /// <summary>Whether the client uses PKCE on every authorization code request, true when it registered no
     /// choice.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(155)]
     [JsonPropertyName(Parameters.PkceRequired)]
     public bool? PkceRequired { get; init; }
 
     /// <summary>The offline access the client receives.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(156)]
     [JsonPropertyName(Parameters.OfflineAccess)]
     public OfflineAccess? OfflineAccess { get; init; }
 
     /// <summary>The authorization details types the client may request (RFC 9396 section 10).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(157)]
     [JsonPropertyName(Parameters.AuthorizationDetailsTypes)]
     public string[]? AuthorizationDetailsTypes { get; init; }
 
     /// <summary>The subject token types the client may present to token exchange (an extension of this server).
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(158)]
     [JsonPropertyName(Parameters.TokenExchangeSubjectTokenTypes)]
     public Uri[]? TokenExchangeSubjectTokenTypes { get; init; }
 
     /// <summary>The audiences the client may request in token exchange (an extension of this server).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(159)]
     [JsonPropertyName(Parameters.TokenExchangeAudiences)]
     public string[]? TokenExchangeAudiences { get; init; }
 
     /// <summary>The resources the client may get access tokens for (an extension of this server).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(162)]
     [JsonPropertyName(Parameters.AllowedResources)]
     public Uri[]? AllowedResources { get; init; }
 
     /// <summary>The identifier of the client software (RFC 7591 section 2).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(160)]
     [JsonPropertyName(Parameters.SoftwareId)]
     public string? SoftwareId { get; init; }
 
     /// <summary>The version of the client software (RFC 7591 section 2).</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(161)]
     [JsonPropertyName(Parameters.SoftwareVersion)]
     public string? SoftwareVersion { get; init; }

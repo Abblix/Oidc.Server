@@ -15,24 +15,35 @@ namespace Abblix.Oidc.Server.Model;
 /// <summary>
 /// Represents the token delivery payload sent to the client in push mode.
 /// </summary>
+#if NET11_0_OR_GREATER
 [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
 public sealed record BackChannelPushNotificationRequest : IBackChannelNotificationRequest
 {
     /// <summary>
     /// The authentication request identifier.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.AuthReqId)]
     public required string AuthenticationRequestId { get; init; }
 
     /// <summary>
     /// The access token issued by the authorization server.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.AccessToken)]
     public required string AccessToken { get; init; }
 
     /// <summary>
     /// The type of the token (typically <c>Bearer</c>).
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.TokenType)]
     public required string TokenType { get; init; }
 
@@ -46,12 +57,18 @@ public sealed record BackChannelPushNotificationRequest : IBackChannelNotificati
     /// <summary>
     /// The ID token, if requested.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.IdToken)]
     public string? IdToken { get; init; }
 
     /// <summary>
     /// The refresh token, if issued.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.RefreshToken)]
     public string? RefreshToken { get; init; }
 

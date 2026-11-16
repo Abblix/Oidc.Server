@@ -16,7 +16,9 @@ namespace Abblix.Oidc.Server.Model;
 /// metadata value the server holds for it, as RFC 7592 section 3 requires.
 /// Unregistered metadata is omitted from the JSON per RFC 7592 section 3, not emitted as an explicit null.
 /// </summary>
+#if NET11_0_OR_GREATER
 [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
 public record ReadClientSuccessfulResponse : RegisteredClientMetadata
 {
     /// <summary>
@@ -38,6 +40,9 @@ public record ReadClientSuccessfulResponse : RegisteredClientMetadata
     /// The unique identifier of the client as registered with the authorization server.
     /// Required per RFC 7591 Section 3.2.1.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(1)]
     [JsonPropertyName(Parameters.ClientId)]
     public required string ClientId { get; init; }
@@ -46,6 +51,9 @@ public record ReadClientSuccessfulResponse : RegisteredClientMetadata
     /// The secret associated with the client, used for authenticating with the authorization server.
     /// Optional - only present for confidential clients. Per RFC 7591 Section 3.2.1.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(2)]
     [JsonPropertyName(Parameters.ClientSecret)]
     public string? ClientSecret { get; init; }
@@ -56,6 +64,9 @@ public record ReadClientSuccessfulResponse : RegisteredClientMetadata
     /// A value of 0 indicates the secret does not expire.
     /// Serialized as Unix seconds (a JSON number) per RFC 7591 section 3.2.1, matching the register-path DTO.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(3)]
     [JsonPropertyName(Parameters.ClientSecretExpiresAt)]
     [JsonConverter(typeof(DateTimeOffsetUnixTimeSecondsConverter))]
@@ -65,6 +76,9 @@ public record ReadClientSuccessfulResponse : RegisteredClientMetadata
     /// The fully qualified URL of the client configuration endpoint for this client.
     /// Required per RFC 7592 Section 3.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(4)]
     [JsonPropertyName(Parameters.RegistrationClientUri)]
     public Uri? RegistrationClientUri { get; init; }
@@ -73,6 +87,9 @@ public record ReadClientSuccessfulResponse : RegisteredClientMetadata
     /// The access token for subsequent operations on the client configuration endpoint.
     /// Required per RFC 7592 Section 3.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyOrder(5)]
     [JsonPropertyName(Parameters.RegistrationAccessToken)]
     public required string RegistrationAccessToken { get; init; }

@@ -17,7 +17,9 @@ namespace Abblix.Oidc.Server.Model;
 /// transport adapters (MVC, Minimal API) serialize; serialization is identical across frameworks, so a single core
 /// type serves both.
 /// </summary>
+#if NET11_0_OR_GREATER
 [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
 public record TokenResponse
 {
     /// <summary>
@@ -48,11 +50,17 @@ public record TokenResponse
     /// REQUIRED by RFC 6749 section 5.1, so it is required here: a successful token response without it is
     /// not a response this server is allowed to send, and the compiler can say so where the null could not.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.AccessToken)]
     [JsonPropertyOrder(1)]
     public required string AccessToken { get; init; }
 
     /// <summary>The type of the issued token, typically an absolute URI identifying the token type.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.IssuedTokenType)]
     [JsonPropertyOrder(2)]
     public Uri? IssuedTokenType { get; set; }
@@ -61,6 +69,9 @@ public record TokenResponse
     /// The type of token that is issued, usually 'Bearer'.
     /// REQUIRED by RFC 6749 section 5.1.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.TokenType)]
     [JsonPropertyOrder(3)]
     public required string TokenType { get; init; }
@@ -72,17 +83,26 @@ public record TokenResponse
     public TimeSpan ExpiresIn { get; init; }
 
     /// <summary>The refresh token, used to obtain new access tokens using the same authorization grant.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.RefreshToken)]
     [JsonPropertyOrder(5)]
     public string? RefreshToken { get; init; }
 
     /// <summary>The scope of the access token as granted by the resource owner.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.Scope)]
     [JsonPropertyOrder(6)]
     [JsonConverter(typeof(SpaceSeparatedValuesConverter))]
     public string[]? Scope { get; init; }
 
     /// <summary>The ID token (a JWT carrying the user's identity), present in OpenID Connect flows.</summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.IdToken)]
     [JsonPropertyOrder(7)]
     public string? IdToken { get; init; }
@@ -91,6 +111,9 @@ public record TokenResponse
     /// RFC 9396 section 7 <c>authorization_details</c>: the structured authorization data the token was granted for, echoed
     /// back to the client byte-exact. Omitted when no Rich Authorization Request was used.
     /// </summary>
+#if !NET11_0_OR_GREATER
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+#endif
     [JsonPropertyName(Parameters.AuthorizationDetails)]
     [JsonPropertyOrder(8)]
     public JsonArray? AuthorizationDetails { get; init; }
