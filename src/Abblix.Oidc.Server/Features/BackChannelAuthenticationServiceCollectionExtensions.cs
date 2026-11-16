@@ -70,8 +70,7 @@ public static class BackChannelAuthenticationServiceCollectionExtensions
         services.TryAddKeyedSingleton<IBackChannelGrantProcessor, PushModeGrantProcessor>(
             BackchannelTokenDeliveryModes.Push);
 
-        // Register long-polling status notifier if long-polling is enabled
-        // This service is optional - if not registered, long-polling will be disabled
+        // The long-polling status notifier, which the poll and ping completion handlers require
         services.TryAddSingleton<IBackChannelLongPollingService>(sp =>
         {
             // Registered whatever the long-polling setting says. A factory that answers null publishes a
