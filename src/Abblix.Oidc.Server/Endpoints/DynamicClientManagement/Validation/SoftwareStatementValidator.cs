@@ -58,7 +58,7 @@ public partial class SoftwareStatementValidator(
                 "No trusted issuers configured for software statement validation");
         }
 
-        var profile = SecurityProfileRequirements.For(tenant, client: null);
+        var profile = context.SecurityProfileRequirementsAt(tenant);
 
         var validationParameters = new ValidationParameters
         {

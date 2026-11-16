@@ -12,6 +12,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -238,5 +239,26 @@ public class ProfileSigningKeysValidatorTests
 
         Assert.Null(await Validator(Ec()).ValidateAsync(Tenant(ClientSecurityProfile.None), context));
         Assert.Null(context.Request.IdTokenSignedResponseAlg);
+    }
+
+    /// <summary>
+    /// An update is judged under the profile the stored client is held to: a client held to FAPI 1.0 Advanced at a
+    /// tenant held to none, naming no ID token algorithm, is given the one its profile admits rather than left to the
+    /// RS256 default that profile refuses.
+    /// </summary>
+    [Fact]
+    public async Task AnUpdate_IsGivenTheAlgorithmTheStoredClientsOwnProfileAdmits()
+    {
+        var context = Context() with
+        {
+            Operation = DynamicClientOperation.Update,
+            StoredClient = new ClientInfo(TestConstants.DefaultClientId)
+            {
+                SecurityProfile = ClientSecurityProfile.Fapi1Advanced,
+            },
+        };
+
+        Assert.Null(await Validator(Ec()).ValidateAsync(Tenant(ClientSecurityProfile.None), context));
+        Assert.Equal(SigningAlgorithms.ES256, context.Request.IdTokenSignedResponseAlg);
     }
 }

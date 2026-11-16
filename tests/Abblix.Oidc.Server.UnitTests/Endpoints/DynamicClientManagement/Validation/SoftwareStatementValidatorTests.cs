@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
@@ -358,5 +359,35 @@ public class SoftwareStatementValidatorTests
             Assert.Equal([SigningAlgorithms.ES256, SigningAlgorithms.PS256], captured!.AllowedSigningAlgorithms!.Order());
         else
             Assert.Null(captured!.AllowedSigningAlgorithms);
+    }
+
+    /// <summary>
+    /// An update is judged under the profile the stored client is held to: the software statement of a client held to
+    /// FAPI 1.0 Advanced at a tenant held to none is accepted only under the algorithms that profile names.
+    /// </summary>
+    [Fact]
+    public async Task AnUpdatesSignatureAlgorithms_AreTheStoredClientsOwnProfiles()
+    {
+        _oidcOptions.SoftwareStatement.TrustedIssuers =
+        [
+            new TrustedIssuer { Issuer = "https://trusted-issuer.example.com", JwksUri = new Uri("https://trusted-issuer.example.com/jwks") },
+        ];
+        ValidationParameters? captured = null;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync("eyJ.valid.jwt", It.IsAny<ValidationParameters>()))
+            .Callback(new Action<string, ValidationParameters>((_, p) => captured = p))
+            .ReturnsAsync(new JsonWebToken());
+        var context = CreateContext("eyJ.valid.jwt") with
+        {
+            Operation = DynamicClientOperation.Update,
+            StoredClient = new ClientInfo(TestConstants.DefaultClientId)
+            {
+                SecurityProfile = ClientSecurityProfile.Fapi1Advanced,
+            },
+        };
+
+        await _validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.None }.ToTenant(), context);
+
+        Assert.Equal([SigningAlgorithms.ES256, SigningAlgorithms.PS256], captured!.AllowedSigningAlgorithms!.Order());
     }
 }
