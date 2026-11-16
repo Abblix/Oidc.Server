@@ -619,6 +619,35 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2 has the server "only use the parameters included in the signed request object", so
+    /// a scope sent only outside the object is not the request's, and RFC 6749 section 3.3 lets the server "fail the
+    /// request" rather than serve a default: the object is refused as invalid, by value with the scope outside it and
+    /// pushed with a code challenge, so the scope is all it lacks.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ARequestObjectNamingNoScope_IsRefused(bool pushed)
+    {
+        var request = ConformantRequest();
+        request.Remove(AuthorizationRequest.Parameters.Scope);
+
+        HttpResponseMessage response;
+        if (pushed)
+        {
+            request[AuthorizationRequest.Parameters.CodeChallenge] = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+            request[AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256;
+            response = await PushAsync(request);
+        }
+        else
+        {
+            response = await AuthorizeAsync(request);
+        }
+
+        Assert.Equal(ErrorCodes.InvalidRequestObject, await ErrorOf(response));
+    }
+
+    /// <summary>
     /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require PAR requests, if supported, to use PKCE (RFC7636) with
     /// S256 as the code challenge method". A pushed request without a code challenge is refused; the same request with
     /// an S256 challenge is accepted.

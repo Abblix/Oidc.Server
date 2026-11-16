@@ -125,7 +125,7 @@ public class RequestObjectFetcherTests
 
         const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjMSJ9.signature";
         var request = new JarTestRequest { ClientId = "c1", State = "outside-only", Request = jwt };
-        var payload = new JsonObject { [RequestParameters.ClientId] = "c1" };
+        var payload = new JsonObject { [RequestParameters.ClientId] = "c1", [RequestParameters.Scope] = Scopes.OpenId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -171,7 +171,7 @@ public class RequestObjectFetcherTests
 
         const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjMSJ9.signature";
         var request = new JarTestRequest { ClientId = "c1", State = "outside-only", Request = jwt };
-        var payload = new JsonObject { [RequestParameters.ClientId] = "c1" };
+        var payload = new JsonObject { [RequestParameters.ClientId] = "c1", [RequestParameters.Scope] = Scopes.OpenId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()),
@@ -1101,7 +1101,7 @@ public class RequestObjectFetcherTests
 
         const string jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjMSJ9.signature";
         var request = new JarTestRequest { ClientId = "c1", State = "outside-only", Request = jwt };
-        var payload = new JsonObject { [RequestParameters.ClientId] = "c1" };
+        var payload = new JsonObject { [RequestParameters.ClientId] = "c1", [RequestParameters.Scope] = Scopes.OpenId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()) { Algorithm = SigningAlgorithms.PS256 },
@@ -1138,7 +1138,7 @@ public class RequestObjectFetcherTests
         bool namesTheIssuer, bool namesTheEndpoint, bool accepted)
     {
         var tenant = SingleIssuer.Tenant;
-        var payload = WithinTheProfileLifetime(new JsonObject());
+        var payload = WithinTheProfileLifetime(NamingItsScope());
         payload.Audiences = new[]
             {
                 namesTheIssuer ? tenant.Issuer.OriginalString : null,
@@ -1163,7 +1163,7 @@ public class RequestObjectFetcherTests
     [Fact]
     public async Task FetchAsync_Fapi2Client_RequestObjectWithoutAudienceOrLifetime_Passes()
     {
-        Assert.True((await Fetch(Fapi2Client, SingleIssuer.Tenant, new JsonWebTokenPayload(new JsonObject())))
+        Assert.True((await Fetch(Fapi2Client, SingleIssuer.Tenant, new JsonWebTokenPayload(NamingItsScope())))
             .TryGetSuccess(out _));
     }
 
@@ -1191,7 +1191,7 @@ public class RequestObjectFetcherTests
         var fetcher = CreateFetcher();
         var outerRequest = new Abblix.Oidc.Server.Model.AuthorizationRequest { State = "outer-state" };
         var jwt = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJjbGllbnQxIn0.signature";
-        var payload = new JsonObject { [RequestParameters.ClientId] = TestConstants.DefaultClientId };
+        var payload = new JsonObject { [RequestParameters.ClientId] = TestConstants.DefaultClientId, [RequestParameters.Scope] = Scopes.OpenId };
         var token = new JsonWebToken
         {
             Header = new JsonWebTokenHeader(new JsonObject()) { Algorithm = SigningAlgorithms.RS256 },
@@ -1260,7 +1260,7 @@ public class RequestObjectFetcherTests
         TenantDefinition tenant,
         DateTimeOffset? notBefore,
         DateTimeOffset? expiresAt)
-        => Fetch(client, tenant, AddressedTo(tenant, WithLifetime(new JsonObject(), notBefore, expiresAt)));
+        => Fetch(client, tenant, AddressedTo(tenant, WithLifetime(NamingItsScope(), notBefore, expiresAt)));
 
     /// <summary>
     /// The payload addressed to the tenant's issuer, which is what every profile accepts as its audience - for a test
@@ -1300,6 +1300,11 @@ public class RequestObjectFetcherTests
     }
 
     private static ClientInfo Fapi2Client => new("c1") { SecurityProfile = ClientSecurityProfile.Fapi2 };
+
+    /// <summary>
+    /// Claims of an object naming its scope, which strict processing requires of every object.
+    /// </summary>
+    private static JsonObject NamingItsScope() => new() { [RequestParameters.Scope] = Scopes.OpenId };
 
     private static TenantDefinition Fapi1AdvancedTenant
         => new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced }.ToTenant();
@@ -1413,5 +1418,39 @@ public class RequestObjectFetcherTests
             .ReturnsAsync(new ValidJsonWebToken(token, Fapi1AdvancedClient));
 
         AssertInvalidRequestObject(await CreateFetcher().FetchAsync(SingleIssuer.Tenant, null, request, jwt, null, [], _ => null));
+    }
+
+    /// <summary>
+    /// Under strict processing the object is the whole request (RFC 9101 section 6.3: "MUST only use the parameters in
+    /// the Request Object"; FAPI 1.0 Part 2 section 5.2.2: "shall only use the parameters included in the signed request
+    /// object"), so an object naming no scope is a request naming none, and RFC 6749 section 3.3 lets the server "fail
+    /// the request" rather than apply a default: it is refused as an invalid request object, for a profile processing
+    /// strictly and for a host turning strict processing on. Merge processing, where the scope outside the object
+    /// applies, is unchanged.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, false, null, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, false, "", false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, false, Scopes.OpenId, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, false, null, false)]
+    [InlineData(null, true, null, false)]
+    [InlineData(null, false, null, true)]
+    public async Task FetchAsync_StrictProcessing_RefusesAnObjectNamingNoScope(
+        ClientSecurityProfile? profile, bool strictByHost, string? scope, bool accepted)
+    {
+        _oidcOptions.IgnoreParametersOutsideRequestObject = strictByHost;
+        var payload = new JsonObject();
+        if (scope is not null)
+            payload[IanaClaimTypes.Scope] = scope;
+
+        var result = await Fetch(
+            new ClientInfo("c1") { SecurityProfile = profile },
+            SingleIssuer.Tenant,
+            AddressedTo(SingleIssuer.Tenant, WithinTheProfileLifetime(payload)));
+
+        if (accepted)
+            Assert.True(result.TryGetSuccess(out _));
+        else
+            AssertInvalidRequestObject(result);
     }
 }
