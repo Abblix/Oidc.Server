@@ -108,13 +108,13 @@ public partial class SecureUriValidator : ISecureUriValidator
             return null;
 
         var hostname = uri.Host;
-        if (IsInternalHostname(hostname))
+        if (PrivateNetworks.IsPrivateHostname(hostname))
         {
             return $"Hostname '{hostname}' matches internal hostname pattern. " +
                    $"Request blocked to prevent access to internal infrastructure.";
         }
 
-        if (IPAddress.TryParse(hostname, out var ipAddress) && IsPrivateOrReservedAddress(ipAddress))
+        if (IPAddress.TryParse(hostname, out var ipAddress) && PrivateNetworks.IsPrivateOrReservedAddress(ipAddress))
         {
             return $"IP address '{ipAddress}' is private/internal. " +
                    $"Request blocked to prevent access to internal infrastructure.";
@@ -122,24 +122,4 @@ public partial class SecureUriValidator : ISecureUriValidator
 
         return null;
     }
-
-    /// <summary>
-    /// Checks if a hostname appears to be internal or non-public.
-    /// </summary>
-    /// <remarks>
-    /// The rules live in <see cref="PrivateNetworks"/>, where every package that must refuse such an address
-    /// reads them, so a name added there takes effect here too. The wording of this member is kept as shipped:
-    /// it is public, and a rename would break a host that calls it for nothing but a synonym.
-    /// </remarks>
-    public static bool IsInternalHostname(string hostname)
-        => PrivateNetworks.IsPrivateHostname(hostname);
-
-    /// <summary>
-    /// Checks if an IP address is private, loopback, link-local, or otherwise reserved.
-    /// </summary>
-    /// <remarks>
-    /// Delegates to <see cref="PrivateNetworks"/> for the same reason as the hostname rules above.
-    /// </remarks>
-    public static bool IsPrivateOrReservedAddress(IPAddress address)
-        => PrivateNetworks.IsPrivateOrReservedAddress(address);
 }
