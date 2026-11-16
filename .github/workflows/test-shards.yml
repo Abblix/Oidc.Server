@@ -26,10 +26,10 @@ jobs:
     needs: discover
     name: Tests (${{ matrix.project }})
     runs-on: ubuntu-latest
-    # 8 minutes per shard: the two server E2E shards build their dependency closure and then run
-    # the prompt walks by every way of sending a request, which takes them past five; this leaves
-    # room while still catching a runaway sooner than a single whole-suite wall would.
-    timeout-minutes: 8
+    # 14 minutes per shard: every project builds and runs once per target framework, and the
+    # slowest shards took up to 260 seconds for one framework, so about nine minutes for two;
+    # this leaves room while still catching a runaway sooner than a single whole-suite wall would.
+    timeout-minutes: 14
     permissions:
       contents: read
     strategy:
@@ -59,13 +59,15 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          # No version here on purpose: with dotnet-version absent the action installs what
-          # global.json names, which is the same file the local build resolves against. Naming a
-          # version in each workflow is an enumeration - one of them is missed by a bump and that
-          # job keeps building on the old SDK, green, until something needs the new one. The
-          # version itself still moves by hand - global.json names an exact build and the action
-          # installs that one - but it moves in one place.
+          # The SDK version comes from global.json alone, the same file the local build resolves
+          # against. Naming the SDK in each workflow is an enumeration - one of them is missed by a
+          # bump and that job keeps building on the old SDK, green, until something needs the new
+          # one. The version itself still moves by hand - global.json names an exact build and the
+          # action installs that one - but it moves in one place.
           global-json-file: global.json
+          # Not the SDK that builds (global.json pins it and allows no roll-forward): this line only
+          # brings the .NET 10 runtime the net10.0 suites run on. Removing it fails every net10.0 run.
+          dotnet-version: 10.0.x
         timeout-minutes: 3
       # Restored only: the entry is saved by the build of develop, so every pull request reads that one copy
       # instead of writing its own into the repository's shared cache allowance
@@ -81,7 +83,11 @@ jobs:
         timeout-minutes: 3
       - name: Test
         # --no-restore reuses the restore above; the project's dependency closure still builds here,
-        # so allow more room than the 3-minute step baseline for the largest shard.
+        # once per target framework, so the largest shard's 221 seconds for one framework sets the
+        # ceiling for two.
+        #
+        # No fixed report file name: the two frameworks run in one invocation and would overwrite one
+        # file, so a red framework's report could be replaced by the green one's.
         #
         # The new dotnet test experience (Microsoft.Testing.Platform runner, opted in via global.json)
         # takes MTP options directly, without the VSTest separator. --results-directory resolves from
@@ -92,11 +98,11 @@ jobs:
         # logs the most as the least tested one.
         run: |
           dotnet test "tests/$PROJECT/$PROJECT.csproj" --configuration Release --no-restore \
-            --report-trx --report-trx-filename test-results.trx \
+            --report-trx \
             --coverage --coverage-output-format cobertura \
             --coverage-settings tests/code-coverage.settings.xml \
             --results-directory ./tests/results
-        timeout-minutes: 7
+        timeout-minutes: 12
       # A RED run only. Nobody opens these after a green one, and the storage they take is shared
       # across the account: six of them per run, a hundred in three hours, all younger than the
       # retention window - so the window cannot help, because there is nothing old to expire.

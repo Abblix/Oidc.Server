@@ -73,11 +73,13 @@ jobs:
     # were cut off. Read the step timings of a recent run before changing it again, and size from a run
     # that was CUT OFF rather than one that finished: a cut-off duration is a lower bound on the work.
     # Sized from the steps around Test taking about 2.5 minutes and the Test step's own ceiling below.
+    # Raised again when the packages began to build and test for two target frameworks, which doubles
+    # the Build and Test steps: green runs took 386 to 502 seconds for one framework.
     #
     # Worth knowing when it happens again: a job timeout is reported as "cancelled", the same word a
     # manual stop gets, so what identifies it is the duration landing on the ceiling. Nothing else
     # says it happened, and the run that was cut off publishes nothing.
-    timeout-minutes: 20
+    timeout-minutes: 32
     permissions:
       contents: read
       packages: write
@@ -103,13 +105,15 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          # No version here on purpose: with dotnet-version absent the action installs what
-          # global.json names, which is the same file the local build resolves against. Naming a
-          # version in each workflow is an enumeration - one of them is missed by a bump and that
-          # job keeps building on the old SDK, green, until something needs the new one. The
-          # version itself still moves by hand - global.json names an exact build and the action
-          # installs that one - but it moves in one place.
+          # The SDK version comes from global.json alone, the same file the local build resolves
+          # against. Naming the SDK in each workflow is an enumeration - one of them is missed by a
+          # bump and that job keeps building on the old SDK, green, until something needs the new
+          # one. The version itself still moves by hand - global.json names an exact build and the
+          # action installs that one - but it moves in one place.
           global-json-file: global.json
+          # Not the SDK that builds (global.json pins it and allows no roll-forward): this line only
+          # brings the .NET 10 runtime the net10.0 suite runs on. Removing it fails every net10.0 run.
+          dotnet-version: 10.0.x
 
         timeout-minutes: 3
       # Looked up, never downloaded: the packages this job builds and publishes come from the feed, not from a
@@ -138,7 +142,8 @@ jobs:
       - name: Build
         run: dotnet build --no-restore -c Release
 
-        timeout-minutes: 3
+        # Two target frameworks: one took up to 146 seconds, so two take about five minutes.
+        timeout-minutes: 7
       # Whether the pull request that produced this commit already ran the suite on this very tree. Three
       # things must hold, each asked of the side that decides it. The rule on develop requires the
       # "Unit tests" check AND that the branch be up to date with develop before merging, so the tree a
@@ -199,14 +204,15 @@ jobs:
         # The ceiling is sized from the suite, which only grows, and from how much one run differs from
         # the next: green runs took 4m31s, 4m57s and 8m20s on the same suite, and the runs cut off at
         # 5 minutes needed more than 5m13s. Raise it from a cut-off run's step timings, together with
-        # the job's ceiling above.
+        # the job's ceiling above. It runs the suite once per target framework, and recent green runs
+        # took 210 to 294 seconds for one.
         #
         # The suite still runs for a release branch, for a commit with no merged pull request behind it
         # and whenever the lookup above cannot prove its pull request tested this tree: only a develop
         # commit that came through the rule is trusted to have been tested.
         run: dotnet test --no-build -c Release --verbosity normal
 
-        timeout-minutes: 15
+        timeout-minutes: 20
       - name: Pack
         # `pack --no-build` on the multi-targeted family csprojs trips NETSDK1085 on the .NET 10.0.301 SDK
         # ("NoBuild set but Build target invoked") - the outer no-build does not propagate to the inner

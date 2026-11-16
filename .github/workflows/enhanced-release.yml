@@ -186,7 +186,8 @@ jobs:
           retention-days: 3
 
         timeout-minutes: 3
-    timeout-minutes: 5
+    # Build and Pack run once per target framework; the last release's job took 181 seconds for one.
+    timeout-minutes: 12
   test-getting-started:
     needs: [versioning, build-and-pack]
     runs-on: ubuntu-latest

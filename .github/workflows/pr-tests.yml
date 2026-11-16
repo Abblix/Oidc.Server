@@ -83,7 +83,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Two target frameworks double the Build step, which took up to 157 seconds for one.
+    timeout-minutes: 9
     permissions:
       contents: read
     steps:
@@ -138,7 +139,8 @@ jobs:
         # Release, matching what the dev-build publish compiles: a configuration-conditional
         # analyser or a Release-only warning-as-error must fail here rather than after the merge.
         run: dotnet build Abblix.Oidc.slnx --no-restore -c Release
-        timeout-minutes: 3
+        # Every project builds once per target framework: one took up to 157 seconds.
+        timeout-minutes: 6
 
   test:
     # Single required status check aggregating the shards and the multi-framework build: it succeeds
