@@ -355,7 +355,35 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
         var request = ConformantRequest();
         request.Remove(AuthorizationRequest.Parameters.ResponseMode);
 
-        Assert.Equal(ErrorCodes.UnsupportedResponseType, await ErrorOf(await AuthorizeAsync(request)));
+        Assert.Equal(ErrorCodes.InvalidRequest, await ErrorOf(await AuthorizeAsync(request)));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 6.2.1 has the protected resource "set the response header x-fapi-interaction-id to the
+    /// value received from the corresponding FAPI client request header", and a UserInfo request the binder refuses
+    /// before any token is read is answered under the tenant's profile with the value the client sent, and with a
+    /// UUID of the server's own where it sent none.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AUserInfoRequestRefusedAtBinding_CarriesTheInteractionId(bool clientSendsOne)
+    {
+        const string interactionId = "c770aef3-6784-41f7-8e0e-ff5f97bddb3a";
+        const string accessToken = UserInfoRequest.Parameters.AccessToken;
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get, $"{Acme}/connect/userinfo?{accessToken}=one&{accessToken}=two");
+        if (clientSendsOne)
+            request.Headers.Add(HttpRequestHeaders.FapiInteractionId, interactionId);
+
+        var response = await _http!.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.False(response.IsSuccessStatusCode);
+        var answered = Assert.Single(response.Headers.GetValues(HttpRequestHeaders.FapiInteractionId));
+        if (clientSendsOne)
+            Assert.Equal(interactionId, answered);
+        else
+            Assert.True(Guid.TryParseExact(answered, "D", out _), answered);
     }
 
     /// <summary>
@@ -588,6 +616,36 @@ public sealed class Fapi1AdvancedProfileTests : IAsyncLifetime
             await AssertSentToLogin(response);
         else
             Assert.Equal(expectedError, await ErrorOf(response));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2 has the server "only use the parameters included in the signed request object", so
+    /// a scope sent only outside the object is not the request's, and RFC 6749 section 3.3 lets the server refuse a
+    /// request naming no scope rather than serve a default. The object is what is wrong, and RFC 9101 section 7 defines
+    /// invalid_request_object as "The request parameter contains an invalid Request Object": refused so by value with
+    /// the scope outside it, and pushed with a code challenge, so the scope is all it lacks.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ARequestObjectNamingNoScope_IsRefused(bool pushed)
+    {
+        var request = ConformantRequest();
+        request.Remove(AuthorizationRequest.Parameters.Scope);
+
+        HttpResponseMessage response;
+        if (pushed)
+        {
+            request[AuthorizationRequest.Parameters.CodeChallenge] = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+            request[AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256;
+            response = await PushAsync(request);
+        }
+        else
+        {
+            response = await AuthorizeAsync(request);
+        }
+
+        Assert.Equal(ErrorCodes.InvalidRequestObject, await ErrorOf(response));
     }
 
     /// <summary>

@@ -649,6 +649,6 @@ public class UserInfoRequestValidatorTests
         var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateUserInfoRequest(), clientRequest);
 
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(refusal, error with { DPoPAlgorithmsAdmitted = null });
+        Assert.Equal(refusal, error with { DPoPAlgorithmsAdmitted = null, SecurityProfile = null });
     }
 }

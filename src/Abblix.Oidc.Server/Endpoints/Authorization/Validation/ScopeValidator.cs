@@ -38,6 +38,19 @@ public class ScopeValidator(IScopeManager scopeManager) : SyncAuthorizationConte
 	/// </returns>
 	protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
 	{
+		// A response type delivering an ID token exists only in OpenID Connect, so the request is an Authentication
+		// Request, whose scope OpenID Connect Core 1.0 section 3.1.2.1 has "REQUIRED. OpenID Connect requests MUST
+		// contain the openid scope value. If the openid scope value is not present, the behavior is entirely
+		// unspecified." Refusing it is our choice within that unspecified behavior, and a default the client never named
+		// does not stand in for the scope. RFC 6749 section 4.1.2.1 answers with invalid_request: a request "missing a
+		// required parameter" where it names no scope, one that "includes an invalid parameter value" where its scope
+		// leaves openid out
+		if (context.Request.ResponseType.HasFlag(ResponseTypes.IdToken) && !context.ClientRequestsOpenId())
+		{
+			return context.InvalidRequest(
+				$"The {ResponseTypes.IdToken} response type requires the {Scopes.OpenId} scope");
+		}
+
 		// An offline_access the server ignores is set aside before deciding whether the request named a scope at all,
 		// so a request naming it alone is served the default on every route, and the resources the resource validator
 		// settled before this are those of the same served scope

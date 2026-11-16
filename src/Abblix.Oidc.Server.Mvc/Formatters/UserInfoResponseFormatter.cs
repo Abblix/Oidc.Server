@@ -27,10 +27,15 @@ namespace Abblix.Oidc.Server.Mvc.Formatters;
 /// <summary>
 /// Formatter for user information responses.
 /// </summary>
+/// <param name="clock">Stamps the issue time of a UserInfo JWT.</param>
+/// <param name="clientJwtFormatter">Signs and encrypts a UserInfo JWT for its client.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+/// <param name="interactionIds">Decides the <c>x-fapi-interaction-id</c> the response carries.</param>
 public class UserInfoResponseFormatter(
     TimeProvider clock,
     IClientJwtFormatter clientJwtFormatter,
-    ITenantAccessor tenantAccessor) : IUserInfoResponseFormatter<ActionResult>
+    ITenantAccessor tenantAccessor,
+    IFapiInteractionIdResolver interactionIds) : IUserInfoResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Asynchronously formats the response for a user information request.
@@ -48,12 +53,17 @@ public class UserInfoResponseFormatter(
         UserInfoRequest request,
         Result<UserInfoFoundResponse, OidcError> response)
     {
-        return await response.MatchAsync(
+        var result = await response.MatchAsync(
             onSuccess: async found => PrivateWhenTokenInQuery(request, await FormatSuccessAsync(found)),
             onFailure: error => Task.FromResult(
                 // RFC 6750 section 3.1: invalid_token and insufficient_scope carry their own status, and what is
                 // left at a protected resource is invalid_request, which SHOULD be a 400
                 FormatError(error)));
+
+        var clientProfile = response.Match(found => found.ClientInfo.SecurityProfile, error => error.SecurityProfile);
+        return interactionIds.Resolve(tenantAccessor.CurrentTenant(), clientProfile, request.FapiInteractionId) is { } id
+            ? new ActionResultDecorator(result, httpResponse => httpResponse.Headers[HttpRequestHeaders.FapiInteractionId] = id)
+            : result;
     }
 
     /// <summary>

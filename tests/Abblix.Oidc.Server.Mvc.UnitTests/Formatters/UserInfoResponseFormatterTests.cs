@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Endpoints.UserInfo;
 using Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -40,7 +41,8 @@ public class UserInfoResponseFormatterTests
         var formatter = new UserInfoResponseFormatter(
             TimeProvider.System,
             new Mock<IClientJwtFormatter>(MockBehavior.Strict).Object,
-            tenantAccessor);
+            tenantAccessor,
+            new FapiInteractionIdResolver(NullLogger<FapiInteractionIdResolver>.Instance));
 
         Result<UserInfoFoundResponse, OidcError> response = new OidcError(errorCode, "the description");
         return await ActionResultRunner.RunAsync(await formatter.FormatResponseAsync(new UserInfoRequest(), response));
@@ -63,7 +65,7 @@ public class UserInfoResponseFormatterTests
                 It.IsAny<TenantDefinition>(), It.IsAny<Abblix.Jwt.JsonWebToken>(), client, It.IsAny<ClientJwtEncryption>()))
             .ReturnsAsync(new OidcError(ErrorCodes.UnauthorizedClient, "no key to encrypt to"));
         var formatter = new UserInfoResponseFormatter(
-            TimeProvider.System, clientJwtFormatter.Object, tenantAccessor);
+            TimeProvider.System, clientJwtFormatter.Object, tenantAccessor, new FapiInteractionIdResolver(NullLogger<FapiInteractionIdResolver>.Instance));
         Result<UserInfoFoundResponse, OidcError> found =
             new UserInfoFoundResponse(new System.Text.Json.Nodes.JsonObject(), client, tenant.Issuer.OriginalString)
             {
@@ -121,7 +123,7 @@ public class UserInfoResponseFormatterTests
                     encryption.KeyManagementAlgorithm == Abblix.Jwt.EncryptionAlgorithms.KeyManagement.RsaOaep256)))
             .ReturnsAsync("header.encrypted-key.iv.ciphertext.tag");
         var formatter = new UserInfoResponseFormatter(
-            TimeProvider.System, clientJwtFormatter.Object, tenantAccessor);
+            TimeProvider.System, clientJwtFormatter.Object, tenantAccessor, new FapiInteractionIdResolver(NullLogger<FapiInteractionIdResolver>.Instance));
         Result<UserInfoFoundResponse, OidcError> found =
             new UserInfoFoundResponse(new System.Text.Json.Nodes.JsonObject(), client, tenant.Issuer.OriginalString);
 
@@ -166,7 +168,7 @@ public class UserInfoResponseFormatterTests
         var clientJwtFormatter = new ClientJwtFormatter(
             NullLogger<ClientJwtFormatter>.Instance,
             issuer, new ClientEncryptionKeyResolver(issuer, clientKeys.Object, TimeProvider.System), serviceKeys.Object);
-        var formatter = new UserInfoResponseFormatter(TimeProvider.System, clientJwtFormatter, tenantAccessor);
+        var formatter = new UserInfoResponseFormatter(TimeProvider.System, clientJwtFormatter, tenantAccessor, new FapiInteractionIdResolver(NullLogger<FapiInteractionIdResolver>.Instance));
         Result<UserInfoFoundResponse, OidcError> found = new UserInfoFoundResponse(
             new System.Text.Json.Nodes.JsonObject { [Abblix.Jwt.IanaClaimTypes.Sub] = "user-1" },
             client,

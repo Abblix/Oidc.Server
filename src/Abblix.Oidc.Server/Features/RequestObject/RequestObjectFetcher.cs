@@ -147,6 +147,13 @@ public partial class RequestObjectFetcher(
         var strict = options.Value.IgnoreParametersOutsideRequestObject
             || SecurityProfileRequirements.For(issuer, tenant.DefaultSecurityProfile)
                 .RequireStrictRequestObjectProcessing;
+
+        // Served the client's default, an object leaving its scope to the parameters outside it would be answered with a
+        // scope it never named, while FAPI 1.0 Part 2 section 5.2.2 has the server "only use the parameters included in
+        // the signed request object"
+        if (strict && StrictProcessing.WhyRefused(payload) is { } refusal)
+            return InvalidRequestObject(refusal);
+
         var target = strict ? Activator.CreateInstance<T>() : request;
 
         T? updatedRequest;
@@ -169,7 +176,7 @@ public partial class RequestObjectFetcher(
             // In strict mode (RFC 9101 section 6.3) parameters passed outside the request object are silently
             // dropped, so they are surfaced for an operator to see a client sending parameters that never
             // take effect
-            var ignored = IgnoredOutsideParameters.Of(request, requestObject, payload);
+            var ignored = StrictProcessing.IgnoredOutsideParameters(request, requestObject, payload);
             if (ignored.Count > 0)
                 LogParametersOutsideRequestObjectIgnored(string.Join(", ", ignored));
         }

@@ -29,21 +29,33 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// Connect Core 5.3.2). On failure it returns the RFC 6750 / RFC 9449 section 7.1 challenge response that advertises both the
 /// DPoP and Bearer schemes.
 /// </summary>
+/// <param name="clock">Stamps the issue time of a UserInfo JWT.</param>
+/// <param name="clientJwtFormatter">Signs and encrypts a UserInfo JWT for its client.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+/// <param name="interactionIds">Decides the <c>x-fapi-interaction-id</c> the response carries.</param>
 public class UserInfoResponseFormatter(
     TimeProvider clock,
     IClientJwtFormatter clientJwtFormatter,
-    ITenantAccessor tenantAccessor) : IUserInfoResponseFormatter<IResult>
+    ITenantAccessor tenantAccessor,
+    IFapiInteractionIdResolver interactionIds) : IUserInfoResponseFormatter<IResult>
 {
     /// <inheritdoc />
-    public Task<IResult> FormatResponseAsync(
+    public async Task<IResult> FormatResponseAsync(
         UserInfoRequest request,
         Result<UserInfoFoundResponse, OidcError> response)
-        => response.MatchAsync(
+    {
+        var result = await response.MatchAsync(
             onSuccess: async found => PrivateWhenTokenInQuery(request, await FormatSuccessAsync(found)),
             onFailure: error => Task.FromResult(
                 // RFC 6750 section 3.1: invalid_token and insufficient_scope carry their own status, and what is
                 // left at a protected resource is invalid_request, which SHOULD be a 400
                 FormatError(error)));
+
+        var clientProfile = response.Match(found => found.ClientInfo.SecurityProfile, error => error.SecurityProfile);
+        return interactionIds.Resolve(tenantAccessor.CurrentTenant(), clientProfile, request.FapiInteractionId) is { } id
+            ? result.WithResponse(httpResponse => httpResponse.Headers[HttpRequestHeaders.FapiInteractionId] = id)
+            : result;
+    }
 
     /// <summary>
     /// RFC 6750 section 3.1: invalid_token and insufficient_scope carry their own status, and what is left at a

@@ -216,7 +216,7 @@ public class UserInfoHandlerTests
 
         // Assert
         Assert.True(result.TryGetFailure(out var failure));
-        Assert.Equal(error with { PresentedScheme = AccessTokenScheme.Bearer }, failure with { DPoPAlgorithmsAdmitted = null });
+        Assert.Equal(error with { PresentedScheme = AccessTokenScheme.Bearer }, failure with { DPoPAlgorithmsAdmitted = null, SecurityProfile = null });
         _validator.Verify(v => v.ValidateAsync(TestTenant.Matched, userInfoRequest, clientRequest), Times.Once);
         _processor.Verify(p => p.ProcessAsync(TestTenant.Matched, validRequest), Times.Once);
     }

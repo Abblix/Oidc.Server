@@ -112,7 +112,8 @@ public class UserInfoRequestValidator(
 		// RFC 9449 section 7.1: the challenge answering a refusal names the algorithms a new proof may use, and from here
 		// on they are those of the client the token names, whatever refuses the request
 		var outcome = await ValidateForClientAsync(tenant, userInfoRequest, clientRequest, token, jwtAccessToken, clientInfo);
-		return outcome.MapFailure(error => error.NamingTheAlgorithmsOf(tenant, clientInfo));
+		return outcome.MapFailure(error =>
+			error.NamingTheAlgorithmsOf(tenant, clientInfo) with { SecurityProfile = clientInfo.SecurityProfile });
 	}
 
 	/// <summary>

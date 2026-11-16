@@ -17,7 +17,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
 /// <summary>
 /// Default <see cref="IAuthorizationResponseEncoder"/>. Applies the <c>iss</c> (RFC 9207) and
-/// implicit/hybrid <c>scope</c> gating, and - for a JARM (<c>*.jwt</c>) response mode - packs the
+/// access token <c>scope</c> gating, and - for a JARM (<c>*.jwt</c>) response mode - packs the
 /// response parameters into a signed/encrypted <c>response</c> JWT and resolves the delivery mode.
 /// Mutates the response, or replaces it with an error when its JWT cannot be produced, and returns the one to
 /// deliver; the transport layer only maps the encoded response onto the wire.
@@ -35,15 +35,14 @@ public class AuthorizationResponseEncoder(
 		{
 			case SuccessfullyAuthenticated success:
 			{
-				// Scope rides the authorization response only for implicit/hybrid flows (OIDC Core
-				// section 3.2.2.5 / section 3.3.2.5), where the response itself carries tokens. The code flow returns
-				// only code + state (+ optional iss per RFC 9207); emitting scope there is flagged by
-				// OIDF Conformance as "unexpected parameters" and disallowed by FAPI 2.0 section 5.3.1.
-				// The value is the GRANTED scope (matching the issued token), not the requested set, so a
+				// RFC 6749 section 4.2.2 defines the scope response parameter as "The scope of the access token", and
+				// OpenID Connect Core 1.0 sections 3.1.2.5, 3.2.2.5 and 3.3.2.5 list no scope for a response returning
+				// none, so it rides only a response carrying an access token: code id_token and the code flow get
+				// none. The value is the GRANTED scope (matching the issued token), not the requested set, so a
 				// consent-narrowed grant is advertised truthfully per RFC 6749 section 3.3.
 				var carriesTokens = success is { AccessToken: not null } or { IdToken: not null };
 				success.Issuer = IssuerOf(tenant);
-				success.Scope = carriesTokens ? string.Join(' ', success.GrantedScopes) : null;
+				success.Scope = success.AccessToken is not null ? string.Join(' ', success.GrantedScopes) : null;
 
 				return await PackJwtAsync(tenant, success, carriesTokens, SuccessParameters(success));
 			}

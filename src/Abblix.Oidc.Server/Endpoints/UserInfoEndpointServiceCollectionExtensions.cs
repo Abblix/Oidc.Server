@@ -43,6 +43,7 @@ public static class UserInfoEndpointServiceCollectionExtensions
         services.AddTelemetryDecorator<IUserInfoRequestProcessor, ObservedUserInfoRequestProcessor>();
         services.TryAddSingleton<IDPoPUserInfoValidator, UserInfo.Validation.DPoPUserInfoValidator>();
         services.TryAddSingleton<IMtlsUserInfoValidator, UserInfo.Validation.MtlsUserInfoValidator>();
+        services.TryAddSingleton<IFapiInteractionIdResolver, FapiInteractionIdResolver>();
         return services;
     }
 }

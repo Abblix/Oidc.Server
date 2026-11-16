@@ -733,4 +733,60 @@ public class ScopeValidatorTests
 
         Assert.Equal(ErrorCodes.InvalidScope, result?.Error);
     }
+
+    /// <summary>
+    /// A response type delivering an ID token makes the request an OpenID Connect Authentication Request, whose
+    /// scope OpenID Connect Core 1.0 section 3.1.2.1 has REQUIRED and containing openid, and section 3.1.2.2 has the
+    /// server "verify that all the REQUIRED parameters are present". A default the client never named does not stand
+    /// in for it, nor does a scope without openid, on the first pass or on the request read back from a page.
+    /// </summary>
+    [Theory]
+    [InlineData(new string[0], new[] { Scopes.OpenId })]
+    [InlineData(new string[0], null)]
+    [InlineData(new[] { Scopes.Profile }, null)]
+    public async Task AnIdTokenRequest_NotNamingOpenId_IsRefusedAsMissingARequiredParameter(
+        string[] named, string[]? defaultScope)
+    {
+        var context = CreateContext(
+            named,
+            FlowTypes.Hybrid,
+            responseType: [ResponseTypes.Code, ResponseTypes.IdToken]);
+        context.ClientInfo.DefaultScope = defaultScope;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
+    }
+
+    /// <summary>
+    /// The request read back from a page carries the default it was served with and the mark that the client named
+    /// none, and is refused the same as on the first pass.
+    /// </summary>
+    [Fact]
+    public async Task AnIdTokenRequest_ReadBackWithAServedDefault_IsRefused()
+    {
+        var context = CreateContext(
+            [Scopes.OpenId],
+            FlowTypes.Hybrid,
+            responseType: [ResponseTypes.Code, ResponseTypes.IdToken]);
+        context.Request = context.Request with { ClientNamedNoScope = true };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
+    }
+
+    /// <summary>
+    /// The positive control of the rule above: an ID token request naming openid is served.
+    /// </summary>
+    [Fact]
+    public async Task AnIdTokenRequest_NamingOpenId_IsServed()
+    {
+        var context = CreateContext(
+            [Scopes.OpenId],
+            FlowTypes.Hybrid,
+            responseType: [ResponseTypes.Code, ResponseTypes.IdToken]);
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+    }
 }
