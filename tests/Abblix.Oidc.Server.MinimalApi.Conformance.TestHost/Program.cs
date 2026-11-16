@@ -224,10 +224,20 @@ app.MapPost("/login", async (
         var pending = await pendingRequests.TryGetAsync(tenant, new Uri(requestUri));
         var sessionId = sessionIdGenerator.GenerateSessionId();
 
-        // Refusing still takes the user's sign-in: the server asks for consent only of a signed-in user, and a consent
-        // granting nothing is how the refusal reaches the client
-        if (action == "deny")
-            RefusedAuthorizations.RefuseIn(sessionId);
+        switch (action)
+        {
+            case "allow":
+                break;
+
+            // Refusing still takes the user's sign-in: the server asks for consent only of a signed-in user, and a
+            // consent granting nothing is how the refusal reaches the client
+            case "deny":
+                RefusedAuthorizations.RefuseIn(sessionId);
+                break;
+
+            default:
+                return Results.BadRequest("The action is neither allow nor deny");
+        }
 
         await authService.SignInAsync(new AuthSession(
             ConformanceUser.Subject,
