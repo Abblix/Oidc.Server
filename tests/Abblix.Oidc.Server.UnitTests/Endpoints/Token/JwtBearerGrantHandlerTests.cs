@@ -9,9 +9,11 @@
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using System;
 using System.Linq;
+using System.Threading;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
@@ -697,6 +699,7 @@ public class JwtBearerGrantHandlerTests
 	private record Mocks(
 		Mock<IJsonWebTokenValidator> JwtValidator,
 		Mock<IJwtBearerIssuerProvider> IssuerProvider,
+		Mock<IReplayCache> ReplayCache,
 		Mock<IRequestInfoProvider> RequestInfoProvider,
 		Mock<ISessionIdGenerator> SessionIdGenerator,
 		FakeTimeProvider TimeProvider);
@@ -717,6 +720,10 @@ public class JwtBearerGrantHandlerTests
 	{
 		var jwtValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
 		var issuerProvider = new Mock<IJwtBearerIssuerProvider>(MockBehavior.Strict);
+		var replayCache = new Mock<IReplayCache>(MockBehavior.Strict);
+		replayCache
+			.Setup(c => c.TryReserveAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+			.ReturnsAsync(true);
 		var requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
 		var sessionIdGenerator = new Mock<ISessionIdGenerator>(MockBehavior.Strict);
 		var timeProvider = fixedTime.HasValue
@@ -763,12 +770,13 @@ public class JwtBearerGrantHandlerTests
 			logger.Object,
 			new ProfiledJwtValidator(jwtValidator.Object),
 			issuerProvider.Object,
+			replayCache.Object,
 			requestInfoProvider.Object,
 			sessionIdGenerator.Object,
 			timeProvider,
 			SingleIssuer.LicensedCatalog);
 
-		return (handler, new Mocks(jwtValidator, issuerProvider, requestInfoProvider, sessionIdGenerator, timeProvider));
+		return (handler, new Mocks(jwtValidator, issuerProvider, replayCache, requestInfoProvider, sessionIdGenerator, timeProvider));
 	}
 
 	private static JsonWebToken CreateValidJwt()
@@ -878,9 +886,9 @@ public class JwtBearerGrantHandlerTests
 		jwt.Payload.JwtId = "unique-jti-12345";
 		SetupValidJwtValidation(mocks.JwtValidator, jwt);
 		SetupTrustedIssuer(mocks.IssuerProvider, Issuer);
-		mocks.IssuerProvider
-			.Setup(p => p.IsReplayedAsync("unique-jti-12345", It.IsAny<DateTimeOffset?>()))
-			.ReturnsAsync(true);
+		mocks.ReplayCache
+			.Setup(c => c.TryReserveAsync("unique-jti-12345", It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+			.ReturnsAsync(false);
 		var clientInfo = new ClientInfo(ClientId);
 		var tokenRequest = new TokenRequest
 		{
@@ -1356,10 +1364,6 @@ public class JwtBearerGrantHandlerTests
 		issuerProvider
 			.Setup(p => p.GetTrustedIssuerAsync(TestTenant.Matched, issuer))
 			.ReturnsAsync(trustedIssuer);
-
-		issuerProvider
-			.Setup(p => p.IsReplayedAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset?>()))
-			.ReturnsAsync(false);
 	}
 
 	/// <summary>
