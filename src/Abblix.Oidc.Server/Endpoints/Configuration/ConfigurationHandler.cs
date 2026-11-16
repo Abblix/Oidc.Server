@@ -43,7 +43,8 @@ public sealed class ConfigurationHandler(
 	IAuthServiceKeysProvider serviceKeys,
 	IEnumerable<IAuthenticationCompletionHandler> cibaCompletionHandlers,
 	IAcrMetadataProvider acrMetadata,
-	Features.RichAuthorizationRequests.IAuthorizationDetailsMetadataProvider authorizationDetailsMetadata) : IConfigurationHandler
+	Features.RichAuthorizationRequests.IAuthorizationDetailsMetadataProvider authorizationDetailsMetadata,
+	EncryptionAlgorithmsProvider encryptionAlgorithms) : IConfigurationHandler
 {
 	// CIBA metadata is advertised only when the CIBA feature is opted in (AddBackChannelAuthentication), the sole
 	// registrar of IAuthenticationCompletionHandler. Resolved from a collection so discovery - an always-on
@@ -162,7 +163,8 @@ public sealed class ConfigurationHandler(
 				tenant,
 				await serviceKeys.GetInboundKeyManagementAlgorithmsAsync(
 					tenant,
-					jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported))
+					jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported,
+					encryptionAlgorithms))
 			.ToArray();
 
 		return algorithms.Length > 0 ? algorithms : null;

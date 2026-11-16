@@ -164,10 +164,11 @@ public class UserInfoResponseFormatterTests
         var serviceKeys = new Mock<Abblix.Oidc.Server.Common.Interfaces.IAuthServiceKeysProvider>();
         serviceKeys.Setup(k => k.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()))
             .Returns(System.Linq.AsyncEnumerable.Empty<Abblix.Jwt.JsonWebKey>());
-        var issuer = new ProfiledJwtIssuer(Get<Abblix.Jwt.IJsonWebTokenCreator>());
+        var issuer = new ProfiledJwtIssuer(Get<Abblix.Jwt.IJsonWebTokenCreator>(), Get<Abblix.Jwt.EncryptionAlgorithmsProvider>());
         var clientJwtFormatter = new ClientJwtFormatter(
             NullLogger<ClientJwtFormatter>.Instance,
-            issuer, new ClientEncryptionKeyResolver(issuer, clientKeys.Object, TimeProvider.System), serviceKeys.Object);
+            issuer, new ClientEncryptionKeyResolver(
+                issuer, clientKeys.Object, TimeProvider.System, Get<Abblix.Jwt.EncryptionAlgorithmsProvider>()), serviceKeys.Object);
         var formatter = new UserInfoResponseFormatter(TimeProvider.System, clientJwtFormatter, tenantAccessor, new FapiInteractionIdResolver(NullLogger<FapiInteractionIdResolver>.Instance));
         Result<UserInfoFoundResponse, OidcError> found = new UserInfoFoundResponse(
             new System.Text.Json.Nodes.JsonObject { [Abblix.Jwt.IanaClaimTypes.Sub] = "user-1" },

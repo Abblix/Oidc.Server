@@ -50,11 +50,13 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <param name="serviceKeys">The tenant's own keys, which a request object is encrypted to.</param>
 /// <param name="clientInfoProvider">Supplies the stored client an update keeps the secrets of.</param>
 /// <param name="timeProvider">Supplies the time a stored secret's expiry is judged against.</param>
+/// <param name="encryptionAlgorithms">Tells which key types a key management algorithm is carried out with.</param>
 public class EncryptedResponseAlgorithmsValidator(
     IJwtAlgorithmsProvider jwtAlgorithms,
     IAuthServiceKeysProvider serviceKeys,
     IClientInfoProvider clientInfoProvider,
-    TimeProvider timeProvider) : IClientRegistrationContextValidator
+    TimeProvider timeProvider,
+    EncryptionAlgorithmsProvider encryptionAlgorithms) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
@@ -108,7 +110,8 @@ public class EncryptedResponseAlgorithmsValidator(
 
         return await serviceKeys.GetInboundKeyManagementAlgorithmsAsync(
             tenant,
-            jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported);
+            jwtAlgorithms.RequestObjectEncryptionAlgValuesSupported,
+            encryptionAlgorithms);
     }
 
     private OidcError? ValidateSupported(
@@ -179,12 +182,12 @@ public class EncryptedResponseAlgorithmsValidator(
         string algorithm,
         string contentEncryption)
     {
-        if (!ClientSecretEncryptionKey.IsSymmetric(algorithm))
+        if (!ClientSecretEncryptionKey.IsSymmetric(encryptionAlgorithms, algorithm))
         {
             if (context.Request.JwksUri is not null || Array.Exists(
                     context.Request.Jwks?.Keys ?? [],
                     key => key.Usage is (null or PublicKeyUsages.Encryption) &&
-                           ClientEncryptionKeyResolver.Carries(key, algorithm)))
+                           encryptionAlgorithms.CanPerform(key, algorithm)))
             {
                 return null;
             }

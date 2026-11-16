@@ -244,6 +244,8 @@ public class JwtEncryptionTests
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
+        // The mitigation guards hosts that opted into RSA1_5; a key is tried only for an algorithm registered for it
+        services.AddRsaPkcs1KeyManagement();
         // Appended after AddJsonWebTokens so keyed last-wins resolution routes A256GCM to the spy.
         services.AddKeyedSingleton<IContentEncryptionAlgorithm>(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, spy);
         await using var provider = services.BuildServiceProvider();

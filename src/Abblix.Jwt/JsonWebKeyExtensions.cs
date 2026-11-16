@@ -59,8 +59,7 @@ public static class JsonWebKeyExtensions
     /// <summary>
     /// Asynchronously retrieves the first <see cref="JsonWebKey"/> matching an optional algorithm and an
     /// optional key id. This is the key-id-aware sibling of <see cref="FirstByAlgorithmAsync(IAsyncEnumerable{JsonWebKey}, string?)"/>:
-    /// signing passes the token's <c>alg</c> and pinned <c>kid</c>; encryption passes a <c>null</c> algorithm
-    /// (the key-management <c>alg</c> is derived from the chosen key afterwards) and only the pinned <c>kid</c>.
+    /// signing passes the token's <c>alg</c> and pinned <c>kid</c>.
     /// </summary>
     /// <param name="credentials">The asynchronous sequence of <see cref="JsonWebKey"/> objects.</param>
     /// <param name="algorithm">The algorithm to match, or <c>null</c> to not filter by algorithm. A key qualifies
@@ -70,10 +69,27 @@ public static class JsonWebKeyExtensions
     /// <returns>The first matching key, or <c>null</c> when the sequence yields none and neither filter was
     /// applied. Throws when a filter was applied but nothing matched, so a pinned key id or a required
     /// algorithm that resolves to no key fails loudly rather than silently downgrading.</returns>
-    public static async Task<JsonWebKey?> FirstByAlgorithmAsync(
+    public static Task<JsonWebKey?> FirstByAlgorithmAsync(
         this IAsyncEnumerable<JsonWebKey> credentials,
         string? algorithm,
         string? keyId)
+        => credentials.FirstByAlgorithmAsync(algorithm, keyId, CanPerform);
+
+    /// <summary>
+    /// The same selection as <see cref="FirstByAlgorithmAsync(IAsyncEnumerable{JsonWebKey}, string?, string?)"/>, with
+    /// whether a key may be used for the algorithm answered by <paramref name="canPerform"/>: a JWE key management
+    /// algorithm is answered by <see cref="EncryptionAlgorithmsProvider.CanPerform"/>, which reads the registered
+    /// algorithms, a JWS one by <see cref="CanPerform"/>.
+    /// </summary>
+    /// <param name="credentials">The asynchronous sequence of <see cref="JsonWebKey"/> objects.</param>
+    /// <param name="algorithm">The algorithm to match, or <c>null</c> to not filter by algorithm.</param>
+    /// <param name="keyId">The <c>kid</c> to match, or <c>null</c> to not filter by key id.</param>
+    /// <param name="canPerform">Whether a key may be used for an algorithm.</param>
+    public static async Task<JsonWebKey?> FirstByAlgorithmAsync(
+        this IAsyncEnumerable<JsonWebKey> credentials,
+        string? algorithm,
+        string? keyId,
+        Func<JsonWebKey, string, bool> canPerform)
     {
         if (algorithm is SigningAlgorithms.None)
             return null;
@@ -83,7 +99,7 @@ public static class JsonWebKeyExtensions
 
         if (algorithm.HasValue())
         {
-            credentials = credentials.Where(key => key.CanPerform(algorithm));
+            credentials = credentials.Where(key => canPerform(key, algorithm));
         }
 
         var key = await credentials.FirstOrDefaultAsync();

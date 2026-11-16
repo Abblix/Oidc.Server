@@ -34,15 +34,18 @@ internal static class ClientSecretEncryptionKey
     private const int AesCbcHmacKeyParts = 2;
 
     /// <summary>
-    /// A key of the octet type, asked which algorithms its type carries out, so the symmetric family is the one
-    /// <see cref="AlgorithmSupportExtensions"/> names rather than a second list.
+    /// A key of the octet type, asked which algorithms are registered for its type, so the symmetric family is the one
+    /// the registry of key management algorithms holds rather than a second list.
     /// </summary>
     private static readonly OctetJsonWebKey OctetKeyType = new();
 
     /// <summary>
     /// Whether the key management algorithm is carried out with a symmetric key.
     /// </summary>
-    public static bool IsSymmetric(string keyManagementAlgorithm) => OctetKeyType.SupportsAlgorithm(keyManagementAlgorithm);
+    /// <param name="encryptionAlgorithms">The registry of key management algorithms.</param>
+    /// <param name="keyManagementAlgorithm">The algorithm asked about.</param>
+    public static bool IsSymmetric(EncryptionAlgorithmsProvider encryptionAlgorithms, string keyManagementAlgorithm)
+        => encryptionAlgorithms.CanPerform(OctetKeyType, keyManagementAlgorithm);
 
     /// <summary>
     /// Whether a JWT can be encrypted to a client under the key management algorithm at all: an asymmetric one to a key
@@ -52,8 +55,10 @@ internal static class ClientSecretEncryptionKey
     /// <c>dir</c> is asked with the content encryption algorithm a client registering none is sent
     /// (<see cref="ClientJwtEncryption.DefaultContentEncryptionAlgorithm"/>), so it counts as servable.
     /// </remarks>
-    public static bool CanBeServed(string keyManagementAlgorithm)
-        => !IsSymmetric(keyManagementAlgorithm) ||
+    /// <param name="encryptionAlgorithms">The registry of key management algorithms.</param>
+    /// <param name="keyManagementAlgorithm">The algorithm asked about.</param>
+    public static bool CanBeServed(EncryptionAlgorithmsProvider encryptionAlgorithms, string keyManagementAlgorithm)
+        => !IsSymmetric(encryptionAlgorithms, keyManagementAlgorithm) ||
            SizeInBytes(keyManagementAlgorithm, ClientJwtEncryption.DefaultContentEncryptionAlgorithm) is not null;
 
     /// <summary>

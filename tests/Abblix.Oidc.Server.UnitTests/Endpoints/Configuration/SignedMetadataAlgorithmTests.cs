@@ -43,7 +43,7 @@ public class SignedMetadataAlgorithmTests
         keys.Setup(k => k.GetSigningKeys(TestTenant.Matched, true)).Returns(() => all.ToAsyncEnumerable());
         var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
 
-        await new SignedMetadataProvider(new ProfiledJwtIssuer(creator.Object), keys.Object, TimeProvider.System)
+        await new SignedMetadataProvider(new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every), keys.Object, TimeProvider.System)
             .SignAsync(tenant, new Abblix.Oidc.Server.Model.ConfigurationResponse
             {
                 Issuer = tenant.Issuer.OriginalString,

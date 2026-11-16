@@ -10,7 +10,7 @@ using System.Collections.Frozen;
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Whether a key's material can carry out an algorithm, one rule per algorithm (Specification).
+/// Whether a key's material can carry out a JWS signing algorithm, one rule per algorithm (Specification).
 /// </summary>
 public static class AlgorithmSupportExtensions
 {
@@ -36,49 +36,17 @@ public static class AlgorithmSupportExtensions
                 key => key.KeyType == JsonWebKeyTypes.Octet
             ),
 
-            // JWE key management, RFC 7518 section 4.1. The same question, asked of the recipient's key.
-            (
-                [
-                    EncryptionAlgorithms.KeyManagement.Rsa1_5,
-                    EncryptionAlgorithms.KeyManagement.RsaOaep,
-                    EncryptionAlgorithms.KeyManagement.RsaOaep256,
-                ],
-                key => key.KeyType == JsonWebKeyTypes.Rsa
-            ),
-
-            // Key agreement needs a curve, and any of the three will do: unlike ECDSA, the algorithm name does
-            // not pin one, so the curve is carried in the ephemeral key instead.
-            (
-                [
-                    EncryptionAlgorithms.KeyManagement.EcdhEs,
-                    EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW,
-                    EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW,
-                    EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW,
-                ],
-                key => key.KeyType == JsonWebKeyTypes.EllipticCurve
-            ),
-            (
-                [
-                    EncryptionAlgorithms.KeyManagement.Aes128KW,
-                    EncryptionAlgorithms.KeyManagement.Aes192KW,
-                    EncryptionAlgorithms.KeyManagement.Aes256KW,
-                    EncryptionAlgorithms.KeyManagement.Aes128Gcmkw,
-                    EncryptionAlgorithms.KeyManagement.Aes192Gcmkw,
-                    EncryptionAlgorithms.KeyManagement.Aes256Gcmkw,
-                    EncryptionAlgorithms.KeyManagement.Dir,
-                    EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW,
-                    EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW,
-                    EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW,
-                ],
-                key => key.KeyType == JsonWebKeyTypes.Octet
-            ),
+            // JWE key management is not here: which key type an algorithm is carried out with is the registration
+            // of its IKeyManagementAlgorithm<TJsonWebKey>, a host's included, and EncryptionAlgorithmsProvider.CanPerform
+            // asks that registry
         }
         .SelectMany(rule => rule.Algorithms, (rule, algorithm) => KeyValuePair.Create(algorithm, rule.IsMetBy))
         .ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>
-    /// Whether this key can carry out the given algorithm - JWS signing or JWE key management - judged by the
-    /// key's own material rather than by what it declares.
+    /// Whether this key can carry out the given JWS signing algorithm, judged by the key's own material rather than
+    /// by what it declares. A JWE key management algorithm is asked of
+    /// <see cref="EncryptionAlgorithmsProvider.CanPerform"/>, which reads the registered algorithms.
     /// </summary>
     /// <remarks>
     /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL, so a key may simply not say what it is for - and a key

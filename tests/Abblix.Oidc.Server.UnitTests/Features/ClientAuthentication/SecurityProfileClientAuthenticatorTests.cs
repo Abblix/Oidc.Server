@@ -26,6 +26,7 @@ using Moq;
 using Xunit;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -76,7 +77,7 @@ public class SecurityProfileClientAuthenticatorTests
         var authenticator = new SecurityProfileClientAuthenticator(
             inner.Object,
             logger,
-            new ClientEncryptionKeyResolver(new ProfiledJwtIssuer(creator.Object), keys.Object, TimeProvider.System),
+            new ClientEncryptionKeyResolver(new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every), keys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
             Options.Create(options));
 
         return (authenticator, inner);

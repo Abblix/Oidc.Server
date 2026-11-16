@@ -74,7 +74,7 @@ public class ConfigurationHandlerTests
             Mock.Of<IAuthServiceKeysProvider>(MockBehavior.Strict),
             [],
             acr.Object,
-            Mock.Of<IAuthorizationDetailsMetadataProvider>());
+            Mock.Of<IAuthorizationDetailsMetadataProvider>(), TestEncryptionAlgorithms.Every);
 
         var document = await handler.HandleAsync(SingleIssuer.Tenant);
 
@@ -128,7 +128,7 @@ public class ConfigurationHandlerTests
             keys,
             [],
             Mock.Of<IAcrMetadataProvider>(),
-            Mock.Of<IAuthorizationDetailsMetadataProvider>());
+            Mock.Of<IAuthorizationDetailsMetadataProvider>(), TestEncryptionAlgorithms.Every);
 
         var document = await handler.HandleAsync(new TestIssuer { DefaultSecurityProfile = profile }.ToTenant());
 
@@ -437,9 +437,9 @@ public class ConfigurationHandlerTests
             inner.Object,
             NullLogger<SecurityProfileClientAuthenticator>.Instance,
             new ClientEncryptionKeyResolver(
-                new ProfiledJwtIssuer(Mock.Of<IJsonWebTokenCreator>(MockBehavior.Strict)),
+                new ProfiledJwtIssuer(Mock.Of<IJsonWebTokenCreator>(MockBehavior.Strict), TestEncryptionAlgorithms.Every),
                 Mock.Of<IClientKeysProvider>(MockBehavior.Strict),
-                TimeProvider.System),
+                TimeProvider.System, TestEncryptionAlgorithms.Every),
             Options.Create(options));
     }
 
@@ -576,6 +576,6 @@ public class ConfigurationHandlerTests
             keys,
             cibaCompletionHandler is null ? [] : [cibaCompletionHandler],
             Mock.Of<IAcrMetadataProvider>(),
-            Mock.Of<IAuthorizationDetailsMetadataProvider>());
+            Mock.Of<IAuthorizationDetailsMetadataProvider>(), TestEncryptionAlgorithms.Every);
     }
 }

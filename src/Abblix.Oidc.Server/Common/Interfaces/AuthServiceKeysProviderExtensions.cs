@@ -72,19 +72,23 @@ public static partial class AuthServiceKeysProviderExtensions
     /// <summary>
     /// The key management algorithms of <paramref name="algorithms"/> an inbound JWE to <paramref name="tenant"/> can
     /// be encrypted under: those one of its <see cref="GetInboundEncryptionKeys">inbound encryption keys</see> can be
-    /// used with, by the algorithm it declares or, declaring none, by its material. The inbound decryption tries a
-    /// key only under the same condition, so a client using an algorithm listed here meets a key that opens it.
+    /// used with, by <see cref="EncryptionAlgorithmsProvider.CanPerform"/>. The inbound decryption tries a key only
+    /// under the same condition, so a client using an algorithm listed here meets a key that opens it.
     /// </summary>
     /// <param name="provider">The provider of the service's keys.</param>
     /// <param name="tenant">The tenant whose keys are asked for.</param>
     /// <param name="algorithms">The key management algorithms otherwise supported.</param>
+    /// <param name="encryptionAlgorithms">Tells which keys may be used with a key management algorithm.</param>
     public static async Task<string[]> GetInboundKeyManagementAlgorithmsAsync(
         this IAuthServiceKeysProvider provider,
         TenantDefinition tenant,
-        IEnumerable<string> algorithms)
+        IEnumerable<string> algorithms,
+        EncryptionAlgorithmsProvider encryptionAlgorithms)
     {
         var keys = await provider.GetInboundEncryptionKeys(tenant).ToArrayAsync();
-        return algorithms.Where(algorithm => Array.Exists(keys, key => key.CanPerform(algorithm))).ToArray();
+        return algorithms
+            .Where(algorithm => Array.Exists(keys, key => encryptionAlgorithms.CanPerform(key, algorithm)))
+            .ToArray();
     }
 
     /// <summary>

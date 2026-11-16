@@ -5,7 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Xunit;
@@ -75,8 +74,6 @@ public class JsonWebKeyExtensionsTests
     [InlineData(SigningAlgorithms.PS512, true)]
     [InlineData(SigningAlgorithms.ES256, false)]   // needs an EC key on P-256
     [InlineData(SigningAlgorithms.HS256, false)]   // needs a symmetric key
-    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, true)]
-    [InlineData(EncryptionAlgorithms.KeyManagement.EcdhEs, false)]
     [InlineData(SigningAlgorithms.None, false)]
     [InlineData("made-up", false)]
     public void RsaKey_SupportsExactlyTheAlgorithmsItsMaterialCanPerform(string algorithm, bool expected)
@@ -97,7 +94,6 @@ public class JsonWebKeyExtensionsTests
     [InlineData(EllipticCurveTypes.P384, SigningAlgorithms.ES384, true)]
     [InlineData(EllipticCurveTypes.P521, SigningAlgorithms.ES512, true)]
     [InlineData(EllipticCurveTypes.P256, SigningAlgorithms.RS256, false)]
-    [InlineData(EllipticCurveTypes.P256, EncryptionAlgorithms.KeyManagement.EcdhEs, true)]
     public void EllipticCurveKey_IsJudgedByItsCurve(string curve, string algorithm, bool expected)
     {
         var key = JsonWebKeyFactory.CreateEllipticCurve(curve, SigningAlgorithms.ES256);
@@ -106,9 +102,9 @@ public class JsonWebKeyExtensionsTests
     }
 
     /// <summary>
-    /// Every algorithm this library recognizes, except "none", is met by some key: the requirement table behind
+    /// Every signing algorithm this library recognizes, except "none", is met by some key: the requirement table behind
     /// <see cref="AlgorithmSupportExtensions.SupportsAlgorithm"/> is held complete here rather than by a default arm,
-    /// so an algorithm added to either catalog fails this test until its key requirement is written down.
+    /// so an algorithm added to the catalog fails this test until its key requirement is written down.
     /// </summary>
     [Theory]
     [MemberData(nameof(RecognizedAlgorithms))]
@@ -130,13 +126,7 @@ public class JsonWebKeyExtensionsTests
     {
         get
         {
-            var keyManagement = typeof(EncryptionAlgorithms.KeyManagement)
-                .GetFields(BindingFlags.Public | BindingFlags.Static)
-                .Where(constant => constant.IsLiteral)
-                .Select(constant => (string)constant.GetRawConstantValue()!);
-
-            return new TheoryData<string>(
-                SigningAlgorithms.Known.Where(algorithm => algorithm != SigningAlgorithms.None).Concat(keyManagement));
+            return new TheoryData<string>(SigningAlgorithms.Known.Where(algorithm => algorithm != SigningAlgorithms.None));
         }
     }
 }

@@ -11,6 +11,7 @@ using System.Linq;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Configuration;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 using Moq;
 
@@ -29,7 +30,7 @@ public class JwtAlgorithmsProviderTests
     private readonly Mock<IJsonWebTokenCreator> _creator = new(MockBehavior.Strict);
     private readonly Mock<IJsonWebTokenValidator> _validator = new(MockBehavior.Strict);
 
-    private JwtAlgorithmsProvider CreateProvider() => new(_creator.Object, _validator.Object);
+    private JwtAlgorithmsProvider CreateProvider() => new(_creator.Object, _validator.Object, TestEncryptionAlgorithms.Every);
 
     [Fact]
     public void DpopSigningAlgorithmsSupported_ValidatorReturnsNothingInWhitelist_ReturnsEmpty()

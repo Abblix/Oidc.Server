@@ -56,7 +56,7 @@ public class ClientValidatorTests
         => new(
             new Mock<ILogger<ClientValidator>>(MockBehavior.Loose).Object,
             _clientInfoProvider.Object,
-            new ClientEncryptionKeyResolver(new ProfiledJwtIssuer(EncryptingWithRsa()), _clientKeys.Object, TimeProvider.System),
+            new ClientEncryptionKeyResolver(new ProfiledJwtIssuer(EncryptingWithRsa(), TestEncryptionAlgorithms.Every), _clientKeys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
             Options.Create(options));
 
     /// <summary>A creator performing the RSA key management algorithms, which are all a key below declares.</summary>
