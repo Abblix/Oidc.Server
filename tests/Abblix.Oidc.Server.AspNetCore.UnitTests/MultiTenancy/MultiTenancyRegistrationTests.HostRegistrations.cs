@@ -25,15 +25,54 @@ public partial class MultiTenancyRegistrationTests
 {
     private const string GlobexIssuer = "https://auth.example.com/tenants/globex";
 
-    private static ServiceProvider ServingWithHostRegistrations(HostRegistrations registrations)
+    private static ServiceProvider ServingWithHostRegistrations(
+        HostRegistrations? registrations,
+        bool registeredFirst = false)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddOptions<OidcOptions>();
+        if (registrations != null && registeredFirst)
+            services.AddSingleton<ITenantClientRegistrationStore>(registrations);
         services.AddClientInformation();
-        services.AddSingleton<ITenantClientRegistrationStore>(registrations);
+        if (registrations != null && !registeredFirst)
+            services.AddSingleton<ITenantClientRegistrationStore>(registrations);
         services.AddServerStorage().ServeTenants(_ => { });
         return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// The host's store keeps the registrations whether the host registers it before or after the server's services.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AHostStore_KeepsTheRegistrations_InWhicheverOrderItIsRegistered(bool registeredFirst)
+    {
+        var registrations = new HostRegistrations();
+        using var provider = ServingWithHostRegistrations(registrations, registeredFirst);
+        var manager = provider.GetRequiredService<IClientInfoManager>();
+
+        EnterTenant(provider, Tenant("acme", "1"));
+        Assert.True(await manager.TryAddClientAsync(Entered(provider), Registration("app")));
+        Assert.Equal(("acme", "1", "APP"), Assert.Single(registrations.Held.Keys));
+    }
+
+    /// <summary>
+    /// A host registering no store of its own finds none under the contract: the server keeps the registrations in
+    /// memory without offering that store as the host's.
+    /// </summary>
+    [Fact]
+    public async Task AHostWithoutAStore_FindsNoneUnderTheContract_AndRegistrationsAreKept()
+    {
+        using var provider = ServingWithHostRegistrations(null);
+
+        EnterTenant(provider, Tenant("acme", "1"));
+        Assert.True(await provider.GetRequiredService<IClientInfoManager>().TryAddClientAsync(
+            Entered(provider), Registration("app")));
+        Assert.NotNull(await provider.GetRequiredService<IClientInfoProvider>().TryFindClientAsync(
+            Entered(provider), "app"));
+        Assert.Null(provider.GetService<ITenantClientRegistrationStore>());
     }
 
     private static TenantDefinition Tenant(string id, string generation, params string[] configured) => new()

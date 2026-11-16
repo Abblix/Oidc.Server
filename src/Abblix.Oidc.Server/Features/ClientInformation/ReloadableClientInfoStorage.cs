@@ -45,7 +45,7 @@ internal partial class ReloadableClientInfoStorage(
     ILogger<ReloadableClientInfoStorage> logger,
     ITenantCatalog catalog,
     IIssuerLocal<Dictionary<string, ClientInfo>> configured,
-    IClientRegistrations registrations)
+    ITenantClientRegistrationStore registrations)
     : IClientInfoStore
 {
     private Dictionary<string, ClientInfo> ConfiguredAt(TenantDefinition tenant)
@@ -63,7 +63,10 @@ internal partial class ReloadableClientInfoStorage(
     /// </summary>
     private Dictionary<string, ClientInfo> Evicting(TenantDefinition tenant, Dictionary<string, ClientInfo> clients)
     {
-        foreach (var clientId in registrations.DropHeld(
+        if (registrations is not IssuerClientRegistrations held)
+            return clients;
+
+        foreach (var clientId in held.DropHeld(
                      tenant, id => clients.ContainsKey(id) && ConfiguredInForce(tenant, id)))
         {
             LogRegistrationEvicted(clientId, tenant.Id);
