@@ -68,6 +68,42 @@ public partial class BackChannelAuthenticationTests
     }
 
     /// <summary>
+    /// The answer to an expired auth_req_id does not depend on how late the poll comes. A ping client polls when it is
+    /// notified, and CIBA Core 1.0 section 10.2 needs no notification sent for an expired request, so its last poll can
+    /// come well after a short expiry: polled at more than twice its expires_in, the request is still answered
+    /// expired_token rather than as one never issued. That answer is given once, and the request is gone after it.
+    /// </summary>
+    [Fact]
+    public async Task An_auth_req_id_polled_long_after_a_short_expiry_is_answered_expired_token()
+    {
+        await using var host = CreateCibaHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var initiator = await RegisterCibaClientAsync(client, discovery);
+
+        var authRequestId = await InitiateShortLivedAsync(client, discovery, initiator);
+
+        var early = await RedeemAsync(client, discovery, initiator, authRequestId);
+        var earlyBody = await ReadJsonAsync(early);
+        Assert.Equal(ErrorCodes.AuthorizationPending, earlyBody[ErrorResponse.Parameters.Error]!.GetValue<string>());
+
+        await Task.Delay(
+            ShortRequestedExpiry + ShortRequestedExpiry + ShortRequestedExpiry / 2,
+            TestContext.Current.CancellationToken);
+
+        var late = await RedeemAsync(client, discovery, initiator, authRequestId);
+        var lateBody = await ReadJsonAsync(late);
+        Assert.Equal(HttpStatusCode.BadRequest, late.StatusCode);
+        Assert.Equal(ErrorCodes.ExpiredToken, lateBody[ErrorResponse.Parameters.Error]!.GetValue<string>());
+
+        // Told once: the client was sent to make a new request, and the expired one is gone after that answer
+        var again = await RedeemAsync(client, discovery, initiator, authRequestId);
+        var againBody = await ReadJsonAsync(again);
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidGrant, againBody[ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
     /// CIBA Core 1.0 section 7.3, on expires_in: "A Client calling the token endpoint with an expired auth_req_id will
     /// receive an error". The end user approving in time does not stretch that lifetime: a request approved at once,
     /// with the host keeping the approval readable for minutes and naming a later expiry on its own copy, and polled
