@@ -32,7 +32,8 @@ public interface IAuthenticationCompletionHandler
     /// <param name="request">The authentication request carrying the grant the end user approved. Only
     /// the grant is read from it, and the grant has to be for the client the request came from. Everything
     /// the request recorded when it arrived - its status, the end users it named, the authorization_details
-    /// and authentication levels it asked for, the client's notification endpoint and token - is taken
+    /// and authentication levels it asked for, the client's notification endpoint and token, and when it
+    /// expires - is taken
     /// from the STORED record and written over this copy, so a caller cannot change any of it by setting a
     /// field on its own copy.</param>
     /// <param name="expiresIn">How long the approved record is kept in the store. It does not extend the request: a poll after the request's own expiry is answered expired_token however long the record is kept.</param>

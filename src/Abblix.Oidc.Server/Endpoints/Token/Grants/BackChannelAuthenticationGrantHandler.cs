@@ -71,7 +71,8 @@ public class BackChannelAuthenticationGrantHandler(
     /// <remarks>
     /// <para><strong>Behavior by Authentication Status:</strong></para>
     /// <list type="bullet">
-    ///   <item><term>Authenticated:</term> Returns authorized grant and removes from storage (poll mode only)</item>
+    ///   <item><term>Authenticated:</term> Returns authorized grant and removes from storage (poll mode only);
+    ///   once the request's expiry has come, returns expired_token and removes it instead</item>
     ///   <item><term>Pending (short-polling):</term> Immediately returns authorization_pending error</item>
     ///   <item><term>Pending (long-polling):</term> Waits for status change notification up to configured timeout,
     ///   then re-checks storage to return grant or appropriate error</item>

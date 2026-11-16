@@ -86,9 +86,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
 ///             AuthContextClassRef = authenticatedLevel,
 ///         };
 ///
-///         // Carry the end user's answer on the grant. AuthorizedGrant is a positional member of the
-///         // record, so it is init-only and a `with` expression is how it is replaced; the copy carries
-///         // every other member unchanged.
+///         // Carry the end user's answer on the grant. A `with` expression replaces it and carries every
+///         // other member of the stored record unchanged.
 ///         //
 ///         // Nothing needs to touch Status - the denial below goes through DenyAsync. A host that does
 ///         // set it on its own copy changes nothing either way: completion reads the STORED record and
