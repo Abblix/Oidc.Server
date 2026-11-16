@@ -342,6 +342,34 @@ public sealed class CibaRequestObjectProfileTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// FAPI-CIBA section 5.2.2: the server "shall require Backchannel Authentication Endpoint requests to be signed as
+    /// described in [CIBA] 7.1.1". The client held to FAPI 1.0 Advanced sending its authentication request as plain
+    /// parameters is answered invalid_request (CIBA Core 1.0 section 13, "The request is missing a required
+    /// parameter"); the client held to no profile sending the same parameters is accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(FapiClientId, HttpStatusCode.BadRequest, ErrorCodes.InvalidRequest)]
+    [InlineData(PlainClientId, HttpStatusCode.OK, null)]
+    public async Task PlainParameters_AreRefusedForTheClientHeldToFapi(
+        string clientId, HttpStatusCode expectedStatus, string? expectedError)
+    {
+        using var response = await _http!.PostAsync(
+            Acme + AuthorizePath,
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [CibaParameters.Scope] = Scopes.OpenId,
+                [CibaParameters.LoginHint] = LoginHint,
+                [ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer,
+                [ClientRequest.Parameters.ClientAssertion] = await ClientAssertionAsync(clientId),
+            }),
+            TestContext.Current.CancellationToken);
+
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.True(expectedStatus == response.StatusCode, $"{response.StatusCode}: {body}");
+        Assert.Equal(expectedError, body[ErrorResponse.Parameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
     /// A signed, unencrypted authentication request of <paramref name="clientId"/> carrying every claim CIBA Core 1.0
     /// section 7.1.1 lists, changed by <paramref name="change"/> before it is signed.
     /// </summary>

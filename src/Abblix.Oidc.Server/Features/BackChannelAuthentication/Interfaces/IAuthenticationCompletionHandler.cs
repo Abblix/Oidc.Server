@@ -32,10 +32,11 @@ public interface IAuthenticationCompletionHandler
     /// <param name="request">The authentication request carrying the grant the end user approved. Only
     /// the grant is read from it, and the grant has to be for the client the request came from. Everything
     /// the request recorded when it arrived - its status, the end users it named, the authorization_details
-    /// and authentication levels it asked for, the client's notification endpoint and token - is taken
+    /// and authentication levels it asked for, the client's notification endpoint and token, and when it
+    /// expires - is taken
     /// from the STORED record and written over this copy, so a caller cannot change any of it by setting a
     /// field on its own copy.</param>
-    /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
+    /// <param name="expiresIn">How long the approved record is kept in the store. It does not extend the request: a poll after the request's own expiry is answered expired_token however long the record is kept.</param>
     /// <returns>A task representing the asynchronous completion operation.</returns>
     /// <remarks>
     /// This method automatically:
@@ -45,8 +46,8 @@ public interface IAuthenticationCompletionHandler
     ///   <item>Delegates to the mode-specific implementation for token delivery</item>
     /// </list>
     /// </remarks>
-    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
-    /// identifier. Stated as what must be true rather than as a list of causes, because the causes are
+    /// <exception cref="InvalidOperationException">The store does not hold, under this identifier, a
+    /// PENDING record whose expiry has not come. Stated as what must be true rather than as a list of causes, because the causes are
     /// more numerous than they look and this seam cannot tell them apart: the request may have been
     /// answered, refused or expired, its record may have been redeemed and removed by a poll, taken by
     /// push - by a rival answer, or by push itself after a configuration fault where nothing was answered
@@ -78,7 +79,7 @@ public interface IAuthenticationCompletionHandler
     /// <param name="authenticationRequestId">The auth_req_id the end user refused.</param>
     /// <param name="expiresIn">How long a denied request stays readable, for the modes that leave one.</param>
     /// <returns>A task representing the asynchronous denial.</returns>
-    /// <exception cref="InvalidOperationException">The store does not hold a PENDING record under this
-    /// identifier, the same condition <see cref="CompleteAsync"/> refuses on.</exception>
+    /// <exception cref="InvalidOperationException">The store does not hold, under this identifier, a
+    /// PENDING record whose expiry has not come, the same condition <see cref="CompleteAsync"/> refuses on.</exception>
     Task DenyAsync(TenantDefinition tenant, string authenticationRequestId, TimeSpan expiresIn);
 }

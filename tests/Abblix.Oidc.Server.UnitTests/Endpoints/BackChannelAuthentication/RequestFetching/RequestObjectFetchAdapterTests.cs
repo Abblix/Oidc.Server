@@ -83,4 +83,78 @@ public class RequestObjectFetchAdapterTests
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
+
+    /// <summary>
+    /// FAPI-CIBA section 5.2.2 has the server "require Backchannel Authentication Endpoint requests to be signed as
+    /// described in [CIBA] 7.1.1", and that profile builds on FAPI 1.0 Advanced. A request of a client held to it sent
+    /// as plain parameters is missing the request parameter, which CIBA Core 1.0 section 13 answers invalid_request,
+    /// "The request is missing a required parameter", and nothing of it is fetched.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_PlainParametersOfAClientHeldToFapi1Advanced_AreInvalidRequest()
+    {
+        const ClientSecurityProfile profile = ClientSecurityProfile.Fapi1Advanced;
+        var outer = new BackChannelAuthenticationRequest { Scope = [Scopes.OpenId], LoginHint = "end-user" };
+        var client = new ClientInfo("client-1") { SecurityProfile = profile };
+
+        var fetcher = new Mock<IRequestObjectFetcher>(MockBehavior.Strict);
+
+        var result = await new RequestObjectFetchAdapter(fetcher.Object, Mock.Of<IJwtAlgorithmsProvider>())
+            .FetchAsync(SingleIssuer.Tenant, client, outer);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// The profile a tenant holds every client to is a floor, so a client naming none is held to signed backchannel
+    /// requests when its tenant's default profile requires them.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_PlainParametersAtATenantRequiringSignedRequests_AreInvalidRequest()
+    {
+        var outer = new BackChannelAuthenticationRequest { Scope = [Scopes.OpenId], LoginHint = "end-user" };
+        var client = new ClientInfo("client-1");
+        var tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced }.ToTenant();
+
+        var fetcher = new Mock<IRequestObjectFetcher>(MockBehavior.Strict);
+
+        var result = await new RequestObjectFetchAdapter(fetcher.Object, Mock.Of<IJwtAlgorithmsProvider>())
+            .FetchAsync(tenant, client, outer);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+    }
+
+    /// <summary>
+    /// A client held to no profile, or to a FAPI 2.0 profile, may send its authentication request as plain
+    /// parameters: CIBA Core 1.0 section 7.2 validates the JWT only "If the authentication request is signed", and
+    /// FAPI 2.0 has no CIBA clause. That includes the FAPI 2.0 profiles requiring signed authorization requests, whose
+    /// requirement is about the request object at the PAR endpoint.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(ClientSecurityProfile.Fapi2)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationRequests)]
+    [InlineData(ClientSecurityProfile.Fapi2SignedAuthorizationResponses)]
+    [InlineData(ClientSecurityProfile.Fapi2MessageSigning)]
+    public async Task FetchAsync_PlainParametersOfAClientNotHeldToSignedRequests_AreFetched(
+        ClientSecurityProfile? profile)
+    {
+        var outer = new BackChannelAuthenticationRequest { Scope = [Scopes.OpenId], LoginHint = "end-user" };
+        var client = new ClientInfo("client-1") { SecurityProfile = profile };
+
+        var fetcher = new Mock<IRequestObjectFetcher>(MockBehavior.Strict);
+        fetcher
+            .Setup(f => f.FetchAsync(
+                TestTenant.Matched, client, outer, null,
+                It.IsAny<Func<ClientInfo, string?>>(), It.IsAny<string[]>(), It.IsAny<Func<JsonWebToken, string?>>()))
+            .ReturnsAsync(outer);
+
+        var result = await new RequestObjectFetchAdapter(fetcher.Object, Mock.Of<IJwtAlgorithmsProvider>())
+            .FetchAsync(SingleIssuer.Tenant, client, outer);
+
+        Assert.True(result.TryGetSuccess(out var value));
+        Assert.Same(outer, value);
+    }
 }

@@ -93,7 +93,7 @@ public partial class PingModeCompletionHandler(
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated request containing the authorized grant.</param>
     /// <param name="clientInfo">Client information for validation.</param>
-    /// <param name="expiresIn">How long the authenticated request remains valid for token retrieval.</param>
+    /// <param name="expiresIn">How long the approved record is kept in the store. It does not extend the request: a poll after the request's own expiry is answered expired_token however long the record is kept.</param>
     protected override async Task HandleDeliveryAsync(
         TenantDefinition tenant,
         [Credential] string authenticationRequestId,

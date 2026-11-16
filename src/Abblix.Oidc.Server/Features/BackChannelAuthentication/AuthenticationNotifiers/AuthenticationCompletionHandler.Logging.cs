@@ -73,4 +73,14 @@ partial class AuthenticationCompletionHandler
                   "found, and this seam cannot tell why: absence has more causes than it can " +
                   "distinguish, including a completion that already ran and removed the record.")]
     private partial void LogNotPendingOnCompletion(Fingerprint AuthReqId, string Answered, string? Status);
+
+    /// <summary>
+    /// Information rather than Error: an end user answering after the request's expiry is ordinary use, not a fault
+    /// of the service or the host.
+    /// </summary>
+    [LoggerMessage(
+        EventId = LogEvents.Device.AuthenticationCompletionHandler.ExpiredBeforeAnswered,
+        Level = LogLevel.Information,
+        Message = "auth_req_id {AuthReqId} could not be {Answered}: it expired before the answer came.")]
+    private partial void LogExpiredBeforeAnswered(Fingerprint AuthReqId, string Answered);
 }
