@@ -120,6 +120,15 @@ function Write-Step([string] $Message) {
     Write-Host "==> $Message" -ForegroundColor Cyan
 }
 
+# 32 random bytes in base64url without padding, which an environment variable and a form post carry unchanged
+function New-UserPassword {
+    [CmdletBinding()]
+    param()
+
+    [Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).
+        TrimEnd('=').Replace('+', '-').Replace('/', '_')
+}
+
 function Assert-LastExit([string] $What) {
     if ($LASTEXITCODE -ne 0) {
         throw "$What failed with exit code $LASTEXITCODE"
@@ -448,6 +457,8 @@ if ($ResultsPath) {
 }
 
 $imageTagBefore = $env:IMAGE_TAG
+$userPasswordBefore = $env:Conformance__UserPassword
+$loginPasswordBefore = $env:LOGIN_PASSWORD
 $ComposeFile = $null
 $exitCode = 1
 try {
@@ -485,9 +496,15 @@ try {
     # Emptied first, so a configuration the host no longer writes is not read from an earlier run
     Remove-PlanConfigurations
     New-Item -ItemType Directory $PlanConfigurationsDirectory | Out-Null
+    # The conformance user's password is fresh for every run and kept nowhere. The host and the browser driver take it
+    # from this process's environment by name, so it is on no command line, and the finally block puts back what the
+    # environment held before
+    $env:Conformance__UserPassword = New-UserPassword
+    $env:LOGIN_PASSWORD = $env:Conformance__UserPassword
     docker run -d --name $HostContainer --network $Network --network-alias $HostMtlsAlias `
         -v "${PublishDirectory}:/app:ro" -v "${PlanConfigurationsDirectory}:${PlanConfigurationsMount}" -w /app `
         -e "Conformance__PlanConfigurations=$PlanConfigurationsMount" `
+        -e Conformance__UserPassword `
         $RuntimeImage dotnet $HostAssembly | Out-Null
     Assert-LastExit 'docker run (host)'
     try {
@@ -520,7 +537,7 @@ try {
         -e "CONFORMANCE_SERVER=$SuiteUrl" `
         -e "HOST_ORIGIN=$($hostSettings.Issuer)" `
         -e "LOGIN_EMAIL=$($hostSettings.UserEmail)" `
-        -e "LOGIN_PASSWORD=$($hostSettings.UserPassword)" `
+        -e LOGIN_PASSWORD `
         -e 'DRIVER_DEADLINE_SECONDS=14400' `
         -e "DRIVER_SCREENSHOT_DIR=$BrowserScreenshots" `
         $BrowserImage | Out-Null
@@ -632,6 +649,8 @@ try {
 }
 finally {
     $env:IMAGE_TAG = $imageTagBefore
+    $env:Conformance__UserPassword = $userPasswordBefore
+    $env:LOGIN_PASSWORD = $loginPasswordBefore
     # Collecting the evidence must neither hide why the run failed nor stop the cleanup after it
     try {
         Save-Evidence
@@ -643,6 +662,9 @@ finally {
         Write-Step "Left running: the suite at $SuiteUrl and the host as $HostContainer; stop them with"
         $stopSuite = if ($ComposeFile) { "; docker compose -f `"$ComposeFile`" -p $ProjectName down" } else { '' }
         Write-Host "  docker rm -f $HostContainer$stopSuite"
+        # The password was made for this run only, so the one copy left is in the host's environment
+        Write-Host "Signing in by hand takes the conformance user's password, which this prints:"
+        Write-Host "  docker exec $HostContainer printenv Conformance__UserPassword"
     }
     else {
         Write-Step 'Removing the host and the suite'

@@ -51,6 +51,8 @@ public static class ConformanceHost
         var suite = new Uri(Required(settings, "SuiteBaseUrl"));
         var mtlsBase = new Uri(Required(settings, "MtlsBaseUrl"));
         var userEmail = Required(settings, "UserEmail");
+        // The password is in no settings file: the run script makes a fresh one for every run and hands it over
+        // through the environment (Conformance__UserPassword)
         var user = new ConformanceUser(userEmail, Required(settings, "UserPassword"));
 
         builder.WebHost.ListenForSuite(issuer, mtlsBase);
