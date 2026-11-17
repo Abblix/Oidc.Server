@@ -106,6 +106,19 @@ public class SignedMetadataAlgorithmTests
     }
 
     /// <summary>
+    /// Without a profile the first key signs, so one declaring an algorithm its material does not perform is refused
+    /// before anything is signed with it.
+    /// </summary>
+    [Fact]
+    public async Task AKeyDeclaringAnAlgorithmItsMaterialDoesNotPerform_IsRefusedWithoutAProfile()
+    {
+        var misdeclared = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256)
+            with { Algorithm = SigningAlgorithms.PS256 };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => SignedWith(ClientSecurityProfile.None, misdeclared));
+    }
+
+    /// <summary>
     /// An elliptic-curve key declaring no algorithm signs with the ECDSA algorithm of its curve (RFC 7518 section 3.4).
     /// </summary>
     [Theory]

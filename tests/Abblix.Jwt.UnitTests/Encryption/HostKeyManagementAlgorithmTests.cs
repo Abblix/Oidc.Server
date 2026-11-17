@@ -182,12 +182,13 @@ public class HostKeyManagementAlgorithmTests
 	{
 		EncryptionAlgorithms.KeyManagement.Aes128KW or EncryptionAlgorithms.KeyManagement.Aes128Gcmkw => 16,
 		EncryptionAlgorithms.KeyManagement.Aes192KW or EncryptionAlgorithms.KeyManagement.Aes192Gcmkw => 24,
-		EncryptionAlgorithms.KeyManagement.Aes256KW or EncryptionAlgorithms.KeyManagement.Aes256Gcmkw => 32,
-		EncryptionAlgorithms.KeyManagement.Dir => 32,
-		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW
+		EncryptionAlgorithms.KeyManagement.Aes256KW
+			or EncryptionAlgorithms.KeyManagement.Aes256Gcmkw
+			or EncryptionAlgorithms.KeyManagement.Dir
+			or EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW
 			or EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW
-			or EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW => 32,
-		EncryptionAlgorithms.KeyManagement.RsaOaep
+			or EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW
+			or EncryptionAlgorithms.KeyManagement.RsaOaep
 			or EncryptionAlgorithms.KeyManagement.RsaOaep256
 			or EncryptionAlgorithms.KeyManagement.Rsa1_5
 			or EncryptionAlgorithms.KeyManagement.EcdhEs
