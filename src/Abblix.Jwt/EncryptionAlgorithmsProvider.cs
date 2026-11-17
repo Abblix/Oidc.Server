@@ -29,8 +29,8 @@ public sealed class EncryptionAlgorithmsProvider(IServiceProvider serviceProvide
 {
     /// <summary>
     /// Whether <paramref name="key"/> may encrypt and decrypt a JWE with the key management algorithm
-    /// <paramref name="keyManagementAlgorithm"/>: it declares that algorithm or none, and an algorithm of that name is
-    /// registered for the key's type. The registry answering this is the one <see cref="KeyManagementAlgorithms"/>
+    /// <paramref name="keyManagementAlgorithm"/>: it declares that algorithm or none, an algorithm of that name is
+    /// registered for the key's type, and that algorithm accepts the key's material. The registry answering this is the one <see cref="KeyManagementAlgorithms"/>
     /// lists and encryption and decryption dispatch to, so an algorithm a host registers is advertised, matched to its
     /// keys and carried out by one and the same registration.
     /// </summary>
@@ -44,11 +44,24 @@ public sealed class EncryptionAlgorithmsProvider(IServiceProvider serviceProvide
     public bool CanEncrypt(JsonWebKey key, string keyManagementAlgorithm)
         => (key.Algorithm ?? keyManagementAlgorithm) == keyManagementAlgorithm && key switch
         {
-            RsaJsonWebKey => IsRegistered<RsaJsonWebKey>(keyManagementAlgorithm),
-            EllipticCurveJsonWebKey => IsRegistered<EllipticCurveJsonWebKey>(keyManagementAlgorithm),
-            OctetJsonWebKey => IsRegistered<OctetJsonWebKey>(keyManagementAlgorithm),
+            RsaJsonWebKey rsaKey => Accepts(rsaKey, keyManagementAlgorithm),
+            EllipticCurveJsonWebKey ellipticCurveKey => Accepts(ellipticCurveKey, keyManagementAlgorithm),
+            OctetJsonWebKey octetKey => Accepts(octetKey, keyManagementAlgorithm),
             _ => false,
         };
+
+    /// <summary>
+    /// Whether an algorithm of that name is registered for keys of type <typeparamref name="TJsonWebKey"/>, whatever
+    /// any one key's material: a symmetric algorithm is one registered for octet keys.
+    /// </summary>
+    /// <param name="keyManagementAlgorithm">The JWE <c>alg</c> asked about.</param>
+    /// <typeparam name="TJsonWebKey">The key type asked about.</typeparam>
+    internal bool IsRegisteredFor<TJsonWebKey>(string keyManagementAlgorithm) where TJsonWebKey : JsonWebKey
+        => serviceProvider.GetKeyedService<IKeyManagementAlgorithm<TJsonWebKey>>(keyManagementAlgorithm) is not null;
+
+    private bool Accepts<TJsonWebKey>(TJsonWebKey key, string keyManagementAlgorithm) where TJsonWebKey : JsonWebKey
+        => serviceProvider.GetKeyedService<IKeyManagementAlgorithm<TJsonWebKey>>(keyManagementAlgorithm) is { } algorithm &&
+           algorithm.Accepts(key);
 
     /// <summary>
     /// The content encryption algorithm registered under <paramref name="contentEncryptionAlgorithm"/>, or null where
@@ -57,9 +70,6 @@ public sealed class EncryptionAlgorithmsProvider(IServiceProvider serviceProvide
     /// <param name="contentEncryptionAlgorithm">The JWE <c>enc</c>.</param>
     internal IContentEncryptionAlgorithm? FindContentEncryptionAlgorithm(string contentEncryptionAlgorithm)
         => serviceProvider.GetKeyedService<IContentEncryptionAlgorithm>(contentEncryptionAlgorithm);
-
-    private bool IsRegistered<TJsonWebKey>(string keyManagementAlgorithm) where TJsonWebKey : JsonWebKey
-        => serviceProvider.GetKeyedService<IKeyManagementAlgorithm<TJsonWebKey>>(keyManagementAlgorithm) is not null;
 
     /// <summary>
     /// Gets the supported JWE key-management algorithms (the <c>alg</c> values, e.g. "RSA-OAEP-256").

@@ -138,11 +138,45 @@ public class HostKeyManagementAlgorithmTests
 		[
 			JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { Algorithm = null },
 			JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256) with { Algorithm = null },
-			JsonWebKeyFactory.CreateHmac(SigningAlgorithms.HS256) with { Algorithm = null },
+			new OctetJsonWebKey { KeyValue = CryptoRandom.GetRandomBytes(KeySizeFor(algorithm)) },
 		];
 
 		Assert.Equal(
 			[keyType],
 			keys.Where(key => algorithms.CanEncrypt(key, algorithm)).Select(key => key.KeyType));
 	}
+
+	/// <summary>
+	/// AES Key Wrap and AES GCM key encryption take a key of exactly the size they name (RFC 7518 sections 4.4 and
+	/// 4.7), so a symmetric key of another size is passed over when a key is chosen rather than refused at the wrap.
+	/// </summary>
+	[Theory]
+	[InlineData(EncryptionAlgorithms.KeyManagement.Aes128KW, 32)]
+	[InlineData(EncryptionAlgorithms.KeyManagement.Aes256KW, 16)]
+	[InlineData(EncryptionAlgorithms.KeyManagement.Aes128Gcmkw, 24)]
+	public void ASymmetricKeyOfAnotherSize_IsNotChosenForAesKeyWrap(string algorithm, int keySize)
+	{
+		var algorithms = ServiceProvider.GetRequiredService<EncryptionAlgorithmsProvider>();
+
+		Assert.False(algorithms.CanEncrypt(new OctetJsonWebKey { KeyValue = CryptoRandom.GetRandomBytes(keySize) }, algorithm));
+	}
+
+	/// <summary>
+	/// A symmetric key whose bytes a custodian holds carries none in the server, so its size is the custodian's to
+	/// judge, and the key stays eligible.
+	/// </summary>
+	[Fact]
+	public void ASymmetricKeyACustodianHolds_IsChosenForAesKeyWrap()
+	{
+		var algorithms = ServiceProvider.GetRequiredService<EncryptionAlgorithmsProvider>();
+
+		Assert.True(algorithms.CanEncrypt(new OctetJsonWebKey { KeyId = "held" }, EncryptionAlgorithms.KeyManagement.Aes128KW));
+	}
+
+	private static int KeySizeFor(string algorithm) => algorithm switch
+	{
+		EncryptionAlgorithms.KeyManagement.Aes128KW or EncryptionAlgorithms.KeyManagement.Aes128Gcmkw => 16,
+		EncryptionAlgorithms.KeyManagement.Aes192KW or EncryptionAlgorithms.KeyManagement.Aes192Gcmkw => 24,
+		_ => 32,
+	};
 }

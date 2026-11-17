@@ -41,6 +41,11 @@ internal sealed class AesKeyWrapEncryptor(string algorithm) : IKeyManagementAlgo
 	};
 
 	/// <inheritdoc />
+	/// <remarks>RFC 7518 section 4.4: the key is of exactly the size the algorithm names. A key whose bytes a custodian
+	/// holds carries none here, and the custodian carries the algorithm out with them.</remarks>
+	public bool Accepts(OctetJsonWebKey key) => key.KeyValue is not { } keyValue || keyValue.Length == _keySize;
+
+	/// <inheritdoc />
 	public byte[] EncryptKey(JsonWebTokenHeader header, OctetJsonWebKey keyEncryptionKey, byte[] keyToEncrypt)
 	{
 		// Key Encryption Key (KEK) validation
