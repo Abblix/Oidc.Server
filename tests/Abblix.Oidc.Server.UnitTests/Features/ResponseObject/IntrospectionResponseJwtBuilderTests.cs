@@ -54,7 +54,7 @@ public class IntrospectionResponseJwtBuilderTests
             .Returns(() => signingKeys.ToAsyncEnumerable());
 
         return new IntrospectionResponseJwtBuilder(
-            formatter.Object, TimeProvider.System, keys.Object);
+            formatter.Object, TimeProvider.System, keys.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered);
     }
 
     private static TenantDefinition Tenant(ClientSecurityProfile profile)

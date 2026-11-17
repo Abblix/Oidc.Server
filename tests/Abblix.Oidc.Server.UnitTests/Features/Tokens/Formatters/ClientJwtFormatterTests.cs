@@ -85,10 +85,10 @@ public class ClientJwtFormatterTests
             new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every),
             new ClientEncryptionKeyResolver(
                 new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every), _clientKeysProvider.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
-            _serviceKeysProvider.Object);
+            _serviceKeysProvider.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered);
 
-        _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
-        _clientEncryptionKey = new RsaJsonWebKey { KeyId = "client-enc", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep };
+        _signingKeyRS256 = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
+        _clientEncryptionKey = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "client-enc", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep };
         _clientInfo = new ClientInfo(ClientId);
     }
 
@@ -404,9 +404,9 @@ public class ClientJwtFormatterTests
             Payload = { Subject = "user123", Audiences = [ClientId] },
         };
         var client = new ClientInfo(ClientId) { SecurityProfile = profile, UserInfoEncryptedResponseAlgorithm = expectedAlgorithm };
-        var pkcs1 = new RsaJsonWebKey { KeyId = "pkcs1", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 };
-        var oaep = new RsaJsonWebKey { KeyId = "oaep", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
-        var signing = new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.PS256 };
+        var pkcs1 = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "pkcs1", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 };
+        var oaep = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "oaep", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
+        var signing = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig", Algorithm = SigningAlgorithms.PS256 };
         JsonWebKey? usedKey = null;
         string? usedAlgorithm = null;
 
@@ -444,14 +444,14 @@ public class ClientJwtFormatterTests
             Header = { Algorithm = SigningAlgorithms.PS256 },
             Payload = { Subject = "user123", Audiences = [ClientId] },
         };
-        var unusable = new RsaJsonWebKey { KeyId = "first", Algorithm = firstKeyAlgorithm };
-        var oaep = new RsaJsonWebKey { KeyId = "oaep", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
+        var unusable = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "first", Algorithm = firstKeyAlgorithm };
+        var oaep = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "oaep", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
         JsonWebKey? usedKey = null;
         string? usedAlgorithm = null;
 
         _serviceKeysProvider
             .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
-            .Returns(new[] { new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }.ToAsyncEnumerable());
+            .Returns(new[] { new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }.ToAsyncEnumerable());
         _clientKeysProvider
             .Setup(p => p.GetEncryptionKeys(_clientInfo))
             .Returns(new JsonWebKey[] { unusable, oaep }.ToAsyncEnumerable());
@@ -486,13 +486,13 @@ public class ClientJwtFormatterTests
         JsonWebKey unusable = firstKey == "ec"
             ? new EllipticCurveJsonWebKey { KeyId = "first", Curve = EllipticCurveTypes.P256 }
             : new OctetJsonWebKey { KeyId = "first" };
-        var rsa = new RsaJsonWebKey { KeyId = "rsa" };
+        var rsa = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "rsa" };
         JsonWebKey? usedKey = null;
         string? usedAlgorithm = null;
 
         _serviceKeysProvider
             .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
-            .Returns(new[] { new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }.ToAsyncEnumerable());
+            .Returns(new[] { new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }.ToAsyncEnumerable());
         _clientKeysProvider
             .Setup(p => p.GetEncryptionKeys(_clientInfo))
             .Returns(new[] { unusable, rsa }.ToAsyncEnumerable());
@@ -531,7 +531,7 @@ public class ClientJwtFormatterTests
             .Returns(new[] { _signingKeyRS256 }.ToAsyncEnumerable());
         _clientKeysProvider
             .Setup(p => p.GetEncryptionKeys(_clientInfo))
-            .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "k", Algorithm = keyAlgorithm } }.ToAsyncEnumerable());
+            .Returns(new JsonWebKey[] { new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "k", Algorithm = keyAlgorithm } }.ToAsyncEnumerable());
         _jwtCreator
             .Setup(c => c.IssueAsync(token, It.IsAny<JsonWebKey>(), It.IsAny<JsonWebKey?>(), It.IsAny<string>(), It.IsAny<string>()))
             .Callback<JsonWebToken, JsonWebKey, JsonWebKey?, string, string>((_, _, key, _, _) => usedKey = key)
@@ -556,9 +556,9 @@ public class ClientJwtFormatterTests
             Header = { Algorithm = SigningAlgorithms.RS256 },
             Payload = { Subject = "user123", Audiences = [ClientId] },
         };
-        var other = new RsaJsonWebKey { KeyId = "other", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep };
+        var other = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "other", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep };
         var ec = new EllipticCurveJsonWebKey { KeyId = "ec", Curve = EllipticCurveTypes.P256 };
-        var rsa = new RsaJsonWebKey { KeyId = "rsa" };
+        var rsa = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "rsa" };
         JsonWebKey? usedKey = null;
         string? usedAlgorithm = null;
         _serviceKeysProvider
@@ -595,7 +595,7 @@ public class ClientJwtFormatterTests
             Header = { Algorithm = SigningAlgorithms.None },
             Payload = { Subject = "user123", Audiences = [ClientId] },
         };
-        var rsa = new RsaJsonWebKey { KeyId = "rsa" };
+        var rsa = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "rsa" };
         var nested = false;
         var claimsSet = false;
         _serviceKeysProvider
@@ -645,7 +645,7 @@ public class ClientJwtFormatterTests
         _clientKeysProvider
             .Setup(p => p.GetEncryptionKeys(_clientInfo))
             .Returns((keyDeclaringAnother
-                ? new JsonWebKey[] { new RsaJsonWebKey { KeyId = "other", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep } }
+                ? new JsonWebKey[] { new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "other", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep } }
                 : []).ToAsyncEnumerable());
         _clientInfo.IdentityTokenEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
 
@@ -679,12 +679,12 @@ public class ClientJwtFormatterTests
         };
         _serviceKeysProvider
             .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
-            .Returns(new[] { new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }.ToAsyncEnumerable());
+            .Returns(new[] { new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }.ToAsyncEnumerable());
         _clientKeysProvider
             .Setup(p => p.GetEncryptionKeys(client))
             .Returns(new JsonWebKey[]
             {
-                new RsaJsonWebKey { KeyId = "pkcs1", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 },
+                new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "pkcs1", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 },
             }.ToAsyncEnumerable());
 
         var result = await _formatter.FormatAsync(SingleIssuer.Tenant, token, client, UserInfoPolicy(client));

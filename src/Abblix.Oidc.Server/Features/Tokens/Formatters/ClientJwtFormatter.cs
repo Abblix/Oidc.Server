@@ -29,11 +29,13 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="encryptionKeyResolver">Chooses the key the JWT is encrypted to under the algorithm the client
 /// registered.</param>
 /// <param name="serviceKeysProvider">Provider for service signing keys.</param>
+/// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
 public partial class ClientJwtFormatter(
     ILogger<ClientJwtFormatter> logger,
     ProfiledJwtIssuer issuer,
     ClientEncryptionKeyResolver encryptionKeyResolver,
-    IAuthServiceKeysProvider serviceKeysProvider) : IClientJwtFormatter
+    IAuthServiceKeysProvider serviceKeysProvider,
+    SigningAlgorithmsProvider signingAlgorithms) : IClientJwtFormatter
 {
     /// <summary>
     /// Asynchronously formats a JWT for a specific client, signing it with the authentication service's key chosen by
@@ -118,9 +120,23 @@ public partial class ClientJwtFormatter(
     /// and where no key performs it.
     /// </summary>
     private async Task<JsonWebKey?> SigningKeyAsync(TenantDefinition tenant, string? algorithm)
-        => IsUnsigned(algorithm)
-            ? null
-            : await serviceKeysProvider.GetSigningKeys(tenant, true).FirstOrDefaultAsync(key => key.CanPerform(algorithm));
+    {
+        if (IsUnsigned(algorithm))
+            return null;
+
+        var signingKey = await serviceKeysProvider.GetSigningKeys(tenant, true)
+            .FirstOrDefaultAsync(key => signingAlgorithms.CanSign(key, algorithm));
+        if (signingKey is null)
+        {
+            // The client is told only that no key produces the algorithm; the host is told which key it passed over
+            // for its size, which a key held by a custodian or supplied by its own provider is checked for nowhere else
+            var keys = await serviceKeysProvider.GetSigningKeys(tenant, true).ToArrayAsync();
+            foreach (var (key, bits, floor) in SigningKeyFloor.UndersizedKeys(keys, algorithm))
+                LogSigningKeyBelowTheFloor(key.KeyId, algorithm, bits, floor);
+        }
+
+        return signingKey;
+    }
 
     /// <summary>
     /// Why a JWT signed with <paramref name="algorithm"/> cannot be issued to the client, or null where it can: its

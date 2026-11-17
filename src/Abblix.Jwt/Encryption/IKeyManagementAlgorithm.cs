@@ -35,6 +35,15 @@ public interface IKeyManagementAlgorithm<in TJsonWebKey>
 	string Algorithm { get; }
 
 	/// <summary>
+	/// Whether this algorithm can be carried out with the material of <paramref name="key"/>, asked when a key is
+	/// chosen for it. The key type this algorithm is registered for already settles what most algorithms ask; AES Key
+	/// Wrap and AES GCM key encryption ask more, a key of exactly the size the algorithm names (RFC 7518 sections 4.4
+	/// and 4.7).
+	/// </summary>
+	/// <param name="key">The key a JWE would be encrypted or decrypted with.</param>
+	bool Accepts(TJsonWebKey key) => true;
+
+	/// <summary>
 	/// Produces the Content Encryption Key the content encryption step will use, before it is
 	/// protected by <see cref="EncryptKey"/>. Key-wrapping and key-transport algorithms use the
 	/// default implementation - a fresh random CEK. Algorithms where the CEK is determined by the

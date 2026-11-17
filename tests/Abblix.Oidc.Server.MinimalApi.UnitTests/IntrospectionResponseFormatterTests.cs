@@ -69,7 +69,8 @@ public class IntrospectionResponseFormatterTests
         var formatter = new IntrospectionResponseFormatter(
             new ServedBy(Served),
             new IntrospectionResponseJwtBuilder(
-                clientJwtFormatter.Object, TimeProvider.System, signingKeys),
+                clientJwtFormatter.Object, TimeProvider.System, signingKeys,
+                Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered),
             Mock.Of<IHttpContextAccessor>(accessor => accessor.HttpContext == httpContext));
 
         Result<IntrospectionSuccess, OidcError> found = new IntrospectionSuccess(

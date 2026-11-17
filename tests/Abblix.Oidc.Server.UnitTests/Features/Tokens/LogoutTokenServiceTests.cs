@@ -651,7 +651,7 @@ public class LogoutTokenServiceTests
                     new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every),
                     new Mock<IClientKeysProvider>(MockBehavior.Strict).Object,
                     TimeProvider.System, TestEncryptionAlgorithms.Every),
-                serviceKeys.Object),
+                serviceKeys.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered),
             _tokenIdGenerator.Object);
 
         var result = await service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, CreateLogoutContext());

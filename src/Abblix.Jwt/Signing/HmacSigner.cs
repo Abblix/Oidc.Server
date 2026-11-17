@@ -27,28 +27,35 @@ internal sealed class HmacSigner(string algorithm) : ISignatureAlgorithm<OctetJs
 	public string Algorithm => algorithm;
 
 	/// <inheritdoc />
-	public byte[] Sign(OctetJsonWebKey octetKey, byte[] data)
+	/// <remarks>RFC 7518 section 3.2: a key at least as long as the hash output, as <see cref="Sign"/> and
+	/// <see cref="Verify"/> require. A key whose bytes a custodian holds carries none here, and the custodian carries
+	/// the algorithm out with them.</remarks>
+	public bool Accepts(OctetJsonWebKey key)
+		=> key.KeyValue is not { } keyValue || keyValue.Length >= GetMinimumKeyLengthBytes();
+
+	/// <inheritdoc />
+	public byte[] Sign(OctetJsonWebKey key, byte[] data)
 	{
-		var keyValue = octetKey.KeyValue;
+		var keyValue = key.KeyValue;
 		if (keyValue == null)
-			throw new ArgumentException("Octet key must have a KeyValue", nameof(octetKey));
+			throw new ArgumentException("Octet key must have a KeyValue", nameof(key));
 
 		var minLength = GetMinimumKeyLengthBytes();
 		if (keyValue.Length < minLength)
 			throw new ArgumentException(
 				$"{algorithm} requires a key of at least {minLength} bytes ({minLength << 3} bits) " +
 				$"per RFC 7518 section 3.2; got {keyValue.Length} bytes.",
-				nameof(octetKey));
+				nameof(key));
 
 		return HmacAlgorithms.Compute(algorithm, keyValue, data);
 	}
 
 	/// <inheritdoc />
-	public bool Verify(OctetJsonWebKey octetKey, byte[] data, byte[] signature)
+	public bool Verify(OctetJsonWebKey key, byte[] data, byte[] signature)
 	{
-		var keyValue = octetKey.KeyValue;
+		var keyValue = key.KeyValue;
 		if (keyValue == null)
-			throw new ArgumentException("Octet key must have a KeyValue", nameof(octetKey));
+			throw new ArgumentException("Octet key must have a KeyValue", nameof(key));
 
 		// RFC 7518 section 3.2: a key shorter than the hash output cannot satisfy the algorithm's
 		// nominal strength; reject without performing the HMAC so callers cannot silently

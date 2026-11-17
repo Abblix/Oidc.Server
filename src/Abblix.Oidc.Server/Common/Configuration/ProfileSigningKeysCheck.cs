@@ -18,10 +18,13 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// section 8.6, FAPI 2.0 section 5.4.1) when no signing key of the tenant produces an algorithm the client is
 /// configured for, instead of failing when the first ID token or JWT response is signed for it.
 /// </summary>
+/// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
 /// <param name="custodian">Present when the keys are held by an external custodian, in which case they live outside
 /// the tenant's settings and the absence of one there says nothing. It is a registration marker only and is never
 /// called here.</param>
-public sealed class ProfileSigningKeysCheck(IKeyCustodian? custodian = null) : ITenantsCheck
+public sealed class ProfileSigningKeysCheck(
+    SigningAlgorithmsProvider signingAlgorithms,
+    IKeyCustodian? custodian = null) : ITenantsCheck
 {
     /// <inheritdoc />
     public IEnumerable<TenantRefusal> Check(IReadOnlyCollection<TenantDefinition> tenants, OidcOptions options)
@@ -34,12 +37,12 @@ public sealed class ProfileSigningKeysCheck(IKeyCustodian? custodian = null) : I
         return TenantRefusal.EachOf(tenants.Where(tenant => tenant.SigningKeys.Count > 0), Failures);
     }
 
-    private static IEnumerable<string> Failures(TenantDefinition tenant)
+    private IEnumerable<string> Failures(TenantDefinition tenant)
         => from client in tenant.Clients
            where Enum.IsDefined(SecurityProfileRequirements.ProfileNamedFor(tenant, client)) &&
                  SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile).RequireFapiSigningAlgorithms
            from setting in SignedForTheClient(client)
-           where setting.Algorithm is { } algorithm && !tenant.SigningKeys.Any(key => key.CanPerform(algorithm))
+           where setting.Algorithm is { } algorithm && !tenant.SigningKeys.Any(key => signingAlgorithms.CanSign(key, algorithm))
            select $"Client '{client.ClientId}': {setting.Name} is {setting.Algorithm}, which no signing key of the " +
                   "tenant produces.";
 

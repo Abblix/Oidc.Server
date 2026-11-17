@@ -24,11 +24,26 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration;
 /// <param name="issuer">Issues the JWS once the tenant's profile admits its algorithm.</param>
 /// <param name="serviceKeysProvider">Supplies this provider's signing keys.</param>
 /// <param name="clock">Stamps <c>iat</c>.</param>
+/// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
 public class SignedMetadataProvider(
     ProfiledJwtIssuer issuer,
     IAuthServiceKeysProvider serviceKeysProvider,
-    TimeProvider clock) : ISignedMetadataProvider
+    TimeProvider clock,
+    SigningAlgorithmsProvider signingAlgorithms) : ISignedMetadataProvider
 {
+    /// <summary>
+    /// What a key declaring no algorithm signs with, first match taken: RS256 for an RSA key and the curve's own ECDSA
+    /// algorithm for an elliptic-curve one (RFC 7518 section 3.4).
+    /// </summary>
+    private static readonly string[] Unprofiled =
+        [SigningAlgorithms.RS256, SigningAlgorithms.ES256, SigningAlgorithms.ES384, SigningAlgorithms.ES512];
+
+    /// <summary>
+    /// The same under a profile admitting no PKCS #1 v1.5 signature, where an RSA key signs with RSASSA-PSS.
+    /// </summary>
+    private static readonly string[] Profiled =
+        [SigningAlgorithms.PS256, SigningAlgorithms.ES256, SigningAlgorithms.ES384, SigningAlgorithms.ES512];
+
     /// <summary>
     /// Serializes the metadata into the <c>signed_metadata</c> JWS payload. The members of the metadata leave
     /// themselves out when null, so the signed copy omits what the plain JSON omits, and RFC 8414 section 2.1
@@ -93,46 +108,43 @@ public class SignedMetadataProvider(
     /// Names the algorithm to sign with: the one the key declares, or the standard one for its kind.
     /// </summary>
     /// <remarks>
-    /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL on a key, and the rest of this server honors that - a key
-    /// declaring no algorithm is usable with any compatible one (see
-    /// <c>JsonWebKeyExtensions.FirstByAlgorithmAsync</c>). Reading the algorithm straight off the key
-    /// inverted that rule here, and since a key imported from an RSA certificate declares none, every such
-    /// deployment answered its discovery endpoint with an error once signed metadata was switched on.
-    /// The fallback for elliptic-curve keys follows the curve, the same pairing
-    /// <c>EllipticCurveJsonWebKeyExtensions.Apply</c> uses when it imports one.
+    /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL on a key, and a key imported from an RSA certificate declares
+    /// none, so a key declaring none signs with the standard algorithm its material performs.
     /// </remarks>
-    private static string SigningAlgorithmFor(JsonWebKey signingKey, SecurityProfileRequirements profile)
+    private string SigningAlgorithmFor(JsonWebKey signingKey, SecurityProfileRequirements profile)
         => NamedAlgorithmFor(signingKey, profile) ?? throw new InvalidOperationException(
-            signingKey is EllipticCurveJsonWebKey { Curve: var curve }
-                ? $"The signing key names the curve '{curve}', which this server has no signing algorithm for. Set " +
-                  "the alg parameter on the key to say how the discovery document is to be signed (RFC 7517 section 4.4)."
-                : $"The signing key is a {signingKey.GetType().Name} and declares no alg parameter, so there is no " +
-                  "algorithm to sign the discovery document with. Set the alg parameter on the key (RFC 7517 section 4.4).");
+            signingKey switch
+            {
+                var key when SigningKeyFloor.Undersized(key) is { } size =>
+                    $"The signing key '{key.KeyId}' has {size.Bits} bits, below the {size.Floor} RFC 7518 requires of " +
+                    $"it, so the discovery document cannot be signed with it. Replace it with a key of at least " +
+                    $"{size.Floor} bits.",
+                { Algorithm: { } declared } =>
+                    $"The signing key declares the alg {declared}, which its material does not sign with. Set the alg " +
+                    "parameter on the key to one it signs with (RFC 7517 section 4.4).",
+                EllipticCurveJsonWebKey { Curve: var curve } =>
+                    $"The signing key names the curve '{curve}', which this server has no signing algorithm for. Set " +
+                    "the alg parameter on the key to say how the discovery document is to be signed (RFC 7517 section 4.4).",
+                _ =>
+                    $"The signing key is a {signingKey.GetType().Name} and declares no alg parameter, so there is no " +
+                    "algorithm to sign the discovery document with. Set the alg parameter on the key (RFC 7517 section 4.4).",
+            });
 
     /// <summary>
-    /// The algorithm the key signs with: the one it declares, else the one its material implies, or null where neither
-    /// names one.
+    /// The algorithm the key signs with: the one it declares where its material performs it, else the standard one its
+    /// material performs, or null where neither names one.
     /// </summary>
-    private static string? NamedAlgorithmFor(JsonWebKey signingKey, SecurityProfileRequirements profile)
+    private string? NamedAlgorithmFor(JsonWebKey signingKey, SecurityProfileRequirements profile)
+        => signingAlgorithms.FirstSignedWith(signingKey, CandidatesFor(signingKey, profile));
+
+    /// <summary>
+    /// The algorithms a key may sign with, in order: the one it declares, else the standard ones for the profile.
+    /// </summary>
+    private static string[] CandidatesFor(JsonWebKey signingKey, SecurityProfileRequirements profile)
     {
         if (signingKey.Algorithm is { } declared)
-            return declared;
+            return [declared];
 
-        return signingKey switch
-        {
-            // RSASSA-PSS where the profile admits no PKCS #1 v1.5 signature, RS256 otherwise
-            RsaJsonWebKey when profile.RequireFapiSigningAlgorithms => SigningAlgorithms.PS256,
-            RsaJsonWebKey => SigningAlgorithms.RS256,
-
-            EllipticCurveJsonWebKey { Curve: var curve } => curve switch
-            {
-                EllipticCurveTypes.P256 => SigningAlgorithms.ES256,
-                EllipticCurveTypes.P384 => SigningAlgorithms.ES384,
-                EllipticCurveTypes.P521 => SigningAlgorithms.ES512,
-                _ => null,
-            },
-
-            _ => null,
-        };
+        return profile.RequireFapiSigningAlgorithms ? Profiled : Unprofiled;
     }
 }

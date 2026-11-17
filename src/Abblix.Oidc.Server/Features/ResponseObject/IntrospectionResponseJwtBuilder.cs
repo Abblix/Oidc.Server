@@ -26,10 +26,12 @@ namespace Abblix.Oidc.Server.Features.ResponseObject;
 /// <param name="timeProvider">Supplies the current time for the <c>iat</c> claim.</param>
 /// <param name="serviceKeysProvider">The tenant's signing keys, which decide the algorithm a profiled client naming
 /// none is signed for with.</param>
+/// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
 public class IntrospectionResponseJwtBuilder(
     IClientJwtFormatter clientJwtFormatter,
     TimeProvider timeProvider,
-    IAuthServiceKeysProvider serviceKeysProvider) : IIntrospectionResponseJwtBuilder
+    IAuthServiceKeysProvider serviceKeysProvider,
+    SigningAlgorithmsProvider signingAlgorithms) : IIntrospectionResponseJwtBuilder
 {
     /// <inheritdoc />
     public async Task<Result<string, OidcError>> BuildAsync(
@@ -101,7 +103,7 @@ public class IntrospectionResponseJwtBuilder(
             return SigningAlgorithms.RS256;
 
         var signingKeys = await serviceKeysProvider.GetSigningKeys(tenant).ToArrayAsync();
-        return SecurityProfileRequirements.FapiSigningAlgorithmProducedBy(signingKeys) ??
+        return SecurityProfileRequirements.FapiSigningAlgorithmProducedBy(signingKeys, signingAlgorithms) ??
                SecurityProfileRequirements.FapiSigningAlgorithms[0];
     }
 }

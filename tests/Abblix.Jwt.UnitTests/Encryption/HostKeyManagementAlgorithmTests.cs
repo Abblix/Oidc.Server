@@ -100,13 +100,13 @@ public class HostKeyManagementAlgorithmTests
 		var rsa = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { Algorithm = null };
 
 		Assert.Contains(HostAlgorithm, algorithms.KeyManagementAlgorithms);
-		Assert.True(algorithms.CanPerform(rsa, HostAlgorithm));
-		Assert.True(algorithms.CanPerform(rsa with { Algorithm = HostAlgorithm }, HostAlgorithm));
-		Assert.False(algorithms.CanPerform(rsa with { Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 }, HostAlgorithm));
-		Assert.False(algorithms.CanPerform(
+		Assert.True(algorithms.CanEncrypt(rsa, HostAlgorithm));
+		Assert.True(algorithms.CanEncrypt(rsa with { Algorithm = HostAlgorithm }, HostAlgorithm));
+		Assert.False(algorithms.CanEncrypt(rsa with { Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 }, HostAlgorithm));
+		Assert.False(algorithms.CanEncrypt(
 			JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256) with { Algorithm = null },
 			HostAlgorithm));
-		Assert.False(algorithms.CanPerform(JsonWebKeyFactory.CreateHmac(SigningAlgorithms.HS256) with { Algorithm = null }, HostAlgorithm));
+		Assert.False(algorithms.CanEncrypt(JsonWebKeyFactory.CreateHmac(SigningAlgorithms.HS256) with { Algorithm = null }, HostAlgorithm));
 	}
 
 	/// <summary>
@@ -138,11 +138,63 @@ public class HostKeyManagementAlgorithmTests
 		[
 			JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { Algorithm = null },
 			JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256) with { Algorithm = null },
-			JsonWebKeyFactory.CreateHmac(SigningAlgorithms.HS256) with { Algorithm = null },
+			new OctetJsonWebKey { KeyValue = CryptoRandom.GetRandomBytes(KeySizeFor(algorithm)) },
 		];
 
 		Assert.Equal(
 			[keyType],
-			keys.Where(key => algorithms.CanPerform(key, algorithm)).Select(key => key.KeyType));
+			keys.Where(key => algorithms.CanEncrypt(key, algorithm)).Select(key => key.KeyType));
 	}
+
+	/// <summary>
+	/// AES Key Wrap and AES GCM key encryption take a key of exactly the size they name (RFC 7518 sections 4.4 and
+	/// 4.7), so a symmetric key of another size is passed over when a key is chosen rather than refused at the wrap.
+	/// </summary>
+	[Theory]
+	[InlineData(EncryptionAlgorithms.KeyManagement.Aes128KW, 32)]
+	[InlineData(EncryptionAlgorithms.KeyManagement.Aes256KW, 16)]
+	[InlineData(EncryptionAlgorithms.KeyManagement.Aes128Gcmkw, 24)]
+	public void ASymmetricKeyOfAnotherSize_IsNotChosenForAesKeyWrap(string algorithm, int keySize)
+	{
+		var algorithms = ServiceProvider.GetRequiredService<EncryptionAlgorithmsProvider>();
+
+		Assert.False(algorithms.CanEncrypt(new OctetJsonWebKey { KeyValue = CryptoRandom.GetRandomBytes(keySize) }, algorithm));
+	}
+
+	/// <summary>
+	/// A symmetric key whose bytes a custodian holds carries none in the server, so its size is the custodian's to
+	/// judge, and the key stays eligible.
+	/// </summary>
+	[Fact]
+	public void ASymmetricKeyACustodianHolds_IsChosenForAesKeyWrap()
+	{
+		var algorithms = ServiceProvider.GetRequiredService<EncryptionAlgorithmsProvider>();
+
+		Assert.True(algorithms.CanEncrypt(new OctetJsonWebKey { KeyId = "held" }, EncryptionAlgorithms.KeyManagement.Aes128KW));
+	}
+
+	/// <summary>
+	/// The size of the symmetric key offered for <paramref name="algorithm"/>: the one AES Key Wrap and AES GCM key
+	/// encryption name, and a 256-bit key where the size is the content encryption's or the password's, and for the
+	/// algorithms no symmetric key performs.
+	/// </summary>
+	private static int KeySizeFor(string algorithm) => algorithm switch
+	{
+		EncryptionAlgorithms.KeyManagement.Aes128KW or EncryptionAlgorithms.KeyManagement.Aes128Gcmkw => 16,
+		EncryptionAlgorithms.KeyManagement.Aes192KW or EncryptionAlgorithms.KeyManagement.Aes192Gcmkw => 24,
+		EncryptionAlgorithms.KeyManagement.Aes256KW
+			or EncryptionAlgorithms.KeyManagement.Aes256Gcmkw
+			or EncryptionAlgorithms.KeyManagement.Dir
+			or EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW
+			or EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW
+			or EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW
+			or EncryptionAlgorithms.KeyManagement.RsaOaep
+			or EncryptionAlgorithms.KeyManagement.RsaOaep256
+			or EncryptionAlgorithms.KeyManagement.Rsa1_5
+			or EncryptionAlgorithms.KeyManagement.EcdhEs
+			or EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW
+			or EncryptionAlgorithms.KeyManagement.EcdhEsAes192KW
+			or EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW => 32,
+		_ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, "No key size is chosen for this algorithm"),
+	};
 }

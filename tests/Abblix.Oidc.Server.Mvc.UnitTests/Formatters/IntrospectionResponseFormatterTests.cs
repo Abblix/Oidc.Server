@@ -61,7 +61,8 @@ public class IntrospectionResponseFormatterTests
                 Mock.Of<IAuthServiceKeysProvider>(provider =>
                     provider.GetSigningKeys(It.IsAny<TenantDefinition>(), It.IsAny<bool>()) ==
                     new JsonWebKey[] { JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, null, 2048) }
-                        .ToAsyncEnumerable())),
+                        .ToAsyncEnumerable()),
+                Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered),
             httpContextAccessor.Object);
 
         Result<IntrospectionSuccess, OidcError> response = success;

@@ -187,7 +187,7 @@ public class EncryptedResponseAlgorithmsValidator(
             if (context.Request.JwksUri is not null || Array.Exists(
                     context.Request.Jwks?.Keys ?? [],
                     key => key.Usage is (null or PublicKeyUsages.Encryption) &&
-                           encryptionAlgorithms.CanPerform(key, algorithm)))
+                           encryptionAlgorithms.CanEncrypt(key, algorithm)))
             {
                 return null;
             }

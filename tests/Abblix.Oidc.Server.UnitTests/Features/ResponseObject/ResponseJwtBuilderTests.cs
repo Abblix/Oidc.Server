@@ -49,8 +49,8 @@ public class ResponseJwtBuilderTests
     private readonly ResponseJwtBuilder _builder;
     private readonly ClientInfo _client = new(ClientId);
 
-    private readonly JsonWebKey _signingKeyRs256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
-    private readonly JsonWebKey _clientEncryptionKey = new RsaJsonWebKey { KeyId = "client-enc", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
+    private readonly JsonWebKey _signingKeyRs256 = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
+    private readonly JsonWebKey _clientEncryptionKey = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "client-enc", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
     private readonly DateTimeOffset _now = new(2026, 6, 2, 12, 0, 0, TimeSpan.Zero);
 
     public ResponseJwtBuilderTests()
@@ -69,7 +69,7 @@ public class ResponseJwtBuilderTests
             new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every),
             new ClientEncryptionKeyResolver(
                 new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every), _clientKeys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
-            _serviceKeys.Object);
+            _serviceKeys.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered);
 
         _builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
@@ -229,7 +229,7 @@ public class ResponseJwtBuilderTests
                 new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every),
                 new ClientEncryptionKeyResolver(
                     new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every), _clientKeys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
-                _serviceKeys.Object),
+                _serviceKeys.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered),
             _timeProvider,
             options);
 
@@ -247,8 +247,8 @@ public class ResponseJwtBuilderTests
     public async Task BuildAsync_EncryptsUnderTheRegisteredAlgorithm_PassingOverAKeyDeclaringAnother()
     {
         var capture = CaptureIssue();
-        var other = new RsaJsonWebKey { KeyId = "other", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
-        var plain = new RsaJsonWebKey { KeyId = "plain" };
+        var other = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "other", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
+        var plain = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "plain" };
         _clientKeys
             .Setup(p => p.GetEncryptionKeys(It.IsAny<ClientInfo>()))
             .Returns(new JsonWebKey[] { other, plain }.ToAsyncEnumerable());
@@ -275,7 +275,7 @@ public class ResponseJwtBuilderTests
             .Returns((keyDeclaringAnother
                 ? new JsonWebKey[]
                 {
-                    new RsaJsonWebKey { KeyId = "other", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 },
+                    new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "other", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 },
                 }
                 : []).ToAsyncEnumerable());
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep;
@@ -296,7 +296,7 @@ public class ResponseJwtBuilderTests
         var capture = CaptureIssue();
         _clientKeys
             .Setup(p => p.GetEncryptionKeys(It.IsAny<ClientInfo>()))
-            .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "plain" } }.ToAsyncEnumerable());
+            .Returns(new JsonWebKey[] { new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "plain" } }.ToAsyncEnumerable());
 
         var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
@@ -307,7 +307,7 @@ public class ResponseJwtBuilderTests
     [Fact]
     public async Task BuildAsync_HonoursClientConfiguredSigningAlgorithm()
     {
-        var signingKeyRs384 = new RsaJsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
+        var signingKeyRs384 = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
 
         _serviceKeys
             .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))

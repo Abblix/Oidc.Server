@@ -1116,6 +1116,7 @@ internal static class LogEvents
             private const int Base = 11110;
 
             public const int JwtNotIssued = Base;
+            public const int SigningKeyBelowTheFloor = Base + 1;
         }
     }
 

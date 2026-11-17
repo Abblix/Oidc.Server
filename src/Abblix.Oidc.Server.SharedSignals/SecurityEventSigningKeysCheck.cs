@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -24,11 +25,13 @@ namespace Abblix.Oidc.Server.SharedSignals;
 /// each one left waiting in the outbox.
 /// </summary>
 /// <param name="securityEvents">What the deployment allows to sign security events with.</param>
+/// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
 /// <param name="custodian">Present when the keys are held by an external custodian, in which case they live outside
 /// the tenant's settings and the absence of one there says nothing. It is a registration marker only and is never
 /// called here.</param>
 internal sealed class SecurityEventSigningKeysCheck(
     IOptions<SecurityEventsOptions> securityEvents,
+    SigningAlgorithmsProvider signingAlgorithms,
     IKeyCustodian? custodian = null) : ITenantsCheck
 {
     /// <summary>
@@ -54,7 +57,7 @@ internal sealed class SecurityEventSigningKeysCheck(
         var profile = SecurityProfileRequirements.For(tenant, null);
         var permitted = TenantSecurityEventTokenSigner.AlgorithmsFor(profile, securityEvents.Value);
 
-        if (tenant.SigningKeys.Any(key => TenantSecurityEventTokenSigner.AlgorithmOf(key, permitted) is not null))
+        if (tenant.SigningKeys.Any(key => signingAlgorithms.FirstSignedWith(key, permitted) is not null))
             return [];
 
         if (permitted.Length > 0)

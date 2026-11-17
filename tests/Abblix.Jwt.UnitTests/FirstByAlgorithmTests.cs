@@ -15,6 +15,8 @@ namespace Abblix.Jwt.UnitTests;
 /// </summary>
 public class FirstByAlgorithmTests
 {
+    private static readonly SigningAlgorithmsProvider Signing = RegisteredAlgorithms.Signing;
+
     private static async IAsyncEnumerable<JsonWebKey> Sequence(params JsonWebKey[] keys)
     {
         foreach (var key in keys)
@@ -38,7 +40,7 @@ public class FirstByAlgorithmTests
         var declaredRsa = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
 
         var chosen = await Sequence(rsaDeclaringAnother, undeclaredRsa, declaredRsa)
-            .FirstByAlgorithmAsync(SigningAlgorithms.RS256);
+            .FirstByAlgorithmAsync(SigningAlgorithms.RS256, keyId: null, Signing.CanSign);
 
         Assert.Same(undeclaredRsa, chosen);
     }
@@ -54,7 +56,7 @@ public class FirstByAlgorithmTests
         undeclaredRsa.Algorithm = null;
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Sequence(undeclaredRsa).FirstByAlgorithmAsync(SigningAlgorithms.ES256));
+            () => Sequence(undeclaredRsa).FirstByAlgorithmAsync(SigningAlgorithms.ES256, keyId: null, Signing.CanSign));
     }
 
     [Fact]
@@ -64,7 +66,7 @@ public class FirstByAlgorithmTests
         key.KeyId = "current";
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Sequence(key).FirstByAlgorithmAsync(SigningAlgorithms.RS256, "retired"));
+            () => Sequence(key).FirstByAlgorithmAsync(SigningAlgorithms.RS256, "retired", Signing.CanSign));
     }
 
     /// <summary>
@@ -77,7 +79,7 @@ public class FirstByAlgorithmTests
         ecdsa.KeyId = "k";
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Sequence(ecdsa).FirstByAlgorithmAsync(SigningAlgorithms.RS256, "k"));
+            () => Sequence(ecdsa).FirstByAlgorithmAsync(SigningAlgorithms.RS256, "k", Signing.CanSign));
     }
 
     /// <summary>
@@ -91,7 +93,7 @@ public class FirstByAlgorithmTests
         key.KeyId = "current";
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Sequence(key).FirstByAlgorithmAsync(algorithm: null, keyId: "retired"));
+            () => Sequence(key).FirstByAlgorithmAsync(algorithm: null, keyId: "retired", Signing.CanSign));
     }
 
     [Fact]
@@ -102,7 +104,7 @@ public class FirstByAlgorithmTests
         var next = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
         next.KeyId = "next";
 
-        Assert.Same(next, await Sequence(current, next).FirstByAlgorithmAsync(SigningAlgorithms.RS256, "next"));
+        Assert.Same(next, await Sequence(current, next).FirstByAlgorithmAsync(SigningAlgorithms.RS256, "next", Signing.CanSign));
     }
 
     /// <summary>
@@ -113,8 +115,7 @@ public class FirstByAlgorithmTests
     {
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
 
-        Assert.Null(await Sequence(key).FirstByAlgorithmAsync(SigningAlgorithms.None));
-        Assert.Null(await Sequence(key).FirstByAlgorithmAsync(SigningAlgorithms.None, keyId: null));
+        Assert.Null(await Sequence(key).FirstByAlgorithmAsync(SigningAlgorithms.None, keyId: null, Signing.CanSign));
     }
 
     /// <summary>
@@ -123,17 +124,6 @@ public class FirstByAlgorithmTests
     [Fact]
     public async Task NoFilterOverNoKeys_ChoosesNoKey()
     {
-        Assert.Null(await Sequence().FirstByAlgorithmAsync(algorithm: null, keyId: null));
-    }
-
-    /// <summary>
-    /// Without an algorithm to sign with there is nothing to select, whatever the keys.
-    /// </summary>
-    [Fact]
-    public async Task NoAlgorithm_ChoosesNoKey()
-    {
-        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
-
-        Assert.Null(await Sequence(key).FirstByAlgorithmAsync(algorithm: null));
+        Assert.Null(await Sequence().FirstByAlgorithmAsync(algorithm: null, keyId: null, Signing.CanSign));
     }
 }

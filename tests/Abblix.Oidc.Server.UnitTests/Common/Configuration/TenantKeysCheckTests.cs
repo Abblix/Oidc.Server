@@ -203,6 +203,30 @@ public class TenantKeysCheckTests
         Assert.Equal(["acme"], refusal.TenantIds);
     }
 
+    /// <summary>
+    /// A signing key smaller than RFC 7518 lets it sign with refuses its tenant at startup, rather than reading as a
+    /// missing key at the first token: an RSA key below 2048 bits, a symmetric key shorter than its algorithm's hash.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(UndersizedSigningKeys))]
+    public void Check_AnUndersizedSigningKey_RefusesItsTenant(JsonWebKey undersized)
+    {
+        using var serviceProvider = BuildHost();
+        var tenant = Tenant(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature), undersized);
+
+        var refusal = Assert.Single(new TenantKeysCheck(serviceProvider).Check([tenant], new OidcOptions()));
+
+        Assert.Equal(["acme"], refusal.TenantIds);
+    }
+
+    public static TheoryData<JsonWebKey> UndersizedSigningKeys() =>
+    [
+        // The key factory refuses to create an RSA key this short, so its modulus is written out: 1024 bits
+        new RsaJsonWebKey { KeyId = "short-rsa", Exponent = [1, 0, 1], Modulus = [0x80, .. new byte[127]] },
+        new OctetJsonWebKey { KeyId = "short-hs256", KeyValue = new byte[16] },
+        new OctetJsonWebKey { KeyId = "short-hs512", Algorithm = SigningAlgorithms.HS512, KeyValue = new byte[32] },
+    ];
+
     private static TenantDefinition Tenant(params JsonWebKey[] signingKeys) => new()
     {
         Id = "acme",

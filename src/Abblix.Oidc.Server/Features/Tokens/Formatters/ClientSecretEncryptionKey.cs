@@ -34,18 +34,13 @@ internal static class ClientSecretEncryptionKey
     private const int AesCbcHmacKeyParts = 2;
 
     /// <summary>
-    /// A key of the octet type, asked which algorithms are registered for its type, so the symmetric family is the one
-    /// the registry of key management algorithms holds rather than a second list.
-    /// </summary>
-    private static readonly OctetJsonWebKey OctetKeyType = new();
-
-    /// <summary>
-    /// Whether the key management algorithm is carried out with a symmetric key.
+    /// Whether the key management algorithm is carried out with a symmetric key: one registered for octet keys, so the
+    /// symmetric family is the one the registry of key management algorithms holds rather than a second list.
     /// </summary>
     /// <param name="encryptionAlgorithms">The registry of key management algorithms.</param>
     /// <param name="keyManagementAlgorithm">The algorithm asked about.</param>
     public static bool IsSymmetric(EncryptionAlgorithmsProvider encryptionAlgorithms, string keyManagementAlgorithm)
-        => encryptionAlgorithms.CanPerform(OctetKeyType, keyManagementAlgorithm);
+        => encryptionAlgorithms.IsRegisteredFor<OctetJsonWebKey>(keyManagementAlgorithm);
 
     /// <summary>
     /// Whether a JWT can be encrypted to a client under the key management algorithm at all: an asymmetric one to a key

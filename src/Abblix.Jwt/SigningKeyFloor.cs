@@ -11,10 +11,37 @@ namespace Abblix.Jwt;
 
 /// <summary>
 /// The minimum key sizes RFC 7518 sets for signing, applied to the keys a signature failed under, so a log can
-/// tell a key refused for its size from a signature that did not match.
+/// tell a key refused for its size from a signature that did not match, and to a key no algorithm chose, so it is
+/// reported for its size rather than as missing.
 /// </summary>
 internal static class SigningKeyFloor
 {
+    /// <summary>
+    /// How far a signing key falls short of the floor of the algorithm it declares, or, declaring none, of the least
+    /// demanding algorithm of its family (RS256 for an RSA key, HS256 for a symmetric one), or null where it does not.
+    /// </summary>
+    /// <remarks>
+    /// The question a key is asked once, at startup and wherever no key was found for an algorithm: a key below every
+    /// floor of its family signs with nothing, so it is reported for what it is rather than as a key that is missing.
+    /// </remarks>
+    /// <param name="key">The signing key asked about.</param>
+    public static (int Bits, int Floor)? Undersized(JsonWebKey key)
+    {
+        var algorithm = key.Algorithm ?? key switch
+        {
+            RsaJsonWebKey => SigningAlgorithms.RS256,
+            OctetJsonWebKey => SigningAlgorithms.HS256,
+            _ => null,
+        };
+
+        if (algorithm is null)
+            return null;
+
+        return UndersizedKeys([key], algorithm)
+            .Select(found => ((int Bits, int Floor)?)(found.Bits, found.Floor))
+            .FirstOrDefault();
+    }
+
     /// <summary>
     /// The candidate keys that cannot carry the algorithm's nominal strength, with what each measures and
     /// what it would have to.

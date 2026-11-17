@@ -43,6 +43,11 @@ internal sealed class AesGcmKeyWrapEncryptor(string algorithm) : IKeyManagementA
 	};
 
 	/// <inheritdoc />
+	/// <remarks>RFC 7518 section 4.7: the key is of exactly the size the algorithm names. A key whose bytes a custodian
+	/// holds carries none here, and the custodian carries the algorithm out with them.</remarks>
+	public bool Accepts(OctetJsonWebKey key) => key.KeyValue is not { } keyValue || keyValue.Length == _keySize;
+
+	/// <inheritdoc />
 	/// <remarks>
 	/// Per RFC 7518 Section 4.7 the 96-bit IV and 128-bit authentication tag travel in the JOSE header
 	/// parameters 'iv' and 'tag' (base64url), and the returned JWE Encrypted Key holds only the
