@@ -26,7 +26,7 @@
 [![Share](https://img.shields.io/badge/share-FF4500?logo=reddit&logoColor=white)](https://www.reddit.com/submit?title=Check%20out%20this%20project%20on%20GitHub:%20https://github.com/Abblix/Oidc.Server)
 [![Share](https://img.shields.io/badge/share-0088CC?logo=telegram&logoColor=white)](https://t.me/share/url?url=https://github.com/Abblix/Oidc.Server&text=Check%20out%20this%20project%20on%20GitHub)
 
-Add a certified OpenID Connect provider to your own ASP.NET Core app, one you embed and own end to end rather than a separate server to run and operate.
+Add an OpenID Connect provider to your own ASP.NET Core app, one you embed and own end to end rather than a separate server to run and operate.
 
 📑 For the full picture, see the [technical overview](https://resources.abblix.com/pdf/abblix-oidc-server-presentation-eng.pdf).
 
@@ -44,7 +44,7 @@ Add a certified OpenID Connect provider to your own ASP.NET Core app, one you em
 
 ## 🚀 About
 
-Abblix OIDC Server turns your ASP.NET Core application into a fully certified OpenID Connect provider. Rather than deploying and operating a separate identity server, you embed the protocol directly into your app, so your users, your data, and your UI stay inside your product.
+Abblix OIDC Server turns your ASP.NET Core application into an OpenID Connect provider. Rather than deploying and operating a separate identity server, you embed the protocol directly into your app, so your users, your data, and your UI stay inside your product.
 
 - Certified in versions 1.x and 2.x: all seven OpenID Provider profiles and all four logout profiles; in the 2.x certification 634 conformance tests passed with none skipped and no warnings. Version 3.0 is being prepared for certification and passes the same plans before every release. FAPI is not among the certified profiles.
 - A library you own, not a server you run: the OpenID Connect endpoints live inside your app, so users, data, and UI never leave it.

@@ -12,7 +12,7 @@
         <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeAspNetCoreSharedInPackage</TargetsForTfmSpecificBuildOutput>
         <PackageId>Abblix.OIDC.Server.MVC</PackageId>
         <Title>Abblix OIDC Server Model-View-Controller</Title>
-        <Description>ASP.NET Core MVC integration for Abblix OIDC Server, the certified OpenID Connect and OAuth 2.0 provider. Controllers, model binding and routing for every protocol endpoint: add it to a controller-based application and get a complete identity provider.</Description>
+        <Description>ASP.NET Core MVC integration for Abblix OIDC Server, the OpenID Connect and OAuth 2.0 provider. Controllers, model binding and routing for every protocol endpoint: add it to a controller-based application and get a complete identity provider.</Description>
         <Authors>Abblix LLP</Authors>
         <PackageProjectUrl>https://www.abblix.com/abblix-oidc-server</PackageProjectUrl>
         <RepositoryUrl>https://github.com/Abblix/Oidc.Server</RepositoryUrl>
