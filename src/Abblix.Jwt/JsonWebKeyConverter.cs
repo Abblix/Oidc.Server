@@ -54,9 +54,7 @@ public sealed class JsonWebKeyConverter : JsonConverter<JsonWebKey>
     /// or <see cref="OctetJsonWebKey"/>) based on the <c>kty</c> property.
     /// </summary>
     public override JsonWebKey? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        return JsonWebKeyDocument.Read(ref reader, JsonWebKeySerializerOptions.Instance);
-    }
+        => JsonWebKeyDocument.Read(ref reader, JsonWebKeySerializerOptions.Instance);
 
     /// <summary>
     /// Writes a <see cref="JsonWebKey"/> to JSON in its concrete-subtype shape, so the

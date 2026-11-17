@@ -69,8 +69,8 @@ public sealed class SigningAlgorithmsProvider(IServiceProvider serviceProvider)
     /// Gets the collection of signing algorithms supported for JWT creation and validation.
     /// Returns algorithm identifiers self-declared by the registered signers (e.g. "RS256", "ES384").
     /// </summary>
-    public IEnumerable<string> Algorithms =>
-        AlgorithmsFor<JsonWebKey>()
+    public IEnumerable<string> Algorithms
+        => AlgorithmsFor<JsonWebKey>()
             .Concat(AlgorithmsFor<RsaJsonWebKey>())
             .Concat(AlgorithmsFor<EllipticCurveJsonWebKey>())
             .Concat(AlgorithmsFor<OctetJsonWebKey>())

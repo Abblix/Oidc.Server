@@ -74,8 +74,8 @@ public sealed class EncryptionAlgorithmsProvider(IServiceProvider serviceProvide
     /// <summary>
     /// Gets the supported JWE key-management algorithms (the <c>alg</c> values, e.g. "RSA-OAEP-256").
     /// </summary>
-    public IEnumerable<string> KeyManagementAlgorithms =>
-        KeyManagementAlgorithmsFor<RsaJsonWebKey>()
+    public IEnumerable<string> KeyManagementAlgorithms
+        => KeyManagementAlgorithmsFor<RsaJsonWebKey>()
             .Concat(KeyManagementAlgorithmsFor<EllipticCurveJsonWebKey>())
             .Concat(KeyManagementAlgorithmsFor<OctetJsonWebKey>())
             .Distinct();
