@@ -4,12 +4,14 @@
 
 | Version     | Supported                                                                      |
 |-------------|--------------------------------------------------------------------------------|
-| Latest 2.x  | Yes: every security fix lands here                                             |
+| Latest 3.x  | Yes: every security fix lands here                                              |
+| Earlier 3.x | No fix in place. Upgrade to the latest 3.x                                      |
+| Latest 2.x  | Yes: security fixes, for hosts that stay on .NET 8, .NET 9 or .NET 10           |
 | Earlier 2.x | No fix in place. Upgrade to the latest 2.x, or ask us about a back-ported patch |
-| 1.x         | No longer supported. Upgrade to 2.x                                            |
+| 1.x         | Not supported. Upgrade to 3.x, or to 2.x on an earlier .NET                     |
 
 Full platform and end-of-support dates are on the
-[version support lifecycle](https://docs.abblix.com/docs/version-support-lifecycle) page.
+[version support lifecycle](https://www.abblix.com/en/docs/version-support-lifecycle) page.
 
 A fix is made in the latest release and reaches you by upgrading the package. The fixed package is published
 on NuGet and available to everyone, including those using the library free of charge: a security fix is
