@@ -276,9 +276,7 @@ jobs:
           cd getting-started
           dotnet restore
           dotnet build
-        # The samples' builds run npm install, whose audit request alone has taken three minutes on
-        # the hosted runner while the whole step used to take forty seconds.
-        timeout-minutes: 10
+        timeout-minutes: 3
       - name: Test OpenIDProviderApp runs
         run: |
           cd getting-started/OpenIDProviderApp
