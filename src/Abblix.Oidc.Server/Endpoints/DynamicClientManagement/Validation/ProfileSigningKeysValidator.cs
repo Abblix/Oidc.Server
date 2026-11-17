@@ -28,7 +28,10 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// do nothing about.
 /// </remarks>
 /// <param name="keys">The tenant's signing keys.</param>
-public class ProfileSigningKeysValidator(IAuthServiceKeysProvider keys) : IClientRegistrationContextValidator
+/// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
+public class ProfileSigningKeysValidator(
+    IAuthServiceKeysProvider keys,
+    SigningAlgorithmsProvider signingAlgorithms) : IClientRegistrationContextValidator
 {
     /// <inheritdoc />
     public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
@@ -38,7 +41,7 @@ public class ProfileSigningKeysValidator(IAuthServiceKeysProvider keys) : IClien
             return null;
 
         var signingKeys = await keys.GetSigningKeys(tenant).ToArrayAsync();
-        bool Produces(string algorithm) => Array.Exists(signingKeys, key => key.CanSign(algorithm));
+        bool Produces(string algorithm) => Array.Exists(signingKeys, key => signingAlgorithms.CanSign(key, algorithm));
 
         if (WithUnnamedAlgorithmsGiven(context.Request, signingKeys) is not { } request)
         {
@@ -79,7 +82,7 @@ public class ProfileSigningKeysValidator(IAuthServiceKeysProvider keys) : IClien
     /// userinfo algorithm of a client that registered userinfo encryption alone, whose response is a JWT (OpenID Connect
     /// Core 1.0 section 5.3.2) the profile would refuse unsigned.
     /// </summary>
-    private static ClientRegistrationRequest? WithUnnamedAlgorithmsGiven(
+    private ClientRegistrationRequest? WithUnnamedAlgorithmsGiven(
         ClientRegistrationRequest request,
         JsonWebKey[] signingKeys)
     {
@@ -91,7 +94,7 @@ public class ProfileSigningKeysValidator(IAuthServiceKeysProvider keys) : IClien
             return request;
         }
 
-        if (SecurityProfileRequirements.FapiSigningAlgorithmProducedBy(signingKeys) is not { } given)
+        if (SecurityProfileRequirements.FapiSigningAlgorithmProducedBy(signingKeys, signingAlgorithms) is not { } given)
             return null;
 
         return request with

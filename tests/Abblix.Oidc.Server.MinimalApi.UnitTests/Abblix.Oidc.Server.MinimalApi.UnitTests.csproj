@@ -34,4 +34,8 @@
 	  <ProjectReference Include="..\..\src\Abblix.Oidc.Server.AspNetCore\Abblix.Oidc.Server.AspNetCore.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<Compile Include="../Abblix.Oidc.Server.UnitTests/TestInfrastructure/TestSigningAlgorithms.cs" Link="Shared/TestSigningAlgorithms.cs" />
+	</ItemGroup>
+
 </Project>

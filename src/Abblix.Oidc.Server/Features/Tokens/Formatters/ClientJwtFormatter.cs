@@ -29,11 +29,13 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="encryptionKeyResolver">Chooses the key the JWT is encrypted to under the algorithm the client
 /// registered.</param>
 /// <param name="serviceKeysProvider">Provider for service signing keys.</param>
+/// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
 public partial class ClientJwtFormatter(
     ILogger<ClientJwtFormatter> logger,
     ProfiledJwtIssuer issuer,
     ClientEncryptionKeyResolver encryptionKeyResolver,
-    IAuthServiceKeysProvider serviceKeysProvider) : IClientJwtFormatter
+    IAuthServiceKeysProvider serviceKeysProvider,
+    SigningAlgorithmsProvider signingAlgorithms) : IClientJwtFormatter
 {
     /// <summary>
     /// Asynchronously formats a JWT for a specific client, signing it with the authentication service's key chosen by
@@ -120,7 +122,7 @@ public partial class ClientJwtFormatter(
     private async Task<JsonWebKey?> SigningKeyAsync(TenantDefinition tenant, string? algorithm)
         => IsUnsigned(algorithm)
             ? null
-            : await serviceKeysProvider.GetSigningKeys(tenant, true).FirstOrDefaultAsync(key => key.CanSign(algorithm));
+            : await serviceKeysProvider.GetSigningKeys(tenant, true).FirstOrDefaultAsync(key => signingAlgorithms.CanSign(key, algorithm));
 
     /// <summary>
     /// Why a JWT signed with <paramref name="algorithm"/> cannot be issued to the client, or null where it can: its

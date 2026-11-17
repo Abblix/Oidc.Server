@@ -85,7 +85,7 @@ public class ClientJwtFormatterTests
             new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every),
             new ClientEncryptionKeyResolver(
                 new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every), _clientKeysProvider.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
-            _serviceKeysProvider.Object);
+            _serviceKeysProvider.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered);
 
         _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
         _clientEncryptionKey = new RsaJsonWebKey { KeyId = "client-enc", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep };

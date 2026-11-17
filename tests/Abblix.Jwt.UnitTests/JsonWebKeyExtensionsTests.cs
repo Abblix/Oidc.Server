@@ -78,9 +78,9 @@ public class JsonWebKeyExtensionsTests
     [InlineData("made-up", false)]
     public void RsaKey_SupportsExactlyTheAlgorithmsItsMaterialCanPerform(string algorithm, bool expected)
     {
-        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) with { Algorithm = null };
 
-        Assert.Equal(expected, key.SupportsAlgorithm(algorithm));
+        Assert.Equal(expected, RegisteredAlgorithms.Signing.CanSign(key, algorithm));
     }
 
     /// <summary>
@@ -96,15 +96,38 @@ public class JsonWebKeyExtensionsTests
     [InlineData(EllipticCurveTypes.P256, SigningAlgorithms.RS256, false)]
     public void EllipticCurveKey_IsJudgedByItsCurve(string curve, string algorithm, bool expected)
     {
-        var key = JsonWebKeyFactory.CreateEllipticCurve(curve, SigningAlgorithms.ES256);
+        var key = JsonWebKeyFactory.CreateEllipticCurve(curve, SigningAlgorithms.ES256) with { Algorithm = null };
 
-        Assert.Equal(expected, key.SupportsAlgorithm(algorithm));
+        Assert.Equal(expected, RegisteredAlgorithms.Signing.CanSign(key, algorithm));
     }
 
     /// <summary>
-    /// Every signing algorithm this library recognizes, except "none", is met by some key: the requirement table behind
-    /// <see cref="AlgorithmSupportExtensions.SupportsAlgorithm"/> is held complete here rather than by a default arm,
-    /// so an algorithm added to the catalog fails this test until its key requirement is written down.
+    /// A key declaring an algorithm is used with that one alone (RFC 8725 section 3.1), and only where its material
+    /// performs it: a key declaring another algorithm is refused for this one, and a declaration its material cannot
+    /// honour, an EC key declaring an RSA algorithm, is refused for the declared one too.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, SigningAlgorithms.RS256, true)]
+    [InlineData(SigningAlgorithms.RS384, SigningAlgorithms.RS256, false)]
+    public void RsaKeyDeclaringAnAlgorithm_IsUsedWithThatOneAlone(string declared, string algorithm, bool expected)
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) with { Algorithm = declared };
+
+        Assert.Equal(expected, RegisteredAlgorithms.Signing.CanSign(key, algorithm));
+    }
+
+    [Fact]
+    public void EllipticCurveKeyDeclaringAnRsaAlgorithm_IsRefusedForIt()
+    {
+        var key = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256)
+            with { Algorithm = SigningAlgorithms.RS256 };
+
+        Assert.False(RegisteredAlgorithms.Signing.CanSign(key, SigningAlgorithms.RS256));
+    }
+
+    /// <summary>
+    /// Every signing algorithm this library recognizes, except "none", is registered and accepted by some key, so an
+    /// algorithm added to the catalog fails this test until its signer is registered for a key type.
     /// </summary>
     [Theory]
     [MemberData(nameof(RecognizedAlgorithms))]
@@ -119,7 +142,7 @@ public class JsonWebKeyExtensionsTests
             JsonWebKeyFactory.CreateHmac(SigningAlgorithms.HS256),
         ];
 
-        Assert.Contains(keys, key => key.SupportsAlgorithm(algorithm));
+        Assert.Contains(keys, key => RegisteredAlgorithms.Signing.CanSign(key with { Algorithm = null }, algorithm));
     }
 
     public static TheoryData<string> RecognizedAlgorithms

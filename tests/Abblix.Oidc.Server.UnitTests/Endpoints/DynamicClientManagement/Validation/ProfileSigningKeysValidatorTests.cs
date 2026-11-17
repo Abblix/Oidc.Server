@@ -36,7 +36,7 @@ public class ProfileSigningKeysValidatorTests
         var keys = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
         keys.Setup(k => k.GetSigningKeys(TestTenant.Matched, It.IsAny<bool>()))
             .Returns(() => signingKeys.ToAsyncEnumerable());
-        return new ProfileSigningKeysValidator(keys.Object);
+        return new ProfileSigningKeysValidator(keys.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered);
     }
 
     private static ClientRegistrationValidationContext Context(string? idTokenAlgorithm = null)

@@ -47,7 +47,7 @@ public class ProfileSigningKeysCheckTests
     [Fact]
     public void AClientConfiguredForAnAlgorithmNoKeyProduces_IsRefused()
     {
-        var check = new ProfileSigningKeysCheck();
+        var check = new ProfileSigningKeysCheck(Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered);
         var options = new OidcOptions();
 
         Assert.NotEmpty(check.Check([Tenant(Ec(), Client(SigningAlgorithms.PS256))], options).ToList());
@@ -78,7 +78,7 @@ public class ProfileSigningKeysCheckTests
             RedirectUris = redirectUri ? [TestConstants.DefaultRedirectUri] : [],
         };
 
-        var refusals = new ProfileSigningKeysCheck().Check([Tenant(Ec(), client)], new OidcOptions()).ToList();
+        var refusals = new ProfileSigningKeysCheck(Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered).Check([Tenant(Ec(), client)], new OidcOptions()).ToList();
 
         Assert.Equal(refused, refusals.Count > 0);
     }
@@ -99,6 +99,6 @@ public class ProfileSigningKeysCheckTests
             BackChannelLogout = new BackChannelLogoutOptions(TestConstants.DefaultRedirectUri),
         };
 
-        Assert.NotEmpty(new ProfileSigningKeysCheck().Check([Tenant(Ec(), client)], new OidcOptions()));
+        Assert.NotEmpty(new ProfileSigningKeysCheck(Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered).Check([Tenant(Ec(), client)], new OidcOptions()));
     }
 }

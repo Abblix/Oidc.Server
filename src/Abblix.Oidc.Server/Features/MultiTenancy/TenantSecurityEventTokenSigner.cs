@@ -37,11 +37,13 @@ namespace Abblix.Oidc.Server.Features.MultiTenancy;
 /// <param name="issuer">Signs the token once the tenant's profile admits its algorithm.</param>
 /// <param name="options">What the deployment allows to sign with.</param>
 /// <param name="tenantAccessor">Names the tenant the request is served at.</param>
+/// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
 public sealed class TenantSecurityEventTokenSigner(
     IAuthServiceKeysProvider keys,
     ProfiledJwtIssuer issuer,
     IOptions<SecurityEventsOptions> options,
-    ITenantAccessor tenantAccessor) : ISecurityEventTokenSigner
+    ITenantAccessor tenantAccessor,
+    SigningAlgorithmsProvider signingAlgorithms) : ISecurityEventTokenSigner
 {
     /// <inheritdoc />
     public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
@@ -66,7 +68,7 @@ public sealed class TenantSecurityEventTokenSigner(
 
         await foreach (var key in keys.GetSigningKeys(tenant, true).WithCancellation(cancellationToken))
         {
-            if (AlgorithmOf(key, permitted) is not { } algorithm)
+            if (AlgorithmOf(key, permitted, signingAlgorithms) is not { } algorithm)
                 continue;
 
             // Written into the header so the profile judges what the token is signed with, and so a key declaring no
@@ -103,6 +105,9 @@ public sealed class TenantSecurityEventTokenSigner(
     /// the one it declares, or, for a key declaring none, as one taken from a certificate, the first its material
     /// performs.
     /// </summary>
-    internal static string? AlgorithmOf(JsonWebKey key, string[] algorithms)
-        => algorithms.FirstOrDefault(key.CanSign);
+    internal static string? AlgorithmOf(
+        JsonWebKey key,
+        string[] algorithms,
+        SigningAlgorithmsProvider signingAlgorithms)
+        => algorithms.FirstOrDefault(algorithm => signingAlgorithms.CanSign(key, algorithm));
 }

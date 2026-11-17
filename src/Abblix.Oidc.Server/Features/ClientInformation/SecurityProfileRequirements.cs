@@ -386,8 +386,13 @@ public sealed record SecurityProfileRequirements
     /// none of its own.
     /// </summary>
     /// <param name="signingKeys">The tenant's signing keys.</param>
-    internal static string? FapiSigningAlgorithmProducedBy(IReadOnlyCollection<JsonWebKey> signingKeys)
-        => Array.Find(FapiSigningAlgorithms, algorithm => signingKeys.Any(key => key.CanSign(algorithm)));
+    /// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
+    internal static string? FapiSigningAlgorithmProducedBy(
+        IReadOnlyCollection<JsonWebKey> signingKeys,
+        SigningAlgorithmsProvider signingAlgorithms)
+        => Array.Find(
+            FapiSigningAlgorithms,
+            algorithm => signingKeys.Any(key => signingAlgorithms.CanSign(key, algorithm)));
 
     /// <summary>
     /// Whether a JWS signed with <paramref name="algorithm"/> is one this profile admits.

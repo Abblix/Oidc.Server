@@ -38,7 +38,7 @@ internal sealed class RsaSigner(string algorithm) : ISignatureAlgorithm<RsaJsonW
 	public string Algorithm => algorithm;
 
 	/// <inheritdoc />
-	public byte[] Sign(RsaJsonWebKey rsaKey, byte[] data)
+	public byte[] Sign(RsaJsonWebKey key, byte[] data)
 	{
 		// Measured from the modulus, NOT from RSA.KeySize, whose answer for a padded modulus depends on
 		// the platform's importer - see ModulusBitLength. Checked before the import, which is what makes
@@ -47,20 +47,20 @@ internal sealed class RsaSigner(string algorithm) : ISignatureAlgorithm<RsaJsonW
 		// Nothing upstream chooses the key - it arrives from whatever the host registered - so without
 		// this a deployment mints RS256 over a 1024-bit modulus and every peer accepts it, because the
 		// header says RS256 and the signature verifies.
-		var bits = rsaKey.ModulusBitLength();
+		var bits = key.ModulusBitLength();
 		if (bits < MinimumKeySizeBits)
 			throw new ArgumentException(
-				$"The signing key (kid={rsaKey.KeyId}) has a {bits}-bit modulus. {algorithm} requires at " +
+				$"The signing key (kid={key.KeyId}) has a {bits}-bit modulus. {algorithm} requires at " +
 				$"least {MinimumKeySizeBits} bits per RFC 7518 " +
 				$"{KeySizeFloors.RsaSectionFor(algorithm)}.",
-				nameof(rsaKey));
+				nameof(key));
 
-		using var rsa = rsaKey.ToRsa();
+		using var rsa = key.ToRsa();
 		return rsa.SignData(data, _parameters.hashAlgorithm, _parameters.padding);
 	}
 
 	/// <inheritdoc />
-	public bool Verify(RsaJsonWebKey rsaKey, byte[] data, byte[] signature)
+	public bool Verify(RsaJsonWebKey key, byte[] data, byte[] signature)
 	{
 		// A key below the floor cannot carry the algorithm's nominal strength, so refuse without verifying -
 		// otherwise a peer downgrades this deployment simply by publishing a weak key in its JWKS, and the
@@ -70,10 +70,10 @@ internal sealed class RsaSigner(string algorithm) : ISignatureAlgorithm<RsaJsonW
 		//
 		// Measured from the modulus for the reason ModulusBitLength gives: padding a weak modulus out to a
 		// respectable octet count is exactly how this check would otherwise be walked past.
-		if (rsaKey.ModulusBitLength() < MinimumKeySizeBits)
+		if (key.ModulusBitLength() < MinimumKeySizeBits)
 			return false;
 
-		using var rsa = rsaKey.ToRsa();
+		using var rsa = key.ToRsa();
 		return rsa.VerifyData(data, signature, _parameters.hashAlgorithm, _parameters.padding);
 	}
 

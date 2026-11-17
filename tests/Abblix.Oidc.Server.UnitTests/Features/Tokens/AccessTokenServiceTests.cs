@@ -1139,7 +1139,7 @@ public class AccessTokenServiceTests
         var service = new AccessTokenService(
             new FakeTimeProvider(_currentTime),
             tokenIdGenerator.Object,
-            new AuthServiceJwtFormatter(new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every), serviceKeys.Object, TestEncryptionAlgorithms.Every),
+            new AuthServiceJwtFormatter(new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every), serviceKeys.Object, TestEncryptionAlgorithms.Every, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered),
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(options),
             SingleIssuer.LicensedCatalog,
@@ -1212,7 +1212,7 @@ public class AccessTokenServiceTests
         var service = new AccessTokenService(
             new FakeTimeProvider(_currentTime),
             tokenIdGenerator.Object,
-            new AuthServiceJwtFormatter(new ProfiledJwtIssuer(creator, TestEncryptionAlgorithms.Every), serviceKeys.Object, TestEncryptionAlgorithms.Every),
+            new AuthServiceJwtFormatter(new ProfiledJwtIssuer(creator, TestEncryptionAlgorithms.Every), serviceKeys.Object, TestEncryptionAlgorithms.Every, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered),
             new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(options),
             SingleIssuer.LicensedCatalog,

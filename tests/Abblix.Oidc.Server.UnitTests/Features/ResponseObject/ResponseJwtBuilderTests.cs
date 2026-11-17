@@ -69,7 +69,7 @@ public class ResponseJwtBuilderTests
             new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every),
             new ClientEncryptionKeyResolver(
                 new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every), _clientKeys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
-            _serviceKeys.Object);
+            _serviceKeys.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered);
 
         _builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
@@ -229,7 +229,7 @@ public class ResponseJwtBuilderTests
                 new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every),
                 new ClientEncryptionKeyResolver(
                     new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every), _clientKeys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
-                _serviceKeys.Object),
+                _serviceKeys.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered),
             _timeProvider,
             options);
 

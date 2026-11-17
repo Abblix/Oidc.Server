@@ -27,10 +27,12 @@ namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
 /// <param name="serviceKeysProvider">The provider that supplies cryptographic keys used for signing and
 /// encrypting JWTs.</param>
 /// <param name="encryptionAlgorithms">Tells which server keys may be used with a key management algorithm.</param>
+/// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
 public class AuthServiceJwtFormatter(
 	ProfiledJwtIssuer issuer,
 	IAuthServiceKeysProvider serviceKeysProvider,
-	EncryptionAlgorithmsProvider encryptionAlgorithms) : IAuthServiceJwtFormatter
+	EncryptionAlgorithmsProvider encryptionAlgorithms,
+	SigningAlgorithmsProvider signingAlgorithms) : IAuthServiceJwtFormatter
 {
 	/// <inheritdoc />
 	/// <remarks>
@@ -52,7 +54,7 @@ public class AuthServiceJwtFormatter(
 		// issuing service from its ServiceTokens.<Type>.Signing settings. The signer restamps the header kid
 		// from the chosen key, so passing the header kid here only selects which signing key is used.
 		var signingCredentials = await serviceKeysProvider.GetSigningKeys(tenant, true)
-			.FirstByAlgorithmAsync(token.Header.Algorithm, token.Header.KeyId);
+			.FirstByAlgorithmAsync(token.Header.Algorithm, token.Header.KeyId, signingAlgorithms.CanSign);
 
 		// Opt-out: this token type is configured signed only, so the server's encryption keys are not even
 		// resolved, mirroring the client formatter's JARM signed-only branch.

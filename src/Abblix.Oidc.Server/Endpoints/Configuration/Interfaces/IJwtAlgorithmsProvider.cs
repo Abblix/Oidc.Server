@@ -23,9 +23,8 @@ public interface IJwtAlgorithmsProvider
 	/// a UserInfo, introspection or JARM authorization response - can be encrypted under: those the JWT creator
 	/// encrypts with, less the symmetric ones no key is derived for from the client secret. Registration accepts a
 	/// client's <c>*_encrypted_response_alg</c> from this list, and discovery advertises it for the JARM and
-	/// introspection responses. Being listed does not make an algorithm servable: one a host registered beyond the
-	/// key type table of <see cref="Abblix.Jwt.AlgorithmSupportExtensions"/> is listed once its encryptor is registered,
-	/// yet no client key is ever found to carry it, so a JWT is never encrypted under it.
+	/// introspection responses. An algorithm a host registers is listed, and matched to client keys, by the same
+	/// registration (<see cref="Abblix.Jwt.EncryptionAlgorithmsProvider.CanEncrypt"/>).
 	/// </summary>
 	IEnumerable<string> EncryptedResponseAlgorithmsSupported { get; }
 
