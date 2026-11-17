@@ -45,37 +45,31 @@ public static class JsonWebKeyExtensions
         if (algorithm is SigningAlgorithms.None)
             return null;
 
-        if (keyId.HasValue())
-            credentials = credentials.Where(key => key.KeyId == keyId);
-
         var passedOver = new List<JsonWebKey>();
-        if (algorithm.HasValue())
+        await foreach (var key in credentials)
         {
-            credentials = credentials.Where(key =>
-            {
-                if (canPerform(key, algorithm))
-                    return true;
+            if (keyId.HasValue() && key.KeyId != keyId)
+                continue;
 
-                passedOver.Add(key);
-                return false;
-            });
+            if (!algorithm.HasValue() || canPerform(key, algorithm))
+                return key;
+
+            passedOver.Add(key);
         }
 
-        var key = await credentials.FirstOrDefaultAsync();
-        if (key is null && (algorithm.HasValue() || keyId.HasValue()))
-        {
-            // A key passed over for being smaller than RFC 7518 lets the algorithm use is named with its size, so a
-            // retired short key reads as what it is rather than as a key that is missing
-            var undersized = algorithm.HasValue()
-                ? string.Concat(SigningKeyFloor.UndersizedKeys(passedOver, algorithm).Select(found =>
-                    $" The key '{found.Key.KeyId}' has {found.Bits} bits, below the {found.Floor} RFC 7518 requires."))
-                : string.Empty;
+        if (!algorithm.HasValue() && !keyId.HasValue())
+            return null;
 
-            throw new InvalidOperationException(
-                $"No key found for algorithm '{algorithm}' and key id '{keyId}'.{undersized} " +
-                $"Ensure the corresponding keys are properly configured and loaded.");
-        }
-        return key;
+        // A key passed over for being smaller than RFC 7518 lets the algorithm use is named with its size, so a
+        // retired short key reads as what it is rather than as a key that is missing
+        var undersized = algorithm.HasValue()
+            ? string.Concat(SigningKeyFloor.UndersizedKeys(passedOver, algorithm).Select(found =>
+                $" The key '{found.Key.KeyId}' has {found.Bits} bits, below the {found.Floor} RFC 7518 requires."))
+            : string.Empty;
+
+        throw new InvalidOperationException(
+            $"No key found for algorithm '{algorithm}' and key id '{keyId}'.{undersized} " +
+            $"Ensure the corresponding keys are properly configured and loaded.");
     }
 
     /// <summary>

@@ -124,12 +124,13 @@ public partial class ClientJwtFormatter(
         if (IsUnsigned(algorithm))
             return null;
 
-        var keys = await serviceKeysProvider.GetSigningKeys(tenant, true).ToArrayAsync();
-        var signingKey = Array.Find(keys, key => signingAlgorithms.CanSign(key, algorithm));
+        var signingKey = await serviceKeysProvider.GetSigningKeys(tenant, true)
+            .FirstOrDefaultAsync(key => signingAlgorithms.CanSign(key, algorithm));
         if (signingKey is null)
         {
             // The client is told only that no key produces the algorithm; the host is told which key it passed over
             // for its size, which a key held by a custodian or supplied by its own provider is checked for nowhere else
+            var keys = await serviceKeysProvider.GetSigningKeys(tenant, true).ToArrayAsync();
             foreach (var (key, bits, floor) in SigningKeyFloor.UndersizedKeys(keys, algorithm))
                 LogSigningKeyBelowTheFloor(key.KeyId, algorithm, bits, floor);
         }

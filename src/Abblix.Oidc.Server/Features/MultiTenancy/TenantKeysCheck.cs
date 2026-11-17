@@ -98,16 +98,20 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
     /// material to measure is refused as incomplete instead.
     /// </summary>
     private static IEnumerable<TenantRefusal> UndersizedSettingsKeysOf(IReadOnlyCollection<TenantDefinition> tenants)
-        => from tenant in tenants
-           from key in tenant.SigningKeys
-           where key.HasPublicKey
-           let size = SigningKeyFloor.Undersized(key)
-           where size is not null
-           select TenantRefusal.Of(
-               tenant,
-               $"Tenant '{tenant.Id}': The signing key '{key.KeyId}' has {size.Value.Bits} bits, below the " +
-               $"{size.Value.Floor} RFC 7518 requires of it, so nothing is signed with it. Replace it with a key of at " +
-               $"least {size.Value.Floor} bits.");
+        => (from tenant in tenants
+            from key in tenant.SigningKeys
+            where key.HasPublicKey
+            select UndersizedRefusal(tenant, key))
+           .OfType<TenantRefusal>();
+
+    private static TenantRefusal? UndersizedRefusal(TenantDefinition tenant, JsonWebKey key)
+        => SigningKeyFloor.Undersized(key) is { } size
+            ? TenantRefusal.Of(
+                tenant,
+                $"Tenant '{tenant.Id}': The signing key '{key.KeyId}' has {size.Bits} bits, below the {size.Floor} " +
+                $"RFC 7518 requires of it, so nothing is signed with it. Replace it with a key of at least " +
+                $"{size.Floor} bits.")
+            : null;
 
     /// <summary>
     /// No key, compared by its thumbprint, is declared by two tenants: sharing one would let a party trusting one
