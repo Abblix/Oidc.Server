@@ -1,0 +1,50 @@
+name: Coverage summary
+
+# One assembly is measured by several test projects, each reaching a different part of it, so its
+# coverage exists only after the shards' reports are merged. The table lands in the run summary.
+#
+# A workflow of its own, called beside the shards rather than inside them, so that nothing the
+# caller publishes waits for it: the figure is read, not enforced, and a broken summary must not
+# hold back a release whose tests are green.
+on:
+  workflow_call:
+    inputs:
+      projects:
+        description: JSON array of the test projects the shards ran; one report is expected from each.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  summary:
+    name: Coverage summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+        timeout-minutes: 3
+      - name: Download coverage reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: coverage-*
+          path: coverage
+        timeout-minutes: 3
+      # A shard whose report is missing (a failed shard, or a re-run after the reports expired) is
+      # named in the table and turns this job red; the table is still written from what is there.
+      - name: Write coverage summary
+        env:
+          PROJECTS: ${{ inputs.projects }}
+        run: python3 -I .github/scripts/coverage-summary.py coverage "$PROJECTS" >> "$GITHUB_STEP_SUMMARY"
+        timeout-minutes: 3

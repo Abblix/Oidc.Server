@@ -1,15 +1,22 @@
 """Merge the Cobertura reports of every test shard into one coverage table per shipped assembly.
 
 Each shard measures what its own test project reaches, so one assembly appears in several reports,
-each covering a different part of it. A line counts as covered when ANY shard executed it, and a
-branch point contributes the most conditions any shard took there: summing the reports instead
-would count a line twice, and taking one report would credit an assembly with only the tests of
-one project.
+each covering a different part of it. A source line counts as covered when ANY shard executed it:
+summing the reports would count a line twice, and taking one report would credit an assembly with
+only the tests of one project. Lines are counted per source line, so a line shared by a method and
+a lambda inside it counts once, and the figure can differ slightly from a single report's header.
 
-Usage: coverage-summary.py <directory with *.cobertura.xml, searched recursively>
-The Markdown table goes to stdout; the caller appends it to the job summary.
+A branch point is kept per class, because a method and a lambda on the same line are different
+points, and contributes the most conditions any one shard took there. Cobertura does not say WHICH
+conditions a shard took, so two shards taking different halves still count as half: the branch
+column is a lower bound.
+
+Usage: coverage-summary.py <directory with the downloaded artefacts> <JSON array of the projects>
+Each artefact is a directory coverage-<project>. The Markdown table goes to stdout; the exit code
+is 1 when a project's report is missing, after the table is written from the reports present.
 """
 
+import json
 import pathlib
 import re
 import sys
@@ -25,20 +32,26 @@ def source_path(filename):
 
 
 def is_shipped(package):
-    """Test projects, test hosts and documentation samples are measured too, but nobody ships them."""
-    return package.startswith('Abblix.') and 'Test' not in package and 'DocSamples' not in package
+    """Test projects, test hosts, samples and build-time source generators are measured too, but not shipped."""
+    return (package.startswith('Abblix.')
+            and not any(part in package for part in ('Test', 'DocSamples', 'SourceGenerators')))
 
 
-def main(directory):
-    reports = sorted(pathlib.Path(directory).rglob('*.cobertura.xml'))
+def percent(part, whole):
+    return f'{100 * part / whole:.1f}%' if whole else 'n/a'
+
+
+def main(directory, projects):
+    root = pathlib.Path(directory)
+    missing = [p for p in projects if not any((root / f'coverage-{p}').rglob('*.cobertura.xml'))]
+    reports = sorted(root.rglob('*.cobertura.xml'))
     if not reports:
         sys.exit(f'No *.cobertura.xml under {directory}: no shard uploaded a coverage report.')
 
-    lines = {}     # (package, file, number) -> executed by any shard
-    branches = {}  # (package, file, number) -> (conditions taken, conditions present)
+    lines = {}     # (assembly, file, line) -> executed by any shard
+    branches = {}  # (assembly, file, line, class) -> (conditions taken, conditions present)
     for report in reports:
-        root = ElementTree.parse(report).getroot()
-        for package in root.iterfind('./packages/package'):
+        for package in ElementTree.parse(report).getroot().iterfind('./packages/package'):
             name = package.get('name')
             if not is_shipped(name):
                 continue
@@ -49,26 +62,26 @@ def main(directory):
                     lines[key] = lines.get(key, False) or int(line.get('hits')) > 0
                     match = CONDITIONS.search(line.get('condition-coverage', ''))
                     if line.get('branch') == 'True' and match:
+                        point = key + (cls.get('name'),)
                         taken, present = int(match.group(1)), int(match.group(2))
-                        known = branches.get(key, (0, present))
-                        branches[key] = (max(known[0], taken), max(known[1], present))
+                        known = branches.get(point, (0, present))
+                        branches[point] = (max(known[0], taken), max(known[1], present))
 
     totals = {}
     for (name, _, _), covered in lines.items():
         entry = totals.setdefault(name, [0, 0, 0, 0])
         entry[0] += covered
         entry[1] += 1
-    for (name, _, _), (taken, present) in branches.items():
-        entry = totals[name]
-        entry[2] += taken
-        entry[3] += present
+    for (name, _, _, _), (taken, present) in branches.items():
+        totals[name][2] += taken
+        totals[name][3] += present
 
-    def percent(part, whole):
-        return f'{100 * part / whole:.1f}%' if whole else 'n/a'
-
-    print(f'### Test coverage, merged from {len(reports)} shard reports')
+    print(f'### Test coverage, merged from {len(reports)} reports of {len(projects)} test projects')
     print()
-    print('| Assembly | Lines | Branches |')
+    if missing:
+        print(f'Incomplete: no coverage report from {", ".join(missing)}.')
+        print()
+    print('| Assembly | Lines | Branches (lower bound) |')
     print('|---|---|---|')
     sums = [0, 0, 0, 0]
     for name in sorted(totals):
@@ -76,11 +89,12 @@ def main(directory):
         sums = [a + b for a, b in zip(sums, totals[name])]
         print(f'| {name} | {percent(line_hit, line_all)} ({line_hit}/{line_all}) '
               f'| {percent(branch_hit, branch_all)} ({branch_hit}/{branch_all}) |')
-    print(f'| All shipped assemblies | {percent(sums[0], sums[1])} ({sums[0]}/{sums[1]}) '
+    print(f'| All measured shipped assemblies | {percent(sums[0], sums[1])} ({sums[0]}/{sums[1]}) '
           f'| {percent(sums[2], sums[3])} ({sums[2]}/{sums[3]}) |')
+    return 1 if missing else 0
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        sys.exit('usage: coverage-summary.py <reports directory>')
-    main(sys.argv[1])
+    if len(sys.argv) != 3:
+        sys.exit('usage: coverage-summary.py <reports directory> <JSON array of the projects>')
+    sys.exit(main(sys.argv[1], json.loads(sys.argv[2])))

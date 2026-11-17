@@ -68,6 +68,15 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/test-shards.yml
+    with:
+      coverage: true
+
+  coverage-trial:
+    needs: shards
+    if: ${{ !cancelled() && needs.shards.result != 'skipped' }}
+    uses: ./.github/workflows/coverage-summary.yml
+    with:
+      projects: ${{ needs.shards.outputs.projects }}
 
   build:
     # The whole SOLUTION in Release, which the shards do not cover: they build what the test
