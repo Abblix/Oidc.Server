@@ -121,14 +121,20 @@ The refresh happens on use, not on a background schedule: each request through t
 builder.Services.AddVaultCustodian(vault => builder.Configuration.GetSection("Vault").Bind(vault));
 ```
 
-```jsonc
-// Kubernetes: the pod authenticates with its projected service-account token,
-// which is re-read on every login because the kubelet rotates the file.
-"Vault": { "Authentication": { "Kubernetes": { "Role": "oidc-signer" } } }
+Kubernetes: the pod authenticates with its projected service-account token, which is re-read on every login because the kubelet rotates the file.
 
-// AppRole: the identifier pair, for a host outside Kubernetes. The secret comes
-// from a secret store or a mounted secret, never from a committed file.
-"Vault": { "Authentication": { "AppRole": { "RoleId": "...", "SecretId": "..." } } }
+```json
+{
+  "Vault": { "Authentication": { "Kubernetes": { "Role": "oidc-signer" } } }
+}
+```
+
+AppRole: the identifier pair, for a host outside Kubernetes. The secret comes from a secret store or a mounted secret, never from a committed file.
+
+```json
+{
+  "Vault": { "Authentication": { "AppRole": { "RoleId": "...", "SecretId": "..." } } }
+}
 ```
 
 The auth role must issue service tokens without a use limit (`token_num_uses=0`): every Transit call spends a use invisibly. For AppRole, remember that every login consumes a `secret_id` use - including logins retried after a lost response - so a bounded `secret_id_num_uses` runs out on schedule rather than on error.

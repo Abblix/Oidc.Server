@@ -10,6 +10,15 @@ Each tenant of the server is an issuer of its own, and a transmitter answering f
 - push delivery runs for each tenant the server serves, in turn;
 - once a running instance releases a tenant, at least one refresh period after the tenant left the store of tenants, its streams and the events queued on them are deleted, and a stream that cannot be deleted is logged. A tenant that left the store while no instance served it, as during a restart, is not released by the instances that start afterwards, so its streams stay.
 
+## Install
+
+```bash
+dotnet add package Abblix.OIDC.Server.SharedSignals
+dotnet add package Abblix.OIDC.Server.MinimalAPI
+```
+
+The examples below map the server with the Minimal API package; an MVC host installs Abblix.OIDC.Server.MVC instead.
+
 ## Turning it on
 
 Register the transmitter and the stores it uses first, then the server and the transmitter's part in it:
