@@ -10,6 +10,11 @@ name: Test shards
 # changing. Callers keep their own aggregate job and depend on this one.
 on:
   workflow_call:
+    inputs:
+      coverage:
+        description: Keep each shard's coverage report as an artefact named coverage-<project>, for coverage-summary.yml.
+        type: boolean
+        default: false
     outputs:
       projects:
         description: JSON array of the test projects that were run.
@@ -109,4 +114,15 @@ jobs:
             tests/results/*.trx
             tests/results/**/*.cobertura.xml
           retention-days: 3
+        timeout-minutes: 3
+      # Kept only when the caller asks (the release), for coverage-summary.yml: a pull request run would
+      # add one artefact per shard to the storage the whole account shares, and nobody reads it there.
+      - name: Upload coverage report
+        if: inputs.coverage && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-${{ matrix.project }}
+          path: tests/results/**/*.cobertura.xml
+          if-no-files-found: error
+          retention-days: 1
         timeout-minutes: 3

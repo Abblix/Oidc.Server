@@ -104,6 +104,17 @@ jobs:
   tests:
     needs: versioning
     uses: ./.github/workflows/test-shards.yml
+    with:
+      coverage: true
+
+  # The merged coverage per assembly, in the run summary. Nothing below needs it: the figure is
+  # informative, and a broken summary must not hold back a release.
+  coverage:
+    needs: tests
+    if: ${{ !cancelled() }}
+    uses: ./.github/workflows/coverage-summary.yml
+    with:
+      projects: ${{ needs.tests.outputs.projects }}
 
   # The OpenID Foundation conformance plans, the certified OpenID Connect ones and the FAPI and FAPI-CIBA ones, run
   # against the release commit's own conformance host on each transport adapter, four jobs at once. create-release
