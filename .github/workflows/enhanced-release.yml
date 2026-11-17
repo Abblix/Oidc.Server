@@ -104,6 +104,8 @@ jobs:
   tests:
     needs: versioning
     uses: ./.github/workflows/test-shards.yml
+    with:
+      coverage: true
 
   # The OpenID Foundation conformance plans, the certified OpenID Connect ones and the FAPI and FAPI-CIBA ones, run
   # against the release commit's own conformance host on each transport adapter, four jobs at once. create-release

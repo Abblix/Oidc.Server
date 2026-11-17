@@ -10,6 +10,11 @@ name: Test shards
 # changing. Callers keep their own aggregate job and depend on this one.
 on:
   workflow_call:
+    inputs:
+      coverage:
+        description: Keep each shard's coverage report and publish the merged coverage per assembly in the run summary.
+        type: boolean
+        default: false
     outputs:
       projects:
         description: JSON array of the test projects that were run.
@@ -109,4 +114,47 @@ jobs:
             tests/results/*.trx
             tests/results/**/*.cobertura.xml
           retention-days: 3
+        timeout-minutes: 3
+      # Kept only when the caller asks (the release), for the merge below: a pull request run would
+      # add one artefact per shard to the storage the whole account shares, and nobody reads it there.
+      - name: Upload coverage report
+        if: inputs.coverage && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-${{ matrix.project }}
+          path: tests/results/**/*.cobertura.xml
+          if-no-files-found: error
+          retention-days: 1
+        timeout-minutes: 3
+
+  # One assembly is measured by several test projects, each reaching a different part of it, so its
+  # coverage exists only after the shards' reports are merged. The table lands in the run summary,
+  # where the release checklist reads it.
+  coverage:
+    needs: shard
+    if: inputs.coverage && !cancelled()
+    name: Coverage summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+        timeout-minutes: 3
+      - name: Download coverage reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: coverage-*
+          path: coverage
+        timeout-minutes: 3
+      - name: Write coverage summary
+        run: python3 -I .github/scripts/coverage-summary.py coverage >> "$GITHUB_STEP_SUMMARY"
         timeout-minutes: 3
