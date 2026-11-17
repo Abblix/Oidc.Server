@@ -50,7 +50,7 @@ Abblix OIDC Server turns your ASP.NET Core application into an OpenID Connect pr
 - A library you own, not a server you run: the OpenID Connect endpoints live inside your app, so users, data, and UI never leave it.
 - Current with the modern security stack: DPoP, PAR, JARM, RAR, CIBA, device authorization, token exchange, certificate-bound tokens and JWT introspection responses, alongside the OAuth 2.0 and OpenID Connect core.
 - Security profiles the server enforces per client or per tenant, not certified: FAPI 2.0, FAPI 2.0 Message Signing and FAPI 1.0 Advanced, which also holds CIBA clients to FAPI-CIBA. Every 3.0 release runs their OpenID Foundation conformance plans.
-- The test suite of version 3.0 covers over 90% of the lines and branches of the code its packages ship.
+- The test suite of version 3.0 covers over 90% of the lines and branches of the hand-written code its packages ship.
 - Many issuers in one deployment: each tenant has its own clients, keys and security profile, declared at startup or added while the server runs. The free tier allows one production issuer, see [License](#-license).
 - Engineering you can audit: over 11,000 passing tests, top SonarCloud security, reliability, and maintainability ratings, and a CodeQL scan of every push to the development branch.
 - Modern .NET, minimal friction: targets .NET 11, with drop-in adapters for both MVC and Minimal API.

@@ -21,6 +21,9 @@ jobs:
   summary:
     name: Coverage summary
     runs-on: ubuntu-latest
+    # Whatever fails here - the download, the checkout, the merge - shows on this job and does not
+    # fail the run: a release whose packages are already out would otherwise read as failed.
+    continue-on-error: true
     timeout-minutes: 5
     permissions:
       contents: read
@@ -42,10 +45,8 @@ jobs:
           path: coverage
         timeout-minutes: 3
       # A shard whose report is missing (a failed shard, or a re-run after the reports expired) is
-      # named in the table, which is still written from what is there. The step fails then, and does
-      # not fail the run: a release whose packages are already out would otherwise read as failed.
+      # named in the table, which is still written from what is there, and the step fails.
       - name: Write coverage summary
-        continue-on-error: true
         env:
           PROJECTS: ${{ inputs.projects }}
         run: python3 -I .github/scripts/coverage-summary.py coverage "$PROJECTS" >> "$GITHUB_STEP_SUMMARY"
