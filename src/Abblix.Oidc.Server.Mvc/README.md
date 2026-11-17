@@ -4,7 +4,7 @@ Abblix.OIDC.Server.MVC integrates the Abblix OIDC Server with ASP.NET Core MVC, 
 
 ## What's New in Version 3.0
 
-Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3-0) before moving a 2.x deployment.
+Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3.0) before moving a 2.x deployment.
 
 🚀 Features
 - The endpoints are mapped with `MapOidcControllers()`, at the routes `OidcRouteOptions` sets

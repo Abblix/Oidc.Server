@@ -4,7 +4,7 @@ Abblix OIDC Server is a .NET library implementing the server side of OpenID Conn
 
 ## What's New in Version 3.0
 
-Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3-0) before moving a 2.x deployment.
+Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3.0) before moving a 2.x deployment.
 
 🚀 Features
 - Multi-tenancy: one server serves several issuers, each a tenant with its own clients, scopes, resources, keys and pages, declared in the settings or kept in a store of the host's own and changed while the server runs

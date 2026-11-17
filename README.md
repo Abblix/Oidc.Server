@@ -172,7 +172,7 @@ Version 3.0 changes how a host registers and configures the server. The changes 
 - A client signing its own authentication JWT names the issuer as its only audience, as RFC 10070 requires. While a client moves off the token endpoint address, the backchannel authentication endpoint address, the pushed authorization request endpoint address or an audience array, the host can let that one client keep its form with `ClientInfo.ClientAssertionAudiences`, and dynamically registered clients with `NewClientOptions.ClientAssertionAudiences`, except under FAPI 2.0.
 - What 2.x stored is not read by 3.0, so end users sign in again, and grants, dynamic client registrations and minted keys of 2.x end once.
 
-The complete list, with what each change asks of a host, is in the [3.0 release notes](https://github.com/Abblix/Oidc.Server/releases/tag/v3.0). The [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3-0) guide walks a 2.x deployment through the move, including how to keep the signing keys it minted.
+The complete list, with what each change asks of a host, is in the [3.0 release notes](https://github.com/Abblix/Oidc.Server/releases/tag/v3.0). The [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3.0) guide walks a 2.x deployment through the move, including how to keep the signing keys it minted.
 
 ## 📚 Documentation
 
