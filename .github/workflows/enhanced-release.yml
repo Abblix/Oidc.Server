@@ -427,15 +427,10 @@ jobs:
         with:
           egress-policy: audit
         timeout-minutes: 3
-      - name: Download NuGet packages
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: nuget-packages
-          path: nupkg
-        timeout-minutes: 3
       # global.json is the one place naming the SDK, and this job has no working copy to read it
       # from - it downloads the packages as an artifact and pushes them. Fetched on its own rather
       # than naming a version here, which would drift from the build that produced the packages.
+      # It runs before the download: checkout empties the workspace first, packages included.
       - name: Fetch the SDK pin
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -455,8 +450,15 @@ jobs:
           # installs that one - but it moves in one place.
           global-json-file: global.json
         timeout-minutes: 3
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: nupkg
+        timeout-minutes: 3
       - name: List packages to be published
         run: |
+          shopt -s failglob
           echo "Packages ready for publishing to GitHub Packages:"
           for pkg in nupkg/*.nupkg; do
             echo "  - $(basename "$pkg")"
@@ -495,15 +497,10 @@ jobs:
         with:
           egress-policy: audit
         timeout-minutes: 3
-      - name: Download NuGet packages
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: nuget-packages
-          path: nupkg
-        timeout-minutes: 3
       # global.json is the one place naming the SDK, and this job has no working copy to read it
       # from - it downloads the packages as an artifact and pushes them. Fetched on its own rather
       # than naming a version here, which would drift from the build that produced the packages.
+      # It runs before the download: checkout empties the workspace first, packages included.
       - name: Fetch the SDK pin
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -523,8 +520,15 @@ jobs:
           # installs that one - but it moves in one place.
           global-json-file: global.json
         timeout-minutes: 3
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: nupkg
+        timeout-minutes: 3
       - name: List packages to be published
         run: |
+          shopt -s failglob
           echo "Packages ready for publishing to NuGet.org:"
           for pkg in nupkg/*.nupkg; do
             echo "  - $(basename "$pkg")"
