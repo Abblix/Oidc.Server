@@ -46,7 +46,7 @@ public class DiscoverySignedMetadataTests
     private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 5, 19, 10, 0, 0, TimeSpan.Zero));
     private readonly OidcOptions _oidcOptions;
     private readonly ConfigurationResponseFormatter _formatter;
-    private readonly JsonWebKey _signingKey = new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.RS256 };
+    private readonly JsonWebKey _signingKey = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig", Algorithm = SigningAlgorithms.RS256 };
 
     public DiscoverySignedMetadataTests()
     {
@@ -193,7 +193,7 @@ public class DiscoverySignedMetadataTests
         _oidcOptions.Discovery.SignedMetadata = true;
         _keysProviderMock
             .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
-            .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "sig" } }.ToAsyncEnumerable());
+            .Returns(new JsonWebKey[] { new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig" } }.ToAsyncEnumerable());
 
         JsonWebToken? capturedToken = null;
         _jwtCreatorMock

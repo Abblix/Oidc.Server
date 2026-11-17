@@ -38,6 +38,11 @@ internal sealed class RsaSigner(string algorithm) : ISignatureAlgorithm<RsaJsonW
 	public string Algorithm => algorithm;
 
 	/// <inheritdoc />
+	/// <remarks>RFC 7518 sections 3.3 and 3.5: a key of 2048 bits or larger, measured from the modulus as
+	/// <see cref="Sign"/> and <see cref="Verify"/> measure it, so a key they would refuse is not chosen.</remarks>
+	public bool Accepts(RsaJsonWebKey key) => key.ModulusBitLength() >= MinimumKeySizeBits;
+
+	/// <inheritdoc />
 	public byte[] Sign(RsaJsonWebKey key, byte[] data)
 	{
 		// Measured from the modulus, NOT from RSA.KeySize, whose answer for a padded modulus depends on

@@ -27,6 +27,13 @@ internal sealed class HmacSigner(string algorithm) : ISignatureAlgorithm<OctetJs
 	public string Algorithm => algorithm;
 
 	/// <inheritdoc />
+	/// <remarks>RFC 7518 section 3.2: a key at least as long as the hash output, as <see cref="Sign"/> and
+	/// <see cref="Verify"/> require. A key whose bytes a custodian holds carries none here, and the custodian carries
+	/// the algorithm out with them.</remarks>
+	public bool Accepts(OctetJsonWebKey key)
+		=> key.KeyValue is not { } keyValue || keyValue.Length >= GetMinimumKeyLengthBytes();
+
+	/// <inheritdoc />
 	public byte[] Sign(OctetJsonWebKey key, byte[] data)
 	{
 		var keyValue = key.KeyValue;

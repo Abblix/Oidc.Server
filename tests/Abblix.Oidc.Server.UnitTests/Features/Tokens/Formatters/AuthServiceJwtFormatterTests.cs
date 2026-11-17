@@ -52,9 +52,9 @@ public class AuthServiceJwtFormatterTests
 
         _formatter = new AuthServiceJwtFormatter(new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every), _keysProvider.Object, TestEncryptionAlgorithms.Every, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered);
 
-        _signingKeyRS256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
-        _signingKeyRS256Alt = new RsaJsonWebKey { KeyId = "sig-rs256-alt", Algorithm = SigningAlgorithms.RS256 };
-        _signingKeyRS384 = new RsaJsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
+        _signingKeyRS256 = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
+        _signingKeyRS256Alt = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig-rs256-alt", Algorithm = SigningAlgorithms.RS256 };
+        _signingKeyRS384 = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
         _encryptionKey = new RsaJsonWebKey
         {
             KeyId = "enc-key",
@@ -250,7 +250,7 @@ public class AuthServiceJwtFormatterTests
     public async Task FormatAsync_Encrypt_FallsBackToRsaOaep256_WhenKeyDeclaresNoAlgorithm()
     {
         var token = TokenWith();
-        var agnosticKey = new RsaJsonWebKey { KeyId = "enc-agnostic", Algorithm = null };
+        var agnosticKey = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "enc-agnostic", Algorithm = null };
         SetupSigningKeys(_signingKeyRS256);
         SetupEncryptionKeys(agnosticKey);
 
@@ -275,7 +275,7 @@ public class AuthServiceJwtFormatterTests
     public async Task FormatAsync_Encrypt_ExplicitPolicyAlgorithmSelectsAgnosticKeyAndSetsHeaderAlgorithm()
     {
         var token = TokenWith();
-        var agnosticKey = new RsaJsonWebKey { KeyId = "enc-agnostic", Algorithm = null };
+        var agnosticKey = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "enc-agnostic", Algorithm = null };
         SetupSigningKeys(_signingKeyRS256);
         SetupEncryptionKeys(agnosticKey);
 
@@ -410,7 +410,7 @@ public class AuthServiceJwtFormatterTests
         var token = TokenWith();
         SetupSigningKeys(_signingKeyRS256);
 
-        var audienceKey = new RsaJsonWebKey { KeyId = "audience-enc" };
+        var audienceKey = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "audience-enc" };
         var policy = Encrypt() with { Key = audienceKey };
 
         JsonWebKey? capturedEncryptionKey = null;
@@ -440,7 +440,7 @@ public class AuthServiceJwtFormatterTests
         var token = TokenWith();
         SetupSigningKeys(_signingKeyRS256);
 
-        var audienceKey = new RsaJsonWebKey { KeyId = "audience-enc", Algorithm = declaredAlgorithm };
+        var audienceKey = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "audience-enc", Algorithm = declaredAlgorithm };
         var policy = Encrypt(policyAlgorithm) with { Key = audienceKey };
 
         string? capturedAlgorithm = null;
@@ -543,11 +543,11 @@ public class AuthServiceJwtFormatterTests
     [InlineData(ClientSecurityProfile.None, "pkcs1")]
     public async Task FormatAsync_AtAFapiTenant_NeverEncryptsWithRsa1_5(ClientSecurityProfile profile, string expectedKeyId)
     {
-        var pkcs1 = new RsaJsonWebKey { KeyId = "pkcs1", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 };
-        var oaep = new RsaJsonWebKey { KeyId = "oaep", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
+        var pkcs1 = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "pkcs1", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 };
+        var oaep = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "oaep", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
         var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
         // An algorithm the profile admits, since what is under test is the encryption key
-        var signingKeyPs256 = new RsaJsonWebKey { KeyId = "sig-ps256", Algorithm = SigningAlgorithms.PS256 };
+        var signingKeyPs256 = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig-ps256", Algorithm = SigningAlgorithms.PS256 };
         SetupSigningKeys(signingKeyPs256);
         SetupEncryptionKeys(pkcs1, oaep);
         JsonWebKey? used = null;

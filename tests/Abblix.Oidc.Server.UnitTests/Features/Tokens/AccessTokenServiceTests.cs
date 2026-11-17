@@ -837,7 +837,7 @@ public class AccessTokenServiceTests
     public async Task CreateAccessToken_ResourceSetLeadsWithAKeyNothingEncryptsTo_EncryptsToTheNextOne(
         string firstKeyAlgorithm)
     {
-        var unusable = new RsaJsonWebKey { KeyId = "orders-first", Algorithm = firstKeyAlgorithm };
+        var unusable = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "orders-first", Algorithm = firstKeyAlgorithm };
         var resourceKey = new RsaJsonWebKey
         {
             KeyId = "orders-enc",
@@ -866,7 +866,7 @@ public class AccessTokenServiceTests
     [Fact]
     public async Task CreateAccessToken_ResourcePublishesOnlyKeysNothingEncryptsTo_IsRefused()
     {
-        var signingOnly = new RsaJsonWebKey { KeyId = "orders-sig", Algorithm = SigningAlgorithms.RS256 };
+        var signingOnly = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "orders-sig", Algorithm = SigningAlgorithms.RS256 };
         var service = CreateServiceWithResources(new() { [OrdersApi] = [signingOnly] });
 
         var refused = await Assert.ThrowsAsync<AudienceKeyRefusedException>(() => service.CreateAccessTokenAsync(
@@ -882,7 +882,7 @@ public class AccessTokenServiceTests
     [Fact]
     public async Task CreateAccessToken_EncryptionTurnedOff_IgnoresTheResourceKeys()
     {
-        var signingOnly = new RsaJsonWebKey { KeyId = "orders-sig", Algorithm = SigningAlgorithms.RS256 };
+        var signingOnly = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "orders-sig", Algorithm = SigningAlgorithms.RS256 };
         var options = new OidcOptions();
         options.ServiceTokens.AccessToken.Encrypt = false;
         var service = CreateServiceWithResources(new() { [OrdersApi] = [signingOnly] }, options: options);
@@ -913,7 +913,7 @@ public class AccessTokenServiceTests
     [Fact]
     public async Task CreateAccessToken_ResourcePublishesKey_EncryptsToThatKey()
     {
-        var resourceKey = new RsaJsonWebKey { KeyId = "orders-enc" };
+        var resourceKey = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "orders-enc" };
         var service = CreateServiceWithResources(new() { [OrdersApi] = [resourceKey] });
 
         ServiceJwtEncryption? capturedPolicy = null;
@@ -962,8 +962,8 @@ public class AccessTokenServiceTests
     {
         var service = CreateServiceWithResources(new()
         {
-            [OrdersApi] = [new RsaJsonWebKey { KeyId = "orders-enc" }],
-            [BillingApi] = [new RsaJsonWebKey { KeyId = "billing-enc" }],
+            [OrdersApi] = [new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "orders-enc" }],
+            [BillingApi] = [new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "billing-enc" }],
         });
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -1117,7 +1117,7 @@ public class AccessTokenServiceTests
         var serviceKeys = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
         serviceKeys
             .Setup(k => k.GetSigningKeys(TestTenant.Matched, true))
-            .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }
+            .Returns(new JsonWebKey[] { new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }
                 .ToAsyncEnumerable());
         var options = new OidcOptions();
         options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
@@ -1175,7 +1175,7 @@ public class AccessTokenServiceTests
     {
         JsonWebKey unusable = firstKey switch
         {
-            "rsa1_5" => new RsaJsonWebKey { KeyId = "first", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 },
+            "rsa1_5" => new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "first", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 },
             "ec" => JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256)
                 .Sanitize(includePrivateKeys: false) with { KeyId = "first", Algorithm = null, Usage = null },
             "oct" => new OctetJsonWebKey { KeyId = "first", KeyValue = new byte[16] },
