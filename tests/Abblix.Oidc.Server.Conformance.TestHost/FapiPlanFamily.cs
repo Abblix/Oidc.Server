@@ -34,13 +34,18 @@ public sealed record FapiPlanFamily(
     Action<ClientInfo, SuitePlan, Uri> Configure)
 {
     /// <summary>
+    /// The scope the suite requests in every FAPI and CIBA plan.
+    /// </summary>
+    private const string SuiteScope = "openid profile offline_access";
+
+    /// <summary>
     /// The FAPI 2.0 Security Profile, with every combination of client authentication and token binding its plan
     /// variants name. The suite writes the issuer as the client assertion audience under FAPI 2.0, which is all
     /// section 5.3.2.1 lets the server accept, so the clients keep the default.
     /// </summary>
     public static FapiPlanFamily Fapi2SecurityProfile { get; } = new(
         ClientSecurityProfile.Fapi2,
-        "openid profile offline_access",
+        SuiteScope,
         EveryClientAuthenticationAndBinding("abblix-fapi2"),
         (client, _, _) => client.AllowedResponseTypes = [[ResponseTypes.Code]]);
 
@@ -49,7 +54,7 @@ public sealed record FapiPlanFamily(
     /// </summary>
     public static FapiPlanFamily Fapi2MessageSigning { get; } = new(
         ClientSecurityProfile.Fapi2MessageSigning,
-        "openid profile offline_access",
+        SuiteScope,
         EveryClientAuthenticationAndBinding("abblix-fapi2-ms"),
         (client, _, _) =>
         {
@@ -70,7 +75,7 @@ public sealed record FapiPlanFamily(
     /// </remarks>
     public static FapiPlanFamily Fapi1Advanced { get; } = new(
         ClientSecurityProfile.Fapi1Advanced,
-        "openid profile offline_access",
+        SuiteScope,
         [
             new SuitePlan("abblix-fapi1-pkjwt", AuthenticatesByMutualTls: false, BindsTokensByMutualTls: true),
             new SuitePlan("abblix-fapi1-mtls", AuthenticatesByMutualTls: true, BindsTokensByMutualTls: true),
@@ -101,7 +106,7 @@ public sealed record FapiPlanFamily(
     /// </remarks>
     public static FapiPlanFamily Ciba { get; } = new(
         ClientSecurityProfile.Fapi1Advanced,
-        "openid profile offline_access",
+        SuiteScope,
         [
             new SuitePlan("abblix-ciba-pkjwt-poll", false, true, BackchannelTokenDeliveryModes.Poll),
             new SuitePlan("abblix-ciba-pkjwt-ping", false, true, BackchannelTokenDeliveryModes.Ping),

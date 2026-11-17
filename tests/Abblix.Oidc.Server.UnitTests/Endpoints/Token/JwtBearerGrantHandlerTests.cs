@@ -766,15 +766,22 @@ public class JwtBearerGrantHandlerTests
 
 		var logger = new Mock<Microsoft.Extensions.Logging.ILogger<JwtBearerGrantHandler>>();
 
+		var policy = new JwtBearerAssertionPolicy(
+			new Mock<Microsoft.Extensions.Logging.ILogger<JwtBearerAssertionPolicy>>().Object,
+			issuerProvider.Object,
+			timeProvider,
+			replayCache.Object,
+			requestInfoProvider.Object,
+			SingleIssuer.LicensedCatalog);
+
 		var handler = new JwtBearerGrantHandler(
 			logger.Object,
 			new ProfiledJwtValidator(jwtValidator.Object),
 			issuerProvider.Object,
-			replayCache.Object,
 			requestInfoProvider.Object,
 			sessionIdGenerator.Object,
 			timeProvider,
-			SingleIssuer.LicensedCatalog);
+			policy);
 
 		return (handler, new Mocks(jwtValidator, issuerProvider, replayCache, requestInfoProvider, sessionIdGenerator, timeProvider));
 	}

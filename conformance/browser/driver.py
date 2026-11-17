@@ -179,6 +179,13 @@ class VisitResult:
     last_server_page: Screenshot | None
 
 
+@dataclass
+class WalkState:
+    """What one visit has seen so far: how often it signed in, and the last page of the server under test."""
+    sign_ins: int = 0
+    last_server_page: Screenshot | None = None
+
+
 class SuiteApi:
     """The suite's REST endpoints this driver uses; each name matches the operationId in the suite source."""
 
@@ -260,58 +267,73 @@ class ModuleDriver:
         self.filled_placeholders: set[str] = set()
         self.last_visit: VisitResult | None = None
         self.upload_ready_polls = 0
+        self.missing_info_polls = 0
 
     async def run(self) -> None:
         context = await self.browser.new_context(ignore_https_errors=True, viewport={"width": 1280, "height": 900})
         context.set_default_timeout(self.settings.page_timeout_ms)
-        missing_info_polls = 0
         try:
-            while True:
-                info = await self.api.get_test_info(self.test_id)
-                if info is None:
-                    # The runner lists a module a moment before its test info is stored
-                    missing_info_polls += 1
-                    if missing_info_polls > 5:
-                        raise ModuleFailure("the runner lists this module, but the suite keeps no test info for it")
-                    await asyncio.sleep(self.settings.poll_seconds)
-                    continue
-                self.module_name = info.get("testName", "")
-                self.scope = f"{self.module_name or '?'} {self.test_id}"
-                status = info.get("status")
-                if not status:
-                    raise ModuleFailure("the suite's test info carries no status")
-                if status in FINAL_STATES:
-                    log(self.scope, "end", f"status {status}, result {info.get('result')}")
-                    return
-
-                runner = await self.api.get_test_status(self.test_id)
-                if runner is None:
-                    log(self.scope, "end", "the runner no longer holds this module")
-                    return
-                browser_state = runner.get("browser") or {}
-                pending = browser_state.get("urlsWithMethod") or []
-
-                if pending:
-                    self.upload_ready_polls = 0
-                    target = pending[0]
-                    await self.visit(context, target["url"], (target.get("method") or "GET").upper(),
-                                     browser_state.get("visited"))
-                    continue
-
-                uploads_required = int(browser_state.get("uploadsRequired") or 0)
-                if status == "WAITING" and uploads_required > 0:
-                    # The module waits on a placeholder and asks for no further URL; two polls in a row rule out
-                    # the moment between one visit finishing and the module publishing its next URL
-                    self.upload_ready_polls += 1
-                    if self.upload_ready_polls >= 2:
-                        await self.upload_screenshot()
-                        self.upload_ready_polls = 0
-                else:
-                    self.upload_ready_polls = 0
-
-                await asyncio.sleep(self.settings.poll_seconds)
+            while await self.poll(context):
+                pass
         finally:
             await context.close()
+
+    async def poll(self, context: BrowserContext) -> bool:
+        """Acts once on what the module asks for; False once the module has ended."""
+        status = await self.read_status()
+        if status is None:
+            await asyncio.sleep(self.settings.poll_seconds)
+            return True
+        if status in FINAL_STATES:
+            return False
+
+        runner = await self.api.get_test_status(self.test_id)
+        if runner is None:
+            log(self.scope, "end", "the runner no longer holds this module")
+            return False
+        browser_state = runner.get("browser") or {}
+        pending = browser_state.get("urlsWithMethod") or []
+
+        if pending:
+            self.upload_ready_polls = 0
+            target = pending[0]
+            await self.visit(context, target["url"], (target.get("method") or "GET").upper(),
+                             browser_state.get("visited"))
+            return True
+
+        await self.upload_when_waiting(status, browser_state)
+        await asyncio.sleep(self.settings.poll_seconds)
+        return True
+
+    async def read_status(self) -> str | None:
+        """The module's status, or None while the suite has not stored its test info yet."""
+        info = await self.api.get_test_info(self.test_id)
+        if info is None:
+            # The runner lists a module a moment before its test info is stored
+            self.missing_info_polls += 1
+            if self.missing_info_polls > 5:
+                raise ModuleFailure("the runner lists this module, but the suite keeps no test info for it")
+            return None
+        self.module_name = info.get("testName", "")
+        self.scope = f"{self.module_name or '?'} {self.test_id}"
+        status = info.get("status")
+        if not status:
+            raise ModuleFailure("the suite's test info carries no status")
+        if status in FINAL_STATES:
+            log(self.scope, "end", f"status {status}, result {info.get('result')}")
+        return status
+
+    async def upload_when_waiting(self, status: str, browser_state: dict) -> None:
+        uploads_required = int(browser_state.get("uploadsRequired") or 0)
+        if status == "WAITING" and uploads_required > 0:
+            # The module waits on a placeholder and asks for no further URL; two polls in a row rule out
+            # the moment between one visit finishing and the module publishing its next URL
+            self.upload_ready_polls += 1
+            if self.upload_ready_polls >= 2:
+                await self.upload_screenshot()
+                self.upload_ready_polls = 0
+        else:
+            self.upload_ready_polls = 0
 
     async def visit(self, context: BrowserContext, url: str, method: str, visited: list | None) -> None:
         # A module may publish a URL it already had visited, to open it again (a request_uri used twice). The suite
@@ -355,44 +377,49 @@ class ModuleDriver:
 
     async def walk(self, page: Page) -> VisitResult:
         """Follows the page from the server under test back to the suite, acting on each page it recognises."""
-        sign_ins = 0
-        last_server_page: Screenshot | None = None
+        walk = WalkState()
         for _ in range(MAX_STEPS_PER_VISIT):
             await self.settle(page)
             current = page.url
             origin = origin_of(current)
 
             if origin == self.settings.host_origin:
-                if await self.is_login_page(page):
-                    sign_ins += 1
-                    if sign_ins > MAX_SIGN_INS_PER_VISIT:
-                        raise ModuleFailure(f"the login page came back after {MAX_SIGN_INS_PER_VISIT} sign-ins: "
-                                            f"the server under test does not accept LOGIN_EMAIL and LOGIN_PASSWORD")
-                    # Taken before the form is filled: the logo, policy, terms and second-login modules want this page
-                    last_server_page = await self.capture(page, "login page")
-                    if self.module_name.endswith(ABANDONING_MODULE_SUFFIX) and not self.abandoned_login:
-                        self.abandoned_login = True
-                        log(self.scope, "stop", f"login page left without signing in, as the module asks, at {current}")
-                        return VisitResult(last_server_page)
-                    await self.sign_in(page)
+                if await self.step_on_server(page, current, walk):
                     continue
-                if await page.locator("#sign-out").count() > 0:
-                    log(self.scope, "click", f"sign-out on {current}")
-                    await page.locator("#sign-out").first.click()
-                    continue
-                # A page of the server under test that neither asks to sign in nor to confirm a logout and does not
-                # move on: an error page or a logged-out page, the one a module expecting a screenshot wants
-                last_server_page = await self.capture(page, "server page")
-                log(self.scope, "stop", f"server page '{await page.title()}' at {current}")
-                return VisitResult(last_server_page)
+                return VisitResult(walk.last_server_page)
 
             if origin == self.settings.suite_origin:
                 await self.finish_on_suite(page)
-                return VisitResult(last_server_page)
+                return VisitResult(walk.last_server_page)
 
             raise ModuleFailure(f"the browser reached {current}, neither the suite nor the server under test")
 
         raise ModuleFailure(f"no stable page after {MAX_STEPS_PER_VISIT} steps, last at {page.url}")
+
+    async def step_on_server(self, page: Page, current: str, walk: WalkState) -> bool:
+        """Acts on a page of the server under test; False when the visit stops on it."""
+        if await self.is_login_page(page):
+            walk.sign_ins += 1
+            if walk.sign_ins > MAX_SIGN_INS_PER_VISIT:
+                raise ModuleFailure(f"the login page came back after {MAX_SIGN_INS_PER_VISIT} sign-ins: "
+                                    f"the server under test does not accept LOGIN_EMAIL and LOGIN_PASSWORD")
+            # Taken before the form is filled: the logo, policy, terms and second-login modules want this page
+            walk.last_server_page = await self.capture(page, "login page")
+            if self.module_name.endswith(ABANDONING_MODULE_SUFFIX) and not self.abandoned_login:
+                self.abandoned_login = True
+                log(self.scope, "stop", f"login page left without signing in, as the module asks, at {current}")
+                return False
+            await self.sign_in(page)
+            return True
+        if await page.locator("#sign-out").count() > 0:
+            log(self.scope, "click", f"sign-out on {current}")
+            await page.locator("#sign-out").first.click()
+            return True
+        # A page of the server under test that neither asks to sign in nor to confirm a logout and does not
+        # move on: an error page or a logged-out page, the one a module expecting a screenshot wants
+        walk.last_server_page = await self.capture(page, "server page")
+        log(self.scope, "stop", f"server page '{await page.title()}' at {current}")
+        return False
 
     async def settle(self, page: Page) -> None:
         """Waits until the page stops loading and its address holds still: auto-submitting forms move on by then."""
@@ -508,8 +535,8 @@ class ModuleDriver:
                                 "server under test")
         expectation = expectation_for(self.module_name)
         if expectation is None:
-            raise ModuleFailure(f"the module waits for a screenshot, and the driver knows no check of what its page "
-                                f"has to show; add one to expectation_for")
+            raise ModuleFailure("the module waits for a screenshot, and the driver knows no check of what its page "
+                                "has to show; add one to expectation_for")
         description, holds = expectation
         if not holds(shot):
             raise ModuleFailure(f"the page captured for review should show {description}, "

@@ -159,23 +159,4 @@ public static class ResultExtensions
         var result = await resultTask;
         return await result.MapSuccessAsync(onSuccess);
     }
-
-    /// <summary>
-    /// Maps both success and failure values to new types.
-    /// </summary>
-    /// <typeparam name="TSuccess">The type of the original success value.</typeparam>
-    /// <typeparam name="TFailure">The type of the original failure.</typeparam>
-    /// <typeparam name="TNewSuccess">The type to map the success value to.</typeparam>
-    /// <typeparam name="TNewFailure">The type to map the failure value to.</typeparam>
-    /// <param name="result">The result to map.</param>
-    /// <param name="onSuccess">The function to apply if the result is successful.</param>
-    /// <param name="onFailure">The function to apply if the result is a failure.</param>
-    /// <returns>A new result with both success and failure values mapped to new types.</returns>
-    public static Result<TNewSuccess, TNewFailure> Map<TSuccess, TFailure, TNewSuccess, TNewFailure>(
-        this Result<TSuccess, TFailure> result,
-        Func<TSuccess, TNewSuccess> onSuccess,
-        Func<TFailure, TNewFailure> onFailure)
-        => result.Match<Result<TNewSuccess, TNewFailure>>(
-            success => onSuccess(success),
-            failure => onFailure(failure));
 }
