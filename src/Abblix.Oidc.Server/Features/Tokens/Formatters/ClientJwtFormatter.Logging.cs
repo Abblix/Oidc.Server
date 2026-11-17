@@ -16,4 +16,10 @@ partial class ClientJwtFormatter
         EventId = LogEvents.TokenIssuance.ClientJwtFormatter.JwtNotIssued,
         Message = "No JWT issued to client {ClientId} ({Cause}): {Reason}")]
     private partial void LogJwtNotIssued(LogLevel level, string ClientId, ClientJwtRefusalCause Cause, string Reason);
+
+    [LoggerMessage(
+        EventId = LogEvents.TokenIssuance.ClientJwtFormatter.SigningKeyBelowTheFloor,
+        Level = LogLevel.Error,
+        Message = "The signing key {KeyId} is not used for {Algorithm}: it has {Bits} bits, below the {Floor} RFC 7518 requires")]
+    private partial void LogSigningKeyBelowTheFloor(string? KeyId, string Algorithm, int Bits, int Floor);
 }

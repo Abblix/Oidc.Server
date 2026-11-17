@@ -115,6 +115,10 @@ public class SignedMetadataProvider(
         => NamedAlgorithmFor(signingKey, profile) ?? throw new InvalidOperationException(
             signingKey switch
             {
+                var key when SigningKeyFloor.Undersized(key) is { } size =>
+                    $"The signing key '{key.KeyId}' has {size.Bits} bits, below the {size.Floor} RFC 7518 requires of " +
+                    $"it, so the discovery document cannot be signed with it. Replace it with a key of at least " +
+                    $"{size.Floor} bits.",
                 { Algorithm: { } declared } =>
                     $"The signing key declares the alg {declared}, which its material does not sign with. Set the alg " +
                     "parameter on the key to one it signs with (RFC 7517 section 4.4).",

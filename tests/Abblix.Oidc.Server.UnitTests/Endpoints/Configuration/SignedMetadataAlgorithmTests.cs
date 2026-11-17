@@ -119,6 +119,22 @@ public class SignedMetadataAlgorithmTests
     }
 
     /// <summary>
+    /// An RSA key below the 2048 bits RFC 7518 sections 3.3 and 3.5 require signs nothing, declared or not, so the
+    /// document is not signed with it.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(SigningAlgorithms.RS256)]
+    public async Task AnRsaKeyBelow2048Bits_IsRefused(string? declared)
+    {
+        // The key factory refuses to create one this short, so its modulus is written out: 1024 bits
+        var shortKey = new RsaJsonWebKey
+            { KeyId = "short", Algorithm = declared, Exponent = [1, 0, 1], Modulus = [0x80, .. new byte[127]] };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => SignedWith(ClientSecurityProfile.None, shortKey));
+    }
+
+    /// <summary>
     /// An elliptic-curve key declaring no algorithm signs with the ECDSA algorithm of its curve (RFC 7518 section 3.4).
     /// </summary>
     [Theory]

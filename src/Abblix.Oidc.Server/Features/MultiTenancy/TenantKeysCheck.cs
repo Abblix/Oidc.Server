@@ -33,6 +33,7 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
             KeyProviderKind.Settings => Unread(tenants, "the keys come from each tenant's settings",
                     nameof(TenantDefinition.SigningKeys), nameof(TenantDefinition.EncryptionKeys))
                 .Concat(UnsignedOf(tenants))
+                .Concat(UndersizedSettingsKeysOf(tenants))
                 .Concat(IncompleteSettingsKeysOf(tenants))
                 .Concat(SharedSettingsKeysOf(tenants)),
 
@@ -89,6 +90,24 @@ public sealed class TenantKeysCheck(IServiceProvider serviceProvider) : ITenants
                 $"publishes an empty JWKS. Supply at least one JWK with a private part in " +
                 $"{nameof(TenantDefinition)}.{nameof(TenantDefinition.SigningKeys)}, or have the keys held by a " +
                 "custodian or minted by the server.");
+
+    /// <summary>
+    /// No signing key a tenant declares is smaller than RFC 7518 lets it sign with: an RSA key below 2048 bits
+    /// (sections 3.3 and 3.5), a symmetric key shorter than the hash output of its algorithm (section 3.2). Such a key
+    /// signs nothing, and found missing at the first token it would read as a key that is not there. A key without the
+    /// material to measure is refused as incomplete instead.
+    /// </summary>
+    private static IEnumerable<TenantRefusal> UndersizedSettingsKeysOf(IReadOnlyCollection<TenantDefinition> tenants)
+        => from tenant in tenants
+           from key in tenant.SigningKeys
+           where key.HasPublicKey
+           let size = SigningKeyFloor.Undersized(key)
+           where size is not null
+           select TenantRefusal.Of(
+               tenant,
+               $"Tenant '{tenant.Id}': The signing key '{key.KeyId}' has {size.Value.Bits} bits, below the " +
+               $"{size.Value.Floor} RFC 7518 requires of it, so nothing is signed with it. Replace it with a key of at " +
+               $"least {size.Value.Floor} bits.");
 
     /// <summary>
     /// No key, compared by its thumbprint, is declared by two tenants: sharing one would let a party trusting one
