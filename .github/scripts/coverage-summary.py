@@ -32,9 +32,9 @@ def source_path(filename):
 
 
 def is_shipped(package):
-    """Test projects, test hosts, samples and build-time source generators are measured too, but not shipped."""
+    """Test projects, test hosts, samples and build-time analyzers and generators are measured too, but not shipped."""
     return (package.startswith('Abblix.')
-            and not any(part in package for part in ('Test', 'DocSamples', 'SourceGenerators')))
+            and not any(part in package for part in ('Test', 'DocSamples', 'SourceGenerators', 'Analyzers')))
 
 
 def percent(part, whole):
