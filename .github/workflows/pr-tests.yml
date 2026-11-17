@@ -69,6 +69,11 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/test-shards.yml
 
+  coverage-failure-trial:
+    uses: ./.github/workflows/coverage-summary.yml
+    with:
+      projects: '["no-such-project"]'
+
   build:
     # The whole SOLUTION in Release, which the shards do not cover: they build what the test
     # projects reach, and a project nothing references is compiled by nothing else a pull request
