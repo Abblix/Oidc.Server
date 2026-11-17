@@ -273,8 +273,9 @@ class ModuleDriver:
         context = await self.browser.new_context(ignore_https_errors=True, viewport={"width": 1280, "height": 900})
         context.set_default_timeout(self.settings.page_timeout_ms)
         try:
-            while await self.poll(context):
-                pass
+            running = True
+            while running:
+                running = await self.poll(context)
         finally:
             await context.close()
 
