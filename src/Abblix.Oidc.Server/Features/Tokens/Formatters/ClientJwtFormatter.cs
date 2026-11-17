@@ -120,7 +120,7 @@ public partial class ClientJwtFormatter(
     private async Task<JsonWebKey?> SigningKeyAsync(TenantDefinition tenant, string? algorithm)
         => IsUnsigned(algorithm)
             ? null
-            : await serviceKeysProvider.GetSigningKeys(tenant, true).FirstOrDefaultAsync(key => key.CanPerform(algorithm));
+            : await serviceKeysProvider.GetSigningKeys(tenant, true).FirstOrDefaultAsync(key => key.CanSign(algorithm));
 
     /// <summary>
     /// Why a JWT signed with <paramref name="algorithm"/> cannot be issued to the client, or null where it can: its

@@ -39,7 +39,7 @@ public sealed class ProfileSigningKeysCheck(IKeyCustodian? custodian = null) : I
            where Enum.IsDefined(SecurityProfileRequirements.ProfileNamedFor(tenant, client)) &&
                  SecurityProfileRequirements.For(client, tenant.DefaultSecurityProfile).RequireFapiSigningAlgorithms
            from setting in SignedForTheClient(client)
-           where setting.Algorithm is { } algorithm && !tenant.SigningKeys.Any(key => key.CanPerform(algorithm))
+           where setting.Algorithm is { } algorithm && !tenant.SigningKeys.Any(key => key.CanSign(algorithm))
            select $"Client '{client.ClientId}': {setting.Name} is {setting.Algorithm}, which no signing key of the " +
                   "tenant produces.";
 

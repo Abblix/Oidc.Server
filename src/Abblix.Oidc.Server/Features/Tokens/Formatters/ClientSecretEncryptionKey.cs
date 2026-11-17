@@ -45,7 +45,7 @@ internal static class ClientSecretEncryptionKey
     /// <param name="encryptionAlgorithms">The registry of key management algorithms.</param>
     /// <param name="keyManagementAlgorithm">The algorithm asked about.</param>
     public static bool IsSymmetric(EncryptionAlgorithmsProvider encryptionAlgorithms, string keyManagementAlgorithm)
-        => encryptionAlgorithms.CanPerform(OctetKeyType, keyManagementAlgorithm);
+        => encryptionAlgorithms.CanEncrypt(OctetKeyType, keyManagementAlgorithm);
 
     /// <summary>
     /// Whether a JWT can be encrypted to a client under the key management algorithm at all: an asymmetric one to a key

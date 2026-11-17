@@ -28,7 +28,7 @@ namespace Abblix.Jwt;
 public sealed class EncryptionAlgorithmsProvider(IServiceProvider serviceProvider)
 {
     /// <summary>
-    /// Whether <paramref name="key"/> may be used with the JWE key management algorithm
+    /// Whether <paramref name="key"/> may encrypt and decrypt a JWE with the key management algorithm
     /// <paramref name="keyManagementAlgorithm"/>: it declares that algorithm or none, and an algorithm of that name is
     /// registered for the key's type. The registry answering this is the one <see cref="KeyManagementAlgorithms"/>
     /// lists and encryption and decryption dispatch to, so an algorithm a host registers is advertised, matched to its
@@ -41,7 +41,7 @@ public sealed class EncryptionAlgorithmsProvider(IServiceProvider serviceProvide
     /// </remarks>
     /// <param name="key">The key asked about.</param>
     /// <param name="keyManagementAlgorithm">The JWE <c>alg</c> it would be used with.</param>
-    public bool CanPerform(JsonWebKey key, string keyManagementAlgorithm)
+    public bool CanEncrypt(JsonWebKey key, string keyManagementAlgorithm)
         => (key.Algorithm ?? keyManagementAlgorithm) == keyManagementAlgorithm && key switch
         {
             RsaJsonWebKey => IsRegistered<RsaJsonWebKey>(keyManagementAlgorithm),

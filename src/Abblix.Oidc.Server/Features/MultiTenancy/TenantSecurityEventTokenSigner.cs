@@ -104,5 +104,5 @@ public sealed class TenantSecurityEventTokenSigner(
     /// performs.
     /// </summary>
     internal static string? AlgorithmOf(JsonWebKey key, string[] algorithms)
-        => algorithms.FirstOrDefault(key.CanPerform);
+        => algorithms.FirstOrDefault(key.CanSign);
 }

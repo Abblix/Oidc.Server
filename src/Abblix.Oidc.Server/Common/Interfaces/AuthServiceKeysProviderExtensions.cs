@@ -72,7 +72,7 @@ public static partial class AuthServiceKeysProviderExtensions
     /// <summary>
     /// The key management algorithms of <paramref name="algorithms"/> an inbound JWE to <paramref name="tenant"/> can
     /// be encrypted under: those one of its <see cref="GetInboundEncryptionKeys">inbound encryption keys</see> can be
-    /// used with, by <see cref="EncryptionAlgorithmsProvider.CanPerform"/>. The inbound decryption tries a key only
+    /// used with, by <see cref="EncryptionAlgorithmsProvider.CanEncrypt"/>. The inbound decryption tries a key only
     /// under the same condition, so a client using an algorithm listed here meets a key that opens it.
     /// </summary>
     /// <param name="provider">The provider of the service's keys.</param>
@@ -87,7 +87,7 @@ public static partial class AuthServiceKeysProviderExtensions
     {
         var keys = await provider.GetInboundEncryptionKeys(tenant).ToArrayAsync();
         return algorithms
-            .Where(algorithm => Array.Exists(keys, key => encryptionAlgorithms.CanPerform(key, algorithm)))
+            .Where(algorithm => Array.Exists(keys, key => encryptionAlgorithms.CanEncrypt(key, algorithm)))
             .ToArray();
     }
 

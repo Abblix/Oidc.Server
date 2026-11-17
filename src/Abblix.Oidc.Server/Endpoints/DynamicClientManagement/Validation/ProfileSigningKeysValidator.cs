@@ -38,7 +38,7 @@ public class ProfileSigningKeysValidator(IAuthServiceKeysProvider keys) : IClien
             return null;
 
         var signingKeys = await keys.GetSigningKeys(tenant).ToArrayAsync();
-        bool Produces(string algorithm) => Array.Exists(signingKeys, key => key.CanPerform(algorithm));
+        bool Produces(string algorithm) => Array.Exists(signingKeys, key => key.CanSign(algorithm));
 
         if (WithUnnamedAlgorithmsGiven(context.Request, signingKeys) is not { } request)
         {

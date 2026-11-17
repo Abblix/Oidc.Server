@@ -55,7 +55,7 @@ public sealed class ClientEncryptionKeyResolver(
         if (!ClientSecretEncryptionKey.IsSymmetric(encryptionAlgorithms, keyManagementAlgorithm))
         {
             return await clientKeysProvider.GetEncryptionKeys(client).FirstOrDefaultAsync(key =>
-                encryptionAlgorithms.CanPerform(key, keyManagementAlgorithm) &&
+                encryptionAlgorithms.CanEncrypt(key, keyManagementAlgorithm) &&
                 Usable(profile, key, keyManagementAlgorithm));
         }
 

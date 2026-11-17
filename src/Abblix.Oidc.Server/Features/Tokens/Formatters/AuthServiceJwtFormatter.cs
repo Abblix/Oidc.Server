@@ -73,7 +73,7 @@ public class AuthServiceJwtFormatter(
 			?? await serviceKeysProvider.GetEncryptionKeys(tenant)
 				.Where(key => key.Algorithm is not { } declared || profile.PermitsKeyManagementAlgorithm(declared))
 				.FirstByAlgorithmAsync(
-					encryption.KeyManagementAlgorithm, encryption.KeyId, encryptionAlgorithms.CanPerform);
+					encryption.KeyManagementAlgorithm, encryption.KeyId, encryptionAlgorithms.CanEncrypt);
 
 		if (encryptingCredentials is null)
 		{

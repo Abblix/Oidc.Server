@@ -43,7 +43,7 @@ public static class JsonWebKeyExtensions
 
         if (algorithm.HasValue())
         {
-            credentials = credentials.Where(key => key.CanPerform(algorithm));
+            credentials = credentials.Where(key => key.CanSign(algorithm));
         }
 
         var key = await credentials.FirstOrDefaultAsync();
@@ -73,13 +73,13 @@ public static class JsonWebKeyExtensions
         this IAsyncEnumerable<JsonWebKey> credentials,
         string? algorithm,
         string? keyId)
-        => credentials.FirstByAlgorithmAsync(algorithm, keyId, CanPerform);
+        => credentials.FirstByAlgorithmAsync(algorithm, keyId, CanSign);
 
     /// <summary>
     /// The same selection as <see cref="FirstByAlgorithmAsync(IAsyncEnumerable{JsonWebKey}, string?, string?)"/>, with
     /// whether a key may be used for the algorithm answered by <paramref name="canPerform"/>: a JWE key management
-    /// algorithm is answered by <see cref="EncryptionAlgorithmsProvider.CanPerform"/>, which reads the registered
-    /// algorithms, a JWS one by <see cref="CanPerform"/>.
+    /// algorithm is answered by <see cref="EncryptionAlgorithmsProvider.CanEncrypt"/>, which reads the registered
+    /// algorithms, a JWS one by <see cref="CanSign"/>.
     /// </summary>
     /// <param name="credentials">The asynchronous sequence of <see cref="JsonWebKey"/> objects.</param>
     /// <param name="algorithm">The algorithm to match, or <c>null</c> to not filter by algorithm.</param>
@@ -113,8 +113,9 @@ public static class JsonWebKeyExtensions
     }
 
     /// <summary>
-    /// Whether a key may be used for an algorithm: it either declares that algorithm, or declares none and its
-    /// material can perform it.
+    /// Whether a key may sign and verify with a JWS algorithm: it either declares that algorithm, or declares none
+    /// and its material can perform it. A JWE key management algorithm is asked of
+    /// <see cref="EncryptionAlgorithmsProvider.CanEncrypt"/>, which reads the registered algorithms.
     /// </summary>
     /// <remarks>
     /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL, and a key imported from an RSA certificate never carries one.
@@ -123,8 +124,8 @@ public static class JsonWebKeyExtensions
     /// selection. Asking the material settles it, and RFC 7518 sections 3.1 and 3.4 make the answer exact.
     /// </remarks>
     /// <param name="key">The key asked about.</param>
-    /// <param name="algorithm">The algorithm it would be used for.</param>
-    public static bool CanPerform(this JsonWebKey key, string algorithm)
+    /// <param name="algorithm">The JWS algorithm it would be used for.</param>
+    internal static bool CanSign(this JsonWebKey key, string algorithm)
         => key.Algorithm is not null ? key.Algorithm == algorithm : key.SupportsAlgorithm(algorithm);
 
     /// <summary>

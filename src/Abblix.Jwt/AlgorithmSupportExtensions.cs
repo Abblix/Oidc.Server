@@ -12,7 +12,7 @@ namespace Abblix.Jwt;
 /// <summary>
 /// Whether a key's material can carry out a JWS signing algorithm, one rule per algorithm (Specification).
 /// </summary>
-public static class AlgorithmSupportExtensions
+internal static class AlgorithmSupportExtensions
 {
     /// <summary>
     /// What each algorithm demands of a key's material (Specification pattern, one rule per algorithm). An
@@ -37,7 +37,7 @@ public static class AlgorithmSupportExtensions
             ),
 
             // JWE key management is not here: which key type an algorithm is carried out with is the registration
-            // of its IKeyManagementAlgorithm<TJsonWebKey>, a host's included, and EncryptionAlgorithmsProvider.CanPerform
+            // of its IKeyManagementAlgorithm<TJsonWebKey>, a host's included, and EncryptionAlgorithmsProvider.CanEncrypt
             // asks that registry
         }
         .SelectMany(rule => rule.Algorithms, (rule, algorithm) => KeyValuePair.Create(algorithm, rule.IsMetBy))
@@ -46,7 +46,7 @@ public static class AlgorithmSupportExtensions
     /// <summary>
     /// Whether this key can carry out the given JWS signing algorithm, judged by the key's own material rather than
     /// by what it declares. A JWE key management algorithm is asked of
-    /// <see cref="EncryptionAlgorithmsProvider.CanPerform"/>, which reads the registered algorithms.
+    /// <see cref="EncryptionAlgorithmsProvider.CanEncrypt"/>, which reads the registered algorithms.
     /// </summary>
     /// <remarks>
     /// RFC 7517 section 4.4 makes <c>alg</c> OPTIONAL, so a key may simply not say what it is for - and a key
@@ -58,7 +58,7 @@ public static class AlgorithmSupportExtensions
     /// <param name="key">The key to test.</param>
     /// <param name="algorithm">The JWS algorithm the caller needs.</param>
     /// <returns>True when the key's type, and for ECDSA its curve, match what the algorithm requires.</returns>
-    public static bool SupportsAlgorithm(this JsonWebKey key, string algorithm)
+    internal static bool SupportsAlgorithm(this JsonWebKey key, string algorithm)
         => KeyRequirements.TryGetValue(algorithm, out var isMetBy) && isMetBy(key);
 
     /// <summary>Whether the key is an elliptic-curve key on exactly the named curve.</summary>

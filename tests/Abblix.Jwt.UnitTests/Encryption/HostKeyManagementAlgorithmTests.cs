@@ -100,13 +100,13 @@ public class HostKeyManagementAlgorithmTests
 		var rsa = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { Algorithm = null };
 
 		Assert.Contains(HostAlgorithm, algorithms.KeyManagementAlgorithms);
-		Assert.True(algorithms.CanPerform(rsa, HostAlgorithm));
-		Assert.True(algorithms.CanPerform(rsa with { Algorithm = HostAlgorithm }, HostAlgorithm));
-		Assert.False(algorithms.CanPerform(rsa with { Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 }, HostAlgorithm));
-		Assert.False(algorithms.CanPerform(
+		Assert.True(algorithms.CanEncrypt(rsa, HostAlgorithm));
+		Assert.True(algorithms.CanEncrypt(rsa with { Algorithm = HostAlgorithm }, HostAlgorithm));
+		Assert.False(algorithms.CanEncrypt(rsa with { Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 }, HostAlgorithm));
+		Assert.False(algorithms.CanEncrypt(
 			JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256) with { Algorithm = null },
 			HostAlgorithm));
-		Assert.False(algorithms.CanPerform(JsonWebKeyFactory.CreateHmac(SigningAlgorithms.HS256) with { Algorithm = null }, HostAlgorithm));
+		Assert.False(algorithms.CanEncrypt(JsonWebKeyFactory.CreateHmac(SigningAlgorithms.HS256) with { Algorithm = null }, HostAlgorithm));
 	}
 
 	/// <summary>
@@ -143,6 +143,6 @@ public class HostKeyManagementAlgorithmTests
 
 		Assert.Equal(
 			[keyType],
-			keys.Where(key => algorithms.CanPerform(key, algorithm)).Select(key => key.KeyType));
+			keys.Where(key => algorithms.CanEncrypt(key, algorithm)).Select(key => key.KeyType));
 	}
 }
