@@ -14,14 +14,14 @@
     <PackageVersion Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="11.0.0" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="11.0.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.9.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.12.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="5.9.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.12.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="5.12.0" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="11.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="11.0.0" />
-    <PackageVersion Include="Testcontainers.Redis" Version="4.16.0" />
-    <PackageVersion Include="StackExchange.Redis" Version="3.4.31" />
+    <PackageVersion Include="Testcontainers.Redis" Version="4.17.0" />
+    <PackageVersion Include="StackExchange.Redis" Version="3.4.35" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="11.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="11.0.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
@@ -51,14 +51,14 @@
          load cleanly. The test-authoring API is identical across variants; only the runner
          integration differs, so test code is unaffected. -->
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.12.0" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.2" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.3" />
     <PackageVersion Include="MinVer" Version="8.0.0" />
     <PackageVersion Include="Moq" Version="4.21.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.21.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.2" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.21.0" />
     <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.36.0.15337" />
-    <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerGen" Version="11.0.0" />
+    <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerGen" Version="11.0.1" />
     <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
     <PackageVersion Include="System.Linq.Async" Version="7.0.1" />
     <PackageVersion Include="xunit.v3.mtp-v2" Version="4.0.3" />
