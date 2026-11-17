@@ -146,6 +146,6 @@ When the custodian itself cannot answer, say which kind of failure it is, becaus
 
 ## Related
 
-- [Documentation](https://docs.abblix.com/docs) and the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide)
+- [Documentation](https://www.abblix.com/en/docs/introduction-to-abblix-oidc-server) and the [Getting Started Guide](https://www.abblix.com/en/docs/getting-started-guide)
 - [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) - the core OpenID Connect server
 - [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) - JWT signing, encryption and validation

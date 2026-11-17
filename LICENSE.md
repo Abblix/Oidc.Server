@@ -7,7 +7,7 @@ This License Agreement ("Agreement") is a legal agreement between you (as a pers
 ATTENTION! Please thoroughly examine the terms and conditions in this License Agreement before operating the Software. By using the Software, you agree to be bound by the terms set forth in this License Agreement. If you do not agree to these terms, you have no right to use the Software and must promptly uninstall it from your System.
 
 ## 1. Definitions
-1.1. "Software" refers to the "OIDC Server" software, including any accompanying materials, updates, and extensions, the copyright of which belongs to Abblix Limited Liability Partnership. The source code is publicly viewable at [github.com/Abblix/Oidc.Server](https://github.com/Abblix/Oidc.Server) for evaluation purposes, subject to all restrictions in this Agreement. The full text of this Agreement is available at [oidc.abblix.com/license](https://oidc.abblix.com/license). In the event the specified URL becomes unavailable, the full text of this Agreement may be obtained by contacting the Copyright Holder at the addresses specified in Section 16.
+1.1. "Software" refers to the "OIDC Server" software, including any accompanying materials, updates, and extensions, the copyright of which belongs to Abblix Limited Liability Partnership. The source code is publicly viewable at [github.com/Abblix/Oidc.Server](https://github.com/Abblix/Oidc.Server) for evaluation purposes, subject to all restrictions in this Agreement. The full text of this Agreement is available at [github.com/Abblix/Oidc.Server/blob/master/LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md). In the event the specified URL becomes unavailable, the full text of this Agreement may be obtained by contacting the Copyright Holder at the addresses specified in Section 16.
 
    Components not covered. The repository named above also hosts components the Copyright Holder distributes under separate open-source licences. Such a component is not part of the Software and is not governed by this Agreement. A component states its licence in its package manifest (the `PackageLicenseExpression` or `PackageLicenseFile` element) and in the SPDX identifier carried by each of its source files; where either names a licence other than this Agreement, that licence governs the component exclusively, and nothing in this Agreement limits, conditions or revokes the rights it grants. Where a component is governed by this Agreement, the fact that it is distributed together with, or depends upon, an open-source component grants no rights in the Software beyond those set out here.
 
@@ -44,7 +44,7 @@ ATTENTION! Please thoroughly examine the terms and conditions in this License Ag
    (f) Non-production environments (development, testing, staging, beta, QA, or similar) used solely for internal development, quality assurance, or pre-production testing are not counted as separate Systems, provided they are not accessible to external end users or used to provide production services. Each production environment constitutes a separate System.
 
 ## 2. License Grant
-2.1. You are granted a non-exclusive license to use the Software within the scope of the functionality described on the Copyright Holder's official website, available at [oidc.abblix.com/functionality](https://oidc.abblix.com/functionality), provided that you comply with all restrictions and conditions specified in this License Agreement. This license does not grant sublicensing or redistribution rights to third parties. To obtain sublicensing or redistribution rights, you must purchase a separate type of license.
+2.1. You are granted a non-exclusive license to use the Software within the scope of the functionality described on the Copyright Holder's official website, available at [abblix.com/en/docs/implemented-standards](https://www.abblix.com/en/docs/implemented-standards), provided that you comply with all restrictions and conditions specified in this License Agreement. This license does not grant sublicensing or redistribution rights to third parties. To obtain sublicensing or redistribution rights, you must purchase a separate type of license.
 
 2.2. Prohibited Actions. You may not:
 
@@ -101,9 +101,9 @@ Commercial production use is permitted free of charge under this Section: passin
 
 3.2. If you obtain the Software from a Partner, the useful life of the Software may be determined between you and the Partner.
 
-3.3. The Software can only be installed on platforms suitable for its use. The Copyright Holder does not provide support for the following situations: copies of the Software installed on platforms not specified on the official website page, available at [oidc.abblix.com/requirements](https://oidc.abblix.com/requirements); support requests not related to the normal use of the Software; or support requests arising from the use of third-party products that either prohibit or do not function with the Software.
+3.3. The Software can only be installed on platforms suitable for its use. The Copyright Holder does not provide support for the following situations: copies of the Software installed on platforms not specified on the official website page, available at [abblix.com/en/docs/technical-requirements](https://www.abblix.com/en/docs/technical-requirements); support requests not related to the normal use of the Software; or support requests arising from the use of third-party products that either prohibit or do not function with the Software.
 
-3.4. The license period for the Software can be verified on the official website page at [oidc.abblix.com/license-check](https://oidc.abblix.com/license-check).
+3.4. The license period for the Software can be verified on the official website page at [abblix.com/en/oidc-server/verify](https://www.abblix.com/en/oidc-server/verify).
 
 3.5. Termination for Breach.
 
@@ -136,19 +136,19 @@ Commercial production use is permitted free of charge under this Section: passin
 
 ## 6. Notifications
 
-6.1. Important notifications regarding the Software, including security updates, license changes, and version information, are published on the official website at [abblix.com](https://www.abblix.com), in the documentation at [docs.abblix.com](https://docs.abblix.com), and the GitHub repository at [github.com/Abblix/Oidc.Server](https://github.com/Abblix/Oidc.Server).
+6.1. Important notifications regarding the Software, including security updates, license changes, and version information, are published on the official website at [abblix.com](https://www.abblix.com), in the documentation at [abblix.com/en/docs](https://www.abblix.com/en/docs/introduction-to-abblix-oidc-server), and the GitHub repository at [github.com/Abblix/Oidc.Server](https://github.com/Abblix/Oidc.Server).
 
 ## 7. Source Code and Certifications
 
 7.1. Source Code Transparency. The Software source code is publicly available at [github.com/Abblix/Oidc.Server](https://github.com/Abblix/Oidc.Server) to enable security audits and technical evaluation. Public availability does NOT constitute open-source licensing. The Software remains subject to all restrictions in this Agreement.
 
-7.2. Certifications and Standards. Implemented standards and certifications are documented at [docs.abblix.com/docs/implemented-standards](https://docs.abblix.com/docs/implemented-standards). The Copyright Holder does not claim any certifications beyond those explicitly documented.
+7.2. Certifications and Standards. Implemented standards and certifications are documented at [abblix.com/en/docs/implemented-standards](https://www.abblix.com/en/docs/implemented-standards). The Copyright Holder does not claim any certifications beyond those explicitly documented.
 
 ## 8. Warranty Disclaimer
 
 8.1. Free Licenses. For free licenses under Section 2.3, the Software is provided "AS IS" WITHOUT WARRANTY OF ANY KIND. You use the Software entirely at your own risk.
 
-8.2. Commercial Licenses. For commercial licenses, the Copyright Holder warrants that the Software implements the standards documented at [docs.abblix.com/docs/implemented-standards](https://docs.abblix.com/docs/implemented-standards). No other warranties are provided.
+8.2. Commercial Licenses. For commercial licenses, the Copyright Holder warrants that the Software implements the standards documented at [abblix.com/en/docs/implemented-standards](https://www.abblix.com/en/docs/implemented-standards). No other warranties are provided.
 
 8.3. DISCLAIMER. TO THE MAXIMUM EXTENT PERMITTED BY THE LAW GOVERNING THIS AGREEMENT, THE COPYRIGHT HOLDER DISCLAIMS ALL OTHER WARRANTIES, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
@@ -180,7 +180,7 @@ At the Licensee's option, exercised by written notice to the Copyright Holder pr
 
 11.3. Severability. If any provision of this License Agreement is held to be void, voidable, unenforceable, or illegal, the remaining provisions of this License Agreement will remain in full force and effect. In the event of a conflict between the terms of this Agreement and the terms of any software product license agreement concluded between you and the Partners or the Copyright Holder, the terms of such a license agreement shall prevail; in all other respects, the terms of this Agreement and such agreement shall apply.
 
-11.4. External Document Conflicts. In the event of a conflict between the terms of this License Agreement and information provided on external websites (including but not limited to oidc.abblix.com, GitHub repositories, or third-party documentation):
+11.4. External Document Conflicts. In the event of a conflict between the terms of this License Agreement and information provided on external websites (including but not limited to abblix.com, GitHub repositories, or third-party documentation):
 
    (a) This License Agreement shall prevail for all legal rights, obligations, warranties, and limitations of liability;
    

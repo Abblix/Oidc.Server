@@ -4,7 +4,7 @@ Abblix.OIDC.Server.MinimalAPI integrates the Abblix OIDC Server with ASP.NET Cor
 
 ## What's New in Version 3.0
 
-Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://docs.abblix.com/docs/upgrading-to-3-0) before moving a 2.x deployment.
+Version 3.0 changes how a host registers and configures the server. Read [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3-0) before moving a 2.x deployment.
 
 🚀 Features
 - Every tenant of a multi-tenant server is served through the same endpoints
@@ -120,7 +120,7 @@ For the complete standards list, see the [Abblix.OIDC.Server](https://www.nuget.
 
 ## Getting Started
 
-To learn more about the Abblix OIDC Server product, visit our [Documentation](https://docs.abblix.com/docs) site and explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide).
+To learn more about the Abblix OIDC Server product, visit our [Documentation](https://www.abblix.com/en/docs/introduction-to-abblix-oidc-server) site and explore the [Getting Started Guide](https://www.abblix.com/en/docs/getting-started-guide).
 
 ## License
 

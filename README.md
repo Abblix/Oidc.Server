@@ -1,9 +1,9 @@
 <a name="top"></a>
 [![Abblix OIDC Server](https://resources.abblix.com/imgs/jpg/abblix-oidc-server-github-banner.jpg)](https://www.abblix.com/abblix-oidc-server)
-[![.NET](https://img.shields.io/badge/.NET-11.0-512BD4)](https://docs.abblix.com/docs/technical-requirements)
+[![.NET](https://img.shields.io/badge/.NET-11.0-512BD4)](https://www.abblix.com/en/docs/technical-requirements)
 [![language](https://img.shields.io/badge/language-C%23-239120)](https://learn.microsoft.com/en-us/dotnet/csharp/tour-of-csharp/overview)
-[![OS](https://img.shields.io/badge/OS-linux%2C%20windows%2C%20macOS-0078D4)](https://docs.abblix.com/docs/technical-requirements)
-[![CPU](https://img.shields.io/badge/CPU-x86%2C%20x64%2C%20ARM%2C%20ARM64-FF8C00)](https://docs.abblix.com/docs/technical-requirements)
+[![OS](https://img.shields.io/badge/OS-linux%2C%20windows%2C%20macOS-0078D4)](https://www.abblix.com/en/docs/technical-requirements)
+[![CPU](https://img.shields.io/badge/CPU-x86%2C%20x64%2C%20ARM%2C%20ARM64-FF8C00)](https://www.abblix.com/en/docs/technical-requirements)
 [![security rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=security_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![reliability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=reliability_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
 [![maintainability rating](https://sonarcloud.io/api/project_badges/measure?project=Abblix_Oidc.Server&metric=sqale_rating)](https://sonarcloud.io/summary/overall?id=Abblix_Oidc.Server)
@@ -13,8 +13,8 @@
 [![GitHub release](https://img.shields.io/github/v/release/Abblix/Oidc.Server)](#)
 [![GitHub release date](https://img.shields.io/github/release-date/Abblix/Oidc.Server)](#)
 [![GitHub last commit](https://img.shields.io/github/last-commit/Abblix/Oidc.Server)](#)
-[![getting started](https://img.shields.io/badge/getting_started-guide-1D76DB)](https://docs.abblix.com/docs/getting-started-guide)
-[![migrating from IdentityServer](https://img.shields.io/badge/migrating_from_IdentityServer-guide-1D76DB)](https://docs.abblix.com/docs/migrate-from-identityserver)
+[![getting started](https://img.shields.io/badge/getting_started-guide-1D76DB)](https://www.abblix.com/en/docs/getting-started-guide)
+[![migrating from IdentityServer](https://img.shields.io/badge/migrating_from_IdentityServer-guide-1D76DB)](https://www.abblix.com/en/docs/migrate-from-identityserver)
 [![License](https://img.shields.io/badge/license-Source_Available-blue)](LICENSE.md)
 [![Free](https://img.shields.io/badge/free_under_%241M_revenue-brightgreen)](#-license)
 
@@ -95,13 +95,13 @@ app.Run();
 
 An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead. A host serving several tenants, a single tenant at an issuer with a path, or tenants from a store or catalog of its own also calls `app.UseMultiTenancy()` before its own routing, so each request reaches its tenant.
 
-This is the outline, not a complete application: the server also needs an `IDistributedCache` (a shared one when several instances run), the CORS middleware, a login page, your user store, and signing keys that outlive a restart, since the key in the outline is generated anew at every start. The [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide) builds a complete, runnable solution step by step.
+This is the outline, not a complete application: the server also needs an `IDistributedCache` (a shared one when several instances run), the CORS middleware, a login page, your user store, and signing keys that outlive a restart, since the key in the outline is generated anew at every start. The [Getting Started Guide](https://www.abblix.com/en/docs/getting-started-guide) builds a complete, runnable solution step by step.
 
 ## 🎓 Certification
 
-[![OpenID Foundation Certification](https://resources.abblix.com/imgs/svg/abblix-oidc-server-openid-foundation-certification-mark.svg)](https://oidc.abblix.com/certified-profiles)
+[![OpenID Foundation Certification](https://resources.abblix.com/imgs/svg/abblix-oidc-server-openid-foundation-certification-mark.svg)](https://openid.net/certification/certified-openid-providers-profiles/)
 
-Versions 1.x and 2.x are certified in all seven OpenID Provider profiles and all four logout profiles. In the 2.x certification we skipped no tests and received no warnings: all 634 tests ![Passed](https://img.shields.io/badge/PASSED-brightgreen). For more details, click the links ([Certified OpenID Providers & Profiles](https://oidc.abblix.com/certified-profiles), [Certified OpenID Providers for Logout Profiles](https://oidc.abblix.com/certified-logout-profiles)).
+Versions 1.x and 2.x are certified in all seven OpenID Provider profiles and all four logout profiles. In the 2.x certification we skipped no tests and received no warnings: all 634 tests ![Passed](https://img.shields.io/badge/PASSED-brightgreen). For more details, click the links ([Certified OpenID Providers & Profiles](https://openid.net/certification/certified-openid-providers-profiles/), [Certified OpenID Providers for Logout Profiles](https://openid.net/certification/certified-openid-providers-for-logout-profiles/)).
 
 Version 3.0 is being prepared for certification. Until then, every 3.0 release is held to the same suite: the release workflow runs the OpenID Foundation conformance plans for the certified OpenID Connect profiles and for FAPI 2.0, FAPI 2.0 Message Signing, FAPI 1.0 Advanced and FAPI-CIBA, and a release is not published unless they pass, apart from the few checks the suite cannot complete unattended, which the repository lists. The FAPI plans are run, not certified.
 
@@ -172,21 +172,21 @@ Version 3.0 changes how a host registers and configures the server. The changes 
 - A client signing its own authentication JWT names the issuer as its only audience, as RFC 10070 requires. While a client moves off the token endpoint address, the backchannel authentication endpoint address, the pushed authorization request endpoint address or an audience array, the host can let that one client keep its form with `ClientInfo.ClientAssertionAudiences`, and dynamically registered clients with `NewClientOptions.ClientAssertionAudiences`, except under FAPI 2.0.
 - What 2.x stored is not read by 3.0, so end users sign in again, and grants, dynamic client registrations and minted keys of 2.x end once.
 
-The complete list, with what each change asks of a host, is in the [3.0 release notes](https://github.com/Abblix/Oidc.Server/releases/tag/v3.0). The [Upgrading to 3.0](https://docs.abblix.com/docs/upgrading-to-3-0) guide walks a 2.x deployment through the move, including how to keep the signing keys it minted.
+The complete list, with what each change asks of a host, is in the [3.0 release notes](https://github.com/Abblix/Oidc.Server/releases/tag/v3.0). The [Upgrading to 3.0](https://www.abblix.com/en/docs/upgrading-to-3-0) guide walks a 2.x deployment through the move, including how to keep the signing keys it minted.
 
 ## 📚 Documentation
 
 ### Getting Started
-Explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide).
+Explore the [Getting Started Guide](https://www.abblix.com/en/docs/getting-started-guide).
 In this guide, you will create a working solution step by step, building an OpenID Connect Provider using ASP.NET MVC and the Abblix OIDC Server solution.
 
 ### Migrating from IdentityServer
-[Migrating from IdentityServer4 or Duende](https://docs.abblix.com/docs/migrate-from-identityserver) walks through a real migration end to end: dotnet/eShop's Identity.API moved from Duende IdentityServer onto Abblix OIDC Server, every decision named along the way.
+[Migrating from IdentityServer4 or Duende](https://www.abblix.com/en/docs/migrate-from-identityserver) walks through a real migration end to end: dotnet/eShop's Identity.API moved from Duende IdentityServer onto Abblix OIDC Server, every decision named along the way.
 
 ### Shared Signals
 [A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) shows two hosts exchanging a signed Security Event Token over HTTPS, each verifying the other.
 
-The [Documentation](https://docs.abblix.com/docs) site covers configuration, deployment, the API reference and the OpenID Connect standard itself.
+The [Documentation](https://www.abblix.com/en/docs/introduction-to-abblix-oidc-server) site covers configuration, deployment, the API reference and the OpenID Connect standard itself.
 
 ## 💎 Abblix Account
 

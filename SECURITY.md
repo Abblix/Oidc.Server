@@ -9,7 +9,7 @@
 | 1.x         | No longer supported. Upgrade to 2.x                                            |
 
 Full platform and end-of-support dates are on the
-[version support lifecycle](https://docs.abblix.com/docs/version-support-lifecycle) page.
+[version support lifecycle](https://www.abblix.com/en/docs/version-support-lifecycle) page.
 
 A fix is made in the latest release and reaches you by upgrading the package. The fixed package is published
 on NuGet and available to everyone, including those using the library free of charge: a security fix is
