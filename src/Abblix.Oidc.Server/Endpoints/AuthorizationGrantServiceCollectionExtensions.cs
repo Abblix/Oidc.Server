@@ -57,6 +57,7 @@ public static class AuthorizationGrantServiceCollectionExtensions
         // The storage lives in Abblix.JWT so a Security Event Token receiver can share it without
         // reaching for the OpenID Connect server.
         services.AddReplayPrevention();
+        services.TryAddSingleton<JwtBearerAssertionPolicy>();
 
         return services.AddAuthorizationGrant<JwtBearerGrantHandler>();
     }

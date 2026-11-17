@@ -65,33 +65,22 @@ public sealed class ConformancePages(TenantDefinition tenant)
                 ? Results.NoContent()
                 : Results.NotFound());
 
-        endpoints.MapPost("/login", async (
-                [FromForm] string email,
-                [FromForm] string password,
-                [FromForm] string requestUri,
-                [FromForm] string? action,
-                IAuthSessionService authService,
-                IOidcEndpointResolver endpointResolver,
-                ISessionIdGenerator sessionIdGenerator,
-                TimeProvider timeProvider,
-                IAuthorizationRequestStorage pendingRequests,
-                IClientInfoProvider clients,
-                ConformanceUser conformanceUser) =>
+        endpoints.MapPost("/login", async ([AsParameters] LoginForm form, [AsParameters] LoginServices services) =>
             {
-                if (!conformanceUser.Matches(email, password))
+                if (!services.ConformanceUser.Matches(form.Email, form.Password))
                 {
-                    var client = await PendingClientAsync(requestUri, pendingRequests, clients);
+                    var client = await PendingClientAsync(form.RequestUri, services.PendingRequests, services.Clients);
                     return Results.Content(
-                        LoginPage.Render(requestUri, "Invalid email or password", client), "text/html");
+                        LoginPage.Render(form.RequestUri, "Invalid email or password", client), "text/html");
                 }
 
                 // The server keeps only the sessions at a level the request asked for, so a sign-in recording none
                 // would be sent straight back here. A password is the one factor this host has, and it is taken as
                 // whichever level the client named first.
-                var pending = await pendingRequests.TryGetAsync(tenant, new Uri(requestUri));
-                var sessionId = sessionIdGenerator.GenerateSessionId();
+                var pending = await services.PendingRequests.TryGetAsync(tenant, new Uri(form.RequestUri));
+                var sessionId = services.SessionIdGenerator.GenerateSessionId();
 
-                switch (action)
+                switch (form.Action)
                 {
                     case "allow":
                         break;
@@ -106,17 +95,17 @@ public sealed class ConformancePages(TenantDefinition tenant)
                         return Results.BadRequest("The action is neither allow nor deny");
                 }
 
-                await authService.SignInAsync(new AuthSession(
+                await services.AuthService.SignInAsync(new AuthSession(
                     ConformanceUser.Subject,
                     sessionId,
-                    timeProvider.GetUtcNow(),
+                    services.TimeProvider.GetUtcNow(),
                     CookieAuthenticationDefaults.AuthenticationScheme)
                 {
                     AuthContextClassRef = pending?.AcrValues?.FirstOrDefault(),
                 });
 
-                var authorizeUrl = new UriBuilder(endpointResolver.Resolve(OidcEndpoints.Authorize)!)
-                    { Query = { [AuthorizationRequest.Parameters.RequestUri] = requestUri } };
+                var authorizeUrl = new UriBuilder(services.EndpointResolver.Resolve(OidcEndpoints.Authorize)!)
+                    { Query = { [AuthorizationRequest.Parameters.RequestUri] = form.RequestUri } };
                 return Results.Redirect(authorizeUrl);
             })
             // The single-use request_uri the form carries already binds the post to the pending authorization request

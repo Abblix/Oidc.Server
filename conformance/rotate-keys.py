@@ -45,11 +45,9 @@ async def run_once(suite, client, config, specification):
     return result == "PASSED"
 
 
-async def main(config_file, specifications):
+async def main(config, specifications):
     suite = Conformance(os.environ["CONFORMANCE_SERVER"], None, False)
     await suite.wait_for_server_ready()
-    with open(config_file, encoding="utf-8") as f:
-        config = f.read()
 
     passed = True
     async with httpx.AsyncClient(verify=False) as client:
@@ -62,4 +60,6 @@ async def main(config_file, specifications):
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         raise SystemExit(__doc__)
-    sys.exit(asyncio.run(main(sys.argv[1], sys.argv[2:])))
+    with open(sys.argv[1], encoding="utf-8") as f:
+        config = f.read()
+    sys.exit(asyncio.run(main(config, sys.argv[2:])))

@@ -213,13 +213,18 @@ public class ReplayChecksThroughEntityStorageTests
         var sessions = new Mock<ISessionIdGenerator>();
         sessions.Setup(g => g.GenerateSessionId()).Returns("session");
 
+        var policy = ActivatorUtilities.CreateInstance<JwtBearerAssertionPolicy>(
+            provider,
+            issuers.Object,
+            requestInfo.Object,
+            SingleIssuer.LicensedCatalog);
         var handler = ActivatorUtilities.CreateInstance<JwtBearerGrantHandler>(
             provider,
             new ProfiledJwtValidator(validator.Object),
             issuers.Object,
             requestInfo.Object,
             sessions.Object,
-            SingleIssuer.LicensedCatalog);
+            policy);
         var request = new TokenRequest { GrantType = GrantTypes.JwtBearer, Assertion = "assertion" };
         var client = new ClientInfo(ClientId);
         var ct = TestContext.Current.CancellationToken;

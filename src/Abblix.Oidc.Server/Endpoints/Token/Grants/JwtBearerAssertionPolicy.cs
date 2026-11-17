@@ -28,20 +28,26 @@ namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
 /// </summary>
 /// <remarks>
 /// Each check is one link of the handler's validation chain (Chain of Responsibility): it passes the context on
-/// or answers with the refusal.
+/// or answers with the refusal. <see cref="AuthorizationGrantServiceCollectionExtensions.AddJwtBearerGrant"/>
+/// registers it for <see cref="JwtBearerGrantHandler"/>; a host has no call to make on it.
 /// </remarks>
 /// <param name="logger">Records why an assertion was refused.</param>
 /// <param name="issuerProvider">Carries the JWT Bearer options and the per-issuer configuration.</param>
 /// <param name="timeProvider">Provides the current time the assertion's age is measured against.</param>
 /// <param name="replayCache">Records each jti until its assertion expires (RFC 7523 Section 3).</param>
-/// <param name="requestInfoProvider">Names the address a replay came from.</param>
-internal sealed partial class JwtBearerAssertionPolicy(
-	ILogger logger,
+/// <param name="requestInfoProvider">Names the address a replay came from and the endpoint an assertion's
+/// audience has to name.</param>
+/// <param name="catalog">Tells an issuer this server serves, whose assertions are refused.</param>
+public sealed partial class JwtBearerAssertionPolicy(
+	ILogger<JwtBearerAssertionPolicy> logger,
 	IJwtBearerIssuerProvider issuerProvider,
 	TimeProvider timeProvider,
 	IReplayCache replayCache,
-	IRequestInfoProvider requestInfoProvider)
+	IRequestInfoProvider requestInfoProvider,
+	ITenantCatalog catalog)
 {
+	private readonly JwtBearerAssertionParameters _parameters = new(logger, issuerProvider, requestInfoProvider, catalog);
+
 	/// <summary>
 	/// Default secure algorithms allowed for JWT signatures when not configured per issuer.
 	/// Excludes symmetric (HMAC) and 'none' algorithms for security.
@@ -71,8 +77,17 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// a profile in this codebase resolves one. Reading the server default alone would ignore a
 	/// client that asks for a tighter window than the deployment demands.
 	/// </remarks>
-	public ClockSkew ResolveClockSkew(TenantDefinition tenant, ClientInfo clientInfo)
+	internal ClockSkew ResolveClockSkew(TenantDefinition tenant, ClientInfo clientInfo)
 		=> issuerProvider.Options.ResolveClockSkew(Profile(tenant, clientInfo));
+
+	/// <summary>
+	/// The parameters the signature, lifetime, issuer and audience of an assertion this client presents at
+	/// <paramref name="tenant"/> are validated with, read with the tolerance of the client's profile.
+	/// </summary>
+	/// <param name="tenant">The tenant the grant is requested at.</param>
+	/// <param name="clientInfo">The client presenting the assertion.</param>
+	internal ValidationParameters ParametersFor(TenantDefinition tenant, ClientInfo clientInfo)
+		=> _parameters.For(tenant, ResolveClockSkew(tenant, clientInfo));
 
 	/// <summary>
 	/// The control bundle this client is held to: what the deployment demands of everyone,
@@ -87,7 +102,7 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// be used; the generic lifetime check treats a token with neither 'nbf' nor 'exp' as valid, so
 	/// this enforces the grant-specific MUST and is also what bounds the replay-cache entry's TTL.
 	/// </summary>
-	public Result<JwtBearerValidationContext, OidcError> ValidateExpiration(
+	internal Result<JwtBearerValidationContext, OidcError> ValidateExpiration(
 		JwtBearerValidationContext ctx, ClientInfo clientInfo)
 	{
 		// Through the guarded reader rather than the accessor: the validator that ran first is
@@ -109,7 +124,7 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// Validates that the JWT signing algorithm is in the trusted issuer's allowed list. The client's security profile
 	/// bounded the algorithm already, where the assertion was validated.
 	/// </summary>
-	public Result<JwtBearerValidationContext, OidcError> ValidateAlgorithm(
+	internal Result<JwtBearerValidationContext, OidcError> ValidateAlgorithm(
 		JwtBearerValidationContext ctx, ClientInfo clientInfo)
 	{
 		var allowedAlgorithms = ctx.TrustedIssuer?.AllowedAlgorithms ?? DefaultAllowedAlgorithms;
@@ -134,7 +149,7 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// Section 3.11). A listed type matches in either spelling of its <c>application/</c> prefix, as RFC 7515
 	/// Section 4.1.9 makes them one type.
 	/// </remarks>
-	public Result<JwtBearerValidationContext, OidcError> ValidateTokenType(
+	internal Result<JwtBearerValidationContext, OidcError> ValidateTokenType(
 		JwtBearerValidationContext ctx, ClientInfo clientInfo)
 	{
 		var options = issuerProvider.Options;
@@ -159,7 +174,7 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// <summary>
 	/// Validates that the JWT is not too old based on MaxJwtAge configuration.
 	/// </summary>
-	public Result<JwtBearerValidationContext, OidcError> ValidateJwtAge(
+	internal Result<JwtBearerValidationContext, OidcError> ValidateJwtAge(
 		TenantDefinition tenant,
 		JwtBearerValidationContext ctx, ClientInfo clientInfo)
 	{
@@ -193,7 +208,7 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// <summary>
 	/// Validates that requested scopes are allowed for the issuer.
 	/// </summary>
-	public Result<JwtBearerValidationContext, OidcError> ValidateScopes(
+	internal Result<JwtBearerValidationContext, OidcError> ValidateScopes(
 		JwtBearerValidationContext ctx, string[]? scope)
 	{
 		if (ctx is not { TrustedIssuer.AllowedScopes: { Length: > 0 } allowedScopes} || scope is null)
@@ -213,7 +228,7 @@ internal sealed partial class JwtBearerAssertionPolicy(
 	/// <summary>
 	/// Validates that the JWT has not been used before (replay protection per RFC 7523 Section 3).
 	/// </summary>
-	public async Task<Result<JwtBearerValidationContext, OidcError>> ValidateReplayAsync(
+	internal async Task<Result<JwtBearerValidationContext, OidcError>> ValidateReplayAsync(
 		JwtBearerValidationContext ctx, ClientInfo clientInfo)
 	{
 		var options = issuerProvider.Options;
