@@ -42,8 +42,10 @@ jobs:
           path: coverage
         timeout-minutes: 3
       # A shard whose report is missing (a failed shard, or a re-run after the reports expired) is
-      # named in the table and turns this job red; the table is still written from what is there.
+      # named in the table, which is still written from what is there. The step fails then, and does
+      # not fail the run: a release whose packages are already out would otherwise read as failed.
       - name: Write coverage summary
+        continue-on-error: true
         env:
           PROJECTS: ${{ inputs.projects }}
         run: python3 -I .github/scripts/coverage-summary.py coverage "$PROJECTS" >> "$GITHUB_STEP_SUMMARY"

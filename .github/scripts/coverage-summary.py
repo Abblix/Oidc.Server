@@ -32,7 +32,10 @@ def source_path(filename):
 
 
 def is_shipped(package):
-    """Test projects, test hosts, samples and build-time analyzers and generators are measured too, but not shipped."""
+    """Test projects, test hosts, samples and the source generators are measured too, but a release packs none of them.
+
+    The analyzers are left out as well: a development build packs them, a release does not.
+    """
     return (package.startswith('Abblix.')
             and not any(part in package for part in ('Test', 'DocSamples', 'SourceGenerators', 'Analyzers')))
 

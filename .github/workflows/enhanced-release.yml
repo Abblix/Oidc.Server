@@ -108,7 +108,7 @@ jobs:
       coverage: true
 
   # The merged coverage per assembly, in the run summary. Nothing below needs it: the figure is
-  # read by the release checklist, and a broken summary must not hold back a release.
+  # informative, and a broken summary must not hold back a release.
   coverage:
     needs: tests
     if: ${{ !cancelled() }}
