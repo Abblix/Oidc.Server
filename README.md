@@ -99,9 +99,9 @@ This is the outline, not a complete application: the server also needs an `IDist
 
 ## 🎓 Certification
 
-[![OpenID Foundation Certification](https://resources.abblix.com/imgs/svg/abblix-oidc-server-openid-foundation-certification-mark.svg)](https://openid.net/certification/certified-openid-providers-profiles/)
+[![OpenID Foundation Certification](https://resources.abblix.com/imgs/svg/abblix-oidc-server-openid-foundation-certification-mark.svg)](https://oidc.abblix.com/certified-profiles)
 
-Versions 1.x and 2.x are certified in all seven OpenID Provider profiles and all four logout profiles. In the 2.x certification we skipped no tests and received no warnings: all 634 tests ![Passed](https://img.shields.io/badge/PASSED-brightgreen). For more details, click the links ([Certified OpenID Providers & Profiles](https://openid.net/certification/certified-openid-providers-profiles/), [Certified OpenID Providers for Logout Profiles](https://openid.net/certification/certified-openid-providers-for-logout-profiles/)).
+Versions 1.x and 2.x are certified in all seven OpenID Provider profiles and all four logout profiles. In the 2.x certification we skipped no tests and received no warnings: all 634 tests ![Passed](https://img.shields.io/badge/PASSED-brightgreen). For more details, click the links ([Certified OpenID Providers & Profiles](https://oidc.abblix.com/certified-profiles), [Certified OpenID Providers for Logout Profiles](https://oidc.abblix.com/certified-logout-profiles)).
 
 Version 3.0 is being prepared for certification. Until then, every 3.0 release is held to the same suite: the release workflow runs the OpenID Foundation conformance plans for the certified OpenID Connect profiles and for FAPI 2.0, FAPI 2.0 Message Signing, FAPI 1.0 Advanced and FAPI-CIBA, and a release is not published unless they pass, apart from the few checks the suite cannot complete unattended, which the repository lists. The FAPI plans are run, not certified.
 
