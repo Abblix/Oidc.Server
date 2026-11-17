@@ -6,7 +6,7 @@
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <PackageId>Abblix.OIDC.Server</PackageId>
         <Title>Abblix OIDC Server</Title>
-        <Description>OpenID Connect and OAuth 2.0 server for ASP.NET Core, certified by the OpenID Foundation in versions 1.x and 2.x. Add a complete identity provider and authorization server to your own .NET application: every OIDC flow, PKCE, PAR, DPoP, JARM, CIBA, device flow, token exchange and FAPI 2.0.</Description>
+        <Description>OpenID Connect and OAuth 2.0 server for ASP.NET Core; versions 1.x and 2.x are certified by the OpenID Foundation. Add a complete identity provider and authorization server to your own .NET application: every OIDC flow, PKCE, PAR, DPoP, JARM, CIBA, device flow, token exchange and FAPI 2.0.</Description>
         <IsPackable>true</IsPackable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <Authors>Abblix LLP</Authors>

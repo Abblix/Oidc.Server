@@ -1,6 +1,6 @@
 # Abblix OIDC Server
 
-Abblix OIDC Server is a .NET library implementing the server side of OpenID Connect and OAuth 2.0: a provider you embed in your own ASP.NET Core application instead of running a separate identity product. Versions 1.x and 2.x are certified by the OpenID Foundation across all login and logout profiles, and every 3.0 release passes the same conformance plans before it is published. It builds on the standard .NET DI container, and uses its own JWT implementation built on .NET cryptographic primitives.
+Abblix OIDC Server is a .NET library implementing the server side of OpenID Connect and OAuth 2.0: a provider you embed in your own ASP.NET Core application instead of running a separate identity product. Versions 1.x and 2.x are certified by the OpenID Foundation across all login and logout profiles, and every 3.0 release passes the same conformance plans before it is published. It builds on the standard .NET DI container and uses its own JWT implementation built on .NET cryptographic primitives.
 
 ## What's New in Version 3.0
 
