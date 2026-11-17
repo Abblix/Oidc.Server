@@ -62,7 +62,7 @@ internal sealed class JweDecryption(
             // RFC 8725 section 3.1: "each key MUST be used with exactly one algorithm, and this MUST be checked when
             // the cryptographic operation is performed". A key declaring its 'alg' opens only that algorithm, as on
             // the JWS side; one declaring none, which RFC 7517 section 4.4 permits, opens what is registered for its
-            // type. Discovery asks the same question of the same keys to say which algorithms it accepts.
+            // type and accepts its material. Discovery asks the same question of the same keys to say which algorithms it accepts.
             if (!encryptionAlgorithms.CanEncrypt(key, algorithm))
             {
                 keysForAnotherAlgorithm++;

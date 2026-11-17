@@ -68,7 +68,7 @@ public sealed class TenantSecurityEventTokenSigner(
 
         await foreach (var key in keys.GetSigningKeys(tenant, true).WithCancellation(cancellationToken))
         {
-            if (AlgorithmOf(key, permitted, signingAlgorithms) is not { } algorithm)
+            if (signingAlgorithms.FirstSignedWith(key, permitted) is not { } algorithm)
                 continue;
 
             // Written into the header so the profile judges what the token is signed with, and so a key declaring no
@@ -99,15 +99,4 @@ public sealed class TenantSecurityEventTokenSigner(
             ? [.. allowed.Where(profile.PermitsSigningAlgorithm)]
             : [.. (IEnumerable<string>?)profile.SigningAlgorithmsAdmitted()
                   ?? SecurityEventsOptions.DefaultSigningAlgorithms];
-
-    /// <summary>
-    /// The first of <paramref name="algorithms"/> <paramref name="key"/> signs with, or null where it signs with none:
-    /// the one it declares, or, for a key declaring none, as one taken from a certificate, the first its material
-    /// performs.
-    /// </summary>
-    internal static string? AlgorithmOf(
-        JsonWebKey key,
-        string[] algorithms,
-        SigningAlgorithmsProvider signingAlgorithms)
-        => algorithms.FirstOrDefault(algorithm => signingAlgorithms.CanSign(key, algorithm));
 }

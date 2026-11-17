@@ -57,7 +57,7 @@ internal sealed class SecurityEventSigningKeysCheck(
         var profile = SecurityProfileRequirements.For(tenant, null);
         var permitted = TenantSecurityEventTokenSigner.AlgorithmsFor(profile, securityEvents.Value);
 
-        if (tenant.SigningKeys.Any(key => TenantSecurityEventTokenSigner.AlgorithmOf(key, permitted, signingAlgorithms) is not null))
+        if (tenant.SigningKeys.Any(key => signingAlgorithms.FirstSignedWith(key, permitted) is not null))
             return [];
 
         if (permitted.Length > 0)

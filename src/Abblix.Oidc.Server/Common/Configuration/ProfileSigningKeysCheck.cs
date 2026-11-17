@@ -18,10 +18,10 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// section 8.6, FAPI 2.0 section 5.4.1) when no signing key of the tenant produces an algorithm the client is
 /// configured for, instead of failing when the first ID token or JWT response is signed for it.
 /// </summary>
+/// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
 /// <param name="custodian">Present when the keys are held by an external custodian, in which case they live outside
 /// the tenant's settings and the absence of one there says nothing. It is a registration marker only and is never
 /// called here.</param>
-/// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
 public sealed class ProfileSigningKeysCheck(
     SigningAlgorithmsProvider signingAlgorithms,
     IKeyCustodian? custodian = null) : ITenantsCheck

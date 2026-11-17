@@ -26,7 +26,7 @@ namespace Abblix.Jwt;
 public sealed class SigningAlgorithmsProvider(IServiceProvider serviceProvider)
 {
     /// <summary>
-    /// Whether <paramref name="key"/> may sign and verify a JWS with <paramref name="algorithm"/>: it declares that
+    /// Whether <paramref name="key"/> may sign a JWS with <paramref name="algorithm"/>: it declares that
     /// algorithm or none, an algorithm of that name is registered for the key's type, and that algorithm accepts the
     /// key's material. The registry answering this is the one <see cref="Algorithms"/> lists and signing and
     /// verification dispatch to, so an algorithm is advertised, matched to its keys and carried out by one and the
@@ -50,6 +50,16 @@ public sealed class SigningAlgorithmsProvider(IServiceProvider serviceProvider)
             OctetJsonWebKey octetKey => Accepts(octetKey, algorithm),
             _ => false,
         };
+
+    /// <summary>
+    /// The first of <paramref name="algorithms"/> <paramref name="key"/> signs with, by <see cref="CanSign"/>, or null
+    /// where it signs with none: the one it declares, or, for a key declaring none, as one taken from a certificate,
+    /// the first its material performs.
+    /// </summary>
+    /// <param name="key">The key asked about.</param>
+    /// <param name="algorithms">The JWS algorithms acceptable to the caller, in its order of preference.</param>
+    public string? FirstSignedWith(JsonWebKey key, IEnumerable<string> algorithms)
+        => algorithms.FirstOrDefault(algorithm => CanSign(key, algorithm));
 
     private bool Accepts<TJsonWebKey>(TJsonWebKey key, string algorithm) where TJsonWebKey : JsonWebKey
         => serviceProvider.GetKeyedService<ISignatureAlgorithm<TJsonWebKey>>(algorithm) is { } signer &&

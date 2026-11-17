@@ -20,7 +20,7 @@ namespace Abblix.Jwt;
 /// algorithms the host added or replaced - with no registration-time bookkeeping to keep in sync.
 /// </summary>
 /// <remarks>
-/// The enumerated key types mirror the dispatch switch in <see cref="LocalKeyEncryptor"/>: an
+/// The enumerated key types mirror the dispatch by key type that encryption and decryption make: an
 /// encryptor registered for any other <see cref="JsonWebKey"/> subtype is unreachable at run time,
 /// so it is deliberately not advertised. The enumeration order (RSA, EC, octet) is the order these
 /// algorithms appear in the discovery document, which consumers read verbatim.
@@ -30,14 +30,14 @@ public sealed class EncryptionAlgorithmsProvider(IServiceProvider serviceProvide
     /// <summary>
     /// Whether <paramref name="key"/> may encrypt and decrypt a JWE with the key management algorithm
     /// <paramref name="keyManagementAlgorithm"/>: it declares that algorithm or none, an algorithm of that name is
-    /// registered for the key's type, and that algorithm accepts the key's material. The registry answering this is the one <see cref="KeyManagementAlgorithms"/>
-    /// lists and encryption and decryption dispatch to, so an algorithm a host registers is advertised, matched to its
-    /// keys and carried out by one and the same registration.
+    /// registered for the key's type, and that algorithm accepts the key's material. The registry answering this is
+    /// the one <see cref="KeyManagementAlgorithms"/> lists and encryption and decryption dispatch to, so an algorithm a
+    /// host registers is advertised, matched to its keys and carried out by one and the same registration.
     /// </summary>
     /// <remarks>
     /// RFC 8725 section 3.1: "each key MUST be used with exactly one algorithm, and this MUST be checked when the
     /// cryptographic operation is performed", so a key declaring another algorithm is refused; RFC 7517 section 4.4
-    /// makes <c>alg</c> optional, so a key declaring none is judged by its type.
+    /// makes <c>alg</c> optional, so a key declaring none is judged by its type and material.
     /// </remarks>
     /// <param name="key">The key asked about.</param>
     /// <param name="keyManagementAlgorithm">The JWE <c>alg</c> it would be used with.</param>

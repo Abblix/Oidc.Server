@@ -64,7 +64,7 @@ public class DiscoverySignedMetadataTests
         _formatter = new ConfigurationResponseFormatter(
             _optionsMock.Object,
             _endpointResolverMock.Object,
-            new SignedMetadataProvider(new ProfiledJwtIssuer(_jwtCreatorMock.Object, TestEncryptionAlgorithms.Every), _keysProviderMock.Object, _clock),
+            new SignedMetadataProvider(new ProfiledJwtIssuer(_jwtCreatorMock.Object, TestEncryptionAlgorithms.Every), _keysProviderMock.Object, _clock, TestSigningAlgorithms.Registered),
             SingleIssuer.Accessor);
     }
 

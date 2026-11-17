@@ -43,7 +43,7 @@ public class SignedMetadataAlgorithmTests
         keys.Setup(k => k.GetSigningKeys(TestTenant.Matched, true)).Returns(() => all.ToAsyncEnumerable());
         var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
 
-        await new SignedMetadataProvider(new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every), keys.Object, TimeProvider.System)
+        await new SignedMetadataProvider(new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every), keys.Object, TimeProvider.System, TestSigningAlgorithms.Registered)
             .SignAsync(tenant, new Abblix.Oidc.Server.Model.ConfigurationResponse
             {
                 Issuer = tenant.Issuer.OriginalString,
@@ -87,5 +87,35 @@ public class SignedMetadataAlgorithmTests
         Assert.Equal(
             SigningAlgorithms.PS256,
             await SignedWith(ClientSecurityProfile.Fapi1Advanced, ps256, rs256, unnamed, ps256));
+    }
+
+    /// <summary>
+    /// A key declaring an algorithm its material does not perform - an elliptic-curve key declaring PS256 - is passed
+    /// over at a FAPI tenant like a key declaring nothing it can sign with, rather than handed to the signer to fail.
+    /// </summary>
+    [Fact]
+    public async Task AKeyDeclaringAnAlgorithmItsMaterialDoesNotPerform_IsPassedOverUnderFapi1Advanced()
+    {
+        var misdeclared = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256)
+            with { Algorithm = SigningAlgorithms.PS256 };
+        var ps256 = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.PS256);
+
+        Assert.Equal(
+            SigningAlgorithms.PS256,
+            await SignedWith(ClientSecurityProfile.Fapi1Advanced, ps256, misdeclared, ps256));
+    }
+
+    /// <summary>
+    /// An elliptic-curve key declaring no algorithm signs with the ECDSA algorithm of its curve (RFC 7518 section 3.4).
+    /// </summary>
+    [Theory]
+    [InlineData(EllipticCurveTypes.P256, SigningAlgorithms.ES256)]
+    [InlineData(EllipticCurveTypes.P384, SigningAlgorithms.ES384)]
+    [InlineData(EllipticCurveTypes.P521, SigningAlgorithms.ES512)]
+    public async Task AnEllipticCurveKeyDeclaringNoAlgorithm_SignsWithItsCurvesAlgorithm(string curve, string algorithm)
+    {
+        var key = JsonWebKeyFactory.CreateEllipticCurve(curve, algorithm) with { Algorithm = null };
+
+        Assert.Equal(algorithm, await SignedWith(ClientSecurityProfile.None, key));
     }
 }
