@@ -8,12 +8,14 @@
 
 using System;
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Model;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -30,7 +32,8 @@ public class ClientIdMetadataDocumentReaderTests
     private static ClientIdMetadataDocumentReader CreateReader(
         string[]? authenticationMethods = null,
         string[]? grantTypes = null,
-        string[]? responseTypeParts = null)
+        string[]? responseTypeParts = null,
+        string[]? allowedGrantTypes = null)
     {
         var authenticator = new Mock<IClientAuthenticator>();
         authenticator.Setup(a => a.ClientAuthenticationMethodsSupported).Returns(authenticationMethods ??
@@ -51,7 +54,12 @@ public class ClientIdMetadataDocumentReaderTests
             return builder.Object;
         });
 
-        return new ClientIdMetadataDocumentReader(authenticator.Object, [grants.Object], builders);
+        var options = new OidcOptions { NewClientOptions = new NewClientOptions { AllowedGrantTypes = allowedGrantTypes } };
+        return new ClientIdMetadataDocumentReader(
+            authenticator.Object,
+            [grants.Object],
+            builders,
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == options));
     }
 
     private static JsonObject Document(string json = "{}")
@@ -213,6 +221,24 @@ public class ClientIdMetadataDocumentReaderTests
         Assert.Equal([GrantTypes.AuthorizationCode, GrantTypes.RefreshToken], metadata.GrantTypes);
         Assert.Equal([[ResponseTypes.Code]], metadata.ResponseTypes);
     }
+
+    /// <summary>
+    /// A grant type the host does not allow a new client is filtered out of a document as an unsupported one is,
+    /// where a registration asking for it is refused.
+    /// </summary>
+    [Fact]
+    public void AGrantTypeTheHostDoesNotAllow_IsFilteredOut()
+        => Assert.Equal(
+            [GrantTypes.AuthorizationCode],
+            Read(
+                Document("""{"grant_types":["authorization_code","refresh_token"]}"""),
+                CreateReader(allowedGrantTypes: [GrantTypes.AuthorizationCode])).GrantTypes);
+
+    [Fact]
+    public void ADocumentOfOnlyGrantTypesTheHostDoesNotAllow_IsRefused()
+        => Refused(
+            Document("""{"grant_types":["refresh_token"],"response_types":[]}"""),
+            CreateReader(allowedGrantTypes: [GrantTypes.AuthorizationCode]));
 
     [Theory]
     [InlineData("""{"grant_types":["urn:example:unknown"]}""")]

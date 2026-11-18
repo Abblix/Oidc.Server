@@ -9,6 +9,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
@@ -16,6 +17,7 @@ using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
+using Microsoft.Extensions.Options;
 using Parameters = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using ResponseParameters = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
 
@@ -30,10 +32,12 @@ namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 /// <param name="clientAuthenticator">Names the client authentication methods this server supports.</param>
 /// <param name="grantTypeInformers">Name the grant types this server supports.</param>
 /// <param name="responseBuilders">Name the response types this server supports.</param>
+/// <param name="options">Holds the grant types the host allows a new client, read on each document.</param>
 internal sealed class ClientIdMetadataDocumentReader(
     IClientAuthenticator clientAuthenticator,
     IEnumerable<IGrantTypeInformer> grantTypeInformers,
-    IEnumerable<IAuthorizationResponseBuilder> responseBuilders)
+    IEnumerable<IAuthorizationResponseBuilder> responseBuilders,
+    IOptionsMonitor<OidcOptions> options)
 {
     /// <summary>
     /// The methods built on a secret shared between client and server, which a public document cannot establish.
@@ -224,11 +228,23 @@ internal sealed class ClientIdMetadataDocumentReader(
         return chosen;
     }
 
+    /// <summary>
+    /// The grant types of <paramref name="declared"/> this server supports and the host allows a new client.
+    /// </summary>
+    /// <remarks>
+    /// A registration asking for a grant type outside <see cref="NewClientOptions.AllowedGrantTypes"/> is refused, but
+    /// a document is filtered: section 6 has the server keep "the intersection of what the Client ID Metadata Document
+    /// declares and what the Authorization Servers supports", and what the host allows is what it supports for such a
+    /// client, so one document can serve servers allowing different grant types.
+    /// </remarks>
     private string[] SupportedGrantTypes(string[] declared)
     {
         var supported = grantTypeInformers
             .SelectMany(informer => informer.GrantTypesSupported)
             .ToHashSet(StringComparer.Ordinal);
+
+        if (options.CurrentValue.NewClientOptions.AllowedGrantTypes is { } allowed)
+            supported.IntersectWith(allowed);
 
         return declared.Where(supported.Contains).Distinct(StringComparer.Ordinal).ToArray();
     }

@@ -7,10 +7,12 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -62,7 +64,10 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ClientIdMetadataDocumentFetcher>();
-        services.TryAddSingleton<HeldMetadataDocuments>();
+        // The documents are held in the host's memory cache, or in an in-process one when the host registers none
+        services.AddInProcessCaches();
+        services.TryAddSingleton(serviceProvider => serviceProvider.CreateService<HeldMetadataDocuments>(
+            Dependency.Override<IMemoryCache>(InProcessCaches.MemoryCache)));
         services.Decorate<IClientInfoProvider, ClientIdMetadataDocumentClients>();
 
         services.AddOptions<ClientIdMetadataDocumentsWiring>()

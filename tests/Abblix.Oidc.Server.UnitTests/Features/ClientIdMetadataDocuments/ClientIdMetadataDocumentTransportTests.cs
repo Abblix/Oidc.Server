@@ -11,7 +11,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features;
+using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -79,6 +83,34 @@ public class ClientIdMetadataDocumentTransportTests
         var tenant = new TenantDefinition { Id = "tenant", Issuer = new Uri("https://issuer.example.com/") };
 
         Assert.Null(await provider.GetRequiredService<IClientInfoProvider>().TryFindClientAsync(tenant, clientId));
+        Assert.Equal(1, origin.RequestsTo(clientId));
+    }
+
+    /// <summary>
+    /// A host registering no memory cache, as one made from the web template without views, still holds documents.
+    /// </summary>
+    [Fact]
+    public async Task AHostWithoutAMemoryCache_StillResolvesAndHoldsADocument()
+    {
+        const string clientId = "https://client.example.com/metadata.json";
+        var origin = new MetadataDocumentOrigin();
+        origin.Serve(clientId, $$"""{"client_id":"{{clientId}}"}""", "max-age=60");
+        var services = Registration();
+        services.AddHttpClient(ClientIdMetadataDocumentTransport.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => origin);
+        services.AddSingleton(Mock.Of<IClientAuthenticator>(
+            authenticator => authenticator.ClientAuthenticationMethodsSupported == new[] { ClientAuthenticationMethods.None }));
+        services.AddSingleton(Mock.Of<IGrantTypeInformer>(
+            informer => informer.GrantTypesSupported == new[] { GrantTypes.AuthorizationCode }));
+        services.AddSingleton(Mock.Of<IAuthorizationResponseBuilder>(builder => builder.ResponseType == ResponseTypes.Code));
+
+        await using var provider = services.BuildServiceProvider();
+        var documents = provider.GetRequiredService<HeldMetadataDocuments>();
+
+        Assert.Null(provider.GetService<Microsoft.Extensions.Caching.Memory.IMemoryCache>());
+        var first = await documents.GetAsync(clientId, new Uri(clientId));
+        var second = await documents.GetAsync(clientId, new Uri(clientId));
+        Assert.Same(first, second);
         Assert.Equal(1, origin.RequestsTo(clientId));
     }
 
