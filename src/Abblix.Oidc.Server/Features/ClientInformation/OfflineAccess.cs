@@ -43,7 +43,9 @@ public enum OfflineAccess
 
     /// <summary>
     /// The client receives offline access without asking for consent with <c>prompt=consent</c>. It is host-side
-    /// configuration only: a client registering itself cannot set it.
+    /// configuration only: a client registering itself receives it only where the host grants it to new clients
+    /// (<see cref="Common.Configuration.NewClientOptions.OfflineAccess"/>), or keeps it on an RFC 7592 update once the
+    /// host has given it.
     /// </summary>
     [JsonStringEnumMemberName("allowed")]
     Allowed,

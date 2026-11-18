@@ -37,8 +37,9 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// not ask and the host has not configured the client to receive offline access without it.
 /// </summary>
 /// <remarks>
-/// A client registering itself cannot state those conditions, so a dynamically registered client is the one the
-/// host has not configured.
+/// A client registering itself cannot state those conditions, so under the host's default for new clients a
+/// dynamically registered client is the one the host has not configured; a host granting more is proven by
+/// <see cref="NewClientOfflineAccessTests"/>.
 /// </remarks>
 public class OfflineAccessTests(TestFactory factory) : TestBase(factory)
 {

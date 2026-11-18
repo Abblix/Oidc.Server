@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
@@ -16,47 +17,71 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Validates the <c>offline_access</c> registration parameter, a server extension to RFC 7591 metadata: a client
-/// registering itself may ask for no offline access or for offline access with <c>prompt=consent</c>, but not for
-/// offline access without it.
+/// registering itself may ask for the offline access the host grants new clients
+/// (<see cref="NewClientOptions.OfflineAccess"/>) or for less, never for more.
 /// </summary>
 /// <remarks>
 /// OpenID Connect Core 1.0, section 11, waives <c>prompt=consent</c> only where "other conditions for processing the
 /// request permitting offline access" are in place, and stating those conditions for a client is the host's call,
 /// never the client's own. An update (RFC 7592 section 2.2) sends back the metadata the server returned, so a client
-/// the host already allowed keeps <c>allowed</c> there, while one it did not cannot raise itself to it.
+/// the host already gave more than it grants new clients keeps it there, while one it did not cannot raise itself.
 /// </remarks>
-/// <param name="clientInfoProvider">Store consulted for the offline access of the client being updated.</param>
-public class OfflineAccessValidator(IClientInfoProvider clientInfoProvider) : IClientRegistrationContextValidator
+public class OfflineAccessValidator : IClientRegistrationContextValidator
 {
     /// <summary>
-    /// Returns an <c>invalid_client_metadata</c> error when the client asks for offline access without
-    /// <c>prompt=consent</c> it does not already have, or names no offline access at all; <c>null</c> otherwise.
+    /// Creates the validator holding a client to <see cref="OfflineAccess.ConsentRequired"/>, the default of
+    /// <see cref="NewClientOptions.OfflineAccess"/>.
     /// </summary>
-    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
+    /// <param name="clientInfoProvider">Not consulted: an update is judged against the client it replaces, which
+    /// <see cref="ClientRegistrationValidationContext.StoredClient"/> carries.</param>
+    public OfflineAccessValidator(IClientInfoProvider clientInfoProvider)
+        : this(clientInfoProvider, new NewClientOptions())
     {
-        switch (context.Request.OfflineAccess)
-        {
-            case OfflineAccess.Disabled or OfflineAccess.ConsentRequired:
-                return null;
-
-            case OfflineAccess.Allowed:
-                if (await AlreadyAllowedAsync(tenant, context))
-                    return null;
-
-                return ErrorFactory.InvalidClientMetadata(
-                    $"The {Parameters.OfflineAccess} a client asks for at registration requires prompt=consent");
-
-            // A number, or a list of names, that reads into none of the named values
-            default:
-                return ErrorFactory.InvalidClientMetadata($"The {Parameters.OfflineAccess} value is not recognized");
-        }
     }
 
     /// <summary>
-    /// Whether the request updates a client the host has already allowed offline access without
-    /// <c>prompt=consent</c>.
+    /// Creates the validator holding a client to the offline access the host grants new clients.
     /// </summary>
-    private async Task<bool> AlreadyAllowedAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
+    /// <param name="clientInfoProvider">Not consulted, as in the constructor without the options: it keeps this one
+    /// the longer of the two, so a container activating the validator by its type picks it whenever the options are
+    /// registered.</param>
+    /// <param name="newClientOptions">The options carrying the offline access the host grants new clients.</param>
+    public OfflineAccessValidator(IClientInfoProvider clientInfoProvider, NewClientOptions newClientOptions)
+    {
+        _newClientOptions = newClientOptions;
+    }
+
+    private readonly NewClientOptions _newClientOptions;
+
+    /// <summary>
+    /// Returns an <c>invalid_client_metadata</c> error when the client asks for more offline access than the host
+    /// grants new clients and it does not already have, or states a value the enumeration does not define;
+    /// <c>null</c> otherwise, a request stating none included.
+    /// </summary>
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
+        => Task.FromResult(Validate(context));
+
+    private OidcError? Validate(ClientRegistrationValidationContext context)
+    {
+        // A client stating none is registered with what the host grants
+        if (context.Request.StatedOfflineAccess is not { } asked)
+            return null;
+
+        // A number, or a list of names, that reads into none of the named values
+        if (!Enum.IsDefined(asked))
+            return ErrorFactory.InvalidClientMetadata($"The {Parameters.OfflineAccess} value is not recognized");
+
+        if (_newClientOptions.OfflineAccess.Covers(asked) || AlreadyHas(context, asked))
+            return null;
+
+        return ErrorFactory.InvalidClientMetadata(
+            $"The server does not grant the {Parameters.OfflineAccess} value {asked} to a client registering itself");
+    }
+
+    /// <summary>
+    /// Whether the request updates a client the host has already given the offline access it asks for.
+    /// </summary>
+    private static bool AlreadyHas(ClientRegistrationValidationContext context, OfflineAccess asked)
     {
         switch (context.Operation)
         {
@@ -64,9 +89,9 @@ public class OfflineAccessValidator(IClientInfoProvider clientInfoProvider) : IC
                 return false;
 
             case DynamicClientOperation.Update:
-                var clientId = context.Request.ClientId;
-                return clientId.HasValue() &&
-                       await clientInfoProvider.TryFindClientAsync(tenant, clientId) is { OfflineAccess: OfflineAccess.Allowed };
+                var stored = context.StoredClient ?? throw new InvalidOperationException(
+                    $"An update is judged without the {nameof(context.StoredClient)} it replaces");
+                return stored.OfflineAccess.Covers(asked);
 
             default:
                 throw new InvalidOperationException($"Unsupported dynamic client operation: {context.Operation}");

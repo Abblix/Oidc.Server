@@ -153,6 +153,33 @@ public class UpdateClientRequestProcessorTests
     }
 
     /// <summary>
+    /// An update builds the client anew, so one omitting the offline access member takes what the host grants new
+    /// clients, and one stating a value keeps the value it states.
+    /// </summary>
+    [Theory]
+    [InlineData(OfflineAccess.Allowed, null, OfflineAccess.Allowed)]
+    [InlineData(OfflineAccess.ConsentRequired, null, OfflineAccess.ConsentRequired)]
+    [InlineData(OfflineAccess.Allowed, OfflineAccess.ConsentRequired, OfflineAccess.ConsentRequired)]
+    public async Task AnUpdate_TakesTheHostsOfflineAccessUnlessItStatesOne(
+        OfflineAccess granted, OfflineAccess? stated, OfflineAccess expected)
+    {
+        ClientInfo? saved = null;
+        var (processor, _, _, idGenerator) = CreateProcessor(
+            c => saved = c.ClientInfo,
+            newClients: new NewClientOptions { OfflineAccess = granted });
+        idGenerator.Setup(g => g.GenerateTokenId()).Returns("new-jti");
+        var model = new ClientRegistrationRequest { RedirectUris = [new Uri("https://client.example.com/cb")] };
+        if (stated is { } value)
+            model = model with { OfflineAccess = value };
+        var request = new ValidUpdateClientRequest(
+            new UpdateClientRequest(new ClientRequest(), model), Existing(), model);
+
+        await processor.ProcessAsync(SingleIssuer.Tenant, request);
+
+        Assert.Equal(expected, saved!.OfflineAccess);
+    }
+
+    /// <summary>
     /// What the host set on the client and no registration request can carry stays with the client through an
     /// update: RFC 7592 section 2.2 replaces the client metadata, and these are not metadata. Its own security profile
     /// among them, so the updated client is held to the profile the host holds it to.
