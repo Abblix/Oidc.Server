@@ -287,7 +287,8 @@ builder.Services.AddAuthentication().AddCookie();
 // so app.UseCors() below resolves that policy without a manual AddCors here.
 builder.Services.AddAuthorization();
 
-// The distributed cache is the host's to choose, per the documented host caching responsibility.
+// A cache of the host's own is optional, since the server falls back to an in-process one; this host registers one so
+// the suite runs over a host-registered cache.
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddHttpContextAccessor();
 

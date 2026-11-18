@@ -21,8 +21,10 @@ namespace Abblix.Jwt;
 /// The in-process caches are never registered under the types a host registers its caches under, only under a key of
 /// their own, and the choice is made when a cache is first asked for, so a cache the host registers wins whatever order
 /// it is registered in and by whichever method, a <c>TryAdd</c> after the libraries' own registrations included. A
-/// <c>TryAdd</c> of the framework's in-memory cache would take the place of that host's cache. The host's other code
-/// sees no cache it did not register.
+/// <c>TryAdd</c> of the framework's in-memory cache would take the place of that host's cache.
+/// Only a cache the host registers without a key is the host's here: one registered only as a keyed service is not
+/// found, and the libraries keep their state in process. A host's unkeyed lookups and <c>TryAdd</c> calls see no cache
+/// it did not register; a lookup by <c>KeyedService.AnyKey</c> does find the libraries' own.
 /// </remarks>
 internal static class InProcessCaches
 {
