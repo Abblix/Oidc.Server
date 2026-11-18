@@ -92,6 +92,11 @@ public static class SecureHttpFetchServiceCollectionExtensions
             client.Timeout = options.RequestTimeout;
         });
 
+        // The cached fetchers below keep fetched documents in the memory cache. A host created from the web template
+        // without views registers none, and every endpoint resolving a cached fetcher would answer 500. The call adds
+        // the cache only when the host has not, so a host's own cache still serves
+        services.AddMemoryCache();
+
         // The cached fetchers are created per resolution, so the fetches they share live in one loader of the
         // container's, and every consumer asking for the same URI at once shares a single fetch
         services.TryAddSingleton(TimeProvider.System);
