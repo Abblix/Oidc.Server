@@ -44,32 +44,35 @@ def percent(part, whole):
     return f'{100 * part / whole:.1f}%' if whole else 'n/a'
 
 
-def main(directory, projects):
-    root = pathlib.Path(directory)
-    missing = [p for p in projects if not any((root / f'coverage-{p}').rglob('*.cobertura.xml'))]
-    reports = sorted(root.rglob('*.cobertura.xml'))
-    if not reports:
-        sys.exit(f'No *.cobertura.xml under {directory}: no shard uploaded a coverage report.')
+def merge_line(lines, branches, name, cls, line):
+    """Adds one report line to the merged line and branch maps."""
+    key = (name, source_path(cls.get('filename')), int(line.get('number')))
+    lines[key] = lines.get(key, False) or int(line.get('hits')) > 0
+    match = CONDITIONS.search(line.get('condition-coverage', ''))
+    if line.get('branch') == 'True' and match:
+        point = key + (cls.get('name'),)
+        taken, present = int(match.group(1)), int(match.group(2))
+        known = branches.get(point, (0, present))
+        branches[point] = (max(known[0], taken), max(known[1], present))
 
-    lines = {}     # (assembly, file, line) -> executed by any shard
-    branches = {}  # (assembly, file, line, class) -> (conditions taken, conditions present)
+
+def collect(reports):
+    """Lines keyed (assembly, file, line) -> executed by any shard, and branch points keyed
+    (assembly, file, line, class) -> (conditions taken, conditions present)."""
+    lines, branches = {}, {}
     for report in reports:
         for package in ElementTree.parse(report).getroot().iterfind('./packages/package'):
             name = package.get('name')
             if not is_shipped(name):
                 continue
             for cls in package.iterfind('./classes/class'):
-                path = source_path(cls.get('filename'))
                 for line in cls.iterfind('./lines/line'):
-                    key = (name, path, int(line.get('number')))
-                    lines[key] = lines.get(key, False) or int(line.get('hits')) > 0
-                    match = CONDITIONS.search(line.get('condition-coverage', ''))
-                    if line.get('branch') == 'True' and match:
-                        point = key + (cls.get('name'),)
-                        taken, present = int(match.group(1)), int(match.group(2))
-                        known = branches.get(point, (0, present))
-                        branches[point] = (max(known[0], taken), max(known[1], present))
+                    merge_line(lines, branches, name, cls, line)
+    return lines, branches
 
+
+def totals_per_assembly(lines, branches):
+    """Per assembly: [lines covered, lines, conditions taken, conditions]."""
     totals = {}
     for (name, _, _), covered in lines.items():
         entry = totals.setdefault(name, [0, 0, 0, 0])
@@ -78,8 +81,11 @@ def main(directory, projects):
     for (name, _, _, _), (taken, present) in branches.items():
         totals[name][2] += taken
         totals[name][3] += present
+    return totals
 
-    print(f'### Test coverage, merged from {len(reports)} reports of {len(projects)} test projects')
+
+def print_table(totals, report_count, project_count, missing):
+    print(f'### Test coverage, merged from {report_count} reports of {project_count} test projects')
     print()
     if missing:
         print(f'Incomplete: no coverage report from {", ".join(missing)}.')
@@ -94,6 +100,16 @@ def main(directory, projects):
               f'| {percent(branch_hit, branch_all)} ({branch_hit}/{branch_all}) |')
     print(f'| All measured shipped assemblies | {percent(sums[0], sums[1])} ({sums[0]}/{sums[1]}) '
           f'| {percent(sums[2], sums[3])} ({sums[2]}/{sums[3]}) |')
+
+
+def main(directory, projects):
+    root = pathlib.Path(directory)
+    missing = [p for p in projects if not any((root / f'coverage-{p}').rglob('*.cobertura.xml'))]
+    reports = sorted(root.rglob('*.cobertura.xml'))
+    if not reports:
+        sys.exit(f'No *.cobertura.xml under {directory}: no shard uploaded a coverage report.')
+    lines, branches = collect(reports)
+    print_table(totals_per_assembly(lines, branches), len(reports), len(projects), missing)
     return 1 if missing else 0
 
 
