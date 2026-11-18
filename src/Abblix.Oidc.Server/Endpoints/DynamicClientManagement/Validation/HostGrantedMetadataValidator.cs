@@ -32,7 +32,30 @@ public class HostGrantedMetadataValidator(IOptionsMonitor<OidcOptions> options) 
                ?? WithinGranted(
                    request.TokenExchangeAudiences,
                    granted.TokenExchangeAudiences,
-                   Parameters.TokenExchangeAudiences);
+                   Parameters.TokenExchangeAudiences)
+               ?? WithinAllowedGrantTypes(request.GrantTypes, granted.AllowedGrantTypes);
+    }
+
+    /// <summary>
+    /// The refusal of a grant type in <paramref name="requested"/> outside <paramref name="allowed"/>, or null, which
+    /// it also is when the host sets no limit.
+    /// </summary>
+    /// <remarks>
+    /// Refused rather than replaced, though RFC 7591 section 2 permits either: section 5 names
+    /// <c>invalid_client_metadata</c> as the answer of a server that disallows a grant type, and dropping one would
+    /// leave the response types that need it registered without it, the inconsistent state section 2.1 asks the
+    /// server to keep a client out of.
+    /// </remarks>
+    private static OidcError? WithinAllowedGrantTypes(string[] requested, string[]? allowed)
+    {
+        if (allowed is null)
+            return null;
+
+        var outside = requested.Where(grantType => !allowed.Contains(grantType, StringComparer.Ordinal)).ToArray();
+        return outside.Length > 0
+            ? ErrorFactory.InvalidClientMetadata(
+                $"The server does not grant the {Parameters.GrantTypes} value {outside[0] ?? "null"}")
+            : null;
     }
 
     /// <summary>

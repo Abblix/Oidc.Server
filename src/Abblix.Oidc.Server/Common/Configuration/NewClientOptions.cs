@@ -60,6 +60,22 @@ public record NewClientOptions
     public string[]? TokenExchangeAudiences { get; init; }
 
     /// <summary>
+    /// The grant types a dynamically registered client may request in its <c>grant_types</c> member: a registration
+    /// naming one outside the set, the <c>authorization_code</c> grant RFC 7591 section 2 takes for an omitted member
+    /// included, is refused with <c>invalid_client_metadata</c>. Unset, a client may request every grant type the
+    /// server supports.
+    /// </summary>
+    /// <remarks>
+    /// A host that lets any caller register a client keeps registration to the flows it means to open: a set of
+    /// <c>authorization_code</c> and <c>refresh_token</c> admits clients that sign users in and refuses one asking for
+    /// <c>client_credentials</c>, which would get tokens with no user present. Clients the host defines itself are not
+    /// bound by it, and the discovery document still lists every grant type the server supports. Applied on
+    /// registration and on every RFC 7592 update, since an update replaces the metadata whole. An empty set, or one
+    /// holding a blank value, is refused at startup.
+    /// </remarks>
+    public string[]? AllowedGrantTypes { get; init; }
+
+    /// <summary>
     /// What a dynamically registered client's authentication assertions may name as their audience, and in which
     /// form: <see cref="ClientAssertionAudiences.Issuer"/> by default, the issuer identifier RFC 10070
     /// section 4 requires, as a string. A value left at zero reads as that default.
