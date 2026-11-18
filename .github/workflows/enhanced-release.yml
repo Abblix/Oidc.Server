@@ -322,7 +322,7 @@ jobs:
           dotnet run --launch-profile https &
           APP_PID=$!
           for _ in {1..60}; do
-            if curl -fsSk -o discovery.json "$BASE/.well-known/openid-configuration"; then
+            if curl -fsSk --max-time 5 -o discovery.json "$BASE/.well-known/openid-configuration"; then
               if ! python3 -c "import json, sys; sys.exit(0 if json.load(open('discovery.json')).get('issuer', '').startswith(sys.argv[1]) else 1)" "$BASE"; then
                 echo "The discovery document at $BASE names no issuer under that address" >&2
                 kill "$APP_PID" 2>/dev/null || true
