@@ -552,12 +552,17 @@ jobs:
           sha256sum nupkg/*.nupkg
         timeout-minutes: 3
     timeout-minutes: 5
+  # NuGet.org trusted publishing: the job proves its identity with GitHub's OIDC token and receives a
+  # one-hour, single-use API key for this push, so no long-lived key is stored. The nuget.org policy
+  # names this repository, this workflow file and the publish-packages environment, so another
+  # workflow or a run without the approval cannot obtain a key.
   publish-nuget-org:
     needs: [versioning, build-and-pack, test-getting-started, create-release]
     runs-on: ubuntu-latest
     environment: publish-packages
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -603,9 +608,32 @@ jobs:
           echo "Publishing destination: https://api.nuget.org/v3/index.json"
           echo "This step requires manual approval in GitHub Actions."
         timeout-minutes: 3
-      - name: Publish to NuGet.org
+      - name: NuGet.org user for trusted publishing
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_USER: ${{ secrets.NUGET_USER }}
+        run: |
+          if [ -z "$NUGET_USER" ]; then
+            echo "::error title=NuGet.org trusted publishing::The publish-packages environment has no NUGET_USER secret. Skipped step: create the trusted publishing policy at https://www.nuget.org/account/trustedpublishing (owner: the account that owns the Abblix packages; repository owner Abblix, repository Oidc.Server, workflow file enhanced-release.yml, environment publish-packages, scope allowing new packages and new versions for the glob Abblix.*) and set the publish-packages environment secret NUGET_USER to the nuget.org profile name of the policy creator, then re-run the failed jobs"
+            exit 1
+          fi
+        timeout-minutes: 3
+      # The key is requested just before the push: it is valid for one hour.
+      - name: Get a short-lived NuGet.org key
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ secrets.NUGET_USER }}
+        timeout-minutes: 3
+      - name: Name the skipped step when no key was issued
+        if: ${{ failure() && steps.login.outcome == 'failure' }}
+        run: |
+          echo "::error title=NuGet.org trusted publishing::NuGet.org issued no key for this run. Skipped step: create the trusted publishing policy at https://www.nuget.org/account/trustedpublishing (owner: the account that owns the Abblix packages; repository owner Abblix, repository Oidc.Server, workflow file enhanced-release.yml, environment publish-packages, scope allowing new packages and new versions for the glob Abblix.*) and set the publish-packages environment secret NUGET_USER to the nuget.org profile name of the policy creator; if the policy shows as inactive because its 7-day window passed without a publish, restart the window there. Then re-run the failed jobs"
+          exit 1
+        timeout-minutes: 3
+      - name: Publish to NuGet.org
+        id: push
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         run: |
           for pkg in nupkg/*.nupkg; do
             echo "Publishing $(basename "$pkg") to NuGet.org..."
@@ -615,6 +643,12 @@ jobs:
               --skip-duplicate
           done
           echo "NuGet.org publishing completed"
+        timeout-minutes: 3
+      - name: Name the skipped step when NuGet.org refused a package
+        if: ${{ failure() && steps.push.outcome == 'failure' }}
+        run: |
+          echo "::error title=NuGet.org trusted publishing::NuGet.org refused a package; the push log above names it. Skipped step: for a package new on nuget.org, let the trusted publishing policy's scope allow new packages for the glob Abblix.*; for an existing one, make the policy's owner one of its owners. Then re-run the failed jobs; packages already pushed are skipped as duplicates"
+          exit 1
         timeout-minutes: 3
       - name: Verify publication
         run: |
