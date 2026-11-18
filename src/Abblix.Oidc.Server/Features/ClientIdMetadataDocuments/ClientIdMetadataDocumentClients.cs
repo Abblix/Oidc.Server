@@ -149,6 +149,7 @@ internal sealed partial class ClientIdMetadataDocumentClients(
         return new ClientInfoBuilder(clientId, context.Request)
             .WithSectorIdentifier(context.SectorIdentifier)
             .WithDefaultScope(newClientOptions.Scope)
+            .WithDefaultOfflineAccess(newClientOptions.OfflineAccess)
             .WithDefaultAllowedResources(newClientOptions.AllowedResources)
             .WithDefaultTokenExchangeAudiences(newClientOptions.TokenExchangeAudiences)
             .WithOfflineAccessWithUserAgentAccessToken(newClientOptions.AllowOfflineAccessWithUserAgentAccessToken)

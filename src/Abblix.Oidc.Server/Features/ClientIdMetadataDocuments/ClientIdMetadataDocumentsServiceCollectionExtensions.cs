@@ -61,6 +61,11 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
         services.AddSsrfHttpClient(ClientIdMetadataDocumentTransport.HttpClientName, (serviceProvider, client) =>
             client.Timeout = serviceProvider.GetRequiredService<IOptions<SecureHttpFetchOptions>>().Value.RequestTimeout);
 
+        // The registration checks a document passes take the host's limits on a new client, which dynamic registration
+        // registers the same way when the host opens it
+        services.TryAddTransient(serviceProvider =>
+            serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value.NewClientOptions);
+
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ClientIdMetadataDocumentFetcher>();
         // A cache of their own, so the number of documents held is bounded whatever the host's cache allows: the URLs

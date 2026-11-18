@@ -228,6 +228,31 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
     }
 
     /// <summary>
+    /// A document is held to the host's limits on a new client as a registration is: the offline access it states
+    /// may be at most what <see cref="NewClientOptions.OfflineAccess"/> grants.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TheOfflineAccessADocumentStates_IsHeldToTheHostsLimit(bool granted)
+    {
+        var document = PublicClientDocument();
+        document[RegistrationMembers.OfflineAccess] = "allowed";
+        Serve(document);
+        await using var host = CreateHost(granted
+            ? options => options.NewClientOptions = options.NewClientOptions with { OfflineAccess = OfflineAccess.Allowed }
+            : null);
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+
+        using var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, CodeFlowParameters(ClientId, GeneratePkcePair().Challenge)),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(granted, response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found or HttpStatusCode.SeeOther);
+    }
+
+    /// <summary>
     /// Section 6.1: "At the token endpoint ... the authorization server MUST return an invalid_client error".
     /// </summary>
     [Fact]
