@@ -2,19 +2,20 @@
 
 ## Supported Versions
 
-| Version                  | Supported                                                                                  |
-|--------------------------|--------------------------------------------------------------------------------------------|
-| Latest 3.x               | Yes: every security fix lands here                                                         |
-| Latest 2.x               | Yes: security fixes land here until 2.x reaches its end of support                         |
-| Earlier 3.x, earlier 2.x | No fix in place. Upgrade to the latest release of your line, or ask us about a back-ported patch |
-| 1.x                      | No longer supported. Upgrade to 3.x, or to 2.x where your hosts cannot move to .NET 11 yet  |
+| Version     | Supported                                                                    |
+|-------------|------------------------------------------------------------------------------|
+| Latest 3.x  | Yes: every security fix lands here. Runs on .NET 11                          |
+| Latest 2.x  | Yes: security fixes land here until 2.x reaches its end of support           |
+| Earlier 3.x | No fixes. Upgrade to the latest 3.x, or ask us about a back-ported patch     |
+| Earlier 2.x | No fixes. Upgrade to the latest 2.x, or ask us about a back-ported patch     |
+| 1.x         | No longer supported. Upgrade to 3.x, or to 2.x if your hosts are not on .NET 11 |
 
 Full platform and end-of-support dates are on the
 [version support lifecycle](https://www.abblix.com/en/docs/version-support-lifecycle) page.
 
-A fix is made in the latest release of each supported line and reaches you by upgrading the package. The fixed package is published
-on NuGet and available to everyone, including those using the library free of charge: a security fix is
-never gated behind a purchase.
+A fix is made in the latest release of each supported version and reaches you by upgrading the package. The
+fixed package is published on NuGet and available to everyone, including those using the library free of
+charge: a security fix is never gated behind a purchase.
 
 Know what upgrading can cost, though. Minor releases in this library do carry breaking changes. In 2.4, for
 instance, several endpoints become opt-in, and clients configured for pairwise subject identifiers see their
