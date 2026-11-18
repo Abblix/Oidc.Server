@@ -12,7 +12,6 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 using Abblix.Oidc.Server.Features.MultiTenancy;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -36,26 +35,23 @@ public class OfflineAccessValidator : IClientRegistrationContextValidator
     /// <param name="clientInfoProvider">Not consulted: an update is judged against the client it replaces, which
     /// <see cref="ClientRegistrationValidationContext.StoredClient"/> carries.</param>
     public OfflineAccessValidator(IClientInfoProvider clientInfoProvider)
-        : this(new NewClientOptions())
+        : this(clientInfoProvider, new NewClientOptions())
     {
     }
 
     /// <summary>
     /// Creates the validator holding a client to the offline access the host grants new clients.
     /// </summary>
+    /// <param name="clientInfoProvider">Not consulted, as in the constructor without the options: it keeps this one
+    /// the longer of the two, so a container activating the validator by its type picks it whenever the options are
+    /// registered.</param>
     /// <param name="newClientOptions">The options carrying the offline access the host grants new clients.</param>
-    public OfflineAccessValidator(NewClientOptions newClientOptions)
+    public OfflineAccessValidator(IClientInfoProvider clientInfoProvider, NewClientOptions newClientOptions)
     {
         _newClientOptions = newClientOptions;
     }
 
     private readonly NewClientOptions _newClientOptions;
-
-    /// <summary>
-    /// The validator holding a client to the options for new clients the container carries.
-    /// </summary>
-    internal static OfflineAccessValidator FromServices(IServiceProvider services)
-        => new(services.GetRequiredService<NewClientOptions>());
 
     /// <summary>
     /// Returns an <c>invalid_client_metadata</c> error when the client asks for more offline access than the host

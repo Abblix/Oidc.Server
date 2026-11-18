@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.Features.MultiTenancy;
@@ -49,7 +50,8 @@ public class OfflineAccessValidatorTests
     private static Subject Validator(OfflineAccess? existing, OfflineAccess? granted = null)
         => new(
             granted is { } host
-                ? new OfflineAccessValidator(new NewClientOptions { OfflineAccess = host })
+                ? new OfflineAccessValidator(
+                    Mock.Of<IClientInfoProvider>(MockBehavior.Strict), new NewClientOptions { OfflineAccess = host })
                 : new OfflineAccessValidator(Mock.Of<IClientInfoProvider>(MockBehavior.Strict)),
             existing);
 
@@ -90,6 +92,29 @@ public class OfflineAccessValidatorTests
     public async Task AnUpdate_KeepsAllowedOnlyForAClientAlreadyAllowed(OfflineAccess existing, string? error)
     {
         var result = await Validator(existing).ValidateAsync(SingleIssuer.Tenant, Context(OfflineAccess.Allowed, DynamicClientOperation.Update));
+
+        Assert.Equal(error, result?.Error);
+    }
+
+    /// <summary>
+    /// A container activating the validator by its type, as a host registering it itself does, picks the constructor
+    /// taking the options for new clients when they are registered and the one without them otherwise.
+    /// </summary>
+    [Theory]
+    [InlineData(true, null)]
+    [InlineData(false, ErrorCodes.InvalidClientMetadata)]
+    public async Task AValidatorActivatedByType_TakesTheOptionsForNewClientsWhenRegistered(
+        bool optionsRegistered, string? error)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(Mock.Of<IClientInfoProvider>(MockBehavior.Strict));
+        if (optionsRegistered)
+            services.AddSingleton(new NewClientOptions { OfflineAccess = OfflineAccess.Allowed });
+        services.AddSingleton<IClientRegistrationContextValidator, OfflineAccessValidator>();
+        using var provider = services.BuildServiceProvider();
+
+        var validator = provider.GetRequiredService<IClientRegistrationContextValidator>();
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context(OfflineAccess.Allowed));
 
         Assert.Equal(error, result?.Error);
     }
