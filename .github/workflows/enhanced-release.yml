@@ -312,25 +312,35 @@ jobs:
           dotnet restore
           dotnet build
         timeout-minutes: 3
-      - name: Test OpenIDProviderApp runs
+      # The sample must answer its discovery document at the address its own launch profile names,
+      # which is also its issuer; any other outcome within the wait fails the step. -k: the sample
+      # serves the runner's untrusted ASP.NET Core development certificate on loopback.
+      - name: Test OpenIDProviderApp answers discovery
         run: |
           cd getting-started/OpenIDProviderApp
-          dotnet run &
+          BASE=$(python3 -c "import json; print(json.load(open('Properties/launchSettings.json', encoding='utf-8-sig'))['profiles']['https']['applicationUrl'].split(';')[0])")
+          dotnet run --launch-profile https &
           APP_PID=$!
-          for _ in {1..30}; do
-            if curl -fsS http://localhost:5000 >/dev/null 2>&1 \
-               || curl -fsS http://localhost:5000/.well-known/openid-configuration >/dev/null 2>&1; then
-              echo "App is responding"
-              break
+          for _ in {1..60}; do
+            if curl -fsSk --max-time 5 -o discovery.json "$BASE/.well-known/openid-configuration"; then
+              if ! python3 -c "import json, sys; sys.exit(0 if json.load(open('discovery.json')).get('issuer', '').startswith(sys.argv[1]) else 1)" "$BASE"; then
+                echo "The discovery document at $BASE names no issuer under that address" >&2
+                kill "$APP_PID" 2>/dev/null || true
+                exit 1
+              fi
+              echo "App answers discovery at $BASE"
+              kill "$APP_PID" 2>/dev/null || true
+              exit 0
             fi
             if ! kill -0 "$APP_PID" 2>/dev/null; then
-              echo "App process died before responding" >&2
+              echo "App process died before answering" >&2
               exit 1
             fi
             sleep 1
           done
+          echo "App did not answer discovery at $BASE within the wait" >&2
           kill "$APP_PID" 2>/dev/null || true
-
+          exit 1
         timeout-minutes: 3
     timeout-minutes: 5
   create-release:
