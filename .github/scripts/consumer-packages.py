@@ -28,7 +28,9 @@ SKIPPED_DIRECTORIES = {"bin", "obj", "node_modules", ".git"}
 
 def use_local(folder: Path) -> int:
     if not any(folder.glob("*.nupkg")):
-        print(f"::error::{folder} holds no .nupkg, so there is nothing of this run to restore", file=sys.stderr)
+        print(f"::error::{folder} holds no .nupkg, so there is nothing of this run to restore. Skipped step: the "
+              "packages the build-and-pack job uploads as nuget-packages - fix the pack on the release branch and "
+              "dispatch the release again", file=sys.stderr)
         return 1
     configuration = ElementTree.Element("configuration")
     sources = ElementTree.SubElement(configuration, "packageSources")
@@ -81,7 +83,9 @@ def point(version: str, root: Path) -> int:
             pointed += 1
     if pointed == 0:
         print(f"::error::No project under {root} references an Abblix package, so nothing here would test "
-              "this run's packages", file=sys.stderr)
+              "this run's packages. Skipped step: a consumer project that installs the Abblix packages - when the "
+              "repository dropped them, fix the job in .github/workflows/release.yml on the release branch and "
+              "dispatch the release again", file=sys.stderr)
         return 1
     return 0
 
@@ -90,7 +94,8 @@ def verify(folder: Path, version: str) -> int:
     packages = Path(os.environ.get("NUGET_PACKAGES") or Path.home() / ".nuget" / "packages")
     expected = str(folder.resolve()).rstrip("/")
     found, wrong = 0, []
-    for package in sorted(path for path in packages.iterdir() if path.name.startswith(PREFIX)):
+    restored_packages = packages.iterdir() if packages.is_dir() else []
+    for package in sorted(path for path in restored_packages if path.name.startswith(PREFIX)):
         for restored in package.iterdir():
             metadata = json.loads((restored / ".nupkg.metadata").read_text(encoding="utf-8"))
             source = str(metadata.get("source", "")).rstrip("/")
@@ -99,11 +104,17 @@ def verify(folder: Path, version: str) -> int:
                 wrong.append(f"{package.name} {restored.name} from {source or 'an unknown source'}")
     if wrong:
         print(f"::error::Restored Abblix packages that are not this run's {version} from {expected}: "
-              + "; ".join(wrong), file=sys.stderr)
+              + "; ".join(wrong) + ". Skipped step: restore through the configuration the step 'Restore Abblix "
+              "packages from this run only' writes - a nuget.config of the consumer repository that adds sources "
+              "or mappings overrides it, so remove it there and re-run this job; a reference this job did not "
+              "point at the run's version is fixed in .github/workflows/release.yml on the release branch, then "
+              "the release is dispatched again", file=sys.stderr)
         return 1
     if found == 0:
-        print(f"::error::{packages} holds no Abblix package, so nothing was restored from this run",
-              file=sys.stderr)
+        print(f"::error::{packages} holds no Abblix package, so nothing was restored from this run. Skipped step: "
+              "the build of the consumer projects before this check, after the step 'Restore Abblix packages from "
+              "this run only' - fix the order in .github/workflows/release.yml on the release branch and dispatch "
+              "the release again", file=sys.stderr)
         return 1
     print(f"{found} Abblix packages restored, each {version} from {expected}")
     return 0

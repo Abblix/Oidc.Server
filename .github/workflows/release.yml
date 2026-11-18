@@ -251,12 +251,15 @@ jobs:
   # started. create-release needs all four jobs below, so a release whose quickstart, samples or templates do not
   # work for the reader stops before either approval. Our own test hosts above never see what these see: a project
   # made by `dotnet new web`, a sample from another repository, a scaffold of a template.
+  #
+  # The step and job ceilings below come from hosted runs of the samples' and the templates' own workflows and from
+  # local runs of these steps, since no release has run them yet; re-set them from the first release run that does.
 
-  # Each adapter's README quickstart as a reader builds it: a new web project, the adapter's package of this run,
-  # the README block as Program.cs plus only what the repository README's outline paragraph says the host adds and
-  # a protocol request needs (a distributed cache, the CORS middleware), and the issuer in appsettings.json. The
-  # block is the compiled copy ReadmeSampleTests holds to the README's lines, turned into top-level statements by
-  # the C# compiler's parser. One leg per adapter, the same steps on each, and neither stops the other.
+  # Each README quickstart as a reader builds it: a new web project, the package of this run that README installs,
+  # the README block pasted as Program.cs, and the issuer in appsettings.json as the README says. The block is the
+  # compiled copy ReadmeSampleTests holds to the README's lines, turned into top-level statements by the C# compiler's
+  # parser. The only line added to it is the distributed cache the repository README's outline leaves to the host,
+  # without which the server does not start. One leg per README, the same steps on each, and none stops the others.
   readme-quickstart:
     needs: [versioning, build-and-pack]
     runs-on: ubuntu-latest
@@ -266,17 +269,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - adapter: Minimal API
+          - readme: README.md
             package: Abblix.OIDC.Server.MinimalAPI
-            readme: README.md
             copy: ReadmeQuickstart.cs
-          - adapter: MVC
+          - readme: src/Abblix.Oidc.Server.MinimalApi/README.md
+            package: Abblix.OIDC.Server.MinimalAPI
+            copy: MinimalApiQuickstart.cs
+          - readme: src/Abblix.Oidc.Server.Mvc/README.md
             package: Abblix.OIDC.Server.MVC
-            readme: src/Abblix.Oidc.Server.Mvc/README.md
             copy: MvcQuickstart.cs
     env:
       VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
-      RELEASE_BRANCH: ${{ github.ref_name }}
       PACKAGE: ${{ matrix.package }}
       README: ${{ matrix.readme }}
       COPY: ${{ matrix.copy }}
@@ -307,22 +310,27 @@ jobs:
         run: python3 -I main-repo/.github/scripts/consumer-packages.py use-local local-packages
         timeout-minutes: 3
       - name: Create the ASP.NET Core development certificate
-        run: dotnet dev-certs https
+        run: |
+          if ! dotnet dev-certs https; then
+            echo "::error title=$PACKAGE quickstart::dotnet dev-certs https could not create the development certificate the quickstart serves HTTPS with; its output is above. Skipped step: the certificate this job creates on the runner - re-run this job"
+            exit 1
+          fi
         timeout-minutes: 3
       # Outside the checkout, so none of this repository's build, package or SDK settings reach the project
       - name: Build the README quickstart in a new web project
         id: quickstart
         run: |
           refuse() {
-            echo "::error title=$PACKAGE quickstart::$1. Skipped step: make the quickstart of $README compile in a project made by dotnet new web - fix the library, that README or its compiled copy tests/Abblix.DocSamples/Samples/$COPY on $RELEASE_BRANCH, check it the way this step does (dotnet new web; dotnet add package $PACKAGE; dotnet .github/scripts/quickstart-program.cs <copy> Program.cs run from outside the repository; dotnet build), then dispatch the release again from the new head"
+            echo "::error title=$PACKAGE quickstart::$1. Skipped step: make the quickstart of $README build in a project made by dotnet new web - fix the library, that README or its compiled copy tests/Abblix.DocSamples/Samples/$COPY on $GITHUB_REF_NAME, and check it the way this step does (dotnet new web; dotnet add package $PACKAGE --version <this release>; copy .github/scripts/quickstart-program.cs into an empty folder and run dotnet quickstart-program.cs <the copy> <the project>/Program.cs there; put Issuer into appsettings.json; dotnet build), then dispatch the release again from the new head"
             exit 1
           }
           work="$RUNNER_TEMP/quickstart"
-          dotnet new web --name Quickstart --output "$work"
-          dotnet add "$work" package "$PACKAGE" --version "$VERSION_FULL"
-          # The generator names its own Roslyn version, which the repository's central package versions refuse
-          mkdir "$RUNNER_TEMP/program"
-          cp main-repo/.github/scripts/quickstart-program.cs "$RUNNER_TEMP/program/"
+          dotnet new web --name Quickstart --output "$work" || refuse "dotnet new web did not create the project"
+          dotnet add "$work" package "$PACKAGE" --version "$VERSION_FULL" ||
+            refuse "dotnet add package $PACKAGE --version $VERSION_FULL failed in a new web project; its output is above"
+          # The generator pins its own Roslyn version, which this repository's central package versions refuse
+          { mkdir "$RUNNER_TEMP/program" && cp main-repo/.github/scripts/quickstart-program.cs "$RUNNER_TEMP/program/"; } ||
+            refuse "The generator could not be copied out of the checkout"
           dotnet "$RUNNER_TEMP/program/quickstart-program.cs" \
             "main-repo/tests/Abblix.DocSamples/Samples/$COPY" "$work/Program.cs" ||
             refuse "The compiled copy $COPY could not be turned into a Program.cs; the generator's reason is above"
@@ -338,7 +346,7 @@ jobs:
           with open(f"{work}/appsettings.json", "w", encoding="utf-8") as file:
               json.dump(settings, file, indent=2)
           print(issuer)
-          ' "$work")
+          ' "$work") || refuse "The https profile of the new project's launchSettings.json, or its appsettings.json, could not be read as JSON"
           echo "issuer=$issuer" >> "$GITHUB_OUTPUT"
           dotnet build "$work" || refuse "The README block does not build in a project made by dotnet new web; the build output above names the error"
         timeout-minutes: 3
@@ -349,10 +357,11 @@ jobs:
           EXPECTED_ISSUER: ${{ steps.quickstart.outputs.issuer }}
         run: |
           refuse() {
-            echo "::error title=$PACKAGE quickstart::$1. Skipped step: make the quickstart of $README work in a project made by dotnet new web - fix the library or that README on $RELEASE_BRANCH and check it the way this job does (dotnet new web; dotnet add package $PACKAGE; Program.cs from the README block plus the distributed cache and app.UseCors() the repository README's outline names; Issuer in appsettings.json; dotnet run --launch-profile https), then dispatch the release again from the new head"
+            echo "::error title=$PACKAGE quickstart::$1. Skipped step: make the quickstart of $README work as pasted in a project made by dotnet new web - fix the library or that README on $GITHUB_REF_NAME and check it the way this job does (dotnet new web; dotnet add package $PACKAGE; the README block as Program.cs with the distributed cache the repository README's outline names; Issuer in appsettings.json; dotnet run --launch-profile https), then dispatch the release again from the new head"
             exit 1
           }
           cd "$RUNNER_TEMP/quickstart"
+          # The launch profile is what a reader's dotnet run takes, the Development environment included
           dotnet run --no-build --launch-profile https > "$RUNNER_TEMP/quickstart.log" 2>&1 &
           app=$!
           trap 'kill "$app" 2>/dev/null || true' EXIT
@@ -365,12 +374,16 @@ jobs:
           done
           if [ "$code" != 200 ]; then
             tail -n 60 "$RUNNER_TEMP/quickstart.log"
-            [ "$code" = 000 ] && refuse "The quickstart did not answer $EXPECTED_ISSUER/.well-known/openid-configuration within the wait; its log is above"
+            if [ "$code" = 000 ]; then
+              kill -0 "$app" 2>/dev/null || refuse "The quickstart exited before it answered $EXPECTED_ISSUER/.well-known/openid-configuration; its log is above"
+              refuse "The quickstart did not answer $EXPECTED_ISSUER/.well-known/openid-configuration within the wait; its log is above"
+            fi
             refuse "The quickstart answered its discovery document with HTTP $code; its log is above"
           fi
-          named=$(python3 -I -c 'import json, sys; print(json.load(open("discovery.json")).get("issuer", ""))')
+          named=$(python3 -I -c 'import json; print(json.load(open("discovery.json")).get("issuer", ""))') ||
+            refuse "The discovery document is not JSON"
           [ "$named" = "$EXPECTED_ISSUER" ] || refuse "The discovery document names the issuer '$named', not $EXPECTED_ISSUER, the address it is served on and the Issuer setting this job wrote"
-          token_endpoint=$(python3 -I -c 'import json, sys; print(json.load(open("discovery.json")).get("token_endpoint", ""))')
+          token_endpoint=$(python3 -I -c 'import json; print(json.load(open("discovery.json")).get("token_endpoint", ""))')
           [ -n "$token_endpoint" ] || refuse "The discovery document names no token_endpoint"
           # A client the server does not know: the protocol answer is an OAuth error, never a server failure
           code=$(curl -sk --max-time 10 -o token.json -w '%{http_code}' \
@@ -519,7 +532,8 @@ jobs:
           # On Linux it exits with 4 when the certificate is trusted for OpenSSL, which the three
           # samples call each other through, but not for every certificate store it tried
           if [ "$status" -ne 0 ] && [ "$status" -ne 4 ]; then
-            exit "$status"
+            echo "::error title=Getting-started loop ($PROVIDER)::dotnet dev-certs https --trust exited with $status, so the three samples cannot call each other over HTTPS; its output is above. Skipped step: the certificate this job creates and trusts on the runner - re-run this job"
+            exit 1
           fi
         timeout-minutes: 3
       - name: Sign in, call the API and sign out
@@ -538,10 +552,12 @@ jobs:
         timeout-minutes: 3
     timeout-minutes: 5
 
-  # Every provider template scaffolded, pointed at this run's packages, built and started at the address its own
-  # launch profile names, which must be the issuer its discovery document names. The 3.0 templates live on the
-  # templates' release/3.0 branch until their 3.0 release, and they are installed from their folders, since that
-  # release is not published yet.
+  # Every provider template scaffolded, pointed at this run's packages, built and started as a reader's dotnet run
+  # starts it - the Development environment, at the address its own launch profile names, which must be the issuer
+  # its discovery document names. The templates are named: each provider must be found and checked, each other
+  # template named as one, and a template under no name stops the job, so a renamed or new template cannot drop out
+  # of the check unnoticed. The 3.0 templates live on the templates' release/3.0 branch until their 3.0 release,
+  # and they are installed from their folders, since that release is not published yet.
   templates:
     needs: [versioning, build-and-pack]
     runs-on: ubuntu-latest
@@ -550,6 +566,8 @@ jobs:
     env:
       VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
       TEMPLATES_REF: release/3.0
+      PROVIDER_TEMPLATES: abblix-oidc-server abblix-oidc-server-gettingstarted
+      OTHER_TEMPLATES: abblix-react
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -591,36 +609,53 @@ jobs:
         run: python3 -I main-repo/.github/scripts/consumer-packages.py use-local local-packages
         timeout-minutes: 3
       - name: Create the ASP.NET Core development certificate
-        run: dotnet dev-certs https
+        run: |
+          if ! dotnet dev-certs https; then
+            echo "::error title=Templates::dotnet dev-certs https could not create the development certificate the templates serve HTTPS with; its output is above. Skipped step: the certificate this job creates on the runner - re-run this job"
+            exit 1
+          fi
         timeout-minutes: 3
       - name: Scaffold, build and start each provider template
         run: |
-          shopt -s failglob
           helper=main-repo/.github/scripts/consumer-packages.py
           refuse() {
             echo "::error title=Templates::$1. Skipped step: scaffold the template with dotnet new $2 from Abblix/Templates $TEMPLATES_REF against this release's packages and fix it there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
             exit 1
           }
-          checked=0
-          for config in templates/*/.template.config/template.json; do
+          # A change to the list of templates is a change to this workflow, which lands on the release branch
+          unnamed() {
+            echo "::error title=Templates::$1. Skipped step: name every template of Abblix/Templates $TEMPLATES_REF in PROVIDER_TEMPLATES or OTHER_TEMPLATES of the templates job in .github/workflows/release.yml on $GITHUB_REF_NAME, then dispatch the release again"
+            exit 1
+          }
+          shopt -s nullglob
+          configs=(templates/*/.template.config/template.json)
+          [ "${#configs[@]}" -gt 0 ] || unnamed "Abblix/Templates $TEMPLATES_REF holds no */.template.config/template.json"
+          read -ra providers <<< "$PROVIDER_TEMPLATES"
+          read -ra others <<< "$OTHER_TEMPLATES"
+          checked=()
+          for config in "${configs[@]}"; do
             folder=$(dirname "$(dirname "$config")")
-            short=$(python3 -I -c 'import json, sys; name = json.load(open(sys.argv[1], encoding="utf-8-sig"))["shortName"]; print(name if isinstance(name, str) else name[0])' "$config")
-            dotnet new install "$folder"
-            work="$RUNNER_TEMP/scaffold-$short"
-            dotnet new "$short" --name ConsumerCheck --output "$work"
-            # On a line of its own, so a failing count stops the step instead of reading as no reference
-            references=$(python3 -I "$helper" count "$work")
-            if [ "$references" = 0 ]; then
-              echo "dotnet new $short: no Abblix package reference, not a provider template"
+            short=$(python3 -I -c 'import json, sys; name = json.load(open(sys.argv[1], encoding="utf-8-sig"))["shortName"]; print(name if isinstance(name, str) else name[0])' "$config") ||
+              unnamed "$config has no shortName that reads as JSON"
+            if [[ " ${others[*]} " == *" $short "* ]]; then
+              echo "dotnet new $short: named in OTHER_TEMPLATES, not a provider template"
               continue
             fi
-            python3 -I "$helper" point "$VERSION_FULL" "$work"
-            url=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8-sig"))["profiles"]["https"]["applicationUrl"].split(";")[0])' "$work/Properties/launchSettings.json")
+            [[ " ${providers[*]} " == *" $short "* ]] || unnamed "The template $short in $folder is named in neither PROVIDER_TEMPLATES nor OTHER_TEMPLATES"
+            dotnet new install "$folder" || refuse "dotnet new install $folder failed; its output is above" "$short"
+            work="$RUNNER_TEMP/scaffold-$short"
+            dotnet new "$short" --name ConsumerCheck --output "$work" || refuse "dotnet new $short did not scaffold a project; its output is above" "$short"
+            # On a line of its own, so a failing count stops the step instead of reading as no reference
+            references=$(python3 -I "$helper" count "$work") || refuse "The scaffold of $short could not be evaluated; the output above names the project" "$short"
+            [ "$references" != 0 ] || refuse "dotnet new $short scaffolds a project with no Abblix package reference, so it would not test this run's packages" "$short"
+            python3 -I "$helper" point "$VERSION_FULL" "$work" || exit 1
+            url=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8-sig"))["profiles"]["https"]["applicationUrl"].split(";")[0])' "$work/Properties/launchSettings.json") ||
+              refuse "The scaffold of $short has no https profile in Properties/launchSettings.json that reads as JSON" "$short"
             dotnet build "$work" -c Release || refuse "dotnet new $short does not build against this run's packages; the build output above names the error" "$short"
+            target=$(dotnet msbuild "$work" -getProperty:TargetPath -p:Configuration=Release) || refuse "The output path of the scaffold of $short could not be evaluated" "$short"
             # From the output directory: the app reads appsettings.json from its working directory
-            target=$(dotnet msbuild "$work" -getProperty:TargetPath -p:Configuration=Release)
             pushd "$(dirname "$target")" > /dev/null
-            dotnet "$target" --urls "$url" > app.log 2>&1 &
+            ASPNETCORE_ENVIRONMENT=Development dotnet "$target" --urls "$url" > app.log 2>&1 &
             app=$!
             code=000
             for _ in {1..60}; do
@@ -629,20 +664,27 @@ jobs:
               kill -0 "$app" 2>/dev/null || break
               sleep 1
             done
+            exited=0
+            kill -0 "$app" 2>/dev/null || exited=1
             kill "$app" 2>/dev/null || true
             wait "$app" 2>/dev/null || true
             if [ "$code" != 200 ]; then
               tail -n 60 app.log
-              refuse "dotnet new $short answered $url/.well-known/openid-configuration with HTTP $code (000: no answer within the wait); its log is above" "$short"
+              [ "$code" != 000 ] || [ "$exited" = 0 ] || refuse "dotnet new $short exited before it answered $url/.well-known/openid-configuration; its log is above" "$short"
+              [ "$code" != 000 ] || refuse "dotnet new $short did not answer $url/.well-known/openid-configuration within the wait; its log is above" "$short"
+              refuse "dotnet new $short answered $url/.well-known/openid-configuration with HTTP $code; its log is above" "$short"
             fi
-            named=$(python3 -I -c 'import json; print(json.load(open("discovery.json")).get("issuer", ""))')
+            named=$(python3 -I -c 'import json; print(json.load(open("discovery.json")).get("issuer", ""))') ||
+              refuse "The discovery document of $short is not JSON" "$short"
             [ "$named" = "$url" ] || refuse "dotnet new $short serves at $url, the address its launchSettings.json names, but its discovery document names the issuer '$named'" "$short"
             echo "dotnet new $short: discovery at $url names it as the issuer"
             popd > /dev/null
-            python3 -I "$helper" verify local-packages "$VERSION_FULL"
-            checked=$((checked + 1))
+            python3 -I "$helper" verify local-packages "$VERSION_FULL" || exit 1
+            checked+=("$short")
           done
-          [ "$checked" -gt 0 ] || refuse "No template on $TEMPLATES_REF references an Abblix package, so no provider template was checked" "<template>"
+          for short in "${providers[@]}"; do
+            [[ " ${checked[*]} " == *" $short "* ]] || unnamed "The provider template $short is not in Abblix/Templates $TEMPLATES_REF, so it was not checked"
+          done
         # Two scaffolds, cold restores, an npm install and a Vite build, two starts: the templates' own smoke test
         # measured the two provider templates at 25 seconds together on a hosted runner
         timeout-minutes: 3
@@ -970,40 +1012,59 @@ jobs:
     if: ${{ needs.create-release.outputs.is_prerelease == 'false' }}
     env:
       VERSION: ${{ needs.versioning.outputs.version }}
+      VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: audit
         timeout-minutes: 3
-      # Read-only checkout to edit the csproj locally; the signed commit is made
-      # through the Contents API (next step), so nothing is git-pushed here and
+      # The script that moves every Abblix reference, and the SDK pin it evaluates the projects with. It runs before
+      # the GettingStarted checkout, which would otherwise take the workspace root these two land in.
+      - name: Fetch the reference script and the SDK pin
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: main-repo
+          sparse-checkout: |
+            /.github/scripts/consumer-packages.py
+            /global.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+        timeout-minutes: 3
+      # Read-only checkout to edit the project files locally; the signed commits are made
+      # through the Contents API (last step), so nothing is git-pushed here and
       # the token must not be persisted as a git credential.
       - name: Checkout GettingStarted repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Oidc.Server.GettingStarted
           token: ${{ secrets.GETTING_STARTED_REPO_TOKEN }}
+          path: getting-started
           persist-credentials: false
         timeout-minutes: 3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: main-repo/global.json
+        timeout-minutes: 3
+      # Every sample, not one: the release checked all of them against these packages
       - name: Update package references to released version
-        run: |
-          sed -i "s|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"[^\"]*\"|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"$VERSION\"|g" OpenIDProviderApp/OpenIDProviderApp.csproj
+        run: python3 -I main-repo/.github/scripts/consumer-packages.py point "$VERSION_FULL" getting-started
         timeout-minutes: 3
       - name: Open a pull request with a signed commit
         env:
           GH_TOKEN: ${{ secrets.GETTING_STARTED_REPO_TOKEN }}
         run: |
           REPO="Abblix/Oidc.Server.GettingStarted"
-          FILE="OpenIDProviderApp/OpenIDProviderApp.csproj"
           BRANCH="chore/bump-abblix-v$VERSION"
-          # Nothing to do if the version already matches.
-          if git diff --quiet -- "$FILE"; then
+          mapfile -t FILES < <(git -C getting-started diff --name-only)
+          # Nothing to do if every version already matches.
+          if [ "${#FILES[@]}" -eq 0 ]; then
             echo "No version change needed; skipping PR."
             exit 0
           fi
           # The master branch ruleset requires signed commits AND a pull request,
-          # so a plain git push is rejected (GH013). Commit the bumped file
+          # so a plain git push is rejected (GH013). Commit each bumped file
           # through the Contents API instead: GitHub signs API commits (satisfies
           # required_signatures) and the PR satisfies the pull_request rule. A
           # code owner still reviews and merges (1 approval required).
@@ -1015,19 +1076,21 @@ jobs:
             BASE_SHA=$(gh api "repos/$REPO/git/ref/heads/master" --jq '.object.sha')
             gh api -X POST "repos/$REPO/git/refs" -f "ref=refs/heads/$BRANCH" -f "sha=$BASE_SHA"
           fi
-          FILE_SHA=$(gh api "repos/$REPO/contents/$FILE?ref=$BRANCH" --jq '.sha')
-          CONTENT=$(base64 -w0 "$FILE")
-          gh api -X PUT "repos/$REPO/contents/$FILE" \
-            -f "message=Update Abblix packages to v$VERSION" \
-            -f "content=$CONTENT" \
-            -f "sha=$FILE_SHA" \
-            -f "branch=$BRANCH"
+          for FILE in "${FILES[@]}"; do
+            FILE_SHA=$(gh api "repos/$REPO/contents/$FILE?ref=$BRANCH" --jq '.sha')
+            CONTENT=$(base64 -w0 "getting-started/$FILE")
+            gh api -X PUT "repos/$REPO/contents/$FILE" \
+              -f "message=Update Abblix packages to v$VERSION in $FILE" \
+              -f "content=$CONTENT" \
+              -f "sha=$FILE_SHA" \
+              -f "branch=$BRANCH"
+          done
           if [ "$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq 'length')" != "0" ]; then
             echo "A pull request for $BRANCH is already open."
           else
             gh pr create --repo "$REPO" --base master --head "$BRANCH" \
               --title "Update Abblix packages to v$VERSION" \
-              --body "Automated bump of Abblix.Oidc.Server.Mvc to v$VERSION after the release. Requires code-owner review per branch protection."
+              --body "Automated bump of every Abblix package reference of the samples to v$VERSION after the release. Requires code-owner review per branch protection."
           fi
         timeout-minutes: 3
     timeout-minutes: 5
