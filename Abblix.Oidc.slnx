@@ -7,7 +7,7 @@
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
     <File Path=".gitattributes" />
-    <File Path=".github/workflows/enhanced-release.yml" />
+    <File Path=".github/workflows/release.yml" />
     <File Path=".github/workflows/pr-tests.yml" />
     <File Path=".gitignore" />
     <File Path="Directory.Build.props" />
