@@ -7,6 +7,7 @@
 
 using Abblix.DependencyInjection;
 using Abblix.Jwt.ReplayPrevention;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -33,7 +34,9 @@ public static class ReplayCacheServiceCollectionExtensions
     /// Builds the store this method registers; one instance, so the registration it made can be told from any other.
     /// </summary>
     private static readonly Func<IServiceProvider, object> DefaultStore
-        = provider => provider.CreateService<DistributedReplayCache>(Dependency.Override(CacheKeyPrefix));
+        = provider => provider.CreateService<DistributedReplayCache>(
+            Dependency.Override(CacheKeyPrefix),
+            Dependency.Override<IDistributedCache>(InProcessCaches.DistributedCache));
 
     /// <summary>
     /// Whether <paramref name="registration"/> is the one <see cref="AddDistributedReplayCache"/> made, rather than a
@@ -48,7 +51,8 @@ public static class ReplayCacheServiceCollectionExtensions
         => registration is { IsKeyedService: false, ImplementationFactory: var factory } && factory == DefaultStore;
 
     /// <summary>
-    /// Registers the replay cache over the host's <c>IDistributedCache</c> as the <see cref="IReplayCache"/>.
+    /// Registers the replay cache over the host's <c>IDistributedCache</c>, or over an in-process one when the host
+    /// registers none, as the <see cref="IReplayCache"/>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -63,15 +67,16 @@ public static class ReplayCacheServiceCollectionExtensions
     /// the server registers is kept as the host's own store, and the server reserves in it too.
     /// </para>
     /// <para>
-    /// The cache itself is the host's choice and is deliberately not registered here:
-    /// <c>AddDistributedMemoryCache()</c> keeps the reservations in one process, Redis or another backend shares
-    /// them between instances.
+    /// The cache itself is the host's choice. Without one the reservations are kept in this process, which is enough for
+    /// a single instance; several instances need a shared cache, Redis or another backend, or a token refused by one
+    /// is accepted by the next.
     /// </para>
     /// </remarks>
     /// <param name="services">The service collection.</param>
     public static IServiceCollection AddDistributedReplayCache(this IServiceCollection services)
     {
         services.TryAddSingleton(TimeProvider.System);
+        services.AddInProcessCaches();
         services.TryAdd(ServiceDescriptor.Singleton(typeof(IReplayCache), DefaultStore));
 
         return services;

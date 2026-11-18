@@ -84,8 +84,14 @@ public static class CommonServiceCollectionExtensions
         services.TryAddSingleton<IBinarySerializer, CompositeBinarySerializer>();
         // Every tenant's entities are kept in one store, each under keys its stores build from the tenant. The store
         // is the one registered under the shared key, which a host substitutes in any order, or one the host
-        // registered for the server before this call, which the forwarding below then leaves in place
-        services.TryAddKeyedSingleton<IEntityStorage, DistributedCacheStorage>(TenantServiceKeys.Shared);
+        // registered for the server before this call, which the forwarding below then leaves in place. It keeps them
+        // in the host's distributed cache, or in an in-process one when the host registers none
+        services.AddInProcessCaches();
+        services.TryAddKeyedSingleton<IEntityStorage>(
+            TenantServiceKeys.Shared,
+            (serviceProvider, _) => new DistributedCacheStorage(
+                InProcessCaches.DistributedCache(serviceProvider),
+                serviceProvider.GetRequiredService<IBinarySerializer>()));
         services.TryAddSingleton<IEntityStorage>(
             serviceProvider => serviceProvider.GetRequiredKeyedService<IEntityStorage>(TenantServiceKeys.Shared));
         return services;

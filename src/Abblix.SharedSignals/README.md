@@ -92,7 +92,8 @@ get the event again. Some things to plan for:
 ```csharp
 builder.Services.AddSecurityEvents(options => options.Events.RegisterCaepEvents());
 builder.Services.AddJwksKeyResolution();
-builder.Services.AddDistributedMemoryCache();
+// Replay protection over the host's IDistributedCache, or in process when none is registered;
+// several receiver instances need a shared one, such as Redis
 builder.Services.AddDistributedReplayCache();
 builder.Services.AddSharedSignalsReceiver(new SharedSignalsValidationOptions
 {

@@ -97,8 +97,7 @@ The poll address travels per stream rather than in the document, and it comes fr
 builder.Services
     .AddSecurityEvents()
     .AddJwksKeyResolution()
-    .AddDistributedMemoryCache()   // or Redis - the replay cache rides the host's IDistributedCache
-    .AddDistributedReplayCache()
+    .AddDistributedReplayCache()   // over the host's IDistributedCache, in process when none is registered
     .AddSharedSignalsReceiver(new SharedSignalsValidationOptions
     {
         ExpectedAudience = "https://receiver.example.com",

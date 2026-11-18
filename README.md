@@ -100,7 +100,7 @@ The issuer comes from configuration, so add it to `appsettings.json` first, for 
 
 An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead. A host serving several tenants, a single tenant at an issuer with a path, or tenants from a store or catalog of its own also calls `app.UseMultiTenancy()` before its own routing, so each request reaches its tenant.
 
-This is the outline, not a complete application: the server also needs an `IDistributedCache` (a shared one when several instances run), the CORS middleware, a login page, your user store, and signing keys that outlive a restart, since the key in the outline is generated anew at every start. The [Getting Started Guide](https://www.abblix.com/en/docs/getting-started-guide) builds a complete, runnable solution step by step.
+This is the outline, not a complete application. The server keeps authorization codes, pushed requests and other short-lived state in an in-process cache unless you register an `IDistributedCache` of your own, which is enough for one instance; several instances need a shared one, such as Redis. It also needs the CORS middleware, a login page, your user store, and signing keys that outlive a restart, since the key in the outline is generated anew at every start. The [Getting Started Guide](https://www.abblix.com/en/docs/getting-started-guide) builds a complete, runnable solution step by step.
 
 ## 🎓 Certification
 
