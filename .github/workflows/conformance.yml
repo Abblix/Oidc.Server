@@ -2,7 +2,7 @@ name: OIDF conformance
 
 # Runs the OpenID Foundation conformance plans the library is certified against, and the FAPI 2.0, FAPI 1.0 Advanced
 # and FAPI-CIBA plans, on the suite's newest numbered release, against the conformance test host on each transport
-# adapter, Minimal API and MVC; all four runs gate a release alike: the release workflow (enhanced-release.yml) calls
+# adapter, Minimal API and MVC; all four runs gate a release alike: the release workflow (release.yml) calls
 # it as its conformance job, which its create-release job needs before it creates the GitHub release and the packages
 # are published, and for a pre-release before the tag is created. The four run at once, each on a runner of its own.
 # A stable release's signed tag is pushed by hand before the workflow starts, so a failed run leaves that
@@ -24,7 +24,7 @@ permissions:
 
 concurrency:
   # Called from the release workflow, github.workflow and github.event_name are the caller's: the group is
-  # "Enhanced Release Automation-conformance-<ref>", never the release's own "release", and a workflow_dispatch event
+  # "Release-conformance-<ref>", never the release's own "release", and a workflow_dispatch event
   # cancels nothing, so a release's run is never cancelled; only a pull request's superseded run is
   group: ${{ github.workflow }}-conformance-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

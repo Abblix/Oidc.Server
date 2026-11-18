@@ -1,4 +1,4 @@
-name: Enhanced Release Automation
+name: Release
 
 on:
   workflow_dispatch:
@@ -613,7 +613,7 @@ jobs:
           NUGET_USER: ${{ secrets.NUGET_USER }}
         run: |
           if [ -z "$NUGET_USER" ]; then
-            echo "::error title=NuGet.org trusted publishing::The publish-packages environment has no NUGET_USER secret. Skipped step: create the trusted publishing policy at https://www.nuget.org/account/trustedpublishing (owner: the account that owns the Abblix packages; repository owner Abblix, repository Oidc.Server, workflow file enhanced-release.yml, environment publish-packages, scope allowing new packages and new versions for the glob Abblix.*) and set the publish-packages environment secret NUGET_USER to the nuget.org profile name of the policy creator, then re-run the failed jobs"
+            echo "::error title=NuGet.org trusted publishing::The publish-packages environment has no NUGET_USER secret. Skipped step: create the trusted publishing policy at https://www.nuget.org/account/trustedpublishing (owner: the account that owns the Abblix packages; repository owner Abblix, repository Oidc.Server, workflow file release.yml, environment publish-packages, scope allowing new packages and new versions for the glob Abblix.*) and set the publish-packages environment secret NUGET_USER to the nuget.org profile name of the policy creator, then re-run the failed jobs"
             exit 1
           fi
         timeout-minutes: 3
@@ -627,7 +627,7 @@ jobs:
       - name: Name the skipped step when no key was issued
         if: ${{ failure() && steps.login.outcome == 'failure' }}
         run: |
-          echo "::error title=NuGet.org trusted publishing::NuGet.org issued no key for this run. Skipped step: create the trusted publishing policy at https://www.nuget.org/account/trustedpublishing (owner: the account that owns the Abblix packages; repository owner Abblix, repository Oidc.Server, workflow file enhanced-release.yml, environment publish-packages, scope allowing new packages and new versions for the glob Abblix.*) and set the publish-packages environment secret NUGET_USER to the nuget.org profile name of the policy creator; if the policy shows as inactive because its 7-day window passed without a publish, restart the window there. Then re-run the failed jobs"
+          echo "::error title=NuGet.org trusted publishing::NuGet.org issued no key for this run. Skipped step: create the trusted publishing policy at https://www.nuget.org/account/trustedpublishing (owner: the account that owns the Abblix packages; repository owner Abblix, repository Oidc.Server, workflow file release.yml, environment publish-packages, scope allowing new packages and new versions for the glob Abblix.*) and set the publish-packages environment secret NUGET_USER to the nuget.org profile name of the policy creator; if the policy shows as inactive because its 7-day window passed without a publish, restart the window there. Then re-run the failed jobs"
           exit 1
         timeout-minutes: 3
       - name: Publish to NuGet.org
