@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -33,7 +34,8 @@ public class ClientIdMetadataDocumentReaderTests
         string[]? authenticationMethods = null,
         string[]? grantTypes = null,
         string[]? responseTypeParts = null,
-        string[]? allowedGrantTypes = null)
+        string[]? allowedGrantTypes = null,
+        Uri[]? allowedDestinations = null)
     {
         var authenticator = new Mock<IClientAuthenticator>();
         authenticator.Setup(a => a.ClientAuthenticationMethodsSupported).Returns(authenticationMethods ??
@@ -59,7 +61,11 @@ public class ClientIdMetadataDocumentReaderTests
             authenticator.Object,
             [grants.Object],
             builders,
-            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == options));
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == options),
+            Mock.Of<IOptionsMonitor<SecureHttpFetchOptions>>(monitor => monitor.CurrentValue == new SecureHttpFetchOptions
+            {
+                AllowedDestinations = allowedDestinations,
+            }));
     }
 
     private static JsonObject Document(string json = "{}")
@@ -273,6 +279,10 @@ public class ClientIdMetadataDocumentReaderTests
     [InlineData("redirect_uris", """["data:text/html,x"]""")]
     [InlineData("redirect_uris", """["myapp:/cb"]""")]
     [InlineData("redirect_uris", """["http://client.example.com/cb"]""")]
+    [InlineData("redirect_uris", """["cb"]""")]
+    [InlineData("jwks_uri", "\"jwks\"")]
+    [InlineData("sector_identifier_uri", "\"http://client.example.com/sector\"")]
+    [InlineData("backchannel_client_notification_endpoint", "\"http://client.example.com/ciba\"")]
     [InlineData("post_logout_redirect_uris", """["javascript:alert(1)"]""")]
     [InlineData("frontchannel_logout_uri", "\"javascript:alert(1)\"")]
     [InlineData("backchannel_logout_uri", "\"http://client.example.com/logout\"")]
@@ -288,6 +298,25 @@ public class ClientIdMetadataDocumentReaderTests
         var document = Document();
         document[member] = JsonNode.Parse(value);
         Refused(document);
+    }
+
+    /// <summary>
+    /// Section 10.7 asks the same of "any URLs contained within a Client ID Metadata Document" as of its own URL, so a
+    /// URI the server fetches or posts to is refused when it is a destination the host opened for its own services.
+    /// </summary>
+    [Theory]
+    [InlineData("jwks_uri", "\"https://internal.example.com/jwks\"")]
+    [InlineData("sector_identifier_uri", "\"https://internal.example.com/sector\"")]
+    [InlineData("backchannel_logout_uri", "\"https://internal.example.com/logout\"")]
+    [InlineData("backchannel_client_notification_endpoint", "\"https://internal.example.com/ciba\"")]
+    [InlineData("request_uris", """["https://internal.example.com/admin"]""")]
+    public void AUriTheHostAllowsForItsServices_IsRefused(string member, string value)
+    {
+        var document = Document();
+        document[member] = JsonNode.Parse(value);
+
+        Assert.NotNull(Read(document));
+        Refused(document, CreateReader(allowedDestinations: [new Uri("https://internal.example.com/")]));
     }
 
     [Theory]

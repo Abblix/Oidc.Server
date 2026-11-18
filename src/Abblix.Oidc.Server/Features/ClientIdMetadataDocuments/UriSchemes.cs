@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Oidc.Server.Model;
 using Parameters = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
@@ -28,9 +29,22 @@ namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 internal static class UriSchemes
 {
     /// <summary>
-    /// Why a URI <paramref name="metadata"/> names uses a scheme a document may not, or null when none does.
+    /// Why a URI <paramref name="metadata"/> names uses a scheme a document may not, or is one the host opened for its
+    /// own services, or null when none is.
     /// </summary>
-    public static string? WhyRefused(ClientRegistrationRequest metadata)
+    /// <param name="metadata">The metadata the document describes the client with.</param>
+    /// <param name="allowedDestinations">The destinations the host lets the server reach past the SSRF rules
+    /// (<see cref="SecureHttpFetchOptions.AllowedDestinations"/>).</param>
+    /// <remarks>
+    /// Section 10.7 has the server "MUST NOT fetch a Client ID Metadata Document URL or any URLs contained within a
+    /// Client ID Metadata Document that resolve to special-use IP addresses". A destination the host named reaches past
+    /// that refusal for its own services, so a URI the server fetches or posts to on a document's word is refused when
+    /// it is one: whoever writes the document chose it.
+    /// </remarks>
+    public static string? WhyRefused(ClientRegistrationRequest metadata, Uri[]? allowedDestinations)
+        => WhySchemeRefused(metadata) ?? WhyDestinationRefused(metadata, allowedDestinations);
+
+    private static string? WhySchemeRefused(ClientRegistrationRequest metadata)
     {
         var redirects = (metadata.RedirectUris ?? []).Select(uri => (Parameters.RedirectUris, uri))
             .Concat(metadata.PostLogoutRedirectUris.Select(uri => (Parameters.PostLogoutRedirectUris, uri)));
@@ -60,6 +74,26 @@ internal static class UriSchemes
         {
             if (uri is not null && !(uri.IsAbsoluteUri && uri.Scheme == Uri.UriSchemeHttps))
                 return $"its {member} is not an https URI";
+        }
+
+        return null;
+    }
+
+    private static string? WhyDestinationRefused(ClientRegistrationRequest metadata, Uri[]? allowedDestinations)
+    {
+        (string Member, Uri? Uri)[] reached =
+        [
+            (Parameters.JwksUri, metadata.JwksUri),
+            (Parameters.SectorIdentifierUri, metadata.SectorIdentifierUri),
+            (Parameters.BackChannelLogoutUri, metadata.BackChannelLogoutUri),
+            (Parameters.BackChannelClientNotificationEndpoint, metadata.BackChannelClientNotificationEndpoint),
+            ..(metadata.RequestUris ?? []).Select(uri => (Parameters.RequestUris, (Uri?)uri)),
+        ];
+
+        foreach (var (member, uri) in reached)
+        {
+            if (uri is not null && SecureUriValidator.IsAllowedDestination(uri, allowedDestinations))
+                return $"its {member} is a destination the host allows for its own services";
         }
 
         return null;

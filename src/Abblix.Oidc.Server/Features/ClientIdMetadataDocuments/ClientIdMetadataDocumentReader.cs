@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
+using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Features.UriValidation;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
@@ -33,11 +34,14 @@ namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 /// <param name="grantTypeInformers">Name the grant types this server supports.</param>
 /// <param name="responseBuilders">Name the response types this server supports.</param>
 /// <param name="options">Holds the grant types the host allows a new client, read on each document.</param>
+/// <param name="fetchOptions">Holds the destinations the host opened for its own services, read on each document.
+/// </param>
 internal sealed class ClientIdMetadataDocumentReader(
     IClientAuthenticator clientAuthenticator,
     IEnumerable<IGrantTypeInformer> grantTypeInformers,
     IEnumerable<IAuthorizationResponseBuilder> responseBuilders,
-    IOptionsMonitor<OidcOptions> options)
+    IOptionsMonitor<OidcOptions> options,
+    IOptionsMonitor<SecureHttpFetchOptions> fetchOptions)
 {
     /// <summary>
     /// The methods built on a secret shared between client and server, which a public document cannot establish.
@@ -114,7 +118,7 @@ internal sealed class ClientIdMetadataDocumentReader(
         ClientRegistrationRequest metadata,
         string authenticationMethod)
     {
-        if (UriSchemes.WhyRefused(metadata) is { } schemes)
+        if (UriSchemes.WhyRefused(metadata, fetchOptions.CurrentValue.AllowedDestinations) is { } schemes)
             return MetadataDocumentFailure.Terminal(schemes);
 
         var grantTypes = SupportedGrantTypes(metadata.GrantTypes);
