@@ -127,12 +127,11 @@ jobs:
     needs: versioning
     uses: ./.github/workflows/conformance.yml
 
-  # SonarQube Cloud analyses the main branch (develop) and pull requests here, never a release
-  # branch, so the release code is covered by two analyses: the release pull request at this commit
-  # for the lines the release changed, and the main branch at develop's head, which must contain
-  # this commit, for the lines it shares with develop. The script refuses an open issue, a hotspot
-  # to review or an unexplained accepted issue in either, and an analysis of the wrong commit or
-  # missing a project. It reads the public Web API, so it holds no secret.
+  # SonarQube Cloud analyses only the main branch (develop) in full here, never a release branch,
+  # so the release is judged by develop's analysis once that analysis is shown to be of this code:
+  # of develop's head, which contains this commit, with no analysed file different from it. The
+  # script refuses an open issue, a hotspot to review, an unexplained accepted issue, and an
+  # analysis of other code or missing a project. It reads the public Web API, so it holds no secret.
   sonar-gate:
     needs: versioning
     runs-on: ubuntu-latest

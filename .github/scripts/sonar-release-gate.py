@@ -1,18 +1,18 @@
 """Refuse a release whose code still carries an open SonarQube Cloud issue.
 
-The project runs Automatic Analysis on the Free plan, which analyses the main branch (develop) and
-pull requests, never a release branch or a tag. A pull request reports only the issues its changed
-lines introduce relative to the main branch, so the two analyses together cover the release code:
-the lines the release changed, through the release pull request analysed at the release commit,
-and the lines it shares with develop, through the main branch analysed at develop's head, which
-must contain the release commit. Each half is required to hold no open issue and no security
-hotspot left to review.
+The project runs Automatic Analysis on the Free plan, which analyses the main branch (develop) in
+full and pull requests only in part, never a release branch or a tag. So the release is gated on
+the main branch analysis, and that analysis is first shown to be of the release code: it is of
+develop's head, develop contains the release commit, and no file Sonar analyses on develop differs
+from the release commit, nor does develop lack a file the release ships. A release whose code
+develop does not hold yet is refused with the files that differ, rather than judged by an analysis
+of other code.
 
-A zero read from an analysis that is missing, stale or empty is the failure this script exists to
-refuse, so each count is taken only after the analysis is shown to be of the right commit, and the
-main branch analysis must hold files of every project directory of the repository. An
-issue a person marked accepted or false positive does not count as open, but it must carry a
-comment saying why; one without is refused, and every such verdict is listed for the approver.
+A zero read from an analysis that is missing, stale or partial is the failure this script exists to
+refuse, so the counts are taken only after those checks, and the analysis must hold files of every
+tracked project directory. An issue a person marked accepted or false positive does not count as
+open, but it must carry a comment saying why; one without is refused. Every such verdict and every
+rule that hides issues before they are raised is listed for the approver.
 
 Usage: sonar-release-gate.py <project key> <release commit> <develop head>
 Run from the repository root. Writes a Markdown report to stdout; exits 1 when any check fails.
@@ -38,112 +38,133 @@ def get(path, **query):
         return json.load(response)
 
 
-def issues(project, scope, statuses):
-    """Every issue of the given statuses in one analysis scope, comments included."""
+def paged(path, field, **query):
+    """Every element of a paginated list."""
     found, page = [], 1
     while True:
-        reply = get('issues/search', componentKeys=project, issueStatuses=statuses, ps=PAGE, p=page,
-                    additionalFields='comments', **scope)
-        found += reply['issues']
+        reply = get(path, ps=PAGE, p=page, **query)
+        found += reply[field]
         if page * PAGE >= reply['paging']['total']:
             return found
         page += 1
 
 
-def hotspots_to_review(project, scope):
-    return get('hotspots/search', projectKey=project, status='TO_REVIEW', ps=1, **scope)['paging']['total']
+def git(*args):
+    return subprocess.run(['git', *args], check=True, capture_output=True, text=True).stdout
+
+
+def one_line(text):
+    """Text from the analysis on one line, so it cannot start a runner command in the job log."""
+    return ' '.join(str(text).split())
 
 
 def describe(issue):
     path = issue['component'].split(':', 1)[-1]
-    return f"{issue['rule']} {path}:{issue.get('line', '-')} {issue['message']}"
+    return one_line(f"{issue['rule']} {path}:{issue.get('line', '-')} {issue['message']}")
 
 
-def check_scope(project, scope, label, failures, verdicts):
-    """Open issues, unexplained verdicts and unreviewed hotspots of one analysis."""
-    for issue in issues(project, scope, 'OPEN,CONFIRMED'):
-        failures.append(f'{label}: open issue {describe(issue)}')
-    for issue in issues(project, scope, 'ACCEPTED,FALSE_POSITIVE'):
-        reason = issue['comments'][-1]['markdown'] if issue.get('comments') else ''
-        if not reason.strip():
-            failures.append(f"{label}: {issue['issueStatus']} without a reason {describe(issue)}")
-        verdicts.append(f"{label}: {issue['issueStatus']} {describe(issue)}: {reason}")
-    count = hotspots_to_review(project, scope)
-    if count:
-        failures.append(f'{label}: {count} security hotspots to review')
-
-
-def release_pull_requests(project, commit, failures):
-    """The pull requests whose latest analysis is of the release commit."""
-    matches = [pr['key'] for pr in get('project_pull_requests/list', project=project)['pullRequests']
-               if pr.get('commit', {}).get('sha') == commit]
-    if not matches:
-        failures.append(f'no pull request analysis of the release commit {commit}: '
-                        'open the release pull request, or wait for its analysis')
-    return matches
-
-
-def main_branch(project, commit, develop, failures):
-    """The main branch name, once its latest analysis is shown to be of develop's head and that
-    head is shown to contain the release commit."""
+def main_branch(project, develop, failures):
+    """The main branch name, once its latest analysis is shown to be of develop's head."""
     name = next(b['name'] for b in get('project_branches/list', project=project)['branches'] if b['isMain'])
     analyses = get('project_analyses/search', project=project, branch=name, ps=1)['analyses']
     revision = analyses[0].get('revision') if analyses else None
     if revision != develop:
         failures.append(f'main branch analysis is of {revision}, not of develop head {develop}: '
                         'wait for the analysis of the latest push')
-    contained = subprocess.run(['git', 'merge-base', '--is-ancestor', commit, develop], check=False)
-    if contained.returncode != 0:
+    return name
+
+
+def analysed_files(project, branch):
+    return {c['path'] for c in paged('components/tree', 'components', component=project, branch=branch,
+                                     qualifiers='FIL,UTS')}
+
+
+def check_same_code(commit, develop, analysed, failures, notes):
+    """The analysis of develop is the analysis of the release only when develop holds the release
+    commit and every file it analysed is the same in both."""
+    if subprocess.run(['git', 'merge-base', '--is-ancestor', commit, develop], check=False).returncode:
         failures.append(f'develop head {develop} does not contain the release commit {commit}: '
                         'merge the release branch into develop first')
-    return name
+        return
+    entries = git('diff', '--name-status', '-z', '--no-renames', commit, develop).split('\0')
+    for status, path in zip(entries[0::2], entries[1::2]):
+        if status == 'D':
+            failures.append(f'{path} ships in the release and is absent on develop, so it was not analysed')
+        elif path in analysed:
+            failures.append(f'{path} differs between the release and develop, so its analysis is not of the release')
+        else:
+            notes.append(f'{path} differs on develop and is not analysed by Sonar')
 
 
 def tracked_project_directories():
     """Each directory holding a tracked project file and tracked C# source: a project of no
     source, such as a template package, has nothing to analyse, and build output is not tracked."""
-    listed = subprocess.run(['git', 'ls-files', '*.csproj', '*.cs'], check=True, capture_output=True,
-                            text=True).stdout.split()
+    listed = git('ls-files', '-z', '*.csproj', '*.cs').split('\0')
     projects = {str(pathlib.PurePosixPath(path).parent) for path in listed if path.endswith('.csproj')}
     return sorted(d for d in projects if any(path.startswith(d + '/') and path.endswith('.cs') for path in listed))
 
 
-def check_projects_analysed(project, branch, failures):
-    """Every project directory of the repository holds analysed files on the main branch, source or
-    test, so a zero count cannot come from an analysis that skipped a project."""
-    for directory in tracked_project_directories():
-        try:
-            files = get('components/tree', component=f'{project}:{directory}', branch=branch,
-                        qualifiers='FIL,UTS', ps=1)['paging']['total']
-        except urllib.error.HTTPError as error:
-            if error.code != 404:
-                raise
-            files = 0
-        if files == 0:
+def check_projects_analysed(analysed, failures):
+    """Every project directory holds analysed files, source or test, so a zero count cannot come
+    from an analysis that skipped a project."""
+    directories = tracked_project_directories()
+    if not directories:
+        failures.append('no project directory found to check the analysis against')
+    for directory in directories:
+        if not any(path.startswith(directory + '/') for path in analysed):
             failures.append(f'main branch analysis holds no file of {directory}')
 
 
-def report(failures, verdicts):
+def check_issues(project, branch, failures, verdicts):
+    """Open issues, unexplained verdicts and unreviewed hotspots of the analysis."""
+    scope = {'componentKeys': project, 'branch': branch, 'additionalFields': 'comments'}
+    for issue in paged('issues/search', 'issues', issueStatuses='OPEN,CONFIRMED', **scope):
+        failures.append(f'open issue {describe(issue)}')
+    for issue in paged('issues/search', 'issues', issueStatuses='ACCEPTED,FALSE_POSITIVE', **scope):
+        reason = one_line(issue['comments'][-1]['markdown']) if issue.get('comments') else ''
+        if not reason:
+            failures.append(f"{issue['issueStatus']} without a reason: {describe(issue)}")
+        verdicts.append(f"{issue['issueStatus']} {describe(issue)}: {reason}")
+    count = get('hotspots/search', projectKey=project, branch=branch, status='TO_REVIEW', ps=1)['paging']['total']
+    if count:
+        failures.append(f'{count} security hotspots to review')
+
+
+def suppression_rules(project):
+    """The rules that keep issues from being raised at all, as the analysis applies them."""
+    settings = get('settings/values', component=project,
+                   keys='sonar.issue.ignore.multicriteria,sonar.issue.ignore.allfile,sonar.issue.ignore.block,'
+                        'sonar.exclusions,sonar.test.exclusions')['settings']
+    rules = []
+    for setting in settings:
+        for value in setting.get('fieldValues') or setting.get('values') or [setting.get('value')]:
+            rules.append(one_line(f"{setting['key']}: {value}"))
+    return rules
+
+
+def report(failures, verdicts, notes, rules):
     print('### SonarQube Cloud release gate')
     print()
     print('Passed: no open issue, no hotspot to review.' if not failures else 'Refused:')
-    for failure in failures:
-        print(f'- {failure}')
-    if verdicts:
-        print()
-        print('Issues marked accepted or false positive, with the reason given:')
-        for verdict in verdicts:
-            print(f'- {verdict}')
+    for title, lines in (('', failures),
+                         ('Files that differ on develop and are not analysed:', notes),
+                         ('Issues marked accepted or false positive, with the reason given:', verdicts),
+                         ('Rules that keep issues from being raised:', rules)):
+        if title and lines:
+            print()
+            print(title)
+        for line in lines:
+            print(f'- {line}')
 
 
 def main(project, commit, develop):
-    failures, verdicts = [], []
-    for key in release_pull_requests(project, commit, failures):
-        check_scope(project, {'pullRequest': key}, f'pull request #{key}', failures, verdicts)
-    branch = main_branch(project, commit, develop, failures)
-    check_scope(project, {'branch': branch}, f'main branch {branch}', failures, verdicts)
-    check_projects_analysed(project, branch, failures)
-    report(failures, verdicts)
+    failures, verdicts, notes = [], [], []
+    branch = main_branch(project, develop, failures)
+    analysed = analysed_files(project, branch)
+    check_same_code(commit, develop, analysed, failures, notes)
+    check_projects_analysed(analysed, failures)
+    check_issues(project, branch, failures, verdicts)
+    report(failures, verdicts, notes, suppression_rules(project))
     return 1 if failures else 0
 
 
