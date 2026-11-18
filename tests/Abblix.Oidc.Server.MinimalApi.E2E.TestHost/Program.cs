@@ -287,9 +287,8 @@ builder.Services.AddAuthentication().AddCookie();
 // so app.UseCors() below resolves that policy without a manual AddCors here.
 builder.Services.AddAuthorization();
 
-// The MVC host received IMemoryCache transitively through AddControllersWithViews; the Minimal API
-// host registers it (and the distributed cache) directly, per the documented host caching responsibility.
-builder.Services.AddMemoryCache();
+// A cache of the host's own is optional, since the server falls back to an in-process one; this host registers one so
+// the suite runs over a host-registered cache.
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddHttpContextAccessor();
 

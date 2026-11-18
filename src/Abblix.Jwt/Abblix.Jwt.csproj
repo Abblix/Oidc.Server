@@ -30,7 +30,8 @@
     <!-- Hosting.Abstractions carries only IHostedService and BackgroundService, which the key ring's refresh
          service needs. Options carries IOptions<>, which the ring reads its rollover window from.
          Caching.Abstractions carries only IDistributedCache, the store the replay cache reserves identifiers
-         in; the store itself is the host's to register. -->
+         in. Caching.Memory carries the in-process caches used when the host registers none of its own. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
     <PackageReference Update="SonarAnalyzer.CSharp">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>build; analyzers; buildtransitive</IncludeAssets>

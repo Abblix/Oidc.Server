@@ -103,9 +103,10 @@ services.AddSecurityEvents(options =>
 services.AddDiscoveryKeyResolution(); // receivers: each issuer names its own JWK Set in its
                                       // discovery document, so the address follows a rotation
                                       // (AddJwksKeyResolution pins one instead)
-services.AddDistributedMemoryCache(); // or Redis: the replay cache rides the host's IDistributedCache
-services.AddDistributedReplayCache(); // receivers (Abblix.Jwt): "jti" replay protection over that store,
-                                     // held for SecurityEventTokenValidationOptions.ReplayRetention
+services.AddDistributedReplayCache(); // receivers (Abblix.Jwt): "jti" replay protection, held for
+                                     // SecurityEventTokenValidationOptions.ReplayRetention, over the
+                                     // host's IDistributedCache, or in process when none is registered;
+                                     // several instances need a shared one, such as Redis
 ```
 
 A host that receives Back-Channel Logout adds the receiver for it, naming what every Logout Token
