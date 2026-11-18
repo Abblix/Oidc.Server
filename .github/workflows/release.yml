@@ -543,8 +543,8 @@ jobs:
             echo "::error title=Getting-started loop ($PROVIDER)::The $PROVIDER provider, the API and the client did not complete sign-in, the API call and sign-out on this run's packages; the line starting with ==> above the failure names the step. Skipped step: run dotnet run-loop.cs --check --provider $PROVIDER in Abblix/Oidc.Server.GettingStarted (master) against this release's packages and fix the sample there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
             exit 1
           fi
-        # The script builds and starts three projects, measured at 1m45s to 2m12s on a hosted runner in the samples'
-        # own workflow, which gives the step the same 4 minutes
+        # The script builds and starts three projects, measured at 44s to 2m18s per provider on hosted runners in the
+        # samples' own workflow, which gives the step the same 4 minutes
         timeout-minutes: 4
       - name: The loop restored this run's packages
         run: python3 -I main-repo/.github/scripts/consumer-packages.py verify local-packages "$VERSION_FULL"
@@ -564,6 +564,7 @@ jobs:
       contents: read
     env:
       VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
+      # Moves to the templates' default branch once Templates 3.0 is released
       TEMPLATES_REF: release/3.0
       PROVIDER_TEMPLATES: abblix-oidc-server abblix-oidc-server-gettingstarted
       OTHER_TEMPLATES: abblix-react
@@ -580,12 +581,19 @@ jobs:
           persist-credentials: false
         timeout-minutes: 3
       - name: Checkout Templates repo
+        id: templates_checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: Abblix/Templates
           ref: ${{ env.TEMPLATES_REF }}
           path: templates
           persist-credentials: false
+        timeout-minutes: 3
+      - name: Name the skipped step when the templates could not be checked out
+        if: ${{ failure() && steps.templates_checkout.outcome == 'failure' }}
+        run: |
+          echo "::error title=Templates::Abblix/Templates could not be checked out at $TEMPLATES_REF; the checkout log above says why. Skipped step: the branch the templates job reads - when it was merged or renamed, set TEMPLATES_REF of the templates job in .github/workflows/release.yml on $GITHUB_REF_NAME to the branch holding the 3.x templates and dispatch the release again; when GitHub could not be reached, re-run this job"
+          exit 1
         timeout-minutes: 3
       - name: Download NuGet packages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -626,9 +634,9 @@ jobs:
             echo "::error title=Templates::$1. Skipped step: name every template of Abblix/Templates $TEMPLATES_REF in PROVIDER_TEMPLATES or OTHER_TEMPLATES of the templates job in .github/workflows/release.yml on $GITHUB_REF_NAME, then dispatch the release again"
             exit 1
           }
-          shopt -s nullglob
-          configs=(templates/*/.template.config/template.json)
-          [ "${#configs[@]}" -gt 0 ] || unnamed "Abblix/Templates $TEMPLATES_REF holds no */.template.config/template.json"
+          shopt -s nullglob globstar
+          configs=(templates/**/.template.config/template.json)
+          [ "${#configs[@]}" -gt 0 ] || unnamed "Abblix/Templates $TEMPLATES_REF holds no .template.config/template.json"
           read -ra providers <<< "$PROVIDER_TEMPLATES"
           read -ra others <<< "$OTHER_TEMPLATES"
           checked=()
@@ -1018,8 +1026,7 @@ jobs:
         with:
           egress-policy: audit
         timeout-minutes: 3
-      # The script that moves every Abblix reference, and the SDK pin it evaluates the projects with. It runs before
-      # the GettingStarted checkout, which would otherwise take the workspace root these two land in.
+      # The script that moves every Abblix reference, and the SDK pin it evaluates the projects with
       - name: Fetch the reference script and the SDK pin
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -1048,7 +1055,7 @@ jobs:
         timeout-minutes: 3
       # Every sample, not one: the release checked all of them against these packages
       - name: Update package references to released version
-        run: python3 -I main-repo/.github/scripts/consumer-packages.py point "$VERSION_FULL" getting-started
+        run: python3 -I main-repo/.github/scripts/consumer-packages.py bump "$VERSION_FULL" getting-started
         timeout-minutes: 3
       - name: Open a pull request with a signed commit
         env:

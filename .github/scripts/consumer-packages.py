@@ -11,6 +11,9 @@ The release workflow builds what a reader builds - the getting-started samples, 
   point <version> <dir>         sets every Abblix package reference of every project under <dir> to <version>.
                                 The references are read from MSBuild's own evaluation and written by
                                 `dotnet add package`, so no project file is parsed or edited by hand.
+  bump <version> <dir>          `point` for the job that moves the getting-started samples after a release is
+                                published: its refusals send the reader to that repository, since the release
+                                itself cannot be dispatched again.
   verify <folder> <version>     after a restore: every Abblix package in the global packages folder is
                                 <version> and came from <folder>, and there is at least one.
 """
@@ -23,6 +26,25 @@ import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 
 PREFIX = "abblix."
+
+# The skipped steps a refusal names, by the job that ran the command: before the release is created a fault is
+# fixed on the release branch and the release dispatched again; after it is published only a re-run remains
+BEFORE_RELEASE = {
+    "dotnet": "the project it names must evaluate and accept this run's packages - reproduce with the same command "
+              "in that repository, fix the project there, then re-run this job; when the library's packages are at "
+              "fault, fix them on the release branch and dispatch the release again",
+    "none": "a consumer project that installs the Abblix packages - when the repository dropped them, fix the job in "
+            ".github/workflows/release.yml on the release branch and dispatch the release again",
+}
+AFTER_PUBLISH = {
+    "dotnet": "the project it names must evaluate - reproduce with the same command in "
+              "Abblix/Oidc.Server.GettingStarted, fix the project there, then re-run this job; a fault in this job's "
+              "own steps is fixed in .github/workflows/release.yml, and this release's bump is then made by hand",
+    "none": "a sample that installs the Abblix packages - when Abblix/Oidc.Server.GettingStarted dropped them, fix "
+            "that repository and re-run this job; a fault in this job's own steps is fixed in "
+            ".github/workflows/release.yml, and this release's bump is then made by hand",
+}
+skipped_steps = BEFORE_RELEASE
 SKIPPED_DIRECTORIES = {"bin", "obj", "node_modules", ".git"}
 
 
@@ -82,10 +104,8 @@ def point(version: str, root: Path) -> int:
             print(f"{project.relative_to(root)}: {package} {version}")
             pointed += 1
     if pointed == 0:
-        print(f"::error::No project under {root} references an Abblix package, so nothing here would test "
-              "this run's packages. Skipped step: a consumer project that installs the Abblix packages - when the "
-              "repository dropped them, fix the job in .github/workflows/release.yml on the release branch and "
-              "dispatch the release again", file=sys.stderr)
+        print(f"::error::No project under {root} references an Abblix package, so no version "
+              f"was moved. Skipped step: {skipped_steps['none']}", file=sys.stderr)
         return 1
     return 0
 
@@ -97,7 +117,13 @@ def verify(folder: Path, version: str) -> int:
     restored_packages = packages.iterdir() if packages.is_dir() else []
     for package in sorted(path for path in restored_packages if path.name.startswith(PREFIX)):
         for restored in package.iterdir():
-            metadata = json.loads((restored / ".nupkg.metadata").read_text(encoding="utf-8"))
+            recorded = restored / ".nupkg.metadata"
+            if not recorded.is_file():
+                print(f"::error::{restored} holds no .nupkg.metadata, so nothing says where the restore took "
+                      f"{package.name} {restored.name} from. Skipped step: a restore that finished - re-run this job, "
+                      "whose runner starts with an empty packages folder", file=sys.stderr)
+                return 1
+            metadata = json.loads(recorded.read_text(encoding="utf-8"))
             source = str(metadata.get("source", "")).rstrip("/")
             found += 1
             if restored.name != version.lower() or source != expected:
@@ -129,6 +155,10 @@ def main(arguments: list[str]) -> int:
             return 0
         case ["point", version, root]:
             return point(version, Path(root).resolve())
+        case ["bump", version, root]:
+            global skipped_steps
+            skipped_steps = AFTER_PUBLISH
+            return point(version, Path(root).resolve())
         case ["verify", folder, version]:
             return verify(Path(folder), version)
         case _:
@@ -140,8 +170,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main(sys.argv[1:]))
     except DotnetFailed as failure:
-        print(f"::error::{failure}. Skipped step: the project it names must evaluate and accept this run's "
-              "packages - reproduce with the same command in that repository, fix the project there, then re-run "
-              "this job; when the library's packages are at fault, fix them on the release branch and dispatch "
-              "the release again", file=sys.stderr)
+        print(f"::error::{failure}. Skipped step: {skipped_steps['dotnet']}", file=sys.stderr)
         sys.exit(1)

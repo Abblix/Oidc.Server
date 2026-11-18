@@ -80,7 +80,7 @@ An optional prefix mounts every endpoint under a sub-path:
 app.MapOidcEndpoints(prefix: "/auth"); // e.g. /auth/connect/token, /auth/.well-known/jwks
 ```
 
-Endpoints that allow cross-origin requests (discovery, jwks, checksession, token, revoke, userinfo, endsession) carry CORS metadata, so a host that enables them must register a CORS policy named `OidcConstants.CorsPolicyName` and call `app.UseCors()`.
+Endpoints that allow cross-origin requests (discovery, jwks, checksession, token, revoke, userinfo, endsession) carry CORS metadata, so the host calls `app.UseCors()`. The server registers a policy named `OidcConstants.CorsPolicyName` that allows any origin without credentials; a host narrows it through `OidcCorsOptions.AllowedOrigins`, or replaces it by registering its own policy of that name.
 
 ## Migrating from the MVC integration
 
