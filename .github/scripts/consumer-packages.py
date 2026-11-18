@@ -54,10 +54,20 @@ def projects_under(root: Path):
                 yield Path(directory) / name
 
 
+class DotnetFailed(Exception):
+    """A dotnet command refused; its own output is printed, since MSBuild writes its errors to stdout."""
+
+
+def dotnet(arguments: list[str]) -> str:
+    completed = subprocess.run(["dotnet", *arguments], capture_output=True, text=True)
+    if completed.returncode != 0:
+        print(completed.stdout, completed.stderr, sep="\n", file=sys.stderr)
+        raise DotnetFailed(f"dotnet {' '.join(arguments)} exited with {completed.returncode}; its output is above")
+    return completed.stdout
+
+
 def abblix_references(project: Path) -> list[str]:
-    evaluated = subprocess.run(
-        ["dotnet", "msbuild", str(project), "-getItem:PackageReference"],
-        check=True, capture_output=True, text=True).stdout
+    evaluated = dotnet(["msbuild", str(project), "-getItem:PackageReference"])
     items = json.loads(evaluated).get("Items", {}).get("PackageReference", [])
     return [item["Identity"] for item in items if item["Identity"].lower().startswith(PREFIX)]
 
@@ -66,9 +76,7 @@ def point(version: str, root: Path) -> int:
     pointed = 0
     for project in sorted(projects_under(root)):
         for package in abblix_references(project):
-            subprocess.run(
-                ["dotnet", "add", str(project), "package", package, "--version", version, "--no-restore"],
-                check=True, stdout=subprocess.DEVNULL)
+            dotnet(["add", str(project), "package", package, "--version", version, "--no-restore"])
             print(f"{project.relative_to(root)}: {package} {version}")
             pointed += 1
     if pointed == 0:
@@ -118,4 +126,11 @@ def main(arguments: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except DotnetFailed as failure:
+        print(f"::error::{failure}. Skipped step: the project it names must evaluate and accept this run's "
+              "packages - reproduce with the same command in that repository, fix the project there, then re-run "
+              "this job; when the library's packages are at fault, fix them on the release branch and dispatch "
+              "the release again", file=sys.stderr)
+        sys.exit(1)
