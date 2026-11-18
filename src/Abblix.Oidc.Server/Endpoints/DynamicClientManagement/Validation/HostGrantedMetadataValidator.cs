@@ -19,6 +19,11 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// audiences and its grant types, to the sets the host grants in <see cref="NewClientOptions"/>: a client may narrow
 /// them, never widen them, so the limit on a client is never set by the client it limits.
 /// </summary>
+/// <remarks>
+/// An unset set does not mean the same for each member: unset resources or audiences let a client name none, while
+/// unset grant types set no limit, so a client may request every grant type the server supports. Read the grant types
+/// as the resources are and every registration is refused, since a request always carries a grant type.
+/// </remarks>
 /// <param name="options">The server options carrying the host's sets.</param>
 public class HostGrantedMetadataValidator(IOptionsMonitor<OidcOptions> options) : SyncClientRegistrationContextValidator
 {

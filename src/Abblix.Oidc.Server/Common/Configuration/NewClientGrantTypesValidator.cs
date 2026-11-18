@@ -11,11 +11,13 @@ using Microsoft.Extensions.Options;
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
-/// Refuses, while the host is still starting, grant types for new clients that are an empty set or hold a blank value.
+/// Refuses, while the host is still starting, grant types for new clients that are an empty set or hold a blank or
+/// null value.
 /// </summary>
 /// <remarks>
-/// Every registration is held to the set, so an empty one refuses each of them, and a blank value is a grant type no
-/// client can request: either way registration fails for every caller and is noticed only when one tries.
+/// Every registration is held to the set, so an empty one refuses each of them, and a blank or null value names no
+/// grant type a client can request. Only those two are checked here: a misspelled value, or one padded with spaces,
+/// still starts the host, and a client requesting that grant type is refused.
 /// </remarks>
 public sealed class NewClientGrantTypesValidator : IValidateOptions<OidcOptions>
 {
