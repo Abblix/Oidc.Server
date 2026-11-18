@@ -92,6 +92,12 @@ public static class JsonWebKeyPropertyNames
     public const string FirstCrtCoefficient = "qi";
 
     /// <summary>
+    /// RSA Other Primes Info parameter (oth), the private factors of a key with more than two primes
+    /// (RFC 7518 section 6.3.2.7).
+    /// </summary>
+    public const string OtherPrimesInfo = "oth";
+
+    /// <summary>
     /// ECC X Coordinate parameter (x).
     /// </summary>
     public const string EllipticCurveX = "x";

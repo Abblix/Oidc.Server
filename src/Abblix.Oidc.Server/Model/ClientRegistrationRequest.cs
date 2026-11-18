@@ -884,6 +884,11 @@ public record ClientRegistrationRequest
         /// authentication method used at the token endpoint.</summary>
         public const string TokenEndpointAuthMethod = "token_endpoint_auth_method";
 
+        /// <summary>The <c>token_endpoint_auth_methods_supported</c> client metadata (OpenID Connect Relying Party
+        /// Metadata Choices 1.0 section 2) listing every client authentication method the client can use, of which
+        /// the server picks one.</summary>
+        public const string TokenEndpointAuthMethodsSupported = "token_endpoint_auth_methods_supported";
+
         /// <summary>The <c>token_endpoint_auth_signing_alg</c> registration parameter naming the JWS
         /// algorithm used when the client authenticates with a signed JWT assertion.</summary>
         public const string TokenEndpointAuthSigningAlg = "token_endpoint_auth_signing_alg";

@@ -63,7 +63,17 @@ public partial class ClientValidator(
         if (clientInfo == null)
         {
             LogClientNotFound(clientId);
-            return context.Error(ErrorCodes.UnauthorizedClient, "The client is not authorized");
+
+            // draft-ietf-oauth-client-id-metadata-document has a server aborting the authorization request "with
+            // invalid_client" when a client identifier URL's document is refused (sections 5 and 6), and section 6.1
+            // has it "MUST NOT redirect the user agent to the client" when the document could not be had: no redirect
+            // URI is validated yet, so the error is shown rather than sent
+            var error = options.Value.ClientIdMetadataDocuments.Enabled &&
+                        clientId.StartsWith(Uri.UriSchemeHttps + Uri.SchemeDelimiter, StringComparison.Ordinal)
+                ? ErrorCodes.InvalidClient
+                : ErrorCodes.UnauthorizedClient;
+
+            return context.Error(error, "The client is not authorized");
         }
 
         // FAPI 1.0 Part 2 section 8.6, FAPI 2.0 section 5.4.1: the server signs only with the profile's algorithms,

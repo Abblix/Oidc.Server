@@ -244,6 +244,11 @@ public record ConfigurationResponse
         /// authorization-detail <c>type</c> values this server understands (RFC 9396 section 10).
         /// Absent when no per-type validators are registered.</summary>
         public const string AuthorizationDetailsTypesSupported = "authorization_details_types_supported";
+
+        /// <summary>The <c>client_id_metadata_document_supported</c> metadata field saying the server
+        /// fetches a client's metadata from its client identifier URL
+        /// (draft-ietf-oauth-client-id-metadata-document section 8).</summary>
+        public const string ClientIdMetadataDocumentSupported = "client_id_metadata_document_supported";
     }
 
     /// <summary>
@@ -613,4 +618,11 @@ public record ConfigurationResponse
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetailsTypesSupported)]
     public IEnumerable<string>? AuthorizationDetailsTypesSupported { get; init; }
+
+    /// <summary>
+    /// draft-ietf-oauth-client-id-metadata-document section 8: "Boolean value specifying whether the authorization
+    /// server supports retrieving client metadata from a client_id URL". Omitted when the server does not.
+    /// </summary>
+    [JsonPropertyName(Parameters.ClientIdMetadataDocumentSupported)]
+    public bool? ClientIdMetadataDocumentSupported { get; init; }
 }

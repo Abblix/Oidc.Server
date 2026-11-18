@@ -121,7 +121,7 @@ public record OidcOptions
 	/// JWKS endpoint before the server begins producing tokens with it, giving client JWKS caches time to pick it
 	/// up so a rotation never causes a verification or decryption failure. This single value is the server's
 	/// source of truth for rollover timing: the JWKS endpoint derives its <c>Cache-Control</c> max-age from it
-	/// (so a client honouring the header is never staler than this window), and a key provider that rotates keys
+	/// (so a client honoring the header is never staler than this window), and a key provider that rotates keys
 	/// dynamically (for example the external-custodian provider addressing a versioned HSM/KMS key) holds a freshly
 	/// rotated key as announced-but-not-yet-signing for this long. Size it to at least the longest a client may
 	/// cache the JWKS. A static, non-rotating key set is unaffected by the activation gate but still gets this as
@@ -355,7 +355,7 @@ public record OidcOptions
 	/// The refusal is about length and never about content. RFC 7591 Section 2 requires the server to
 	/// ignore metadata it does not understand, so refusing a registration for carrying unknown members
 	/// would contradict it - whereas declining to read an oversized body is not a statement about metadata
-	/// at all, and a bound that counted unrecognised members would be.
+	/// at all, and a bound that counted unrecognized members would be.
 	/// </para>
 	/// <para>
 	/// How it is enforced differs by host, and the difference is worth knowing when sizing capacity.
@@ -523,6 +523,12 @@ public record OidcOptions
 	/// Configuration options for software statement validation per RFC 7591 Section 2.3.
 	/// </summary>
 	public SoftwareStatementOptions SoftwareStatement { get; set; } = new();
+
+	/// <summary>
+	/// How clients identifying themselves by the URL of their own metadata document are accepted
+	/// (draft-ietf-oauth-client-id-metadata-document), once the host calls <c>AddClientIdMetadataDocuments()</c>.
+	/// </summary>
+	public ClientIdMetadataDocumentOptions ClientIdMetadataDocuments { get; set; } = new();
 
 	/// <summary>
 	/// Configuration options for OAuth 2.0 DPoP (RFC 9449), governing the

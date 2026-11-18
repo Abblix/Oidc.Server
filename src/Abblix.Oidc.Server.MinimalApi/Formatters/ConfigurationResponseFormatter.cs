@@ -112,6 +112,7 @@ public class ConfigurationResponseFormatter(
             AuthorizationResponseIssParameterSupported = response.AuthorizationResponseIssParameterSupported,
 
             AuthorizationDetailsTypesSupported = response.AuthorizationDetailsTypesSupported,
+            ClientIdMetadataDocumentSupported = response.ClientIdMetadataDocumentSupported,
         };
 
         modelResponse = MtlsEndpointAliasing.WithMtlsAliases(modelResponse, tenantAccessor.CurrentTenant().MtlsBaseUri);

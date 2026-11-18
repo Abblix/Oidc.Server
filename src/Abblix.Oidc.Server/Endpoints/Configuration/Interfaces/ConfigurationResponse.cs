@@ -22,7 +22,7 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 /// when the field is omitted, so omission is an answer rather than a gap: <c>grant_types_supported</c> defaults
 /// to authorization code and implicit, <c>response_modes_supported</c> to query and fragment, and
 /// <c>token_endpoint_auth_methods_supported</c> to client_secret_basic.
-/// Before this, all eleven were declared non-nullable with a null-forgiving initialiser, which swore they were
+/// Before this, all eleven were declared non-nullable with a null-forgiving initializer, which swore they were
 /// always present while nothing enforced it. A custom <see cref="IConfigurationHandler"/> that left one out
 /// produced no error at all: the null traveled into the wire model, whose null-omitting serialisation dropped
 /// the field, so a discovery document could silently ship without a REQUIRED member and answer 200.
@@ -245,4 +245,11 @@ public record ConfigurationResponse
 	/// or omitted when null (no per-type validators registered).
 	/// </summary>
 	public IEnumerable<string>? AuthorizationDetailsTypesSupported { get; init; }
+
+	/// <summary>
+	/// draft-ietf-oauth-client-id-metadata-document section 8: whether the server accepts a client identified by the
+	/// URL of its own metadata document. True once the host calls <c>AddClientIdMetadataDocuments()</c>, and null
+	/// otherwise, so the member is omitted.
+	/// </summary>
+	public bool? ClientIdMetadataDocumentSupported { get; init; }
 }
