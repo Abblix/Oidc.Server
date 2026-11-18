@@ -16,6 +16,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 
@@ -47,6 +48,7 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
     /// end user's tokens unseen, so it does not start.
     /// </para>
     /// </remarks>
+    [Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
     public static IOidcServerBuilder AddClientIdMetadataDocuments(this IOidcServerBuilder builder)
     {
         var services = builder.Services;

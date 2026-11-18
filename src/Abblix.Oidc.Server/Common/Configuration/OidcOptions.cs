@@ -12,6 +12,8 @@ using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DPoP;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
 
@@ -528,6 +530,7 @@ public record OidcOptions
 	/// How clients identifying themselves by the URL of their own metadata document are accepted
 	/// (draft-ietf-oauth-client-id-metadata-document), once the host calls <c>AddClientIdMetadataDocuments()</c>.
 	/// </summary>
+	[Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
 	public ClientIdMetadataDocumentOptions ClientIdMetadataDocuments { get; set; } = new();
 
 	/// <summary>

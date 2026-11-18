@@ -66,9 +66,14 @@ Abblix OIDC Server implements the following standards for authorization and secu
 
 A client can use the HTTPS URL of a JSON document it publishes as its `client_id` instead of registering, which is how the MCP authorization specification expects clients and servers with no prior relationship to meet. The server fetches the document the first time the client shows up, keeps it for as long as the response's cache headers allow (within `MinimumCacheDuration` and `MaximumCacheDuration`), and checks it the way it checks a dynamic registration request. Discovery then advertises `client_id_metadata_document_supported`.
 
+Available since 3.0.1, the feature implements [draft-ietf-oauth-client-id-metadata-document-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03), an Internet-Draft. It stays experimental until the draft becomes an RFC and may change in a minor release, so the compiler reports `ABX9001` wherever your code uses it until you suppress that diagnostic.
+
 ```csharp
 using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 using Abblix.Oidc.Server.MinimalApi;
+
+// Client ID Metadata Documents are experimental until the draft becomes an RFC
+#pragma warning disable ABX9001
 
 var builder = WebApplication.CreateBuilder(args);
 

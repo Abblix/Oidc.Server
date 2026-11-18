@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- The suite tests the experimental Client ID Metadata Documents (ABX9001). -->
+    <NoWarn>$(NoWarn);ABX9001</NoWarn>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>

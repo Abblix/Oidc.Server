@@ -8,6 +8,8 @@
 
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 
 namespace Abblix.Oidc.Server.Model;
 
@@ -624,5 +626,6 @@ public record ConfigurationResponse
     /// server supports retrieving client metadata from a client_id URL". Omitted when the server does not.
     /// </summary>
     [JsonPropertyName(Parameters.ClientIdMetadataDocumentSupported)]
+    [Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
     public bool? ClientIdMetadataDocumentSupported { get; init; }
 }

@@ -6,6 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
+
 namespace Abblix.Oidc.Server.Common.Configuration;
 
 /// <summary>
@@ -19,6 +22,7 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// scope, the resources and token exchange audiences it may name and the audiences of its assertions among them,
 /// because its metadata is as much the client's own word as a registration request is.
 /// </remarks>
+[Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
 public record ClientIdMetadataDocumentOptions
 {
     /// <summary>

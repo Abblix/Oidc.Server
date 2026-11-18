@@ -25,6 +25,9 @@ internal static class ClientIdMetadataDocumentsSample
     internal static void Configure(string[] args)
     {
         // <sample>
+        // Client ID Metadata Documents are experimental until the draft becomes an RFC
+#pragma warning disable ABX9001
+
         var builder = WebApplication.CreateBuilder(args);
 
         builder.Services

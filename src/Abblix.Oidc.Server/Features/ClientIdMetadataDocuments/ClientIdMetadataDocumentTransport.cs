@@ -6,11 +6,14 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 
 /// <summary>
 /// The HTTP transport a client's metadata document is fetched on, from the URL the client uses as its identifier.
 /// </summary>
+[Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
 public static class ClientIdMetadataDocumentTransport
 {
     /// <summary>

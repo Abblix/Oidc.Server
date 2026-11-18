@@ -7,6 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Microsoft.Extensions.Options;
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
 
 namespace Abblix.Oidc.Server.Common.Configuration;
 
@@ -18,6 +20,7 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// Each of these is otherwise found on the first authorization request of a client nobody configured, as a refusal
 /// that names the client rather than the setting.
 /// </remarks>
+[Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
 public sealed class ClientIdMetadataDocumentOptionsValidator : IValidateOptions<OidcOptions>
 {
     private const string Section = nameof(OidcOptions.ClientIdMetadataDocuments);

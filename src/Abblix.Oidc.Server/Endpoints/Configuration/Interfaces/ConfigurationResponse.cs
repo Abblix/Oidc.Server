@@ -6,6 +6,9 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
+using Abblix.Oidc.Server.Features.ClientIdMetadataDocuments;
+
 namespace Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 
 /// <summary>
@@ -251,5 +254,6 @@ public record ConfigurationResponse
 	/// URL of its own metadata document. True once the host calls <c>AddClientIdMetadataDocuments()</c>, and null
 	/// otherwise, so the member is omitted.
 	/// </summary>
+	[Experimental(ClientIdMetadataDocumentsExperiment.DiagnosticId, UrlFormat = ClientIdMetadataDocumentsExperiment.UrlFormat)]
 	public bool? ClientIdMetadataDocumentSupported { get; init; }
 }
