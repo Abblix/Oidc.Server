@@ -324,7 +324,7 @@ jobs:
               break
             fi
             if ! kill -0 "$APP_PID" 2>/dev/null; then
-              echo "App process died before responding"
+              echo "App process died before responding" >&2
               exit 1
             fi
             sleep 1

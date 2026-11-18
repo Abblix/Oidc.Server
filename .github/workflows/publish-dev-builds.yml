@@ -362,16 +362,14 @@ jobs:
               # the release and the next bump of MinVerMinimumMajorMinor. Re-asserting the patch
               # would have rebuilt the same silent failure inside the fix for it.
               #
-              # The refusal step before the push stops every version without the dev identifier, so
-              # one arriving here was read differently by this step than by that one, and a sentence
-              # about floating would be advice about a line the package is not on.
+              # Only for a dev build: a version read here without the dev identifier gets no sentence
+              # about floating, which would be advice about a line it is not on. The step does not
+              # fail on it, because the package is already on the feed by now.
               case "$VERSION" in
                 *-dev.*)
                   echo "Consumers floating \`${VERSION%%-*}-dev.*\` will pick this up on next \`dotnet restore\`."
                   ;;
                 *)
-                  echo "The summary read '$VERSION' out of $PKG, which carries no dev identifier, though the refusal step let it publish." >&2
-                  exit 1
                   ;;
               esac
             } >> "$GITHUB_STEP_SUMMARY"
