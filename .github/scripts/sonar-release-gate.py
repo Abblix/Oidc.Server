@@ -9,17 +9,16 @@ develop does not hold yet is refused with the files that differ, rather than jud
 of other code.
 
 A zero read from an analysis that is missing, stale or partial is the failure this script exists to
-refuse, so the counts are taken only after those checks, and the analysis must hold files of every
-tracked project directory. An issue a person marked accepted or false positive does not count as
-open, but it must carry a comment saying why; one without is refused. Every such verdict and every
-rule that hides issues before they are raised is listed for the approver.
+refuse, so the counts are taken only after those checks, and the analysis must hold every source
+file the release commit tracks. An issue a person marked accepted or false positive does not count as
+open, but it must carry a comment saying why; one without is refused. Every such verdict, every
+rule that hides issues before they are raised and every NOSONAR marker is listed for the approver.
 
 Usage: sonar-release-gate.py <project key> <release commit> <develop head>
 Run from the repository root. Writes a Markdown report to stdout; exits 1 when any check fails.
 """
 
 import json
-import pathlib
 import subprocess
 import sys
 import urllib.error
@@ -88,6 +87,7 @@ def check_same_code(commit, develop, analysed, failures, notes):
         return
     entries = git('diff', '--name-status', '-z', '--no-renames', commit, develop).split('\0')
     for status, path in zip(entries[0::2], entries[1::2]):
+        path = one_line(path)
         if status == 'D':
             failures.append(f'{path} ships in the release and is absent on develop, so it was not analysed')
         elif path in analysed:
@@ -96,23 +96,33 @@ def check_same_code(commit, develop, analysed, failures, notes):
             notes.append(f'{path} differs on develop and is not analysed by Sonar')
 
 
-def tracked_project_directories():
-    """Each directory holding a tracked project file and tracked C# source: a project of no
-    source, such as a template package, has nothing to analyse, and build output is not tracked."""
-    listed = git('ls-files', '-z', '*.csproj', '*.cs').split('\0')
-    projects = {str(pathlib.PurePosixPath(path).parent) for path in listed if path.endswith('.csproj')}
-    return sorted(d for d in projects if any(path.startswith(d + '/') and path.endswith('.cs') for path in listed))
+# The files Sonar must have analysed, named by kind rather than read from the analysis: a list
+# taken from the analysed set would lose a whole language the analysis dropped, and pass.
+ANALYSED_SUFFIXES = ('.cs', '.py', '.html', '.js', '.ts')
+ANALYSED_DIRECTORIES = ('.github/workflows/', '.github/actions/')
 
 
-def check_projects_analysed(analysed, failures):
-    """Every project directory holds analysed files, source or test, so a zero count cannot come
-    from an analysis that skipped a project."""
-    directories = tracked_project_directories()
-    if not directories:
-        failures.append('no project directory found to check the analysis against')
-    for directory in directories:
-        if not any(path.startswith(directory + '/') for path in analysed):
-            failures.append(f'main branch analysis holds no file of {directory}')
+def must_be_analysed(path):
+    return path.endswith(ANALYSED_SUFFIXES) or (
+        path.startswith(ANALYSED_DIRECTORIES) and path.endswith(('.yml', '.yaml')))
+
+
+def check_every_file_analysed(commit, analysed, failures):
+    """Every source file the release commit tracks is in the analysis, so a zero count cannot come
+    from an analysis that skipped files."""
+    required = [path for path in git('ls-tree', '-r', '-z', '--name-only', commit).split('\0')
+                if path and must_be_analysed(path)]
+    if not required:
+        failures.append(f'no source file found in {commit} to check the analysis against')
+    for path in required:
+        if path not in analysed:
+            failures.append(f'{one_line(path)} is in the release and not in the analysis')
+
+
+def nosonar_files(commit):
+    """Tracked files carrying a NOSONAR marker, each of which hides an issue on its line."""
+    found = subprocess.run(['git', 'grep', '-l', '-z', 'NOSONAR', commit], capture_output=True, text=True)
+    return [one_line(entry.split(':', 1)[-1]) for entry in found.stdout.split('\0') if entry]
 
 
 def check_issues(project, branch, failures, verdicts):
@@ -162,9 +172,10 @@ def main(project, commit, develop):
     branch = main_branch(project, develop, failures)
     analysed = analysed_files(project, branch)
     check_same_code(commit, develop, analysed, failures, notes)
-    check_projects_analysed(analysed, failures)
+    check_every_file_analysed(commit, analysed, failures)
     check_issues(project, branch, failures, verdicts)
-    report(failures, verdicts, notes, suppression_rules(project))
+    rules = suppression_rules(project) + [f'NOSONAR in {path}' for path in nosonar_files(commit)]
+    report(failures, verdicts, notes, rules)
     return 1 if failures else 0
 
 
