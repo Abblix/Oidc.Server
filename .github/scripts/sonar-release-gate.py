@@ -87,18 +87,18 @@ def check_same_code(commit, develop, analysed, failures, notes):
         return
     entries = git('diff', '--name-status', '-z', '--no-renames', commit, develop).split('\0')
     for status, path in zip(entries[0::2], entries[1::2]):
-        path = one_line(path)
+        shown = one_line(path)
         if status == 'D':
-            failures.append(f'{path} ships in the release and is absent on develop, so it was not analysed')
+            failures.append(f'{shown} ships in the release and is absent on develop, so it was not analysed')
         elif path in analysed:
-            failures.append(f'{path} differs between the release and develop, so its analysis is not of the release')
+            failures.append(f'{shown} differs between the release and develop, so its analysis is not of the release')
         else:
-            notes.append(f'{path} differs on develop and is not analysed by Sonar')
+            notes.append(f'{shown} differs on develop and is not analysed by Sonar')
 
 
 # The files Sonar must have analysed, named by kind rather than read from the analysis: a list
 # taken from the analysed set would lose a whole language the analysis dropped, and pass.
-ANALYSED_SUFFIXES = ('.cs', '.py', '.html', '.js', '.ts')
+ANALYSED_SUFFIXES = ('.cs', '.py', '.html', '.js', '.ts', '.xml', '.config')
 ANALYSED_DIRECTORIES = ('.github/workflows/', '.github/actions/')
 
 
