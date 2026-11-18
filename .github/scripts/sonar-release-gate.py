@@ -98,13 +98,14 @@ def check_same_code(commit, develop, analysed, failures, notes):
 
 # The files Sonar must have analysed, named by kind rather than read from the analysis: a list
 # taken from the analysed set would lose a whole language the analysis dropped, and pass.
-ANALYSED_SUFFIXES = ('.cs', '.py', '.html', '.js', '.ts', '.xml', '.config')
+ANALYSED_SUFFIXES = ('.cs', '.py', '.html', '.js', '.ts', '.xml', '.config', '.ps1')
+ANALYSED_NAMES = ('Dockerfile',)
 ANALYSED_DIRECTORIES = ('.github/workflows/', '.github/actions/')
 
 
 def must_be_analysed(path):
-    return path.endswith(ANALYSED_SUFFIXES) or (
-        path.startswith(ANALYSED_DIRECTORIES) and path.endswith(('.yml', '.yaml')))
+    return (path.endswith(ANALYSED_SUFFIXES) or path.rsplit('/', 1)[-1] in ANALYSED_NAMES
+            or (path.startswith(ANALYSED_DIRECTORIES) and path.endswith(('.yml', '.yaml'))))
 
 
 def check_every_file_analysed(commit, analysed, failures):
@@ -121,7 +122,7 @@ def check_every_file_analysed(commit, analysed, failures):
     # so the list cannot fall behind the analysis without the gate saying which file showed it.
     for path in sorted(analysed):
         if not must_be_analysed(path):
-            failures.append(f'Sonar analyses {one_line(path)}, a kind ANALYSED_SUFFIXES and '
+            failures.append(f'Sonar analyses {one_line(path)}, a kind ANALYSED_SUFFIXES, ANALYSED_NAMES and '
                             'ANALYSED_DIRECTORIES do not name: add it there')
 
 
