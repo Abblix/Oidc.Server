@@ -13,17 +13,19 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.AspNetCore;
+using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
+using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
+using Abblix.Tests.Shared;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Xunit;
 #if MINIMAL_API_TRANSPORT
@@ -41,31 +43,14 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// </summary>
 public sealed class BareHostTests
 {
-    private const string Issuer = "https://auth.example.com";
     private const string TenantId = "main";
     private const string LoginPath = "/Auth/Login";
     private const string ClientId = "bare-host-client";
     private const string ClientSecret = "bare-host-secret";
-    private const string RedirectUri = "https://client.example.com/callback";
     private const string CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
     [SuppressMessage("Minor Code Smell", "S1075", Justification = "An address no fetch can reach; only the cache lookup before the fetch is observed.")]
     private const string KeySetAddress = "https://keys.example.invalid/jwks";
-
-    /// <summary>
-    /// How a host registers a cache of its own relative to the server.
-    /// </summary>
-    public enum HostRegistration
-    {
-        /// <summary>Added before the server is registered.</summary>
-        AddBefore,
-
-        /// <summary>Added after the server is registered.</summary>
-        AddAfter,
-
-        /// <summary>Added after the server is registered, only if no registration of the type exists yet.</summary>
-        TryAddAfter,
-    }
 
     /// <summary>
     /// Discovery, the token endpoint and the pushed authorization request endpoint, which stores the request, answer a
@@ -81,7 +66,9 @@ public sealed class BareHostTests
 
         using var discovery = await http.GetAsync(routes.Configuration, ct);
         Assert.Equal(HttpStatusCode.OK, discovery.StatusCode);
-        Assert.Equal(Issuer, (await ReadJsonAsync(discovery))[ConfigurationResponse.Parameters.Issuer]?.GetValue<string>());
+        var issuer = (await ReadJsonAsync(discovery))[ConfigurationResponse.Parameters.Issuer]?.GetValue<string>();
+        Assert.NotNull(issuer);
+        Assert.Equal(TestServerAddress.BaseAddress, new Uri(issuer));
 
         using var token = await RequestTokenAsync(http, routes);
         Assert.Equal(HttpStatusCode.OK, token.StatusCode);
@@ -104,8 +91,8 @@ public sealed class BareHostTests
     {
         var own = new RecordingDistributedCache();
         await using var app = await StartAsync(
-            services => Register<IDistributedCache>(services, own, registration, before: true),
-            services => Register<IDistributedCache>(services, own, registration, before: false));
+            registration.Before<IDistributedCache>(own),
+            registration.After<IDistributedCache>(own));
         using var http = Client(app);
 
         using var pushed = await PushAuthorizationRequestAsync(http, Routes(app));
@@ -126,37 +113,13 @@ public sealed class BareHostTests
     {
         using var own = new RecordingMemoryCache();
         await using var app = await StartAsync(
-            services => Register<IMemoryCache>(services, own, registration, before: true),
-            services => Register<IMemoryCache>(services, own, registration, before: false));
+            registration.Before<IMemoryCache>(own),
+            registration.After<IMemoryCache>(own));
         var fetcher = app.Services.GetRequiredKeyedService<ISecureHttpFetcher>(KeySetOwners.Client);
 
         await fetcher.FetchAsync<JsonWebKeySet>(new Uri(KeySetAddress));
 
         Assert.Contains(own.Read, key => key.EndsWith(KeySetAddress, StringComparison.Ordinal));
-    }
-
-    private static void Register<T>(IServiceCollection services, T instance, HostRegistration registration, bool before)
-        where T : class
-    {
-        switch (registration)
-        {
-            case HostRegistration.AddBefore when before:
-            case HostRegistration.AddAfter when !before:
-                services.AddSingleton(instance);
-                break;
-
-            case HostRegistration.TryAddAfter when !before:
-                services.TryAddSingleton(instance);
-                break;
-
-            case HostRegistration.AddBefore:
-            case HostRegistration.AddAfter:
-            case HostRegistration.TryAddAfter:
-                break;
-
-            default:
-                throw new ArgumentOutOfRangeException(nameof(registration), registration, null);
-        }
     }
 
     private static async Task<WebApplication> StartAsync(
@@ -170,7 +133,7 @@ public sealed class BareHostTests
         builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
         {
             Id = TenantId,
-            Issuer = new Uri(Issuer),
+            Issuer = TestServerAddress.BaseAddress,
             LoginUri = new Uri(LoginPath, UriKind.Relative),
             SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
             Clients =
@@ -183,7 +146,7 @@ public sealed class BareHostTests
                     ],
                     TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretPost,
                     AllowedGrantTypes = [GrantTypes.ClientCredentials, GrantTypes.AuthorizationCode],
-                    RedirectUris = [new Uri(RedirectUri)],
+                    RedirectUris = [new Uri(TestConstants.RedirectUri)],
                 },
             ],
         }));
@@ -208,7 +171,7 @@ public sealed class BareHostTests
     private static HttpClient Client(WebApplication app)
     {
         var http = app.GetTestClient();
-        http.BaseAddress = new Uri(Issuer);
+        http.BaseAddress = TestServerAddress.BaseAddress;
         return http;
     }
 
@@ -231,7 +194,7 @@ public sealed class BareHostTests
                 [ClientRequest.Parameters.ClientId] = ClientId,
                 [ClientRequest.Parameters.ClientSecret] = ClientSecret,
                 [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
-                [AuthorizationRequest.Parameters.RedirectUri] = RedirectUri,
+                [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
                 [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
                 [AuthorizationRequest.Parameters.CodeChallenge] = CodeChallenge,
                 [AuthorizationRequest.Parameters.CodeChallengeMethod] = CodeChallengeMethods.S256,
@@ -240,40 +203,6 @@ public sealed class BareHostTests
 
     private static async Task<JsonNode> ReadJsonAsync(HttpResponseMessage response)
         => JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
-
-    /// <summary>
-    /// A host's distributed cache that records the keys written to it.
-    /// </summary>
-    private sealed class RecordingDistributedCache : IDistributedCache
-    {
-        private readonly MemoryDistributedCache _inner = new(Options.Create(new MemoryDistributedCacheOptions()));
-
-        public List<string> Written { get; } = [];
-
-        public byte[]? Get(string key) => _inner.Get(key);
-
-        public Task<byte[]?> GetAsync(string key, CancellationToken token = default) => _inner.GetAsync(key, token);
-
-        public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
-        {
-            lock (Written) Written.Add(key);
-            _inner.Set(key, value, options);
-        }
-
-        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
-        {
-            lock (Written) Written.Add(key);
-            return _inner.SetAsync(key, value, options, token);
-        }
-
-        public void Refresh(string key) => _inner.Refresh(key);
-
-        public Task RefreshAsync(string key, CancellationToken token = default) => _inner.RefreshAsync(key, token);
-
-        public void Remove(string key) => _inner.Remove(key);
-
-        public Task RemoveAsync(string key, CancellationToken token = default) => _inner.RemoveAsync(key, token);
-    }
 
     /// <summary>
     /// A host's memory cache that records the keys looked up in it.

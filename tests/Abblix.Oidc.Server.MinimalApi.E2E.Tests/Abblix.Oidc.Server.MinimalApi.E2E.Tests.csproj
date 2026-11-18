@@ -47,4 +47,11 @@
     <Compile Include="../Abblix.Oidc.Server.MinimalApi.UnitTests/ChallengeReader.cs" Link="Shared/ChallengeReader.cs" />
   </ItemGroup>
 
+  <!-- What a test of a host's own cache registers, shared by every suite that checks the library uses it. -->
+  <ItemGroup>
+    <Compile Include="../Shared/HostRegistration.cs" Link="Shared/HostRegistration.cs" />
+    <Compile Include="../Shared/HostRegistrationExtensions.cs" Link="Shared/HostRegistrationExtensions.cs" />
+    <Compile Include="../Shared/RecordingDistributedCache.cs" Link="Shared/RecordingDistributedCache.cs" />
+  </ItemGroup>
+
 </Project>
