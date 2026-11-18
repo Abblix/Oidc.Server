@@ -66,6 +66,8 @@ app.MapOidcEndpoints();
 app.Run();
 ```
 
+The issuer comes from configuration, so add it to `appsettings.json` first, for example `"Issuer": "https://localhost:5001"`.
+
 `MapOidcEndpoints()` maps all enabled endpoints onto a route group and returns the `RouteGroupBuilder`, so cross-cutting conventions can be applied to all OIDC endpoints at once:
 
 ```csharp

@@ -82,8 +82,8 @@ builder.Services.AddConsentGrantedForEveryClient();
 builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
     Id = "main",
-    // The address the app is served on, written into every token it issues,
-    // read from the "Issuer" setting, for example in appsettings.json
+    // The address the app is served on, written into every token it issues.
+    // Set it as "Issuer" in appsettings.json or any other configuration source
     Issuer = new Uri(builder.Configuration["Issuer"]
         ?? throw new InvalidOperationException("Set Issuer to the address the app is served on")),
     LoginUri = new Uri("/Auth/Login", UriKind.Relative),
@@ -95,6 +95,8 @@ var app = builder.Build();
 app.MapOidcEndpoints();
 app.Run();
 ```
+
+The issuer comes from configuration, so add it to `appsettings.json` first, for example `"Issuer": "https://localhost:5001"`.
 
 An MVC application installs `Abblix.OIDC.Server.MVC` and calls `app.MapOidcControllers()` instead. A host serving several tenants, a single tenant at an issuer with a path, or tenants from a store or catalog of its own also calls `app.UseMultiTenancy()` before its own routing, so each request reaches its tenant.
 

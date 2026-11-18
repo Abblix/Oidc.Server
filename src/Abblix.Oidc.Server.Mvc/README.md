@@ -66,6 +66,8 @@ app.MapOidcControllers();
 app.Run();
 ```
 
+The issuer comes from configuration, so add it to `appsettings.json` first, for example `"Issuer": "https://localhost:5001"`.
+
 The library's controllers carry no route of their own, so `app.MapControllers()` and a conventional route such as `{controller}/{action}` never reach them. `MapOidcControllers()` maps each enabled endpoint at the path `OidcRouteOptions` gives it, and a disabled endpoint is not mapped at all, so it answers 404. The call returns a convention builder for the endpoints it mapped, so cross-cutting conventions apply to all of them at once and to none of the host's routes, and an optional prefix mounts every endpoint under a sub-path:
 
 ```csharp
