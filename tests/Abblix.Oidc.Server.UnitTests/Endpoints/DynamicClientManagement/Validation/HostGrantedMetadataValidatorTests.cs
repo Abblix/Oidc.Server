@@ -20,7 +20,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validat
 
 /// <summary>
 /// A registering client may narrow the resources and token exchange audiences the host grants it, never widen them,
-/// and a host granting none lets it name none.
+/// and a host granting none lets it name none; its grant types stay within the host's limit when the host sets one.
 /// </summary>
 public class HostGrantedMetadataValidatorTests
 {
@@ -30,7 +30,8 @@ public class HostGrantedMetadataValidatorTests
     private static async Task<string?> ValidateAsync(
         NewClientOptions granted,
         Uri[]? allowedResources = null,
-        string[]? tokenExchangeAudiences = null)
+        string[]? tokenExchangeAudiences = null,
+        string[]? grantTypes = null)
     {
         var options = new Mock<IOptionsMonitor<OidcOptions>>();
         options.Setup(monitor => monitor.CurrentValue).Returns(new OidcOptions { NewClientOptions = granted });
@@ -38,6 +39,7 @@ public class HostGrantedMetadataValidatorTests
         {
             AllowedResources = allowedResources,
             TokenExchangeAudiences = tokenExchangeAudiences,
+            GrantTypes = grantTypes!,
         });
 
         return (await new HostGrantedMetadataValidator(options.Object).ValidateAsync(SingleIssuer.Tenant, context))
@@ -98,4 +100,36 @@ public class HostGrantedMetadataValidatorTests
         => Assert.Equal(
             ErrorCodes.InvalidClientMetadata,
             await ValidateAsync(new NewClientOptions(), tokenExchangeAudiences: ["orders-api"]));
+
+    private static readonly string[] SignInGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
+
+    [Fact]
+    public async Task AnyGrantTypeWithoutAHostLimit_IsServed()
+        => Assert.Null(await ValidateAsync(
+            new NewClientOptions(),
+            grantTypes: [GrantTypes.ClientCredentials, GrantTypes.JwtBearer]));
+
+    [Fact]
+    public async Task GrantTypesWithinTheHostsLimit_AreServed()
+        => Assert.Null(await ValidateAsync(
+            new NewClientOptions { AllowedGrantTypes = SignInGrantTypes },
+            grantTypes: SignInGrantTypes));
+
+    [Fact]
+    public async Task AGrantTypeOutsideTheHostsLimit_IsRefused()
+        => Assert.Equal(
+            ErrorCodes.InvalidClientMetadata,
+            await ValidateAsync(
+                new NewClientOptions { AllowedGrantTypes = SignInGrantTypes },
+                grantTypes: [GrantTypes.AuthorizationCode, GrantTypes.ClientCredentials]));
+
+    /// <summary>
+    /// An omitted <c>grant_types</c> member means the authorization code grant (RFC 7591 section 2), which a limit
+    /// leaving it out does not admit.
+    /// </summary>
+    [Fact]
+    public async Task AnOmittedMemberUnderALimitWithoutTheAuthorizationCodeGrant_IsRefused()
+        => Assert.Equal(
+            ErrorCodes.InvalidClientMetadata,
+            await ValidateAsync(new NewClientOptions { AllowedGrantTypes = [GrantTypes.ClientCredentials] }));
 }

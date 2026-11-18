@@ -15,10 +15,15 @@ using Parameters = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Holds the registration members that say what a client may reach, its allowed resources and its token exchange
-/// audiences, to the sets the host grants in <see cref="NewClientOptions"/>: a client may narrow them, never widen
-/// them, so the limit on a client is never set by the client it limits.
+/// Holds the registration members that say what a client may reach, its allowed resources, its token exchange
+/// audiences and its grant types, to the sets the host grants in <see cref="NewClientOptions"/>: a client may narrow
+/// them, never widen them, so the limit on a client is never set by the client it limits.
 /// </summary>
+/// <remarks>
+/// An unset set does not mean the same for each member: unset resources or audiences let a client name none, while
+/// unset grant types set no limit, so a client may request every grant type the server supports. Read the grant types
+/// as the resources are and every registration is refused, since a request always carries a grant type.
+/// </remarks>
 /// <param name="options">The server options carrying the host's sets.</param>
 public class HostGrantedMetadataValidator(IOptionsMonitor<OidcOptions> options) : SyncClientRegistrationContextValidator
 {
@@ -32,7 +37,30 @@ public class HostGrantedMetadataValidator(IOptionsMonitor<OidcOptions> options) 
                ?? WithinGranted(
                    request.TokenExchangeAudiences,
                    granted.TokenExchangeAudiences,
-                   Parameters.TokenExchangeAudiences);
+                   Parameters.TokenExchangeAudiences)
+               ?? WithinAllowedGrantTypes(request.GrantTypes, granted.AllowedGrantTypes);
+    }
+
+    /// <summary>
+    /// The refusal of a grant type in <paramref name="requested"/> outside <paramref name="allowed"/>, or null, which
+    /// it also is when the host sets no limit.
+    /// </summary>
+    /// <remarks>
+    /// Refused rather than replaced, though RFC 7591 section 2 permits either, with <c>invalid_client_metadata</c>,
+    /// which section 3.2.2 defines for a metadata value the server rejects: a client asking for a grant type learns it
+    /// was not given one from the refusal, while a replaced list would register it without the grant it means to use,
+    /// and without the <c>authorization_code</c> or <c>implicit</c> grant its response types need.
+    /// </remarks>
+    private static OidcError? WithinAllowedGrantTypes(string[] requested, string[]? allowed)
+    {
+        if (allowed is null)
+            return null;
+
+        var outside = requested.Where(grantType => !allowed.Contains(grantType, StringComparer.Ordinal)).ToArray();
+        return outside.Length > 0
+            ? ErrorFactory.InvalidClientMetadata(
+                $"The server does not grant the {Parameters.GrantTypes} value {outside[0] ?? "null"}")
+            : null;
     }
 
     /// <summary>
