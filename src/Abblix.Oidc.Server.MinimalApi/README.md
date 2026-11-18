@@ -45,11 +45,12 @@ var builder = WebApplication.CreateBuilder(args);
 // to ask the end user for consent, register your own IUserConsentsProvider instead
 builder.Services.AddConsentGrantedForEveryClient();
 
-// The server serves tenants; a host serving one issuer declares one, with its clients, scopes and signing keys
+// Turn your ASP.NET Core app into an OpenID Connect provider serving one issuer
 builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
     Id = "main",
-    // The address the app is served on, read from the "Issuer" setting
+    // The address the app is served on, written into every token it issues.
+    // Set it as "Issuer" in appsettings.json or any other configuration source
     Issuer = new Uri(builder.Configuration["Issuer"]
         ?? throw new InvalidOperationException("Set Issuer to the address the app is served on")),
     LoginUri = new Uri("/Auth/Login", UriKind.Relative),
@@ -58,11 +59,8 @@ builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefini
 
 var app = builder.Build();
 
-app.UseAuthentication();
-app.UseAuthorization();
-
+app.UseCors();
 app.MapOidcEndpoints();
-
 app.Run();
 ```
 
@@ -81,7 +79,7 @@ An optional prefix mounts every endpoint under a sub-path:
 app.MapOidcEndpoints(prefix: "/auth"); // e.g. /auth/connect/token, /auth/.well-known/jwks
 ```
 
-Endpoints that allow cross-origin requests (discovery, jwks, checksession, token, revoke, userinfo, endsession) carry CORS metadata, so a host that enables them must register a CORS policy named `OidcConstants.CorsPolicyName` and call `app.UseCors()`.
+Endpoints that allow cross-origin requests (discovery, jwks, checksession, token, revoke, userinfo, endsession) carry CORS metadata, so the host calls `app.UseCors()`. The server registers a policy named `OidcConstants.CorsPolicyName` that allows any origin without credentials; a host narrows it through `OidcCorsOptions.AllowedOrigins`, or replaces it by registering its own policy of that name.
 
 ## Migrating from the MVC integration
 
