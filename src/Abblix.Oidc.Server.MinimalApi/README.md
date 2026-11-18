@@ -58,6 +58,7 @@ builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefini
 
 var app = builder.Build();
 
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 

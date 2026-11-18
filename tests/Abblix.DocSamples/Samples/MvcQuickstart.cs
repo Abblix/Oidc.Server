@@ -51,6 +51,7 @@ internal static class MvcQuickstartSample
 
         var app = builder.Build();
 
+        app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapOidcControllers();

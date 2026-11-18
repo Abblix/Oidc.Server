@@ -51,6 +51,7 @@ internal static class ReadmeQuickstartSample
 
         var app = builder.Build();
 
+        app.UseCors();
         app.MapOidcEndpoints();
         app.Run();
         // </sample>
