@@ -74,8 +74,9 @@ public sealed class EndpointSpanTests(TestFactory factory) : TestBase(factory), 
             endpointSpans.Select(span => (string)span.GetTagItem(TelemetryTags.Endpoint)!).Distinct().Order());
 
         // An endpoint's span sits under the host's request, and each stage's under the endpoint's span or another stage
-        Assert.Equal([HostingSource], endpointSpans.Select(span => span.Parent?.Source.Name).Distinct());
-        Assert.Equal([OidcTelemetry.SourceName], stageSpans.Select(span => span.Parent?.Source.Name).Distinct());
+        Assert.Empty(endpointSpans.Where(span => span.Parent?.Source.Name != HostingSource).Select(span => span.DisplayName));
+        Assert.NotEmpty(stageSpans);
+        Assert.Empty(stageSpans.Where(span => span.Parent?.Source.Name != OidcTelemetry.SourceName).Select(span => span.DisplayName));
         AssertOnlyAdmittedAttributes(spans);
 
         var refused = Assert.Single(spans, span => Equals(span.GetTagItem(TelemetryTags.Error), ErrorCodes.UnauthorizedClient));
