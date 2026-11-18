@@ -9,6 +9,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -30,16 +31,27 @@ public class OfflineAccessValidatorTests
 {
     private const string ClientId = "registered-client";
 
-    private static OfflineAccessValidator Validator(OfflineAccess? existing, OfflineAccess? granted = null)
+    /// <summary>
+    /// The validator under test, judging each context as an update of a stored client holding
+    /// <paramref name="existing"/> when one is named.
+    /// </summary>
+    private sealed class Subject(OfflineAccessValidator validator, OfflineAccess? existing)
     {
-        var clients = new Mock<IClientInfoProvider>();
-        clients
-            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
-            .ReturnsAsync(existing is { } offlineAccess ? new ClientInfo(ClientId) { OfflineAccess = offlineAccess } : null);
-        return granted is { } host
-            ? new OfflineAccessValidator(clients.Object, new NewClientOptions { OfflineAccess = host })
-            : new OfflineAccessValidator(clients.Object);
+        public Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
+        {
+            if (existing is { } offlineAccess)
+                context.StoredClient = new ClientInfo(ClientId) { OfflineAccess = offlineAccess };
+
+            return validator.ValidateAsync(tenant, context);
+        }
     }
+
+    private static Subject Validator(OfflineAccess? existing, OfflineAccess? granted = null)
+        => new(
+            granted is { } host
+                ? new OfflineAccessValidator(new NewClientOptions { OfflineAccess = host })
+                : new OfflineAccessValidator(Mock.Of<IClientInfoProvider>(MockBehavior.Strict)),
+            existing);
 
     private static ClientRegistrationValidationContext Context(
         OfflineAccess offlineAccess,

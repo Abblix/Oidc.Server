@@ -49,7 +49,10 @@ internal static class ClientRegistrationValidationServiceCollectionExtensions
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SoftwareStatementValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, SubjectTypeValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, InitiateLoginUriValidator>(),
-            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, OfflineAccessValidator>(),
+            // Built from the options for new clients: the constructor without them, kept for hosts that call it,
+            // would leave the container two constructors of one parameter to choose from
+            ServiceDescriptor.Singleton<IClientRegistrationContextValidator, OfflineAccessValidator>(
+                OfflineAccessValidator.FromServices),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, BackChannelLogoutUriValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, JwksUriValidator>(),
             ServiceDescriptor.Singleton<IClientRegistrationContextValidator, StoredUriValidator>(),
