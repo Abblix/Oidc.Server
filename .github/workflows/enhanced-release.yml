@@ -390,6 +390,7 @@ jobs:
         env:
           INPUT_PRE_RELEASE: ${{ github.event.inputs.pre_release }}
           RELEASE_COMMIT: ${{ github.sha }}
+          RELEASE_BRANCH: ${{ github.ref_name }}
         run: |
           # A pre-release run creates its own tag, so a stale one is removed rather than re-cut.
           if [ "$INPUT_PRE_RELEASE" = "true" ]; then
@@ -403,6 +404,13 @@ jobs:
               exit 1
             fi
             TAGGED=$(git rev-parse "v$VERSION^{commit}")
+            BRANCH_HEAD=$(git rev-parse "origin/$RELEASE_BRANCH")
+            # A re-run keeps the commit of its first attempt; once the branch has moved on, the tag
+            # belongs on the new head and the step is a new dispatch, not a tag moved back here.
+            if [ "$RELEASE_COMMIT" != "$BRANCH_HEAD" ]; then
+              echo "::error title=Release tag::This run builds $RELEASE_COMMIT, but $RELEASE_BRANCH has moved on to $BRANCH_HEAD. Skipped step: put the tag on $BRANCH_HEAD if it is not there yet, then dispatch the release again rather than re-running this run"
+              exit 1
+            fi
             if [ "$TAGGED" != "$RELEASE_COMMIT" ]; then
               echo "::error title=Release tag::Tag v$VERSION is on $TAGGED, while this run builds $RELEASE_COMMIT, the head of the dispatched branch. Skipped step: $RECUT"
               exit 1

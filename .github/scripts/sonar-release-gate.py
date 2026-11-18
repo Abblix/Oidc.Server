@@ -107,11 +107,13 @@ def check_same_code(commit, develop, analysed, failures, notes, steps):
         if status == 'D':
             failures.append(f"{shown} is in the release and absent on develop, so it was not analysed. Skipped "
                             f"step: if develop removed it on purpose, remove it on {steps['ref']} too, "
-                            f"{steps['merge']}, then {steps['redispatch']}; otherwise {steps['merge']}, then {RERUN}")
+                            f"{steps['merge']}, then {steps['redispatch']}; otherwise the release branch has moved past this "
+                            f"run's commit: {steps['redispatch']}")
         elif path in analysed:
             failures.append(f"{shown} differs between the release and develop, so its analysis is not of the "
                             f"release. Skipped step: if develop changed it, bring that change to {steps['ref']}, "
-                            f"{steps['merge']}, then {steps['redispatch']}; otherwise {steps['merge']}, then {RERUN}")
+                            f"{steps['merge']}, then {steps['redispatch']}; otherwise the release branch has moved past this "
+                            f"run's commit: {steps['redispatch']}")
         else:
             notes.append(f'{shown} differs on develop and is not analysed by Sonar')
     return True
