@@ -45,11 +45,12 @@ var builder = WebApplication.CreateBuilder(args);
 // to ask the end user for consent, register your own IUserConsentsProvider instead
 builder.Services.AddConsentGrantedForEveryClient();
 
-// The server serves tenants; a host serving one issuer declares one, with its clients, scopes and signing keys
+// Turn your ASP.NET Core app into an OpenID Connect provider serving one issuer
 builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
     Id = "main",
-    // The address the app is served on, read from the "Issuer" setting
+    // The address the app is served on, written into every token it issues.
+    // Set it as "Issuer" in appsettings.json or any other configuration source
     Issuer = new Uri(builder.Configuration["Issuer"]
         ?? throw new InvalidOperationException("Set Issuer to the address the app is served on")),
     LoginUri = new Uri("/Auth/Login", UriKind.Relative),
@@ -59,9 +60,7 @@ builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefini
 var app = builder.Build();
 
 app.UseCors();
-
 app.MapOidcEndpoints();
-
 app.Run();
 ```
 

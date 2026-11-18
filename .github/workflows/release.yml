@@ -258,7 +258,9 @@ jobs:
   # Each README quickstart as a reader builds it: a new web project, the package of this run that README installs,
   # the README block pasted as Program.cs, and the issuer in appsettings.json as the README says. The block is the
   # compiled copy ReadmeSampleTests holds to the README's lines, turned into top-level statements by the C# compiler's
-  # parser, with nothing added. One leg per README, the same steps on each, and none stops the others.
+  # parser, with nothing added. One leg per compiled copy, the same steps on each, and none stops the others; the
+  # repository README and the Minimal API package README carry the same block, held to one copy, so one leg starts
+  # both.
   readme-quickstart:
     needs: [versioning, build-and-pack]
     runs-on: ubuntu-latest
@@ -268,12 +270,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - readme: README.md
+          - readme: README.md and src/Abblix.Oidc.Server.MinimalApi/README.md
             package: Abblix.OIDC.Server.MinimalAPI
             copy: ReadmeQuickstart.cs
-          - readme: src/Abblix.Oidc.Server.MinimalApi/README.md
-            package: Abblix.OIDC.Server.MinimalAPI
-            copy: MinimalApiQuickstart.cs
           - readme: src/Abblix.Oidc.Server.Mvc/README.md
             package: Abblix.OIDC.Server.MVC
             copy: MvcQuickstart.cs
@@ -320,7 +319,7 @@ jobs:
         id: quickstart
         run: |
           refuse() {
-            echo "::error title=$PACKAGE quickstart::$1. Skipped step: make the quickstart of $README build in a project made by dotnet new web - fix the library, that README or its compiled copy tests/Abblix.DocSamples/Samples/$COPY on $GITHUB_REF_NAME, and check it the way this step does (dotnet new web; dotnet add package $PACKAGE --version <this release>; copy .github/scripts/quickstart-program.cs into an empty folder and run dotnet quickstart-program.cs <the copy> <the project>/Program.cs there; put Issuer into appsettings.json; dotnet build), then dispatch the release again from the new head"
+            echo "::error title=$PACKAGE quickstart::$1. Skipped step: make the quickstart of $README build in a project made by dotnet new web - fix the library, the README or its compiled copy tests/Abblix.DocSamples/Samples/$COPY on $GITHUB_REF_NAME, and check it the way this step does (dotnet new web; dotnet add package $PACKAGE --version <this release>; copy .github/scripts/quickstart-program.cs into an empty folder and run dotnet quickstart-program.cs <the copy> <the project>/Program.cs there; put Issuer into appsettings.json; dotnet build), then dispatch the release again from the new head"
             exit 1
           }
           work="$RUNNER_TEMP/quickstart"
@@ -356,7 +355,7 @@ jobs:
           EXPECTED_ISSUER: ${{ steps.quickstart.outputs.issuer }}
         run: |
           refuse() {
-            echo "::error title=$PACKAGE quickstart::$1. Skipped step: make the quickstart of $README work as pasted in a project made by dotnet new web - fix the library or that README on $GITHUB_REF_NAME and check it the way this job does (dotnet new web; dotnet add package $PACKAGE; the README block as Program.cs; Issuer in appsettings.json; dotnet run --launch-profile https), then dispatch the release again from the new head"
+            echo "::error title=$PACKAGE quickstart::$1. Skipped step: make the quickstart of $README work as pasted in a project made by dotnet new web - fix the library or the README on $GITHUB_REF_NAME and check it the way this job does (dotnet new web; dotnet add package $PACKAGE; the README block as Program.cs; Issuer in appsettings.json; dotnet run --launch-profile https), then dispatch the release again from the new head"
             exit 1
           }
           cd "$RUNNER_TEMP/quickstart"
