@@ -13,7 +13,7 @@ name: Publish dev build to GitHub Packages
 #
 # Example version (with MinVerMinimumMajorMinor=2.4 and DefaultPreReleaseIdentifiers=dev.0):
 #   any branch here                     ->  2.4.0-dev.0.<first-parent distance from the root>
-#   a release, version supplied by hand ->  2.4.0   (enhanced-release.yml, MinVerVersionOverride)
+#   a release, version supplied by hand ->  2.4.0   (release.yml, MinVerVersionOverride)
 #
 # MinVer reads NO tag in this repository, on any branch - the release tags are two-part (v2.3),
 # which is not SemVer, and MinVerTagPrefix is unset besides. So the whole version comes from
@@ -26,7 +26,7 @@ name: Publish dev build to GitHub Packages
 # To gate deterministically against a specific branch build, pin the exact version.
 #
 # Releases (canonical 2.4.0, 2.4.0-beta1, etc.) flow through the manual
-# enhanced-release.yml - this workflow does not produce them.
+# release.yml - this workflow does not produce them.
 
 on:
   push:
@@ -219,7 +219,7 @@ jobs:
         run: |
           set -euo pipefail
           # This workflow publishes DEV builds. A version carrying no dev identifier means a release
-          # tag sits on the commit, and those belong to enhanced-release.yml, behind its approval
+          # tag sits on the commit, and those belong to release.yml, behind its approval
           # gate. Without this step such a package would reach the feed past that gate, and the
           # approved publish afterwards uses --skip-duplicate and would no-op over it.
           if [ ! -f Directory.Build.props ]; then
@@ -278,7 +278,7 @@ jobs:
             "$EXPECTED".*-dev.*) echo "Dev build $VERSION - publishing." ;;
             "$EXPECTED".*)
               echo "Refusing to publish $VERSION: it carries no dev identifier, so a release tag is on this commit." >&2
-              echo "Releases and pre-releases are published by enhanced-release.yml, behind its approval gate." >&2
+              echo "Releases and pre-releases are published by release.yml, behind its approval gate." >&2
               exit 1
               ;;
             *)
