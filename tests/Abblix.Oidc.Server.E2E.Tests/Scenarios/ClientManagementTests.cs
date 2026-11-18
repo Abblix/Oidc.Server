@@ -55,7 +55,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// <see cref="One_clients_token_cannot_delete_anothers_registration"/> are written around that boundary
 /// rather than around the formatter behind it.
 /// </remarks>
-public class ClientManagementTests(TestFactory factory) : TestBase(factory)
+public partial class ClientManagementTests(TestFactory factory) : TestBase(factory)
 {
     // Named once: the same member is written into a request and looked for in a response and in an
     // extension's view, and those three have to agree.

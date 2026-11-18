@@ -99,7 +99,8 @@ public static class ScopeManagerExtensions
         if (scopeManager.TryGet(tenant, scope, out definition))
             return true;
 
-        // TryGet promises nothing about its output when it finds nothing, and a host's replacement may leave it set
+        // IScopeManager.TryGet documents its output as null when the scope does not exist, but a host's replacement
+        // that leaves it set would otherwise add a definition of another scope to the request's
         definition = null;
         return (resources ?? []).Any(resource => resource.Scopes.Any(declared => declared.Scope == scope));
     }
