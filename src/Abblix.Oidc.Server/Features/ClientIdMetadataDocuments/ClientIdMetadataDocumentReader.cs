@@ -114,6 +114,9 @@ internal sealed class ClientIdMetadataDocumentReader(
         ClientRegistrationRequest metadata,
         string authenticationMethod)
     {
+        if (UriSchemes.WhyRefused(metadata) is { } schemes)
+            return MetadataDocumentFailure.Terminal(schemes);
+
         var grantTypes = SupportedGrantTypes(metadata.GrantTypes);
         var responseTypes = SupportedResponseTypes(metadata.ResponseTypes);
 

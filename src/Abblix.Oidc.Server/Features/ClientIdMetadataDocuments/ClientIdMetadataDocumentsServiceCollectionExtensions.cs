@@ -7,7 +7,6 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.DependencyInjection;
-using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -64,10 +63,18 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ClientIdMetadataDocumentFetcher>();
-        // The documents are held in the host's memory cache, or in an in-process one when the host registers none
-        services.AddInProcessCaches();
+        // A cache of their own, so the number of documents held is bounded whatever the host's cache allows: the URLs
+        // are chosen by whoever sends a request
+        services.TryAddKeyedSingleton<IMemoryCache>(
+            typeof(HeldMetadataDocuments),
+            (serviceProvider, _) => new MemoryCache(new MemoryCacheOptions
+            {
+                SizeLimit = serviceProvider.GetRequiredService<IOptions<OidcOptions>>().Value
+                    .ClientIdMetadataDocuments.MaxHeldDocuments,
+            }));
         services.TryAddSingleton(serviceProvider => serviceProvider.CreateService<HeldMetadataDocuments>(
-            Dependency.Override<IMemoryCache>(InProcessCaches.MemoryCache)));
+            Dependency.Override(provider =>
+                provider.GetRequiredKeyedService<IMemoryCache>(typeof(HeldMetadataDocuments)))));
         services.Decorate<IClientInfoProvider, ClientIdMetadataDocumentClients>();
 
         services.AddOptions<ClientIdMetadataDocumentsWiring>()

@@ -34,6 +34,12 @@ public class ClientIdMetadataDocumentOptionsValidatorTests
     public void ADocumentSizeOfNothing_IsRefused(int size)
         => Assert.False(Valid(new ClientIdMetadataDocumentOptions { MaxDocumentSize = size }));
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void HoldingNoDocument_IsRefused(int count)
+        => Assert.False(Valid(new ClientIdMetadataDocumentOptions { MaxHeldDocuments = count }));
+
     [Fact]
     public void ANegativeMinimum_IsRefused()
         => Assert.False(Valid(new ClientIdMetadataDocumentOptions { MinimumCacheDuration = TimeSpan.FromSeconds(-1) }));

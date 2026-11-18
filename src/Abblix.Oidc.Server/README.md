@@ -84,9 +84,10 @@ builder.Services
 - A client resolved this way authenticates with `none` or with a key its document publishes (`private_key_jwt`). A document declaring a method built on a shared secret, or carrying a secret or a private key, is refused.
 - `NewClientOptions` limits what the client may ask for, the same way it limits dynamically registered clients.
 - A client you configure or register under the same URL is served as configured, and the document is never fetched. Dynamic registration refuses a `client_id` that starts with `https://`.
-- The server fetches documents through the SSRF-guarded HTTP client named `ClientIdMetadataDocumentTransport.HttpClientName`, reads no more of each than `MaxDocumentSize`, and follows no redirects.
+- The server fetches documents through the SSRF-guarded HTTP client named `ClientIdMetadataDocumentTransport.HttpClientName`, reads no more of each than `MaxDocumentSize`, follows no redirects, and never fetches from the `AllowedDestinations` you opened for your own services.
+- A redirect URI must use `https`, `http` to a loopback address, or a private-use scheme such as `com.example.app`. Every other URI in the document must use `https`.
 
-Nobody reviewed these clients, so the consent page is the end user's only check on them. Show the host name of the `client_id` next to the client's name. If you show its logo, fetch the image and serve it yourself rather than linking to `logo_uri` (section 10.9 of the draft). Granting every client everything it asks for (`AddConsentGrantedForEveryClient`) together with this feature hands the user's tokens to any URL without asking, unless the allowed prefixes cover only your own clients.
+Nobody reviewed these clients, so the consent page is the end user's only check on them. Show the host name of the `client_id` next to the client's name. If you show its logo, fetch the image and serve it yourself rather than linking to `logo_uri` (section 10.9 of the draft). Granting every client everything it asks for (`AddConsentGrantedForEveryClient`) together with this feature hands the user's tokens to any URL without asking, unless the allowed prefixes cover only your own clients. A consent your provider remembers must be keyed by the `client_id` URL and the resource together (section 10.12 of the draft), so a consent given to one client is never reused for another.
 
 ## Install
 

@@ -74,7 +74,11 @@ internal sealed partial class HeldMetadataDocuments(
             // cache headers", no-store among them. One that may is kept until the host's maximum has passed since it
             // was fetched, so a fetch failing for a reason that may pass can still be answered with it
             if (read.FreshUntil > fetchedAt)
-                cache.Set(key, read, fetchedAt + settings.MaximumCacheDuration);
+                cache.Set(key, read, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpiration = fetchedAt + settings.MaximumCacheDuration,
+                    Size = 1,
+                });
             else
                 cache.Remove(key);
 
@@ -95,7 +99,10 @@ internal sealed partial class HeldMetadataDocuments(
             LogDocumentRefused(clientId, failure.Reason);
 
         // Section 6.2: the server "MUST NOT cache documents which are invalid or malformed", so a document refused now
-        // is not served from what was held of it before
+        // is not served from what was held of it before. Section 6.1 also says a terminal failure "caused by a
+        // client_id mismatch SHOULD invalidate the client's outstanding refresh tokens immediately"; this server does
+        // not, as it keeps no cutoff for every token of one client: the client is refused at the token endpoint while
+        // its document is refused, and its refresh tokens are served again once a valid document returns
         cache.Remove(key);
         return null;
     }

@@ -79,4 +79,16 @@ public record ClientIdMetadataDocumentOptions
     /// cached valid client metadata on transient failures".
     /// </remarks>
     public TimeSpan MaximumCacheDuration { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// The most documents held at once. Default: 10000. Read once, when the server starts.
+    /// </summary>
+    /// <remarks>
+    /// Whoever sends an authorization request names the URL, so without a bound a host answering every path with a
+    /// document naming that path would fill the server's memory for <see cref="MaximumCacheDuration"/>. A document
+    /// arriving while the server holds this many is served to the request that fetched it and not held, so it is fetched
+    /// again on its next use, which section 6.2 of the draft allows a server doing "to avoid repeatedly fetching" no
+    /// less than it allows holding.
+    /// </remarks>
+    public int MaxHeldDocuments { get; set; } = 10_000;
 }

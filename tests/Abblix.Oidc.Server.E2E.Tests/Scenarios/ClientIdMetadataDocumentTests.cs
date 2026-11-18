@@ -201,6 +201,33 @@ public class ClientIdMetadataDocumentTests(TestFactory factory) : TestBase(facto
     }
 
     /// <summary>
+    /// Section 10.7 names "a URI scheme such as javascript:" among those a server parses at its peril: a document with
+    /// such a redirect URI would have the server post its answer, an error to a request without a session included,
+    /// into script running in its own origin.
+    /// </summary>
+    [Fact]
+    public async Task ADocumentRedirectingToScript_IsAnInvalidClient_AndNoFormIsRendered()
+    {
+        const string script = "javascript:alert(document.domain)//x";
+        var document = PublicClientDocument();
+        document[RegistrationMembers.RedirectUris] = new JsonArray(script);
+        Serve(document);
+        await using var host = CreateHost();
+        var client = CreateClientFor(host);
+        var discovery = await FetchDiscoveryAsync(client);
+        var parameters = CodeFlowParameters(ClientId, GeneratePkcePair().Challenge);
+        parameters[AuthorizationRequest.Parameters.RedirectUri] = script;
+        parameters[AuthorizationRequest.Parameters.ResponseMode] = ResponseModes.FormPost;
+        parameters[AuthorizationRequest.Parameters.Prompt] = Prompts.None;
+
+        using var response = await client.GetAsync(
+            QueryHelpers.BuildUri(discovery.AuthorizationEndpoint, parameters), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClient, await ErrorResponseReader.ErrorCodeOf(response));
+    }
+
+    /// <summary>
     /// Section 6.1: "At the token endpoint ... the authorization server MUST return an invalid_client error".
     /// </summary>
     [Fact]

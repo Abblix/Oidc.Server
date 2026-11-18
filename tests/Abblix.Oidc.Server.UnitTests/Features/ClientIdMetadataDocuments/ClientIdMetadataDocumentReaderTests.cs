@@ -254,7 +254,6 @@ public class ClientIdMetadataDocumentReaderTests
     [InlineData("""["http://127.0.0.1:3000/cb","com.example.app:/cb"]""", ApplicationTypes.Native)]
     [InlineData("""["http://[::1]/cb"]""", ApplicationTypes.Native)]
     [InlineData("""["https://client.example.com/cb","http://127.0.0.1/cb"]""", ApplicationTypes.Web)]
-    [InlineData("""["http://client.example.com/cb"]""", ApplicationTypes.Web)]
     [InlineData("""[]""", ApplicationTypes.Web)]
     public void ADocumentNamingNoApplicationType_IsTypedByItsRedirectUris(string redirectUris, string expected)
     {
@@ -262,6 +261,44 @@ public class ClientIdMetadataDocumentReaderTests
         document["redirect_uris"] = JsonNode.Parse(redirectUris);
 
         Assert.Equal(expected, Read(document).ApplicationType);
+    }
+
+    /// <summary>
+    /// Section 10.7: the server "SHOULD ensure they only fetch or parse URLs with known and supported URI schemes",
+    /// naming "a URI scheme such as javascript:". A document is anybody's, and a response posted to a javascript
+    /// redirect URI would run its author's script in this server's origin.
+    /// </summary>
+    [Theory]
+    [InlineData("redirect_uris", """["javascript:alert(document.domain)//x"]""")]
+    [InlineData("redirect_uris", """["data:text/html,x"]""")]
+    [InlineData("redirect_uris", """["myapp:/cb"]""")]
+    [InlineData("redirect_uris", """["http://client.example.com/cb"]""")]
+    [InlineData("post_logout_redirect_uris", """["javascript:alert(1)"]""")]
+    [InlineData("frontchannel_logout_uri", "\"javascript:alert(1)\"")]
+    [InlineData("backchannel_logout_uri", "\"http://client.example.com/logout\"")]
+    [InlineData("client_uri", "\"javascript:alert(1)\"")]
+    [InlineData("logo_uri", "\"data:image/png;base64,AA==\"")]
+    [InlineData("policy_uri", "\"http://client.example.com/policy\"")]
+    [InlineData("tos_uri", "\"javascript:alert(1)\"")]
+    [InlineData("initiate_login_uri", "\"http://client.example.com/login\"")]
+    [InlineData("jwks_uri", "\"http://client.example.com/jwks\"")]
+    [InlineData("request_uris", """["http://client.example.com/request"]""")]
+    public void AUriOfASchemeADocumentMayNotUse_IsRefused(string member, string value)
+    {
+        var document = Document();
+        document[member] = JsonNode.Parse(value);
+        Refused(document);
+    }
+
+    [Theory]
+    [InlineData("""["https://client.example.com/cb"]""")]
+    [InlineData("""["http://127.0.0.1:3000/cb","http://localhost/cb","http://[::1]/cb"]""")]
+    [InlineData("""["com.example.app:/cb"]""")]
+    public void ARedirectUriOfAWebOrNativeClient_IsKept(string redirectUris)
+    {
+        var document = Document();
+        document["redirect_uris"] = JsonNode.Parse(redirectUris);
+        Assert.NotEmpty(Read(document).RedirectUris!);
     }
 
     [Fact]

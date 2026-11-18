@@ -36,6 +36,13 @@ public sealed class ClientIdMetadataDocumentOptionsValidator : IValidateOptions<
                 "metadata document could be read. Set it to the number of bytes a document may take, 5 KB by default.");
         }
 
+        if (settings.MaxHeldDocuments <= 0)
+        {
+            return ValidateOptionsResult.Fail(
+                $"{Section}.{nameof(settings.MaxHeldDocuments)} is {settings.MaxHeldDocuments}, so no document could " +
+                "be held and every request would fetch its client's document again. Set it to how many may be held.");
+        }
+
         if (settings.MinimumCacheDuration < TimeSpan.Zero)
         {
             return ValidateOptionsResult.Fail(

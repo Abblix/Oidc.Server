@@ -35,6 +35,7 @@ public class ClientIdMetadataDocumentFetcherTests
 
     private readonly MetadataDocumentOrigin _origin = new();
     private readonly ClientIdMetadataDocumentOptions _settings = new();
+    private readonly SecureHttpFetchOptions _transport = new();
 
     private ClientIdMetadataDocumentFetcher CreateFetcher()
     {
@@ -47,9 +48,9 @@ public class ClientIdMetadataDocumentFetcherTests
         return new ClientIdMetadataDocumentFetcher(
             NullLogger<ClientIdMetadataDocumentFetcher>.Instance,
             factory,
-            new SecureUriValidator(
-                Options.Create(new SecureHttpFetchOptions()), NullLogger<SecureUriValidator>.Instance),
-            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == oidcOptions));
+            new SecureUriValidator(Options.Create(_transport), NullLogger<SecureUriValidator>.Instance),
+            Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == oidcOptions),
+            Mock.Of<IOptionsMonitor<SecureHttpFetchOptions>>(monitor => monitor.CurrentValue == _transport));
     }
 
     private async Task<FetchedDocument> FetchedAsync()
@@ -89,6 +90,8 @@ public class ClientIdMetadataDocumentFetcherTests
     [InlineData(HttpStatusCode.PartialContent, false)]
     [InlineData(HttpStatusCode.Found, false)]
     [InlineData(HttpStatusCode.NotFound, false)]
+    [InlineData(HttpStatusCode.RequestTimeout, true)]
+    [InlineData(HttpStatusCode.TooManyRequests, true)]
     [InlineData(HttpStatusCode.InternalServerError, true)]
     [InlineData(HttpStatusCode.ServiceUnavailable, true)]
     public async Task AnyOtherStatus_IsAFailure(HttpStatusCode status, bool mayPass)
@@ -145,6 +148,9 @@ public class ClientIdMetadataDocumentFetcherTests
     [InlineData("[]")]
     [InlineData("\"https://client.example.com/metadata.json\"")]
     [InlineData("{not json")]
+    // A member repeated, at the top and inside a key
+    [InlineData("""{"client_id":"https://client.example.com/metadata.json","client_id":"https://client.example.com/metadata.json"}""")]
+    [InlineData("""{"client_id":"https://client.example.com/metadata.json","jwks":{"keys":[{"kty":"EC","kty":"EC"}]}}""")]
     public async Task ABodyThatIsNoJsonObject_IsRefused(string body)
     {
         _origin.Serve(Url, body);
@@ -218,6 +224,96 @@ public class ClientIdMetadataDocumentFetcherTests
         });
 
         Assert.Equal(TimeSpan.FromSeconds(20), (await FetchedAsync()).Lifetime);
+    }
+
+    /// <summary>
+    /// The client's timeout ends only the wait for the headers, so a body that never arrives is ended by the fetch's
+    /// own deadline, as a failure that may pass.
+    /// </summary>
+    [Fact]
+    public async Task ABodyThatNeverArrives_EndsAtTheDeadline_AsAFailureThatMayPass()
+    {
+        _transport.RequestTimeout = TimeSpan.FromMilliseconds(200);
+        _origin.Answer(Url, () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StalledContent() });
+
+        Assert.True((await FailedAsync()).MayPass);
+    }
+
+    [Fact]
+    public async Task ABodyBrokenOffHalfWay_IsAFailureThatMayPass()
+    {
+        _origin.Answer(Url, () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new BrokenContent() });
+
+        Assert.True((await FailedAsync()).MayPass);
+    }
+
+    /// <summary>
+    /// A destination the host named for its own services is not one an anonymous client identifier reaches.
+    /// </summary>
+    [Fact]
+    public async Task ADestinationTheHostAllowsForItsServices_IsRefusedWithoutARequest()
+    {
+        _transport.AllowedDestinations = [new Uri("https://client.example.com")];
+        _origin.Serve(Url, Document);
+
+        Assert.False((await FailedAsync()).MayPass);
+        Assert.Empty(_origin.Requests);
+    }
+
+    /// <summary>
+    /// A JSON body whose bytes never come.
+    /// </summary>
+    private sealed class StalledContent : HttpContent
+    {
+        public StalledContent() => Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+        protected override Task SerializeToStreamAsync(System.IO.Stream stream, TransportContext? context)
+            => throw new NotSupportedException();
+
+        protected override Task<System.IO.Stream> CreateContentReadStreamAsync(System.Threading.CancellationToken cancellationToken)
+            => Task.FromResult<System.IO.Stream>(new StalledStream());
+
+        protected override Task<System.IO.Stream> CreateContentReadStreamAsync()
+            => Task.FromResult<System.IO.Stream>(new StalledStream());
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
+
+    private sealed class StalledStream : System.IO.MemoryStream
+    {
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer, System.Threading.CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(System.Threading.Timeout.Infinite, cancellationToken);
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// A JSON body whose connection breaks while it is read.
+    /// </summary>
+    private sealed class BrokenContent : HttpContent
+    {
+        public BrokenContent() => Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+        protected override Task SerializeToStreamAsync(System.IO.Stream stream, TransportContext? context)
+            => throw new System.IO.IOException("the connection was reset");
+
+        protected override Task<System.IO.Stream> CreateContentReadStreamAsync()
+            => throw new System.IO.IOException("the connection was reset");
+
+        protected override Task<System.IO.Stream> CreateContentReadStreamAsync(System.Threading.CancellationToken cancellationToken)
+            => throw new System.IO.IOException("the connection was reset");
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
     }
 
     /// <summary>

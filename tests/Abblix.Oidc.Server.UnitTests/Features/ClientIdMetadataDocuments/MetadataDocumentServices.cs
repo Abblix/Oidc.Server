@@ -40,6 +40,7 @@ internal sealed class MetadataDocumentServices : IDisposable
         services.AddSingleton<IMemoryCache>(new TimedMemoryCache(Clock));
         services.AddSingleton<IOptionsMonitor<OidcOptions>>(
             Mock.Of<IOptionsMonitor<OidcOptions>>(monitor => monitor.CurrentValue == Options));
+        services.AddOptions();
         services.AddSingleton<ISecureUriValidator>(new SecureUriValidator(
             Microsoft.Extensions.Options.Options.Create(new SecureHttpFetchOptions()),
             NullLogger<SecureUriValidator>.Instance));
