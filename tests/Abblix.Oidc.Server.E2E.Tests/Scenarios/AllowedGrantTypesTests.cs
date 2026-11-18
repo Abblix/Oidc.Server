@@ -95,7 +95,8 @@ public sealed class AllowedGrantTypesTests(TestFactory factory) : TestBase(facto
 
     /// <summary>
     /// A sign-in client within the limit registers with the <c>code</c> response type its authorization code grant
-    /// pairs with, and an RFC 7592 update adding a grant type outside the limit is refused as a registration is.
+    /// pairs with, and an RFC 7592 update adding a grant type outside the limit is refused as a registration is, while
+    /// the same update within the limit is served.
     /// </summary>
     [Fact]
     public async Task A_client_within_the_limit_registers_and_cannot_widen_it_on_update()
@@ -104,24 +105,37 @@ public sealed class AllowedGrantTypesTests(TestFactory factory) : TestBase(facto
         var client = ClientOf(host);
         var discovery = await FetchDiscoveryAsync(client);
         var registered = await RegisterClientAsync(client, discovery, SignInClientMetadata("sign-in-limited"));
+        var configurationUri = new Uri(
+            registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(),
+            UriKind.RelativeOrAbsolute);
 
-        var updated = SignInClientMetadata("sign-in-limited");
-        updated[RequestMembers.ClientId] = registered[ResponseMembers.ClientId]!.GetValue<string>();
-        updated[RequestMembers.GrantTypes]!.AsArray().Add(GrantTypes.ClientCredentials);
-        var update = new HttpRequestMessage(
-            HttpMethod.Put,
-            new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute))
-        {
-            Content = JsonContent.Create(updated),
-        };
-        update.Headers.Authorization = new AuthenticationHeaderValue(
-            TokenTypes.Bearer,
-            registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>());
+        var within = SignInClientMetadata("sign-in-limited");
+        within[RequestMembers.ClientId] = registered[ResponseMembers.ClientId]!.GetValue<string>();
+        var servedWithin = await client.SendAsync(
+            Update(configurationUri, registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>(), within),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, servedWithin.StatusCode);
 
-        var response = await client.SendAsync(update, TestContext.Current.CancellationToken);
+        var widened = SignInClientMetadata("sign-in-limited");
+        widened[RequestMembers.ClientId] = registered[ResponseMembers.ClientId]!.GetValue<string>();
+        widened[RequestMembers.GrantTypes]!.AsArray().Add(GrantTypes.ClientCredentials);
+        var accessToken = JsonNode.Parse(await servedWithin.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken))?[ResponseMembers.RegistrationAccessToken]?.GetValue<string>()
+            ?? registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>();
+
+        var response = await client.SendAsync(
+            Update(configurationUri, accessToken, widened),
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, await ReadErrorAsync(response));
+    }
+
+    private static HttpRequestMessage Update(Uri configurationUri, string accessToken, JsonObject metadata)
+    {
+        var update = new HttpRequestMessage(HttpMethod.Put, configurationUri) { Content = JsonContent.Create(metadata) };
+        update.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
+        return update;
     }
 
     private static async Task<string?> ReadErrorAsync(HttpResponseMessage response)

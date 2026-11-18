@@ -15,9 +15,9 @@ using Parameters = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Holds the registration members that say what a client may reach, its allowed resources and its token exchange
-/// audiences, to the sets the host grants in <see cref="NewClientOptions"/>: a client may narrow them, never widen
-/// them, so the limit on a client is never set by the client it limits.
+/// Holds the registration members that say what a client may reach, its allowed resources, its token exchange
+/// audiences and its grant types, to the sets the host grants in <see cref="NewClientOptions"/>: a client may narrow
+/// them, never widen them, so the limit on a client is never set by the client it limits.
 /// </summary>
 /// <param name="options">The server options carrying the host's sets.</param>
 public class HostGrantedMetadataValidator(IOptionsMonitor<OidcOptions> options) : SyncClientRegistrationContextValidator
@@ -41,10 +41,10 @@ public class HostGrantedMetadataValidator(IOptionsMonitor<OidcOptions> options) 
     /// it also is when the host sets no limit.
     /// </summary>
     /// <remarks>
-    /// Refused rather than replaced, though RFC 7591 section 2 permits either: section 5 names
-    /// <c>invalid_client_metadata</c> as the answer of a server that disallows a grant type, and dropping one would
-    /// leave the response types that need it registered without it, the inconsistent state section 2.1 asks the
-    /// server to keep a client out of.
+    /// Refused rather than replaced, though RFC 7591 section 2 permits either, with <c>invalid_client_metadata</c>,
+    /// which section 3.2.2 defines for a metadata value the server rejects: a client asking for a grant type learns it
+    /// was not given one from the refusal, while a replaced list would register it without the grant it means to use,
+    /// and without the <c>authorization_code</c> or <c>implicit</c> grant its response types need.
     /// </remarks>
     private static OidcError? WithinAllowedGrantTypes(string[] requested, string[]? allowed)
     {

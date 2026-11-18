@@ -100,6 +100,7 @@ public class HostGrantedMetadataValidatorTests
         => Assert.Equal(
             ErrorCodes.InvalidClientMetadata,
             await ValidateAsync(new NewClientOptions(), tokenExchangeAudiences: ["orders-api"]));
+
     private static readonly string[] SignInGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken];
 
     [Fact]

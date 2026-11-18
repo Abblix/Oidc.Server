@@ -70,7 +70,8 @@ public record NewClientOptions
     /// <c>authorization_code</c> and <c>refresh_token</c> admits clients that sign users in and refuses one asking for
     /// <c>client_credentials</c>, which would get tokens with no user present. Clients the host defines itself are not
     /// bound by it, and the discovery document still lists every grant type the server supports. Applied on
-    /// registration and on every RFC 7592 update, since an update replaces the metadata whole. An empty set, or one
+    /// registration and on every RFC 7592 update, since an update replaces the metadata whole, so a client registered
+    /// before the limit was set keeps its grant types until its next update. An empty set, or one
     /// holding a blank value, is refused at startup.
     /// </remarks>
     public string[]? AllowedGrantTypes { get; init; }
