@@ -398,19 +398,24 @@ jobs:
           else
             RECUT="re-cut it on the release head: git tag -d v$VERSION; git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s --cleanup=verbatim $RELEASE_COMMIT && git push --force origin v$VERSION, then dispatch again"
           fi
+          BRANCH_HEAD=$(git rev-parse "origin/$RELEASE_BRANCH")
+          # A re-run keeps the commit of its first attempt; once the branch has moved on, every tag
+          # step belongs to the new head and a new dispatch, so this is decided before any of them.
+          if [ "$RELEASE_COMMIT" != "$BRANCH_HEAD" ]; then
+            if [ "$INPUT_PRE_RELEASE" = "true" ]; then
+              MOVED="delete the tag if one exists (git push origin :refs/tags/v$VERSION) and dispatch the release again; that run creates the pre-release tag on the new head"
+            else
+              MOVED="put the tag on $BRANCH_HEAD if it is not there yet, then dispatch the release again rather than re-running this run"
+            fi
+            echo "::error title=Release tag::This run builds $RELEASE_COMMIT, but $RELEASE_BRANCH has moved on to $BRANCH_HEAD. Skipped step: $MOVED"
+            exit 1
+          fi
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
             if [ "$(git cat-file -t "v$VERSION")" != "tag" ]; then
               echo "::error title=Release tag::Tag v$VERSION is lightweight, and a release needs an annotated tag; a stable one is signed and carries the release notes. Skipped step: $RECUT"
               exit 1
             fi
             TAGGED=$(git rev-parse "v$VERSION^{commit}")
-            BRANCH_HEAD=$(git rev-parse "origin/$RELEASE_BRANCH")
-            # A re-run keeps the commit of its first attempt; once the branch has moved on, the tag
-            # belongs on the new head and the step is a new dispatch, not a tag moved back here.
-            if [ "$RELEASE_COMMIT" != "$BRANCH_HEAD" ]; then
-              echo "::error title=Release tag::This run builds $RELEASE_COMMIT, but $RELEASE_BRANCH has moved on to $BRANCH_HEAD. Skipped step: put the tag on $BRANCH_HEAD if it is not there yet, then dispatch the release again rather than re-running this run"
-              exit 1
-            fi
             if [ "$TAGGED" != "$RELEASE_COMMIT" ]; then
               echo "::error title=Release tag::Tag v$VERSION is on $TAGGED, while this run builds $RELEASE_COMMIT, the head of the dispatched branch. Skipped step: $RECUT"
               exit 1
