@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -87,5 +88,44 @@ public class ScopeValidatorTests
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("unknown_scope", result.ErrorDescription);
+    }
+
+    private const string ResourceScope = "orders.read";
+
+    /// <summary>
+    /// A tenant declaring <see cref="ResourceScope"/> on a resource only, not among its own scopes.
+    /// </summary>
+    private static TenantDefinition TenantWithResourceScope => new TestIssuer
+    {
+        Resources = [new ResourceDefinition(new Uri("https://api.example.com/orders"), new ScopeDefinition(ResourceScope))],
+    }.ToTenant();
+
+    /// <summary>
+    /// A scope a resource of the tenant declares is served to an authorization request naming that resource, so a
+    /// client registering for it is accepted.
+    /// </summary>
+    [Fact]
+    public async Task AScopeOnlyAResourceDeclares_IsAccepted()
+    {
+        var validator = new ScopeValidator(SingleIssuer.ScopeManager());
+
+        var result = await validator.ValidateAsync(TenantWithResourceScope, CreateContext([Scopes.OpenId, ResourceScope]));
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// A scope neither the tenant nor any of its resources declares is still refused, on a tenant whose resources
+    /// do declare scopes.
+    /// </summary>
+    [Fact]
+    public async Task AScopeNoResourceDeclares_IsInvalidClientMetadata()
+    {
+        var validator = new ScopeValidator(SingleIssuer.ScopeManager());
+
+        var result = await validator.ValidateAsync(TenantWithResourceScope, CreateContext([ResourceScope, "unknown_scope"]));
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 }

@@ -364,26 +364,63 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         metadata[RequestMembers.GrantTypes] = new JsonArray(grantType);
         metadata[RequestMembers.ResponseTypes] = new JsonArray();
 
-        HttpResponseMessage response;
-        if (onUpdate)
-        {
-            var registration = await RegisterAsync(client, discovery, $"no-response-type-{grantType}-{onUpdate}");
-            metadata[RequestMembers.ClientId] = registration.ClientId;
-            var update = Request(HttpMethod.Put, registration.ConfigurationUri, registration.AccessToken);
-            update.Content = JsonContent.Create(metadata);
-            response = await client.SendAsync(update, TestContext.Current.CancellationToken);
-        }
-        else
-        {
-            response = await client.PostAsJsonAsync(
-                discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
-        }
+        var response = await RegisterOrUpdateAsync(
+            client, discovery, metadata, onUpdate, $"no-response-type-{grantType}-{onUpdate}");
 
         var body = await ReadJsonAsync(response);
         // The body of a success carries the registration's credentials, so only the error is quoted
         Assert.True(response.StatusCode == expected, $"{(int)response.StatusCode}: {body[DescriptionMember]}");
         if (expected == HttpStatusCode.BadRequest)
             Assert.Equal(ErrorCodes.InvalidClientMetadata, body[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A client registers, and updates its registration, with the scopes an authorization request of it may carry:
+    /// those of the tenant and those a resource of the tenant declares, here one only a resource declares. A scope
+    /// neither declares is refused with invalid_client_metadata, which RFC 7591 section 3.2.2 gives "The value of one
+    /// of the client metadata fields is invalid".
+    /// </summary>
+    [Theory]
+    [InlineData(TestConstants.ApiScope, false, HttpStatusCode.Created)]
+    [InlineData(TestConstants.ApiScope, true, HttpStatusCode.OK)]
+    [InlineData("no_such_scope", false, HttpStatusCode.BadRequest)]
+    [InlineData("no_such_scope", true, HttpStatusCode.BadRequest)]
+    public async Task A_client_registers_with_the_scopes_a_resource_declares_and_no_other(
+        string scope, bool onUpdate, HttpStatusCode expected)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata($"resource-scope-{scope}-{onUpdate}");
+        metadata[RequestMembers.Scope] = $"{Scopes.OpenId} {scope}";
+
+        var response = await RegisterOrUpdateAsync(
+            client, discovery, metadata, onUpdate, $"resource-scope-{scope}-{onUpdate}");
+
+        var body = await ReadJsonAsync(response);
+        // The body of a success carries the registration's credentials, so only the error is quoted
+        Assert.True(response.StatusCode == expected, $"{(int)response.StatusCode}: {body[DescriptionMember]}");
+        if (expected == HttpStatusCode.BadRequest)
+            Assert.Equal(ErrorCodes.InvalidClientMetadata, body[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Sends <paramref name="metadata"/> as a registration, or, <paramref name="onUpdate"/>, as the RFC 7592 update of
+    /// a client first registered under <paramref name="clientName"/> with the plain metadata.
+    /// </summary>
+    private static async Task<HttpResponseMessage> RegisterOrUpdateAsync(
+        HttpClient client, DiscoveryDocument discovery, JsonObject metadata, bool onUpdate, string clientName)
+    {
+        if (!onUpdate)
+        {
+            return await client.PostAsJsonAsync(
+                discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+        }
+
+        var registration = await RegisterAsync(client, discovery, clientName);
+        metadata[RequestMembers.ClientId] = registration.ClientId;
+        var update = Request(HttpMethod.Put, registration.ConfigurationUri, registration.AccessToken);
+        update.Content = JsonContent.Create(metadata);
+        return await client.SendAsync(update, TestContext.Current.CancellationToken);
     }
 
     /// <summary>
