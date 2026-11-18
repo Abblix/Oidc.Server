@@ -164,6 +164,38 @@ public class RegisterClientRequestProcessorTests
         Assert.Equal(granted, stored!.ClientInfo.AllowOfflineAccessWithUserAgentAccessToken);
     }
 
+    /// <summary>
+    /// A client registering without the offline access member takes what the host grants new clients, and one stating
+    /// a value is registered with the value it states.
+    /// </summary>
+    [Theory]
+    [InlineData(OfflineAccess.ConsentRequired, null, OfflineAccess.ConsentRequired)]
+    [InlineData(OfflineAccess.Allowed, null, OfflineAccess.Allowed)]
+    [InlineData(OfflineAccess.Disabled, null, OfflineAccess.Disabled)]
+    [InlineData(OfflineAccess.Allowed, OfflineAccess.ConsentRequired, OfflineAccess.ConsentRequired)]
+    [InlineData(OfflineAccess.Allowed, OfflineAccess.Disabled, OfflineAccess.Disabled)]
+    public async Task ARegisteredClient_TakesTheHostsOfflineAccessUnlessItStatesOne(
+        OfflineAccess granted, OfflineAccess? stated, OfflineAccess expected)
+    {
+        RegisteredClient? stored = null;
+        _clients
+            .Setup(c => c.TryAddClientAsync(TestTenant.Matched, It.IsAny<RegisteredClient>()))
+            .Callback((TenantDefinition _, RegisteredClient client) => stored = client)
+            .ReturnsAsync(true);
+        var model = new ClientRegistrationRequest
+        {
+            ClientId = "client-1",
+            RedirectUris = [new Uri("https://client.example.com/cb")],
+        };
+        if (stated is { } value)
+            model = model with { OfflineAccess = value };
+
+        await Processor(_clients.Object, new NewClientOptions { OfflineAccess = granted })
+            .ProcessAsync(SingleIssuer.Tenant, new ValidClientRegistrationRequest(model, SectorIdentifier: null));
+
+        Assert.Equal(expected, stored!.ClientInfo.OfflineAccess);
+    }
+
     [Fact]
     public async Task ARegistrationTheStoreDoesNotKeep_IsRefused()
     {

@@ -30,6 +30,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     private string[]? _defaultTokenExchangeAudiences;
     private ClientAssertionAudiences _assertionAudiences = ClientAssertionAudiences.Issuer;
     private bool _offlineAccessWithUserAgentAccessToken;
+    private OfflineAccess _defaultOfflineAccess = OfflineAccess.ConsentRequired;
     private ClientInfo _hostSettings = new(clientId);
 
     /// <summary>
@@ -66,6 +67,15 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
     public ClientInfoBuilder WithClientAssertionAudiences(ClientAssertionAudiences audiences)
     {
         _assertionAudiences = audiences;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the offline access the client receives when its metadata states none.
+    /// </summary>
+    public ClientInfoBuilder WithDefaultOfflineAccess(OfflineAccess offlineAccess)
+    {
+        _defaultOfflineAccess = offlineAccess;
         return this;
     }
 
@@ -180,7 +190,7 @@ internal sealed class ClientInfoBuilder(string clientId, ClientRegistrationReque
         // would revert the client to "any scope" (null = unrestricted) and defeat per-client scope enforcement.
         // Metadata naming none takes the host's default set, RFC 7591 section 2.
         clientInfo.AllowedScopes = model.Scope ?? _defaultScope;
-        clientInfo.OfflineAccess = model.OfflineAccess;
+        clientInfo.OfflineAccess = model.StatedOfflineAccess ?? _defaultOfflineAccess;
         clientInfo.AllowOfflineAccessWithUserAgentAccessToken = _offlineAccessWithUserAgentAccessToken;
         clientInfo.ApplicationType = model.ApplicationType;
         clientInfo.SubjectType = model.SubjectType;

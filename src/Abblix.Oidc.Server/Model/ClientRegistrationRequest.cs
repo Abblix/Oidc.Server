@@ -496,18 +496,30 @@ public record ClientRegistrationRequest
     public bool? PkceRequired { get; init; }
 
     /// <summary>
-    /// The offline access the client asks for, a server extension to RFC 7591 metadata:
-    /// <see cref="OfflineAccess.Disabled"/>, or <see cref="OfflineAccess.ConsentRequired"/> when the
-    /// request does not state it.
+    /// The offline access the client asks for, a server extension to RFC 7591 metadata. It reads as
+    /// <see cref="OfflineAccess.ConsentRequired"/> when the request does not state it, and such a client is registered
+    /// with <see cref="Common.Configuration.NewClientOptions.OfflineAccess"/>.
     /// </summary>
     /// <remarks>
-    /// <see cref="OfflineAccess.Allowed"/> is refused by
-    /// <see cref="Endpoints.DynamicClientManagement.Validation.OfflineAccessValidator"/>: it waives
-    /// <c>prompt=consent</c> for the client, which OpenID Connect Core 1.0, section 11, leaves to the conditions the
-    /// host states, never to the client itself.
+    /// A value beyond <see cref="Common.Configuration.NewClientOptions.OfflineAccess"/> is refused by
+    /// <see cref="Endpoints.DynamicClientManagement.Validation.OfflineAccessValidator"/>, unless an RFC 7592 update
+    /// states what the client already has:
+    /// <see cref="OfflineAccess.Allowed"/> waives <c>prompt=consent</c> for the client, which OpenID Connect Core 1.0,
+    /// section 11, leaves to the conditions the host states, never to the client itself.
     /// </remarks>
     [JsonPropertyName(Parameters.OfflineAccess)]
-    public OfflineAccess OfflineAccess { get; init; } = OfflineAccess.ConsentRequired;
+    public OfflineAccess OfflineAccess
+    {
+        get => StatedOfflineAccess ?? OfflineAccess.ConsentRequired;
+        init => StatedOfflineAccess = value;
+    }
+
+    /// <summary>
+    /// The offline access the request states, or <c>null</c> when it does not state any, which
+    /// <see cref="OfflineAccess"/> cannot tell apart from a stated <see cref="OfflineAccess.ConsentRequired"/>.
+    /// </summary>
+    [JsonIgnore]
+    internal OfflineAccess? StatedOfflineAccess { get; private init; }
 
     /// <summary>
     /// The <c>dpop_bound_access_tokens</c> client metadata per RFC 9449 section 5.2: when <c>true</c>,

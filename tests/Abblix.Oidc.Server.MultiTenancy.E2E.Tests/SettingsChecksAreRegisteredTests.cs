@@ -37,7 +37,7 @@ namespace Abblix.Oidc.Server.MultiTenancy.E2E.Tests;
 /// <remarks>
 /// The checks are found in the compiled packages, whatever settings type they judge, so a check added later is held
 /// here without anybody extending a list. The wiring is the full server with each feature a host turns on by a call of
-/// its own: backchannel authentication, device authorization, a key custodian and a key
+/// its own: backchannel authentication, device authorization, dynamic client registration, a key custodian and a key
 /// ring sealed to it, a Shared Signals transmitter, and Shared Signals per tenant on top of it.
 /// </remarks>
 public class SettingsChecksAreRegisteredTests
@@ -65,6 +65,7 @@ public class SettingsChecksAreRegisteredTests
         var services = new ServiceCollection();
         services.AddBackChannelAuthentication();
         services.AddDeviceAuthorization();
+        services.AddDynamicClientRegistration();
         services.AddConsentGrantedForEveryClient();
         services.RequireKeyPlacement();
         services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = "kek" });

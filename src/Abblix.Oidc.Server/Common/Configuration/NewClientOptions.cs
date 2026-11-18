@@ -108,4 +108,21 @@ public record NewClientOptions
     /// RFC 7592 update, since an update builds the client anew.
     /// </remarks>
     public bool AllowOfflineAccessWithUserAgentAccessToken { get; init; }
+
+    /// <summary>
+    /// The offline access a dynamically registered client receives: what a client registering without an
+    /// <c>offline_access</c> member is given, and the most a value it sends may ask for.
+    /// <see cref="Features.ClientInformation.OfflineAccess.ConsentRequired"/> by default, so a client receives offline
+    /// access only from an authorization request with <c>prompt=consent</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Features.ClientInformation.OfflineAccess.Allowed"/> is the host stating, for every client that
+    /// registers, the "other conditions for processing the request permitting offline access" under which OpenID
+    /// Connect Core 1.0 section 11 waives <c>prompt=consent</c>; it does not waive the end user's consent to offline
+    /// access, which the host's consent provider still reports. A client may ask for less, never for more. Applied on
+    /// registration and on every RFC 7592 update, since an update builds the client anew; a client the host already
+    /// gave more keeps it when its update sends it back. A value the enumeration does not define is refused at
+    /// startup.
+    /// </remarks>
+    public OfflineAccess OfflineAccess { get; init; } = OfflineAccess.ConsentRequired;
 }

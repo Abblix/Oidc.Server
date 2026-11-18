@@ -9,6 +9,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
@@ -29,13 +30,15 @@ public class OfflineAccessValidatorTests
 {
     private const string ClientId = "registered-client";
 
-    private static OfflineAccessValidator Validator(OfflineAccess? existing)
+    private static OfflineAccessValidator Validator(OfflineAccess? existing, OfflineAccess? granted = null)
     {
         var clients = new Mock<IClientInfoProvider>();
         clients
             .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId))
             .ReturnsAsync(existing is { } offlineAccess ? new ClientInfo(ClientId) { OfflineAccess = offlineAccess } : null);
-        return new OfflineAccessValidator(clients.Object);
+        return granted is { } host
+            ? new OfflineAccessValidator(clients.Object, new NewClientOptions { OfflineAccess = host })
+            : new OfflineAccessValidator(clients.Object);
     }
 
     private static ClientRegistrationValidationContext Context(
@@ -80,6 +83,60 @@ public class OfflineAccessValidatorTests
     }
 
     /// <summary>
+    /// A registration may ask for the offline access the host grants new clients or for less, never for more.
+    /// </summary>
+    [Theory]
+    [InlineData(OfflineAccess.Allowed, OfflineAccess.Allowed, null)]
+    [InlineData(OfflineAccess.Allowed, OfflineAccess.ConsentRequired, null)]
+    [InlineData(OfflineAccess.Allowed, OfflineAccess.Disabled, null)]
+    [InlineData(OfflineAccess.ConsentRequired, OfflineAccess.Allowed, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(OfflineAccess.Disabled, OfflineAccess.ConsentRequired, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(OfflineAccess.Disabled, OfflineAccess.Allowed, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(OfflineAccess.Disabled, OfflineAccess.Disabled, null)]
+    public async Task ARegistration_MayAskForTheHostsGrantOrLess(OfflineAccess granted, OfflineAccess asked, string? error)
+    {
+        var result = await Validator(existing: null, granted).ValidateAsync(SingleIssuer.Tenant, Context(asked));
+
+        Assert.Equal(error, result?.Error);
+    }
+
+    /// <summary>
+    /// A registration stating no offline access is registered with what the host grants, so nothing is refused.
+    /// </summary>
+    [Theory]
+    [InlineData(OfflineAccess.Disabled)]
+    [InlineData(OfflineAccess.ConsentRequired)]
+    [InlineData(OfflineAccess.Allowed)]
+    public async Task ARegistrationStatingNoOfflineAccess_IsNotRefused(OfflineAccess granted)
+    {
+        var context = new ClientRegistrationValidationContext(new ClientRegistrationRequest
+        {
+            ClientId = ClientId,
+            RedirectUris = [TestConstants.DefaultRedirectUri],
+        });
+
+        var result = await Validator(existing: null, granted).ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+    }
+
+    /// <summary>
+    /// An update sending back what the host gave the client keeps it after the host grants new clients less.
+    /// </summary>
+    [Theory]
+    [InlineData(OfflineAccess.ConsentRequired, OfflineAccess.ConsentRequired, null)]
+    [InlineData(OfflineAccess.Disabled, OfflineAccess.ConsentRequired, ErrorCodes.InvalidClientMetadata)]
+    [InlineData(OfflineAccess.Allowed, OfflineAccess.ConsentRequired, null)]
+    public async Task AnUpdate_UnderAHostGrantingNothing_KeepsWhatTheClientHas(
+        OfflineAccess existing, OfflineAccess asked, string? error)
+    {
+        var result = await Validator(existing, granted: OfflineAccess.Disabled)
+            .ValidateAsync(SingleIssuer.Tenant, Context(asked, DynamicClientOperation.Update));
+
+        Assert.Equal(error, result?.Error);
+    }
+
+    /// <summary>
     /// The parameter carries each value under its registration name, and a request that does not state it asks for
     /// offline access with prompt=consent.
     /// </summary>
@@ -90,6 +147,16 @@ public class OfflineAccessValidatorTests
     [InlineData(null, OfflineAccess.ConsentRequired)]
     public void OfflineAccess_IsReadByItsRegistrationName(string? name, OfflineAccess expected)
         => Assert.Equal(expected, Read(name)?.OfflineAccess);
+
+    /// <summary>
+    /// A request that does not state the parameter is told apart from one stating consent_required, so the host's
+    /// grant reaches the former only.
+    /// </summary>
+    [Theory]
+    [InlineData("consent_required", OfflineAccess.ConsentRequired)]
+    [InlineData(null, null)]
+    public void OfflineAccess_IsStatedOnlyWhenSent(string? name, OfflineAccess? expected)
+        => Assert.Equal(expected, Read(name)?.StatedOfflineAccess);
 
     [Fact]
     public void OfflineAccess_OfAnUnknownName_IsNotRead()
