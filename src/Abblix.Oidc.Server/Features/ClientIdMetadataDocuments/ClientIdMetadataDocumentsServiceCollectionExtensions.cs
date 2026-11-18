@@ -10,6 +10,7 @@ using Abblix.DependencyInjection;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Consents;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,10 +41,10 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
     /// fetch takes the outbound HTTP client named <see cref="ClientIdMetadataDocumentTransport.HttpClientName"/>, whose
     /// SSRF validation follows <see cref="SecureHttpFetchOptions"/>.
     /// <para>
-    /// Every such client is one nobody reviewed, so the consent screen is the end user's only protection: a host that
-    /// grants every client everything it asks for (<see cref="Consents.ConsentsServiceCollectionExtensions.AddConsentGrantedForEveryClient"/>)
-    /// lets any URL obtain the end user's tokens unseen, unless <see cref="ClientIdMetadataDocumentOptions.AllowedClientIdPrefixes"/>
-    /// limits the documents to its own.
+    /// Every such client is one nobody reviewed, so the consent screen is the end user's only protection. A host that
+    /// grants every client everything it asks for (<see cref="ConsentsServiceCollectionExtensions.AddConsentGrantedForEveryClient"/>)
+    /// and sets no <see cref="ClientIdMetadataDocumentOptions.AllowedClientIdPrefixes"/> would let any URL obtain the
+    /// end user's tokens unseen, so it does not start.
     /// </para>
     /// </remarks>
     public static IOidcServerBuilder AddClientIdMetadataDocuments(this IOidcServerBuilder builder)
@@ -90,11 +91,31 @@ public static class ClientIdMetadataDocumentsServiceCollectionExtensions
                 using var scope = provider.CreateScope();
                 wiring.IssuerSent = scope.ServiceProvider.GetService<IAuthorizationMetadataProvider>()
                     is not { AuthorizationResponseIssParameterSupported: false };
+
+                wiring.ConsentGrantedToAnyUrl = GrantsConsentToEveryClient(services) &&
+                    provider.GetRequiredService<IOptions<OidcOptions>>().Value
+                        .ClientIdMetadataDocuments.AllowedClientIdPrefixes is null;
             })
             .Validate(wiring => wiring.StoreResolvesDocuments, ClientIdMetadataDocumentsWiring.StoreReplacedMessage)
             .Validate(wiring => wiring.IssuerSent, ClientIdMetadataDocumentsWiring.IssuerNotSentMessage)
+            .Validate(wiring => !wiring.ConsentGrantedToAnyUrl, ClientIdMetadataDocumentsWiring.ConsentGrantedToAnyUrlMessage)
             .ValidateOnStart();
 
         return builder;
     }
+
+    /// <summary>
+    /// Whether the consent provider the container resolves grants every client everything it asks for.
+    /// </summary>
+    /// <remarks>
+    /// Read from the registration the container resolves, the last one, by the type it registers, so neither the order
+    /// of the host's calls nor building the provider at startup decides it. A host's own provider, or one it builds by
+    /// an untyped factory, is not that one.
+    /// </remarks>
+    private static bool GrantsConsentToEveryClient(IServiceCollection services)
+        => services.LastOrDefault(descriptor =>
+                   descriptor is { IsKeyedService: false } &&
+                   descriptor.ServiceType == typeof(IUserConsentsProvider))?
+               .ResolveImplementationType() is { } implementation &&
+           typeof(NullConsentService).IsAssignableFrom(implementation);
 }

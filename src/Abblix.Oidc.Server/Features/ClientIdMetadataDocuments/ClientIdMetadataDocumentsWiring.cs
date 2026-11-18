@@ -37,6 +37,16 @@ internal sealed class ClientIdMetadataDocumentsWiring
         "AuthorizationResponseIssParameterSupported on.";
 
     /// <summary>
+    /// What a host is told when it grants every client everything and accepts a document from any URL.
+    /// </summary>
+    internal const string ConsentGrantedToAnyUrlMessage =
+        "AddClientIdMetadataDocuments() was called with no ClientIdMetadataDocuments.AllowedClientIdPrefixes, and the " +
+        "consent provider is the one AddConsentGrantedForEveryClient() registers (NullConsentService), so any URL " +
+        "could name itself a client and obtain an end user's tokens without the end user being asked. Set " +
+        "AllowedClientIdPrefixes to the URLs of clients you trust, or register an IUserConsentsProvider that asks the " +
+        "end user for consent.";
+
+    /// <summary>
     /// Whether the client store the container resolves is the one looking clients up by their documents.
     /// </summary>
     public bool StoreResolvesDocuments { get; set; }
@@ -45,4 +55,9 @@ internal sealed class ClientIdMetadataDocumentsWiring
     /// Whether authorization responses carry the issuer (RFC 9207).
     /// </summary>
     public bool IssuerSent { get; set; }
+
+    /// <summary>
+    /// Whether every client is granted everything it asks for while a document is accepted from any URL.
+    /// </summary>
+    public bool ConsentGrantedToAnyUrl { get; set; }
 }
