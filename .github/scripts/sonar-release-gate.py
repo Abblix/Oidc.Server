@@ -57,11 +57,15 @@ def git(*args):
 
 
 # The steps a refusal points to. {ref} is the release branch, {project} the project key.
-MERGE = ('merge the release branch into develop: git fetch origin && git switch -c merge-release origin/develop '
-         '&& git merge --no-ff -S origin/{ref} && git push origin HEAD:develop, then wait for the analysis of '
-         "develop's new head and re-run this job")
+# A re-run keeps the run's commit and its copy of this script, so it is the next step only when
+# nothing changes on the release branch; a commit there needs a new tag and a new dispatch.
+MERGE = ('merge the release branch into develop (git fetch origin && git switch --detach origin/develop '
+         '&& git merge --no-ff -S origin/{ref} && git push origin HEAD:develop) and wait for the analysis of '
+         "develop's new head")
 WAIT = ("wait until SonarQube Cloud has analysed develop's head "
-        '(https://sonarcloud.io/project/activity?id={project}), then re-run this job')
+        '(https://sonarcloud.io/project/activity?id={project})')
+RERUN = 're-run this job'
+REDISPATCH = 're-cut the release tag on the new head of {ref} and dispatch the release again'
 
 
 def one_line(text):
@@ -80,8 +84,8 @@ def main_branch(project, develop, failures, steps):
     analyses = get('project_analyses/search', project=project, branch=name, ps=1)['analyses']
     revision = analyses[0].get('revision') if analyses else None
     if revision != develop:
-        failures.append(f"The main branch analysis is of {revision}, not of develop's head {develop}. "
-                        f"Skipped step: {steps['wait']}")
+        failures.append(f"The main branch analysis is of {one_line(revision)}, not of develop's head {develop}. "
+                        f"Skipped step: {steps['wait']}, then {RERUN}")
     return name
 
 
@@ -95,18 +99,19 @@ def check_same_code(commit, develop, analysed, failures, notes, steps):
     commit and every file it analysed is the same in both."""
     if subprocess.run(['git', 'merge-base', '--is-ancestor', commit, develop], check=False).returncode:
         failures.append(f"Develop's head {develop} does not contain the release commit {commit}. "
-                        f"Skipped step: {steps['merge']}")
+                        f"Skipped step: {steps['merge']}, then {RERUN}")
         return False
     entries = git('diff', '--name-status', '-z', '--no-renames', commit, develop).split('\0')
     for status, path in zip(entries[0::2], entries[1::2]):
         shown = one_line(path)
         if status == 'D':
-            failures.append(f"{shown} is in the release and absent on develop, so it was not analysed. If develop "
-                            f"removed it on purpose, remove it on {steps['ref']} too. Then {steps['merge']}")
+            failures.append(f"{shown} is in the release and absent on develop, so it was not analysed. Skipped "
+                            f"step: if develop removed it on purpose, remove it on {steps['ref']} too, "
+                            f"{steps['merge']}, then {steps['redispatch']}; otherwise {steps['merge']}, then {RERUN}")
         elif path in analysed:
             failures.append(f"{shown} differs between the release and develop, so its analysis is not of the "
-                            f"release. If develop changed it, bring that change to {steps['ref']} first. "
-                            f"Then {steps['merge']}")
+                            f"release. Skipped step: if develop changed it, bring that change to {steps['ref']}, "
+                            f"{steps['merge']}, then {steps['redispatch']}; otherwise {steps['merge']}, then {RERUN}")
         else:
             notes.append(f'{shown} differs on develop and is not analysed by Sonar')
     return True
@@ -135,8 +140,10 @@ def check_every_file_analysed(commit, analysed, failures, steps):
         if path not in analysed:
             failures.append(f"{one_line(path)} is in the release and SonarQube Cloud did not analyse it. "
                             f"Skipped step: read why in the analysis warnings "
-                            f"(https://sonarcloud.io/project/background_tasks?id={steps['project']}), "
-                            f"fix the cause, push to develop, then {steps['wait']}")
+                            f"(https://sonarcloud.io/project/background_tasks?id={steps['project']}). If the cause "
+                            f"is a SonarQube Cloud setting, fix it there, push to develop a commit that changes no "
+                            f"analysed file, {steps['wait']}, then {RERUN}; if it is in the code, fix it on "
+                            f"{steps['ref']}, {steps['merge']}, then {steps['redispatch']}")
     # The list follows Sonar: a kind it starts analysing is refused here until the list names it,
     # so the list cannot fall behind the analysis without the gate saying which file showed it.
     for path in sorted(analysed):
@@ -144,7 +151,7 @@ def check_every_file_analysed(commit, analysed, failures, steps):
             failures.append(f"SonarQube Cloud analyses {one_line(path)}, a kind this gate does not require. "
                             f"Skipped step: add the kind to ANALYSED_SUFFIXES or ANALYSED_NAMES in "
                             f".github/scripts/sonar-release-gate.py by a pull request into {steps['ref']}, "
-                            f"then {steps['merge']}, and re-cut the release tag on the new head")
+                            f"{steps['merge']}, then {steps['redispatch']}")
 
 
 def nosonar_files(commit):
@@ -161,20 +168,20 @@ def check_issues(project, branch, failures, verdicts, steps):
     """Open issues, unexplained verdicts and unreviewed hotspots of the analysis."""
     scope = {'componentKeys': project, 'branch': branch, 'additionalFields': 'comments'}
     for issue in paged('issues/search', 'issues', issueStatuses='OPEN,CONFIRMED', **scope):
-        failures.append(f"Open issue {describe(issue)}. Skipped step: fix it on {steps['ref']}, or mark it "
-                        f"Accepted or False positive with a comment giving the reason "
-                        f"({issue_link(project, branch, issue)}); after a fix, {steps['merge']}")
+        failures.append(f"Open issue {describe(issue)}. Skipped step: mark it Accepted or False positive with "
+                        f"a comment giving the reason ({issue_link(project, branch, issue)}), then {RERUN}; or fix "
+                        f"it on {steps['ref']}, {steps['merge']}, then {steps['redispatch']}")
     for issue in paged('issues/search', 'issues', issueStatuses='ACCEPTED,FALSE_POSITIVE', **scope):
         reason = one_line(issue['comments'][-1]['markdown']) if issue.get('comments') else ''
         if not reason:
             failures.append(f"{issue['issueStatus']} without a reason: {describe(issue)}. Skipped step: add a "
-                            f"comment giving the reason ({issue_link(project, branch, issue)}), then re-run this job")
+                            f"comment giving the reason ({issue_link(project, branch, issue)}), then {RERUN}")
         verdicts.append(f"{issue['issueStatus']} {describe(issue)}: {reason}")
     count = get('hotspots/search', projectKey=project, branch=branch, status='TO_REVIEW', ps=1)['paging']['total']
     if count:
         failures.append(f"{count} security hotspots to review. Skipped step: review each as Safe or Fixed "
                         f"(https://sonarcloud.io/project/security_hotspots?id={project}&branch={branch}), "
-                        f"then re-run this job")
+                        f"then {RERUN}")
 
 
 def suppression_rules(project):
@@ -208,12 +215,14 @@ def annotate(failures):
     """Each refusal as an error annotation, so the run's page names the skipped step."""
     if os.environ.get('GITHUB_ACTIONS') == 'true':
         for failure in failures:
-            print(f'::error title=SonarQube Cloud release gate::{failure}', file=sys.stderr)
+            text = one_line(failure).replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+            print(f'::error title=SonarQube Cloud release gate::{text}', file=sys.stderr)
 
 
 def main(project, commit, develop, ref='release/X'):
     steps = {'ref': ref, 'project': project,
-             'merge': MERGE.format(ref=ref), 'wait': WAIT.format(project=project)}
+             'merge': MERGE.format(ref=ref), 'wait': WAIT.format(project=project),
+             'redispatch': REDISPATCH.format(ref=ref)}
     failures, verdicts, notes = [], [], []
     branch = main_branch(project, develop, failures, steps)
     analysed = analysed_files(project, branch)

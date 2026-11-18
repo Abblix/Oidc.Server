@@ -391,15 +391,20 @@ jobs:
           INPUT_PRE_RELEASE: ${{ github.event.inputs.pre_release }}
           RELEASE_COMMIT: ${{ github.sha }}
         run: |
-          RECUT="git tag -d v$VERSION; git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s --cleanup=verbatim $RELEASE_COMMIT && git push --force origin v$VERSION, then dispatch again"
+          # A pre-release run creates its own tag, so a stale one is removed rather than re-cut.
+          if [ "$INPUT_PRE_RELEASE" = "true" ]; then
+            RECUT="delete it (git push origin :refs/tags/v$VERSION) and dispatch again; this run creates the pre-release tag itself"
+          else
+            RECUT="re-cut it on the release head: git tag -d v$VERSION; git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s --cleanup=verbatim $RELEASE_COMMIT && git push --force origin v$VERSION, then dispatch again"
+          fi
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
             if [ "$(git cat-file -t "v$VERSION")" != "tag" ]; then
-              echo "::error title=Release tag::Tag v$VERSION is lightweight, and a stable release needs an annotated, signed tag carrying the release notes. Skipped step: re-cut it on the release head: $RECUT"
+              echo "::error title=Release tag::Tag v$VERSION is lightweight, and a release needs an annotated tag; a stable one is signed and carries the release notes. Skipped step: $RECUT"
               exit 1
             fi
             TAGGED=$(git rev-parse "v$VERSION^{commit}")
             if [ "$TAGGED" != "$RELEASE_COMMIT" ]; then
-              echo "::error title=Release tag::Tag v$VERSION is on $TAGGED, while this run builds $RELEASE_COMMIT, the head of the dispatched branch. Skipped step: re-cut the tag on the release head after the last commit: $RECUT"
+              echo "::error title=Release tag::Tag v$VERSION is on $TAGGED, while this run builds $RELEASE_COMMIT, the head of the dispatched branch. Skipped step: $RECUT"
               exit 1
             fi
             echo "Tag v$VERSION is annotated and on the commit being built - using it"
