@@ -259,8 +259,6 @@ jobs:
           while [ -n "$REST" ]; do
             case "$REST" in
               [0-9]*.[0-9]*.[0-9]*) VERSION=$REST; break ;;
-            esac
-            case "$REST" in
               *.*) REST=${REST#*.} ;;
               *) REST="" ;;
             esac
@@ -369,6 +367,9 @@ jobs:
               case "$VERSION" in
                 *-dev.*)
                   echo "Consumers floating \`${VERSION%%-*}-dev.*\` will pick this up on next \`dotnet restore\`."
+                  ;;
+                *)
+                  # A tagged pre-release: no floating range follows it, so the summary says nothing more.
                   ;;
               esac
             } >> "$GITHUB_STEP_SUMMARY"
