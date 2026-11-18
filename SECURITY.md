@@ -2,16 +2,17 @@
 
 ## Supported Versions
 
-| Version     | Supported                                                                      |
-|-------------|--------------------------------------------------------------------------------|
-| Latest 2.x  | Yes: every security fix lands here                                             |
-| Earlier 2.x | No fix in place. Upgrade to the latest 2.x, or ask us about a back-ported patch |
-| 1.x         | No longer supported. Upgrade to 2.x                                            |
+| Version                  | Supported                                                                                  |
+|--------------------------|--------------------------------------------------------------------------------------------|
+| Latest 3.x               | Yes: every security fix lands here                                                         |
+| Latest 2.x               | Yes: security fixes land here until 2.x reaches its end of support                         |
+| Earlier 3.x, earlier 2.x | No fix in place. Upgrade to the latest release of your line, or ask us about a back-ported patch |
+| 1.x                      | No longer supported. Upgrade to 3.x, or to 2.x where your hosts cannot move to .NET 11 yet  |
 
 Full platform and end-of-support dates are on the
 [version support lifecycle](https://www.abblix.com/en/docs/version-support-lifecycle) page.
 
-A fix is made in the latest release and reaches you by upgrading the package. The fixed package is published
+A fix is made in the latest release of each supported line and reaches you by upgrading the package. The fixed package is published
 on NuGet and available to everyone, including those using the library free of charge: a security fix is
 never gated behind a purchase.
 
@@ -20,7 +21,7 @@ instance, several endpoints become opt-in, and clients configured for pairwise s
 `sub` values change. Each release lists its breaking changes, and when we tell you which release carries your
 fix, we will tell you what stands between your version and it.
 
-Where upgrading is genuinely not an option, we can build a patch release for the specific 2.x version you run.
+Where upgrading is genuinely not an option, we can build a patch release for the specific version you run.
 That is commercial work under your purchase agreement, not part of the standard license, so write to
 [info@abblix.com](mailto:info@abblix.com) and we will scope it. A version that has passed end of support
 cannot be brought back into support by request.
