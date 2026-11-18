@@ -51,13 +51,6 @@ public static class ScopeManagerExtensions
 
         var scopeList = new List<ScopeDefinition>();
 
-        // Create a hash set of resource scopes if resources are provided and not empty
-        var resourceScopes = resources is { Length: > 0 }
-            ? resources
-                .SelectMany(rd => rd.Scopes, (_, sd) => sd.Scope)
-                .ToHashSet(StringComparer.Ordinal)
-            : null;
-
         foreach (var scope in scopes)
         {
             // Enforce the client's registered scope set: a client must not obtain a scope it was
@@ -70,24 +63,45 @@ public static class ScopeManagerExtensions
                 return false;
             }
 
-            // Check if the scope is recognized by the scope manager
-            if (scopeManager.TryGet(tenant, scope, out var scopeDefinition))
-            {
-                scopeList.Add(scopeDefinition);
-            }
-            // Check if the scope is part of the resource scopes
-            else if (resourceScopes != null && resourceScopes.Contains(scope))
-            {
-                // skip it
-            }
-            else
+            if (!scopeManager.IsAvailable(tenant, scope, resources, out var scopeDefinition))
             {
                 errorDescription = "The scope is not available";
                 return false;
             }
+
+            // A scope only a resource declares is carried by the resource it belongs to, not listed here
+            if (scopeDefinition != null)
+                scopeList.Add(scopeDefinition);
         }
 
         scopeDefinitions = scopeList.ToArray();
         return true;
+    }
+
+    /// <summary>
+    /// Whether a request naming <paramref name="resources"/> may carry <paramref name="scope"/>: a scope
+    /// <paramref name="tenant"/> knows, or one any of <paramref name="resources"/> declares.
+    /// </summary>
+    /// <param name="scopeManager">The scope manager that maintains the definitions of scopes.</param>
+    /// <param name="tenant">The tenant whose scopes are searched.</param>
+    /// <param name="scope">The scope identifier asked about.</param>
+    /// <param name="resources">The resources whose declared scopes count as well.</param>
+    /// <param name="definition">The tenant's definition of the scope; null for a scope only a resource declares.
+    /// </param>
+    /// <returns>True when the scope may be carried, false otherwise.</returns>
+    internal static bool IsAvailable(
+        this IScopeManager scopeManager,
+        TenantDefinition tenant,
+        string scope,
+        IEnumerable<ResourceDefinition>? resources,
+        out ScopeDefinition? definition)
+    {
+        if (scopeManager.TryGet(tenant, scope, out definition))
+            return true;
+
+        // IScopeManager.TryGet documents its output as null when the scope does not exist, but a host's replacement
+        // that leaves it set would otherwise add a definition of another scope to the request's
+        definition = null;
+        return (resources ?? []).Any(resource => resource.Scopes.Any(declared => declared.Scope == scope));
     }
 }
