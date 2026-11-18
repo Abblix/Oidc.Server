@@ -11,9 +11,9 @@ using Microsoft.Extensions.Caching.Distributed;
 namespace Abblix.Jwt.ReplayPrevention;
 
 /// <summary>
-/// A replay cache over the host's <see cref="IDistributedCache"/>: process-local when the host
-/// registers the in-memory distributed cache, shared when it registers Redis or another backend -
-/// so a scaled-out deployment gains one common memory by swapping the store, not the cache.
+/// A replay cache over a <see cref="IDistributedCache"/>: process-local over an in-memory one, shared
+/// over Redis or another backend - so a scaled-out deployment gains one common memory by swapping the
+/// cache, not the store.
 /// </summary>
 /// <remarks>
 /// The add-if-absent underneath is decided within one process only: it reads and writes under a
@@ -36,8 +36,7 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// one's success rests on is gone, and the next presentation of the token passes as fresh.
 /// </para>
 /// </remarks>
-/// <param name="cache">The distributed cache the host registered; the store is the host's choice.
-/// </param>
+/// <param name="cache">The distributed cache the reservations are kept in.</param>
 /// <param name="clock">The clock the retention window is measured against.</param>
 /// <param name="keyPrefix">
 /// Keeps these entries out of the way of whatever else shares the host's cache. It is the
