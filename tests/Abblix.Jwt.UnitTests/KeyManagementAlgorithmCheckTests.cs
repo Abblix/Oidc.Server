@@ -86,7 +86,7 @@ public class KeyManagementAlgorithmCheckTests
             .Services.AddSingleton(Mock.Of<IKeyRingStore>());
         services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = "kek", KeyWrapAlgorithm = NotServed });
 
-        await StartAsync(services);
+        Assert.Null(await Record.ExceptionAsync(() => StartAsync(services)));
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class KeyManagementAlgorithmCheckTests
         var services = HostWithCustodian();
         services.RequireKeyPlacement().UseKeysInCustodian(KeysEncryptingUnder(Served));
 
-        await StartAsync(services);
+        Assert.Null(await Record.ExceptionAsync(() => StartAsync(services)));
     }
 
     /// <summary>
@@ -108,7 +108,7 @@ public class KeyManagementAlgorithmCheckTests
         services.RequireKeyPlacement().UseKeysInCustodian(
             new CustodianHeldKeys { SigningKeyName = "sign", EncryptionAlgorithm = NotServed });
 
-        await StartAsync(services);
+        Assert.Null(await Record.ExceptionAsync(() => StartAsync(services)));
     }
 
     [Theory]
