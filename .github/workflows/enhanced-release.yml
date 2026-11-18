@@ -53,7 +53,8 @@ jobs:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
           if [[ ! "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z0-9.-]+)?$ ]]; then
-            echo "Error: invalid version format: $INPUT_VERSION" >&2
+            echo "::error title=Version input::The version input is not X.Y, X.Y.Z or X.Y.Z-suffix. Skipped step: dispatch again from the release branch with the version the tag names without its v, such as 3.0"
+            echo "Invalid version input: $INPUT_VERSION" >&2
             exit 1
           fi
           VERSION="$INPUT_VERSION"
@@ -152,10 +153,11 @@ jobs:
       - name: No open SonarQube Cloud issue in the release code
         env:
           RELEASE_COMMIT: ${{ github.sha }}
+          RELEASE_BRANCH: ${{ github.ref_name }}
         run: |
           DEVELOP_HEAD=$(git rev-parse origin/develop)
           status=0
-          python3 -I .github/scripts/sonar-release-gate.py Abblix_Oidc.Server "$RELEASE_COMMIT" "$DEVELOP_HEAD" > sonar-gate.md || status=$?
+          python3 -I .github/scripts/sonar-release-gate.py Abblix_Oidc.Server "$RELEASE_COMMIT" "$DEVELOP_HEAD" "$RELEASE_BRANCH" > sonar-gate.md || status=$?
           cat sonar-gate.md >> "$GITHUB_STEP_SUMMARY"
           cat sonar-gate.md
           exit "$status"
@@ -324,7 +326,7 @@ jobs:
           for _ in {1..60}; do
             if curl -fsSk --max-time 5 -o discovery.json "$BASE/.well-known/openid-configuration"; then
               if ! python3 -c "import json, sys; sys.exit(0 if json.load(open('discovery.json')).get('issuer', '').startswith(sys.argv[1]) else 1)" "$BASE"; then
-                echo "The discovery document at $BASE names no issuer under that address" >&2
+                echo "::error title=Getting-started sample::The discovery document at $BASE names no issuer under that address. Skipped step: run the sample on the Abblix/Oidc.Server.GettingStarted branch that the Checkout GettingStarted repo step names (dotnet run --launch-profile https in OpenIDProviderApp), fix it there until it serves /.well-known/openid-configuration with its own issuer, then re-run this job"
                 kill "$APP_PID" 2>/dev/null || true
                 exit 1
               fi
@@ -333,12 +335,12 @@ jobs:
               exit 0
             fi
             if ! kill -0 "$APP_PID" 2>/dev/null; then
-              echo "App process died before answering" >&2
+              echo "::error title=Getting-started sample::The sample exited before answering at $BASE; its output is above. Skipped step: run the sample on the Abblix/Oidc.Server.GettingStarted branch that the Checkout GettingStarted repo step names (dotnet run --launch-profile https in OpenIDProviderApp), fix it there until it serves /.well-known/openid-configuration with its own issuer, then re-run this job"
               exit 1
             fi
             sleep 1
           done
-          echo "App did not answer discovery at $BASE within the wait" >&2
+          echo "::error title=Getting-started sample::The sample did not answer its discovery document at $BASE within the wait. Skipped step: run the sample on the Abblix/Oidc.Server.GettingStarted branch that the Checkout GettingStarted repo step names (dotnet run --launch-profile https in OpenIDProviderApp), fix it there until it serves /.well-known/openid-configuration with its own issuer, then re-run this job"
           kill "$APP_PID" 2>/dev/null || true
           exit 1
         timeout-minutes: 3
@@ -387,21 +389,23 @@ jobs:
       - name: Create or verify tag
         env:
           INPUT_PRE_RELEASE: ${{ github.event.inputs.pre_release }}
+          RELEASE_COMMIT: ${{ github.sha }}
         run: |
+          RECUT="git tag -d v$VERSION; git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s --cleanup=verbatim $RELEASE_COMMIT && git push --force origin v$VERSION, then dispatch again"
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            if [ "$(git cat-file -t "v$VERSION")" = "tag" ]; then
-              echo "Tag v$VERSION exists and is annotated - using it"
-            else
-              echo "Error: tag v$VERSION is lightweight (not annotated/signed)." >&2
-              echo "Stable releases require an annotated, GPG-signed tag carrying the release notes." >&2
-              echo "Recreate it: git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s && git push origin v$VERSION" >&2
+            if [ "$(git cat-file -t "v$VERSION")" != "tag" ]; then
+              echo "::error title=Release tag::Tag v$VERSION is lightweight, and a stable release needs an annotated, signed tag carrying the release notes. Skipped step: re-cut it on the release head: $RECUT"
               exit 1
             fi
+            TAGGED=$(git rev-parse "v$VERSION^{commit}")
+            if [ "$TAGGED" != "$RELEASE_COMMIT" ]; then
+              echo "::error title=Release tag::Tag v$VERSION is on $TAGGED, while this run builds $RELEASE_COMMIT, the head of the dispatched branch. Skipped step: re-cut the tag on the release head after the last commit: $RECUT"
+              exit 1
+            fi
+            echo "Tag v$VERSION is annotated and on the commit being built - using it"
           else
             if [ "$INPUT_PRE_RELEASE" != "true" ]; then
-              echo "Error: no tag v$VERSION found." >&2
-              echo "A stable release must be tagged (annotated + GPG-signed) before this workflow runs." >&2
-              echo "Create it on the release branch: git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s && git push origin v$VERSION" >&2
+              echo "::error title=Release tag::No tag v$VERSION, and a stable release must be tagged before this workflow runs. Skipped step: tag the release head: git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s --cleanup=verbatim $RELEASE_COMMIT && git push origin v$VERSION, then dispatch again"
               exit 1
             fi
             echo "Pre-release: creating annotated tag v$VERSION"
