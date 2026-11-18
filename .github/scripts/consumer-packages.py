@@ -44,7 +44,6 @@ AFTER_PUBLISH = {
             "that repository and re-run this job; a fault in this job's own steps is fixed in "
             ".github/workflows/release.yml, and this release's bump is then made by hand",
 }
-skipped_steps = BEFORE_RELEASE
 SKIPPED_DIRECTORIES = {"bin", "obj", "node_modules", ".git"}
 
 
@@ -81,26 +80,31 @@ def projects_under(root: Path):
 class DotnetFailed(Exception):
     """A dotnet command refused; its own output is printed, since MSBuild writes its errors to stdout."""
 
+    def __init__(self, message: str, skipped_step: str):
+        super().__init__(message)
+        self.skipped_step = skipped_step
 
-def dotnet(arguments: list[str]) -> str:
+
+def dotnet(arguments: list[str], skipped_steps: dict[str, str]) -> str:
     completed = subprocess.run(["dotnet", *arguments], capture_output=True, text=True)
     if completed.returncode != 0:
         print(completed.stdout, completed.stderr, sep="\n", file=sys.stderr)
-        raise DotnetFailed(f"dotnet {' '.join(arguments)} exited with {completed.returncode}; its output is above")
+        raise DotnetFailed(f"dotnet {' '.join(arguments)} exited with {completed.returncode}; its output is above",
+                           skipped_steps["dotnet"])
     return completed.stdout
 
 
-def abblix_references(project: Path) -> list[str]:
-    evaluated = dotnet(["msbuild", str(project), "-getItem:PackageReference"])
+def abblix_references(project: Path, skipped_steps: dict[str, str]) -> list[str]:
+    evaluated = dotnet(["msbuild", str(project), "-getItem:PackageReference"], skipped_steps)
     items = json.loads(evaluated).get("Items", {}).get("PackageReference", [])
     return [item["Identity"] for item in items if item["Identity"].lower().startswith(PREFIX)]
 
 
-def point(version: str, root: Path) -> int:
+def point(version: str, root: Path, skipped_steps: dict[str, str]) -> int:
     pointed = 0
     for project in sorted(projects_under(root)):
-        for package in abblix_references(project):
-            dotnet(["add", str(project), "package", package, "--version", version, "--no-restore"])
+        for package in abblix_references(project, skipped_steps):
+            dotnet(["add", str(project), "package", package, "--version", version, "--no-restore"], skipped_steps)
             print(f"{project.relative_to(root)}: {package} {version}")
             pointed += 1
     if pointed == 0:
@@ -151,14 +155,12 @@ def main(arguments: list[str]) -> int:
         case ["use-local", folder]:
             return use_local(Path(folder))
         case ["count", root]:
-            print(sum(len(abblix_references(project)) for project in projects_under(Path(root).resolve())))
+            print(sum(len(abblix_references(project, BEFORE_RELEASE)) for project in projects_under(Path(root).resolve())))
             return 0
         case ["point", version, root]:
-            return point(version, Path(root).resolve())
+            return point(version, Path(root).resolve(), BEFORE_RELEASE)
         case ["bump", version, root]:
-            global skipped_steps
-            skipped_steps = AFTER_PUBLISH
-            return point(version, Path(root).resolve())
+            return point(version, Path(root).resolve(), AFTER_PUBLISH)
         case ["verify", folder, version]:
             return verify(Path(folder), version)
         case _:
@@ -170,5 +172,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main(sys.argv[1:]))
     except DotnetFailed as failure:
-        print(f"::error::{failure}. Skipped step: {skipped_steps['dotnet']}", file=sys.stderr)
+        print(f"::error::{failure}. Skipped step: {failure.skipped_step}", file=sys.stderr)
         sys.exit(1)

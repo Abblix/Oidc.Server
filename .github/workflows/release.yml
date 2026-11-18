@@ -248,7 +248,7 @@ jobs:
     timeout-minutes: 5
   # The consumer path: what a reader builds from our documentation, built from the packages THIS run packed (the
   # nuget-packages artifact, restored through a source mapping that lets no Abblix package come from a feed) and
-  # started. create-release needs all four jobs below, so a release whose quickstart, samples or templates do not
+  # started. create-release needs every job below, so a release whose quickstart, samples, guide or templates do not
   # work for the reader stops before either approval. Our own test hosts above never see what these see: a project
   # made by `dotnet new web`, a sample from another repository, a scaffold of a template.
   #
@@ -696,8 +696,72 @@ jobs:
         timeout-minutes: 3
     timeout-minutes: 5
 
+  # The Getting Started guide as a reader follows it, on this run's packages: the samples' own script creates both
+  # projects in an empty folder, adds the packages, writes the guide's files, trusts the development certificate,
+  # signs in as the demo user, reads the claims and signs out. The documentation site takes the guide's code from
+  # the same files, so this is the article itself being run.
+  getting-started-guide:
+    needs: [versioning, build-and-pack]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - name: Fetch the SDK pin
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: main-repo
+          sparse-checkout: /global.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Checkout GettingStarted repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: Abblix/Oidc.Server.GettingStarted
+          path: getting-started
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: local-packages
+        timeout-minutes: 3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: main-repo/global.json
+        timeout-minutes: 3
+      # A region of the guide that no longer has its place in the generated template cannot be put in by a reader
+      - name: Every region of the guide's files has its place in the template
+        run: |
+          if ! python3 -I getting-started/GettingStartedGuide/guide-files.py check; then
+            echo "::error title=Getting Started guide::A region of the guide's files has no place in the template it is put into; the output above names it. Skipped step: run python GettingStartedGuide/guide-files.py check in Abblix/Oidc.Server.GettingStarted (master), fix the guide there, then re-run this job"
+            exit 1
+          fi
+        timeout-minutes: 3
+      # Outside the checkout, so nothing of either repository's build settings reaches the new projects. The script
+      # restores Abblix packages from the given folder only and trusts the development certificate itself
+      - name: Follow the guide
+        run: |
+          if ! bash getting-started/GettingStartedGuide/guide.sh --abblix-version "$VERSION_FULL" --nuget-source "$GITHUB_WORKSPACE/local-packages" "$RUNNER_TEMP/guide"; then
+            echo "::error title=Getting Started guide::The guide does not work on this run's packages; the line starting with guide.sh: step above names the step that failed. Skipped step: run bash GettingStartedGuide/guide.sh --abblix-version <this release> --nuget-source <its packages> <an empty folder> in Abblix/Oidc.Server.GettingStarted (master), fix the guide there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
+            exit 1
+          fi
+        # Measured at 23s to 73s on hosted runners in the samples' own workflow; like there, the extra minutes let the
+        # script's own one-minute wait for an application that never answers end with its named step and log
+        timeout-minutes: 4
+    timeout-minutes: 5
+
   create-release:
-    needs: [versioning, build-and-pack, readme-quickstart, test-getting-started, getting-started-loop, templates, conformance, sonar-gate]
+    needs: [versioning, build-and-pack, readme-quickstart, test-getting-started, getting-started-loop, templates, getting-started-guide, conformance, sonar-gate]
     runs-on: ubuntu-latest
     environment: release-approval
     permissions:
