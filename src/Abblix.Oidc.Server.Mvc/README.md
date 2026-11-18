@@ -49,7 +49,9 @@ builder.Services.AddConsentGrantedForEveryClient();
 builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
     Id = "main",
-    Issuer = new Uri("https://auth.example.com"),
+    // The address the app is served on, read from the "Issuer" setting
+    Issuer = new Uri(builder.Configuration["Issuer"]
+        ?? throw new InvalidOperationException("Set Issuer to the address the app is served on")),
     LoginUri = new Uri("/Auth/Login", UriKind.Relative),
     SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
     Clients = [ /* client configurations */ ],
