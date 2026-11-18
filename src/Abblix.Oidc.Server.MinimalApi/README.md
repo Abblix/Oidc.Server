@@ -49,7 +49,9 @@ builder.Services.AddConsentGrantedForEveryClient();
 builder.Services.AddOidcServices(options => options.Tenants.Add(new TenantDefinition
 {
     Id = "main",
-    Issuer = new Uri("https://auth.example.com"),
+    // The address the app is served on, read from the "Issuer" setting
+    Issuer = new Uri(builder.Configuration["Issuer"]
+        ?? throw new InvalidOperationException("Set Issuer to the address the app is served on")),
     LoginUri = new Uri("/Auth/Login", UriKind.Relative),
     SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature)],
 }));
@@ -63,6 +65,8 @@ app.MapOidcEndpoints();
 
 app.Run();
 ```
+
+The issuer comes from configuration, so add it to `appsettings.json` first, for example `"Issuer": "https://localhost:5001"`.
 
 `MapOidcEndpoints()` maps all enabled endpoints onto a route group and returns the `RouteGroupBuilder`, so cross-cutting conventions can be applied to all OIDC endpoints at once:
 
