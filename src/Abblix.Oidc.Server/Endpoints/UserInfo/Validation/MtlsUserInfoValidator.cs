@@ -17,7 +17,7 @@ using Abblix.Oidc.Server.Model;
 namespace Abblix.Oidc.Server.Endpoints.UserInfo.Validation;
 
 /// <summary>
-/// Resource-server-side enforcement of RFC 8705 §3 mutual-TLS certificate-bound access tokens
+/// Resource-server-side enforcement of RFC 8705 section 3 mutual-TLS certificate-bound access tokens
 /// at the UserInfo endpoint. Mirrors the role of <see cref="DPoPUserInfoValidator"/> for the
 /// <c>cnf.x5t#S256</c> binding: when the access token is certificate-bound, the SHA-256
 /// thumbprint of the certificate presented on the mutual-TLS connection MUST match the bound
@@ -43,7 +43,7 @@ public class MtlsUserInfoValidator : IMtlsUserInfoValidator
                 "was presented on the mutual-TLS connection.");
         }
 
-        // RFC 8705 §3.1: cnf.x5t#S256 is the base64url-encoded SHA-256 digest of the DER
+        // RFC 8705 section 3.1: cnf.x5t#S256 is the base64url-encoded SHA-256 digest of the DER
         // encoding of the certificate, with trailing '=' padding removed.
         var presented = Base64Url.EncodeToString(SHA256.HashData(certificate.RawData));
         if (!string.Equals(presented, committed, StringComparison.Ordinal))

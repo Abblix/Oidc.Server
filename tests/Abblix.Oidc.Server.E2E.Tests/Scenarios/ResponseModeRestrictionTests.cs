@@ -103,9 +103,9 @@ public class ResponseModeRestrictionTests(TestFactory factory) : TestBase(factor
 
         // The auto-submitting form POSTs the authorization response back to the registered redirect_uri.
         Assert.Contains(TestConstants.RedirectUri, body);
-        Assert.Contains(TokenRequest.Parameters.Code, body);
+        Assert.Contains(ResponseParameters.Code, body);
 
-        // The auto-submit page must never be framed by another origin (clickjacking defense, RFC 9700 §4.16).
+        // The auto-submit page must never be framed by another origin (clickjacking defense, RFC 9700 section 4.16).
         Assert.True(response.Headers.TryGetValues("Content-Security-Policy", out var csp));
         Assert.Contains("frame-ancestors 'none'", csp);
         Assert.True(response.Headers.TryGetValues("X-Frame-Options", out var xFrameOptions));

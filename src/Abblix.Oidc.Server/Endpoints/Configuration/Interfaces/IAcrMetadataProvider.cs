@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 
 /// <summary>
@@ -18,5 +20,7 @@ public interface IAcrMetadataProvider
 	/// Lists the ACR (Authentication Context Class Reference) values supported by this provider.
 	/// These values represent authentication assurance levels that can be requested and achieved.
 	/// </summary>
-	IEnumerable<string>? AcrValuesSupported { get; }
+	/// <param name="tenant">The tenant the discovery document is built for, which a host offering different
+	/// levels at different tenants answers for.</param>
+	IEnumerable<string>? AcrValuesSupported(TenantDefinition tenant);
 }

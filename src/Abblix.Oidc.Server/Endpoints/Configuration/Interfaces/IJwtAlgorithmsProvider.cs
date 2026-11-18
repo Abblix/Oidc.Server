@@ -19,6 +19,22 @@ public interface IJwtAlgorithmsProvider
 	IEnumerable<string> SignedResponseAlgorithmsSupported { get; }
 
 	/// <summary>
+	/// Lists the JWE key-management algorithms (the <c>alg</c> values) a JWT this server sends a client - an ID token,
+	/// a UserInfo, introspection or JARM authorization response - can be encrypted under: those the JWT creator
+	/// encrypts with, less the symmetric ones no key is derived for from the client secret. Registration accepts a
+	/// client's <c>*_encrypted_response_alg</c> from this list, and discovery advertises it for the JARM and
+	/// introspection responses. An algorithm a host registers is listed, and matched to client keys, by the same
+	/// registration (<see cref="Abblix.Jwt.EncryptionAlgorithmsProvider.CanEncrypt"/>).
+	/// </summary>
+	IEnumerable<string> EncryptedResponseAlgorithmsSupported { get; }
+
+	/// <summary>
+	/// Lists the JWE content-encryption algorithms (the <c>enc</c> values) a JWT this server sends a client can be
+	/// encrypted with: those the JWT creator encrypts with.
+	/// </summary>
+	IEnumerable<string> EncryptedResponseMethodsSupported { get; }
+
+	/// <summary>
 	/// Lists the signing algorithms supported for validating signed requests and authentication.
 	/// </summary>
 	IEnumerable<string> SigningAlgorithmsSupported { get; }
@@ -26,8 +42,8 @@ public interface IJwtAlgorithmsProvider
 	/// <summary>
 	/// Lists the JWS algorithms a client may use to sign a JWT client-authentication assertion
 	/// (<c>client_secret_jwt</c> / <c>private_key_jwt</c>), advertised via
-	/// <c>token_endpoint_auth_signing_alg_values_supported</c>. RFC 8414 §2 and OpenID Connect
-	/// Discovery 1.0 §3 both state the value <c>none</c> MUST NOT appear here, so it is excluded
+	/// <c>token_endpoint_auth_signing_alg_values_supported</c>. RFC 8414 section 2 and OpenID Connect
+	/// Discovery 1.0 section 3 both state the value <c>none</c> MUST NOT appear here, so it is excluded
 	/// from the underlying verification set.
 	/// </summary>
 	IEnumerable<string> TokenEndpointAuthSigningAlgValuesSupported { get; }
@@ -35,14 +51,14 @@ public interface IJwtAlgorithmsProvider
 	/// <summary>
 	/// Lists the JWS algorithms a client may use to sign a CIBA backchannel authentication request,
 	/// advertised via <c>backchannel_authentication_request_signing_alg_values_supported</c>. CIBA
-	/// Core §7.1.1 mandates an asymmetric signature, so both <c>none</c> and the symmetric HS*
+	/// Core section 7.1.1 mandates an asymmetric signature, so both <c>none</c> and the symmetric HS*
 	/// algorithms are excluded from the underlying verification set.
 	/// </summary>
 	IEnumerable<string> BackChannelAuthenticationRequestSigningAlgValuesSupported { get; }
 
 	/// <summary>
 	/// Lists the JWS signing algorithms the authorization server accepts on inbound DPoP
-	/// proofs (RFC 9449 §5.1 <c>dpop_signing_alg_values_supported</c>): the intersection
+	/// proofs (RFC 9449 section 5.1 <c>dpop_signing_alg_values_supported</c>): the intersection
 	/// of <see cref="SigningAlgorithmsSupported"/> with the static DPoP-compatible
 	/// whitelist. The validator-side set is the source - the AS verifies proofs the
 	/// client signs, it does not issue them.
@@ -51,55 +67,56 @@ public interface IJwtAlgorithmsProvider
 
 	/// <summary>
 	/// Lists the JWE key-management algorithms (the <c>alg</c> values) the authorization server
-	/// accepts when a client encrypts a request object to the server (RFC 9101 §6.1),
-	/// advertised via <c>request_object_encryption_alg_values_supported</c>.
+	/// accepts when a client encrypts a request object to the server (RFC 9101 section 6.1). The discovery
+	/// document lists, as <c>request_object_encryption_alg_values_supported</c>, those of them a tenant's own
+	/// published encryption keys open.
 	/// </summary>
 	IEnumerable<string> RequestObjectEncryptionAlgValuesSupported { get; }
 
 	/// <summary>
 	/// Lists the JWE content-encryption algorithms (the <c>enc</c> values) the authorization server
-	/// accepts when a client encrypts a request object to the server (RFC 9101 §6.1),
+	/// accepts when a client encrypts a request object to the server (RFC 9101 section 6.1),
 	/// advertised via <c>request_object_encryption_enc_values_supported</c>.
 	/// </summary>
 	IEnumerable<string> RequestObjectEncryptionEncValuesSupported { get; }
 
 	/// <summary>
 	/// Lists the JWS algorithms the authorization server uses to sign JARM authorization responses,
-	/// advertised via <c>authorization_signing_alg_values_supported</c> (JARM §4).
+	/// advertised via <c>authorization_signing_alg_values_supported</c> (JARM section 4).
 	/// </summary>
 	IEnumerable<string> AuthorizationSigningAlgValuesSupported { get; }
 
 	/// <summary>
 	/// Lists the JWE key-management algorithms (the <c>alg</c> values) the authorization server can use to
 	/// encrypt JARM authorization responses, advertised via <c>authorization_encryption_alg_values_supported</c>
-	/// (JARM §4).
+	/// (JARM section 4).
 	/// </summary>
 	IEnumerable<string> AuthorizationEncryptionAlgValuesSupported { get; }
 
 	/// <summary>
 	/// Lists the JWE content-encryption algorithms (the <c>enc</c> values) the authorization server can use to
 	/// encrypt JARM authorization responses, advertised via <c>authorization_encryption_enc_values_supported</c>
-	/// (JARM §4).
+	/// (JARM section 4).
 	/// </summary>
 	IEnumerable<string> AuthorizationEncryptionEncValuesSupported { get; }
 
 	/// <summary>
 	/// Lists the JWS algorithms the authorization server uses to sign JWT introspection responses,
-	/// advertised via <c>introspection_signing_alg_values_supported</c> (RFC 9701 §7).
+	/// advertised via <c>introspection_signing_alg_values_supported</c> (RFC 9701 section 7).
 	/// </summary>
 	IEnumerable<string> IntrospectionSigningAlgValuesSupported { get; }
 
 	/// <summary>
 	/// Lists the JWE key-management algorithms (the <c>alg</c> values) the authorization server can use to encrypt
 	/// JWT introspection responses, advertised via <c>introspection_encryption_alg_values_supported</c>
-	/// (RFC 9701 §7).
+	/// (RFC 9701 section 7).
 	/// </summary>
 	IEnumerable<string> IntrospectionEncryptionAlgValuesSupported { get; }
 
 	/// <summary>
 	/// Lists the JWE content-encryption algorithms (the <c>enc</c> values) the authorization server can use to
 	/// encrypt JWT introspection responses, advertised via <c>introspection_encryption_enc_values_supported</c>
-	/// (RFC 9701 §7).
+	/// (RFC 9701 section 7).
 	/// </summary>
 	IEnumerable<string> IntrospectionEncryptionEncValuesSupported { get; }
 }

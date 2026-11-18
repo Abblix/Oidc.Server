@@ -1,0 +1,37 @@
+<Project>
+
+  <!-- Chain to the repository-wide props, for the reason spelled out under tests/: MSBuild stops
+       searching upward at the FIRST Directory.Build.props it finds, so without this import every
+       project under src/ would silently lose TreatWarningsAsErrors, MinVer and the Sonar analyzer. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove($(MSBuildThisFile), $(MSBuildThisFileDirectory)..))" />
+
+  <!-- The frameworks the packages ship, in one place rather than repeated in every project. A
+       per-project copy is an enumeration, and an enumeration is escaped silently: a project added
+       later ships fewer frameworks than the rest and nothing says so, while a project MISSED by a
+       change to the set keeps building the old one and stays green. The two source generators
+       override this - they load into the compiler and must be netstandard2.0. -->
+  <PropertyGroup>
+    <TargetFrameworks>net11.0</TargetFrameworks>
+  </PropertyGroup>
+
+  <!-- What every assembly built here owes, whether or not it is packed on its own: a build that does
+       not depend on the directory it ran in, and symbols that point at this repository rather than at
+       the machine. Kept here rather than per project because a per-project copy is an enumeration and
+       this one had already been escaped twice - by the shared transport assembly, which ships inside
+       both adapter packages and whose published symbols therefore named a build directory, and by the
+       two source generators, which ship nowhere but were built the same way. -->
+  <PropertyGroup>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <!-- A record written past [LoggerMessage] is one the logging rules of Abblix.Analyzers never see, so the
+       shipped code here writes none. Kept to this repository rather than added to the list the analyzers
+       package carries, which every product referencing it would meet on its next upgrade. -->
+  <ItemGroup>
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.Logging.txt" />
+  </ItemGroup>
+
+</Project>

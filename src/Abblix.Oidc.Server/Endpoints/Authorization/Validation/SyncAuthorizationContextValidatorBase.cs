@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 
 
@@ -25,21 +26,23 @@ public abstract class SyncAuthorizationContextValidatorBase : IAuthorizationCont
 	/// This method implements the <see cref="IAuthorizationContextValidator.ValidateAsync"/> method
 	/// to allow synchronous validation logic within an asynchronous method signature.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="context">The validation context containing client information and request details.</param>
 	/// <returns>
 	/// A task representing the result of the synchronous validation. The task contains an
 	/// <see cref="AuthorizationRequestValidationError"/> if the validation fails, or null if the request is valid.
 	/// </returns>
-	public Task<AuthorizationRequestValidationError?> ValidateAsync(AuthorizationValidationContext context)
-		=> Task.FromResult(Validate(context));
+	public Task<AuthorizationRequestValidationError?> ValidateAsync(TenantDefinition tenant, AuthorizationValidationContext context)
+		=> Task.FromResult(Validate(tenant, context));
 
 	/// <summary>
 	/// Abstract method for validating the authorization request.
 	/// Derived classes must implement this method to provide specific validation logic.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="context">The validation context containing client information and request details.</param>
 	/// <returns>
 	/// An <see cref="AuthorizationRequestValidationError"/> if the validation fails, or null if the request is valid.
 	/// </returns>
-	protected abstract AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context);
+	protected abstract AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context);
 }

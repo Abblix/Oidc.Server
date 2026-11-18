@@ -107,7 +107,7 @@ public class IntrospectionCallerTests(TestFactory factory) : TestBase(factory)
         HttpClient client, DiscoveryDocument discovery)
     {
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        return tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        return tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
     }
 
 }

@@ -6,7 +6,10 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 
 namespace Abblix.Oidc.Server.Features.Tokens.Formatters;
@@ -21,24 +24,35 @@ public static class ServiceJwtEncryptionExtensions
     /// <c>aud</c> can read it.
     /// </summary>
     /// <param name="encryption">The policy projected from the server's own settings.</param>
+    /// <param name="tenant">The tenant whose resources the audience is one of.</param>
+    /// <param name="client">The client the token is issued to, whose profile the algorithm must satisfy.</param>
     /// <param name="context">The authorization context naming the token's audience.</param>
     /// <param name="audienceKeys">Answers which key, if any, the named audience published.</param>
-    /// <returns>The policy, pointed at the audience's key where one is published.</returns>
+    /// <returns>The policy, pointed at the audience's key and its algorithm where one is published.</returns>
     /// <remarks>
     /// An audience that publishes no key leaves the policy untouched, which is how it says a signed JWS is
     /// what it expects. What makes a set of resources publish one key or none is
-    /// <see cref="IAudienceKeyResolver"/>'s question.
+    /// <see cref="IAudienceKeyResolver"/>'s question, which is not asked of a policy that turns encryption off: such a
+    /// token is issued as a signed JWS whatever its audience publishes.
     /// </remarks>
     public static async Task<ServiceJwtEncryption> WithAudienceKeyAsync(
         this ServiceJwtEncryption encryption,
+        TenantDefinition tenant,
+        ClientInfo client,
         AuthorizationContext context,
         IAudienceKeyResolver audienceKeys)
     {
-        if (context.Resources is not { Length: > 0 } resources)
+        if (encryption.Encrypt == false || context.Resources is not { Length: > 0 } resources)
             return encryption;
 
-        return await audienceKeys.FindEncryptionKeyAsync(resources) is { } audienceKey
-            ? encryption with { Key = audienceKey }
-            : encryption;
+        var audienceKey = await audienceKeys.FindEncryptionKeyAsync(
+            tenant,
+            resources,
+            SecurityProfileRequirements.For(tenant, client),
+            encryption.KeyManagementAlgorithm ?? EncryptionAlgorithms.KeyManagement.RsaOaep256);
+
+        return audienceKey is null
+            ? encryption
+            : encryption with { Key = audienceKey.Key, KeyManagementAlgorithm = audienceKey.Algorithm };
     }
 }

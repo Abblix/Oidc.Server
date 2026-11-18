@@ -1,6 +1,6 @@
 # Abblix.Jwt.Vault
 
-**Abblix.Jwt.Vault** lets any [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) host - the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) included, but equally a service that only signs tokens - sign and decrypt with keys protected by the HashiCorp Vault / OpenBao Transit secrets engine, in either of two postures. Hold the keys inside Transit, non-exportable, so their private halves never enter your process and every signature is a Transit round-trip; or mint them in-process and seal each to a Transit key, so signing stays local and only the sealed copies leave the process. Either way only public halves are published, and signature verification runs locally and never calls Transit.
+Abblix.Jwt.Vault lets any [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) host - the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) included, but equally a service that only signs tokens - sign and decrypt with keys protected by the HashiCorp Vault / OpenBao Transit secrets engine, in either of two postures. Hold the keys inside Transit, non-exportable, so their private halves never enter your process and every signature is a Transit round-trip; or mint them in-process and seal each to a Transit key, so signing stays local and only the sealed copies leave the process. Either way only public halves are published, and signature verification runs locally and never calls Transit.
 
 Read [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md) first. It is the shared model for every custodian package: what the guarantee does and does not cover, what it costs, how rotation works, and why the placement call is required. This README covers only what is specific to Vault.
 
@@ -68,8 +68,8 @@ builder.Services
     .AddVaultCustodian(vault =>
     {
         // Vault must be reached over TLS: this connection carries the token and every signature.
-        vault.Address = builder.Configuration["Vault:Address"]
-            ?? throw new InvalidOperationException("Vault:Address is not configured.");
+        vault.Address = new Uri(builder.Configuration["Vault:Address"]
+            ?? throw new InvalidOperationException("Vault:Address is not configured."));
         vault.Token = builder.Configuration["Vault:Token"]; // from the environment, never hardcoded
         vault.TransitMount = "transit";                     // optional: this is the default mount
     })
@@ -121,14 +121,20 @@ The refresh happens on use, not on a background schedule: each request through t
 builder.Services.AddVaultCustodian(vault => builder.Configuration.GetSection("Vault").Bind(vault));
 ```
 
-```jsonc
-// Kubernetes: the pod authenticates with its projected service-account token,
-// which is re-read on every login because the kubelet rotates the file.
-"Vault": { "Authentication": { "Kubernetes": { "Role": "oidc-signer" } } }
+Kubernetes: the pod authenticates with its projected service-account token, which is re-read on every login because the kubelet rotates the file.
 
-// AppRole: the identifier pair, for a host outside Kubernetes. The secret comes
-// from a secret store or a mounted secret, never from a committed file.
-"Vault": { "Authentication": { "AppRole": { "RoleId": "...", "SecretId": "..." } } }
+```json
+{
+  "Vault": { "Authentication": { "Kubernetes": { "Role": "oidc-signer" } } }
+}
+```
+
+AppRole: the identifier pair, for a host outside Kubernetes. The secret comes from a secret store or a mounted secret, never from a committed file.
+
+```json
+{
+  "Vault": { "Authentication": { "AppRole": { "RoleId": "...", "SecretId": "..." } } }
+}
 ```
 
 The auth role must issue service tokens without a use limit (`token_num_uses=0`): every Transit call spends a use invisibly. For AppRole, remember that every login consumes a `secret_id` use - including logins retried after a lost response - so a bounded `secret_id_num_uses` runs out on schedule rather than on error.
@@ -139,7 +145,7 @@ Reach Vault over TLS in every environment that is not a local dev container: the
 
 ### The HTTP pipeline
 
-Both engines share one client from the host's `IHttpClientFactory`, so retries, a circuit breaker, timeouts, a proxy or a client certificate are added with the standard APIs and nothing of ours.
+Both engines share one client from the host's `IHttpClientFactory`, so retries, a circuit breaker, timeouts, a proxy or a client certificate are added with the standard APIs and nothing of ours. The examples below use `AddStandardResilienceHandler` from [Microsoft.Extensions.Http.Resilience](https://www.nuget.org/packages/Microsoft.Extensions.Http.Resilience), which your application installs itself.
 
 To make every outbound client of your application resilient, including this one, name none of them:
 
@@ -172,7 +178,7 @@ With `UseKeysInProcess`, the server rotates on the `RotateEvery` schedule with n
 
 With `UseKeysInCustodian`, every issued token costs at least two Transit round-trips: one to list the signing key's versions, one to sign. Decrypting an inbound encrypted request object or client assertion adds an unwrap; issuing an encrypted token adds nothing, because it is wrapped to the recipient's public key locally. Nothing here is cached, and Transit is a hard dependency of token issuance, so size it for your peak token rate. Set an explicit HTTP timeout: a hung call is otherwise bounded only by `HttpClient.Timeout`, which defaults to 100 seconds.
 
-With `UseKeysInProcess`, token issuance makes no Transit call: the server signs locally and reaches Transit only to open a sealed key when a pod loads or refreshes its ring, and, for the winning key of each new period, on any pod that did not mint it. Minting needs Transit only for the key-encryption key's public half, which the server caches. The full picture is in [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md).
+With `UseKeysInProcess`, token issuance makes no Transit call: the server signs locally and reaches Transit on every refresh of the ring, at half the propagation window: one read of the key-encryption key's versions and one unwrap for every key the ring holds, for each tenant. Each mint also reads the key-encryption key's public half, so a pod cannot mint while Transit is unreachable. The full picture is in [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md).
 
 ## Supported algorithms
 
@@ -190,13 +196,13 @@ ECDH-ES key agreement is not supported: Vault Transit exposes no key-agreement p
 
 | Package | Description |
 |---------|-------------|
-| **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
-| **[Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure)** | Azure Key Vault custodian for the same external-key seam |
-| **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
+| [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) | Core OpenID Connect server implementation |
+| [Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure) | Azure Key Vault custodian for the same external-key seam |
+| [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) | JWT signing, encryption, and validation using .NET crypto primitives |
 
 ## Getting Started
 
-To learn more about the Abblix OIDC Server product, visit our [Documentation](https://docs.abblix.com/docs) site and explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide).
+To learn more about the Abblix OIDC Server product, visit our [Documentation](https://www.abblix.com/en/docs/introduction-to-abblix-oidc-server) site and explore the [Getting Started Guide](https://www.abblix.com/en/docs/getting-started-guide).
 
 ## License
 
@@ -204,6 +210,6 @@ See [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
 
 ## Contacts
 
-- **General inquiries**: [info@abblix.com](mailto:info@abblix.com)
-- **Support and security reports**: [support@abblix.com](mailto:support@abblix.com)
-- **Website**: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)
+- General inquiries: [info@abblix.com](mailto:info@abblix.com)
+- Support and security reports: [support@abblix.com](mailto:support@abblix.com)
+- Website: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)

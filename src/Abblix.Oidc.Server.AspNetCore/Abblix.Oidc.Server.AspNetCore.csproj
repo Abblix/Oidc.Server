@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -10,6 +9,7 @@
              part of each adapter's NuGet package (its assembly is embedded into them), never as a standalone
              package, so it is deliberately not packable. -->
         <IsPackable>false</IsPackable>
+
     </PropertyGroup>
 
     <ItemGroup>
@@ -21,6 +21,7 @@
         <InternalsVisibleTo Include="Abblix.Oidc.Server.Mvc" />
         <InternalsVisibleTo Include="Abblix.Oidc.Server.MinimalApi" />
         <InternalsVisibleTo Include="Abblix.Oidc.Server.AspNetCore.UnitTests" />
+        <InternalsVisibleTo Include="Abblix.Oidc.Server.UnitTests" />
     </ItemGroup>
 
     <ItemGroup>

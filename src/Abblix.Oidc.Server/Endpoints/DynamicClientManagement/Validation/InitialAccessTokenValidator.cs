@@ -6,10 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.Options;
 using HttpRequestHeaders = Abblix.Oidc.Server.Common.Constants.HttpRequestHeaders;
@@ -19,59 +21,73 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 /// <summary>
 /// Validates the initial access token on client registration requests per RFC 7591 Section 3
 /// and RFC 6750 Bearer Token Usage. When <see cref="OidcOptions.RequireInitialAccessToken"/> is enabled,
-/// checks JWT signature, expiration, type, and revocation status.
-/// Skipped for update operations and when the feature is disabled.
+/// checks JWT signature, expiration, type, and revocation status, the last through the token status check of
+/// <see cref="IAuthServiceJwtValidator"/>, which refuses a token whose identifier is recorded as revoked.
+/// Skipped when the feature is disabled.
 /// </summary>
 /// <param name="jwtValidator">Validates JWT signature and expiration.</param>
-/// <param name="revocationProvider">Checks whether the token has been revoked.</param>
 /// <param name="options">OIDC configuration options.</param>
 public class InitialAccessTokenValidator(
     IAuthServiceJwtValidator jwtValidator,
-    IInitialAccessTokenRevocationProvider revocationProvider,
-    IOptionsMonitor<OidcOptions> options) : IClientRegistrationContextValidator
+    IOptionsMonitor<OidcOptions> options) : IInitialAccessTokenValidator
 {
     /// <inheritdoc />
-    public async Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+    public async Task<OidcError?> ValidateAsync(TenantDefinition tenant, IReadOnlyList<string>? authorizationHeaderLines)
     {
-        if (context.Operation != DynamicClientOperation.Register || !options.CurrentValue.RequireInitialAccessToken)
+        if (!options.CurrentValue.RequireInitialAccessToken)
             return null;
 
-        var header = context.Request.AuthorizationHeader;
-        if (header?.Parameter == null)
+        // RFC 7591 section 3.2.2 answers an error "appropriate to the OAuth 2.0 token type", and RFC 6750 section 3.1
+        // names a request that "uses more than one method for including an access token" an invalid_request
+        if (authorizationHeaderLines is { Count: > 1 })
+            return Common.Validation.ErrorFactory.MoreThanOneBearerAuthorizationHeader;
+
+        // RFC 6750 section 3.1: a request that "lacks any authentication information (e.g., the client was unaware that
+        // authentication is necessary or attempted using an unsupported authentication method)" gets no error code, so
+        // the typed marker has the challenge builder leave the error attributes out. A token in the query is not read
+        // here at all, so the request carrying one lacks it alike
+        var header = AuthenticationHeaderValueExtensions.FromSingleLine(authorizationHeaderLines);
+        if (header == null)
         {
-            return new OidcError(ErrorCodes.InvalidToken,
+            return new MissingAuthenticationError(
                 $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
         }
 
-        if (header.Scheme != TokenTypes.Bearer)
+        if (!header.HasScheme(TokenTypes.Bearer))
+            return new MissingAuthenticationError($"The scheme name '{header.Scheme}' is not supported");
+
+        // RFC 6750 section 2.1: the credentials are "Bearer" 1*SP b64token, so the scheme alone is a malformed request,
+        // which section 3.1 names invalid_request, rather than a token found invalid
+        if (header.Parameter == null)
         {
-            return new OidcError(ErrorCodes.InvalidToken,
-                $"The scheme name '{header.Scheme}' is not supported");
+            return new BearerRequestError(
+                $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
         }
 
         // The audience is required and checked. An initial access token authorizes registration at this
         // server, so this server is its audience, and the shared validator accepts exactly that. The check
         // used to be off because the token carried no 'aud' at all - a token with no stated recipient, and
         // the one exception to the rule every other token here follows.
-        var result = await jwtValidator.ValidateAsync(header.Parameter);
+        var result = await jwtValidator.ValidateAsync(
+            tenant,
+            client: null,
+            header.Parameter,
+            TokenTypePolicy.Exactly(JwtTypes.InitialAccessToken),
+            // A token that never expires could not be revoked for good: its revocation is kept until it expires
+            ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
 
         if (result.TryGetFailure(out var error))
             return new OidcError(ErrorCodes.InvalidToken, error.ErrorDescription);
 
         var token = result.GetSuccess();
 
-        if (token.Header.Type != JwtTypes.InitialAccessToken)
-        {
-            return new OidcError(ErrorCodes.InvalidToken,
-                $"Invalid token type: {token.Header.Type}");
-        }
-
         var subject = token.Payload.Subject;
         if (string.IsNullOrEmpty(subject))
             return new OidcError(ErrorCodes.InvalidToken, "Token subject is missing");
 
-        if (await revocationProvider.IsRevokedAsync(subject))
-            return new OidcError(ErrorCodes.InvalidToken, "The access token has been revoked");
+        // The identifier the token is revoked by: a token without one could never be refused once issued
+        if (string.IsNullOrEmpty(token.Payload.JwtId))
+            return new OidcError(ErrorCodes.InvalidToken, "Token identifier is missing");
 
         return null;
     }

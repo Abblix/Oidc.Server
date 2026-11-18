@@ -14,13 +14,15 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Endpoints.EndSession.Interfaces;
 using Abblix.Oidc.Server.Endpoints.EndSession;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
@@ -37,18 +39,18 @@ public class EndSessionRequestProcessorTests
 
     private readonly Mock<ILogger<EndSessionRequestProcessor>> _logger;
     private readonly Mock<IAuthSessionService> _authSessionService;
-    private readonly Mock<IIssuerProvider> _issuerProvider;
     private readonly Mock<IClientInfoProvider> _clientInfoProvider;
     private readonly Mock<ILogoutNotifier> _logoutNotifier;
     private readonly Mock<ITokenRevoker> _tokenRevoker;
+    private readonly RecordedSessionClients _sessionClients = new();
     private readonly OidcOptions _options;
+    private readonly Mock<ILogoutConfirmationStore> _confirmationStore = new(MockBehavior.Strict);
     private readonly EndSessionRequestProcessor _processor;
 
     public EndSessionRequestProcessorTests()
     {
         _logger = new Mock<ILogger<EndSessionRequestProcessor>>();
         _authSessionService = new Mock<IAuthSessionService>(MockBehavior.Strict);
-        _issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _logoutNotifier = new Mock<ILogoutNotifier>(MockBehavior.Strict);
         _tokenRevoker = new Mock<ITokenRevoker>(MockBehavior.Strict);
@@ -56,11 +58,16 @@ public class EndSessionRequestProcessorTests
         _processor = new EndSessionRequestProcessor(
             _logger.Object,
             _authSessionService.Object,
-            _issuerProvider.Object,
-            _clientInfoProvider.Object,
-            _logoutNotifier.Object,
-            _tokenRevoker.Object,
-            Options.Create(_options));
+            new AuthSessionTerminator(
+                _tokenRevoker.Object,
+                new SessionLogoutNotifier(
+                    NullLogger<SessionLogoutNotifier>.Instance,
+                    _sessionClients,
+                    _clientInfoProvider.Object,
+                    _logoutNotifier.Object,
+                    SingleIssuer.LicensedCatalog),
+                Options.Create(_options)),
+            _confirmationStore.Object);
     }
 
     private static EndSessionRequest CreateEndSessionRequest(
@@ -84,23 +91,46 @@ public class EndSessionRequestProcessorTests
         return new ValidEndSessionRequest(request, clientInfo);
     }
 
-    private static AuthSession CreateAuthSession(
+    private AuthSession CreateAuthSession(
         string subject = "user_123",
         string sessionId = "session_123",
-        params string[] affectedClientIds)
+        params string[] clientIds)
     {
-        var session = new AuthSession(
+        foreach (var clientId in clientIds)
+            _sessionClients.Record(sessionId, clientId);
+
+        return new AuthSession(
             subject,
             sessionId,
-            DateTimeOffset.UtcNow,
+            TimeProvider.System.GetUtcNow(),
             "local");
+    }
 
-        foreach (var clientId in affectedClientIds)
+    /// <summary>
+    /// The clients each session of the test's tenant has on record, as the tests set them up; a session of any other
+    /// tenant has none.
+    /// </summary>
+    private sealed class RecordedSessionClients : ISessionClientRegistry
+    {
+        private readonly Dictionary<string, List<string>> _clients = new(StringComparer.Ordinal);
+
+        public void Record(string sessionId, string clientId)
         {
-            session.AffectedClientIds.Add(clientId);
+            var key = TenantKey.Of(SingleIssuer.Tenant, sessionId);
+            if (!_clients.TryGetValue(key, out var clients))
+                _clients[key] = clients = [];
+
+            clients.Add(clientId);
         }
 
-        return session;
+        public Task AddClientAsync(
+            TenantDefinition tenant, string sessionId, string clientId, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Ending a session never records a client.");
+
+        public Task<IReadOnlyCollection<string>> GetClientsAsync(
+            TenantDefinition tenant, string sessionId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyCollection<string>>(
+                _clients.TryGetValue(TenantKey.Of(tenant, sessionId), out var clients) ? [..clients] : []);
     }
 
     /// <summary>
@@ -122,16 +152,14 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.NotNull(response.PostLogoutRedirectUri);
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.NotNull(success.PostLogoutRedirectUri);
         _authSessionService.Verify(s => s.AuthenticateAsync(), Times.Once);
         _authSessionService.Verify(s => s.SignOutAsync(), Times.Once);
     }
@@ -157,21 +185,18 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
 
         _tokenRevoker
-            .Setup(r => r.RevokeSessionAsync("session_abc", null, It.IsAny<CancellationToken>()))
+            .Setup(r => r.RevokeSessionAsync(TestTenant.Matched, "session_abc", null, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
         _tokenRevoker.Verify(
-            r => r.RevokeSessionAsync("session_abc", null, It.IsAny<CancellationToken>()), Times.Once);
+            r => r.RevokeSessionAsync(TestTenant.Matched, "session_abc", null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -194,18 +219,15 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
         _tokenRevoker.Verify(
             r => r.RevokeSessionAsync(
-                It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()),
+                TestTenant.Matched, It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -224,12 +246,13 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync((AuthSession?)null);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.NotNull(response.PostLogoutRedirectUri);
-        Assert.Empty(response.FrontChannelLogoutRequestUris);
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.NotNull(success.PostLogoutRedirectUri);
+        Assert.Empty(success.FrontChannelLogoutRequestUris);
         _authSessionService.Verify(s => s.AuthenticateAsync(), Times.Once);
         _authSessionService.Verify(s => s.SignOutAsync(), Times.Never);
     }
@@ -252,12 +275,13 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync((AuthSession?)null);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.NotNull(response.PostLogoutRedirectUri);
-        Assert.Contains("state=state_value_123", response.PostLogoutRedirectUri.Query);
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.NotNull(success.PostLogoutRedirectUri);
+        Assert.Contains("state=state_value_123", success.PostLogoutRedirectUri.Query);
     }
 
     /// <summary>
@@ -277,12 +301,13 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync((AuthSession?)null);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.NotNull(response.PostLogoutRedirectUri);
-        Assert.Equal(redirectUri.ToString(), response.PostLogoutRedirectUri.ToString());
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.NotNull(success.PostLogoutRedirectUri);
+        Assert.Equal(redirectUri.ToString(), success.PostLogoutRedirectUri.ToString());
     }
 
     /// <summary>
@@ -307,29 +332,26 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_2"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_2"))
             .ReturnsAsync(client2);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
-        _logoutNotifier.Verify(n => n.NotifyClientAsync(client1, It.IsAny<LogoutContext>()), Times.Once);
-        _logoutNotifier.Verify(n => n.NotifyClientAsync(client2, It.IsAny<LogoutContext>()), Times.Once);
+        _logoutNotifier.Verify(n => n.NotifyClientAsync(TestTenant.Matched, client1, It.IsAny<LogoutContext>()), Times.Once);
+        _logoutNotifier.Verify(n => n.NotifyClientAsync(TestTenant.Matched, client2, It.IsAny<LogoutContext>()), Times.Once);
     }
 
     /// <summary>
@@ -353,30 +375,27 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_missing"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_missing"))
             .ReturnsAsync((ClientInfo?)null);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(client1, It.IsAny<LogoutContext>()))
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, client1, It.IsAny<LogoutContext>()))
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
-        _logoutNotifier.Verify(n => n.NotifyClientAsync(client1, It.IsAny<LogoutContext>()), Times.Once);
+        _logoutNotifier.Verify(n => n.NotifyClientAsync(TestTenant.Matched, client1, It.IsAny<LogoutContext>()), Times.Once);
         _logoutNotifier.Verify(
-            n => n.NotifyClientAsync(It.Is<ClientInfo>(c => c.ClientId == "client_missing"), It.IsAny<LogoutContext>()),
+            n => n.NotifyClientAsync(TestTenant.Matched, It.Is<ClientInfo>(c => c.ClientId == "client_missing"), It.IsAny<LogoutContext>()),
             Times.Never);
     }
 
@@ -402,21 +421,18 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
-            .Callback<ClientInfo, LogoutContext>((_, context) => capturedContext = context)
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Callback<TenantDefinition, ClientInfo, LogoutContext>((_, _, context) => capturedContext = context)
             .Returns(Task.CompletedTask);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.NotNull(capturedContext);
@@ -446,29 +462,27 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
-            .Callback<ClientInfo, LogoutContext>((_, context) =>
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Callback<TenantDefinition, ClientInfo, LogoutContext>((_, _, context) =>
             {
                 context.FrontChannelLogoutRequestUris.Add(new Uri("https://client1.example.com/logout"));
             })
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.Single(response.FrontChannelLogoutRequestUris);
-        Assert.Equal("https://client1.example.com/logout", response.FrontChannelLogoutRequestUris[0].ToString());
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.Single(success.FrontChannelLogoutRequestUris);
+        Assert.Equal("https://client1.example.com/logout", success.FrontChannelLogoutRequestUris[0].ToString());
     }
 
     /// <summary>
@@ -494,66 +508,23 @@ public class EndSessionRequestProcessorTests
             .Callback(() => callOrder.Add("signout"))
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .Callback(() => callOrder.Add("notify"))
             .Returns(Task.CompletedTask);
 
         // Act
-        await _processor.ProcessAsync(request);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.Equal(2, callOrder.Count);
         Assert.Equal("signout", callOrder[0]);
         Assert.Equal("notify", callOrder[1]);
-    }
-
-    /// <summary>
-    /// Verifies issuer is retrieved for logout context.
-    /// IssuerProvider should be called to get issuer.
-    /// </summary>
-    [Fact]
-    public async Task ProcessAsync_ShouldRetrieveIssuerForLogoutContext()
-    {
-        // Arrange
-        var request = CreateValidEndSessionRequest();
-        var authSession = CreateAuthSession("user_123", "session_123", "client_1");
-
-        var client1 = new ClientInfo("client_1");
-
-        _authSessionService
-            .Setup(s => s.AuthenticateAsync())
-            .ReturnsAsync(authSession);
-
-        _authSessionService
-            .Setup(s => s.SignOutAsync())
-            .Returns(Task.CompletedTask);
-
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
-
-        _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
-            .ReturnsAsync(client1);
-
-        _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
-            .Returns(Task.CompletedTask);
-
-        // Act
-        await _processor.ProcessAsync(request);
-
-        // Assert
-        _issuerProvider.Verify(p => p.GetIssuer(), Times.Once);
     }
 
     /// <summary>
@@ -573,11 +544,12 @@ public class EndSessionRequestProcessorTests
             .ReturnsAsync((AuthSession?)null);
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var response));
-        Assert.Equal(redirectUri.ToString(), response.PostLogoutRedirectUri!.ToString());
+        var success = Assert.IsType<EndSessionSuccess>(response);
+        Assert.Equal(redirectUri.ToString(), success.PostLogoutRedirectUri!.ToString());
     }
 
     /// <summary>
@@ -604,20 +576,17 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .Returns(notificationGate.Task);
 
         // Act
-        var processTask = _processor.ProcessAsync(request);
+        var processTask = _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert - the processor must still be awaiting the pending notification, not done.
         Assert.False(processTask.IsCompleted);
@@ -647,20 +616,17 @@ public class EndSessionRequestProcessorTests
             .Setup(s => s.SignOutAsync())
             .Returns(Task.CompletedTask);
 
-        _issuerProvider
-            .Setup(p => p.GetIssuer())
-            .Returns(Issuer);
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync("client_1"))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, "client_1"))
             .ReturnsAsync(client1);
 
         _logoutNotifier
-            .Setup(n => n.NotifyClientAsync(It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
+            .Setup(n => n.NotifyClientAsync(TestTenant.Matched, It.IsAny<ClientInfo>(), It.IsAny<LogoutContext>()))
             .ThrowsAsync(new InvalidOperationException("client endpoint unreachable"));
 
         // Act
-        var result = await _processor.ProcessAsync(request);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, request);
 
         // Assert - logout succeeds despite the notification failure.
         Assert.True(result.TryGetSuccess(out _));

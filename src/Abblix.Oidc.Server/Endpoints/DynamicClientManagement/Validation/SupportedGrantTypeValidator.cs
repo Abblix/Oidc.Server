@@ -8,21 +8,22 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Rejects client registration when any value in <c>grant_types</c> is not advertised as
-/// supported by this server, returning <c>invalid_client_metadata</c> per OIDC DCR §3.2.
+/// supported by this server, returning <c>invalid_client_metadata</c> per OIDC DCR section 3.2.
 /// Without this gate the registration would succeed and the client would only fail later at
 /// the token endpoint with <c>unsupported_grant_type</c>, or at the authorization endpoint
 /// for the <c>implicit</c> grant. Companion to <see cref="SupportedResponseTypeValidator"/>,
 /// which applies the same rule to <c>response_types</c>.
 /// </summary>
 /// <param name="grantTypeInformers">All registered <see cref="IGrantTypeInformer"/>
-/// contributors. Their union is the same <c>grant_types_supported</c> set the discovery
-/// endpoint advertises, so registration gating, run-time gating, and discovery share one
-/// source of truth. Notable contributors: the authorization endpoint yields
+/// contributors. Their union is the <c>grant_types_supported</c> set the discovery endpoint
+/// narrows by each tenant's security profile before advertising it, so registration gating,
+/// run-time gating, and discovery share one source of truth. Notable contributors: the authorization endpoint yields
 /// <c>implicit</c> only when the host has called <c>EnableImplicitFlow()</c>; the composite
 /// token-endpoint grant handler yields every registered token-endpoint grant such as
 /// <c>authorization_code</c>, <c>refresh_token</c>, <c>client_credentials</c>,
@@ -37,7 +38,7 @@ public class SupportedGrantTypeValidator(
         .ToHashSet(StringComparer.Ordinal);
 
     /// <inheritdoc />
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var unsupported = context.Request.GrantTypes
             .Where(grantType => !_supportedGrantTypes.Contains(grantType))

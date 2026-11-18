@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// <summary>
 /// Outcome signalling that the host must surface its login UI: either no eligible session
 /// exists, or the client requested forced reauthentication via <c>prompt=login</c> /
-/// <c>max_age</c>. Maps to OpenID Connect Core 1.0 §3.1.2.6 <c>login_required</c>
+/// <c>max_age</c>. Maps to OpenID Connect Core 1.0 section 3.1.2.6 <c>login_required</c>
 /// when <c>prompt=none</c>.
 /// </summary>
 public record LoginRequired(AuthorizationRequest Model)

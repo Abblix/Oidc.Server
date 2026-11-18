@@ -26,10 +26,12 @@ namespace Abblix.Oidc.Server.Features.Licensing;
 /// <param name="loggerFactory">Logger factory for initializing the license logger.</param>
 /// <param name="licenseJwtProvider">The provider used to retrieve the license JWT.</param>
 /// <param name="clock">The clock the loaded licenses are evaluated against once loading has finished.</param>
+/// <param name="loading">Tells whatever judges against the licenses at startup that they are loaded.</param>
 internal class LicenseLoadingService(
     ILoggerFactory loggerFactory,
     ILicenseJwtProvider licenseJwtProvider,
-    TimeProvider clock) : IHostedService
+    TimeProvider clock,
+    LicenseLoading loading) : IHostedService
 {
     private readonly ILicenseJwtProvider _licenseJwtProvider = Init(loggerFactory, licenseJwtProvider);
 
@@ -51,6 +53,21 @@ internal class LicenseLoadingService(
     /// when the application starts.
     /// </remarks>
     public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await LoadAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            loading.Fail(exception);
+            throw;
+        }
+
+        loading.Complete();
+    }
+
+    private async Task LoadAsync(CancellationToken cancellationToken)
     {
         var licenses = _licenseJwtProvider.GetLicenseJwtAsync();
         if (licenses != null)

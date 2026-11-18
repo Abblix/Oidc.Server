@@ -11,8 +11,12 @@ using Azure;
 using Azure.Identity;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
+using Abblix.Tests.Shared;
 using Xunit;
+using Abblix.Jwt.ExternalKeys;
 
 namespace Abblix.Jwt.Azure.UnitTests;
 
@@ -30,16 +34,94 @@ public sealed class KeyVaultClientTests : IDisposable
     // typed client never owns the factory's handler), so the test owns that lifetime here, as the Vault suite does.
     private readonly List<HttpClient> _httpClients = [];
 
-    private KeyVaultClient ClientOver(StubHttpMessageHandler handler)
+    private KeyVaultClient ClientOver(
+        StubHttpMessageHandler handler,
+        TimeProvider? timeProvider = null,
+        ILogger<KeyVaultClient>? logger = null)
     {
         var httpClient = new HttpClient(handler);
         _httpClients.Add(httpClient);
         return new KeyVaultClient(
-            NullLogger<KeyVaultClient>.Instance,
+            logger ?? NullLogger<KeyVaultClient>.Instance,
             new AzureKeyVaultOptions { KeyVaultUri = VaultUri },
             new StaticTokenCredential(),
-            httpClient);
+            httpClient,
+            timeProvider ?? TimeProvider.System);
     }
+
+    /// <summary>
+    /// Key Vault decrypts under the RSA algorithms and has no key agreement, which is what a host is held to at
+    /// startup.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, true)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep, true)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Rsa1_5, true)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.EcdhEs, false)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Aes256KW, false)]
+    public void KeyVaultServes_TheRsaAlgorithms(string algorithm, bool served)
+        => Assert.Equal(served, ClientOver(new StubHttpMessageHandler(_ => throw new InvalidOperationException()))
+            .ServesKeyManagement(algorithm));
+
+    /// <summary>
+    /// The client for a key version is kept while it is used, so signing again asks the vault for the key no second
+    /// time, and let go once it has gone unused for the idle lifetime, so the clients of rotated versions and of
+    /// tenants no longer served do not pile up: the next signature builds a new one, which asks for the key again.
+    /// </summary>
+    [Fact]
+    public async Task TheClientOfAKeyVersion_IsKeptWhileUsed_AndLetGoWhenIdle()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var key = KeyFor(SigningAlgorithms.RS256);
+        var handler = SignResponder("oidc-sign", [1, 2, 3], key.Bundle);
+        var time = new FakeTimeProvider();
+        var custodian = ClientOver(handler, time);
+
+        // Used every half of the idle lifetime for twice its length: kept the whole time
+        var halfIdle = CryptographyClients.IdleLifetime / 2;
+        await custodian.SignAsync("oidc-sign/v1", SigningAlgorithms.RS256, [9], ct);
+        foreach (var _ in Enumerable.Range(0, 4))
+        {
+            time.Advance(halfIdle);
+            await custodian.SignAsync("oidc-sign/v1", SigningAlgorithms.RS256, [9], ct);
+        }
+
+        Assert.Equal(1, KeyReads(handler));
+
+        time.Advance(CryptographyClients.IdleLifetime + TimeSpan.FromSeconds(1));
+        await custodian.SignAsync("oidc-sign/v1", SigningAlgorithms.RS256, [9], ct);
+        Assert.Equal(2, KeyReads(handler));
+    }
+
+    // The requests that read the key itself, as a new crypto client does before its first operation
+    private static int KeyReads(StubHttpMessageHandler handler)
+        => handler.Requests.Count(request => request.Method == HttpMethod.Get);
+
+
+    [Fact]
+    public async Task AVaultThatCannotBeReachedIsTemporary()
+    {
+        // A connection that could not be made says nothing about the request, and the next one may succeed.
+        // Reported as permanent it tells a caller never to come back from an outage that clears itself.
+        var handler = new StubHttpMessageHandler(_ => throw new HttpRequestException("no route to host"));
+
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(() => ClientOver(handler).SignAsync(
+            "oidc-sign/1", SigningAlgorithms.RS256, [1], TestContext.Current.CancellationToken));
+    }
+
+
+    [Theory]
+    [InlineData(0, true)]     // never answered at all, which the SDK reports as no status
+    [InlineData(408, true)]   // the service gave up waiting for a request, not one it disliked
+    [InlineData(429, true)]   // throttled per vault
+    [InlineData(500, true)]
+    [InlineData(503, true)]
+    [InlineData(400, false)]  // the request was wrong, and will be next time
+    [InlineData(401, false)]
+    [InlineData(403, false)]
+    [InlineData(404, false)]
+    public void TheStatusesReadAsTemporaryAreTheOnesWaitingCanCure(int status, bool temporary)
+        => Assert.Equal(temporary, AzureFailure.IsTransient(status));
 
     public void Dispose()
     {
@@ -177,16 +259,23 @@ public sealed class KeyVaultClientTests : IDisposable
     public async Task UnwrapKeyAsync_RejectsUnsupportedAlgorithm_WithoutCallingTheVault()
     {
         // An algorithm this store cannot unwrap must be refused outright. Mapping it to something the vault does
-        // accept would decrypt under an algorithm the caller never asked for.
+        // accept would decrypt under an algorithm the caller never asked for. The refusal is a null, as for any
+        // token that does not open, since the algorithm is the sender's choice.
         var handler = new StubHttpMessageHandler(_ =>
             throw new InvalidOperationException("the vault must not be called for an unsupported algorithm"));
+        var logger = new RecordingLogger<KeyVaultClient>();
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler).UnwrapKeyAsync(
+        var key = await ClientOver(handler, logger: logger).UnwrapKeyAsync(
             "oidc-enc/v1",
             EncryptionAlgorithms.KeyManagement.EcdhEs,
             new JsonWebTokenHeader(new JsonObject()),
             [5, 5],
-            TestContext.Current.CancellationToken));
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(key);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogEvents.KeyVaultClient.AlgorithmNotServed, entry.EventId);
+        Assert.Equal(LogLevel.Warning, entry.Level);
     }
 
     [Fact]
@@ -271,7 +360,8 @@ public sealed class KeyVaultClientTests : IDisposable
 
     /// <summary>
     /// The store refuses ECDH-ES rather than pretending: Key Vault exposes no key-agreement primitive, so a
-    /// silent fallback would derive a shared secret that is not the one the peer derived.
+    /// fallback would derive a shared secret that is not the one the peer derived. The refusal is a null, as for
+    /// any token that does not open, since the algorithm is the sender's choice.
     /// </summary>
     [Fact]
     public async Task AgreeKeyAsync_IsRefused_BecauseKeyVaultHasNoAgreementPrimitive()
@@ -280,9 +370,19 @@ public sealed class KeyVaultClientTests : IDisposable
         var handler = new StubHttpMessageHandler(_ =>
             StubHttpMessageHandler.Json(HttpStatusCode.OK, AzureResponses.KeyBundle(VaultUri, "oidc-enc", rsa.ExportParameters(false))));
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => ClientOver(handler).AgreeKeyAsync(
+        var logger = new RecordingLogger<KeyVaultClient>();
+
+        var secret = await ClientOver(handler, logger: logger).AgreeKeyAsync(
             "oidc-enc/v1", EncryptionAlgorithms.KeyManagement.EcdhEs, new EllipticCurveJsonWebKey(),
-            TestContext.Current.CancellationToken));
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(secret);
+
+        // The refusal reaches the token's sender as nothing at all; the operator who published the key needs a
+        // record naming the algorithm, or the failure reads as tokens encrypted to another key.
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogEvents.KeyVaultClient.AlgorithmNotServed, entry.EventId);
+        Assert.Equal(LogLevel.Warning, entry.Level);
     }
 
     [Fact]
@@ -301,7 +401,7 @@ public sealed class KeyVaultClientTests : IDisposable
     {
         // The identity lost its Crypto User role. That is our fault, not the client's, and reporting it as a
         // failed decryption would tell every caller its JWE is bad while the vault is simply refusing us.
-        await Assert.ThrowsAsync<RequestFailedException>(() => DecryptWithVaultAnswering(
+        await Assert.ThrowsAsync<KeyCustodianFailedException>(() => DecryptWithVaultAnswering(
             HttpStatusCode.Forbidden, """{"error":{"code":"Forbidden","message":"denied"}}"""));
     }
 
@@ -311,7 +411,7 @@ public sealed class KeyVaultClientTests : IDisposable
         // Key Vault throttles per vault, and this key sits on the token path, so 429 is routine rather than
         // exotic. Swallowing it as null would reject every encrypted token for as long as the throttle lasts,
         // silently, and blame the clients.
-        await Assert.ThrowsAsync<RequestFailedException>(() => DecryptWithVaultAnswering(
+        await Assert.ThrowsAsync<KeyCustodianUnavailableException>(() => DecryptWithVaultAnswering(
             HttpStatusCode.TooManyRequests, """{"error":{"code":"Throttled","message":"slow down"}}"""));
     }
 

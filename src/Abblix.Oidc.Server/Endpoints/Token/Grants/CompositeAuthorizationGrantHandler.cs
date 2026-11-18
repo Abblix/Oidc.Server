@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -46,6 +47,7 @@ public class CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantH
     /// This method abstracts away the complexity of identifying and invoking the correct handler, simplifying the main
     /// authorization flow.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">
     /// The token request, which includes the grant type and relevant parameters for processing the request.</param>
     /// <param name="clientInfo">
@@ -54,7 +56,7 @@ public class CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantH
     /// If successful, it contains the granted authorization;
     /// otherwise, it contains an error explaining why the authorization failed.</returns>
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
+    public async Task<Result<AuthorizedGrant, OidcError>> AuthorizeAsync(TenantDefinition tenant, TokenRequest request, ClientInfo clientInfo, CancellationToken cancellationToken)
     {
         // Check if there is a handler for the requested grant type.
         // If no handler exists, return an error indicating that the grant type is unsupported.
@@ -66,6 +68,6 @@ public class CompositeAuthorizationGrantHandler(IEnumerable<IAuthorizationGrantH
         }
 
         // Delegate the authorization request to the handler that supports the specified grant type.
-        return await grantHandler.AuthorizeAsync(request, clientInfo, cancellationToken);
+        return await grantHandler.AuthorizeAsync(tenant, request, clientInfo, cancellationToken);
     }
 }

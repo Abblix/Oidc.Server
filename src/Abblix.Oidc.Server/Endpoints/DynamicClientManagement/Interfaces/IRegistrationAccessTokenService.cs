@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 
 /// <summary>
@@ -18,19 +20,20 @@ public interface IRegistrationAccessTokenService
     /// <summary>
     /// Issues a registration access token for a registered client.
     /// </summary>
+    /// <param name="tenant">The tenant the token is issued at.</param>
     /// <param name="clientId">The unique identifier of the registered client.</param>
     /// <param name="issuedAt">The timestamp when the token is issued.</param>
     /// <param name="expiresIn">The optional duration after which the token expires.</param>
     /// <param name="tokenId">
-    /// The identifier (jti) to embed in the token. The caller records this value via the
-    /// registration-access-token store so the validator can bind the token to the client: issuing
-    /// with a fresh id invalidates earlier tokens, reusing the stored id keeps them valid
-    /// (idempotent read).
+    /// The identifier (jti) to embed in the token. The caller stores this value with the client's
+    /// registration through the client manager, so the client configuration endpoint accepts the
+    /// token for that registration alone: issuing with a fresh id invalidates earlier tokens, reusing
+    /// the held id keeps them valid (idempotent read).
     /// </param>
     /// <returns>A task that results in the encoded registration access token.</returns>
     /// <remarks>
     /// The registration access token is a bearer token that authenticates the client when
     /// performing read, update, or delete operations on its configuration.
     /// </remarks>
-    Task<string> IssueTokenAsync(string clientId, DateTimeOffset issuedAt, TimeSpan? expiresIn, string tokenId);
+    Task<string> IssueTokenAsync(TenantDefinition tenant, string clientId, DateTimeOffset issuedAt, TimeSpan? expiresIn, string tokenId);
 }

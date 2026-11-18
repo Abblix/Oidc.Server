@@ -54,6 +54,48 @@ public class ModelBinderRefusalTests
     }
 
     /// <summary>
+    /// A tag naming no language, one .NET builds a nameless culture from or one it does not know, is recorded as a
+    /// failure, as the request object path refuses it.
+    /// </summary>
+    [Theory]
+    [InlineData("und")]
+    [InlineData("en und")]
+    [InlineData("!")]
+    [InlineData("en\t")]
+    [InlineData("\t")]
+    public async Task The_locale_binder_records_a_failure_for_a_tag_naming_no_language(string value)
+    {
+        var outcome = await ModelBinderRunner.BindAsync(new CultureInfoBinder(), typeof(CultureInfo[]), value);
+
+        Assert.False(outcome.IsModelSet);
+        Assert.False(outcome.ModelState.IsValid);
+    }
+
+    /// <summary>
+    /// A list of spaces alone names no tag and binds as an empty list, as the other two paths read it.
+    /// </summary>
+    [Fact]
+    public async Task The_locale_binder_binds_spaces_alone_as_an_empty_list()
+    {
+        var outcome = await ModelBinderRunner.BindAsync(new CultureInfoBinder(), typeof(CultureInfo[]), "   ");
+
+        Assert.True(outcome.IsModelSet);
+        Assert.Empty(Assert.IsType<CultureInfo[]>(outcome.Model));
+    }
+
+    /// <summary>
+    /// A single culture a host's own action binds is held to the same check as a list.
+    /// </summary>
+    [Fact]
+    public async Task The_locale_binder_records_a_failure_for_a_single_tag_naming_no_language()
+    {
+        var outcome = await ModelBinderRunner.BindAsync(new CultureInfoBinder(), typeof(CultureInfo), "und");
+
+        Assert.False(outcome.IsModelSet);
+        Assert.False(outcome.ModelState.IsValid);
+    }
+
+    /// <summary>
     /// Asking for one culture and receiving two: the two arrive joined, no culture is named "en-US,fr-FR", and
     /// the binder records the failure instead of binding one of them. Which one it might have picked is the
     /// point - a silent choice here decides the language the end user is shown.
@@ -136,43 +178,22 @@ public class ModelBinderRefusalTests
     }
 
     /// <summary>
-    /// A value the header grammar cannot parse is refused rather than passed along as something the endpoint
-    /// would read as a credential.
+    /// The authorization header binder keeps every line as received, a line the credentials grammar rejects
+    /// included: the field is not a list (RFC 9110 sections 11.6.2 and 5.3), so the lines are neither joined nor
+    /// judged here, and the core model reads credentials from a single line only.
     /// </summary>
-    /// <remarks>
-    /// The cases are chosen from what the grammar actually rejects, which is narrower than it looks: a scheme
-    /// is any token, so "this is not a header value" parses happily as the scheme "this" with the rest as its
-    /// parameter (measured). What fails is an empty value, or a first token that is not a token at all - a
-    /// comma or an equals sign inside it, or non-ASCII. Writing this test from the phrase that reads most
-    /// obviously wrong would have asserted a refusal that never happens.
-    /// </remarks>
     [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
+    [InlineData("Bearer some-token")]
     [InlineData("=bad")]
-    [InlineData("Bearer,token")]
-    public async Task The_authorization_header_binder_refuses_a_value_the_grammar_rejects(string headerValue)
+    [InlineData("Bearer some-token", "DPoP some-token")]
+    [InlineData("Basic a", "Basic b", "Basic c")]
+    [InlineData("", "Bearer some-token")]
+    public async Task The_authorization_header_binder_binds_every_line_apart(params string[] lines)
     {
         var outcome = await ModelBinderRunner.BindHeaderAsync(
-            new AuthenticationHeaderBinder(), typeof(AuthenticationHeaderValue), "Authorization", headerValue);
-
-        Assert.False(outcome.IsModelSet);
-    }
-
-    /// <summary>
-    /// And the ordinary case, so the refusal above means something: a well-formed header binds to its scheme
-    /// and parameter.
-    /// </summary>
-    [Fact]
-    public async Task The_authorization_header_binder_binds_a_well_formed_header()
-    {
-        var outcome = await ModelBinderRunner.BindHeaderAsync(
-            new AuthenticationHeaderBinder(), typeof(AuthenticationHeaderValue),
-            "Authorization", "Bearer some-token");
+            new AuthenticationHeaderBinder(), typeof(IReadOnlyList<string>), "Authorization", lines);
 
         Assert.True(outcome.IsModelSet);
-        var header = Assert.IsType<AuthenticationHeaderValue>(outcome.Model);
-        Assert.Equal("Bearer", header.Scheme);
-        Assert.Equal("some-token", header.Parameter);
+        Assert.Equal(lines, Assert.IsType<string[]>(outcome.Model));
     }
 }

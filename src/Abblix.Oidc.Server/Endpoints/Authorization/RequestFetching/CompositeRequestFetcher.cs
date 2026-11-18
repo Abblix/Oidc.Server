@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -26,16 +27,17 @@ public class CompositeRequestFetcher(IAuthorizationRequestFetcher[] fetchers) : 
     /// has the opportunity to handle the request. If a fetcher returns a fault, the process stops and
     /// the fault is returned. If all fetchers succeed, the method returns the final successful result.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The authorization request to be processed.</param>
     /// <returns>A <see cref="Result{TSuccess,TFailure}"/> of <see cref="AuthorizationRequest"/> on success or
     /// <see cref="AuthorizationRequestValidationError"/> on failure, representing the outcome of the fetching
     /// process. If a fetcher returns a fault, that fault is propagated; otherwise the final successful request is
     /// returned.</returns>
-    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(AuthorizationRequest request)
+    public async Task<Result<AuthorizationRequest, AuthorizationRequestValidationError>> FetchAsync(TenantDefinition tenant, AuthorizationRequest request)
     {
         foreach (var fetcher in fetchers)
         {
-            var result = await fetcher.FetchAsync(request);
+            var result = await fetcher.FetchAsync(tenant, request);
 
             if (result.TryGetFailure(out var error))
                 return error;

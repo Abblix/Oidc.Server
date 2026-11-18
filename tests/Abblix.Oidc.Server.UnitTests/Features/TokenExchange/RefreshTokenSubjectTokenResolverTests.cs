@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using System;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,6 +23,7 @@ using Abblix.Oidc.Server.Features.UserAuthentication;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.TokenExchange;
 
@@ -30,6 +33,9 @@ namespace Abblix.Oidc.Server.UnitTests.Features.TokenExchange;
 /// </summary>
 public class RefreshTokenSubjectTokenResolverTests
 {
+    /// <summary>The client requesting the exchange.</summary>
+    private static readonly ClientInfo Requester = new("requester");
+
     private const string TokenWire = "refresh.jwt.signature";
     private const string OriginalClientId = "client-1";
 
@@ -44,8 +50,8 @@ public class RefreshTokenSubjectTokenResolverTests
         // The refresh token names its original client; the resolver looks that client up (its sector opens a
         // pairwise subject) before recovering the grant. The permissive fixture lets the lookup pass licensing.
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(OriginalClientId))
-            .ReturnsAsync(new ClientInfo(OriginalClientId));
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, OriginalClientId))
+            .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccess = OfflineAccess.ConsentRequired });
 
         _resolver = new RefreshTokenSubjectTokenResolver(
             _jwtValidator.Object, _refreshTokenService.Object, _clientInfoProvider.Object);
@@ -56,23 +62,76 @@ public class RefreshTokenSubjectTokenResolverTests
     {
         var jwt = NewRefreshJwt();
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, Requester, TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
 
         var grant = new AuthorizedGrant(
             new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "https://idp.example.com"),
-            new AuthorizationContext("client-1", ["openid"], null));
+            new AuthorizationContext("client-1", [Scopes.OpenId], null));
 
         _refreshTokenService
-            .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt, It.IsAny<ClientInfo>()))
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(grant);
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal("user-9", ctx.Subject);
         Assert.Equal("https://idp.example.com", ctx.Issuer);
-        Assert.Equal(["openid"], ctx.Scope!);
+        Assert.Equal([Scopes.OpenId], ctx.Scope!);
+    }
+
+    /// <summary>
+    /// The refresh token's own family travels into the exchange, so a token exchanged from it dies with that
+    /// family. A token carrying none answers none rather than an empty name, which would be a family of its own
+    /// for everything downstream.
+    /// </summary>
+    [Theory]
+    [InlineData("grant_of_this_lineage")]
+    [InlineData(null)]
+    public async Task FamilyOfTheRefreshToken_ReachesTheContext(string? grantId)
+    {
+        var jwt = NewRefreshJwt();
+        jwt.Payload.GrantId = grantId;
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .ReturnsAsync(jwt);
+
+        _refreshTokenService
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(new AuthorizedGrant(
+                new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self"),
+                new AuthorizationContext("client-1", [Scopes.OpenId], null)));
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.Equal(grantId, ctx.GrantId);
+    }
+
+    /// <summary>
+    /// The refresh token's expiry reaches the context, because a token exchanged within its family must not
+    /// outlive it.
+    /// </summary>
+    [Fact]
+    public async Task ExpiryOfTheRefreshToken_ReachesTheContext()
+    {
+        var jwt = NewRefreshJwt();
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .ReturnsAsync(jwt);
+
+        _refreshTokenService
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(new AuthorizedGrant(
+                new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self"),
+                new AuthorizationContext("client-1", [Scopes.OpenId], null)));
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+
+        Assert.True(result.TryGetSuccess(out var ctx));
+        Assert.NotNull(jwt.Payload.ExpiresAt);
+        Assert.Equal(jwt.Payload.ExpiresAt, ctx.ExpiresAt);
     }
 
     [Fact]
@@ -80,54 +139,77 @@ public class RefreshTokenSubjectTokenResolverTests
     {
         var jwt = NewRefreshJwt();
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
 
         const string adWire = """[{"type":"payment_initiation"}]""";
         var adNode = (JsonArray)JsonNode.Parse(adWire)!;
         var grant = new AuthorizedGrant(
             new AuthSession("user-9", "session-1", _timeProvider.GetUtcNow(), "self"),
-            new AuthorizationContext("client-1", ["openid"], null) { AuthorizationDetails = adNode });
+            new AuthorizationContext("client-1", [Scopes.OpenId], null) { AuthorizationDetails = adNode });
 
         _refreshTokenService
-            .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt, It.IsAny<ClientInfo>()))
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(grant);
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(adWire, ctx.AuthorizationDetails!.ToJsonString());
         Assert.NotSame(adNode, ctx.AuthorizationDetails);
     }
 
+    /// <summary>
+    /// A refresh token exists only for offline access, so one whose client is not allowed it, as when the host
+    /// withdrew the permission, ends the exchange before its grant is looked up, as it ends the refresh grant.
+    /// </summary>
+    [Fact]
+    public async Task ClientNotAllowedOfflineAccess_Rejected()
+    {
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .ReturnsAsync(NewRefreshJwt());
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, OriginalClientId))
+            .ReturnsAsync(new ClientInfo(OriginalClientId) { OfflineAccess = OfflineAccess.Disabled });
+
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
+        _refreshTokenService.VerifyNoOtherCalls();
+    }
+
     [Fact]
     public async Task JwtValidationFailure_Rejected()
     {
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "expired"));
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
         Assert.Contains("invalid", error.ErrorDescription, System.StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// A token presented as a refresh token is validated as exactly that type, and the refusal of another one
+    /// ends the exchange.
+    /// </summary>
     [Fact]
     public async Task WrongTypHeader_Rejected()
     {
-        var jwt = NewRefreshJwt();
-        jwt.Header.Type = JsonWebTokenTypes.AccessToken;  // mismatch -- this is supposed to be rt+jwt
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, ValidationOptions.Default))
-            .ReturnsAsync(jwt);
+            .Setup(v => v.ValidateAsync(
+                TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.RefreshToken)), ServiceTokenValidation.AnyAudience))
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
-        Assert.Contains("typ", error.ErrorDescription);
     }
 
     [Fact]
@@ -135,18 +217,49 @@ public class RefreshTokenSubjectTokenResolverTests
     {
         var jwt = NewRefreshJwt();
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(jwt);
 
         _refreshTokenService
-            .Setup(s => s.AuthorizeByRefreshTokenAsync(jwt, It.IsAny<ClientInfo>()))
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, jwt, It.IsAny<ClientInfo>()))
             .ReturnsAsync(new OidcError(ErrorCodes.InvalidGrant, "token revoked"));
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
         Assert.Contains("does not refer", error.ErrorDescription);
+    }
+
+    /// <summary>
+    /// Through the server's own reading of a refresh token, one that names no tenant, as every refresh token before 3.0,
+    /// is an invalid subject token and buys nothing: its grant is never looked up.
+    /// </summary>
+    [Fact]
+    public async Task ARefreshTokenNamingNoTenant_IsAnInvalidSubjectToken()
+    {
+        var inner = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
+        inner
+            .Setup(v => v.ValidateAsync(TokenWire, It.IsAny<ValidationParameters>()))
+            .ReturnsAsync(NewRefreshJwt());
+        var resolver = new RefreshTokenSubjectTokenResolver(
+            new AuthServiceJwtValidator(
+                new ProfiledJwtValidator(inner.Object),
+                SingleIssuer.LicensedCatalog,
+                Mock.Of<Abblix.Oidc.Server.Common.Interfaces.IAuthServiceKeysProvider>(),
+                NothingRecorded.StatusCheck,
+                TestOidcOptions.Defaults(),
+            Mock.Of<Abblix.Oidc.Server.Features.ClientInformation.IClientInfoProvider>()),
+            _refreshTokenService.Object,
+            _clientInfoProvider.Object);
+
+        var result = await resolver.ResolveAsync(
+            SingleIssuer.Tenant,
+            Requester,
+            TokenWire, new Uri(TokenExchangeTokenTypes.RefreshToken), CancellationToken.None);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
     }
 
     private JsonWebToken NewRefreshJwt()

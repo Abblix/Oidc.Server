@@ -11,6 +11,7 @@ using System.Linq;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Configuration;
 using Abblix.Oidc.Server.Features.DPoP;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 using Moq;
 
@@ -22,14 +23,14 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Configuration;
 /// Unit tests for <see cref="JwtAlgorithmsProvider"/>. The provider proxies creator/validator
 /// algorithm sets unchanged for the existing pair (id-token / userinfo signing); the new
 /// <see cref="JwtAlgorithmsProvider.DpopSigningAlgorithmsSupported"/> property intersects the
-/// validator side with the static <see cref="DPoPAlgorithms.Allowed"/> whitelist (RFC 9449 §5.1).
+/// validator side with the static <see cref="DPoPAlgorithms.Allowed"/> whitelist (RFC 9449 section 5.1).
 /// </summary>
 public class JwtAlgorithmsProviderTests
 {
     private readonly Mock<IJsonWebTokenCreator> _creator = new(MockBehavior.Strict);
     private readonly Mock<IJsonWebTokenValidator> _validator = new(MockBehavior.Strict);
 
-    private JwtAlgorithmsProvider CreateProvider() => new(_creator.Object, _validator.Object);
+    private JwtAlgorithmsProvider CreateProvider() => new(_creator.Object, _validator.Object, TestEncryptionAlgorithms.Every);
 
     [Fact]
     public void DpopSigningAlgorithmsSupported_ValidatorReturnsNothingInWhitelist_ReturnsEmpty()
@@ -112,7 +113,7 @@ public class JwtAlgorithmsProviderTests
     }
 
     /// <summary>
-    /// OIDC Core §10.1: HS* signatures key on the client_secret, which this server stores only as
+    /// OIDC Core section 10.1: HS* signatures key on the client_secret, which this server stores only as
     /// a hash - so HMAC algorithms must not be advertised on any client-addressed response-signing
     /// list, even when the JWT layer has HMAC signers registered. Previously the full signer set
     /// (HS* included) leaked into discovery, a client could register HS256 via DCR, and the first
@@ -134,29 +135,56 @@ public class JwtAlgorithmsProviderTests
         Assert.Equal(expected, provider.IntrospectionSigningAlgValuesSupported.ToArray());
     }
 
+    /// <summary>
+    /// A JWT this server sends a client is encrypted by the creator, so the lists registration and discovery judge such
+    /// a JWT by are the creator's, never the decrypting validator's (left unset here, a strict mock refusing a read).
+    /// </summary>
     [Fact]
-    public void AuthorizationEncryptionAlgValuesSupported_ForwardsValidatorKeyManagementAlgorithms()
+    public void ClientAddressedEncryptionLists_ForwardTheCreatorsAlgorithms()
     {
         string[] keyManagement = [EncryptionAlgorithms.KeyManagement.RsaOaep256];
-        _validator.Setup(v => v.EncryptionAlgorithmsSupported).Returns(keyManagement);
+        string[] contentEncryption = [EncryptionAlgorithms.ContentEncryption.Aes256Gcm];
+        _creator.Setup(c => c.EncryptedResponseAlgorithmsSupported).Returns(keyManagement);
+        _creator.Setup(c => c.EncryptedResponseMethodsSupported).Returns(contentEncryption);
+        var provider = CreateProvider();
 
-        var result = CreateProvider().AuthorizationEncryptionAlgValuesSupported.ToArray();
-
-        Assert.Equal(keyManagement, result);
+        Assert.Equal(keyManagement, provider.EncryptedResponseAlgorithmsSupported.ToArray());
+        Assert.Equal(keyManagement, provider.AuthorizationEncryptionAlgValuesSupported.ToArray());
+        Assert.Equal(keyManagement, provider.IntrospectionEncryptionAlgValuesSupported.ToArray());
+        Assert.Equal(contentEncryption, provider.EncryptedResponseMethodsSupported.ToArray());
+        Assert.Equal(contentEncryption, provider.AuthorizationEncryptionEncValuesSupported.ToArray());
+        Assert.Equal(contentEncryption, provider.IntrospectionEncryptionEncValuesSupported.ToArray());
     }
 
-    [Fact]
-    public void AuthorizationEncryptionEncValuesSupported_ForwardsValidatorContentEncryptionAlgorithms()
-    {
-        string[] contentEncryption = [EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256];
-        _validator.Setup(v => v.EncryptionMethodsSupported).Returns(contentEncryption);
-
-        var result = CreateProvider().AuthorizationEncryptionEncValuesSupported.ToArray();
-
-        Assert.Equal(contentEncryption, result);
-    }
     /// <summary>
-    /// RFC 8414 §2 / OIDC Discovery 1.0 §3: token_endpoint_auth_signing_alg_values_supported MUST
+    /// A JWT this server encrypts to a client under a symmetric algorithm uses the key OpenID Connect Core 1.0 section
+    /// 10.2 derives from the client secret, which it defines "for the AES key wrapping or direct encryption algorithm
+    /// used" alone. A password-based algorithm has no such key, so registration refuses it for every client, and the
+    /// JWT authorization and introspection response lists leave it out; AES key wrapping and dir stay.
+    /// </summary>
+    [Fact]
+    public void ClientAddressedEncryptionAlgValues_LeaveOutAlgorithmsNoClientKeyServes()
+    {
+        string[] keyManagement =
+        [
+            EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            EncryptionAlgorithms.KeyManagement.Aes128KW,
+            EncryptionAlgorithms.KeyManagement.Aes256Gcmkw,
+            EncryptionAlgorithms.KeyManagement.Dir,
+            EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW,
+            EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW,
+            EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW,
+        ];
+        string[] served = keyManagement[..4];
+        _creator.Setup(c => c.EncryptedResponseAlgorithmsSupported).Returns(keyManagement);
+
+        Assert.Equal(served, CreateProvider().EncryptedResponseAlgorithmsSupported.ToArray());
+        Assert.Equal(served, CreateProvider().AuthorizationEncryptionAlgValuesSupported.ToArray());
+        Assert.Equal(served, CreateProvider().IntrospectionEncryptionAlgValuesSupported.ToArray());
+    }
+
+    /// <summary>
+    /// RFC 8414 section 2 / OIDC Discovery 1.0 section 3: token_endpoint_auth_signing_alg_values_supported MUST
     /// NOT contain "none". HS* stay because client_secret_jwt keys on the client secret.
     /// </summary>
     [Fact]
@@ -173,7 +201,7 @@ public class JwtAlgorithmsProviderTests
     }
 
     /// <summary>
-    /// CIBA Core §7.1.1 requires an asymmetric signature, so
+    /// CIBA Core section 7.1.1 requires an asymmetric signature, so
     /// backchannel_authentication_request_signing_alg_values_supported excludes "none" and every HS*.
     /// </summary>
     [Fact]

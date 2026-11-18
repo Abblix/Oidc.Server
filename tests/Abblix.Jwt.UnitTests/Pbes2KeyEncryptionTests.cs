@@ -122,7 +122,7 @@ public class Pbes2KeyEncryptionTests
 	/// cap must be rejected before any PBKDF2 work - otherwise a single crafted token demands an
 	/// arbitrary amount of computation (the CVE-2022-36083 class of denial of service; the cap of
 	/// 10,000 is the remediation consensus across JOSE implementations). Values below the
-	/// RFC 7518 §4.8.1.2 recommended minimum signal a downgrade and are rejected as well.
+	/// RFC 7518 section 4.8.1.2 recommended minimum signal a downgrade and are rejected as well.
 	/// </summary>
 	[Theory]
 	[InlineData(10_001)]        // above the DoS cap
@@ -142,7 +142,7 @@ public class Pbes2KeyEncryptionTests
 	}
 
 	/// <summary>
-	/// RFC 7518 §4.8.1.1: the 'p2s' salt input must be at least 8 octets.
+	/// RFC 7518 section 4.8.1.1: the 'p2s' salt input must be at least 8 octets.
 	/// </summary>
 	[Fact]
 	public void TryDecryptKey_SaltInputTooShort_Fails()
@@ -229,6 +229,7 @@ public class Pbes2KeyEncryptionTests
 		var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
 		var result = await validator.ValidateAsync(jwe, new ValidationParameters
 		{
+			TokenTypes = TokenTypePolicy.CheckedByCaller,
 			ValidateAudience = aud => Task.FromResult(aud.Contains("test-audience")),
 			ValidateIssuer = iss => Task.FromResult(iss == "test-issuer"),
 			ResolveTokenDecryptionKeys = _ => passwordKey.ToAsync(),

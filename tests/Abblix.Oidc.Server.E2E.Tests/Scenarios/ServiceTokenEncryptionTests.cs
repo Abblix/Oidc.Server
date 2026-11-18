@@ -44,7 +44,7 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         Assert.Equal(5, SegmentCount(accessToken));
 
@@ -72,8 +72,8 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
 
         Assert.Equal(3, SegmentCount(accessToken));
         Assert.Equal(5, SegmentCount(refreshToken));
@@ -86,7 +86,7 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
-        Assert.NotNull(refreshed[UserInfoRequest.Parameters.AccessToken]);
+        Assert.NotNull(refreshed[TokenResponse.Parameters.AccessToken]);
     }
 
     /// <summary>
@@ -99,14 +99,11 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
         var encryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption);
         return Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
+            {
+                services.PostConfigure<TestTenantSettings>(tenant => tenant.EncryptionKeys = [encryptionKey]);
                 services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
-                    new PostConfigureOptions<OidcOptions>(
-                        Options.DefaultName,
-                        options =>
-                        {
-                            options.EncryptionKeys = [encryptionKey];
-                            configure(options);
-                        }))));
+                    new PostConfigureOptions<OidcOptions>(Options.DefaultName, configure));
+            }));
     }
 
     private static HttpClient CreateClientFor(WebApplicationFactory<Program> host)
@@ -127,21 +124,20 @@ public class ServiceTokenEncryptionTests(TestFactory factory) : TestBase(factory
     /// It does not prove that the refusal comes from <c>ValidateOnStart</c>. Measured by mutation: removing
     /// that call leaves this test green, because something in the composition already reads
     /// <c>IOptions&lt;OidcOptions&gt;.Value</c> while the host starts. The call is kept as a stated contract
-    /// rather than a behaviour this test can observe.
+    /// rather than a behavior this test can observe.
     /// </remarks>
     [Fact]
     public void StartupIsRefusedWhenEncryptionIsRequiredWithoutAnyKey()
     {
         using var host = Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
+            {
+                services.PostConfigure<TestTenantSettings>(tenant => tenant.EncryptionKeys = []);
                 services.AddSingleton<IPostConfigureOptions<OidcOptions>>(_ =>
                     new PostConfigureOptions<OidcOptions>(
                         Options.DefaultName,
-                        options =>
-                        {
-                            options.EncryptionKeys = [];
-                            options.ServiceTokens.AccessToken.Encrypt = true;
-                        }))));
+                        options => options.ServiceTokens.AccessToken.Encrypt = true));
+            }));
 
         var exception = Assert.Throws<OptionsValidationException>(() => CreateClientFor(host));
 

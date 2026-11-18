@@ -12,6 +12,7 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
@@ -39,11 +40,8 @@ public class PkceValidatorTests
         _validator = CreateValidator();
     }
 
-    private static PkceValidator CreateValidator(
-        ClientSecurityProfile defaultSecurityProfile = ClientSecurityProfile.None,
-        IAuthorizationValueReuseDetector? reuseDetector = null)
+    private static PkceValidator CreateValidator(IAuthorizationValueReuseDetector? reuseDetector = null)
         => new(
-            Options.Create(new OidcOptions { DefaultSecurityProfile = defaultSecurityProfile }),
             reuseDetector ?? Mock.Of<IAuthorizationValueReuseDetector>());
 
     /// <summary>
@@ -57,7 +55,7 @@ public class PkceValidatorTests
         // Arrange
         var reuseDetector = new Mock<IAuthorizationValueReuseDetector>();
         reuseDetector
-            .Setup(d => d.IsReusedAsync(ClientId, It.IsAny<string>(), CodeChallengeS256))
+            .Setup(d => d.IsReusedAsync(TestTenant.Matched, ClientId, It.IsAny<string>(), CodeChallengeS256))
             .ReturnsAsync(true);
         var validator = CreateValidator(reuseDetector: reuseDetector.Object);
         var context = CreateContext(
@@ -65,7 +63,7 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S256);
 
         // Act
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -121,7 +119,7 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S256);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -142,7 +140,7 @@ public class PkceValidatorTests
             plainPkceAllowed: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -163,12 +161,12 @@ public class PkceValidatorTests
             plainPkceAllowed: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("plain", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.Plain, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(context.ValidRedirectUri, result.RedirectUri);
         Assert.Equal(context.ResponseMode, result.ResponseMode);
     }
@@ -185,7 +183,7 @@ public class PkceValidatorTests
         var context = CreateContext(pkceRequired: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -207,7 +205,7 @@ public class PkceValidatorTests
         var context = CreateContext(pkceRequired: null);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -227,7 +225,7 @@ public class PkceValidatorTests
         var context = CreateContext(pkceRequired: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -248,7 +246,7 @@ public class PkceValidatorTests
             plainPkceAllowed: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -270,30 +268,28 @@ public class PkceValidatorTests
             plainPkceAllowed: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts request with custom code challenge method.
-    /// Per RFC 7636, servers may support additional transformation methods.
-    /// Tests extensibility for future PKCE enhancements.
+    /// A transformation the server does not support is refused with invalid_request: RFC 7636, section 4.4.1, "the
+    /// authorization endpoint MUST return the authorization error response with "error" value set to
+    /// "invalid_request"".
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithCustomCodeChallengeMethod_ShouldSucceed()
+    public async Task ValidateAsync_WithUnsupportedCodeChallengeMethod_IsRefused()
     {
-        // Arrange
         var context = CreateContext(
             codeChallenge: CodeChallengeS256,
             codeChallengeMethod: "custom-method");
 
-        // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
 
     /// <summary>
@@ -311,7 +307,7 @@ public class PkceValidatorTests
             pkceRequired: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -333,7 +329,7 @@ public class PkceValidatorTests
             plainPkceAllowed: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -355,12 +351,12 @@ public class PkceValidatorTests
             plainPkceAllowed: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("plain", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.Plain, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -377,7 +373,7 @@ public class PkceValidatorTests
             pkceRequired: false);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -397,7 +393,7 @@ public class PkceValidatorTests
             pkceRequired: true);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -418,7 +414,7 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S256);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -439,7 +435,7 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S256);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -459,7 +455,7 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S256);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -479,7 +475,7 @@ public class PkceValidatorTests
         context.ValidRedirectUri = redirectUri;
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -500,7 +496,7 @@ public class PkceValidatorTests
         context.ResponseMode = responseMode;
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -508,25 +504,54 @@ public class PkceValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync treats uppercase PLAIN as different from plain.
-    /// Per RFC 7636, code_challenge_method values are case-sensitive.
-    /// Validator checks for exact match with "plain", so "PLAIN" passes validation.
-    /// This tests that validator correctly enforces case-sensitive method matching.
+    /// An unsupported method is refused without a code_challenge beside it too, since the method alone is what the
+    /// token endpoint would fail to compute.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task ValidateAsync_WithUnsupportedMethodAndNoChallenge_IsRefused(string? codeChallenge)
+    {
+        var context = CreateContext(
+            codeChallenge: codeChallenge,
+            codeChallengeMethod: "custom-method",
+            pkceRequired: false);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+    }
+
+    /// <summary>
+    /// A request issuing no code has nothing for PKCE to protect, so its code_challenge_method is not judged.
     /// </summary>
     [Fact]
-    public async Task ValidateAsync_WithUppercasePlainMethod_ShouldSucceed()
+    public async Task ValidateAsync_WithUnsupportedMethodAndNoCodeIssued_Succeeds()
     {
-        // Arrange
+        var context = CreateContext(
+            codeChallengeMethod: "custom-method",
+            responseType: [ResponseTypes.IdToken]);
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+    }
+
+    /// <summary>
+    /// code_challenge_method values are case-sensitive (RFC 7636), so PLAIN is not plain: it is a method the server
+    /// does not support, and is refused as one.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_WithUppercasePlainMethod_IsRefusedAsUnsupported()
+    {
         var context = CreateContext(
             codeChallenge: CodeChallengePlain,
             codeChallengeMethod: "PLAIN",
-            plainPkceAllowed: false);
+            plainPkceAllowed: true);
 
-        // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
 
     /// <summary>
@@ -541,7 +566,7 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S256,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -559,11 +584,11 @@ public class PkceValidatorTests
             plainPkceAllowed: true,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("S256", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.S256, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -578,16 +603,16 @@ public class PkceValidatorTests
             codeChallengeMethod: CodeChallengeMethods.S512,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("S256", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.S256, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
     /// Under the FAPI 2.0 profile a code challenge with no explicit method is rejected: a missing
-    /// method defaults to plain (RFC 7636 §4.3), which is not the required S256.
+    /// method defaults to plain (RFC 7636 section 4.3), which is not the required S256.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_Fapi2WithChallengeAndNoMethod_ShouldReturnError()
@@ -597,11 +622,11 @@ public class PkceValidatorTests
             codeChallengeMethod: null,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("S256", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.S256, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -615,7 +640,7 @@ public class PkceValidatorTests
             pkceRequired: false,
             securityProfile: ClientSecurityProfile.Fapi2);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -629,18 +654,18 @@ public class PkceValidatorTests
     [Fact]
     public async Task ValidateAsync_GlobalDefaultFapi2_RestrictsUnprofiledClientToS256()
     {
-        var validator = CreateValidator(defaultSecurityProfile: ClientSecurityProfile.Fapi2);
+        var validator = CreateValidator();
         var context = CreateContext(
             codeChallenge: CodeChallengePlain,
             codeChallengeMethod: CodeChallengeMethods.Plain,
             plainPkceAllowed: true,
             securityProfile: null);
 
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("S256", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.S256, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -656,18 +681,18 @@ public class PkceValidatorTests
     [Fact]
     public async Task ValidateAsync_ExplicitNoneUnderGlobalDefaultFapi2_StillRefusesPlain()
     {
-        var validator = CreateValidator(defaultSecurityProfile: ClientSecurityProfile.Fapi2);
+        var validator = CreateValidator();
         var context = CreateContext(
             codeChallenge: CodeChallengePlain,
             codeChallengeMethod: CodeChallengeMethods.Plain,
             plainPkceAllowed: true,
             securityProfile: ClientSecurityProfile.None);
 
-        var result = await validator.ValidateAsync(context);
+        var result = await validator.ValidateAsync(new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi2 }.ToTenant(), context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
-        Assert.Contains("S256", result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(CodeChallengeMethods.S256, result.ErrorDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -682,7 +707,7 @@ public class PkceValidatorTests
             responseType: [ResponseTypes.Token],
             pkceRequired: null);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -699,7 +724,7 @@ public class PkceValidatorTests
             responseType: [ResponseTypes.IdToken],
             pkceRequired: true);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -716,7 +741,7 @@ public class PkceValidatorTests
             responseType: [ResponseTypes.Code, ResponseTypes.IdToken],
             pkceRequired: true);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);

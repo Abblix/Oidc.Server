@@ -19,7 +19,7 @@ public class DiscoveryOptions
     public bool AllowEndpointPathsDiscovery { get; set; } = true;
 
     /// <summary>
-    /// RFC 8414 §2.1: when enabled, the discovery document additionally carries a
+    /// RFC 8414 section 2.1: when enabled, the discovery document additionally carries a
     /// <c>signed_metadata</c> JWS whose payload is the same metadata set, signed with the
     /// authorization server's signing key. This lets relying parties verify the
     /// configuration's origin independently of the TLS layer (relevant behind CDNs, API
@@ -27,19 +27,6 @@ public class DiscoveryOptions
     /// signature gain nothing from it, and an unconsumed field only adds payload weight.
     /// </summary>
     public bool SignedMetadata { get; set; }
-
-    /// <summary>
-    /// RFC 8705: Optional mTLS endpoint aliases to advertise.
-    /// Configure with absolute URIs hosted on an mTLS-enabled origin.
-    /// </summary>
-    public MtlsAliasesOptions? MtlsEndpointAliases { get; set; }
-
-    /// <summary>
-    /// RFC 8705: Optional base URI for computing mTLS endpoint aliases automatically.
-    /// If set, and a specific alias is not provided, discovery will derive the alias by
-    /// taking the standard endpoint path and applying this base URI (scheme/host/port and optional base path).
-    /// </summary>
-    public Uri? MtlsBaseUri { get; set; }
 
     /// <summary>
     /// Optional ACR (Authentication Context Class Reference) values supported by this provider.

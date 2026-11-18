@@ -71,7 +71,7 @@ public static class ActionResultExtensions
 	/// <summary>
 	/// Decorates an <see cref="ActionResult"/> to append each value as a separate header line.
 	/// Use when the wire form expects multiple header lines under the same name (e.g. RFC 9449
-	/// §7.1 dual <c>WWW-Authenticate</c> emission for DPoP and Bearer); plain
+	/// section 7.1 dual <c>WWW-Authenticate</c> emission for DPoP and Bearer); plain
 	/// <see cref="WithHeader"/> overwrites instead of appending.
 	/// </summary>
 	public static ActionResult WithAppendHeader(
@@ -87,12 +87,35 @@ public static class ActionResultExtensions
 			});
 
 	/// <summary>
+	/// Answers a caller that has spent its budget of requests: 429, with the interval the limiter named and no
+	/// body, because the status says the whole of it and no registered error code means "you asked too often".
+	/// The header is left off when the limiter named no interval - one saying nothing is worse than none.
+	/// </summary>
+	/// <remarks>
+	/// Every way of formatting an error passes through here first, so a refusal cannot take the status of
+	/// whichever endpoint it happened to arrive at.
+	/// </remarks>
+	private static ActionResult? FormatRefusal(OidcError error)
+		=> error switch
+		{
+			TooManyRequestsError { RetryAfter: { } interval }
+				=> new StatusOnlyResult(StatusCodes.Status429TooManyRequests)
+					.WithHeader(HeaderNames.RetryAfter, HttpResponseExtensions.RetryAfterHeaderValue(interval)),
+
+			TooManyRequestsError => new StatusOnlyResult(StatusCodes.Status429TooManyRequests),
+
+			_ => null,
+		};
+
+	/// <summary>
 	/// Formats an <see cref="OidcError"/> as an appropriate HTTP error response per RFC 6750 Section 3.
 	/// Bearer token errors (<c>invalid_token</c>) return HTTP 401 with only a <c>WWW-Authenticate</c> header
 	/// and no response body. Scope errors (<c>insufficient_scope</c>) return HTTP 403 with the header.
 	/// Client authentication failures (<c>invalid_client</c>) return HTTP 401 with a Basic challenge
 	/// and the JSON error body per RFC 6749 Section 5.2.
-	/// All other errors use the specified fallback status code with a JSON body.
+	/// <c>invalid_request</c> returns HTTP 400 with the JSON body whatever the fallback (RFC 6749 Section 5.2,
+	/// RFC 6750 Section 3.1), and a <see cref="BearerRequestError"/> adds a Bearer challenge carrying it. All other
+	/// errors use the specified fallback status code with a JSON body.
 	/// </summary>
 	/// <param name="error">The OIDC error to format.</param>
 	/// <param name="fallbackStatusCode">The HTTP status code to use for non-token errors.</param>
@@ -100,26 +123,39 @@ public static class ActionResultExtensions
 	/// <returns>An <see cref="ActionResult"/> with the appropriate status code and headers.</returns>
 	public static ActionResult Format(this OidcError error, int fallbackStatusCode, string? realm = null)
 	{
-		var challenge = WwwAuthenticateBuilder.BuildBearerChallenge(error, realm);
+		if (FormatRefusal(error) is { } refusal)
+			return refusal;
 
+		// The Bearer challenge is built in the arms that send it and nowhere else: building it refuses a code or scope
+		// outside the set RFC 6750 section 3 gives its attributes, a rule about that header that an answer without it
+		// must not fail on
 		return (error.Error, fallbackStatusCode) switch
 		{
 			(ErrorCodes.InvalidToken, _) => new UnauthorizedResult()
-				.WithHeader(HeaderNames.WWWAuthenticate, challenge),
+				.WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
 
 			(ErrorCodes.InsufficientScope, _) => new StatusCodeResult(StatusCodes.Status403Forbidden)
-				.WithHeader(HeaderNames.WWWAuthenticate, challenge),
+				.WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
 
-			// RFC 6749 §5.2: a 401 is REQUIRED when the client authenticated via the Authorization
+			// RFC 6749 section 5.2: a 401 is REQUIRED when the client authenticated via the Authorization
 			// header and allowed otherwise, so the uniform 401 satisfies both cases. Basic is the
-			// only Authorization-header scheme the client-authenticating endpoints (token,
-			// introspection, revocation) support, hence the Basic challenge; the error itself stays
+			// only Authorization-header scheme the client-authenticating endpoints support, hence the
+			// Basic challenge; the error itself stays
 			// in the JSON body because RFC 7617 defines no error attributes for the Basic scheme.
 			(ErrorCodes.InvalidClient, _)
 				=> new UnauthorizedObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))
 					.WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBasicChallenge(realm)),
 
-			(_, StatusCodes.Status400BadRequest)
+			// RFC 6750 section 3: a Bearer-protected endpoint refusing how the token was included "MUST include the
+			// HTTP "WWW-Authenticate" response header field", and the Bearer challenge carries the error
+			(_, _) when error is BearerRequestError
+				=> new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription))
+					.WithHeader(HeaderNames.WWWAuthenticate, WwwAuthenticateBuilder.BuildBearerChallenge(error, realm)),
+
+			// RFC 6749 section 5.2 answers its errors with 400 "unless specified otherwise", and RFC 6750 section 3.1
+			// has invalid_request answered with 400 too, so an endpoint whose other errors take another status does
+			// not lend it to a malformed request
+			(ErrorCodes.InvalidRequest, _) or (_, StatusCodes.Status400BadRequest)
 				=> new BadRequestObjectResult(new ErrorResponse(error.Error, error.ErrorDescription)),
 
 			(_, StatusCodes.Status401Unauthorized)
@@ -132,7 +168,7 @@ public static class ActionResultExtensions
 
 	/// <summary>
 	/// Formats an <see cref="OidcError"/> as an HTTP error response that advertises the DPoP
-	/// scheme (RFC 9449 §7.1) on the <c>WWW-Authenticate</c> header, optionally alongside the
+	/// scheme (RFC 9449 section 7.1) on the <c>WWW-Authenticate</c> header, optionally alongside the
 	/// Bearer scheme. <see cref="UseDPoPNonceError"/> additionally emits the <c>DPoP-Nonce</c>
 	/// response header so the client can echo the freshly issued nonce on retry.
 	/// </summary>
@@ -143,6 +179,9 @@ public static class ActionResultExtensions
 		IEnumerable<string> dpopAlgs,
 		bool advertiseBearer)
 	{
+		if (FormatRefusal(error) is { } refusal)
+			return refusal;
+
 		var challenges = WwwAuthenticateBuilder.BuildChallenges(error, realm, dpopAlgs, advertiseBearer);
 
 		ActionResult result = error switch

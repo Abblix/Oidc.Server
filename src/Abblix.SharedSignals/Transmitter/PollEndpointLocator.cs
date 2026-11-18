@@ -16,7 +16,7 @@ namespace Abblix.SharedSignals.Transmitter;
 /// <remarks>
 /// The address has two possible sources and they answer different questions.
 /// <list type="bullet">
-///   <item><see cref="ServedAt"/> is the address the endpoint was mapped on, declared by whatever mapped
+///   <item><see cref="TransmitterRoutes.ServePollAt"/> is the address the endpoint was mapped on, declared by whatever mapped
 ///   it. That is the only code that knows: the route and its prefix belong to the web framework adapter,
 ///   and a host may move either. A proxy that rewrites paths is covered here too, because what the
 ///   mapping declares is the ADVERTISED prefix rather than the internal one.</item>
@@ -38,47 +38,20 @@ namespace Abblix.SharedSignals.Transmitter;
 /// </remarks>
 /// <param name="options">The deployment's one-time decisions, holding the host's own address if it named
 /// one.</param>
-public sealed class PollEndpointLocator(SharedSignalsTransmitterOptions options)
+/// <param name="routes">Where the routes were mapped, declared once by the code that mapped them.</param>
+/// <param name="identity">The transmitter whose streams this locates, whose address the mapped route is
+/// reached under.</param>
+public sealed class PollEndpointLocator(
+    SharedSignalsTransmitterOptions options,
+    TransmitterRoutes routes,
+    ITransmitterIdentity identity)
 {
-    private Func<string, Uri?>? _served;
 
     /// <summary>
     /// Whether this transmitter offers poll delivery at all - what "delivery_methods_supported"
     /// advertises (SSF 1.0 Section 7.1) and what a create naming poll is judged against.
     /// </summary>
-    public bool IsOffered => options.PollEndpointFactory is not null || _served is not null;
-
-    /// <summary>
-    /// Declares where the poll endpoint is mapped, so a stream created without the host naming an address
-    /// gets one that leads back to the route serving it.
-    /// </summary>
-    /// <remarks>
-    /// Called by the code that maps the route, which happens once at startup and before any stream can be
-    /// created. It is not the host's call to make: a host naming its own address uses
-    /// <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/>, which this never overrides.
-    /// </remarks>
-    /// <param name="pollEndpointOf">Derives the mapped address of a stream's poll endpoint, or answers
-    /// null when this stream has none - an identifier the route cannot carry, for one. A null is a
-    /// refusal a caller can act on: a create or update asking for poll delivery is answered with an
-    /// error, and a declared stream is refused at startup by
-    /// <see cref="ConfigurationStreamStore"/>.</param>
-    /// <exception cref="InvalidOperationException">The endpoint was already mapped. A stream's poll
-    /// address is stored in its configuration, so a second mapping would leave every stream created
-    /// before it pointing at the first - and which streams those are depends on when each call ran.
-    /// </exception>
-    public void ServedAt(Func<string, Uri?> pollEndpointOf)
-    {
-        ArgumentNullException.ThrowIfNull(pollEndpointOf);
-
-        if (_served is not null)
-        {
-            throw new InvalidOperationException(
-                "The poll endpoint is already mapped. A transmitter serves one, and the address goes "
-                + "into every stream it creates.");
-        }
-
-        _served = pollEndpointOf;
-    }
+    public bool IsOffered => options.PollEndpointFactory is not null || routes.Poll is not null;
 
     /// <summary>
     /// The poll endpoint of a stream, or null when there is none for it.
@@ -91,5 +64,6 @@ public sealed class PollEndpointLocator(SharedSignalsTransmitterOptions options)
     /// why the summary above names neither.
     /// </remarks>
     /// <param name="streamId">The stream whose queue is served there.</param>
-    public Uri? Of(string streamId) => (options.PollEndpointFactory ?? _served)?.Invoke(streamId);
+    public Uri? Of(string streamId)
+        => options.PollEndpointFactory is { } hostsOwn ? hostsOwn(streamId) : routes.Poll?.Invoke(identity, streamId);
 }

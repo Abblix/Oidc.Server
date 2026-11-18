@@ -6,7 +6,6 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Net;
-using Abblix.SecurityEvents.Delivery;
 
 namespace Abblix.SecurityEvents.Delivery;
 

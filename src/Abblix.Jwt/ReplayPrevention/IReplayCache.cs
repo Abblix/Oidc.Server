@@ -17,10 +17,13 @@ namespace Abblix.Jwt.ReplayPrevention;
 /// <remarks>
 /// The contract is reserve-and-check in one call, so a caller cannot read, decide and write in
 /// three steps that another caller slips between. Whether the reservation is strictly atomic is
-/// the implementation's promise, not this interface's: the shipped
-/// <see cref="DistributedReplayCache"/> rides <c>IDistributedCache</c>, which exposes only Get
-/// and Set, so its answer is probabilistic within one cache round trip. A deployment that needs
-/// strict single-use takes a backend-native primitive behind this same interface, which is what
+/// the implementation's promise, not this interface's. The OpenID Connect server's default keeps
+/// its reservations in the server's entity storage, so it is exactly as atomic as that storage's
+/// add-if-absent. A receiver without the server gets <see cref="DistributedReplayCache"/>, which
+/// rides <c>IDistributedCache</c>, which exposes only Get and Set, so it decides between the
+/// callers of one process under a per-key gate, and two nodes can both answer that a token is new.
+/// A deployment with several nodes takes a backend-native primitive behind this same interface -
+/// for the server, an entity storage built on one - which is what
 /// <see cref="ReplayCacheBase"/> is for: it holds everything around the primitive and leaves the
 /// primitive itself to a subclass - Redis <c>SET NX PX</c>, SQL
 /// <c>INSERT ... ON CONFLICT DO NOTHING</c>, and their equivalents.
@@ -47,4 +50,16 @@ public interface IReplayCache
         string identifier,
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gives back a reservation, so the same identifier reads as fresh again.
+    /// </summary>
+    /// <remarks>
+    /// For the caller whose own <see cref="TryReserveAsync"/> answered true and whose work on that
+    /// token then failed: without it a retry of the token is refused as a replay of work that never
+    /// happened. Any other caller that releases an identifier opens it to replay.
+    /// </remarks>
+    /// <param name="identifier">The value that was reserved.</param>
+    /// <param name="cancellationToken">Cancels the cache round trip.</param>
+    Task ReleaseAsync(string identifier, CancellationToken cancellationToken = default);
 }

@@ -14,7 +14,7 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 
 /// <summary>
 /// Validates the mutual-TLS certificate-binding contract on a UserInfo request per
-/// RFC 8705 §3: when the inbound access token is certificate-bound (carries
+/// RFC 8705 section 3: when the inbound access token is certificate-bound (carries
 /// <c>cnf.x5t#S256</c>), the protected resource MUST obtain the client certificate used for
 /// mutual TLS and verify that its SHA-256 thumbprint matches the bound value, rejecting the
 /// request otherwise. Unbound access tokens bypass the check. Sibling of
@@ -28,7 +28,7 @@ public interface IMtlsUserInfoValidator
     /// Returns <c>null</c> when the binding holds (or the token is not certificate-bound),
     /// and an <see cref="OidcError"/> with <c>invalid_token</c> when the token is bound but
     /// the presented certificate is absent or its thumbprint does not match
-    /// <c>cnf.x5t#S256</c> (RFC 8705 §3 - HTTP 401, per RFC 6750).
+    /// <c>cnf.x5t#S256</c> (RFC 8705 section 3 - HTTP 401, per RFC 6750).
     /// </summary>
     /// <param name="clientRequest">Carries the client certificate presented on the mutual-TLS
     /// connection (when any).</param>

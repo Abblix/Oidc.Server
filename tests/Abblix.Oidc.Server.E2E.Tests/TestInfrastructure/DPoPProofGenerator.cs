@@ -36,15 +36,28 @@ public sealed class DPoPProofGenerator : IDisposable
 {
     private readonly ECDsa _ecdsa;
     private readonly TimeProvider _timeProvider;
+    private readonly string _algorithm;
+    private readonly HashAlgorithmName _hash;
 
-    public DPoPProofGenerator(TimeProvider? timeProvider = null)
+    /// <param name="timeProvider">The clock the proofs are dated by.</param>
+    /// <param name="algorithm">The ECDSA algorithm the proofs are signed with: <c>ES256</c>, or <c>ES384</c> for a
+    /// scenario that needs an algorithm RFC 9449 admits and a FAPI profile does not.</param>
+    public DPoPProofGenerator(TimeProvider? timeProvider = null, string algorithm = SigningAlgorithms.ES256)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
-        _ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        _algorithm = algorithm;
+        (var curve, _hash) = algorithm switch
+        {
+            SigningAlgorithms.ES256 => (ECCurve.NamedCurves.nistP256, HashAlgorithmName.SHA256),
+            SigningAlgorithms.ES384 => (ECCurve.NamedCurves.nistP384, HashAlgorithmName.SHA384),
+            _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, null),
+        };
+
+        _ecdsa = ECDsa.Create(curve);
         var publicParams = _ecdsa.ExportParameters(includePrivateParameters: false);
         PublicJwk = new EllipticCurveJsonWebKey
         {
-            Algorithm = SigningAlgorithms.ES256,
+            Algorithm = algorithm,
             Usage = PublicKeyUsages.Signature,
         }.Apply(publicParams);
     }
@@ -65,16 +78,16 @@ public sealed class DPoPProofGenerator : IDisposable
     /// presenting the same returned string twice trips the AS replay cache on the second
     /// attempt (the canonical E2E replay scenario).
     /// </summary>
-    /// <param name="httpMethod">HTTP method byte-exact (RFC 9449 §4.2 <c>htm</c>).
+    /// <param name="httpMethod">HTTP method byte-exact (RFC 9449 section 4.2 <c>htm</c>).
     /// Uppercase per IETF convention.</param>
-    /// <param name="requestUri">Absolute URI of the request after RFC 3986 §6.2
+    /// <param name="requestUri">Absolute URI of the request after RFC 3986 section 6.2
     /// canonicalisation. Pass exactly what the client will send on the wire; the
     /// validator canonicalises both sides before comparing.</param>
     /// <param name="accessToken">When the proof accompanies an access token at a
     /// protected resource, the proof MUST carry <c>ath = base64url(sha256(token))</c>
-    /// per RFC 9449 §4.2. Pass the raw access token here and the generator embeds the
+    /// per RFC 9449 section 4.2. Pass the raw access token here and the generator embeds the
     /// hash. Leave null at the /token endpoint and elsewhere proof-only.</param>
-    /// <param name="nonce">RFC 9449 §8 server-supplied freshness nonce. Pass the value
+    /// <param name="nonce">RFC 9449 section 8 server-supplied freshness nonce. Pass the value
     /// from the previous response's <c>DPoP-Nonce</c> header when the AS challenged for
     /// one; leave null for nonce-disabled deployments (the E2E default).</param>
     public string BuildProof(
@@ -86,21 +99,21 @@ public sealed class DPoPProofGenerator : IDisposable
         var header = new JsonObject
         {
             ["typ"] = JsonWebTokenTypes.DPoPProof,
-            ["alg"] = SigningAlgorithms.ES256,
+            ["alg"] = _algorithm,
             [JwtClaimTypes.JsonWebKeyHeader] = JsonSerializer.SerializeToNode(PublicJwk),
         };
 
         var payload = new JsonObject
         {
-            [JwtClaimTypes.DPoPHttpMethod] = httpMethod,
-            [JwtClaimTypes.DPoPHttpUri] = requestUri.AbsoluteUri,
+            [IanaClaimTypes.Htm] = httpMethod,
+            [IanaClaimTypes.Htu] = requestUri.AbsoluteUri,
             [JwtClaimTypes.JwtId] = Guid.NewGuid().ToString("N"),
             [JwtClaimTypes.IssuedAt] = _timeProvider.GetUtcNow().ToUnixTimeSeconds(),
         };
 
         if (accessToken is not null)
         {
-            payload[JwtClaimTypes.DPoPAccessTokenHash] =
+            payload[IanaClaimTypes.Ath] =
                 Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(accessToken)));
         }
 
@@ -113,7 +126,7 @@ public sealed class DPoPProofGenerator : IDisposable
 
         var signature = _ecdsa.SignData(
             Encoding.UTF8.GetBytes(signingInput),
-            HashAlgorithmName.SHA256,
+            _hash,
             DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
 
         return $"{signingInput}.{Base64Url.EncodeToString(signature)}";

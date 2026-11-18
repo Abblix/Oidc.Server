@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SessionManagement;
 
 
@@ -26,9 +27,11 @@ internal class CheckSessionHandler(ISessionManagementService sessionManagementSe
 	/// to assess the current state of the user's session. This method is key to ensuring that the
 	/// application's understanding of the user's session status is accurate and up-to-date.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <returns>
 	/// A <see cref="Task"/> that, when completed, yields a <see cref="CheckSessionResponse"/>
 	/// indicating the current state of the user's session.
 	/// </returns>
-	public Task<CheckSessionResponse> HandleAsync() => sessionManagementService.GetCheckSessionResponseAsync();
+	public Task<CheckSessionResponse> HandleAsync(TenantDefinition tenant)
+		=> sessionManagementService.GetCheckSessionResponseAsync(tenant);
 }

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Net;
+using Abblix.Jwt.ExternalKeys;
 using System.Text.Json;
 
 namespace Abblix.Jwt.Vault;
@@ -42,11 +43,18 @@ internal sealed record ApiResponse(HttpStatusCode Status, JsonDocument? Document
         => Document ?? throw new InvalidOperationException($"Vault '{path}' answered {(int)Status} with no body.");
 
     /// <summary>
-    /// Describes a failed call. The path carries the mount, so it names the engine without the message having to.
+    /// Describes a failed call as one of the library's two custodian failures, so an endpoint can say whether
+    /// the caller should come back. The path carries the mount, so it names the engine without the message
+    /// having to, and that message stays in the log: neither exception reaches a response body.
     /// </summary>
     /// <param name="path">The path that was called.</param>
-    internal InvalidOperationException Failure(string path)
-        => new($"Vault '{path}' failed with {(int)Status}: {Errors}");
+    internal Exception Failure(string path)
+    {
+        var message = $"Vault '{path}' failed with {(int)Status}: {Errors}";
+        return VaultFailure.IsTransient(Status)
+            ? new KeyCustodianUnavailableException(path, message)
+            : new KeyCustodianFailedException(path, new InvalidOperationException(message));
+    }
 
     /// <summary>
     /// Vault's own error text, which is how some outcomes are told apart: a lost cas race and a malformed write

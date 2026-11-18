@@ -7,8 +7,8 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
-using Abblix.Jwt.ReplayPrevention;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -18,34 +18,30 @@ namespace Abblix.Oidc.Server.Features.JwtBearer;
 
 /// <summary>
 /// Default implementation of <see cref="IJwtBearerIssuerProvider"/> that loads trusted issuers
-/// from <see cref="OidcOptions.JwtBearer"/> configuration, fetches JWKS with SSRF protection,
-/// and provides JWT replay protection.
+/// from <see cref="OidcOptions.JwtBearer"/> configuration and fetches JWKS with SSRF protection.
 /// </summary>
 /// <param name="logger">Logger for recording JWKS fetch operations and errors.</param>
 /// <param name="oidcOptions">OIDC configuration options containing JWT Bearer trusted issuers.</param>
-/// <param name="replayCache">Cache for JWT replay protection per RFC 7523 Section 3.</param>
 /// <param name="secureFetcher">HTTP fetcher with SSRF protection and caching.</param>
-/// <param name="timeProvider">Dates the fallback retention window for an assertion without an
-/// expiry.</param>
 public partial class JwtBearerIssuerProvider(
 	ILogger<JwtBearerIssuerProvider> logger,
 	IOptionsMonitor<OidcOptions> oidcOptions,
-	IReplayCache replayCache,
-	[FromKeyedServices(KeySetOwners.Issuer)] ISecureHttpFetcher secureFetcher,
-	TimeProvider timeProvider) : IJwtBearerIssuerProvider
+	[FromKeyedServices(KeySetOwners.Issuer)] ISecureHttpFetcher secureFetcher) : IJwtBearerIssuerProvider
 {
 	/// <inheritdoc />
 	public JwtBearerOptions Options => oidcOptions.CurrentValue.JwtBearer;
 
 	/// <summary>
 	/// Determines whether the specified issuer is trusted for JWT Bearer assertions.
-	/// Checks against the configured list of trusted issuers in <see cref="OidcOptions.JwtBearer"/>.
+	/// Checks against the configured list of trusted issuers in <see cref="OidcOptions.JwtBearer"/>, which every tenant
+	/// shares.
 	/// </summary>
+	/// <param name="tenant">The tenant the grant is requested at.</param>
 	/// <param name="issuer">The issuer identifier from the JWT's 'iss' claim.</param>
 	/// <returns>
 	/// A task that completes with true if the issuer is in the trusted issuers list; otherwise, false.
 	/// </returns>
-	public Task<bool> IsTrustedIssuerAsync(string issuer)
+	public Task<bool> IsTrustedIssuerAsync(TenantDefinition tenant, string issuer)
 	{
 		var trustedIssuer = FindTrustedIssuer(issuer);
 
@@ -56,7 +52,7 @@ public partial class JwtBearerIssuerProvider(
 	}
 
 	/// <inheritdoc />
-	public Task<TrustedIssuer?> GetTrustedIssuerAsync(string issuer) =>
+	public Task<TrustedIssuer?> GetTrustedIssuerAsync(TenantDefinition tenant, string issuer) =>
 		Task.FromResult(FindTrustedIssuer(issuer));
 
 	/// <summary>
@@ -71,24 +67,16 @@ public partial class JwtBearerIssuerProvider(
 			return null;
 		}
 
-		return oidcOptions.CurrentValue.JwtBearer.TrustedIssuers.FirstOrDefault(ti =>
-		{
-			if (!Uri.TryCreate(ti.Issuer, UriKind.Absolute, out var trustedUri))
-				return false;
-
-			// RFC 3986: scheme and host are case-insensitive, path is case-sensitive
-			return string.Equals(issuerUri.Scheme, trustedUri.Scheme, StringComparison.OrdinalIgnoreCase) &&
-			       string.Equals(issuerUri.Host, trustedUri.Host, StringComparison.OrdinalIgnoreCase) &&
-			       issuerUri.Port == trustedUri.Port &&
-			       issuerUri.AbsolutePath == trustedUri.AbsolutePath;
-		});
+		return oidcOptions.CurrentValue.JwtBearer.TrustedIssuers.FirstOrDefault(ti => ti.Names(issuerUri));
 	}
 
 	/// <summary>
 	/// Resolves the signing keys for a trusted issuer by fetching the JWKS from the configured JWKS URI
 	/// with SSRF (Server-Side Request Forgery) protection.
 	/// </summary>
+	/// <param name="tenant">The tenant the grant is requested at.</param>
 	/// <param name="issuer">The issuer identifier from the JWT's 'iss' claim.</param>
+	/// <param name="refetch">Whether to read the issuer's keys at its JWKS URI again past the copy held.</param>
 	/// <returns>
 	/// An async enumerable of JSON Web Keys from the issuer's JWKS endpoint.
 	/// Returns empty if the issuer is not trusted or if fetching JWKS fails.
@@ -101,7 +89,7 @@ public partial class JwtBearerIssuerProvider(
 	/// - Filters keys to return only those suitable for signature verification
 	/// - Logs warnings if JWKS fetching fails
 	/// </remarks>
-	public async IAsyncEnumerable<JsonWebKey> GetSigningKeysAsync(string issuer)
+	public async IAsyncEnumerable<JsonWebKey> GetSigningKeysAsync(TenantDefinition tenant, string issuer, bool refetch = false)
 	{
 		var trustedIssuer = FindTrustedIssuer(issuer);
 
@@ -111,19 +99,10 @@ public partial class JwtBearerIssuerProvider(
 			yield break;
 		}
 
-		var keys = secureFetcher.FetchKeysAsync(trustedIssuer.JwksUri, logger, issuer, KeySetOwners.Issuer);
+		var keys = secureFetcher.FetchKeysAsync(trustedIssuer.JwksUri, logger, issuer, KeySetOwners.Issuer, refetch);
 		await foreach (var key in keys.Where(k => k.Usage is null or PublicKeyUsages.Signature))
 		{
 			yield return key;
 		}
 	}
-
-	/// <inheritdoc />
-	public async Task<bool> IsReplayedAsync(string jti, DateTimeOffset? expiresAt)
-		// An assertion carrying no expiry names no window to remember it for, so the identifier is
-		// held for the fallback the cache publishes. The guess is made here, where the reason for it
-		// is visible, rather than inside the cache where a caller cannot see what it got.
-		=> !await replayCache.TryReserveAsync(
-			jti,
-			expiresAt ?? timeProvider.GetUtcNow() + ReplayPrevention.ConfiguredReplayCache.DefaultExpiration);
 }

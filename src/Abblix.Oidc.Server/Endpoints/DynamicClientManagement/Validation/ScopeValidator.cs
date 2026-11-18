@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ScopeManagement;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
@@ -19,14 +20,19 @@ namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 public class ScopeValidator(IScopeManager scopeManager) : SyncClientRegistrationContextValidator
 {
     /// <inheritdoc />
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var scope = context.Request.Scope;
-        if (scope is not { Length: > 0 })
+        if (scope is null)
             return null;
 
+        // A scope naming no value would be stored as an empty list, which the server reads as no restriction: the
+        // opposite of what the client sent. A client registering without a restriction leaves the member out.
+        if (scope.Length == 0)
+            return ErrorFactory.InvalidClientMetadata("The scope names no value");
+
         return (from value in scope
-            where !scopeManager.TryGet(value, out _)
+            where !scopeManager.TryGet(tenant, value, out _)
             select ErrorFactory.InvalidClientMetadata($"Unknown scope: {value}")).FirstOrDefault();
     }
 }

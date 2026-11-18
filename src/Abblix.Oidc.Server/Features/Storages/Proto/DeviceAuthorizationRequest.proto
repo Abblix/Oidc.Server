@@ -32,7 +32,11 @@ message DeviceAuthorizationRequest {
   string user_code = 4;
 
   // Next time the client should poll for updates
-  optional google.protobuf.Timestamp next_poll_at = 5;
+  // Field 5 held the next-poll instant. It lives under a key of its own now, so noting when a client
+  // may ask again cannot overwrite what the user's approval writes here. Reserved rather than freed:
+  // records written by an earlier build still carry it, and a new field taking this number would read
+  // those bytes as its own.
+  reserved 5;
 
   // Current status of the authorization request
   DeviceAuthorizationStatus status = 6;
@@ -40,12 +44,16 @@ message DeviceAuthorizationRequest {
   // The authorized grant (set when user authorizes)
   optional AuthorizedGrant authorized_grant = 7;
 
-  // RFC 9396 §3 authorization_details array, serialised as a JSON string. Same scheme as
+  // RFC 9396 section 3 authorization_details array, serialised as a JSON string. Same scheme as
   // AuthorizationContext.proto / AuthorizationRequest.proto - byte-exact preservation of
   // member order and type-specific payload until the user-verification step decides what
   // to grant.
   optional string authorization_details_json = 8;
 
-  // Absolute expiry (RFC 8628 §3.2 fixed lifetime); read to cap the remaining cache TTL
+  // Absolute expiry (RFC 8628 section 3.2 fixed lifetime); read to cap the remaining cache TTL
   optional google.protobuf.Timestamp expires_at = 9;
+
+  // Whether the client named no scope and the request carries the default it was served with; a record
+  // stored before the field existed reads false, as a scope the client named
+  bool client_named_no_scope = 10;
 }

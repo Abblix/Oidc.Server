@@ -65,11 +65,11 @@ public sealed record DiscoveryDocument
     [JsonPropertyName("grant_types_supported")]
     public string[]? GrantTypesSupported { get; init; }
 
-    /// <summary>RFC 9449 §5.1: JWS algorithms the AS accepts for DPoP proofs.</summary>
+    /// <summary>RFC 9449 section 5.1: JWS algorithms the AS accepts for DPoP proofs.</summary>
     [JsonPropertyName("dpop_signing_alg_values_supported")]
     public string[]? DPoPSigningAlgValuesSupported { get; init; }
 
-    /// <summary>RFC 9701 §7: JWS algorithms the AS uses to sign JWT introspection responses.</summary>
+    /// <summary>RFC 9701 section 7: JWS algorithms the AS uses to sign JWT introspection responses.</summary>
     [JsonPropertyName("introspection_signing_alg_values_supported")]
     public string[]? IntrospectionSigningAlgValuesSupported { get; init; }
 }

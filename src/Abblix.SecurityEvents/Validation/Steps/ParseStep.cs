@@ -5,10 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Buffers.Text;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Abblix.Jwt;
 
 namespace Abblix.SecurityEvents.Validation.Steps;
@@ -55,28 +51,21 @@ public sealed class ParseStep : ISecurityEventTokenValidator
                         $"A compact JWS has {JwsSegmentCount} segments; this token has {segments.Length}."));
         }
 
-        SecurityEventTokenValidationError? error = null;
-        try
+        // Read as the JWT core reads a compact JWS, so a part carrying padding or whitespace, a header or claims set
+        // that is not UTF-8 JSON, or one repeating a member name is malformed here as it is there
+        var parsed = JwsCompactParser.Parse(segments);
+        if (parsed.TryGetFailure(out var failure))
         {
-            context.UnverifiedHeader = new JsonWebTokenHeader(ParseSegment(segments[0], "header"));
-            context.UnverifiedPayload = new JsonWebTokenPayload(ParseSegment(segments[1], "claims"));
-            context.Establish(SecurityEventTokenValidationStates.Parsed);
-        }
-        catch (Exception exception) when (exception is FormatException or JsonException)
-        {
-            error = new SecurityEventTokenValidationError(
-                SecurityEventTokenErrorCode.MalformedToken,
-                exception.Message);
+            return ValueTask.FromResult<SecurityEventTokenValidationError?>(
+                new SecurityEventTokenValidationError(
+                    SecurityEventTokenErrorCode.MalformedToken,
+                    failure.ErrorDescription));
         }
 
-        return ValueTask.FromResult(error);
-    }
-
-    private static JsonObject ParseSegment(string segment, string name)
-    {
-        var json = Encoding.UTF8.GetString(Base64Url.DecodeFromChars(segment));
-
-        return JsonNode.Parse(json) as JsonObject
-            ?? throw new JsonException($"The token's {name} segment is not a JSON object.");
+        var token = parsed.GetSuccess();
+        context.UnverifiedHeader = token.Header;
+        context.UnverifiedPayload = token.Payload;
+        context.Establish(SecurityEventTokenValidationStates.Parsed);
+        return ValueTask.FromResult<SecurityEventTokenValidationError?>(null);
     }
 }

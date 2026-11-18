@@ -15,20 +15,73 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    # Decides whether this pull request needs the build and the tests, so a change to documentation runs neither.
+    # On a pull request the checkout is GitHub's merge commit, whose first parent is the base branch, so the diff
+    # against it is exactly what the pull request changes. An empty list fails here rather than skipping every
+    # job, which would read as a green run that checked nothing. The workflow lints are not gated here: they run
+    # on every pull request from their own workflow.
+    name: What changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Classify the changed files
+        id: classify
+        run: |
+          set -euo pipefail
+          # Both sides of a rename, and every name as it is rather than quoted, so neither a file moved into
+          # docs/ nor a name outside ASCII is read as documentation
+          git -c core.quotePath=false diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/changed"
+          if [ ! -s "$RUNNER_TEMP/changed" ]; then
+            echo "::error::The pull request changes no file, so there is nothing to decide which checks it needs."
+            exit 1
+          fi
+          code=false
+          while IFS= read -r -d '' file; do
+            # Written as what does NOT need the build and the tests, so a folder added later runs them. Markdown
+            # elsewhere is not on it: the tests compile the READMEs and the analyzers read their release notes.
+            # Nothing the build or the tests read lives under .github/, so the suite says nothing about a change
+            # there - except to the three workflows that RUN the suite, which this pull request is the only
+            # place to execute. The workflow lints check the rest for syntax and shell, never by running it.
+            case "$file" in
+              .github/workflows/pr-tests.yml | .github/workflows/test-shards.yml | .github/workflows/discover-test-projects.yml) code=true ;;
+              docs/* | .github/*) ;;
+              *) code=true ;;
+            esac
+          done < "$RUNNER_TEMP/changed"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+        timeout-minutes: 3
+
   shards:
     # The shards themselves live in a called workflow, shared with the dev-build publish, so the
     # suite is defined once. The project list inside it is derived from the projects, not written
     # by hand, so a new test project cannot be left out.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/test-shards.yml
 
   build:
-    # Every framework the packages ship, which the suite structurally cannot see: each test project
-    # targets net10.0 alone, so anything that compiles there and refuses on net8.0 or net9.0 - a
-    # language feature of a newer version, a BCL type that arrived later - passes every shard. Such a
-    # refusal used to surface only after the merge, in the job that packs the dev build, where it
-    # stops publishing without failing anything a pull request can see: consumers floating the
-    # prerelease range then keep restoring the last good build and notice nothing.
-    name: Build all target frameworks
+    # The whole SOLUTION in Release, which the shards do not cover: they build what the test
+    # projects reach, and a project nothing references is compiled by nothing else a pull request
+    # runs. Every shipped project is reachable today, so this job currently agrees with the shards
+    # on every file - the difference is in what is MEASURED, and the day someone adds a project no
+    # test names, only this job sees it.
+    #
+    # It used to justify itself differently, by the frameworks: the suite ran on one and the
+    # packages shipped for three, so anything refused by an older compiler passed every shard and
+    # surfaced after the merge. That reason went with the other two frameworks.
+    name: Build the solution
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -53,18 +106,29 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          # Every target framework the projects declare, because the point of this job is to compile
-          # all of them: the 10.x SDK builds net8.0 and net9.0 only with their runtime packs present.
-          dotnet-version: |
-            8.x
-            9.x
-            10.x
+          # No version here on purpose: with dotnet-version absent the action installs what
+          # global.json names, which is the same file the local build resolves against. Naming a
+          # version in each workflow is an enumeration - one of them is missed by a bump and that
+          # job keeps building on the old SDK, green, until something needs the new one. The
+          # version itself still moves by hand, but it moves in one place.
+          #
+          # That file also sets roll-forward to "disable", which is what makes "the same SDK" true
+          # rather than nearly true. This action treats one literal value specially: on
+          # "latestFeature" it drops the pinned build and installs the newest one on that channel,
+          # which was a later prerelease of the same feature band. The difference surfaced as an
+          # obsoletion reproducing only on the SDK the runner chose - red here, green wherever the
+          # named version was the one installed, for a reason no diff contained. The tell is the
+          # "--channel" argument in this step own log rather than a version comparison: the two
+          # builds carry the same band, so comparing them says nothing happened.
+          global-json-file: global.json
         timeout-minutes: 3
-      - name: Cache NuGet packages
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      # Restored only: the entry is saved by the build of develop, so every pull request reads that one copy
+      # instead of writing its own into the repository's shared cache allowance
+      - name: Restore NuGet packages cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json', 'global.json') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json') }}
           restore-keys: ${{ runner.os }}-nuget-
         timeout-minutes: 3
       - name: Restore
@@ -83,17 +147,23 @@ jobs:
     # requires and leave every pull request waiting for a check that no longer appears. The name is
     # narrower than what it now covers, and stays that way for the same reason: renaming it silently
     # detaches branch protection from the only gate a pull request has.
+    #
+    # A pull request that needs no tests passes it with the shards and the build skipped, and one that needs them
+    # passes only when both succeeded.
     name: Unit tests
-    needs: [shards, build]
+    needs: [changes, shards, build]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
     # The gate only inspects the other jobs' results; it never touches the repo or the GITHUB_TOKEN.
     permissions: {}
     steps:
+      - name: Fail if the changed files could not be classified
+        if: needs.changes.result != 'success'
+        run: exit 1
       - name: Fail if any shard failed
-        if: needs.shards.result != 'success'
+        if: needs.changes.outputs.code == 'true' && needs.shards.result != 'success'
         run: exit 1
       - name: Fail if the multi-framework build failed
-        if: needs.build.result != 'success'
+        if: needs.changes.outputs.code == 'true' && needs.build.result != 'success'
         run: exit 1

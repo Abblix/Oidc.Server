@@ -6,30 +6,24 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 
 /// <summary>
-/// Provides metadata about supported scopes, claims, grants, and subject types for OpenID Connect discovery.
+/// Provides metadata about supported grants and subject types for OpenID Connect discovery. The scopes and claims
+/// are read from <see cref="Features.UserInfo.IScopeClaimsProvider"/>.
 /// </summary>
 public interface IScopesAndClaimsProvider
 {
-	/// <summary>
-	/// Lists the scopes supported by the OpenID Provider.
-	/// </summary>
-	IEnumerable<string> ScopesSupported { get; }
-
-	/// <summary>
-	/// Lists the claims supported by the OpenID Provider.
-	/// </summary>
-	IEnumerable<string> ClaimsSupported { get; }
-
 	/// <summary>
 	/// Lists the grant types supported by the OpenID Provider.
 	/// </summary>
 	IEnumerable<string> GrantTypesSupported { get; }
 
 	/// <summary>
-	/// Lists the subject types supported by the OpenID Provider.
+	/// Lists the subject types the tenant supports.
 	/// </summary>
-	IEnumerable<string> SubjectTypesSupported { get; }
+	/// <param name="tenant">The tenant the request is served at.</param>
+	IEnumerable<string> SubjectTypesSupported(TenantDefinition tenant);
 }

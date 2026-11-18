@@ -24,7 +24,7 @@ namespace Abblix.Utils.UnitTests;
 /// These decide whether a value that arrived from outside is allowed to go further, and they had no tests
 /// of their own. An attribute that accepts what it should refuse fails silently by construction: the
 /// request proceeds, and whatever the value breaks does so somewhere else entirely.
-/// Each case below is a value shape a real request produces - a missing member, an empty string, a
+/// Each case in this class is a value shape a real request produces - a missing member, an empty string, a
 /// relative address, an array with a hole in it - rather than a sampling of the type system.
 /// </remarks>
 public class ValidationAttributeTests
@@ -150,15 +150,20 @@ public class ValidationAttributeTests
         => Assert.Null(Validate(
             new AllowedValuesAttribute("code", "id_token"), null, nameof(Model.Undecorated)));
 
+    /// <summary>
+    /// A value outside the set is refused under the parameter's wire name, and the value itself, which is whatever the
+    /// client sent, stays out of the message.
+    /// </summary>
     [Fact]
-    public void AllowedValues_RefusesWhatIsNot_AndSaysWhich()
+    public void AllowedValues_RefusesWhatIsNot_AndNamesTheParameter()
     {
         var attribute = new AllowedValuesAttribute("code", "id_token");
 
-        var result = Validate(attribute, "token", nameof(Model.Undecorated));
+        var result = Validate(attribute, "token", nameof(Model.RedirectUri));
 
         Assert.NotNull(result);
-        Assert.Contains("token", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("redirect_uri", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("token", result.ErrorMessage, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -6,7 +6,11 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Jwt;
 using System.Net.Http.Headers;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -27,40 +31,48 @@ public class RegistrationAccessTokenValidator(IAuthServiceJwtValidator jwtValida
     : IRegistrationAccessTokenValidator
 {
     /// <inheritdoc />
-    public async Task<string?> ValidateAsync(AuthenticationHeaderValue? header, string clientId, string? expectedTokenId)
+    public async Task<Result<string, OidcError>> ValidateAsync(TenantDefinition tenant, AuthenticationHeaderValue? header, string clientId)
     {
-        if (header?.Parameter == null)
-            return $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header";
+        // RFC 6750 section 3.1: a request that "lacks any authentication information (e.g., the client was unaware that
+        // authentication is necessary or attempted using an unsupported authentication method)" gets no error code, so
+        // the typed marker has the challenge builder leave the error attributes out. A token in the query is not read
+        // here at all, so the request carrying one lacks it alike
+        if (header == null)
+            return new MissingAuthenticationError(
+                $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
 
-        if (header.Scheme != TokenTypes.Bearer)
-            return $"The scheme name '{header.Scheme}' is not supported";
+        if (!header.HasScheme(TokenTypes.Bearer))
+            return new MissingAuthenticationError($"The scheme name '{header.Scheme}' is not supported");
+
+        // RFC 6750 section 2.1: the credentials are "Bearer" 1*SP b64token, so the scheme alone is a malformed request,
+        // which section 3.1 names invalid_request, rather than a token found invalid
+        if (header.Parameter == null)
+            return new BearerRequestError(
+                $"The access token must be specified via '{HttpRequestHeaders.Authorization}' header");
 
         // The audience is required and checked: it names this server, which is what reads the token. Which
         // registration the token is about is a separate question, and the subject answers it - see below.
-        var result = await jwtValidator.ValidateAsync(header.Parameter);
+        var result = await jwtValidator.ValidateAsync(
+            tenant,
+            client: null,
+            header.Parameter, TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken));
 
         if (result.TryGetFailure(out var error))
-            return error.ErrorDescription;
+            return Refused(error.ErrorDescription);
 
         var token = result.GetSuccess();
 
-        var tokenType = token.Header.Type;
         var subject = token.Payload.Subject;
-
-        if (tokenType != JwtTypes.RegistrationAccessToken)
-            return $"Invalid token type: {tokenType}";
 
         // RFC 7592 Section 1.2: the token "is associated with a particular registered client". The subject
         // carries that association, so a token cannot manage a registration other than the one it names.
-        if (subject != clientId)
-            return "The access token unauthorized";
+        // RFC 7592 section 5: the jti binds the token to one registration, so a rotated token
+        // invalidates its predecessors; a token without one binds to nothing.
+        if (subject != clientId || token.Payload.JwtId is not { } tokenId)
+            return Refused("The access token unauthorized");
 
-        // RFC 7592 §5: bind the token to the client so a rotated token invalidates its
-        // predecessors. Enforced only when the client records the current jti - a null expectation
-        // keeps statically configured clients and pre-existing records working unchanged.
-        if (expectedTokenId != null && token.Payload.JwtId != expectedTokenId)
-            return "The access token unauthorized";
-
-        return null;
+        return tokenId;
     }
+
+    private static OidcError Refused(string description) => new(ErrorCodes.InvalidToken, description);
 }

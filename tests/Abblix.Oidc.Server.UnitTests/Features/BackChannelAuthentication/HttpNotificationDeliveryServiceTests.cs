@@ -114,7 +114,7 @@ public class HttpNotificationDeliveryServiceTests
             l => l.Log(
                 LogLevel.Information,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((o, t) => o.ToString()!.Contains("Successfully sent CIBA ping notification")),
+                It.Is<It.IsAnyType>((o, t) => o!.ToString()!.Contains("Successfully sent CIBA ping notification")),
                 null,
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -150,7 +150,7 @@ public class HttpNotificationDeliveryServiceTests
             l => l.Log(
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((o, t) => o.ToString()!.Contains("Failed to send CIBA ping notification")),
+                It.Is<It.IsAnyType>((o, t) => o!.ToString()!.Contains("Failed to send CIBA ping notification")),
                 null,
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -187,7 +187,7 @@ public class HttpNotificationDeliveryServiceTests
             l => l.Log(
                 LogLevel.Error,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((o, t) => o.ToString()!.Contains("Error sending CIBA ping notification")),
+                It.Is<It.IsAnyType>((o, t) => o!.ToString()!.Contains("Error sending CIBA ping notification")),
                 expectedException,
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -271,9 +271,11 @@ public class HttpNotificationDeliveryServiceTests
                 "SendAsync",
                 ItExpr.IsAny<HttpRequestMessage>(),
                 ItExpr.IsAny<CancellationToken>())
-            .Callback<HttpRequestMessage, CancellationToken>(async (req, _) =>
-                capturedContent = await req.Content!.ReadAsStringAsync())
-            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK));
+            .Returns(async (HttpRequestMessage req, CancellationToken _) =>
+            {
+                capturedContent = await req.Content!.ReadAsStringAsync();
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            });
 
         var httpClient = new HttpClient(mockHandler.Object);
         _httpClientFactory.Setup(f => f.CreateClient(BackChannelNotificationTransport.HttpClientName))

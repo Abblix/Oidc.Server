@@ -6,13 +6,15 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
@@ -21,18 +23,22 @@ namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 /// configuration on success, or the JSON OAuth error on failure.
 /// </summary>
 /// <param name="uriBuilder">Builds the <c>registration_client_uri</c> for the registered client.</param>
-public class RegisterClientResponseFormatter(RegistrationClientUriBuilder uriBuilder) : IRegisterClientResponseFormatter
+/// <param name="tenantAccessor">Names the tenant the request is served at, whose issuer is the realm of a bare challenge.</param>
+public class RegisterClientResponseFormatter(
+    RegistrationClientUriBuilder uriBuilder,
+    ITenantAccessor tenantAccessor) : IRegisterClientResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(
         ClientRegistrationRequest request, Result<ClientRegistrationSuccessResponse, OidcError> response)
         => Task.FromResult(response.Match(
             onSuccess: success => FormatSuccess(request, success),
-            onFailure: error => error.Format(StatusCodes.Status400BadRequest)));
+            onFailure: error => error.Format(
+                StatusCodes.Status400BadRequest, ClientManagementRealm.Of(error, tenantAccessor))));
 
     private IResult FormatSuccess(ClientRegistrationRequest request, ClientRegistrationSuccessResponse success)
     {
-        var modelResponse = new ClientRegistrationResponse
+        var modelResponse = new ClientRegistrationResponse(success.Metadata)
         {
             ClientId = success.ClientId,
             ClientIdIssuedAt = success.ClientIdIssuedAt,
@@ -46,44 +52,8 @@ public class RegisterClientResponseFormatter(RegistrationClientUriBuilder uriBui
                 ? uriBuilder.Build(success.ClientId)
                 : null,
 
-            // RFC 7591 §3.2.1: the response echoes the registered values (the server may default or narrow them),
-            // not the literal request input.
-            InitiateLoginUri = success.InitiateLoginUri ?? request.InitiateLoginUri,
-            TokenEndpointAuthMethod = success.TokenEndpointAuthMethod ?? request.TokenEndpointAuthMethod,
-            Scope = success.Scope ?? request.Scope,
-            SoftwareId = request.SoftwareId,
-            SoftwareVersion = request.SoftwareVersion,
+            // RFC 7591 section 3.2.1: a software statement "MUST be returned unmodified", and the server keeps none
             SoftwareStatement = request.SoftwareStatement,
-
-            ApplicationType = success.ApplicationType,
-            RedirectUris = success.RedirectUris,
-            GrantTypes = success.GrantTypes,
-            ResponseTypes = success.ResponseTypes,
-            ClientName = success.ClientName,
-            LogoUri = success.LogoUri,
-            SubjectType = success.SubjectType,
-            SectorIdentifierUri = success.SectorIdentifierUri,
-            JwksUri = success.JwksUri,
-            UserInfoEncryptedResponseAlg = success.UserInfoEncryptedResponseAlg,
-            UserInfoEncryptedResponseEnc = success.UserInfoEncryptedResponseEnc,
-            // RFC 9701 §6 / RFC 7591 §3.2.1: echo the registered introspection response algorithms.
-            IntrospectionSignedResponseAlg = success.IntrospectionSignedResponseAlg,
-            IntrospectionEncryptedResponseAlg = success.IntrospectionEncryptedResponseAlg,
-            IntrospectionEncryptedResponseEnc = success.IntrospectionEncryptedResponseEnc,
-            Contacts = success.Contacts,
-            RequestUris = success.RequestUris,
-            TlsClientAuthSubjectDn = success.TlsClientAuthSubjectDn,
-            TlsClientAuthSanDns = success.TlsClientAuthSanDns,
-            TlsClientAuthSanUri = success.TlsClientAuthSanUri,
-            TlsClientAuthSanIp = success.TlsClientAuthSanIp,
-            TlsClientAuthSanEmail = success.TlsClientAuthSanEmail,
-            DpopBoundAccessTokens = success.DpopBoundAccessTokens,
-            RequirePushedAuthorizationRequests = success.RequirePushedAuthorizationRequests,
-            RequireSignedRequestObject = success.RequireSignedRequestObject,
-            TlsClientCertificateBoundAccessTokens = success.TlsClientCertificateBoundAccessTokens,
-            AuthorizationDetailsTypes = success.AuthorizationDetailsTypes,
-            TokenExchangeSubjectTokenTypes = success.TokenExchangeSubjectTokenTypes,
-            TokenExchangeAudiences = success.TokenExchangeAudiences,
         };
 
         return Results.Json(modelResponse, statusCode: StatusCodes.Status201Created);

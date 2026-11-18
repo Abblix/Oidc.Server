@@ -9,6 +9,7 @@
 using System.Net.Http.Json;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
@@ -39,7 +40,7 @@ public partial class HttpNotificationDeliveryService(
     /// <returns><c>true</c> if the endpoint returned a success status; otherwise <c>false</c>.</returns>
     public async Task<bool> SendAsync(
         Uri clientNotificationEndpoint,
-        string clientNotificationToken,
+        [Credential] string clientNotificationToken,
         IBackChannelNotificationRequest payload,
         string mode)
     {

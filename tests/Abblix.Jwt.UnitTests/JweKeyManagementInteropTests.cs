@@ -236,8 +236,8 @@ public class JweKeyManagementInteropTests
 			EncryptionAlgorithm = contentEncAlg,
 			AgreementPartyUInfo = "QWxpY2U",
 			AgreementPartyVInfo = "Qm9i",
-			EphemeralPublicKey = (EllipticCurveJsonWebKey)senderKey.Sanitize(includePrivateKeys: false),
 		};
+		header.SetEphemeralPublicKey(senderKey.Sanitize(includePrivateKeys: false));
 
 		// Act - Abblix re-derives the KEK from the recipient private key and their 'epk', then unwraps
 		var encryptor = new EcdhEsKeyEncryptor(keyEncAlg, ServiceProvider);
@@ -249,7 +249,7 @@ public class JweKeyManagementInteropTests
 	}
 
 	/// <summary>
-	/// The RFC 3394 wrap algorithm behind each ECDH-ES key-wrapping variant, per RFC 7518 §4.6:
+	/// The RFC 3394 wrap algorithm behind each ECDH-ES key-wrapping variant, per RFC 7518 section 4.6:
 	/// the derived key is used as the KEK for the corresponding "A*KW" algorithm.
 	/// </summary>
 	private static string ToKeyWrapAlgorithm(string keyEncAlg) => keyEncAlg switch
@@ -292,6 +292,7 @@ public class JweKeyManagementInteropTests
 		var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
 		return await validator.ValidateAsync(jwt, new ValidationParameters
 		{
+			TokenTypes = TokenTypePolicy.CheckedByCaller,
 			Options = ValidationOptions.ValidateIssuer |
 			          ValidationOptions.ValidateAudience |
 			          ValidationOptions.RequireSignedTokens |

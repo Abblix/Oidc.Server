@@ -27,7 +27,7 @@ namespace Abblix.Jwt.UnitTests;
 /// call a real one makes. That keeps the envelope, the ring projection and the minting race under test without a
 /// live Vault, while the crypto itself is the library's own shipped JWE path rather than a test double.
 /// </remarks>
-public sealed class KeyRingTests : IDisposable
+public sealed partial class KeyRingTests : IDisposable
 {
     private const string KeyEncryptionKeyName = "oidc-kek";
 
@@ -48,9 +48,12 @@ public sealed class KeyRingTests : IDisposable
     }
     private static readonly DateTimeOffset Now = new(2026, 7, 17, 12, 0, 0, TimeSpan.Zero);
 
+    /// <summary>How long a wait on the refresh loop's thread sleeps between looks.</summary>
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(50);
+
     /// <summary>An in-memory ring store, standing in for the shared one a deployment uses.</summary>
     /// <remarks>
-    /// It can also refuse to answer, which is how the refresh loop's behaviour under an outage is exercised:
+    /// It can also refuse to answer, which is how the refresh loop's behavior under an outage is exercised:
     /// <see cref="FailWith"/> is the store being down, <see cref="BlockUntilCancelled"/> is a call still in flight
     /// when the host shuts down. <see cref="Loads"/> counts through both, because the point of those tests is that
     /// the loop asks again.
@@ -62,8 +65,23 @@ public sealed class KeyRingTests : IDisposable
         /// <summary>What every subsequent load throws, or <c>null</c> while the store is healthy.</summary>
         public Exception? FailWith { get; set; }
 
-        /// <summary>Whether a load hangs until its token is cancelled, instead of answering.</summary>
+        /// <summary>How many of the next loads fail, before the store answers again.</summary>
+        public int FailingLoads { get; set; }
+
+        /// <summary>Entries another pod adds between this pod's load and its next write.</summary>
+        public List<StoredKey> AddedByAnotherPod { get; } = [];
+
+        /// <summary>Whether a load hangs until its token is canceled, instead of answering.</summary>
         public bool BlockUntilCancelled { get; set; }
+
+        /// <summary>How many more writes succeed before the next one fails, or <c>null</c> while writes succeed.</summary>
+        public int? WritesBeforeFailure { get; set; }
+
+        /// <summary>Whether a load lists the entries newest-written first, as a store with its own order may.</summary>
+        public bool ListsInReverse { get; set; }
+
+        /// <summary>Whether a write keeps the creation time only to the nearest millisecond, as some databases do.</summary>
+        public bool KeepsMilliseconds { get; set; }
 
         private int _loads;
 
@@ -80,13 +98,43 @@ public sealed class KeyRingTests : IDisposable
             if (FailWith is not null)
                 throw FailWith;
 
-            return Entries.ToList();
+            if (FailingLoads > 0)
+            {
+                FailingLoads--;
+                throw new InvalidOperationException("the ring store did not answer this once");
+            }
+
+            return ListsInReverse ? Entries.AsEnumerable().Reverse().ToList() : Entries.ToList();
         }
 
         public Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
         {
+            if (WritesBeforeFailure is { } remaining)
+            {
+                if (remaining == 0)
+                {
+                    WritesBeforeFailure = null;
+                    throw new InvalidOperationException("the ring store did not take this write");
+                }
+
+                WritesBeforeFailure = remaining - 1;
+            }
+
+            Entries.AddRange(AddedByAnotherPod);
+            AddedByAnotherPod.Clear();
+
             if (Entries.Any(entry => entry.Id == key.Id))
                 return Task.FromResult(false);
+
+            if (KeepsMilliseconds)
+            {
+                // Rounded to the nearest millisecond, as a database column of that precision rounds
+                var milliseconds = Math.Round((double)key.CreatedAt.UtcTicks / TimeSpan.TicksPerMillisecond);
+                key = key with
+                {
+                    CreatedAt = new DateTimeOffset((long)milliseconds * TimeSpan.TicksPerMillisecond, TimeSpan.Zero),
+                };
+            }
 
             Entries.Add(key);
             return Task.FromResult(true);
@@ -106,7 +154,8 @@ public sealed class KeyRingTests : IDisposable
         string? encryptionAlgorithm = null,
         TimeSpan? keepRetiredFor = null,
         TimeProvider? timeProvider = null,
-        IReadOnlyList<JsonWebKey>? adoptedKeys = null)
+        IReadOnlyList<JsonWebKey>? adoptedKeys = null,
+        TimeSpan? rotateEvery = null)
     {
         store ??= new FakeStore();
 
@@ -114,6 +163,13 @@ public sealed class KeyRingTests : IDisposable
         services.AddLogging();
         services.AddJsonWebTokens();
         services.AddSingleton(StubCustodian(_keyEncryptionKey));
+        services.AddSingleton<KeyEnvelope>();
+
+        // A stopped clock is enough for everything the ring decides from one instant; a test driving the refresh
+        // timer passes a clock it can advance, and the ring must read the same one so the two agree on now.
+        services.AddSingleton(timeProvider ?? new FakeTimeProvider(now ?? Now));
+        services.AddSingleton(
+            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation ?? TimeSpan.FromHours(1) }));
 
         // Opening an envelope is a custodian unwrap, so the external decryption backend must be on the seam: the
         // KEK is public-only, and that is what routes its unwrap out of process.
@@ -121,44 +177,428 @@ public sealed class KeyRingTests : IDisposable
         var provider = services.BuildServiceProvider();
         _providers.Add(provider);
 
-        var envelope = new KeyEnvelope(provider.GetRequiredService<IJsonWebTokenEncryptor>());
-
-        // A stopped clock is enough for everything the ring decides from one instant; a test driving the refresh
-        // timer passes a clock it can advance, and the ring must read the same one so the two agree on now.
-        TimeProvider time;
-        if (timeProvider is not null)
+        var policy = new MintedKeys
         {
-            time = timeProvider;
-        }
-        else
-        {
-            var stopped = new Mock<TimeProvider>();
-            stopped.Setup(t => t.GetUtcNow()).Returns(now ?? Now);
-            time = stopped.Object;
-        }
+            KeyEncryptionKeyName = KeyEncryptionKeyName,
+            RotateEvery = rotateEvery ?? TimeSpan.FromDays(30),
+            EncryptionAlgorithm = encryptionAlgorithm,
+            KeepRetiredFor = keepRetiredFor,
+            AdoptedKeys = Adopted(KeyRingOptions.DefaultPartition, adoptedKeys),
+        };
+        var steps = new KeyRingRefreshBuilder(provider, policy);
+        var partitions = new OptionsKeyRingPartitions(provider.GetRequiredService<IOptions<KeyRingOptions>>());
+        var setup = new KeyRingSetup(policy, partitions, store);
+        var check = new KeyRingStartupCheck(setup, provider.GetRequiredService<IKeyCustodian>());
+        var ring = new KeyRing(store, steps.Refresh, steps.Schedule, KeyRingOptions.DefaultPartition, check);
 
-        var ring = new KeyRing(
-            store,
-            provider.GetRequiredService<IKeyCustodian>(),
-            envelope,
+        return (ring, store);
+    }
+
+    /// <summary>
+    /// The rings of <paramref name="partitions"/> over one store, built as the container builds them, with the first
+    /// partition's ring.
+    /// </summary>
+    private (KeyRingParts Rings, KeyRing Ring, FakeStore Store) CreateRings(
+        TimeSpan propagation,
+        TimeProvider time,
+        IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>>? adoptedKeys = null,
+        params string[] partitions)
+    {
+        var store = new FakeStore();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddSingleton(StubCustodian(_keyEncryptionKey));
+        services.ComposeExternalKeyBackends();
+        services.AddSingleton<KeyEnvelope>();
+        services.AddSingleton(time);
+        var options = Options.Create(new KeyRingOptions
+        {
+            KeyRolloverPropagation = propagation,
+            Partitions = partitions.Length == 0 ? [KeyRingOptions.DefaultPartition] : partitions,
+        });
+        services.AddSingleton(options);
+        var provider = services.BuildServiceProvider();
+        _providers.Add(provider);
+
+        var rings = new KeyRingParts(
+            provider,
             new MintedKeys
             {
                 KeyEncryptionKeyName = KeyEncryptionKeyName,
                 RotateEvery = TimeSpan.FromDays(30),
-                EncryptionAlgorithm = encryptionAlgorithm,
-                KeepRetiredFor = keepRetiredFor,
-                AdoptedKeys = adoptedKeys ?? [],
+                AdoptedKeys = adoptedKeys ?? new Dictionary<string, IReadOnlyList<JsonWebKey>>(),
             },
-            Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation ?? TimeSpan.FromHours(1) }),
+            store,
+            new OptionsKeyRingPartitions(options));
+        return (rings, rings.Ring(options.Value.Partitions.First()), store);
+    }
+
+    /// <summary>
+    /// Two partitions over one store each mint a key of their own, stored under their own names, so neither serves
+    /// the other's.
+    /// </summary>
+    [Fact]
+    public async Task TwoPartitions_MintKeysOfTheirOwn_IntoOneStore()
+    {
+        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme", "globex");
+
+        foreach (var (_, ring, source) in rings.BeginRound())
+            await ring.RefreshAsync(source, TestContext.Current.CancellationToken);
+
+        var acme = rings.For("acme").Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single();
+        var globex = rings.For("globex").Get(PublicKeyUsages.Signature, includePrivateKeys: false).Single();
+        Assert.NotEqual(acme.ComputeJwkThumbprintBase64Url(), globex.ComputeJwkThumbprintBase64Url());
+        Assert.Contains(store.Entries, entry => entry.Id.StartsWith("acme.", StringComparison.Ordinal));
+        Assert.Contains(store.Entries, entry => entry.Id.StartsWith("globex.", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The refresh service brings up every partition before the server serves anything, so no issuer starts
+    /// without keys.
+    /// </summary>
+    [Fact]
+    public async Task TheRefreshService_BringsUpEveryPartition_AtStartup()
+    {
+        var propagation = TimeSpan.FromHours(1);
+        var time = new FakeTimeProvider(Now);
+        var (rings, _, _) = CreateRings(propagation, time, null, "acme", "globex");
+        var service = new KeyRingRefreshService(
+            new RecordingLogger<KeyRingRefreshService>(),
+            rings.Check,
+            rings.Rounds,
             time);
 
-        return (ring, store);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotEmpty(rings.For("acme").Get(PublicKeyUsages.Signature, includePrivateKeys: false));
+        Assert.NotEmpty(rings.For("globex").Get(PublicKeyUsages.Signature, includePrivateKeys: false));
+    }
+
+    /// <summary>
+    /// A partition reads only its entries, under the ids the ring knows them by, and writes and removes them under
+    /// its name; the default one reads only entries no partition names.
+    /// </summary>
+    [Fact]
+    public async Task APartitionsView_OfTheSharedStore_HoldsItsEntriesAlone()
+    {
+        var store = new FakeStore();
+        var shared = new StoredKey { Id = "sig-RS256-1", Jwe = "default", CreatedAt = Now };
+        var acmeOwn = new StoredKey { Id = "acme.sig-RS256-1", Jwe = "acme", CreatedAt = Now };
+        store.Entries.AddRange([shared, acmeOwn]);
+        var acme = new PartitionedKeyRingStore(store, "acme");
+        var byDefault = new PartitionedKeyRingStore(store, KeyRingOptions.DefaultPartition);
+        var ct = TestContext.Current.CancellationToken;
+
+        Assert.Equal("acme", Assert.Single(await acme.LoadAsync(ct)) is { Id: "sig-RS256-1" } entry ? entry.Jwe : null);
+        Assert.Equal("default", Assert.Single(await byDefault.LoadAsync(ct)).Jwe);
+
+        Assert.True(await acme.TryAddAsync(new StoredKey { Id = "sig-RS256-2", Jwe = "new", CreatedAt = Now }, ct));
+        Assert.Contains(store.Entries, stored => stored.Id == "acme.sig-RS256-2");
+
+        await acme.RemoveAsync("sig-RS256-1", ct);
+        Assert.DoesNotContain(store.Entries, stored => stored.Id == "acme.sig-RS256-1");
+        Assert.Contains(store.Entries, stored => stored.Id == "sig-RS256-1");
+    }
+
+    private static Task<IReadOnlyDictionary<string, Exception>> Open(KeyRingParts rings, params string[] partitions)
+        => rings.OpenAsync(partitions, TestContext.Current.CancellationToken);
+
+    // The clock of the rings RingsKeeping builds, which a test moves on
+    private readonly FakeTimeProvider _ringsTime = new(Now);
+
+    /// <summary>
+    /// Rings keeping the partitions <paramref name="kept"/> names, as a host registering its own does, over a fresh
+    /// store, with keys from <paramref name="custodian"/>.
+    /// </summary>
+    private (KeyRingParts Rings, FakeStore Store) RingsKeeping(
+        IKeyRingPartitions kept,
+        IKeyCustodian custodian,
+        IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>>? adoptedKeys = null)
+    {
+        var store = new FakeStore();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddSingleton(custodian);
+        services.ComposeExternalKeyBackends();
+        services.AddSingleton<KeyEnvelope>();
+        services.AddSingleton<TimeProvider>(_ringsTime);
+        services.AddSingleton(Options.Create(new KeyRingOptions()));
+        var provider = services.BuildServiceProvider();
+        _providers.Add(provider);
+
+        var policy = new MintedKeys
+        {
+            KeyEncryptionKeyName = KeyEncryptionKeyName,
+            AdoptedKeys = adoptedKeys ?? new Dictionary<string, IReadOnlyList<JsonWebKey>>(),
+        };
+        return (new KeyRingParts(provider, policy, store, kept), store);
+    }
+
+    private static IKeyRingPartitions Keeping(params string[] partitions)
+    {
+        var kept = new Mock<IKeyRingPartitions>();
+        kept.Setup(p => p.Kept).Returns(partitions);
+        return kept.Object;
+    }
+
+    /// <summary>
+    /// Keys adopted into one partition are taken into that partition alone: another partition beside it serves none
+    /// of them, so a party trusting one partition's keys cannot verify the other's tokens.
+    /// </summary>
+    [Fact]
+    public async Task AdoptedKeys_AreTakenOnlyIntoThePartitionTheyAreAddressedTo()
+    {
+        var adopted = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature);
+
+        var (rings, _, _) = CreateRings(
+            TimeSpan.FromHours(1), new FakeTimeProvider(Now), Adopted("acme", [adopted]), "acme", "globex");
+
+        foreach (var (_, ring, source) in rings.BeginRound())
+            await ring.RefreshAsync(source, TestContext.Current.CancellationToken);
+
+        var thumbprint = adopted.ComputeJwkThumbprintBase64Url();
+        Assert.Contains(
+            rings.For("acme").Get(PublicKeyUsages.Signature, includePrivateKeys: false),
+            key => key.ComputeJwkThumbprintBase64Url() == thumbprint);
+        Assert.DoesNotContain(
+            rings.For("globex").Get(PublicKeyUsages.Signature, includePrivateKeys: false),
+            key => key.ComputeJwkThumbprintBase64Url() == thumbprint);
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>> Adopted(
+        string partition,
+        IReadOnlyList<JsonWebKey>? keys)
+        => keys is { Count: > 0 }
+            ? new Dictionary<string, IReadOnlyList<JsonWebKey>> { [partition] = keys }
+            : new Dictionary<string, IReadOnlyList<JsonWebKey>>();
+
+    /// <summary>
+    /// A ring keeping no partition yet meets its key-encryption key only when the first one is opened, so it asks
+    /// the custodian for it at the start and refuses to start without it.
+    /// </summary>
+    [Fact]
+    public async Task AKeyEncryptionKeyTheCustodianDoesNotHold_RefusesTheStart()
+    {
+        var custodian = new Mock<IKeyCustodian>();
+        custodian.Setup(c => c.ServesKeyManagement(It.IsAny<string>())).Returns(true);
+        custodian
+            .Setup(c => c.GetKeyVersionsAsync(KeyEncryptionKeyName, It.IsAny<CancellationToken>()))
+            .Returns(AsyncEnumerable.Empty<KeyVersion>());
+        var (rings, _) = RingsKeeping(Keeping(), custodian.Object);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => rings.CheckKeyEncryptionKeyAsync(TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
+    /// A partition opened while the ring runs mints its first key at once and is served, though the ring was not
+    /// started keeping it.
+    /// </summary>
+    [Fact]
+    public async Task OpeningAPartition_MintsItsFirstKey_AndServesIt()
+    {
+        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme");
+
+        Assert.Empty(await Open(rings, "globex"));
+
+        Assert.NotEmpty(rings.For("globex").Get(PublicKeyUsages.Signature, false));
+        Assert.Contains(store.Entries, stored => stored.Id.StartsWith("globex.", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The partitions opened together share one read of the store, the keys they mint included, so a server
+    /// starting with many tenants reads the store once rather than twice for each.
+    /// </summary>
+    [Fact]
+    public async Task PartitionsOpenedTogether_ReadTheStoreOnce()
+    {
+        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme");
+        var before = store.Loads;
+
+        Assert.Empty(await Open(rings, "globex", "initech", "umbrella"));
+
+        Assert.Equal(before + 1, store.Loads);
+    }
+
+    /// <summary>
+    /// A partition whose first refresh failed is not kept half-built: it is not served, the others opened with it
+    /// are, and the next opening tries it again.
+    /// </summary>
+    [Fact]
+    public async Task AFailedOpening_IsNotServed_AndIsTriedAgain()
+    {
+        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme");
+
+        store.FailingLoads = 1;
+        Assert.Equal("globex", Assert.Single(await Open(rings, "globex", "initech")).Key);
+        Assert.Throws<InvalidOperationException>(() => rings.For("globex"));
+        Assert.NotEmpty(rings.For("initech").Get(PublicKeyUsages.Signature, false));
+
+        Assert.Empty(await Open(rings, "globex"));
+        Assert.NotEmpty(rings.For("globex").Get(PublicKeyUsages.Signature, false));
+    }
+
+    /// <summary>
+    /// A ring kept now, or opened within half a refresh period, is current and is not refreshed again when opened,
+    /// while one built but neither kept nor opened since, as a tenant dropped and served again, has missed its
+    /// refreshes and is refreshed before it is served.
+    /// </summary>
+    [Fact]
+    public async Task OpeningARingNoLongerCurrent_RefreshesIt_AndACurrentOneIsLeftAsItIs()
+    {
+        var (rings, store) = RingsKeeping(Keeping("acme"), StubCustodian(_keyEncryptionKey));
+        Assert.Empty(await Open(rings, "acme", "globex"));
+
+        var halfPeriod = new KeyRingOptions().RefreshPeriod / 2;
+        var before = store.Loads;
+        _ringsTime.Advance(halfPeriod - TimeSpan.FromSeconds(1));
+        Assert.Empty(await Open(rings, "acme", "globex"));
+        Assert.Equal(before, store.Loads);
+
+        _ringsTime.Advance(TimeSpan.FromSeconds(1));
+        Assert.Empty(await Open(rings, "acme", "globex"));
+        Assert.Equal(before + 1, store.Loads);
+    }
+
+    /// <summary>
+    /// An opening stopped part way keeps what it opened and reports only what it did not reach, so openings that
+    /// never fit in the time they are given still bring partitions up, some each time.
+    /// </summary>
+    [Fact]
+    public async Task AnOpeningStoppedPartWay_KeepsWhatItOpened()
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var listings = 0;
+        var custodian = new Mock<IKeyCustodian>();
+        custodian.Setup(c => c.ServesKeyManagement(It.IsAny<string>())).Returns(true);
+        custodian
+            .Setup(c => c.GetKeyVersionsAsync(KeyEncryptionKeyName, It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                // A partition minting its first key lists the versions twice, to seal the key and to open it, so
+                // the third listing is the second partition's, where the time runs out
+                if (++listings == 3)
+                {
+                    stop.Cancel();
+                    stop.Token.ThrowIfCancellationRequested();
+                }
+
+                return new[] { new KeyVersion(_keyEncryptionKey.Sanitize(false), Now.AddDays(-100)) }
+                    .ToAsyncEnumerable();
+            });
+        custodian
+            .Setup(c => c.UnwrapKeyAsync(
+                _keyEncryptionKey.KeyId!, It.IsAny<string>(), It.IsAny<JsonWebTokenHeader>(), It.IsAny<byte[]>(),
+                It.IsAny<CancellationToken>()))
+            .Returns((string _, string algorithm, JsonWebTokenHeader _, byte[] encryptedKey, CancellationToken _) =>
+                Task.FromResult<byte[]?>(UnwrapLocally((RsaJsonWebKey)_keyEncryptionKey, algorithm, encryptedKey)));
+        var (rings, _) = RingsKeeping(Keeping(), custodian.Object);
+
+        var failures = await rings.OpenAsync(["acme", "globex", "initech"], stop.Token);
+
+        Assert.Equal(["globex", "initech"], failures.Keys.Order());
+        Assert.NotEmpty(rings.For("acme").Get(PublicKeyUsages.Signature, false));
+
+        // Once stopped, the opening asks the custodian nothing more for the partitions it did not reach
+        Assert.Equal(3, listings);
+    }
+
+    /// <summary>
+    /// The round the ring starts with leaves out the partitions refreshed when opened, so a server opening its
+    /// tenants before the ring starts does not open every key twice.
+    /// </summary>
+    [Fact]
+    public async Task TheFirstRound_LeavesOutThePartitionsAlreadyOpened()
+    {
+        var (rings, _) = RingsKeeping(Keeping("acme", "globex"), StubCustodian(_keyEncryptionKey));
+        Assert.Empty(await Open(rings, "acme"));
+
+        Assert.Equal(["globex"], rings.BeginRound(exceptOpened: true).Select(entry => entry.Partition));
+        Assert.Equal(["acme", "globex"], rings.BeginRound().Select(entry => entry.Partition));
+    }
+
+    /// <summary>
+    /// The partitions a host registers are the ones refreshed, whichever side of the ring's registration it
+    /// registered them, rather than those the settings declare.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PartitionsTheHostRegisters_AreTheOnesRefreshed(bool registeredFirst)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddSingleton(StubCustodian(_keyEncryptionKey));
+        services.AddSingleton<IKeyRingStore>(new FakeStore());
+        services.ComposeExternalKeyBackends();
+        if (registeredFirst)
+            services.AddSingleton(Keeping("globex"));
+
+        services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = KeyEncryptionKeyName });
+        if (!registeredFirst)
+            services.AddSingleton(Keeping("globex"));
+
+        using var provider = services.BuildServiceProvider();
+
+        var round = provider.GetRequiredService<KeyRingRounds>().BeginRound();
+        Assert.Equal(["globex"], round.Select(entry => entry.Partition));
+    }
+
+    /// <summary>
+    /// A partition names its entries in every store the ring may use, so opening one under a name only some stores
+    /// accept is refused.
+    /// </summary>
+    [Theory]
+    [InlineData("tenants/acme")]
+    [InlineData("acme.eu")]
+    public async Task OpeningAPartitionNamedWithCharactersAStoreMayRefuse_IsRefused(string partition)
+    {
+        var (rings, _, _) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme");
+
+        Assert.IsType<ArgumentException>(Assert.Single(await Open(rings, partition)).Value);
+    }
+
+    [Fact]
+    public void APartitionTheRingDoesNotKeep_IsRefused()
+    {
+        var (rings, _, _) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rings.For("globex"));
+        Assert.Contains("keeps no partition 'globex'", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A partition names its entries in every store the ring may use, so a name only some stores accept is refused
+    /// at startup.
+    /// </summary>
+    [Theory]
+    [InlineData("tenants/acme")]
+    [InlineData("acme.eu")]
+    public void APartitionNamedWithCharactersAStoreMayRefuse_IsRefused(string partition)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddSingleton(StubCustodian(_keyEncryptionKey));
+        services.AddSingleton<IKeyRingStore>(new FakeStore());
+        services.ComposeExternalKeyBackends();
+        services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = KeyEncryptionKeyName });
+        services.Configure<KeyRingOptions>(ring => ring.Partitions = [partition]);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<KeyRingOptions>>().Value);
     }
 
     /// <summary>A custodian that holds the KEK: it publishes the public half and unwraps with the private one.</summary>
     private static IKeyCustodian StubCustodian(JsonWebKey keyEncryptionKey)
     {
         var custodian = new Mock<IKeyCustodian>();
+        custodian.Setup(c => c.ServesKeyManagement(It.IsAny<string>())).Returns(true);
 
         custodian
             .Setup(c => c.GetKeyVersionsAsync(KeyEncryptionKeyName, It.IsAny<CancellationToken>()))
@@ -216,6 +656,74 @@ public sealed class KeyRingTests : IDisposable
         Assert.False(published.HasPrivateKey);
     }
 
+    /// <summary>
+    /// The ring reports when its newest key appeared, which is the one observation separating a ring whose
+    /// rotation has stopped from one that is working: a stopped ring keeps serving what it holds, every
+    /// signature it produced still verifies, and nothing else goes red.
+    /// </summary>
+    [Fact]
+    public async Task ReportsWhenItsNewestKeyAppeared()
+    {
+        var (ring, _) = CreateRing();
+
+        // Before it has loaded anything there is no key and so no such moment, which is not the same answer as
+        // a moment long past: a host asking at startup must not read it as a rotation that stopped.
+        Assert.Null(ring.NewestKeyCreatedAt(PublicKeyUsages.Signature));
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(Now, ring.NewestKeyCreatedAt(PublicKeyUsages.Signature));
+    }
+
+    /// <summary>
+    /// It reports the newest key of the role asked about, not the oldest and not one of another role.
+    /// </summary>
+    /// <remarks>
+    /// One key and one role cannot say either: with a single key the newest and the oldest are the same one, and
+    /// with a single role a reader that ignored the role would still answer correctly. Measured - a body reading
+    /// the oldest key of any role passed every row in this repository until this one existed.
+    /// </remarks>
+    [Fact]
+    public async Task ReportsTheNewestKeyOfTheRoleAsked()
+    {
+        var later = Now.AddDays(40);
+        var time = new FakeTimeProvider(Now);
+        var (ring, _) = CreateRing(encryptionAlgorithm: EncryptionAlgorithms.KeyManagement.RsaOaep, timeProvider: time);
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+        time.SetUtcNow(later);
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // Two keys per role by now, so the answer is the rotation that just happened rather than the one
+        // before it.
+        Assert.Equal(later, ring.NewestKeyCreatedAt(PublicKeyUsages.Signature));
+
+        // And a ring that mints for one role only answers about that role, so a reader ignoring the role would
+        // hand back the signing rotation when asked about encryption.
+        var (signingOnly, _) = CreateRing();
+        await signingOnly.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(Now, signingOnly.NewestKeyCreatedAt(PublicKeyUsages.Signature));
+        Assert.Null(signingOnly.NewestKeyCreatedAt(PublicKeyUsages.Encryption));
+    }
+
+    /// <summary>
+    /// A custodian that cannot be reached leaves the answer as it was, rather than turning into a ring with no
+    /// keys - which is the coupling the refresh loop avoids by logging and carrying on.
+    /// </summary>
+    [Fact]
+    public async Task AnUnreachableStore_DoesNotChangeWhatTheRingReports()
+    {
+        var (ring, store) = CreateRing();
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        store.FailWith = new InvalidOperationException("the custodian is unreachable");
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ring.RefreshAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(Now, ring.NewestKeyCreatedAt(PublicKeyUsages.Signature));
+    }
+
     [Fact]
     public async Task MintsNothingNew_WhenThePeriodAlreadyHasAKey()
     {
@@ -224,7 +732,7 @@ public sealed class KeyRingTests : IDisposable
         await ring.RefreshAsync(TestContext.Current.CancellationToken);
         await ring.RefreshAsync(TestContext.Current.CancellationToken);
 
-        // The period id is derived, not random, so a second refresh recognises the period is served.
+        // The period id is derived, not random, so a second refresh recognizes the period is served.
         Assert.Single(store.Entries);
     }
 
@@ -397,8 +905,9 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// The control for the pair above: once BOTH roles have a successor past the window, the unrestricted key
-    /// does leave. Without this the tests would hold equally for a ring that never retires anything.
+    /// The control for <see cref="AKeyNamingNoRole_OutlivesASuccessorInOneRoleOnly"/>: once BOTH roles have a
+    /// successor past the window, the unrestricted key does leave. Without this that test would hold equally for
+    /// a ring that never retires anything.
     /// </summary>
     [Fact]
     public async Task AKeyNamingNoRole_RetiresOnceBothRolesMovedOn()
@@ -479,7 +988,8 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// The control for the test above, and the reason adoption dates the key backwards: once the propagation
+    /// The control for <see cref="AnAdoptedKeyProduces_WhileTheKeyMintedBesideItIsStillAnnounced"/>, and the
+    /// reason adoption dates the key backwards: once the propagation
     /// window has passed, the minted key takes over and the adopted one merely stays published.
     /// </summary>
     [Fact]
@@ -504,11 +1014,11 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// Adoption happens only into an empty ring, which is what makes leaving the call in a host's registration
-    /// harmless: a key the ring has since retired is not brought back by the next refresh.
+    /// Adoption happens only until the ring holds a minted key, which is what makes leaving the call in a host's
+    /// registration harmless: a key the ring has since retired is not brought back by the next refresh.
     /// </summary>
     [Fact]
-    public async Task AnAdoptedKeyIsNotTakenAgain_OnceTheRingHoldsAnything()
+    public async Task AnAdoptedKeyIsNotTakenAgain_OnceTheRingHoldsAMintedKey()
     {
         var existing = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
             with { KeyId = "from-certificate" };
@@ -545,8 +1055,95 @@ public sealed class KeyRingTests : IDisposable
     }
 
     /// <summary>
-    /// The builder call reaches the ring. Everything above constructs the ring directly, which proves the
-    /// behaviour and nothing about the wiring - and a registration method that quietly reaches nobody reads
+    /// A refused key refuses the whole set before anything is stored. Were the keys listed before it stored, the
+    /// next refresh would find the ring not empty, adopt nothing and refuse nothing, and the server would run on
+    /// without the refused key and with no error left to say so.
+    /// </summary>
+    [Fact]
+    public async Task AKeyWithNoPrivateHalf_LeavesNothingAdopted()
+    {
+        var complete = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "complete" };
+        var publicOnly = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            .Sanitize(includePrivateKeys: false) with { KeyId = "public-only" };
+
+        var (ring, store) = CreateRing(adoptedKeys: [complete, publicOnly]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ring.RefreshAsync(TestContext.Current.CancellationToken));
+
+        Assert.Empty(store.Entries);
+    }
+
+    /// <summary>
+    /// A key that cannot be named refuses the set before anything is stored, as a key without its private half
+    /// does: an RSA key carrying its private exponent but no modulus passes the private-half check, and its
+    /// thumbprint, which names the entry, needs the modulus.
+    /// </summary>
+    [Fact]
+    public async Task AKeyThatCannotBeNamed_LeavesNothingAdopted()
+    {
+        var complete = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "complete" };
+        var noModulus = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "no-modulus", Modulus = null };
+
+        var (ring, store) = CreateRing(adoptedKeys: [complete, noModulus]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ring.RefreshAsync(TestContext.Current.CancellationToken));
+
+        Assert.Empty(store.Entries);
+    }
+
+    /// <summary>
+    /// A set whose writing stopped partway is completed by the next refresh. The ring then holds an adopted key
+    /// and nothing minted, and taking that for the end of adoption would leave the rest of the set out for good,
+    /// with nothing reporting the loss.
+    /// </summary>
+    [Fact]
+    public async Task AnAdoptedSetWrittenPartway_IsCompletedByTheNextRefresh()
+    {
+        var first = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "first" };
+        var second = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)
+            with { KeyId = "second" };
+
+        var store = new FakeStore { WritesBeforeFailure = 1 };
+        var (ring, _) = CreateRing(store, adoptedKeys: [first, second]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ring.RefreshAsync(TestContext.Current.CancellationToken));
+        Assert.Single(store.Entries);
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var published = ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false).Select(key => key.KeyId);
+        Assert.Contains("first", published);
+        Assert.Contains("second", published);
+    }
+
+    /// <summary>
+    /// The id of a minted entry is what every pod, of this release and of the next, computes for the same period,
+    /// so it is held exactly: a release naming the period differently would find no key for the current one and
+    /// mint a second, or find the previous period's key and skip a rotation.
+    /// </summary>
+    [Fact]
+    public async Task AMintedEntry_IsNamedAfterItsRoleAndThePeriodItsClockIsIn()
+    {
+        var (ring, store) = CreateRing();
+
+        await ring.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // The test clock reads 2026-07-17T12:00Z, and a thirty-day grid counted from year one puts it in the period
+        // that began 2026-07-04T00:00Z
+        var minted = Assert.Single(store.Entries);
+        Assert.Equal($"{PublicKeyUsages.Signature}-{SigningAlgorithms.RS256}-20260704T000000Z", minted.Id);
+    }
+
+    /// <summary>
+    /// The builder call reaches the ring. The other adoption tests construct the ring directly, which proves the
+    /// behavior and nothing about the wiring - and a registration method that quietly reaches nobody reads
     /// exactly like one that works.
     /// </summary>
     [Fact]
@@ -556,15 +1153,14 @@ public sealed class KeyRingTests : IDisposable
             with { KeyId = "from-certificate" };
 
         var store = new FakeStore();
-        var time = new Mock<TimeProvider>();
-        time.Setup(t => t.GetUtcNow()).Returns(Now);
+        var time = new FakeTimeProvider(Now);
 
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddJsonWebTokens();
         services.AddSingleton(StubCustodian(_keyEncryptionKey));
         services.AddSingleton<IKeyRingStore>(store);
-        services.AddSingleton(time.Object);
+        services.AddSingleton<TimeProvider>(time);
         services.ComposeExternalKeyBackends();
         services
             .AddKeyRing(new MintedKeys { KeyEncryptionKeyName = KeyEncryptionKeyName })
@@ -573,11 +1169,17 @@ public sealed class KeyRingTests : IDisposable
         var provider = services.BuildServiceProvider();
         _providers.Add(provider);
 
-        // Started the way a host starts it: the first refresh runs in StartAsync, which is the door production
-        // walks through.
-        var refresher = provider.GetServices<IHostedService>().Single();
-        await refresher.StartAsync(TestContext.Current.CancellationToken);
-        await refresher.StopAsync(TestContext.Current.CancellationToken);
+        // Started the way a host starts it: every service's StartingAsync, then the first refresh in StartAsync,
+        // which is the door production walks through.
+        var hosted = provider.GetServices<IHostedService>().ToArray();
+        foreach (var starting in hosted.OfType<IHostedLifecycleService>())
+            await starting.StartingAsync(TestContext.Current.CancellationToken);
+
+        foreach (var service in hosted)
+            await service.StartAsync(TestContext.Current.CancellationToken);
+
+        foreach (var service in hosted)
+            await service.StopAsync(TestContext.Current.CancellationToken);
 
         var published = provider.GetRequiredService<IKeyRing>()
             .Get(PublicKeyUsages.Signature, includePrivateKeys: false).ToList();
@@ -605,8 +1207,151 @@ public sealed class KeyRingTests : IDisposable
         var provider = services.BuildServiceProvider();
         _providers.Add(provider);
 
-        Assert.IsType<KeyRingRefreshService>(Assert.Single(provider.GetServices<IHostedService>()));
-        Assert.Same(provider.GetRequiredService<KeyRing>(), provider.GetRequiredService<IKeyRing>());
+        Assert.Single(provider.GetServices<IHostedService>().OfType<KeyRingRefreshService>());
+        Assert.Same(
+            provider.GetRequiredService<IKeyRings>().For(KeyRingOptions.DefaultPartition),
+            provider.GetRequiredService<IKeyRing>());
+    }
+
+    /// <summary>
+    /// A ring keeping a partition for each issuer has no one ring to serve as <see cref="IKeyRing"/>, and says to
+    /// take an issuer's ring instead of naming a partition nobody declared.
+    /// </summary>
+    [Fact]
+    public void TheSingleRing_OfARingKeepingAPartitionForEachIssuer_PointsToTheRingsOfTheIssuers()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddSingleton(StubCustodian(_keyEncryptionKey));
+        services.AddSingleton<IKeyRingStore>(new FakeStore());
+        services.ComposeExternalKeyBackends();
+        services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = KeyEncryptionKeyName });
+        services.Configure<KeyRingOptions>(options => options.Partitions = ["acme", "globex"]);
+
+        var provider = services.BuildServiceProvider();
+        _providers.Add(provider);
+
+        var refusal = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IKeyRing>());
+        Assert.Contains($"{nameof(IKeyRings)}.{nameof(IKeyRings.For)}", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The partitions refreshed in one round share one read of the store, so a tick costs the same read however
+    /// many issuers the ring keeps partitions for.
+    /// </summary>
+    [Fact]
+    public async Task ARound_ReadsTheStoreOnce_ForEveryPartition()
+    {
+        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme", "globex");
+        var ct = TestContext.Current.CancellationToken;
+        foreach (var (_, ring, source) in rings.BeginRound())
+            await ring.RefreshAsync(source, ct);
+
+        var loadsBefore = store.Loads;
+        foreach (var (_, ring, source) in rings.BeginRound())
+            await ring.RefreshAsync(source, ct);
+
+        Assert.Equal(loadsBefore + 1, store.Loads);
+    }
+
+    /// <summary>
+    /// A refresh asked of a ring outside the refresh service reads the store itself, so it sees what other pods
+    /// minted since the last round rather than that round's read.
+    /// </summary>
+    [Fact]
+    public async Task ARefreshAskedOutsideARound_ReadsTheStoreAfresh()
+    {
+        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme", "globex");
+        var ct = TestContext.Current.CancellationToken;
+        foreach (var (_, ring, source) in rings.BeginRound())
+            await ring.RefreshAsync(source, ct);
+
+        var loadsBefore = store.Loads;
+        await rings.For("acme").RefreshAsync(ct);
+        await rings.For("acme").RefreshAsync(ct);
+
+        Assert.Equal(loadsBefore + 2, store.Loads);
+    }
+
+    /// <summary>
+    /// A read that failed is not kept for the round: the partition after it reads the store for itself and is
+    /// refreshed.
+    /// </summary>
+    [Fact]
+    public async Task AFailedRead_IsNotKeptForTheRestOfTheRound()
+    {
+        var (rings, _, store) = CreateRings(TimeSpan.FromHours(1), new FakeTimeProvider(Now), null, "acme", "globex");
+        var ct = TestContext.Current.CancellationToken;
+        store.FailingLoads = 1;
+        var round = rings.BeginRound();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => round[0].Ring.RefreshAsync(round[0].Source, ct));
+        await round[1].Ring.RefreshAsync(round[1].Source, ct);
+
+        Assert.NotEmpty(rings.For("globex").Get(PublicKeyUsages.Signature, includePrivateKeys: false));
+    }
+
+    /// <summary>
+    /// A pod that loses the race to mint a period's key reads the store again in the same refresh, so it holds the
+    /// winner's key at once rather than nothing until the next round.
+    /// </summary>
+    [Fact]
+    public async Task APodLosingTheMintRace_HoldsTheWinnersKey_InTheSameRefresh()
+    {
+        var (winner, winnersStore) = CreateRing();
+        await winner.RefreshAsync(TestContext.Current.CancellationToken);
+
+        var store = new FakeStore();
+        store.AddedByAnotherPod.AddRange(winnersStore.Entries);
+        var (loser, _) = CreateRing(store);
+        await loser.RefreshAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            Assert.Single(winner.Get(PublicKeyUsages.Signature, includePrivateKeys: false)).KeyId,
+            Assert.Single(loser.Get(PublicKeyUsages.Signature, includePrivateKeys: false)).KeyId);
+    }
+
+    /// <summary>
+    /// A partition whose keys cannot be opened is reported by name, and the partitions after it in the round are
+    /// refreshed all the same.
+    /// </summary>
+    [Fact]
+    public async Task RefreshLoop_RefreshesTheOtherPartitions_WhenOneCannotBeOpened()
+    {
+        var propagation = TimeSpan.FromHours(1);
+        var time = new FakeTimeProvider(Now);
+        var (rings, _, store) = CreateRings(propagation, time, null, "acme", "globex");
+        var logger = new RecordingLogger<KeyRingRefreshService>();
+        var service = new KeyRingRefreshService(
+            logger,
+            rings.Check,
+            rings.Rounds,
+            time);
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        await ArmTheLoop(time, propagation / 2, store);
+
+        // acme gets an entry nothing can open; globex loses its stored keys, so its next refresh mints again
+        store.Entries.Add(new StoredKey { Id = "acme.unopenable", Jwe = "not a sealed key", CreatedAt = Now });
+        store.Entries.RemoveAll(entry => entry.Id.StartsWith("globex.", StringComparison.Ordinal));
+
+        time.Advance(propagation / 2);
+        await WaitForErrors(logger, 1);
+
+        // acme is refreshed first, so its failure is reported before globex's refresh has run
+        const int MaxPolls = 100;
+        for (var polls = 0; !GlobexMinted() && polls < MaxPolls; polls++)
+            await Task.Delay(PollInterval, TestContext.Current.CancellationToken);
+
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        Assert.Contains("'acme'", logger.Snapshot.Single(entry => entry.Level == LogLevel.Error).Message);
+        Assert.True(GlobexMinted(), "The partition refreshed after the failing one was not refreshed.");
+
+        bool GlobexMinted() => Array.Exists(
+            store.Entries.ToArray(),
+            entry => entry.Id.StartsWith("globex.", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -618,14 +1363,17 @@ public sealed class KeyRingTests : IDisposable
     public async Task RefreshLoop_KeepsTicking_AfterTheStoreRefuses()
     {
         var propagation = TimeSpan.FromHours(1);
-        var time = new SignallingTimeProvider(new FakeTimeProvider(Now));
-        var (ring, store) = CreateRing(propagation: propagation, timeProvider: time);
+        var time = new FakeTimeProvider(Now);
+        var (rings, ring, store) = CreateRings(propagation, time);
         var logger = new RecordingLogger<KeyRingRefreshService>();
         var service = new KeyRingRefreshService(
-            logger, ring, Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }), time);
+            logger,
+            rings.Check,
+            rings.Rounds,
+            time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
-        await time.TimerCreated.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await ArmTheLoop(time, propagation / 2, store);
         var served = Assert.Single(ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false)).KeyId;
 
         store.FailWith = new InvalidOperationException("the ring store is unreachable");
@@ -639,32 +1387,39 @@ public sealed class KeyRingTests : IDisposable
         time.Advance(propagation / 2);
         await WaitForLoads(store, loadsBeforeOutage + 2);
 
+        // A load is counted as it starts and its failure is logged after it throws, so the second report can
+        // still be on its way when the count arrives.
+        await WaitForErrors(logger, 2);
+
         Assert.False(service.ExecuteTask!.IsFaulted);
         Assert.Equal(served, Assert.Single(ring.Get(PublicKeyUsages.Signature, includePrivateKeys: false)).KeyId);
-        Assert.Equal(2, logger.Entries.Count(entry => entry.Level == LogLevel.Error));
+        Assert.Equal(2, logger.Errors);
 
         await service.StopAsync(TestContext.Current.CancellationToken);
     }
 
     /// <summary>
     /// Shutting the host down while a refresh is in flight is not a failure and must not be reported as one. A
-    /// cancelled call would otherwise write an Error on every ordinary pod restart, which is how a log nobody
+    /// canceled call would otherwise write an Error on every ordinary pod restart, which is how a log nobody
     /// reads is made.
     /// </summary>
     [Fact]
     public async Task RefreshLoop_ReportsNothing_WhenShutdownCancelsARefreshInFlight()
     {
         var propagation = TimeSpan.FromHours(1);
-        var time = new SignallingTimeProvider(new FakeTimeProvider(Now));
-        var (ring, store) = CreateRing(propagation: propagation, timeProvider: time);
+        var time = new FakeTimeProvider(Now);
+        var (rings, _, store) = CreateRings(propagation, time);
         var logger = new RecordingLogger<KeyRingRefreshService>();
         var service = new KeyRingRefreshService(
-            logger, ring, Options.Create(new KeyRingOptions { KeyRolloverPropagation = propagation }), time);
+            logger,
+            rings.Check,
+            rings.Rounds,
+            time);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
-        await time.TimerCreated.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await ArmTheLoop(time, propagation / 2, store);
 
-        // The next load hangs, so the refresh is still running when the host stops and its token is cancelled.
+        // The next load hangs, so the refresh is still running when the host stops and its token is canceled.
         store.BlockUntilCancelled = true;
         var loadsBeforeStop = store.Loads;
 
@@ -673,7 +1428,7 @@ public sealed class KeyRingTests : IDisposable
 
         await service.StopAsync(TestContext.Current.CancellationToken);
 
-        Assert.Empty(logger.Entries);
+        Assert.Empty(logger.Snapshot);
     }
 
     /// <summary>
@@ -690,39 +1445,45 @@ public sealed class KeyRingTests : IDisposable
         Assert.True(store.Loads >= expected, $"Expected at least {expected} loads, the store saw {store.Loads}.");
     }
 
+    /// <summary>Waits for the loop to have reported a given number of failures, bounded the same way.</summary>
+    private static async Task WaitForErrors<T>(RecordingLogger<T> logger, int expected)
+    {
+        var waited = Stopwatch.StartNew();
+        while (logger.Errors < expected && waited.Elapsed < TimeSpan.FromSeconds(10))
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+    }
+
     /// <summary>
-    /// A fake clock that says when the loop has armed its timer.
+    /// Brings the refresh loop to its await with its timer armed and no tick pending, before a case begins.
     /// </summary>
     /// <remarks>
-    /// Starting the service returns as soon as the loop is scheduled, not when it reaches its first await, so
-    /// advancing the clock straight away can land before the timer exists - and a tick nobody is holding a timer
-    /// for is simply lost, which reads as a loop that died. Waiting for <see cref="TimerCreated"/> removes the
-    /// race outright: <see cref="PeriodicTimer"/> holds a tick that arrives with no waiter, so once the timer is
-    /// armed every advance is observed whether or not the loop has reached the await yet.
+    /// Starting the service returns as soon as the loop is scheduled, not when it reaches its first await, so an
+    /// advance made straight away can land before the timer exists, and a tick no timer holds is simply lost. A
+    /// load arriving proves the timer exists; waiting until the count stops moving for 200 ms lets a tick held
+    /// while that load ran fire now rather than inside the case, so every later advance is one load for as long as
+    /// no refresh outlasts that wait. The advances are capped by count, not only by time: each one moves the ring's
+    /// clock too, and enough of them would carry it across a rotation boundary and mint a second key.
     /// </remarks>
-    private sealed class SignallingTimeProvider(FakeTimeProvider inner) : TimeProvider
+    private static async Task ArmTheLoop(FakeTimeProvider time, TimeSpan period, FakeStore store)
     {
-        private readonly TaskCompletionSource _timerCreated =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        const int MaxAdvances = 100;
 
-        public Task TimerCreated => _timerCreated.Task;
-
-        public void Advance(TimeSpan delta) => inner.Advance(delta);
-
-        public override DateTimeOffset GetUtcNow() => inner.GetUtcNow();
-
-        public override TimeZoneInfo LocalTimeZone => inner.LocalTimeZone;
-
-        public override long TimestampFrequency => inner.TimestampFrequency;
-
-        public override long GetTimestamp() => inner.GetTimestamp();
-
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        var loadsAtStart = store.Loads;
+        for (var advances = 0; store.Loads == loadsAtStart && advances < MaxAdvances; advances++)
         {
-            var timer = inner.CreateTimer(callback, state, dueTime, period);
-            _timerCreated.TrySetResult();
-            return timer;
+            time.Advance(period);
+            await Task.Delay(50, TestContext.Current.CancellationToken);
         }
+
+        Assert.True(store.Loads > loadsAtStart, "The refresh loop never loaded, so its timer was never armed.");
+
+        int seen;
+        do
+        {
+            seen = store.Loads;
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+        while (store.Loads != seen);
     }
 
     /// <summary>
@@ -731,7 +1492,19 @@ public sealed class KeyRingTests : IDisposable
     /// </summary>
     private sealed class RecordingLogger<T> : ILogger<T>
     {
-        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+        private readonly List<(LogLevel Level, string Message)> _entries = [];
+
+        /// <summary>What was written so far, copied under the same lock the loop's thread writes under.</summary>
+        public IReadOnlyList<(LogLevel Level, string Message)> Snapshot
+        {
+            get
+            {
+                lock (_entries)
+                    return [.. _entries];
+            }
+        }
+
+        public int Errors => Snapshot.Count(entry => entry.Level == LogLevel.Error);
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -744,8 +1517,8 @@ public sealed class KeyRingTests : IDisposable
             Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
-            lock (Entries)
-                Entries.Add((logLevel, formatter(state, exception)));
+            lock (_entries)
+                _entries.Add((logLevel, formatter(state, exception)));
         }
     }
 }

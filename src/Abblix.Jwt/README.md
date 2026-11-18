@@ -2,17 +2,15 @@
 
 A JWT and JOSE toolkit for .NET, built entirely on the platform's cryptographic primitives and `System.Text.Json.Nodes` - no dependency on `Microsoft.IdentityModel.Tokens`. It implements JWS ([RFC 7515](https://datatracker.ietf.org/doc/html/rfc7515)), JWE ([RFC 7516](https://datatracker.ietf.org/doc/html/rfc7516)), JWK ([RFC 7517](https://datatracker.ietf.org/doc/html/rfc7517)) and JWA ([RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518)), and is the token layer behind Abblix OIDC Server, usable on its own.
 
-## What's New in Version 2.4
+## What's New in Version 3.0
 
 🚀 Features
-- Complete JWE key management: every key-management algorithm of [RFC 7518](https://datatracker.ietf.org/doc/html/rfc7518) section 4, including AES key wrapping ([RFC 3394](https://datatracker.ietf.org/doc/html/rfc3394)) and opt-in password-based encryption with a bounded work factor
-- External signing keys: a custodian seam through which the private half of a key is held outside the process, served by [Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault) for HashiCorp Vault and OpenBao Transit and [Abblix.JWT.Azure](https://www.nuget.org/packages/Abblix.JWT.Azure) for Azure Key Vault
-- Replay prevention for single-use tokens, with one store serving every token profile
+- Every validation states the token types it accepts ([RFC 8725](https://www.rfc-editor.org/rfc/rfc8725.html))
 
 ✏️ Improvements
-- Clock tolerance travels as one value with separate past and future halves, so a window such as the one FAPI 2.0 prescribes is expressed exactly
-- A NumericDate is read as [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519) section 2 defines it: a fractional or exponent-written number is a date, and a claim that cannot be read is refused by name rather than thrown
-- The signed discovery document uses the standard algorithm for a key that declares none ([RFC 7517](https://datatracker.ietf.org/doc/html/rfc7517) section 4.4)
+- AES key wrap from the platform rather than a copy of its own
+- An inbound encrypted token that no key opens is recorded in the log
+- A custodian failure the caller can act on
 
 ## Install
 
@@ -39,7 +37,7 @@ var jwt = await creator.IssueAsync(
         {
             Issuer = "https://issuer.example.com",
             Audiences = ["https://api.example.com"],
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            ExpiresAt = timeProvider.GetUtcNow().AddMinutes(5),
         },
     },
     key);
@@ -52,11 +50,14 @@ Two classes of failure still surface as exceptions, both after the signature has
 ```csharp
 var result = await validator.ValidateAsync(jwt, new ValidationParameters
 {
+    TokenTypes = TokenTypePolicy.Exactly(JsonWebTokenTypes.AccessToken),
     ValidateIssuer = issuer => Task.FromResult(issuer == "https://issuer.example.com"),
     ValidateAudience = audiences => Task.FromResult(audiences.Contains("https://api.example.com")),
     ResolveIssuerSigningKeys = issuer => KnownKeysOf(issuer),
 });
 ```
+
+Every validation states the `typ` values it accepts, and there is no default: `TokenTypePolicy.Exactly(...)` accepts only the listed types, `TokenTypePolicy.OrUntyped(...)` also accepts a token with no type, and `TokenTypePolicy.CheckedByCaller` leaves the type to your own code. A validation that states none throws before the token is read, so a token issued for one purpose is not accepted as another by accident.
 
 The payload is a `JsonObject` underneath, so claims keep their JSON types - numbers, arrays and nested objects need no string round-trips, and custom claims are first-class.
 
@@ -88,7 +89,7 @@ services.AddSingleton<IReplayCache>(provider =>
     provider.CreateService<DistributedReplayCache>(Dependency.Override("MyApp:ReplayPrevention:")));
 ```
 
-The shipped implementation stores in the host's `IDistributedCache`, so a single-instance deployment gets process-local behaviour and a scaled-out one gets shared memory by swapping the store. That store offers Get and Set and no compare-and-set, which makes the answer probabilistic within one cache round trip - enough for the profiles that accept it (RFC 9449 Section 11.1 for DPoP proofs, RFC 8935 Section 2 for redelivered Security Event Tokens), and replaceable behind the same interface by a backend-native primitive where it is not.
+The shipped implementation stores in the host's `IDistributedCache`, so a single-instance deployment gets process-local behavior and a scaled-out one gets shared memory by swapping the store. That store offers Get and Set and no compare-and-set, which makes the answer probabilistic within one cache round trip - enough for the profiles that accept it (RFC 9449 Section 11.1 for DPoP proofs, RFC 8935 Section 2 for redelivered Security Event Tokens), and replaceable behind the same interface by a backend-native primitive where it is not.
 
 ## External keys
 
@@ -132,7 +133,7 @@ the key material rather than beside either consumer.
 
 ## Part of the Abblix product family
 
-Abblix.JWT is the token layer under [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) and [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents); the full family lives in the [repository](https://github.com/Abblix/Oidc.Server).
+Abblix.JWT is the token layer under [Abblix.OIDC](https://www.nuget.org/packages/Abblix.OIDC), [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) and [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents); the full family lives in the [repository](https://github.com/Abblix/Oidc.Server).
 
 ## License
 

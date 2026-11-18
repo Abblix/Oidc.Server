@@ -47,7 +47,7 @@ public partial class BackChannelLogoutTokenSender(
         using var content = new FormUrlEncodedContent(parameters);
         using var response = await backChannelHttpClient.PostAsync(logoutOptions.Uri, content);
 
-        LogRequestSent(parameters, logoutOptions.Uri, response.StatusCode);
+        LogRequestSent(logoutToken.Token.Payload.JwtId, logoutOptions.Uri, response.StatusCode);
 
         try
         {

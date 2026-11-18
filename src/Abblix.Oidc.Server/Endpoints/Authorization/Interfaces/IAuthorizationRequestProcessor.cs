@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
 /// <summary>
@@ -22,8 +24,9 @@ public interface IAuthorizationRequestProcessor
 	/// Processes a valid authorization request, authenticates the end-user, obtains an authorization decision,
 	/// and issues an authorization code or tokens.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The valid authorization request to process.</param>
 	/// <returns>A task that resolves to an <see cref="AuthorizationResponse"/> containing the outcome
 	/// of the request processing.</returns>
-	Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request);
+	Task<AuthorizationResponse> ProcessAsync(TenantDefinition tenant, ValidAuthorizationRequest request);
 }

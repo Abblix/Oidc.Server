@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.EndSession.Validation;
@@ -20,9 +21,10 @@ public class EndSessionContextValidatorComposite(IEndSessionContextValidator[] v
     /// <summary>
     /// Validates the end-session request using a composite of multiple validators.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The end-session validation context.</param>
     /// <returns>A task representing the asynchronous operation.
     /// The result is a validation error if any validation step fails; otherwise, null.</returns>
-    public Task<OidcError?> ValidateAsync(EndSessionValidationContext context)
-        => validationSteps.FirstOrDefaultAsync(v => v.ValidateAsync(context));
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, EndSessionValidationContext context)
+        => validationSteps.FirstOrDefaultAsync(v => v.ValidateAsync(tenant, context));
 }

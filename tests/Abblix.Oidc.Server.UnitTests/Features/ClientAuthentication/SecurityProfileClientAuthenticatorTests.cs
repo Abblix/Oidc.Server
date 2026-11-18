@@ -6,20 +6,27 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using System.Linq;
+using Abblix.Jwt;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Abblix.Oidc.Server;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientAuthentication;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -32,20 +39,110 @@ public class SecurityProfileClientAuthenticatorTests
 {
     private const string ClientId = "stored-client";
 
-    private static (SecurityProfileClientAuthenticator Authenticator, Mock<IClientAuthenticator> Inner)
-        CreateAuthenticator(ClientSecurityProfile defaultProfile)
-        => CreateAuthenticator(defaultProfile, NullLogger<SecurityProfileClientAuthenticator>.Instance);
+    /// <summary>
+    /// The tenant a request is served at, holding its clients to <paramref name="defaultProfile"/> by default.
+    /// </summary>
+    private static TenantDefinition TenantAt(ClientSecurityProfile defaultProfile)
+        => new TestIssuer { DefaultSecurityProfile = defaultProfile }.ToTenant();
 
     private static (SecurityProfileClientAuthenticator Authenticator, Mock<IClientAuthenticator> Inner)
-        CreateAuthenticator(ClientSecurityProfile defaultProfile, ILogger<SecurityProfileClientAuthenticator> logger)
+        CreateAuthenticator()
+        => CreateAuthenticator(NullLogger<SecurityProfileClientAuthenticator>.Instance);
+
+    private static (SecurityProfileClientAuthenticator Authenticator, Mock<IClientAuthenticator> Inner)
+        CreateAuthenticator(ILogger<SecurityProfileClientAuthenticator> logger)
+        => CreateAuthenticator(logger, SigningAlgorithms.PS256, []);
+
+    /// <summary>
+    /// The decorator over a client the inner authenticator returns, with the deployment's service tokens signed with
+    /// <paramref name="serviceTokenAlgorithm"/> and the client publishing <paramref name="encryptionKeys"/>. Service
+    /// tokens default to PS256, which every profile admits, so a refusal elsewhere is the client's own.
+    /// </summary>
+    private static (SecurityProfileClientAuthenticator Authenticator, Mock<IClientAuthenticator> Inner)
+        CreateAuthenticator(
+            ILogger<SecurityProfileClientAuthenticator> logger,
+            string serviceTokenAlgorithm,
+            JsonWebKey[] encryptionKeys)
     {
         var inner = new Mock<IClientAuthenticator>();
+        var options = new OidcOptions();
+        options.ServiceTokens.AccessToken.Signing.Algorithm = serviceTokenAlgorithm;
+        options.ServiceTokens.RefreshToken.Signing.Algorithm = serviceTokenAlgorithm;
+        var keys = new Mock<IClientKeysProvider>();
+        keys.Setup(k => k.GetEncryptionKeys(It.IsAny<ClientInfo>())).Returns(encryptionKeys.ToAsyncEnumerable());
+        var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
+        creator
+            .Setup(c => c.EncryptedResponseAlgorithmsSupported)
+            .Returns([EncryptionAlgorithms.KeyManagement.Rsa1_5, EncryptionAlgorithms.KeyManagement.RsaOaep256]);
         var authenticator = new SecurityProfileClientAuthenticator(
             inner.Object,
-            Options.Create(new OidcOptions { DefaultSecurityProfile = defaultProfile }),
-            logger);
+            logger,
+            new ClientEncryptionKeyResolver(new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every), keys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
+            Options.Create(options));
 
         return (authenticator, inner);
+    }
+
+    /// <summary>
+    /// FAPI 2.0 section 5.4.1 "when creating or processing JWTs": the access and refresh tokens a client is issued are
+    /// signed with what the deployment configures, so a client held to FAPI 2.0 at a tenant held to none does not
+    /// authenticate while they are signed RS256, before anything is spent for it.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, false)]
+    [InlineData(SigningAlgorithms.PS256, true)]
+    public async Task TheServiceTokensAClientWouldBeIssued_AreJudgedByItsProfile(string algorithm, bool authenticated)
+    {
+        var (authenticator, inner) = CreateAuthenticator(
+            NullLogger<SecurityProfileClientAuthenticator>.Instance, algorithm, []);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            SecurityProfile = ClientSecurityProfile.Fapi2,
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
+
+        Assert.Equal(authenticated, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
+    /// algorithm". A client that registered RSA-OAEP-256 for its ID tokens and publishes only RSA1_5 encryption keys has
+    /// nothing to be encrypted to, and does not authenticate; one also publishing an RSA-OAEP-256 key does, and so does
+    /// one that registered no encryption algorithm, which is sent nothing encrypted.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, false, false)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, true, true)]
+    [InlineData(null, false, true)]
+    public async Task ARegisteredAlgorithmWithNoKeyToEncryptTo_DoesNotAuthenticate(
+        string? registered, bool withOaep, bool authenticated)
+    {
+        JsonWebKey[] keys = withOaep
+            ?
+            [
+                new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 },
+                new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 },
+            ]
+            : [new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 }];
+        var (authenticator, inner) = CreateAuthenticator(
+            NullLogger<SecurityProfileClientAuthenticator>.Instance, SigningAlgorithms.PS256, keys);
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            TlsClientCertificateBoundAccessTokens = true,
+            IdentityTokenEncryptedResponseAlgorithm = registered,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest());
+
+        Assert.Equal(authenticated, result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -58,14 +155,14 @@ public class SecurityProfileClientAuthenticatorTests
     {
         var logger = new CapturingLogger();
 
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None, logger);
+        var (authenticator, inner) = CreateAuthenticator(logger);
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             SecurityProfile = (ClientSecurityProfile)7,
         });
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
 
         // Selected by EVENT, not by level: this class emits a second warning of its own, and a
         // fixture that also tripped it would satisfy both assertions off the wrong line.
@@ -90,14 +187,14 @@ public class SecurityProfileClientAuthenticatorTests
     {
         var logger = new CapturingLogger();
 
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        var (authenticator, inner) = CreateAuthenticator(logger);
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
         var entry = Assert.Single(
             logger.Entries,
@@ -118,13 +215,13 @@ public class SecurityProfileClientAuthenticatorTests
     {
         var logger = new CapturingLogger();
 
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        var (authenticator, inner) = CreateAuthenticator(logger);
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
         });
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
         var entry = Assert.Single(
             logger.Entries,
@@ -144,14 +241,14 @@ public class SecurityProfileClientAuthenticatorTests
     {
         var logger = new CapturingLogger();
 
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        var (authenticator, inner) = CreateAuthenticator(logger);
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
         var entry = Assert.Single(
             logger.Entries,
@@ -175,13 +272,13 @@ public class SecurityProfileClientAuthenticatorTests
     {
         var logger = new CapturingLogger();
 
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2, logger);
+        var (authenticator, inner) = CreateAuthenticator(logger);
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
         });
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
         var entry = Assert.Single(
             logger.Entries,
@@ -204,14 +301,14 @@ public class SecurityProfileClientAuthenticatorTests
     {
         var logger = new CapturingLogger();
 
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None, logger);
+        var (authenticator, inner) = CreateAuthenticator(logger);
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             SecurityProfile = ClientSecurityProfile.Fapi2,
         });
 
-        await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
 
         Assert.DoesNotContain(
             logger.Entries,
@@ -219,8 +316,30 @@ public class SecurityProfileClientAuthenticatorTests
                 .ProfileIsNotOneThisServerDefines);
     }
 
+    /// <summary>
+    /// A client allowed the token endpoint URL as its assertion's audience authenticates at a tenant naming no
+    /// profile and is refused under FAPI 2.0, whose section 5.3.2.1 accepts the issuer identifier alone, whichever
+    /// way it was stored.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.None, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, false)]
+    public async Task TokenEndpointAudienceException_IsRefusedUnderFapi2(ClientSecurityProfile profile, bool accepted)
+    {
+        var (authenticator, inner) = CreateAuthenticator();
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            ClientAssertionAudiences = ClientAssertionAudiences.Issuer | ClientAssertionAudiences.TokenEndpoint,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest());
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
     private static void Authenticates(Mock<IClientAuthenticator> inner, ClientInfo clientInfo)
-        => inner.Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
+        => inner.Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
             .ReturnsAsync(clientInfo);
 
     /// <summary>
@@ -234,12 +353,16 @@ public class SecurityProfileClientAuthenticatorTests
     [InlineData(ClientAuthenticationMethods.None)]
     public async Task StoredClientCannotSatisfyProfile_ShouldReturnNull(string method)
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var (authenticator, inner) = CreateAuthenticator();
         Authenticates(inner, new ClientInfo(ClientId) { TokenEndpointAuthMethod = method });
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
+
+        // A public client presented no credential, so it is refused as one that presented none (RFC 9701 section 5
+        // answers that 400 at introspection), and a client whose shared secret verified as one whose credential failed
+        Assert.Equal(method == ClientAuthenticationMethods.None, result.GetFailure() is UnauthenticatedCallerError);
     }
 
     /// <summary>
@@ -251,7 +374,7 @@ public class SecurityProfileClientAuthenticatorTests
     [Fact]
     public async Task StoredClientAllowsAForbiddenResponseType_ShouldReturnNull()
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var (authenticator, inner) = CreateAuthenticator();
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
@@ -260,11 +383,39 @@ public class SecurityProfileClientAuthenticatorTests
             // also trip the clause requiring the code type, and the row would stay green if the
             // clause its name points at were deleted.
             AllowedResponseTypes = [[ResponseTypes.Code], [ResponseTypes.Code, ResponseTypes.IdToken]],
+            // At the RS256 defaults the FAPI 2.0 signing clause would refuse the client as well, and the row would
+            // stay green with the response-type clause deleted
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         });
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// FAPI 2.0 section 5.3.2.2 binds the response type "for flows that use the authorization endpoint": a resource
+    /// server registering no response type, which only calls introspection, authenticates there under FAPI 2.0. It does
+    /// so at the RS256 defaults of the ID token and authorization response algorithms, since it is issued neither JWT;
+    /// a client of the CIBA grant, issued ID tokens at the token endpoint, does not.
+    /// </summary>
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(GrantTypes.Ciba, false)]
+    public async Task StoredClientRegisteringNoResponseType_Authenticates(string? grantType, bool authenticated)
+    {
+        var (authenticator, inner) = CreateAuthenticator();
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedGrantTypes = grantType is null ? [] : [grantType],
+            AllowedResponseTypes = [],
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
+
+        Assert.Equal(authenticated, result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -275,56 +426,157 @@ public class SecurityProfileClientAuthenticatorTests
     [Fact]
     public async Task StoredClientCarriesAProfileThisServerDoesNotDefine_ShouldReturnNull()
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None);
+        var (authenticator, inner) = CreateAuthenticator();
         Authenticates(inner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = (ClientSecurityProfile)7,
         });
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
 
-        Assert.Null(result);
+        Assert.False(result.TryGetSuccess(out _));
     }
 
     /// <summary>
     /// And a client that DOES satisfy the strictest bundle is served, which is what keeps the
-    /// refusal above from being "an undefined profile refuses everything" - a reading under which
+    /// refusal in <see cref="StoredClientCarriesAProfileThisServerDoesNotDefine_ShouldReturnNull"/> from
+    /// being "an undefined profile refuses everything" - a reading under which
     /// the value would be a denial of service rather than a constraint.
     /// </summary>
     [Fact]
     public async Task StoredClientWithAnUndefinedProfileButCompliant_ShouldAuthenticate()
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None);
+        var (authenticator, inner) = CreateAuthenticator();
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
             SecurityProfile = (ClientSecurityProfile)7,
+            // The strictest bundle admits only the FAPI signature algorithms for what the server signs for the client
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            TlsClientCertificateBoundAccessTokens = true,
         };
         Authenticates(inner, clientInfo);
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
 
-        Assert.Same(clientInfo, result);
+        Assert.Same(clientInfo, result.GetSuccess());
     }
 
     /// <summary>
-    /// A registration the profile admits passes through untouched, which is what keeps the refusals
-    /// above from being a decorator that refuses everything.
+    /// A registration the profile admits passes through untouched, which is what keeps the refusals in
+    /// <see cref="StoredClientCannotSatisfyProfile_ShouldReturnNull"/> and
+    /// <see cref="StoredClientAllowsAForbiddenResponseType_ShouldReturnNull"/> from being a decorator that
+    /// refuses everything.
     /// </summary>
     [Fact]
     public async Task StoredClientSatisfiesProfile_ShouldAuthenticate()
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var (authenticator, inner) = CreateAuthenticator();
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            // FAPI 2.0 section 5.4.1 admits no RS256 in what the server signs for the client
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
         };
         Authenticates(inner, clientInfo);
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
 
-        Assert.Same(clientInfo, result);
+        Assert.Same(clientInfo, result.GetSuccess());
+    }
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.1: authorization servers "shall reject requests using the resource owner
+    /// password credentials grant". A stored client configured for that grant, registered while no profile was in
+    /// force, does not authenticate once its tenant is held to FAPI 2.0, and so is issued no token by it; the same
+    /// client without the grant authenticates.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task StoredClientConfiguredForThePasswordGrant_DoesNotAuthenticateUnderFapi2(
+        bool password, bool authenticated)
+    {
+        var (authenticator, inner) = CreateAuthenticator();
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            AllowedGrantTypes = password
+                ? [GrantTypes.AuthorizationCode, GrantTypes.Password]
+                : [GrantTypes.AuthorizationCode],
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest());
+
+        Assert.Equal(authenticated, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// FAPI 2.0 Security Profile section 5.3.2.1 and FAPI 1.0 Part 2 section 5.2.2 have the server "only issue
+    /// sender-constrained access tokens", and the FAPI CIBA profile section 5.2.2 has it "not support CIBA push mode".
+    /// A stored CIBA client in the push mode, registered while no profile was in force, does not authenticate once its
+    /// tenant is held to a FAPI profile, or once it names one itself at a tenant held to none, so it starts no
+    /// backchannel authentication and is pushed no token; the same client in the ping mode authenticates.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, null, BackchannelTokenDeliveryModes.Push, false)]
+    [InlineData(ClientSecurityProfile.Fapi2, null, BackchannelTokenDeliveryModes.Ping, true)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, BackchannelTokenDeliveryModes.Push, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, BackchannelTokenDeliveryModes.Ping, true)]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, BackchannelTokenDeliveryModes.Push, false)]
+    [InlineData(ClientSecurityProfile.None, ClientSecurityProfile.Fapi2, BackchannelTokenDeliveryModes.Ping, true)]
+    public async Task StoredClientInThePushMode_DoesNotAuthenticateUnderFapi(
+        ClientSecurityProfile profile, ClientSecurityProfile? clientProfile, string deliveryMode, bool authenticated)
+    {
+        var (authenticator, inner) = CreateAuthenticator();
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            SecurityProfile = clientProfile,
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.TlsClientAuth,
+            AllowedGrantTypes = [GrantTypes.Ciba],
+            AllowedResponseTypes = [],
+            BackChannelTokenDeliveryMode = deliveryMode,
+            BackChannelClientNotificationEndpoint = new Uri("https://client.example.com/ciba"),
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(profile), new ClientRequest());
+
+        Assert.Equal(authenticated, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.2 has access tokens sender-constrained via MTLS only, so a stored client requiring
+    /// DPoP (RFC 9449 section 5.2), or one no certificate-bound token can be issued to, does not authenticate.
+    /// </summary>
+    [Theory]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, true)]
+    public async Task UnderFapi1Advanced_AClientNoCertificateBoundTokenServes_DoesNotAuthenticate(
+        bool requireDPoP, bool certificateBound, bool authenticated)
+    {
+        var (authenticator, inner) = CreateAuthenticator();
+        var clientInfo = new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            RequireDPoP = requireDPoP,
+            TlsClientCertificateBoundAccessTokens = certificateBound,
+        };
+        Authenticates(inner, clientInfo);
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest());
+
+        Assert.Equal(authenticated, result.TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -334,16 +586,16 @@ public class SecurityProfileClientAuthenticatorTests
     [Fact]
     public async Task NoProfile_ShouldAuthenticateWhateverTheRegistration()
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.None);
+        var (authenticator, inner) = CreateAuthenticator();
         var clientInfo = new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
         };
         Authenticates(inner, clientInfo);
 
-        var result = await authenticator.TryAuthenticateClientAsync(new ClientRequest());
+        var result = await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest());
 
-        Assert.Same(clientInfo, result);
+        Assert.Same(clientInfo, result.GetSuccess());
     }
 
     /// <summary>
@@ -358,40 +610,41 @@ public class SecurityProfileClientAuthenticatorTests
     [Fact]
     public async Task TheClientProfileAddsToTheDefaultRatherThanReplacingIt()
     {
-        var (underFloor, underFloorInner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
+        var (underFloor, underFloorInner) = CreateAuthenticator();
         Authenticates(underFloorInner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        Assert.Null(await underFloor.TryAuthenticateClientAsync(new ClientRequest()));
+        Assert.False((await underFloor.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest())).TryGetSuccess(out _));
 
-        var (tightened, tightenedInner) = CreateAuthenticator(ClientSecurityProfile.None);
+        var (tightened, tightenedInner) = CreateAuthenticator();
         Authenticates(tightenedInner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = ClientSecurityProfile.Fapi2,
         });
 
-        Assert.Null(await tightened.TryAuthenticateClientAsync(new ClientRequest()));
+        Assert.False((await tightened.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest())).TryGetSuccess(out _));
     }
 
     /// <summary>
     /// And a shared-secret client under a server naming no profile is accepted, without which the
-    /// case above would be satisfied by a decorator refusing every shared-secret client.
+    /// <see cref="TheClientProfileAddsToTheDefaultRatherThanReplacingIt"/> would be satisfied by a decorator
+    /// refusing every shared-secret client.
     /// </summary>
     [Fact]
     public async Task NoProfileEitherSide_LeavesASharedSecretClientAlone()
     {
-        var (unprofiled, unprofiledInner) = CreateAuthenticator(ClientSecurityProfile.None);
+        var (unprofiled, unprofiledInner) = CreateAuthenticator();
         Authenticates(unprofiledInner, new ClientInfo(ClientId)
         {
             TokenEndpointAuthMethod = ClientAuthenticationMethods.ClientSecretBasic,
             SecurityProfile = ClientSecurityProfile.None,
         });
 
-        Assert.NotNull(await unprofiled.TryAuthenticateClientAsync(new ClientRequest()));
+        Assert.True((await unprofiled.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.None), new ClientRequest())).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -401,11 +654,11 @@ public class SecurityProfileClientAuthenticatorTests
     [Fact]
     public async Task InnerRefuses_ShouldReturnNull()
     {
-        var (authenticator, inner) = CreateAuthenticator(ClientSecurityProfile.Fapi2);
-        inner.Setup(a => a.TryAuthenticateClientAsync(It.IsAny<ClientRequest>()))
-            .ReturnsAsync((ClientInfo?)null);
+        var (authenticator, inner) = CreateAuthenticator();
+        inner.Setup(a => a.TryAuthenticateClientAsync(TestTenant.Matched, It.IsAny<ClientRequest>()))
+            .ReturnsAsync(ClientAuthenticationFailures.InvalidCredential);
 
-        Assert.Null(await authenticator.TryAuthenticateClientAsync(new ClientRequest()));
+        Assert.False((await authenticator.TryAuthenticateClientAsync(TenantAt(ClientSecurityProfile.Fapi2), new ClientRequest())).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -420,9 +673,10 @@ public class SecurityProfileClientAuthenticatorTests
     ///
     /// The cast falls back to an empty list, which is what a case asserting a field is ABSENT would
     /// be satisfied by if the generator's state type ever stopped carrying the interface. What stops
-    /// that is the assertion beside it, naming a field that must be PRESENT on the same entry: it
-    /// goes red on an empty list, so it is the control for the absence rather than a repetition of
-    /// the case above it.
+    /// that is the assertion beside it in
+    /// <see cref="TheRefusal_ForAClientNamingNothing_CarriesNoProfileFieldAndItsOwnEventId"/>, naming a
+    /// field that must be PRESENT on the same entry: it goes red on an empty list, so it is the control
+    /// for the absence rather than a repetition of the assertion that the field is absent.
     /// </remarks>
     private sealed class CapturingLogger : ILogger<SecurityProfileClientAuthenticator>
     {
@@ -444,5 +698,112 @@ public class SecurityProfileClientAuthenticatorTests
                 eventId.Id,
                 formatter(state, exception),
                 state as IReadOnlyList<KeyValuePair<string, object?>> ?? []));
+    }
+
+    /// <summary>
+    /// A stored client at the RS256 defaults, met under a FAPI 1.0 Advanced tenant, is refused where it authenticates:
+    /// the server would sign its ID tokens with an algorithm FAPI 1.0 Part 2 section 8.6 does not name.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, false)]
+    [InlineData(SigningAlgorithms.PS256, true)]
+    public async Task StoredClientSignedForOutsideTheFapiAlgorithms_ShouldReturnNull(string algorithm, bool accepted)
+    {
+        var (authenticator, inner) = CreateAuthenticator();
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdentityTokenSignedResponseAlgorithm = algorithm,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            TlsClientCertificateBoundAccessTokens = true,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest());
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 5.2.2: "shall return an invalid_client error as defined in 5.2 of RFC6749 when
+    /// mis-matched client identifiers were provided through the client authentication methods that permits sending the
+    /// client identifier in more than one way". A client held to FAPI 1.0 Advanced whose request names another
+    /// client_id than the one its credential proves is refused; naming its own, or none, passes, and a client held to
+    /// no profile is left to what the credential proves.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "someone-else", false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, ClientId, true)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, null, true)]
+    [InlineData(null, "someone-else", true)]
+    public async Task AMismatchedClientId_IsRefused(ClientSecurityProfile? profile, string? named, bool accepted)
+    {
+        var (authenticator, inner) = CreateAuthenticator();
+        Authenticates(inner, new ClientInfo(ClientId)
+        {
+            SecurityProfile = profile,
+            TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+            IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+            TlsClientCertificateBoundAccessTokens = true,
+        });
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            TenantAt(ClientSecurityProfile.None), new ClientRequest { ClientId = named });
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>The client registering <paramref name="algorithm"/> for the JWT <paramref name="setting"/> names.</summary>
+    private static ClientInfo Registering(ClientInfo client, string setting, string algorithm) => setting switch
+    {
+        nameof(ClientInfo.IdentityTokenEncryptedResponseAlgorithm) => client with { IdentityTokenEncryptedResponseAlgorithm = algorithm },
+        nameof(ClientInfo.UserInfoEncryptedResponseAlgorithm) => client with { UserInfoEncryptedResponseAlgorithm = algorithm },
+        nameof(ClientInfo.IntrospectionEncryptedResponseAlgorithm) => client with { IntrospectionEncryptedResponseAlgorithm = algorithm },
+        nameof(ClientInfo.AuthorizationEncryptedResponseAlgorithm) => client with { AuthorizationEncryptedResponseAlgorithm = algorithm },
+        _ => throw new ArgumentOutOfRangeException(nameof(setting), setting, null),
+    };
+
+    /// <summary>
+    /// Each JWT a client registered an encryption algorithm for is judged: a client registering RSA-OAEP-256 for its ID
+    /// tokens, userinfo, introspection or authorization responses with only RSA1_5 keys does not authenticate under FAPI
+    /// 1.0 Part 2 section 8.6.1, and does once it publishes an RSA-OAEP-256 key.
+    /// </summary>
+    [Theory]
+    [InlineData(nameof(ClientInfo.IdentityTokenEncryptedResponseAlgorithm), false)]
+    [InlineData(nameof(ClientInfo.IdentityTokenEncryptedResponseAlgorithm), true)]
+    [InlineData(nameof(ClientInfo.UserInfoEncryptedResponseAlgorithm), false)]
+    [InlineData(nameof(ClientInfo.UserInfoEncryptedResponseAlgorithm), true)]
+    [InlineData(nameof(ClientInfo.IntrospectionEncryptedResponseAlgorithm), false)]
+    [InlineData(nameof(ClientInfo.IntrospectionEncryptedResponseAlgorithm), true)]
+    [InlineData(nameof(ClientInfo.AuthorizationEncryptedResponseAlgorithm), false)]
+    [InlineData(nameof(ClientInfo.AuthorizationEncryptedResponseAlgorithm), true)]
+    public async Task EachRegisteredEncryption_IsJudged(string setting, bool withKey)
+    {
+        JsonWebKey[] keys = withKey
+            ?
+            [
+                new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 },
+                new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 },
+            ]
+            : [new RsaJsonWebKey { Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 }];
+        var (authenticator, inner) = CreateAuthenticator(
+            NullLogger<SecurityProfileClientAuthenticator>.Instance, SigningAlgorithms.PS256, keys);
+        Authenticates(inner, Registering(
+            new ClientInfo(ClientId)
+            {
+                TokenEndpointAuthMethod = ClientAuthenticationMethods.PrivateKeyJwt,
+                IdentityTokenSignedResponseAlgorithm = SigningAlgorithms.PS256,
+                AuthorizationSignedResponseAlgorithm = SigningAlgorithms.PS256,
+                UserInfoSignedResponseAlgorithm = SigningAlgorithms.PS256,
+                TlsClientCertificateBoundAccessTokens = true,
+            },
+            setting,
+            EncryptionAlgorithms.KeyManagement.RsaOaep256));
+
+        var result = await authenticator.TryAuthenticateClientAsync(
+            TenantAt(ClientSecurityProfile.Fapi1Advanced), new ClientRequest());
+
+        Assert.Equal(withKey, result.TryGetSuccess(out _));
     }
 }

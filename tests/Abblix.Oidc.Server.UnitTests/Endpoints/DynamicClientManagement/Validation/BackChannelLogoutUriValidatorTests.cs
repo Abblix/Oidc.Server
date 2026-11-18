@@ -13,6 +13,7 @@ using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Features.SecureHttpFetch;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -25,7 +26,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validat
 public class BackChannelLogoutUriValidatorTests
 {
     private static BackChannelLogoutUriValidator CreateValidator(SecureHttpFetchOptions options)
-        => new(new SecureUriValidator(Options.Create(options)));
+        => new(new SecureUriValidator(Options.Create(options), NullLogger<SecureUriValidator>.Instance));
 
     private static ClientRegistrationValidationContext CreateContext(Uri? backChannelLogoutUri)
         => new(new ClientRegistrationRequest
@@ -40,7 +41,7 @@ public class BackChannelLogoutUriValidatorTests
     [Fact]
     public async Task ValidateAsync_WithNoUri_ReturnsNull()
     {
-        var result = await CreateValidator(SecureDefaults).ValidateAsync(CreateContext(null));
+        var result = await CreateValidator(SecureDefaults).ValidateAsync(SingleIssuer.Tenant, CreateContext(null));
         Assert.Null(result);
     }
 
@@ -48,7 +49,7 @@ public class BackChannelLogoutUriValidatorTests
     public async Task ValidateAsync_WithPublicHttpsUri_ReturnsNull()
     {
         var result = await CreateValidator(SecureDefaults)
-            .ValidateAsync(CreateContext(new Uri("https://client.example.com/backchannel-logout")));
+            .ValidateAsync(SingleIssuer.Tenant, CreateContext(new Uri("https://client.example.com/backchannel-logout")));
         Assert.Null(result);
     }
 
@@ -56,7 +57,7 @@ public class BackChannelLogoutUriValidatorTests
     public async Task ValidateAsync_WithRelativeUri_ReturnsInvalidClientMetadata()
     {
         var result = await CreateValidator(SecureDefaults)
-            .ValidateAsync(CreateContext(new Uri("/backchannel-logout", UriKind.Relative)));
+            .ValidateAsync(SingleIssuer.Tenant, CreateContext(new Uri("/backchannel-logout", UriKind.Relative)));
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
@@ -65,7 +66,7 @@ public class BackChannelLogoutUriValidatorTests
     public async Task ValidateAsync_WithHttpUri_UnderSecureDefaults_ReturnsInvalidClientMetadata()
     {
         var result = await CreateValidator(SecureDefaults)
-            .ValidateAsync(CreateContext(new Uri("http://client.example.com/backchannel-logout")));
+            .ValidateAsync(SingleIssuer.Tenant, CreateContext(new Uri("http://client.example.com/backchannel-logout")));
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
@@ -74,7 +75,7 @@ public class BackChannelLogoutUriValidatorTests
     public async Task ValidateAsync_WithLoopbackHost_UnderSecureDefaults_ReturnsInvalidClientMetadata()
     {
         var result = await CreateValidator(SecureDefaults)
-            .ValidateAsync(CreateContext(new Uri("https://localhost/backchannel-logout")));
+            .ValidateAsync(SingleIssuer.Tenant, CreateContext(new Uri("https://localhost/backchannel-logout")));
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
@@ -84,7 +85,7 @@ public class BackChannelLogoutUriValidatorTests
     {
         var relaxed = new SecureHttpFetchOptions { AllowedSchemes = [], BlockPrivateNetworks = false };
         var result = await CreateValidator(relaxed)
-            .ValidateAsync(CreateContext(new Uri("http://localhost:15555/backchannel-logout")));
+            .ValidateAsync(SingleIssuer.Tenant, CreateContext(new Uri("http://localhost:15555/backchannel-logout")));
         Assert.Null(result);
     }
 }

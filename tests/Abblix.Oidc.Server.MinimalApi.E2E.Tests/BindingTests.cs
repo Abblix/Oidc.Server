@@ -50,7 +50,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         // ui_locales (culture list), claims (JSON-in-a-field) and resource (repeated Uri[]).
         var query = new Dictionary<string, string>
         {
-            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
             [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
@@ -70,7 +70,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
 
         // The code is real and redeemable - closes the loop that the bound request produced a usable grant.
         var token = await client.ExchangeCodeAsync(discovery, code, verifier, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret);
-        Assert.NotNull(token[ResponseParameters.AccessToken]);
+        Assert.NotNull(token[TokenResponse.Parameters.AccessToken]);
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         var discovery = await client.FetchDiscoveryAsync();
         var accessToken = (await OidcFlows.AuthCodeTokensViaParAsync(
             client, discovery, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret))
-            [ResponseParameters.AccessToken]!.GetValue<string>();
+            [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var userInfoEndpoint = OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.UserInfoEndpoint);
 
         // OIDC Core 5.3.1: the access token may be presented as the access_token request parameter. This is the
@@ -106,7 +106,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         var discovery = await client.FetchDiscoveryAsync();
         var idToken = (await OidcFlows.AuthCodeTokensViaParAsync(
             client, discovery, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret))
-            [ResponseParameters.IdToken]!.GetValue<string>();
+            [TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
         // GET /endsession binding the SupportsGet EndSessionRequest: id_token_hint (string), post_logout_redirect_uri
         // (Uri) and ui_locales (culture list) from the query. With a valid hint and a registered post-logout URI the
@@ -116,7 +116,6 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
             [EndSessionRequest.Parameters.IdTokenHint] = idToken,
             [EndSessionRequest.Parameters.PostLogoutRedirectUri] = MinimalApiTestConstants.PostLogoutRedirectUri,
             [EndSessionRequest.Parameters.UiLocales] = "en-US",
-            ["confirmed"] = "true",
         };
         var response = await client.GetAsync(
             OidcFlows.BuildQuery(OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.EndSessionEndpoint), query),
@@ -147,7 +146,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
 
         Assert.False(string.IsNullOrEmpty(response[DeviceAuthorizationResponse.Parameters.DeviceCode]?.GetValue<string>()));
         Assert.False(string.IsNullOrEmpty(response[DeviceAuthorizationResponse.Parameters.UserCode]?.GetValue<string>()));
-        Assert.False(string.IsNullOrEmpty(response["verification_uri"]?.GetValue<string>()));
+        Assert.False(string.IsNullOrEmpty(response[DeviceAuthorizationResponse.Parameters.VerificationUri]?.GetValue<string>()));
         Assert.NotNull(response[DeviceAuthorizationResponse.Parameters.ExpiresIn]);
     }
 
@@ -169,45 +168,45 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
             [ClientRegistrationRequest.Parameters.ClientName] = "Lifecycle Test Client",
         }, HttpStatusCode.Created);
 
-        var clientId = registered[ClientRequest.Parameters.ClientId]!.GetValue<string>();
-        var registrationAccessToken = registered["registration_access_token"]!.GetValue<string>();
-        var registrationClientUri = registered["registration_client_uri"]!.GetValue<string>();
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        var registrationAccessToken = registered[ClientRegistrationResponse.Parameters.RegistrationAccessToken]!.GetValue<string>();
+        var registrationClientUri = registered[ClientRegistrationResponse.Parameters.RegistrationClientUri]!.GetValue<string>();
         Assert.False(string.IsNullOrEmpty(clientId));
         Assert.False(string.IsNullOrEmpty(registrationAccessToken));
         // The 201 uses Results.Json, not Results.Created, so the management URL is in the body, not a Location header.
         Assert.Null(registerResponse.Headers.Location);
         Assert.False(string.IsNullOrEmpty(registrationClientUri));
 
-        // READ (RFC 7592 §2.1): the registration_access_token authenticates as Bearer against the management URL.
+        // READ (RFC 7592 section 2.1): the registration_access_token authenticates as Bearer against the management URL.
         var read = await SendWithBearerAsync(client, HttpMethod.Get, registrationClientUri, registrationAccessToken);
         Assert.Equal(HttpStatusCode.OK, read.StatusCode);
         var readBody = JsonNode.Parse(
             await read.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(clientId, readBody[ClientRequest.Parameters.ClientId]!.GetValue<string>());
+        Assert.Equal(clientId, readBody[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>());
 
-        // UPDATE (RFC 7592 §2.2): PUT the full metadata with a changed client_name.
+        // UPDATE (RFC 7592 section 2.2): PUT the full metadata with a changed client_name.
         var updateBody = new JsonObject
         {
-            [ClientRequest.Parameters.ClientId] = clientId,
+            [ClientRegistrationRequest.Parameters.ClientId] = clientId,
             [ClientRegistrationRequest.Parameters.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
             [ClientRegistrationRequest.Parameters.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
             [ClientRegistrationRequest.Parameters.ResponseTypes] = new JsonArray { ResponseTypes.Code },
             [ClientRegistrationRequest.Parameters.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretBasic,
             [ClientRegistrationRequest.Parameters.ClientName] = "Renamed Client",
         };
-        if (registered[ClientRequest.Parameters.ClientSecret]?.GetValue<string>() is { } secret)
-            updateBody[ClientRequest.Parameters.ClientSecret] = secret;
+        if (registered[ClientRegistrationResponse.Parameters.ClientSecret]?.GetValue<string>() is { } secret)
+            updateBody[ClientRegistrationRequest.Parameters.ClientSecret] = secret;
         var update = await SendWithBearerAsync(
             client, HttpMethod.Put, registrationClientUri, registrationAccessToken, updateBody);
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);
         var updated = JsonNode.Parse(
             await update.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
 
-        // RFC 7592 §3 permits the server to rotate the registration_access_token on update; the management
+        // RFC 7592 section 3 permits the server to rotate the registration_access_token on update; the management
         // operations that follow must use the most recently issued one.
-        var manageToken = updated["registration_access_token"]?.GetValue<string>() ?? registrationAccessToken;
+        var manageToken = updated[ClientRegistrationResponse.Parameters.RegistrationAccessToken]?.GetValue<string>() ?? registrationAccessToken;
 
-        // DELETE (RFC 7592 §2.3): 204 No Content.
+        // DELETE (RFC 7592 section 2.3): 204 No Content.
         var delete = await SendWithBearerAsync(client, HttpMethod.Delete, registrationClientUri, manageToken);
         Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
     }
@@ -215,6 +214,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
     [Theory]
     [InlineData(AuthorizationRequest.Parameters.Claims, "{not valid json")]
     [InlineData(AuthorizationRequest.Parameters.MaxAge, "9999999999999999")]
+    [InlineData(AuthorizationRequest.Parameters.MaxAge, "-1")]
     [InlineData(AuthorizationRequest.Parameters.UiLocales, "!")]
     public async Task Malformed_special_format_query_param_is_a_400_not_a_500(string parameter, string badValue)
     {
@@ -225,7 +225,7 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         // A well-formed base request plus one hostile special-format field.
         var query = new Dictionary<string, string>
         {
-            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code,
             [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [AuthorizationRequest.Parameters.Scope] = Scopes.OpenId,
@@ -236,13 +236,12 @@ public sealed class BindingTests(TestFactory factory) : IClassFixture<TestFactor
         var url = OidcFlows.BuildQuery(
             OidcFlows.Endpoint(discovery, ConfigurationResponse.Parameters.AuthorizationEndpoint), query);
 
-        // Under TestServer a BindAsync throw does not translate to an HTTP status - it propagates out of the awaited
-        // call. Pre-fix the converter throws JsonException / CultureNotFoundException / TimeSpan overflow; post-fix
-        // FormValues shapes every one into a BadHttpRequestException carrying the 400 the MVC binder would have
-        // produced. Asserting the thrown type is the genuine red (wrong exception) to green (BadHttpRequestException).
-        var ex = await Assert.ThrowsAsync<BadHttpRequestException>(
-            () => client.GetAsync(url, TestContext.Current.CancellationToken));
-        Assert.Equal(StatusCodes.Status400BadRequest, ex.StatusCode);
+        // The value is recorded as malformed while binding and refused by the validation filter, so the client gets
+        // the OAuth error body rather than an exception escaping the binding
+        var response = await client.GetAsync(url, TestContext.Current.CancellationToken);
+        var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"{(int)response.StatusCode}: {raw}");
+        Assert.Equal(ErrorCodes.InvalidRequest, JsonNode.Parse(raw)![ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     private static async Task<(JsonObject Body, HttpResponseMessage Response)> PostJsonAsync(

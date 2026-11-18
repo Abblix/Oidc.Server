@@ -7,27 +7,30 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
 /// Validates that client authentication methods are consistent with the credentials provided during registration.
-/// Ensures clients using JWT-based or TLS authentication have the required credentials (JWKS for JWT methods,
-/// TLS metadata for TLS methods). JWKS may be provided by any client for encryption or request object signing.
+/// Ensures clients using key-based or TLS authentication have the required credentials (JWKS for private_key_jwt,
+/// TLS metadata or JWKS for the TLS methods). JWKS may be provided by any client for encryption or request object signing.
 /// </summary>
 public class CredentialsValidator : SyncClientRegistrationContextValidator
 {
     /// <summary>
     /// Validates that the client's authentication method is consistent with its ability to hold credentials.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing client registration data.</param>
     /// <returns>
     /// A <see cref="OidcError"/> if the client type is inconsistent with authentication method,
     /// or null if the request is valid.
     /// </returns>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 
@@ -42,11 +45,9 @@ public class CredentialsValidator : SyncClientRegistrationContextValidator
                     ErrorCodes.InvalidClientMetadata,
                     "Clients using 'private_key_jwt' authentication must provide either 'jwks' or 'jwks_uri'.");
 
-            // Client secret JWT - requires JWKS or JWKS URI for signature verification
-            case ClientAuthenticationMethods.ClientSecretJwt when !HasJwksCredentials(request):
-                return new OidcError(
-                    ErrorCodes.InvalidClientMetadata,
-                    "Clients using 'client_secret_jwt' authentication must provide either 'jwks' or 'jwks_uri'.");
+            // client_secret_jwt needs no keys: OpenID Connect Core 1.0 section 9 has the client compute the HMAC "using
+            // the octets of the UTF-8 representation of the client_secret as the shared key", the secret this server
+            // issues on registration
 
             // Note: Clients using client_secret_basic/post MAY optionally provide jwks/jwks_uri
             // for ID token encryption, UserInfo encryption, or request object signing.
@@ -75,6 +76,20 @@ public class CredentialsValidator : SyncClientRegistrationContextValidator
                     "('tls_client_auth_subject_dn', 'tls_client_auth_san_dns', etc.) or 'jwks'/'jwks_uri' to convey the client certificate.");
         }
 
+        // RFC 7592 section 2.2 replaces the metadata, not the secret, and this server issues none on update: a client
+        // moved to a method its stored secrets cannot serve could no longer authenticate, an invalid value the section
+        // answers "with an error as described in [RFC7591]"
+        if (context.Operation == DynamicClientOperation.Update &&
+            !ClientSecretsCheck.HoldsSecretFor(
+                request.TokenEndpointAuthMethod,
+                (context.StoredClient ?? throw new InvalidOperationException(
+                    $"An update is judged without the {nameof(context.StoredClient)} it replaces")).ClientSecrets))
+        {
+            return ErrorFactory.InvalidClientMetadata(
+                $"The client holds no secret {request.TokenEndpointAuthMethod} can authenticate it with, and an " +
+                "update issues none");
+        }
+
         return null;
     }
 
@@ -88,9 +103,14 @@ public class CredentialsValidator : SyncClientRegistrationContextValidator
     /// Checks if the request contains TLS metadata for certificate-based authentication.
     /// </summary>
     private static bool HasTlsMetadata(ClientRegistrationRequest request)
+        => request is { TlsClientAuthSubjectDn.Length: > 0 } || HasSubjectAlternativeName(request);
+
+    /// <summary>
+    /// Checks if the request names the client certificate by any of its subject alternative name fields.
+    /// </summary>
+    private static bool HasSubjectAlternativeName(ClientRegistrationRequest request)
         => request
-            is { TlsClientAuthSubjectDn.Length: > 0 }
-            or { TlsClientAuthSanDns.Length: > 0 }
+            is { TlsClientAuthSanDns.Length: > 0 }
             or { TlsClientAuthSanUri.Length: > 0 }
             or { TlsClientAuthSanIp.Length: > 0 }
             or { TlsClientAuthSanEmail.Length: > 0 };

@@ -11,6 +11,8 @@ using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Revocation;
 using Abblix.Oidc.Server.Endpoints.Revocation.Interfaces;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Abblix.Oidc.Server.Model;
@@ -29,18 +31,21 @@ public class RevocationRequestProcessorTests
     private readonly Mock<ITokenRegistry> _tokenRegistry;
     private readonly FakeTimeProvider _clock;
     private readonly RevocationRequestProcessor _processor;
+    private readonly Mock<IClientInfoProvider> _clients;
 
     public RevocationRequestProcessorTests()
     {
         _tokenRegistry = new Mock<ITokenRegistry>(MockBehavior.Strict);
         _clock = new FakeTimeProvider();
-        _processor = new RevocationRequestProcessor(_tokenRegistry.Object, _clock);
+        _clients = new Mock<IClientInfoProvider>(MockBehavior.Strict);
+        _processor = new RevocationRequestProcessor(
+            _tokenRegistry.Object, new GrantRevocation(_tokenRegistry.Object, _clients.Object), _clock);
     }
 
     private static RevocationRequest CreateRevocationRequest() => new()
     {
         Token = "token_to_revoke",
-        TokenTypeHint = "access_token",
+        TokenTypeHint = TokenTypeHints.AccessToken,
     };
 
     private JsonWebToken CreateValidToken(string jwtId = "token_id_123")
@@ -72,19 +77,21 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 token.Payload.JwtId!,
                 JsonWebTokenStatus.Revoked,
                 token.Payload.ExpiresAt!.Value))
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
         Assert.Equal(token.Payload.JwtId, revoked.TokenId);
         _tokenRegistry.Verify(
             r => r.SetStatusAsync(
+                TestTenant.Matched,
                 token.Payload.JwtId!,
                 JsonWebTokenStatus.Revoked,
                 token.Payload.ExpiresAt!.Value),
@@ -104,7 +111,7 @@ public class RevocationRequestProcessorTests
         var now = _clock.GetUtcNow();
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
@@ -130,13 +137,14 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()))
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
@@ -157,17 +165,19 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 token.Payload.JwtId!,
                 JsonWebTokenStatus.Revoked,
                 token.Payload.ExpiresAt!.Value))
             .Returns(Task.CompletedTask);
 
         // Act
-        await _processor.ProcessAsync(validRequest);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         _tokenRegistry.Verify(
             r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()),
@@ -188,13 +198,14 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()))
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
@@ -212,24 +223,25 @@ public class RevocationRequestProcessorTests
         var request = new RevocationRequest
         {
             Token = "token_to_revoke",
-            TokenTypeHint = "refresh_token",
+            TokenTypeHint = TokenTypeHints.RefreshToken,
         };
         var token = CreateValidToken();
         var validRequest = CreateValidRevocationRequest(request, token);
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()))
             .Returns(Task.CompletedTask);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
-        Assert.Equal("refresh_token", revoked.TokenTypeHint);
+        Assert.Equal(TokenTypeHints.RefreshToken, revoked.TokenTypeHint);
     }
 
     /// <summary>
@@ -249,14 +261,15 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 token.Payload.JwtId!,
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()))
-            .Callback<string, JsonWebTokenStatus, DateTimeOffset>((_, _, exp) => capturedExpiresAt = exp)
+            .Callback<TenantDefinition, string, JsonWebTokenStatus, DateTimeOffset>((_, _, _, exp) => capturedExpiresAt = exp)
             .Returns(Task.CompletedTask);
 
         // Act
-        await _processor.ProcessAsync(validRequest);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.NotNull(capturedExpiresAt);
@@ -269,6 +282,7 @@ public class RevocationRequestProcessorTests
         Assert.Equal(expectedSeconds, actualSeconds);
         _tokenRegistry.Verify(
             r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()),
@@ -290,7 +304,7 @@ public class RevocationRequestProcessorTests
         var validRequest = CreateValidRevocationRequest(request, token);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
@@ -313,7 +327,7 @@ public class RevocationRequestProcessorTests
         var validRequest = CreateValidRevocationRequest(request, token);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var revoked));
@@ -334,7 +348,7 @@ public class RevocationRequestProcessorTests
         var validRequest = CreateValidRevocationRequest(request);
 
         // Act
-        var result = await _processor.ProcessAsync(validRequest);
+        var result = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
@@ -354,17 +368,19 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 JsonWebTokenStatus.Revoked,
                 It.IsAny<DateTimeOffset>()))
             .Returns(Task.CompletedTask);
 
         // Act
-        await _processor.ProcessAsync(validRequest);
+        await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest);
 
         // Assert
         _tokenRegistry.Verify(
             r => r.SetStatusAsync(
+                TestTenant.Matched,
                 It.IsAny<string>(),
                 It.IsAny<JsonWebTokenStatus>(),
                 It.IsAny<DateTimeOffset>()),
@@ -389,6 +405,7 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 "token_1",
                 JsonWebTokenStatus.Revoked,
                 token1.Payload.ExpiresAt!.Value))
@@ -396,14 +413,15 @@ public class RevocationRequestProcessorTests
 
         _tokenRegistry
             .Setup(r => r.SetStatusAsync(
+                TestTenant.Matched,
                 "token_2",
                 JsonWebTokenStatus.Revoked,
                 token2.Payload.ExpiresAt!.Value))
             .Returns(Task.CompletedTask);
 
         // Act
-        var result1 = await _processor.ProcessAsync(validRequest1);
-        var result2 = await _processor.ProcessAsync(validRequest2);
+        var result1 = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest1);
+        var result2 = await _processor.ProcessAsync(SingleIssuer.Tenant, validRequest2);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out var revoked1));
@@ -411,10 +429,10 @@ public class RevocationRequestProcessorTests
         Assert.Equal("token_1", revoked1.TokenId);
         Assert.Equal("token_2", revoked2.TokenId);
         _tokenRegistry.Verify(
-            r => r.SetStatusAsync("token_1", JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
+            r => r.SetStatusAsync(TestTenant.Matched, "token_1", JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
             Times.Once);
         _tokenRegistry.Verify(
-            r => r.SetStatusAsync("token_2", JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
+            r => r.SetStatusAsync(TestTenant.Matched, "token_2", JsonWebTokenStatus.Revoked, It.IsAny<DateTimeOffset>()),
             Times.Once);
     }
 }

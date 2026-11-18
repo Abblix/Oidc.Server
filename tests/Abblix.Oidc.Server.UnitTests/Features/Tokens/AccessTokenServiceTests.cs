@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -14,8 +15,9 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Common.Interfaces;
+using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens;
@@ -23,11 +25,13 @@ using System.Collections.Generic;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.Features.UserAuthentication;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens;
 
@@ -51,9 +55,6 @@ public class AccessTokenServiceTests
 
     public AccessTokenServiceTests()
     {
-        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
-
         var timeProvider = new FakeTimeProvider(_currentTime);
 
         var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
@@ -64,13 +65,15 @@ public class AccessTokenServiceTests
         // These tests exercise only public clients (default SubjectType), so a converter with no pairwise settings is
         // the exact production path: Convert and ConvertBack both pass the subject through unchanged.
         _service = new AccessTokenService(
-            issuerProvider.Object,
             timeProvider,
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
-            new SubjectTypeConverter(),
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
             Options.Create(new OidcOptions()),
-            new AudienceKeyResolver(NoResources, NoResourceKeys));
+            SingleIssuer.LicensedCatalog,
+            new AudienceKeyResolver(NoResources, NoResourceKeys, Encrypting()),
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
     }
 
     /// <summary>
@@ -80,6 +83,162 @@ public class AccessTokenServiceTests
     private static IResourceManager NoResources => Mock.Of<IResourceManager>();
 
     private static IResourceKeysProvider NoResourceKeys => Mock.Of<IResourceKeysProvider>();
+
+    /// <summary>
+    /// The address the user signed in with travels in the access token only for a client granted the email scope,
+    /// since every resource server the token reaches reads it.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CreateAccessToken_CarriesTheSessionEmailOnlyUnderTheEmailScope(bool emailGranted)
+    {
+        var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
+        string[] scopes = emailGranted ? [Scopes.OpenId, Scopes.Email] : [Scopes.OpenId, Scopes.Profile];
+        var authContext = new AuthorizationContext(ClientId, scopes, null);
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, CreateClientInfo(), grantId: null, null);
+
+        Assert.NotNull(capturedToken);
+        Assert.Equal(emailGranted ? "user@example.com" : null, capturedToken.Payload.Email);
+        Assert.Equal(emailGranted ? true : null, capturedToken.Payload.EmailVerified);
+    }
+
+    /// <summary>
+    /// A client granted the email claim another way than by the email scope - by naming it for the
+    /// user-information endpoint, or through a scope the host declares with it - gets the address in its access
+    /// token too, so that endpoint answers with the address the user signed in with.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateAccessToken_CarriesTheSessionEmailWhenTheClaimIsGrantedOtherwise(bool byHostScope)
+    {
+        const string contactScope = "contact";
+        var tokenIdGenerator = new Mock<ITokenIdGenerator>();
+        tokenIdGenerator.Setup(generator => generator.GenerateTokenId()).Returns(TokenId);
+        var service = new AccessTokenService(
+            new FakeTimeProvider(_currentTime),
+            tokenIdGenerator.Object,
+            _jwtFormatter.Object,
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
+            Options.Create(new OidcOptions()),
+            SingleIssuer.LicensedCatalog,
+            new AudienceKeyResolver(NoResources, NoResourceKeys, Encrypting()),
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
+        var tenant = new TestIssuer { Scopes = [new ScopeDefinition(contactScope, IanaClaimTypes.Email)] }.ToTenant();
+        var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
+        var authContext = byHostScope
+            ? new AuthorizationContext(ClientId, [Scopes.OpenId, contactScope], null)
+            : new AuthorizationContext(
+                ClientId,
+                [Scopes.OpenId],
+                new RequestedClaims { UserInfo = new() { [IanaClaimTypes.Email] = new RequestedClaimDetails() } });
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await service.CreateAccessTokenAsync(tenant, authSession, authContext, CreateClientInfo(), grantId: null, null);
+
+        Assert.NotNull(capturedToken);
+        Assert.Equal("user@example.com", capturedToken.Payload.Email);
+        Assert.True(capturedToken.Payload.EmailVerified);
+    }
+
+    /// <summary>
+    /// A token naming no resource is addressed to the tenant's default resource before its scope is narrowed, so it
+    /// keeps that resource's scope (RFC 8707 section 2.2).
+    /// </summary>
+    [Fact]
+    public async Task CreateAccessToken_KeepsTheScopeOfTheDefaultResource()
+    {
+        var orders = new Uri("https://api.example.com/orders");
+        var tenant = new TestIssuer
+        {
+            Resources = [new ResourceDefinition(orders, new ScopeDefinition("orders.read"))],
+            DefaultResourceIndicator = orders,
+        }.ToTenant();
+        var authContext = new AuthorizationContext(ClientId, [Scopes.OpenId, "orders.read"], null);
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateAccessTokenAsync(tenant, CreateAuthSession(), authContext, CreateClientInfo(), grantId: null, null);
+
+        Assert.Equal([Scopes.OpenId, "orders.read"], capturedToken!.Payload.Scope);
+    }
+
+    /// <summary>
+    /// The address the user signed in with is released by the scope the token carries once narrowed: a scope
+    /// releasing it that belongs to another resource leaves it out of a token for this one.
+    /// </summary>
+    [Fact]
+    public async Task CreateAccessToken_ReleasesTheSessionEmailByTheNarrowedScope()
+    {
+        const string contactScope = "contact";
+        var orders = new Uri("https://api.example.com/orders");
+        var payments = new Uri("https://api.example.com/payments");
+        var tenant = new TestIssuer
+        {
+            Scopes = [new ScopeDefinition(contactScope, IanaClaimTypes.Email)],
+            Resources =
+            [
+                new ResourceDefinition(orders, new ScopeDefinition(contactScope)),
+                new ResourceDefinition(payments, new ScopeDefinition("payments.read")),
+            ],
+        }.ToTenant();
+        var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
+        var authContext = new AuthorizationContext(ClientId, [Scopes.OpenId, contactScope], null, [payments]);
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateAccessTokenAsync(tenant, authSession, authContext, CreateClientInfo(), grantId: null, null);
+
+        Assert.Null(capturedToken!.Payload.Email);
+    }
+
+    /// <summary>
+    /// A client that names the email claim for the ID token alone has the user-information endpoint ask for nothing
+    /// more, so the address stays out of its access token.
+    /// </summary>
+    [Fact]
+    public async Task CreateAccessToken_LeavesOutTheSessionEmailNamedForTheIdTokenAlone()
+    {
+        var authSession = CreateAuthSession() with { Email = "user@example.com", EmailVerified = true };
+        var authContext = new AuthorizationContext(
+            ClientId,
+            [Scopes.OpenId],
+            new RequestedClaims { IdToken = new() { [IanaClaimTypes.Email] = new RequestedClaimDetails() } });
+
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, CreateClientInfo(), grantId: null, null);
+
+        Assert.NotNull(capturedToken);
+        Assert.Null(capturedToken.Payload.Email);
+        Assert.Null(capturedToken.Payload.EmailVerified);
+    }
 
     /// <summary>
     /// Verifies that CreateAccessTokenAsync generates a JWT with correct header fields:
@@ -96,16 +255,16 @@ public class AccessTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo);
+        await _service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(JsonWebTokenTypes.AccessToken, capturedToken!.Header.Type);
+        Assert.Equal(JsonWebTokenTypes.AccessToken, capturedToken.Header.Type);
         Assert.Equal(SigningAlgorithms.RS256, capturedToken.Header.Algorithm);
     }
 
@@ -114,7 +273,7 @@ public class AccessTokenServiceTests
     /// - IssuedAt (iat): Current time
     /// - NotBefore (nbf): Current time
     /// - ExpiresAt (exp): Current time + client's AccessTokenExpiresIn
-    /// - Issuer (iss): From IIssuerProvider
+    /// - Issuer (iss): From the tenant the request is served at
     /// - JwtId (jti): Unique token identifier from ITokenIdGenerator
     /// </summary>
     [Fact]
@@ -127,20 +286,44 @@ public class AccessTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo);
+        await _service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime, capturedToken!.Payload.IssuedAt);
+        Assert.Equal(_currentTime, capturedToken.Payload.IssuedAt);
         Assert.Equal(_currentTime, capturedToken.Payload.NotBefore);
         Assert.Equal(_currentTime.AddMinutes(30), capturedToken.Payload.ExpiresAt);
         Assert.Equal(Issuer, capturedToken.Payload.Issuer);
         Assert.Equal(TokenId, capturedToken.Payload.JwtId);
+    }
+
+    /// <summary>
+    /// The token carries the refresh token family it was issued in, which is what lets a revoked family refuse it,
+    /// and carries no family at all when it was issued outside one.
+    /// </summary>
+    [Theory]
+    [InlineData("grant_family_1")]
+    [InlineData(null)]
+    public async Task CreateAccessToken_CarriesTheFamilyItIsGiven(string? grantId)
+    {
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateAccessTokenAsync(
+            SingleIssuer.Tenant,
+            CreateAuthSession(), CreateAuthorizationContext(), CreateClientInfo(), grantId, null);
+
+        Assert.NotNull(capturedToken);
+        Assert.Equal(grantId, capturedToken.Payload.GrantId);
+        Assert.Equal(grantId is not null, capturedToken.Payload.Json.ContainsKey(OidcClaimTypes.GrantId));
     }
 
     /// <summary>
@@ -166,16 +349,16 @@ public class AccessTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo);
+        await _service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(UserId, capturedToken!.Payload.Subject);
+        Assert.Equal(UserId, capturedToken.Payload.Subject);
         Assert.Equal(SessionId, capturedToken.Payload.SessionId);
         Assert.Equal(authTime, capturedToken.Payload.AuthenticationTime);
         Assert.Equal("google", capturedToken.Payload.IdentityProvider);
@@ -202,16 +385,16 @@ public class AccessTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo);
+        await _service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(ClientId, capturedToken!.Payload.ClientId);
+        Assert.Equal(ClientId, capturedToken.Payload.ClientId);
         Assert.Equal(scopes, capturedToken.Payload.Scope);
         Assert.Equal(["https://api.example.com", "https://api2.example.com"], capturedToken.Payload.Audiences);
     }
@@ -232,16 +415,16 @@ public class AccessTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo);
+        await _service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal([Issuer], capturedToken!.Payload.Audiences);
+        Assert.Equal([Issuer], capturedToken.Payload.Audiences);
     }
 
     /// <summary>
@@ -271,20 +454,20 @@ public class AccessTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo);
+        await _service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal("Engineering", capturedToken!.Payload["department"]?.GetValue<string>());
+        Assert.Equal("Engineering", capturedToken.Payload["department"]?.GetValue<string>());
         Assert.Equal("EMP123", capturedToken.Payload["employee_id"]?.GetValue<string>());
         var roles = capturedToken.Payload["roles"]?.AsArray();
         Assert.NotNull(roles);
-        Assert.Equal(2, roles!.Count);
+        Assert.Equal(2, roles.Count);
         Assert.Equal("admin", roles[0]?.GetValue<string>());
         Assert.Equal("developer", roles[1]?.GetValue<string>());
     }
@@ -302,11 +485,11 @@ public class AccessTokenServiceTests
         var clientInfo = CreateClientInfo();
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
         // Act
-        var result = await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo);
+        var result = await _service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(result);
@@ -339,7 +522,7 @@ public class AccessTokenServiceTests
         };
 
         // Act
-        var (authSession, _) = (await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo())).GetSuccess();
+        var (authSession, _) = (await _service.AuthenticateByAccessTokenAsync(SingleIssuer.Tenant, jwt, CreateClientInfo())).GetSuccess();
 
         // Assert
         Assert.Equal(UserId, authSession.Subject);
@@ -374,14 +557,14 @@ public class AccessTokenServiceTests
         };
 
         // Act
-        var (_, authContext) = (await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo())).GetSuccess();
+        var (_, authContext) = (await _service.AuthenticateByAccessTokenAsync(SingleIssuer.Tenant, jwt, CreateClientInfo())).GetSuccess();
 
         // Assert
         Assert.Equal(ClientId, authContext.ClientId);
         Assert.Equal(scopes, authContext.Scope);
         Assert.NotNull(authContext.Resources);
-        Assert.Single(authContext.Resources!);
-        Assert.Equal("https://api.example.com/", authContext.Resources![0].ToString());
+        Assert.Single(authContext.Resources);
+        Assert.Equal("https://api.example.com/", authContext.Resources[0].ToString());
     }
 
     /// <summary>
@@ -407,7 +590,7 @@ public class AccessTokenServiceTests
         };
 
         // Act
-        var (_, authContext) = (await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo())).GetSuccess();
+        var (_, authContext) = (await _service.AuthenticateByAccessTokenAsync(SingleIssuer.Tenant, jwt, CreateClientInfo())).GetSuccess();
 
         // Assert
         Assert.Null(authContext.Resources);
@@ -437,12 +620,35 @@ public class AccessTokenServiceTests
         };
 
         // Act
-        var (authSession, _) = (await _service.AuthenticateByAccessTokenAsync(jwt, CreateClientInfo())).GetSuccess();
+        var (authSession, _) = (await _service.AuthenticateByAccessTokenAsync(SingleIssuer.Tenant, jwt, CreateClientInfo())).GetSuccess();
 
         // Assert
         Assert.NotNull(authSession.AdditionalClaims);
-        Assert.Equal("Engineering", authSession.AdditionalClaims!["department"]?.GetValue<string>());
+        Assert.Equal("Engineering", authSession.AdditionalClaims["department"]?.GetValue<string>());
         Assert.Equal("EMP123", authSession.AdditionalClaims["employee_id"]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A bound on the expiry shortens the token when it falls within the client's lifetime, and is no extension
+    /// when it falls beyond it.
+    /// </summary>
+    [Theory]
+    [InlineData(30, 30)]
+    [InlineData(300, 60)]
+    public async Task CreateAccessToken_WithALatestExpiry_ExpiresNoLaterThanIt(int boundMinutes, int expectedMinutes)
+    {
+        var clientInfo = CreateClientInfo(accessTokenExpiresIn: TimeSpan.FromMinutes(60));
+        JsonWebToken? capturedToken = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
+            .ReturnsAsync(EncodedToken);
+
+        await _service.CreateAccessTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), CreateAuthorizationContext(), clientInfo, grantId: null,
+            _currentTime.AddMinutes(boundMinutes));
+
+        Assert.Equal(_currentTime.AddMinutes(expectedMinutes), capturedToken!.Payload.ExpiresAt);
     }
 
     /// <summary>
@@ -460,16 +666,16 @@ public class AccessTokenServiceTests
 
         JsonWebToken? capturedToken = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => capturedToken = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => capturedToken = jwt)
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo);
+        await _service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
         Assert.NotNull(capturedToken);
-        Assert.Equal(_currentTime + customExpiration, capturedToken!.Payload.ExpiresAt);
+        Assert.Equal(_currentTime + customExpiration, capturedToken.Payload.ExpiresAt);
     }
 
     /// <summary>
@@ -484,13 +690,15 @@ public class AccessTokenServiceTests
         var converter = new SubjectTypeConverter(
             new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
         var service = new AccessTokenService(
-            Mock.Of<IIssuerProvider>(),
             new FakeTimeProvider(_currentTime),
             Mock.Of<ITokenIdGenerator>(),
             Mock.Of<IAuthServiceJwtFormatter>(),
-            converter,
+            new FixedSubjectTypeConverter(converter),
             Options.Create(new OidcOptions()),
-            new AudienceKeyResolver(NoResources, NoResourceKeys));
+            SingleIssuer.LicensedCatalog,
+            new AudienceKeyResolver(NoResources, NoResourceKeys, Encrypting()),
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
 
         var presentingClient = new ClientInfo(ClientId)
         {
@@ -516,7 +724,7 @@ public class AccessTokenServiceTests
         };
 
         // Act
-        var result = await service.AuthenticateByAccessTokenAsync(jwt, presentingClient);
+        var result = await service.AuthenticateByAccessTokenAsync(SingleIssuer.Tenant, jwt, presentingClient);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -536,14 +744,14 @@ public class AccessTokenServiceTests
         var clientInfo = CreateClientInfo();
 
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
             .ReturnsAsync(EncodedToken);
 
         // Act
-        await _service.CreateAccessTokenAsync(authSession, authContext, clientInfo);
+        await _service.CreateAccessTokenAsync(SingleIssuer.Tenant, authSession, authContext, clientInfo, grantId: null, null);
 
         // Assert
-        _jwtFormatter.Verify(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()), Times.Once);
+        _jwtFormatter.Verify(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()), Times.Once);
     }
 
     // Helper methods to create test objects
@@ -577,7 +785,8 @@ public class AccessTokenServiceTests
     /// </summary>
     private AccessTokenService CreateServiceWithResources(
         Dictionary<Uri, JsonWebKey[]> resources,
-        bool filterByLocation = false)
+        bool filterByLocation = false,
+        OidcOptions? options = null)
     {
         var manager = new Mock<IResourceManager>(MockBehavior.Strict);
         var keys = new Mock<IResourceKeysProvider>(MockBehavior.Strict);
@@ -586,24 +795,111 @@ public class AccessTokenServiceTests
         {
             var definition = new ResourceDefinition(uri);
             var captured = definition;
-            manager.Setup(m => m.TryGet(uri, out captured)).Returns(true);
+            manager.Setup(m => m.TryGet(TestTenant.Matched, uri, out captured)).Returns(true);
             keys.Setup(k => k.GetEncryptionKeys(definition)).Returns(resourceKeys.ToAsyncEnumerable());
         }
-
-        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
 
         var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
         tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
 
         return new AccessTokenService(
-            issuerProvider.Object,
             new FakeTimeProvider(_currentTime),
             tokenIdGenerator.Object,
             _jwtFormatter.Object,
-            new SubjectTypeConverter(),
-            Options.Create(new OidcOptions { FilterAuthorizationDetailsByLocation = filterByLocation }),
-            new AudienceKeyResolver(manager.Object, keys.Object));
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
+            Options.Create(options ?? new OidcOptions { FilterAuthorizationDetailsByLocation = filterByLocation }),
+            SingleIssuer.LicensedCatalog,
+            new AudienceKeyResolver(manager.Object, keys.Object, Encrypting()),
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
+    }
+
+    /// <summary>
+    /// The issuing guard over a creator that performs the RSA-OAEP key management algorithms, which is all the
+    /// resolver asks it.
+    /// </summary>
+    private static ProfiledJwtIssuer Encrypting()
+    {
+        var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
+        creator
+            .Setup(c => c.EncryptedResponseAlgorithmsSupported)
+            .Returns([EncryptionAlgorithms.KeyManagement.RsaOaep, EncryptionAlgorithms.KeyManagement.RsaOaep256]);
+        return new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every);
+    }
+
+    /// <summary>
+    /// A resource set may hold a key declaring a signing algorithm, or a key management algorithm the host did not
+    /// register, ahead of its encryption key: the token is encrypted to the first key it can be encrypted to.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Rsa1_5)]
+    public async Task CreateAccessToken_ResourceSetLeadsWithAKeyNothingEncryptsTo_EncryptsToTheNextOne(
+        string firstKeyAlgorithm)
+    {
+        var unusable = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "orders-first", Algorithm = firstKeyAlgorithm };
+        var resourceKey = new RsaJsonWebKey
+        {
+            KeyId = "orders-enc",
+            Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
+        };
+        var service = CreateServiceWithResources(new() { [OrdersApi] = [unusable, resourceKey] });
+
+        ServiceJwtEncryption? capturedPolicy = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(
+                TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>(
+                (_, _, _, policy) => capturedPolicy = policy)
+            .ReturnsAsync(EncodedToken);
+
+        await service.CreateAccessTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
+
+        Assert.Same(resourceKey, capturedPolicy?.Key);
+    }
+
+    /// <summary>
+    /// A resource whose published keys are all ones nothing can be encrypted to still asks for encryption, so no token
+    /// is issued for it, and the refusal names it rather than failing the request.
+    /// </summary>
+    [Fact]
+    public async Task CreateAccessToken_ResourcePublishesOnlyKeysNothingEncryptsTo_IsRefused()
+    {
+        var signingOnly = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "orders-sig", Algorithm = SigningAlgorithms.RS256 };
+        var service = CreateServiceWithResources(new() { [OrdersApi] = [signingOnly] });
+
+        var refused = await Assert.ThrowsAsync<AudienceKeyRefusedException>(() => service.CreateAccessTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null));
+
+        Assert.Equal([OrdersApi], refused.Resources);
+    }
+
+    /// <summary>
+    /// A host that turned access token encryption off issues a signed JWS whatever the resource publishes, so a
+    /// resource whose keys nothing can be encrypted to is not refused for them.
+    /// </summary>
+    [Fact]
+    public async Task CreateAccessToken_EncryptionTurnedOff_IgnoresTheResourceKeys()
+    {
+        var signingOnly = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "orders-sig", Algorithm = SigningAlgorithms.RS256 };
+        var options = new OidcOptions();
+        options.ServiceTokens.AccessToken.Encrypt = false;
+        var service = CreateServiceWithResources(new() { [OrdersApi] = [signingOnly] }, options: options);
+
+        ServiceJwtEncryption? capturedPolicy = null;
+        _jwtFormatter
+            .Setup(f => f.FormatAsync(
+                TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>(
+                (_, _, _, policy) => capturedPolicy = policy)
+            .ReturnsAsync(EncodedToken);
+
+        await service.CreateAccessTokenAsync(
+            SingleIssuer.Tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
+
+        Assert.NotNull(capturedPolicy);
+        Assert.Null(capturedPolicy.Key);
     }
 
     private static AuthorizationContext ContextFor(params Uri[] resources) =>
@@ -617,20 +913,20 @@ public class AccessTokenServiceTests
     [Fact]
     public async Task CreateAccessToken_ResourcePublishesKey_EncryptsToThatKey()
     {
-        var resourceKey = new RsaJsonWebKey { KeyId = "orders-enc" };
+        var resourceKey = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "orders-enc" };
         var service = CreateServiceWithResources(new() { [OrdersApi] = [resourceKey] });
 
         ServiceJwtEncryption? capturedPolicy = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((_, policy) => capturedPolicy = policy)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, _, _, policy) => capturedPolicy = policy)
             .ReturnsAsync(EncodedToken);
 
         await service.CreateAccessTokenAsync(
-            CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo());
+            SingleIssuer.Tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
 
         Assert.NotNull(capturedPolicy);
-        Assert.Same(resourceKey, capturedPolicy!.Key);
+        Assert.Same(resourceKey, capturedPolicy.Key);
     }
 
     /// <summary>
@@ -645,15 +941,15 @@ public class AccessTokenServiceTests
 
         ServiceJwtEncryption? capturedPolicy = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((_, policy) => capturedPolicy = policy)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, _, _, policy) => capturedPolicy = policy)
             .ReturnsAsync(EncodedToken);
 
         await service.CreateAccessTokenAsync(
-            CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo());
+            SingleIssuer.Tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
 
         Assert.NotNull(capturedPolicy);
-        Assert.Null(capturedPolicy!.Key);
+        Assert.Null(capturedPolicy.Key);
     }
 
     /// <summary>
@@ -666,13 +962,13 @@ public class AccessTokenServiceTests
     {
         var service = CreateServiceWithResources(new()
         {
-            [OrdersApi] = [new RsaJsonWebKey { KeyId = "orders-enc" }],
-            [BillingApi] = [new RsaJsonWebKey { KeyId = "billing-enc" }],
+            [OrdersApi] = [new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "orders-enc" }],
+            [BillingApi] = [new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "billing-enc" }],
         });
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await service.CreateAccessTokenAsync(
-                CreateAuthSession(), ContextFor(OrdersApi, BillingApi), CreateClientInfo()));
+                SingleIssuer.Tenant, CreateAuthSession(), ContextFor(OrdersApi, BillingApi), CreateClientInfo(), grantId: null, null));
 
         Assert.Contains(OrdersApi.OriginalString, exception.Message);
         Assert.Contains(BillingApi.OriginalString, exception.Message);
@@ -699,14 +995,14 @@ public class AccessTokenServiceTests
     {
         JsonWebToken? captured = null;
         _jwtFormatter
-            .Setup(f => f.FormatAsync(It.IsAny<JsonWebToken>(), It.IsAny<ServiceJwtEncryption>()))
-            .Callback<JsonWebToken, ServiceJwtEncryption>((jwt, _) => captured = jwt)
+            .Setup(f => f.FormatAsync(TestTenant.Matched, It.IsAny<JsonWebToken>(), It.IsAny<ClientInfo?>(), It.IsAny<ServiceJwtEncryption>()))
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo?, ServiceJwtEncryption>((_, jwt, _, _) => captured = jwt)
             .ReturnsAsync(EncodedToken);
 
-        await service.CreateAccessTokenAsync(CreateAuthSession(), context, CreateClientInfo());
+        await service.CreateAccessTokenAsync(SingleIssuer.Tenant, CreateAuthSession(), context, CreateClientInfo(), grantId: null, null);
 
         Assert.NotNull(captured);
-        return captured!;
+        return captured;
     }
 
     /// <summary>
@@ -775,8 +1071,9 @@ public class AccessTokenServiceTests
     ///
     /// It pins the default and nothing about the predicate: the mutation that drops every located entry
     /// leaves this green, because a service built without the flag never reaches the filter. What
-    /// discriminates the predicate is the pair of tests above, and saying so here is the point - a control
-    /// that is trusted for a guarantee it does not give is worse than none.
+    /// discriminates the predicate is <see cref="CreateAccessToken_ForOneResource_KeepsOnlyTheDetailsAddressedToIt"/>
+    /// and <see cref="CreateAccessToken_WhenEveryDetailNamesAnotherResource_OmitsTheClaim"/>, and saying so
+    /// here is the point - a control that is trusted for a guarantee it does not give is worse than none.
     /// </remarks>
     [Fact]
     public async Task CreateAccessToken_WithoutTheSwitch_KeepsEveryDetail()
@@ -790,5 +1087,146 @@ public class AccessTokenServiceTests
         var details = Assert.IsType<JsonArray>(token.Payload.Json[IanaClaimTypes.AuthorizationDetails]);
         Assert.Equal(3, details.Count);
         Assert.Equal([OrdersApi.OriginalString], token.Payload.Audiences);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization servers shall not use the RSA1_5
+    /// algorithm". A resource publishing an encryption key declaring RSA1_5 gets no access token at a tenant held to
+    /// FAPI 1.0 Advanced: nothing reaches the creator, so no such JWE leaves the server, and the refusal names the
+    /// resource, whose request the token endpoint answers. A tenant held to no profile encrypts to it as before.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, false)]
+    [InlineData(ClientSecurityProfile.None, true)]
+    public async Task CreateAccessToken_ToAResourceKeyDeclaringRsa1_5_IsIssuedOnlyWithoutAProfile(
+        ClientSecurityProfile profile, bool issued)
+    {
+        var resourceKey = new RsaJsonWebKey
+        {
+            KeyId = "orders-enc",
+            Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5,
+        };
+        var definition = new ResourceDefinition(OrdersApi);
+        var captured = definition;
+        var manager = new Mock<IResourceManager>(MockBehavior.Strict);
+        manager.Setup(m => m.TryGet(TestTenant.Matched, OrdersApi, out captured)).Returns(true);
+        var resourceKeys = new Mock<IResourceKeysProvider>(MockBehavior.Strict);
+        resourceKeys.Setup(k => k.GetEncryptionKeys(definition)).Returns(new JsonWebKey[] { resourceKey }.ToAsyncEnumerable());
+
+        // Signed with an algorithm the profile admits, so what is judged is the encryption alone
+        var serviceKeys = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
+        serviceKeys
+            .Setup(k => k.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new JsonWebKey[] { new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig", Algorithm = SigningAlgorithms.PS256 } }
+                .ToAsyncEnumerable());
+        var options = new OidcOptions();
+        options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+
+        var creator = new Mock<IJsonWebTokenCreator>(MockBehavior.Strict);
+        // A host that registered RSA1_5, so what is judged is the profile alone
+        creator
+            .Setup(c => c.EncryptedResponseAlgorithmsSupported)
+            .Returns([EncryptionAlgorithms.KeyManagement.Rsa1_5, EncryptionAlgorithms.KeyManagement.RsaOaep256]);
+        string? keyManagement = null;
+        creator
+            .Setup(c => c.IssueAsync(
+                It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey?>(), resourceKey, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<JsonWebToken, JsonWebKey?, JsonWebKey?, string, string>((_, _, _, algorithm, _) => keyManagement = algorithm)
+            .ReturnsAsync(EncodedToken);
+
+        var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
+        tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
+        var service = new AccessTokenService(
+            new FakeTimeProvider(_currentTime),
+            tokenIdGenerator.Object,
+            new AuthServiceJwtFormatter(new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every), serviceKeys.Object, TestEncryptionAlgorithms.Every, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered),
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
+            Options.Create(options),
+            SingleIssuer.LicensedCatalog,
+            new AudienceKeyResolver(manager.Object, resourceKeys.Object, new ProfiledJwtIssuer(creator.Object, TestEncryptionAlgorithms.Every)),
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+
+        try
+        {
+            await service.CreateAccessTokenAsync(
+                tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
+        }
+        catch (AudienceKeyRefusedException refused) when (!issued)
+        {
+            Assert.Equal([OrdersApi], refused.Resources);
+        }
+
+        Assert.Equal(issued ? EncryptionAlgorithms.KeyManagement.Rsa1_5 : null, keyManagement);
+    }
+
+    /// <summary>
+    /// The key and its algorithm are chosen together, so a key no token can be encrypted to under the tenant's
+    /// profile is passed over for the next one in the set: an RSA1_5 key at a FAPI 1.0 Advanced tenant, or a key
+    /// declaring no algorithm whose material does not fit the default RSA-OAEP-256 (an EC or a symmetric key).
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "rsa1_5")]
+    [InlineData(ClientSecurityProfile.None, "ec")]
+    [InlineData(ClientSecurityProfile.None, "oct")]
+    public async Task CreateAccessToken_AKeyNothingCanBeEncryptedToUnderTheProfile_IsPassedOverForTheNext(
+        ClientSecurityProfile profile, string firstKey)
+    {
+        JsonWebKey unusable = firstKey switch
+        {
+            "rsa1_5" => new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "first", Algorithm = EncryptionAlgorithms.KeyManagement.Rsa1_5 },
+            "ec" => JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256)
+                .Sanitize(includePrivateKeys: false) with { KeyId = "first", Algorithm = null, Usage = null },
+            "oct" => new OctetJsonWebKey { KeyId = "first", KeyValue = new byte[16] },
+            _ => throw new ArgumentOutOfRangeException(nameof(firstKey), firstKey, null),
+        };
+        var oaep = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption)
+            .Sanitize(includePrivateKeys: false) with { KeyId = "oaep", Algorithm = null };
+        var definition = new ResourceDefinition(OrdersApi);
+        var captured = definition;
+        var manager = new Mock<IResourceManager>(MockBehavior.Strict);
+        manager.Setup(m => m.TryGet(TestTenant.Matched, OrdersApi, out captured)).Returns(true);
+        var resourceKeys = new Mock<IResourceKeysProvider>(MockBehavior.Strict);
+        resourceKeys.Setup(k => k.GetEncryptionKeys(definition))
+            .Returns(new[] { unusable, oaep }.ToAsyncEnumerable());
+
+        var signingKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.PS256);
+        var serviceKeys = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
+        serviceKeys
+            .Setup(k => k.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new JsonWebKey[] { signingKey }.ToAsyncEnumerable());
+        var options = new OidcOptions();
+        options.ServiceTokens.AccessToken.Signing.Algorithm = SigningAlgorithms.PS256;
+
+        // The real creator, registering RSA1_5 as a host may, so the profile alone passes that key over
+        var services = new ServiceCollection();
+        services.AddSingleton(TimeProvider.System);
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.AddRsaPkcs1KeyManagement();
+        var creator = services.BuildServiceProvider().GetRequiredService<IJsonWebTokenCreator>();
+
+        var tokenIdGenerator = new Mock<ITokenIdGenerator>(MockBehavior.Strict);
+        tokenIdGenerator.Setup(g => g.GenerateTokenId()).Returns(TokenId);
+        var service = new AccessTokenService(
+            new FakeTimeProvider(_currentTime),
+            tokenIdGenerator.Object,
+            new AuthServiceJwtFormatter(new ProfiledJwtIssuer(creator, TestEncryptionAlgorithms.Every), serviceKeys.Object, TestEncryptionAlgorithms.Every, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered),
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()),
+            Options.Create(options),
+            SingleIssuer.LicensedCatalog,
+            new AudienceKeyResolver(manager.Object, resourceKeys.Object, new ProfiledJwtIssuer(creator, TestEncryptionAlgorithms.Every)),
+            ScopeClaims.Of(),
+            NullLogger<AccessTokenService>.Instance);
+        var tenant = new TestIssuer { DefaultSecurityProfile = profile }.ToTenant();
+
+        var issued = await service.CreateAccessTokenAsync(
+            tenant, CreateAuthSession(), ContextFor(OrdersApi), CreateClientInfo(), grantId: null, null);
+
+        var header = System.Text.Json.Nodes.JsonNode.Parse(
+            System.Buffers.Text.Base64Url.DecodeFromChars(issued.EncodedJwt.Split('.')[0]))!;
+        Assert.Equal("oaep", header[JwtClaimTypes.KeyId]?.GetValue<string>());
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, header[JwtClaimTypes.Algorithm]?.GetValue<string>());
     }
 }

@@ -8,6 +8,7 @@
 using Abblix.SecurityEvents.BackChannelLogout;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Net.Http.Headers;
 
@@ -46,7 +47,7 @@ public static class BackChannelLogoutEndpointRouteBuilderExtensions
     /// </remarks>
     private static async Task<IResult> HandleAsync(
         HttpRequest request,
-        BackChannelLogoutHandler handler,
+        [FromServices] BackChannelLogoutHandler handler,
         CancellationToken cancellationToken)
     {
         using var reader = new StreamReader(request.Body);

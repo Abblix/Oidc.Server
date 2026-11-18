@@ -204,7 +204,7 @@ public class ValidationProfileTests
 
         Assert.Contains(nameof(ValidationProfile.Use), refusal.Message, StringComparison.Ordinal);
         Assert.Contains(
-            nameof(Infrastructure.ServiceCollectionExtensions.UseDefaultPipeline),
+            nameof(Infrastructure.ValidationProfileServiceCollectionExtensions.UseDefaultPipeline),
             refusal.Message,
             StringComparison.Ordinal);
     }

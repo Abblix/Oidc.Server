@@ -8,7 +8,6 @@
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Jwt.ExternalKeys;
 
@@ -18,8 +17,9 @@ namespace Abblix.Jwt.ExternalKeys;
 /// </summary>
 /// <remarks>
 /// The first refresh runs in <c>StartAsync</c>, so a ring that cannot be read or opened stops the process rather
-/// than letting it serve without keys. Later refreshes tick on the propagation window rather than the rotation
-/// interval: a pod must notice a key another pod minted while that key is still announced, because once it goes
+/// than letting it serve without keys; the adopted keys are judged before that, by <see cref="KeyRingAdoptionCheck"/>
+/// while the host starts and by every opening of partitions. Later refreshes tick on the propagation window rather
+/// than the rotation interval: a pod must notice a key another pod minted while that key is still announced, because once it goes
 /// active every pod has to be able to verify it.
 /// <para>
 /// The two differ deliberately in what a failure means. At startup there is nothing to serve, so failing is the
@@ -30,38 +30,45 @@ namespace Abblix.Jwt.ExternalKeys;
 /// </remarks>
 internal sealed partial class KeyRingRefreshService(
     ILogger<KeyRingRefreshService> logger,
-    KeyRing ring,
-    IOptions<KeyRingOptions> options,
+    KeyRingStartupCheck check,
+    KeyRingRounds rounds,
     TimeProvider timeProvider) : BackgroundService
 {
     /// <inheritdoc />
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        await ring.RefreshAsync(cancellationToken);
+        await check.CheckKeyEncryptionKeyAsync(cancellationToken);
+
+        // A partition opened before this start was refreshed then, so it is not refreshed again now
+        foreach (var refresh in rounds.BeginRound(exceptOpened: true))
+            await refresh.RefreshAsync(cancellationToken);
+
         await base.StartAsync(cancellationToken);
     }
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Half the propagation window: a freshly minted key is announced for that window before it signs, so
-        // refreshing twice per window means no pod meets a token signed by a key it has not loaded.
-        var period = options.Value.KeyRolloverPropagation / 2;
+        var period = rounds.Period;
         using var timer = new PeriodicTimer(period, timeProvider);
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            try
+            // Each partition on its own: one whose keys cannot be opened leaves the others current
+            foreach (var refresh in rounds.BeginRound())
             {
-                await ring.RefreshAsync(stoppingToken);
-            }
-            catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
-            {
-                // Every tick is a fresh attempt, so a failure costs one period of staleness and nothing more.
-                // Letting it escape would end ExecuteAsync, and the host's default behaviour for a faulted
-                // background service is to stop the process - so the pods would leave one after another over a
-                // single rotation window while still holding perfectly good keys.
-                LogRefreshFailed(exception, period);
+                try
+                {
+                    await refresh.RefreshAsync(stoppingToken);
+                }
+                catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+                {
+                    // Every tick is a fresh attempt, so a failure costs one period of staleness and nothing more.
+                    // Letting it escape would end ExecuteAsync, and the host's default behavior for a faulted
+                    // background service is to stop the process - so the pods would leave one after another over a
+                    // single rotation window while still holding perfectly good keys.
+                    LogRefreshFailed(exception, refresh.Partition, period);
+                }
             }
         }
     }

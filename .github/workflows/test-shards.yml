@@ -10,6 +10,11 @@ name: Test shards
 # changing. Callers keep their own aggregate job and depend on this one.
 on:
   workflow_call:
+    inputs:
+      coverage:
+        description: Keep each shard's coverage report as an artefact named coverage-<project>, for coverage-summary.yml.
+        type: boolean
+        default: false
     outputs:
       projects:
         description: JSON array of the test projects that were run.
@@ -26,9 +31,10 @@ jobs:
     needs: discover
     name: Tests (${{ matrix.project }})
     runs-on: ubuntu-latest
-    # 5 minutes per shard: the slowest runs a little over three, so this leaves room while still
-    # catching a runaway sooner than a single whole-suite wall would.
-    timeout-minutes: 5
+    # 8 minutes per shard: the two server E2E shards build their dependency closure and then run
+    # the prompt walks by every way of sending a request, which takes them past five; this leaves
+    # room while still catching a runaway sooner than a single whole-suite wall would.
+    timeout-minutes: 8
     permissions:
       contents: read
     strategy:
@@ -58,13 +64,21 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          dotnet-version: '10.x'
+          # No version here on purpose: with dotnet-version absent the action installs what
+          # global.json names, which is the same file the local build resolves against. Naming a
+          # version in each workflow is an enumeration - one of them is missed by a bump and that
+          # job keeps building on the old SDK, green, until something needs the new one. The
+          # version itself still moves by hand - global.json names an exact build and the action
+          # installs that one - but it moves in one place.
+          global-json-file: global.json
         timeout-minutes: 3
-      - name: Cache NuGet packages
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      # Restored only: the entry is saved by the build of develop, so every pull request reads that one copy
+      # instead of writing its own into the repository's shared cache allowance
+      - name: Restore NuGet packages cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json', 'global.json') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx', '**/Directory.Packages.props', '**/packages.lock.json') }}
           restore-keys: ${{ runner.os }}-nuget-
         timeout-minutes: 3
       - name: Restore
@@ -87,7 +101,7 @@ jobs:
             --coverage --coverage-output-format cobertura \
             --coverage-settings tests/code-coverage.settings.xml \
             --results-directory ./tests/results
-        timeout-minutes: 5
+        timeout-minutes: 7
       # A RED run only. Nobody opens these after a green one, and the storage they take is shared
       # across the account: six of them per run, a hundred in three hours, all younger than the
       # retention window - so the window cannot help, because there is nothing old to expire.
@@ -100,4 +114,15 @@ jobs:
             tests/results/*.trx
             tests/results/**/*.cobertura.xml
           retention-days: 3
+        timeout-minutes: 3
+      # Kept only when the caller asks (the release), for coverage-summary.yml: a pull request run would
+      # add one artefact per shard to the storage the whole account shares, and nobody reads it there.
+      - name: Upload coverage report
+        if: inputs.coverage && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-${{ matrix.project }}
+          path: tests/results/**/*.cobertura.xml
+          if-no-files-found: error
+          retention-days: 1
         timeout-minutes: 3

@@ -16,6 +16,7 @@ using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.BackChannelAuthentication.Validation;
 
@@ -36,7 +37,7 @@ public class ScopeValidatorTests
 
     private BackChannelAuthenticationValidationContext CreateContext(
         string[]? scopes = null,
-        bool offlineAccessAllowed = false,
+        OfflineAccess offlineAccess = OfflineAccess.Disabled,
         ResourceDefinition[]? resources = null)
     {
         var request = new BackChannelAuthenticationRequest
@@ -50,13 +51,13 @@ public class ScopeValidatorTests
         {
             ClientInfo = new ClientInfo("test-client")
             {
-                OfflineAccessAllowed = offlineAccessAllowed
+                OfflineAccess = offlineAccess
             },
             Resources = resources!
         };
     }
 
-    private delegate bool TryGetCallback(string scope, out ScopeDefinition? definition);
+    private delegate bool TryGetCallback(TenantDefinition tenant, string scope, out ScopeDefinition? definition);
 
     /// <summary>
     /// Verifies validation succeeds with valid openid scope.
@@ -69,8 +70,8 @@ public class ScopeValidatorTests
         var openidDefinition = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDefinition;
                 return true;
@@ -79,7 +80,7 @@ public class ScopeValidatorTests
         var context = CreateContext(scopes: [TestConstants.DefaultScope]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -96,11 +97,11 @@ public class ScopeValidatorTests
     {
         // Arrange
         var context = CreateContext(
-            scopes: [TestConstants.DefaultScope, "offline_access"],
-            offlineAccessAllowed: false);
+            scopes: [TestConstants.DefaultScope, Scopes.OfflineAccess],
+            offlineAccess: OfflineAccess.Disabled);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -110,37 +111,37 @@ public class ScopeValidatorTests
 
     /// <summary>
     /// Verifies validation succeeds when offline_access is requested and allowed.
-    /// Client must have OfflineAccessAllowed = true to request refresh tokens.
+    /// A client whose offline access is not Disabled may request refresh tokens.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_WithOfflineAccessAllowed_ShouldReturnNull()
     {
         // Arrange
         var openidDefinition = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
-        var offlineAccessDefinition = new ScopeDefinition("offline_access", Array.Empty<string>());
+        var offlineAccessDefinition = new ScopeDefinition(Scopes.OfflineAccess, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDefinition;
                 return true;
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet("offline_access", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(TestTenant.Matched, Scopes.OfflineAccess, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = offlineAccessDefinition;
                 return true;
             }));
 
         var context = CreateContext(
-            scopes: [TestConstants.DefaultScope, "offline_access"],
-            offlineAccessAllowed: true);
+            scopes: [TestConstants.DefaultScope, Scopes.OfflineAccess],
+            offlineAccess: OfflineAccess.ConsentRequired);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -157,8 +158,8 @@ public class ScopeValidatorTests
     {
         // Arrange
         _scopeManager
-            .Setup(sm => sm.TryGet("unknown_scope", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(TestTenant.Matched, "unknown_scope", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = null;
                 return false;
@@ -167,7 +168,7 @@ public class ScopeValidatorTests
         var context = CreateContext(scopes: ["unknown_scope"]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -184,37 +185,37 @@ public class ScopeValidatorTests
     {
         // Arrange
         var openidDef = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
-        var profileDef = new ScopeDefinition("profile", Array.Empty<string>());
-        var emailDef = new ScopeDefinition("email", Array.Empty<string>());
+        var profileDef = new ScopeDefinition(Scopes.Profile, Array.Empty<string>());
+        var emailDef = new ScopeDefinition(Scopes.Email, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDef;
                 return true;
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet("profile", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(TestTenant.Matched, Scopes.Profile, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = profileDef;
                 return true;
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet("email", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(TestTenant.Matched, Scopes.Email, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = emailDef;
                 return true;
             }));
 
-        var context = CreateContext(scopes: [TestConstants.DefaultScope, "profile", "email"]);
+        var context = CreateContext(scopes: [TestConstants.DefaultScope, Scopes.Profile, Scopes.Email]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -238,16 +239,16 @@ public class ScopeValidatorTests
             resourceScopeDef);
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDef;
                 return true;
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet("api:read", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(TestTenant.Matched, "api:read", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = null;
                 return false;
@@ -258,7 +259,7 @@ public class ScopeValidatorTests
             resources: [resourceDefinition]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -277,8 +278,8 @@ public class ScopeValidatorTests
         var openidDefinition = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDefinition;
                 return true;
@@ -287,7 +288,7 @@ public class ScopeValidatorTests
         var context = CreateContext(scopes: [TestConstants.DefaultScope]);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(context.Scope);
@@ -306,25 +307,25 @@ public class ScopeValidatorTests
         var openidDef = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
 
         _scopeManager
-            .Setup(sm => sm.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = openidDef;
                 return true;
             }));
 
         _scopeManager
-            .Setup(sm => sm.TryGet("unknown", out It.Ref<ScopeDefinition?>.IsAny))
-            .Returns(new TryGetCallback((string s, out ScopeDefinition? def) =>
+            .Setup(sm => sm.TryGet(TestTenant.Matched, "unknown", out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
             {
                 def = null;
                 return false;
             }));
 
-        var context = CreateContext(scopes: [TestConstants.DefaultScope, "unknown", "profile"]);
+        var context = CreateContext(scopes: [TestConstants.DefaultScope, "unknown", Scopes.Profile]);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -340,11 +341,11 @@ public class ScopeValidatorTests
     {
         // Arrange - No scope manager setup, should fail on offline_access check first
         var context = CreateContext(
-            scopes: [TestConstants.DefaultScope, "offline_access"],
-            offlineAccessAllowed: false);
+            scopes: [TestConstants.DefaultScope, Scopes.OfflineAccess],
+            offlineAccess: OfflineAccess.Disabled);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -352,5 +353,36 @@ public class ScopeValidatorTests
         Assert.Contains("offline access", result.ErrorDescription);
         // Verify scope manager was never called
         _scopeManager.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// A backchannel authentication request naming no scope is served with the client's default scope, and a client
+    /// required to name its scope is refused one naming none with <c>invalid_scope</c> (RFC 6749 section 3.3).
+    /// </summary>
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, ErrorCodes.InvalidScope)]
+    public async Task ARequestNamingNoScope_IsServedWithTheDefaultOrRefused(bool requireScope, string? error)
+    {
+        var definition = new ScopeDefinition(TestConstants.DefaultScope, Array.Empty<string>());
+        _scopeManager
+            .Setup(sm => sm.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny))
+            .Returns(new TryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
+            {
+                def = definition;
+                return true;
+            }));
+        var context = CreateContext(scopes: []);
+        context.ClientInfo = new ClientInfo("test-client")
+        {
+            DefaultScope = [TestConstants.DefaultScope],
+            RequireScope = requireScope,
+        };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(error, result?.Error);
+        Assert.Equal(
+            requireScope ? null : TestConstants.DefaultScope, context.Scope is [var served] ? served.Scope : null);
     }
 }

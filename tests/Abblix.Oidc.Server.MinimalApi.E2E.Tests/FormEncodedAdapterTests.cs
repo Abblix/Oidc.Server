@@ -14,7 +14,6 @@ using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Abblix.Oidc.Server.E2E.Tests;
 
 namespace Abblix.Oidc.Server.MinimalApi.E2E.Tests;
@@ -65,8 +64,8 @@ public sealed class FormEncodedAdapterTests(TestFactory factory) : IClassFixture
                 [TokenRequest.Parameters.Resource] = TestConstants.ApiResource,
             });
 
-        Assert.NotNull(token[ResponseParameters.AccessToken]);
-        Assert.Equal(TokenTypes.Bearer, token[ResponseParameters.TokenType]!.GetValue<string>());
+        Assert.NotNull(token[TokenResponse.Parameters.AccessToken]);
+        Assert.Equal(TokenTypes.Bearer, token[TokenResponse.Parameters.TokenType]!.GetValue<string>());
     }
 
     [Fact]
@@ -86,7 +85,7 @@ public sealed class FormEncodedAdapterTests(TestFactory factory) : IClassFixture
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidClient, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidClient, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     [Fact]
@@ -99,7 +98,7 @@ public sealed class FormEncodedAdapterTests(TestFactory factory) : IClassFixture
         // unlike the stateless client_credentials JWT. The PAR step also exercises the generated AuthorizationRequest
         // binding from a form POST.
         var accessToken = (await client.AuthCodeTokensViaParAsync(discovery, TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret))
-            [ResponseParameters.AccessToken]!.GetValue<string>();
+            [TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         var before = await IntrospectAsync(client, discovery, accessToken);
         Assert.True(before[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());

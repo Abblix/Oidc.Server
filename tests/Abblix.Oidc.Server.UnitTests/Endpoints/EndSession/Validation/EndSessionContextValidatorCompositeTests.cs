@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.EndSession.Validation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
@@ -41,7 +42,7 @@ public class EndSessionContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var error = await validator.ValidateAsync(context);
+        var error = await validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(error);
@@ -59,9 +60,9 @@ public class EndSessionContextValidatorCompositeTests
         var validator2 = new Mock<IEndSessionContextValidator>(MockBehavior.Strict);
         var validator3 = new Mock<IEndSessionContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
-        validator2.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
-        validator3.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
+        validator1.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
+        validator2.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
+        validator3.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
 
         var composite = new EndSessionContextValidatorComposite([
             validator1.Object,
@@ -71,13 +72,13 @@ public class EndSessionContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var error = await composite.ValidateAsync(context);
+        var error = await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(error);
-        validator1.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
-        validator2.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
-        validator3.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
+        validator1.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
+        validator3.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
     }
 
     /// <summary>
@@ -92,7 +93,7 @@ public class EndSessionContextValidatorCompositeTests
         var validator1 = new Mock<IEndSessionContextValidator>(MockBehavior.Strict);
         var validator2 = new Mock<IEndSessionContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync(error1);
+        validator1.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>())).ReturnsAsync(error1);
 
         var composite = new EndSessionContextValidatorComposite([
             validator1.Object,
@@ -101,11 +102,11 @@ public class EndSessionContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var error = await composite.ValidateAsync(context);
+        var error = await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Same(error1, error);
-        validator1.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
+        validator1.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
         validator2.VerifyNoOtherCalls();
     }
 
@@ -122,8 +123,8 @@ public class EndSessionContextValidatorCompositeTests
         var validator2 = new Mock<IEndSessionContextValidator>(MockBehavior.Strict);
         var validator3 = new Mock<IEndSessionContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
-        validator2.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync(error2);
+        validator1.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
+        validator2.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>())).ReturnsAsync(error2);
 
         var composite = new EndSessionContextValidatorComposite([
             validator1.Object,
@@ -133,12 +134,12 @@ public class EndSessionContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var error = await composite.ValidateAsync(context);
+        var error = await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Same(error2, error);
-        validator1.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
-        validator2.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
+        validator1.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
         validator3.VerifyNoOtherCalls();
     }
 
@@ -155,9 +156,9 @@ public class EndSessionContextValidatorCompositeTests
         var validator2 = new Mock<IEndSessionContextValidator>(MockBehavior.Strict);
         var validator3 = new Mock<IEndSessionContextValidator>(MockBehavior.Strict);
 
-        validator1.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
-        validator2.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
-        validator3.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync(error3);
+        validator1.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
+        validator2.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
+        validator3.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>())).ReturnsAsync(error3);
 
         var composite = new EndSessionContextValidatorComposite([
             validator1.Object,
@@ -167,13 +168,13 @@ public class EndSessionContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        var error = await composite.ValidateAsync(context);
+        var error = await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Same(error3, error);
-        validator1.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
-        validator2.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
-        validator3.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
+        validator1.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
+        validator3.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
     }
 
     /// <summary>
@@ -190,16 +191,16 @@ public class EndSessionContextValidatorCompositeTests
         var validator3 = new Mock<IEndSessionContextValidator>(MockBehavior.Strict);
 
         validator1
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
-            .Callback(new Action<EndSessionValidationContext>(_ => callOrder.Add(1)))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
+            .Callback(new Action<TenantDefinition, EndSessionValidationContext>((_, _) => callOrder.Add(1)))
             .ReturnsAsync((OidcError?)null);
         validator2
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
-            .Callback(new Action<EndSessionValidationContext>(_ => callOrder.Add(2)))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
+            .Callback(new Action<TenantDefinition, EndSessionValidationContext>((_, _) => callOrder.Add(2)))
             .ReturnsAsync((OidcError?)null);
         validator3
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
-            .Callback(new Action<EndSessionValidationContext>(_ => callOrder.Add(3)))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
+            .Callback(new Action<TenantDefinition, EndSessionValidationContext>((_, _) => callOrder.Add(3)))
             .ReturnsAsync((OidcError?)null);
 
         var composite = new EndSessionContextValidatorComposite([
@@ -210,7 +211,7 @@ public class EndSessionContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        await composite.ValidateAsync(context);
+        await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Equal(new[] { 1, 2, 3 }, callOrder);
@@ -229,12 +230,12 @@ public class EndSessionContextValidatorCompositeTests
         var validator2 = new Mock<IEndSessionContextValidator>(MockBehavior.Strict);
 
         validator1
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
-            .Callback(new Action<EndSessionValidationContext>(ctx => capturedContexts.Add(ctx)))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
+            .Callback(new Action<TenantDefinition, EndSessionValidationContext>((_, ctx) => capturedContexts.Add(ctx)))
             .ReturnsAsync((OidcError?)null);
         validator2
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
-            .Callback(new Action<EndSessionValidationContext>(ctx => capturedContexts.Add(ctx)))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
+            .Callback(new Action<TenantDefinition, EndSessionValidationContext>((_, ctx) => capturedContexts.Add(ctx)))
             .ReturnsAsync((OidcError?)null);
 
         var composite = new EndSessionContextValidatorComposite([
@@ -244,7 +245,7 @@ public class EndSessionContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        await composite.ValidateAsync(context);
+        await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Equal(2, capturedContexts.Count);
@@ -264,11 +265,11 @@ public class EndSessionContextValidatorCompositeTests
         var validator2 = new Mock<IEndSessionContextValidator>(MockBehavior.Strict);
 
         validator1
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
-            .Callback(new Action<EndSessionValidationContext>(ctx => ctx.ClientId = "modified_client"))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
+            .Callback(new Action<TenantDefinition, EndSessionValidationContext>((_, ctx) => ctx.ClientId = "modified_client"))
             .ReturnsAsync((OidcError?)null);
         validator2
-            .Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()))
             .ReturnsAsync((OidcError?)null);
 
         var composite = new EndSessionContextValidatorComposite([
@@ -278,11 +279,11 @@ public class EndSessionContextValidatorCompositeTests
         var context = CreateContext();
 
         // Act
-        await composite.ValidateAsync(context);
+        await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Equal("modified_client", context.ClientId);
-        validator2.Verify(v => v.ValidateAsync(It.Is<EndSessionValidationContext>(c => c.ClientId == "modified_client")), Times.Once);
+        validator2.Verify(v => v.ValidateAsync(TestTenant.Matched, It.Is<EndSessionValidationContext>(c => c.ClientId == "modified_client")), Times.Once);
     }
 
     /// <summary>
@@ -294,16 +295,16 @@ public class EndSessionContextValidatorCompositeTests
     {
         // Arrange
         var validator = new Mock<IEndSessionContextValidator>(MockBehavior.Strict);
-        validator.Setup(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
+        validator.Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>())).ReturnsAsync((OidcError?)null);
 
         var composite = new EndSessionContextValidatorComposite([validator.Object]);
         var context = CreateContext();
 
         // Act
-        var error = await composite.ValidateAsync(context);
+        var error = await composite.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(error);
-        validator.Verify(v => v.ValidateAsync(It.IsAny<EndSessionValidationContext>()), Times.Once);
+        validator.Verify(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<EndSessionValidationContext>()), Times.Once);
     }
 }

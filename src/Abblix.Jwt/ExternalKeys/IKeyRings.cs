@@ -1,0 +1,58 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0. You may obtain a copy at
+// http://www.apache.org/licenses/LICENSE-2.0
+
+namespace Abblix.Jwt.ExternalKeys;
+
+/// <summary>
+/// The rings of every partition the key ring keeps (<see cref="IKeyRingPartitions"/>), one for each issuer a
+/// server serves, so each issuer mints, rotates and serves keys of its own.
+/// </summary>
+public interface IKeyRings
+{
+    /// <summary>
+    /// The ring of <paramref name="partition"/>.
+    /// </summary>
+    /// <param name="partition">A partition the ring keeps, or one opened by <see cref="OpenAsync"/>.</param>
+    /// <exception cref="InvalidOperationException">The ring keeps no such partition.</exception>
+    IKeyRing For(string partition);
+
+    /// <summary>
+    /// Readies the rings of <paramref name="partitions"/> to serve, each on its own: builds each not built yet and
+    /// refreshes each not kept now, which mints a first key where none is due, so the first request for it finds a
+    /// key to produce with. One read of the store serves them all.
+    /// </summary>
+    /// <param name="partitions">The partitions to open, each named of letters, digits, '-', '_' and '~' only.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the opening of those not opened yet.</param>
+    /// <returns>Why each partition that could not be opened was not, by its name: a name that cannot name a
+    /// partition, or the store or the custodian failing. The others are ready.</returns>
+    /// <exception cref="InvalidOperationException">Keys are adopted where no partition will take them, judged before
+    /// any partition opens, so none of them is opened.</exception>
+    Task<IReadOnlyDictionary<string, Exception>> OpenAsync(
+        IReadOnlyCollection<string> partitions,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lets the ring of <paramref name="partition"/> go, its keys with it, once the issuer it served is gone for
+    /// good; a ring not built is left alone. The partition's entries stay in the store.
+    /// </summary>
+    /// <param name="partition">The partition to close.</param>
+    void Close(string partition);
+
+    /// <summary>
+    /// Removes the entries of <paramref name="partitions"/> from the store, each partition on its own. Call it once
+    /// their rings are closed and nothing will verify a token their keys signed, since the keys are gone for every
+    /// instance sharing the store. One read of the store serves them all.
+    /// </summary>
+    /// <param name="partitions">The partitions whose entries to remove.</param>
+    /// <param name="cancellationToken">Cancels the removal; the entries not removed yet stay.</param>
+    /// <returns>Why each partition whose entries could not all be removed was not, by its name; the others are
+    /// gone.</returns>
+    Task<IReadOnlyDictionary<string, Exception>> DeleteAsync(
+        IReadOnlyCollection<string> partitions,
+        CancellationToken cancellationToken);
+}

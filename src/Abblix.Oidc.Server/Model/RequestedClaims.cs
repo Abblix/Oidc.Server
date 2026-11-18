@@ -7,12 +7,14 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Serialization;
+using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
 /// Represents claims requested for inclusion in the UserInfo response and ID Token in OAuth2 or OpenID Connect authentication flows.
 /// </summary>
+[ExternalInput]
 public record RequestedClaims
 {
     /// <summary>
@@ -32,7 +34,7 @@ public record RequestedClaims
     public Dictionary<string, RequestedClaimDetails>? IdToken { get; init; }
 
     /// <summary>
-    /// Wire-level member names of the OIDC Core 1.0 §5.5 <c>claims</c> request parameter
+    /// Wire-level member names of the OIDC Core 1.0 section 5.5 <c>claims</c> request parameter
     /// (the top-level <c>userinfo</c> / <c>id_token</c> objects within it).
     /// </summary>
     public static class Parameters

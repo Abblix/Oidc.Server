@@ -22,6 +22,16 @@ public interface ISignatureAlgorithm<in TJsonWebKey>
 	string Algorithm { get; }
 
 	/// <summary>
+	/// Whether this algorithm can be carried out with the material of <paramref name="key"/>, asked when a key is
+	/// chosen for it. RFC 7518 section 3.1 binds each algorithm to a key type, which the key type this signer is
+	/// registered for already settles, so every key of that type is accepted unless the algorithm asks more of it:
+	/// section 3.4 binds each ECDSA algorithm to one curve, and sections 3.2, 3.3 and 3.5 set the smallest HMAC and
+	/// RSA keys, which only the key tells.
+	/// </summary>
+	/// <param name="key">The key a token would be signed or verified with.</param>
+	bool Accepts(TJsonWebKey key) => true;
+
+	/// <summary>
 	/// Signs the provided data using the configured algorithm and specified key.
 	/// </summary>
 	/// <param name="key">The key to use for signing.</param>

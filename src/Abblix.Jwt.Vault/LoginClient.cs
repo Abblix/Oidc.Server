@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -145,7 +147,7 @@ internal sealed partial class LoginClient(
 
     /// <summary>
     /// A failure that retrying can cure, as opposed to an answer from Vault: a connection error, the
-    /// client's own timeout - which surfaces as cancellation without the caller's token being cancelled -
+    /// client's own timeout - which surfaces as cancellation without the caller's token being canceled -
     /// or a credential file that cannot be read right now.
     /// </summary>
     private static bool IsRecoverableFailure(Exception exception, CancellationToken cancellationToken)
@@ -162,25 +164,45 @@ internal sealed partial class LoginClient(
         // Shape-checked rather than read with throwing accessors: an answer of the wrong shape is a
         // verdict for the retry loop, never an exception escaping it.
         if (response.Document is not { } document ||
-            !document.RootElement.TryGetProperty("auth", out var auth) ||
-            auth.ValueKind is not JsonValueKind.Object ||
-            !auth.TryGetProperty("client_token", out var token) ||
-            token.ValueKind is not JsonValueKind.String ||
-            token.GetString() is not { Length: > 0 } clientToken)
+            !TryGetAuth(document.RootElement, out var auth) ||
+            !TryGetClientToken(auth, out var clientToken))
         {
             LogMalformedAuthResponse(path);
             return null;
         }
 
-        var leaseSeconds =
-            auth.TryGetProperty("lease_duration", out var lease) &&
-            lease.ValueKind is JsonValueKind.Number &&
-            lease.TryGetInt64(out var seconds)
-                ? seconds
-                : 0;
-        var renewable = auth.TryGetProperty("renewable", out var flag) && flag.ValueKind is JsonValueKind.True;
-        return new TokenLease(clientToken, TimeSpan.FromSeconds(leaseSeconds), renewable);
+        return new TokenLease(clientToken, LeaseDuration(auth), IsRenewable(auth));
     }
+
+    private static bool TryGetAuth(JsonElement root, out JsonElement auth)
+        => root.TryGetProperty("auth", out auth) && auth.ValueKind is JsonValueKind.Object;
+
+    private static bool TryGetClientToken(JsonElement auth, [NotNullWhen(true)] out string? clientToken)
+    {
+        clientToken = auth.TryGetProperty("client_token", out var token) && token.ValueKind is JsonValueKind.String
+            ? token.GetString()
+            : null;
+        return clientToken is { Length: > 0 };
+    }
+
+    /// <summary>
+    /// How long the lease runs, which Vault states in whole seconds; a lease stating none, or no duration a lease
+    /// can have, runs for no time at all.
+    /// </summary>
+    private static TimeSpan LeaseDuration(JsonElement auth)
+    {
+        if (!auth.TryGetProperty("lease_duration", out var lease) ||
+            lease.ValueKind is not JsonValueKind.Number ||
+            !lease.TryGetInt64(out var seconds))
+        {
+            return TimeSpan.Zero;
+        }
+
+        return Durations.TryFromSeconds(seconds, out var duration) ? duration : TimeSpan.Zero;
+    }
+
+    private static bool IsRenewable(JsonElement auth)
+        => auth.TryGetProperty("renewable", out var flag) && flag.ValueKind is JsonValueKind.True;
 
     private static InvalidOperationException MisconfiguredAuthentication(string memberName)
         => new($"Vault authentication is configured without '{memberName}', which startup validation refuses - " +

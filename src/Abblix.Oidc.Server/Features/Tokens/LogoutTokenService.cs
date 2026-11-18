@@ -6,17 +6,17 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
 using Abblix.Jwt;
-using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.RandomGenerators;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.SecurityEvents;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
@@ -30,27 +30,26 @@ namespace Abblix.Oidc.Server.Features.Tokens;
 /// <param name="jwtFormatter">Formatter for encoding the generated logout token into a compact serialized format.
 /// </param>
 /// <param name="tokenIdGenerator">Generator for creating unique JWT identifiers.</param>
-/// <param name="options">Supplies the default content-encryption algorithm used when the client registered a
-/// key-management algorithm but no <c>id_token_encrypted_response_enc</c>.</param>
 public partial class LogoutTokenService(
     ILogger<LogoutTokenService> logger,
     TimeProvider clock,
     ISubjectTypeConverter subjectTypeConverter,
     IClientJwtFormatter jwtFormatter,
-    ITokenIdGenerator tokenIdGenerator,
-    IOptions<OidcOptions> options) : ILogoutTokenService
+    ITokenIdGenerator tokenIdGenerator) : ILogoutTokenService
 {
     /// <summary>
     /// Asynchronously creates a logout token based on the provided client information and logout event context.
     /// The token is then encoded to a serialized string format for easy distribution to clients.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="clientInfo">Information about the client that will receive the logout token.</param>
     /// <param name="logoutContext">Contextual information about the logout event, including the user's subject ID
     /// and session ID.</param>
     /// <returns>A task that returns a logout token.
     /// The task result is an <see cref="EncodedJsonWebToken"/>, which includes both the raw token object and its
     /// string representation.</returns>
-    public async Task<EncodedJsonWebToken> CreateLogoutTokenAsync(ClientInfo clientInfo, LogoutContext logoutContext)
+    public async Task<Result<EncodedJsonWebToken, OidcError>> CreateLogoutTokenAsync(
+        TenantDefinition tenant, ClientInfo clientInfo, LogoutContext logoutContext)
     {
         var logoutOptions = clientInfo.BackChannelLogout.NotNull(nameof(clientInfo.BackChannelLogout));
         if (logoutOptions.RequiresSessionId && string.IsNullOrEmpty(logoutContext.SessionId))
@@ -58,7 +57,7 @@ public partial class LogoutTokenService(
             throw new InvalidOperationException($"The client {clientInfo.ClientId} requires session id");
         }
 
-        var subjectId = subjectTypeConverter.Convert(logoutContext.SubjectId, clientInfo);
+        var subjectId = subjectTypeConverter.Convert(tenant, logoutContext.SubjectId, clientInfo);
         if (string.IsNullOrEmpty(subjectId) && string.IsNullOrEmpty(logoutContext.SessionId))
         {
             throw new InvalidOperationException(
@@ -82,7 +81,7 @@ public partial class LogoutTokenService(
             .WithEvent(LogoutTokenEvents.BackChannelLogout);
 
         // Either identifier may be absent - the guard above requires one of the two - and an
-        // absent one stays off the wire entirely rather than travelling as an empty value.
+        // absent one stays off the wire entirely rather than traveling as an empty value.
         if (!string.IsNullOrEmpty(subjectId))
         {
             builder.WithSubject(subjectId);
@@ -97,7 +96,7 @@ public partial class LogoutTokenService(
 
         // Where Back-Channel Logout deliberately departs from the SET default profile, each
         // departure is one visible line on the open token model, which the builder refuses to
-        // write by design: §2.4 registers the token's own type, and REQUIRES an expiration -
+        // write by design: section 2.4 registers the token's own type, and REQUIRES an expiration -
         // for a logout order, expiry is what bounds how long a lost token still logs somebody
         // out - where a generic SET must carry none.
         logoutToken.Header.Type = JsonWebTokenTypes.LogoutToken;
@@ -110,14 +109,15 @@ public partial class LogoutTokenService(
         // cannot be inherited.
         logoutToken.Header.Algorithm = ResolveSigningAlgorithm(clientInfo);
 
-        LogTokenPrepared(logoutToken);
+        LogTokenPrepared(logoutToken.Payload.JwtId, clientInfo.ClientId);
 
         var jwt = await jwtFormatter.FormatAsync(
+            tenant,
             logoutToken,
             clientInfo,
-            ClientJwtEncryption.ForIdentityToken(clientInfo, options.Value));
+            ClientJwtEncryption.ForIdentityToken(clientInfo));
 
-        return new EncodedJsonWebToken(logoutToken, jwt);
+        return jwt.MapSuccess(encoded => new EncodedJsonWebToken(logoutToken, encoded));
     }
 
     /// <summary>

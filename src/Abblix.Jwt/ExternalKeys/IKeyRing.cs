@@ -33,9 +33,37 @@ public interface IKeyRing
     IEnumerable<JsonWebKey> Get(string usage, bool includePrivateKeys);
 
     /// <summary>
+    /// When the newest key serving a role appeared, or null while the ring holds none for it.
+    /// </summary>
+    /// <param name="usage">Which role to report on, signature or encryption.</param>
+    /// <remarks>
+    /// A ring whose rotation has stopped looks exactly like one that is working: it keeps serving the keys it
+    /// already holds, every signature still verifies, and nothing goes red - while it drifts away from what the
+    /// other instances hold. The age of the newest key is what tells the two apart, and it tells them apart only
+    /// for a role this ring actually rotates. A role served by a key the host adopted, or by one that names no
+    /// role and therefore serves every role, has no rotation to be late for: its answer stands still by design,
+    /// and read as a schedule it says "stopped" forever.
+    /// <para>
+    /// Answered from what the ring holds rather than from the store behind it, so a custodian that goes briefly
+    /// unreachable does not turn into an unhealthy instance - which is the coupling the refresh loop avoids by
+    /// logging and carrying on. A ring that has never loaded holds nothing and answers null, which is the same
+    /// answer as a role it has no key for: null says the ring cannot speak about this role, never that the role
+    /// is healthy or that it is not.
+    /// </para>
+    /// <para>
+    /// A ring that rotates only when asked for a key - the in-memory one, whose keys never leave the process,
+    /// does - answers about what it has been asked for. Reading it as a schedule needs a ring something keeps
+    /// current, as the refresh service keeps the ring a store backs.
+    /// </para>
+    /// </remarks>
+    DateTimeOffset? NewestKeyCreatedAt(string usage);
+
+    /// <summary>
     /// Brings the ring up to date: mints what the current period lacks, retires what has expired, and reloads
     /// what other instances have minted.
     /// </summary>
     /// <param name="cancellationToken">Cancels the refresh.</param>
+    /// <exception cref="InvalidOperationException">A ring minting its keys finds keys adopted where no partition takes
+    /// them, judged before it mints, so nothing is minted.</exception>
     Task RefreshAsync(CancellationToken cancellationToken);
 }

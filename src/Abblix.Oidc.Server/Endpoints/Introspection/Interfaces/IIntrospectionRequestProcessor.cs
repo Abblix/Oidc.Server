@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
@@ -14,14 +15,15 @@ namespace Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 /// <summary>
 /// Builds the RFC 7662 introspection response for an already-validated request: returns
 /// <c>active=true</c> with claims for a live token, or <c>active=false</c> alone when the
-/// token is missing, expired, revoked, or issued to a different client (§2.2).
+/// token is missing, expired, revoked, or issued to a different client (section 2.2).
 /// </summary>
 public interface IIntrospectionRequestProcessor
 {
 	/// <summary>
 	/// Produces the introspection response for a validated request.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">A request that has cleared client authentication and token validation.</param>
 	/// <returns>An <see cref="IntrospectionSuccess"/>; processing-time errors map to <see cref="OidcError"/>.</returns>
-	Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(ValidIntrospectionRequest request);
+	Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(TenantDefinition tenant, ValidIntrospectionRequest request);
 }

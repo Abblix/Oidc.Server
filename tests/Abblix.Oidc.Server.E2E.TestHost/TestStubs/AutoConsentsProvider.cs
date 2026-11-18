@@ -24,7 +24,7 @@ namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 /// By default this leaves <see cref="ConsentDefinition.AuthorizationDetails"/> as <c>null</c>
 /// on <see cref="UserConsents.Granted"/>, which the processor interprets as "legacy provider /
 /// passthrough" and emits the post-validator <c>authorization_details</c> from the request
-/// (preserving PR #135 byte-exact behaviour the existing E2E tests exercise).
+/// (preserving PR #135 byte-exact behavior the existing E2E tests exercise).
 /// <para>
 /// Per-test, scenarios opt in to consent-side narrow / deny by sending the
 /// <see cref="TestConsentOverrideMiddleware.HeaderName"/> header on their HTTP requests; the
@@ -39,17 +39,13 @@ namespace Abblix.Oidc.Server.E2E.TestHost.TestStubs;
 public sealed class AutoConsentsProvider(IHttpContextAccessor httpContextAccessor) : IUserConsentsProvider
 {
     public Task<UserConsents> GetUserConsentsAsync(
+        Abblix.Oidc.Server.Features.MultiTenancy.TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthSession authSession)
     {
-        var grantedScopes = (request.Model.Scope ?? [])
-            .Select(s => new ScopeDefinition(s))
-            .ToArray();
-        var grantedResources = (request.Model.Resources ?? [])
-            .Select(uri => new ResourceDefinition(uri))
-            .ToArray();
-
-        var granted = new ConsentDefinition(grantedScopes, grantedResources);
+        // What validation settled, as the server's own provider grants it: a scope a requested resource declares
+        // travels with that resource rather than among the scopes
+        var granted = new ConsentDefinition(request.Scope, request.Resources);
 
         var items = httpContextAccessor.HttpContext?.Items;
         if (items?[TestConsentOverrideMiddleware.PresenceItemKey] is true)

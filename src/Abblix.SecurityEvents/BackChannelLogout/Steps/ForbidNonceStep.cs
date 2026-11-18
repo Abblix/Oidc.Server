@@ -35,10 +35,10 @@ public sealed class ForbidNonceStep : ISecurityEventTokenValidator
     {
         context.Require(SecurityEventTokenValidationStates.Parsed);
 
-        var error = context.UnverifiedPayload!.Json.ContainsKey(JwtClaimTypes.Nonce)
+        var error = context.UnverifiedPayload!.Json.ContainsKey(IanaClaimTypes.Nonce)
             ? new SecurityEventTokenValidationError(
                 SecurityEventTokenErrorCode.TokenConfusion,
-                $"The claims carry '{JwtClaimTypes.Nonce}', which a Logout Token must not "
+                $"The claims carry '{IanaClaimTypes.Nonce}', which a Logout Token must not "
                 + "(OpenID Connect Back-Channel Logout 1.0 Section 2.4).")
             : null;
 

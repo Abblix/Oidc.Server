@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.ClientInformation;
 
 
@@ -18,4 +19,11 @@ namespace Abblix.Oidc.Server.Endpoints.UserInfo.Interfaces;
 /// <param name="User">The collection of JWT claims associated with the user.</param>
 /// <param name="ClientInfo">Information about the client making the request.</param>
 /// <param name="Issuer">The issuer identifier.</param>
-public record UserInfoFoundResponse(JsonObject User, ClientInfo ClientInfo, string Issuer);
+public record UserInfoFoundResponse(JsonObject User, ClientInfo ClientInfo, string Issuer)
+{
+    /// <summary>
+    /// The scheme the request presented its access token with, which a refusal made while the response is formatted
+    /// answers for (<see cref="OidcError.PresentedScheme"/>).
+    /// </summary>
+    public AccessTokenScheme? PresentedScheme { get; init; }
+}

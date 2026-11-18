@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 
@@ -19,8 +20,9 @@ public interface IPushedAuthorizationRequestProcessor
     /// <summary>
     /// Asynchronously processes a valid authorization request and generates a response.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The valid authorization request to process.</param>
     /// <returns>A task that resolves to an authorization response, including the
     /// request URI and expiration time.</returns>
-    Task<AuthorizationResponse> ProcessAsync(ValidAuthorizationRequest request);
+    Task<AuthorizationResponse> ProcessAsync(TenantDefinition tenant, ValidAuthorizationRequest request);
 }

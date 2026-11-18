@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,22 +15,24 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.ResponseObject;
 using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
+using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ResponseObject;
 
 /// <summary>
 /// Unit tests for <see cref="ResponseJwtBuilder"/> verifying JARM (JWT Secured Authorization Response
-/// Mode) JWT construction: the mandated <c>iss</c>/<c>aud</c>/<c>exp</c> claims (JARM §2.1), signing with the
-/// client's registered algorithm (default RS256, JARM §3), optional signed-then-encrypted output, and the
-/// resolution of the JARM response mode to its plaintext delivery counterpart (JARM §2.3).
+/// Mode) JWT construction: the mandated <c>iss</c>/<c>aud</c>/<c>exp</c> claims (JARM section 2.1), signing with the
+/// client's registered algorithm (default RS256, JARM section 3), optional signed-then-encrypted output, and the
+/// resolution of the JARM response mode to its plaintext delivery counterpart (JARM section 2.3).
 /// </summary>
 public class ResponseJwtBuilderTests
 {
@@ -41,36 +44,37 @@ public class ResponseJwtBuilderTests
     private readonly Mock<IJsonWebTokenCreator> _jwtCreator = new(MockBehavior.Strict);
     private readonly Mock<IClientKeysProvider> _clientKeys = new(MockBehavior.Strict);
     private readonly Mock<IAuthServiceKeysProvider> _serviceKeys = new(MockBehavior.Strict);
-    private readonly Mock<IIssuerProvider> _issuerProvider = new(MockBehavior.Strict);
-    private readonly Mock<TimeProvider> _timeProvider = new(MockBehavior.Strict);
+    private readonly FakeTimeProvider _timeProvider;
 
     private readonly ResponseJwtBuilder _builder;
     private readonly ClientInfo _client = new(ClientId);
 
-    private readonly JsonWebKey _signingKeyRs256 = new RsaJsonWebKey { KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
-    private readonly JsonWebKey _clientEncryptionKey = new RsaJsonWebKey { KeyId = "client-enc", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
+    private readonly JsonWebKey _signingKeyRs256 = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig-rs256", Algorithm = SigningAlgorithms.RS256 };
+    private readonly JsonWebKey _clientEncryptionKey = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "client-enc", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
     private readonly DateTimeOffset _now = new(2026, 6, 2, 12, 0, 0, TimeSpan.Zero);
 
     public ResponseJwtBuilderTests()
     {
-        _clientInfoProvider.Setup(p => p.TryFindClientAsync(ClientId)).ReturnsAsync(_client);
-        _issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
-        _timeProvider.Setup(t => t.GetUtcNow()).Returns(_now);
-        _serviceKeys.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
+        _clientInfoProvider.Setup(p => p.TryFindClientAsync(TestTenant.Matched, ClientId)).ReturnsAsync(_client);
+        _timeProvider = new FakeTimeProvider(_now);
+        _serviceKeys.Setup(p => p.GetSigningKeys(TestTenant.Matched, true)).Returns(new[] { _signingKeyRs256 }.ToAsyncEnumerable());
+        _jwtCreator
+            .Setup(c => c.EncryptedResponseAlgorithmsSupported)
+            .Returns([EncryptionAlgorithms.KeyManagement.RsaOaep, EncryptionAlgorithms.KeyManagement.RsaOaep256]);
 
         // The builder now delegates signing/encryption to a real ClientJwtFormatter built over the same mocks,
         // so the assertions on IJsonWebTokenCreator.IssueAsync continue to exercise the end-to-end JARM behavior.
         var clientJwtFormatter = new ClientJwtFormatter(
-            _jwtCreator.Object,
-            _clientKeys.Object,
-            _serviceKeys.Object,
-            Options.Create(new OidcOptions()));
+            NullLogger<ClientJwtFormatter>.Instance,
+            new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every),
+            new ClientEncryptionKeyResolver(
+                new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every), _clientKeys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
+            _serviceKeys.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered);
 
         _builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             clientJwtFormatter,
-            _issuerProvider.Object,
-            _timeProvider.Object,
+            _timeProvider,
             Options.Create(new OidcOptions()));
     }
 
@@ -112,20 +116,21 @@ public class ResponseJwtBuilderTests
         var capture = CaptureIssue();
 
         var result = await _builder.BuildAsync(
-            ClientId, [("code", "auth-code"), ("state", "client-state")]);
+            SingleIssuer.Tenant,
+            ClientId, [(ResponseParameters.Code, "auth-code"), (ResponseParameters.State, "client-state")]);
 
         Assert.Equal(EncodedJwt, result);
 
-        // JARM §2.1 mandated claims.
+        // JARM section 2.1 mandated claims.
         Assert.Equal(Issuer, capture.Token.Payload.Issuer);
         Assert.Equal([ClientId], capture.Token.Payload.Audiences);
         Assert.Equal(_now + TimeSpan.FromMinutes(10), capture.Token.Payload.ExpiresAt);
 
         // Response parameters carried as claims.
-        Assert.Equal("auth-code", capture.Token.Payload["code"]!.GetValue<string>());
-        Assert.Equal("client-state", capture.Token.Payload["state"]!.GetValue<string>());
+        Assert.Equal("auth-code", capture.Token.Payload[ResponseParameters.Code]!.GetValue<string>());
+        Assert.Equal("client-state", capture.Token.Payload[ResponseParameters.State]!.GetValue<string>());
 
-        // Signed with the client's algorithm (default RS256, JARM §3).
+        // Signed with the client's algorithm (default RS256, JARM section 3).
         Assert.Equal(SigningAlgorithms.RS256, capture.Token.Header.Algorithm);
     }
 
@@ -134,7 +139,7 @@ public class ResponseJwtBuilderTests
     {
         var capture = CaptureIssue();
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
         // Signed-only: no encryption key is resolved or passed.
         Assert.Null(capture.EncryptionKey);
@@ -152,7 +157,7 @@ public class ResponseJwtBuilderTests
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
         _client.AuthorizationEncryptedResponseEncryption = EncryptionAlgorithms.ContentEncryption.Aes256Gcm;
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.Same(_clientEncryptionKey, capture.EncryptionKey);
         Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capture.KeyAlgorithm);
@@ -168,25 +173,42 @@ public class ResponseJwtBuilderTests
             .Returns(new[] { _clientEncryptionKey }.ToAsyncEnumerable());
 
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
-        // AuthorizationEncryptedResponseEncryption omitted → JARM §3 default
+        // AuthorizationEncryptedResponseEncryption omitted → JARM section 3 default
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, capture.ContentAlgorithm);
     }
 
     /// <summary>
-    /// The JARM fallback is a setting, so a deployment whose clients all understand a stronger algorithm can
-    /// raise it.
+    /// A client that asked for its responses encrypted and publishes no key one can be encrypted to (here an EC key
+    /// declaring no algorithm, which the RSA-OAEP-256 it registered does not fit) gets the formatter's refusal back
+    /// rather than an exception, for the caller to answer.
     /// </summary>
-    /// <remarks>
-    /// The case above pins the value the specification names, which a client registering only
-    /// <c>authorization_encrypted_response_alg</c> is entitled to. This one pins that the value is reachable
-    /// at all: without it the setting could be read from nowhere and every test would still pass, because the
-    /// default it happens to carry is the same constant the code used to hold.
-    /// </remarks>
     [Fact]
-    public async Task BuildAsync_WithEncryptionAlgorithmButNoEnc_HonoursTheConfiguredFallback()
+    public async Task BuildAsync_ForAClientWhoseKeysNothingCanBeEncryptedTo_ReturnsTheRefusal()
+    {
+        _clientKeys
+            .Setup(p => p.GetEncryptionKeys(It.IsAny<ClientInfo>()))
+            .Returns(new JsonWebKey[]
+            {
+                new EllipticCurveJsonWebKey { KeyId = "ec", Curve = EllipticCurveTypes.P256 },
+            }.ToAsyncEnumerable());
+        _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256;
+
+        var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+
+        Assert.True(result.TryGetFailure(out var refusal));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
+    }
+
+    /// <summary>
+    /// JARM section 3 names the fallback, so the content encryption algorithm a host sets for the server's own tokens
+    /// does not reach an authorization response: a client registering only
+    /// <c>authorization_encrypted_response_alg</c> is sent A128CBC-HS256 whatever the host configured.
+    /// </summary>
+    [Fact]
+    public async Task BuildAsync_WithEncryptionAlgorithmButNoEnc_IgnoresTheServerTokensContentEncryption()
     {
         var capture = CaptureIssue();
         _clientKeys
@@ -197,63 +219,104 @@ public class ResponseJwtBuilderTests
 
         var options = Options.Create(new OidcOptions
         {
-            DefaultAuthorizationResponseEncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+            DefaultContentEncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
         });
 
         var builder = new ResponseJwtBuilder(
             _clientInfoProvider.Object,
             new ClientJwtFormatter(
-                _jwtCreator.Object, _clientKeys.Object, _serviceKeys.Object, Options.Create(new OidcOptions())),
-            _issuerProvider.Object,
-            _timeProvider.Object,
+                NullLogger<ClientJwtFormatter>.Instance,
+                new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every),
+                new ClientEncryptionKeyResolver(
+                    new ProfiledJwtIssuer(_jwtCreator.Object, TestEncryptionAlgorithms.Every), _clientKeys.Object, TimeProvider.System, TestEncryptionAlgorithms.Every),
+                _serviceKeys.Object, Abblix.Oidc.Server.UnitTests.TestInfrastructure.TestSigningAlgorithms.Registered),
+            _timeProvider,
             options);
 
-        await builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
-        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, capture.ContentAlgorithm);
+        Assert.Equal(EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256, capture.ContentAlgorithm);
     }
 
     /// <summary>
-    /// Characterizes the unified key-management algorithm selection shared by all client-addressed JWTs: when the
-    /// client's encryption key declares its own <c>alg</c>, that algorithm is used in preference to the registered
-    /// <c>authorization_encrypted_response_alg</c>. This is the long-standing UserInfo/ID-token rule, now applied to
-    /// JARM as well; it is observable only when a client's JWK declares an <c>alg</c> different from the registered
-    /// value (a contradictory configuration).
+    /// JARM section 3: authorization_encrypted_response_alg is "The JWE [RFC7516] alg algorithm REQUIRED for
+    /// encrypting authorization responses". The response is encrypted under the registered algorithm only: a key
+    /// declaring another one is passed over for one declaring it or none, and a set holding no such key refuses.
     /// </summary>
     [Fact]
-    public async Task BuildAsync_WhenClientKeyDeclaresAlgorithm_PrefersKeyDeclaredAlgorithm()
+    public async Task BuildAsync_EncryptsUnderTheRegisteredAlgorithm_PassingOverAKeyDeclaringAnother()
     {
         var capture = CaptureIssue();
-        var keyWithOwnAlgorithm = new RsaJsonWebKey
-        {
-            KeyId = "client-enc",
-            Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
-        };
+        var other = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "other", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 };
+        var plain = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "plain" };
         _clientKeys
             .Setup(p => p.GetEncryptionKeys(It.IsAny<ClientInfo>()))
-            .Returns(new[] { (JsonWebKey)keyWithOwnAlgorithm }.ToAsyncEnumerable());
-
-        // Registered key-management algorithm differs from the key's own declared algorithm.
+            .Returns(new JsonWebKey[] { other, plain }.ToAsyncEnumerable());
         _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep;
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
-        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep256, capture.KeyAlgorithm);
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(EncryptionAlgorithms.KeyManagement.RsaOaep, capture.KeyAlgorithm);
+        Assert.Same(plain, capture.EncryptionKey);
+    }
+
+    /// <summary>
+    /// A registered algorithm no published key can be used with - a key declaring another one, or no key at all, as
+    /// when the jwks_uri could not be read - is the refusal, never a response sent signed only.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BuildAsync_ARegisteredAlgorithmNoKeyCanBeUsedWith_IsRefused(bool keyDeclaringAnother)
+    {
+        _clientKeys
+            .Setup(p => p.GetEncryptionKeys(It.IsAny<ClientInfo>()))
+            .Returns((keyDeclaringAnother
+                ? new JsonWebKey[]
+                {
+                    new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "other", Algorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256 },
+                }
+                : []).ToAsyncEnumerable());
+        _client.AuthorizationEncryptedResponseAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep;
+
+        var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+
+        Assert.True(result.TryGetFailure(out var refusal));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
+    }
+
+    /// <summary>
+    /// JARM section 3: "The default, if omitted, is that no encryption is performed." A client that registered no
+    /// algorithm gets its response signed only, whatever keys it publishes.
+    /// </summary>
+    [Fact]
+    public async Task BuildAsync_NoRegisteredAlgorithm_SignsOnlyWhateverTheKeys()
+    {
+        var capture = CaptureIssue();
+        _clientKeys
+            .Setup(p => p.GetEncryptionKeys(It.IsAny<ClientInfo>()))
+            .Returns(new JsonWebKey[] { new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "plain" } }.ToAsyncEnumerable());
+
+        var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Null(capture.EncryptionKey);
     }
 
     [Fact]
     public async Task BuildAsync_HonoursClientConfiguredSigningAlgorithm()
     {
-        var signingKeyRs384 = new RsaJsonWebKey { KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
+        var signingKeyRs384 = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig-rs384", Algorithm = SigningAlgorithms.RS384 };
 
         _serviceKeys
-            .Setup(p => p.GetSigningKeys(true))
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
             .Returns(new[] { _signingKeyRs256, signingKeyRs384 }.ToAsyncEnumerable());
 
         var capture = CaptureIssue();
         _client.AuthorizationSignedResponseAlgorithm = SigningAlgorithms.RS384;
 
-        await _builder.BuildAsync(ClientId, [("code", "auth-code")]);
+        await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
 
         Assert.Equal(SigningAlgorithms.RS384, capture.Token.Header.Algorithm);
     }
@@ -261,7 +324,7 @@ public class ResponseJwtBuilderTests
     /// <summary>
     /// The JARM response mode is mapped to its plaintext delivery mode by
     /// <see cref="ResponseModeExtensions.ToDeliveryMode"/>: the fixed variants map to their base mode, and the
-    /// <c>jwt</c> shortcut resolves to fragment for token-bearing flows and query otherwise (JARM §2.3.4).
+    /// <c>jwt</c> shortcut resolves to fragment for token-bearing flows and query otherwise (JARM section 2.3.4).
     /// </summary>
     [Theory]
     [InlineData(ResponseModes.QueryJwt, false, ResponseModes.Query)]
@@ -272,5 +335,24 @@ public class ResponseJwtBuilderTests
     public void ToDeliveryMode_MapsToPlaintextMode(string responseMode, bool carriesTokens, string expectedDeliveryMode)
     {
         Assert.Equal(expectedDeliveryMode, responseMode.ToDeliveryMode(carriesTokens));
+    }
+
+    /// <summary>
+    /// An authorization response the server cannot sign for the client - its algorithm produced by no key of the tenant,
+    /// or not admitted by its security profile - is the builder's failure, which the encoder answers with
+    /// unauthorized_client in the plain mode the JWT mode delivers through, rather than with a server error.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.ES256, null)]
+    [InlineData(SigningAlgorithms.RS256, ClientSecurityProfile.Fapi2)]
+    public async Task BuildAsync_AResponseTheServerCannotSign_IsRefused(string algorithm, ClientSecurityProfile? profile)
+    {
+        _client.AuthorizationSignedResponseAlgorithm = algorithm;
+        _client.SecurityProfile = profile;
+
+        var result = await _builder.BuildAsync(SingleIssuer.Tenant, ClientId, [(ResponseParameters.Code, "auth-code")]);
+
+        Assert.True(result.TryGetFailure(out var refusal));
+        Assert.Equal(ErrorCodes.UnauthorizedClient, refusal.Error);
     }
 }

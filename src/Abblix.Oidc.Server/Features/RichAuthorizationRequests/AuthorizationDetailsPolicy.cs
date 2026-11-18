@@ -11,6 +11,7 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,7 +30,7 @@ namespace Abblix.Oidc.Server.Features.RichAuthorizationRequests;
 /// <c>GetKeyedServices&lt;IAuthorizationDetailValidator&gt;(KeyedService.AnyKey)</c> in
 /// slice #132 - no <c>TryAddEnumerable</c> parallel slot. Lookup that returns <c>null</c>
 /// (no host registration for the requested type) yields
-/// <c>invalid_authorization_details</c> per RFC 9396 §5, never throws - the server boots
+/// <c>invalid_authorization_details</c> per RFC 9396 section 5, never throws - the server boots
 /// cleanly with zero per-type validators and rejects RAR requests with a structured error.
 /// </remarks>
 internal sealed class AuthorizationDetailsPolicy(
@@ -37,44 +38,57 @@ internal sealed class AuthorizationDetailsPolicy(
 {
     /// <summary>
     /// The per-entry question, which is the only thing the request phase and the granted phase differ
-    /// in: everything around it (object shape, known type, per-client allowlist) binds in both.
+    /// in: everything around it (object shape, known type, per-client allowlist) binds in both. The
+    /// granted phase also hands over the requested entries of the detail's type.
     /// </summary>
     private delegate Task<Result<AuthorizationDetail, OidcError>> AskValidator(
         IAuthorizationDetailValidator validator,
+        TenantDefinition tenant,
         AuthorizationDetail detail,
+        IReadOnlyList<AuthorizationDetail> requested,
         ClientInfo client,
         CancellationToken token);
 
     /// <inheritdoc/>
-    public Task<Result<JsonArray?, OidcError>> ApplyAsync(
+    public Task<Result<JsonArray, OidcError>> ApplyAsync(
+        TenantDefinition tenant,
         JsonArray? raw,
         ClientInfo client,
         CancellationToken token)
         => ApplyCoreAsync(
+            tenant,
             raw,
+            [],
             client,
-            static (validator, detail, client, token) => validator.ValidateAsync(detail, client, token),
+            static (validator, tenant, detail, _, client, token) => validator.ValidateAsync(tenant, detail, client, token),
             token);
 
     /// <inheritdoc/>
-    public Task<Result<JsonArray?, OidcError>> ApplyGrantedAsync(
+    public Task<Result<JsonArray, OidcError>> ApplyGrantedAsync(
+        TenantDefinition tenant,
         JsonArray? granted,
+        JsonArray? requested,
         ClientInfo client,
         CancellationToken token)
         => ApplyCoreAsync(
+            tenant,
             granted,
+            requested?.ToTypedArray() ?? [],
             client,
-            static (validator, detail, client, token) => validator.ValidateGrantedAsync(detail, client, token),
+            static (validator, tenant, detail, requested, client, token)
+                => validator.ValidateGrantedAsync(tenant, detail, requested, client, token),
             token);
 
-    private async Task<Result<JsonArray?, OidcError>> ApplyCoreAsync(
+    private async Task<Result<JsonArray, OidcError>> ApplyCoreAsync(
+        TenantDefinition tenant,
         JsonArray? raw,
+        AuthorizationDetail[] requested,
         ClientInfo client,
         AskValidator ask,
         CancellationToken token)
     {
         if (raw is not { Count: > 0 })
-            return (JsonArray?)null;
+            return new JsonArray();
 
         // An entry that is not a JSON object is dropped by the conversion, so a count that shrank means the
         // client sent authorization_details this server cannot read - ["payment"] or [1,2] rather than the
@@ -103,9 +117,9 @@ internal sealed class AuthorizationDetailsPolicy(
                 return Reject($"Authorization detail types not allowed for this client: {string.Join(", ", disallowed)}");
         }
 
-        var result = await ValidateAsync(authorizationDetails, client, ask, token);
+        var result = await ValidateAsync(tenant, authorizationDetails, requested, client, ask, token);
 
-        // Rebuild the raw array from the validated typed list (RFC 9396 §7.1 narrow / extend).
+        // Rebuild the raw array from the validated typed list (RFC 9396 section 7.1 narrow / extend).
         // When per-type validators left their input untouched the result is byte-equivalent
         // to the original - DeepClone in ToRawJsonArray preserves member order and any
         // type-specific payload. When a validator returned a modified AuthorizationDetail,
@@ -116,7 +130,9 @@ internal sealed class AuthorizationDetailsPolicy(
     }
 
     private async Task<Result<IReadOnlyList<AuthorizationDetail>, OidcError>> ValidateAsync(
+        TenantDefinition tenant,
         IEnumerable<AuthorizationDetail> details,
+        AuthorizationDetail[] requested,
         ClientInfo client,
         AskValidator ask,
         CancellationToken cancellationToken)
@@ -128,7 +144,7 @@ internal sealed class AuthorizationDetailsPolicy(
             if (string.IsNullOrEmpty(detail.Type))
             {
                 return new OidcError(ErrorCodes.InvalidAuthorizationDetails, 
-                    "authorization_details entry is missing the required 'type' member (RFC 9396 §2)");
+                    "authorization_details entry is missing the required 'type' member (RFC 9396 section 2)");
             }
 
             var validator = serviceProvider.GetKeyedService<IAuthorizationDetailValidator>(detail.Type);
@@ -139,7 +155,10 @@ internal sealed class AuthorizationDetailsPolicy(
                     $"unknown authorization_details type: '{detail.Type}'");
             }
 
-            var result = await ask(validator, detail, client, cancellationToken);
+            var requestedOfType = Array.FindAll(
+                requested, entry => string.Equals(entry.Type, detail.Type, StringComparison.Ordinal));
+
+            var result = await ask(validator, tenant, detail, requestedOfType, client, cancellationToken);
             if (result.TryGetFailure(out var failure))
             {
                 return failure;

@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Security.Cryptography;
 using Abblix.Jwt.Encryption;
 using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,7 +14,7 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// Tests for the RFC 3394 AES Key Wrap implementation: the six known-answer vectors of RFC 3394 §4
+/// Tests for the RFC 3394 AES Key Wrap implementation: the six known-answer vectors of RFC 3394 section 4
 /// pin the wrap construction byte-exact, tamper tests prove the integrity check register rejects
 /// every single-byte forgery, and JWE round-trips cover A128KW/A192KW/A256KW end to end.
 /// </summary>
@@ -31,47 +32,61 @@ public class AesKeyWrapTests
 	}
 
 	/// <summary>
-	/// The 128-bit KEK of the RFC 3394 §4.1 vector, shared with the negative tests below.
+	/// The 128-bit KEK of the RFC 3394 section 4.1 vector, shared with the negative tests in this class.
 	/// </summary>
 	private const string KeyEncryptionKey128Hex = "000102030405060708090A0B0C0D0E0F";
 
+	private static byte[] Wrap(byte[] keyEncryptionKey, byte[] keyData)
+	{
+		using var aes = Aes.Create();
+		aes.Key = keyEncryptionKey;
+		return aes.EncryptKeyWrap(keyData);
+	}
+
+	private static bool TryUnwrap(byte[] keyEncryptionKey, byte[] wrappedKey, out byte[]? keyData)
+	{
+		using var aes = Aes.Create();
+		aes.Key = keyEncryptionKey;
+		return aes.TryUnwrapKey(wrappedKey, out keyData);
+	}
+
 	/// <summary>
-	/// The six complete known-answer vectors of RFC 3394 §4.1-§4.6, covering every
+	/// The six complete known-answer vectors of RFC 3394 section 4.1-section 4.6, covering every
 	/// KEK-size × key-data-size combination the specification defines.
 	/// </summary>
 	public static TheoryData<string, string, string> Rfc3394Vectors => new()
 	{
-		// §4.1: 128 bits of Key Data with a 128-bit KEK
+		// section 4.1: 128 bits of Key Data with a 128-bit KEK
 		{
 			KeyEncryptionKey128Hex,
 			"00112233445566778899AABBCCDDEEFF",
 			"1FA68B0A8112B447AEF34BD8FB5A7B829D3E862371D2CFE5"
 		},
-		// §4.2: 128 bits of Key Data with a 192-bit KEK
+		// section 4.2: 128 bits of Key Data with a 192-bit KEK
 		{
 			"000102030405060708090A0B0C0D0E0F1011121314151617",
 			"00112233445566778899AABBCCDDEEFF",
 			"96778B25AE6CA435F92B5B97C050AED2468AB8A17AD84E5D"
 		},
-		// §4.3: 128 bits of Key Data with a 256-bit KEK
+		// section 4.3: 128 bits of Key Data with a 256-bit KEK
 		{
 			"000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F",
 			"00112233445566778899AABBCCDDEEFF",
 			"64E8C3F9CE0F5BA263E9777905818A2A93C8191E7D6E8AE7"
 		},
-		// §4.4: 192 bits of Key Data with a 192-bit KEK
+		// section 4.4: 192 bits of Key Data with a 192-bit KEK
 		{
 			"000102030405060708090A0B0C0D0E0F1011121314151617",
 			"00112233445566778899AABBCCDDEEFF0001020304050607",
 			"031D33264E15D33268F24EC260743EDCE1C6C7DDEE725A936BA814915C6762D2"
 		},
-		// §4.5: 192 bits of Key Data with a 256-bit KEK
+		// section 4.5: 192 bits of Key Data with a 256-bit KEK
 		{
 			"000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F",
 			"00112233445566778899AABBCCDDEEFF0001020304050607",
 			"A8F9BC1612C68B3FF6E6F4FBE30E71E4769C8B80A32CB8958CD5D17D6B254DA1"
 		},
-		// §4.6: 256 bits of Key Data with a 256-bit KEK
+		// section 4.6: 256 bits of Key Data with a 256-bit KEK
 		{
 			"000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F",
 			"00112233445566778899AABBCCDDEEFF000102030405060708090A0B0C0D0E0F",
@@ -83,7 +98,7 @@ public class AesKeyWrapTests
 	[MemberData(nameof(Rfc3394Vectors))]
 	public void Wrap_Rfc3394KnownAnswerVectors_ProducesExpectedCiphertext(string keyEncryptionKeyHex, string keyHex, string expectedHex)
 	{
-		var wrapped = AesKeyWrap.Wrap(Convert.FromHexString(keyEncryptionKeyHex), Convert.FromHexString(keyHex));
+		var wrapped = Wrap(Convert.FromHexString(keyEncryptionKeyHex), Convert.FromHexString(keyHex));
 
 		Assert.Equal(Convert.FromHexString(expectedHex), wrapped);
 	}
@@ -92,12 +107,12 @@ public class AesKeyWrapTests
 	[MemberData(nameof(Rfc3394Vectors))]
 	public void TryUnwrap_Rfc3394KnownAnswerVectors_RecoversKeyData(string keyEncryptionKeyHex, string keyHex, string wrappedHex)
 	{
-		Assert.True(AesKeyWrap.TryUnwrap(Convert.FromHexString(keyEncryptionKeyHex), Convert.FromHexString(wrappedHex), out var keyData));
+		Assert.True(TryUnwrap(Convert.FromHexString(keyEncryptionKeyHex), Convert.FromHexString(wrappedHex), out var keyData));
 		Assert.Equal(Convert.FromHexString(keyHex), keyData);
 	}
 
 	/// <summary>
-	/// RFC 3394 §2.2.2: the integrity check register comparison is the sole integrity mechanism of the
+	/// RFC 3394 section 2.2.2: the integrity check register comparison is the sole integrity mechanism of the
 	/// construction, so flipping ANY single byte of the wrapped key must make unwrapping fail -
 	/// every byte position is exercised, not a sample.
 	/// </summary>
@@ -113,7 +128,7 @@ public class AesKeyWrapTests
 			tampered[position] ^= 0x01;
 
 			Assert.False(
-				AesKeyWrap.TryUnwrap(keyEncryptionKey, tampered, out var keyData),
+				TryUnwrap(keyEncryptionKey, tampered, out var keyData),
 				$"Unwrap must fail when byte {position} is tampered");
 			Assert.Null(keyData);
 		}
@@ -125,7 +140,7 @@ public class AesKeyWrapTests
 		var wrongKeyEncryptionKey = Convert.FromHexString("0F0E0D0C0B0A09080706050403020100");
 		var wrapped = Convert.FromHexString("1FA68B0A8112B447AEF34BD8FB5A7B829D3E862371D2CFE5");
 
-		Assert.False(AesKeyWrap.TryUnwrap(wrongKeyEncryptionKey, wrapped, out var keyData));
+		Assert.False(TryUnwrap(wrongKeyEncryptionKey, wrapped, out var keyData));
 		Assert.Null(keyData);
 	}
 
@@ -138,7 +153,7 @@ public class AesKeyWrapTests
 	{
 		var keyEncryptionKey = Convert.FromHexString(KeyEncryptionKey128Hex);
 
-		Assert.False(AesKeyWrap.TryUnwrap(keyEncryptionKey, new byte[length], out var keyData));
+		Assert.False(TryUnwrap(keyEncryptionKey, new byte[length], out var keyData));
 		Assert.Null(keyData);
 	}
 
@@ -150,7 +165,7 @@ public class AesKeyWrapTests
 	{
 		var keyEncryptionKey = Convert.FromHexString(KeyEncryptionKey128Hex);
 
-		Assert.Throws<ArgumentException>(() => AesKeyWrap.Wrap(keyEncryptionKey, new byte[length]));
+		Assert.Throws<ArgumentException>(() => Wrap(keyEncryptionKey, new byte[length]));
 	}
 
 	/// <summary>
@@ -204,6 +219,7 @@ public class AesKeyWrapTests
 		var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
 		var result = await validator.ValidateAsync(jwe, new ValidationParameters
 		{
+			TokenTypes = TokenTypePolicy.CheckedByCaller,
 			ValidateAudience = aud => Task.FromResult(aud.Contains("test-audience")),
 			ValidateIssuer = iss => Task.FromResult(iss == "test-issuer"),
 			ResolveTokenDecryptionKeys = _ => keyEncryptionKey.ToAsync(),

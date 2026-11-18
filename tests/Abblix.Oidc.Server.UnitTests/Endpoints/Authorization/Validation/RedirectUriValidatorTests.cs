@@ -80,7 +80,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, redirectUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -101,7 +101,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -123,7 +123,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(null, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -146,7 +146,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri1, registeredUri2);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -167,7 +167,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -188,7 +188,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -209,7 +209,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -230,7 +230,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -238,23 +238,22 @@ public class RedirectUriValidatorTests
     }
 
     /// <summary>
-    /// Verifies that ValidateAsync accepts URIs with different fragments.
-    /// Per RFC 6749 Section 3.1.2, fragment component is NOT included in redirect_uri.
-    /// Fragments are client-side only and not sent to server, so they're ignored in validation.
+    /// RFC 6749 section 3.1.2: "The endpoint URI MUST NOT include a fragment component." A redirect URI carrying a
+    /// fragment is refused, whether the registered URI carries none or another one, and so is one carrying user
+    /// information the registered URI lacks.
     /// </summary>
-    [Fact]
-    public async Task ValidateAsync_WithDifferentFragment_ShouldSucceed()
+    [Theory]
+    [InlineData("https://client.example.com/callback", "https://client.example.com/callback#section2")]
+    [InlineData("https://client.example.com/callback#section1", "https://client.example.com/callback#section2")]
+    [InlineData("https://client.example.com/callback", "https://user@client.example.com/callback")]
+    public async Task ValidateAsync_WithFragmentOrUserInfo_ShouldReturnError(string registered, string requested)
     {
-        // Arrange
-        var registeredUri = new Uri("https://client.example.com/callback#section1");
-        var redirectUri = new Uri("https://client.example.com/callback#section2");
-        var context = CreateContext(redirectUri, registeredUri);
+        var context = CreateContext(new Uri(requested), new Uri(registered));
 
-        // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
-        // Assert
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
     }
 
     /// <summary>
@@ -271,7 +270,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -292,7 +291,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -312,7 +311,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -333,7 +332,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -354,7 +353,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -375,7 +374,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -396,7 +395,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -405,7 +404,7 @@ public class RedirectUriValidatorTests
 
     /// <summary>
     /// Verifies that ValidateAsync accepts localhost redirect URI.
-    /// Per RFC 8252 Section 7.3, native apps use localhost with dynamic port.
+    /// RFC 8252 section 8.3 calls localhost NOT RECOMMENDED for native apps, so it keeps an exact match, port included.
     /// Tests support for native application redirect URIs.
     /// </summary>
     [Fact]
@@ -417,7 +416,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -438,7 +437,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -458,7 +457,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -479,7 +478,7 @@ public class RedirectUriValidatorTests
         Assert.Null(context.ValidRedirectUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -501,7 +500,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -522,14 +521,14 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         _logger.Verify(
             x => x.Log(
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("invalid")),
+                It.Is<It.IsAnyType>((v, t) => v!.ToString()!.Contains("invalid")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -549,7 +548,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -569,7 +568,7 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -589,10 +588,77 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// A desktop app takes a free port from the operating system at sign-in, so the port it sends differs from the
+    /// one it registered. RFC 8252 section 7.3 requires any port to be allowed for a loopback IP redirect URI, and
+    /// section 8.4 keeps every other component an exact match.
+    /// </summary>
+    [Theory]
+    [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.1:51005/oauth2redirect")]
+    [InlineData("http://[::1]:61023/oauth2redirect", "http://[::1]:61024/oauth2redirect")]
+    [InlineData("http://127.0.0.1/oauth2redirect", "http://127.0.0.1:51005/oauth2redirect")]
+    public async Task ValidateAsync_LoopbackIpWithAnotherPort_ShouldSucceed(string registered, string requested)
+    {
+        var redirectUri = new Uri(requested);
+        var context = CreateContext(redirectUri, new Uri(registered));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal(redirectUri, context.ValidRedirectUri);
+    }
+
+    /// <summary>
+    /// A client registering several redirect URIs keeps the loopback rule for the loopback one among them, which is
+    /// how an app binding either IPv4 or IPv6 registers both literals (RFC 8252 section 7.3).
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_LoopbackIpAmongSeveralRegistered_AcceptsAnotherPort()
+    {
+        var redirectUri = new Uri("http://[::1]:61024/oauth2redirect");
+        var context = CreateContext(
+            redirectUri,
+            new Uri(RegisteredUri),
+            new Uri("http://127.0.0.1:51004/oauth2redirect"),
+            new Uri("http://[::1]:61023/oauth2redirect"));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Null(result);
+        Assert.Equal(redirectUri, context.ValidRedirectUri);
+    }
+
+    /// <summary>
+    /// Only the port of a loopback IP redirect URI is free (RFC 8252 section 8.4). A different path, host, scheme or
+    /// query is still refused, as is a URI carrying user information or a fragment, and so is another port on <c>localhost</c>, on a loopback address other than
+    /// <c>127.0.0.1</c> or on an <c>https</c> loopback URI, none of which section 7.3 covers.
+    /// </summary>
+    [Theory]
+    [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.1:51005/other")]
+    [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.2:51005/oauth2redirect")]
+    [InlineData("http://127.0.0.1:51004/oauth2redirect", "https://127.0.0.1:51005/oauth2redirect")]
+    [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.1:51005/oauth2redirect?next=1")]
+    [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://[::1]:51005/oauth2redirect")]
+    [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://user@127.0.0.1:51005/oauth2redirect")]
+    [InlineData("http://127.0.0.1:51004/oauth2redirect", "http://127.0.0.1:51005/oauth2redirect#done")]
+    [InlineData("http://localhost:51004/oauth2redirect", "http://localhost:51005/oauth2redirect")]
+    [InlineData("http://127.0.0.2:51004/oauth2redirect", "http://127.0.0.2:51005/oauth2redirect")]
+    [InlineData("https://127.0.0.1:51004/oauth2redirect", "https://127.0.0.1:51005/oauth2redirect")]
+    public async Task ValidateAsync_LoopbackWithAnotherComponent_ShouldReturnError(string registered, string requested)
+    {
+        var context = CreateContext(new Uri(requested), new Uri(registered));
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Null(context.ValidRedirectUri);
     }
 
     /// <summary>
@@ -609,9 +675,48 @@ public class RedirectUriValidatorTests
         var context = CreateContext(redirectUri, registeredUri);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 1 section 5.2.2, taken in by Part 2 section 5.2.2: the server "shall require the value of
+    /// redirect_uri to exactly match one of the pre-registered redirect URIs" and "shall require redirect URIs to use
+    /// the https scheme". For a client held to FAPI 1.0 Advanced a loopback redirect URI on another port, which RFC 8252
+    /// section 7.3 otherwise admits, is refused, and so is an http one even where registered; the exact https URI
+    /// passes, and a client held to no profile keeps the loopback allowance.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "http://127.0.0.1:8080/cb", "http://127.0.0.1:8080/cb", false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "https://127.0.0.1:8443/cb", "https://127.0.0.1:9443/cb", false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, "https://127.0.0.1:8443/cb", "https://127.0.0.1:8443/cb", true)]
+    [InlineData(null, "http://127.0.0.1:8080/cb", "http://127.0.0.1:9090/cb", true)]
+    public async Task ValidateAsync_Fapi1Advanced_RequiresAnExactHttpsRedirectUri(
+        ClientSecurityProfile? profile, string registered, string requested, bool accepted)
+    {
+        var context = CreateContext(new Uri(requested), new Uri(registered));
+        context.ClientInfo.SecurityProfile = profile;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(accepted, result == null);
+    }
+
+    /// <summary>
+    /// A request object binds its redirect_uri without the model validation that keeps a relative one out of a plain
+    /// request, so a relative redirect_uri from a client held to FAPI 1.0 Advanced is refused like any other that
+    /// matches nothing, rather than failing on its scheme.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi1Advanced_ARelativeRedirectUri_IsRefused()
+    {
+        var context = CreateContext(new Uri("callback", UriKind.Relative), new Uri(RegisteredUri));
+        context.ClientInfo.SecurityProfile = ClientSecurityProfile.Fapi1Advanced;
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidRequest, result?.Error);
     }
 }

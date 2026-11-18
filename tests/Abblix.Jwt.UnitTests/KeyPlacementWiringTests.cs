@@ -36,7 +36,9 @@ public class KeyPlacementWiringTests
     private static IServiceCollection WithCustodian()
     {
         var services = new ServiceCollection();
-        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        var custodian = new Mock<IKeyCustodian>(MockBehavior.Loose);
+        custodian.Setup(c => c.ServesKeyManagement(It.IsAny<string>())).Returns(true);
+        services.AddSingleton(custodian.Object);
         return services;
     }
 
@@ -53,7 +55,7 @@ public class KeyPlacementWiringTests
     }
 
     [Fact]
-    public void StartupValidationPasses_WhenAJwtOnlyHostChoosesAPlacement()
+    public async Task StartupValidationPasses_WhenAJwtOnlyHostChoosesAPlacement()
     {
         var services = WithCustodian();
         services.AddJsonWebTokens();
@@ -61,11 +63,12 @@ public class KeyPlacementWiringTests
 
         using var provider = services.BuildServiceProvider();
 
-        provider.GetRequiredService<IStartupValidator>().Validate();
+        await provider.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
-    public void StartupValidationFails_WhenNoPlacementIsChosen()
+    public async Task StartupValidationFails_WhenNoPlacementIsChosen()
     {
         var services = WithCustodian();
         services.AddJsonWebTokens();
@@ -73,8 +76,9 @@ public class KeyPlacementWiringTests
 
         using var provider = services.BuildServiceProvider();
 
-        var error = Assert.Throws<OptionsValidationException>(
-            provider.GetRequiredService<IStartupValidator>().Validate);
+        var error = await Assert.ThrowsAsync<OptionsValidationException>(
+            () => provider.GetRequiredService<IAsyncStartupValidator>()
+                .ValidateAsync(TestContext.Current.CancellationToken));
 
         // The message must name a call the host can actually write. Asserting a substring of a message is only
         // worth anything when the substring is the method name, which the compiler then keeps honest.
@@ -86,7 +90,7 @@ public class KeyPlacementWiringTests
     [Theory]
     [InlineData(KeyPlacement.Custodian)]
     [InlineData(KeyPlacement.InProcess)]
-    public void EachPlacementIsRecorded_AndSatisfiesTheGuard(KeyPlacement placement)
+    public async Task EachPlacementIsRecorded_AndSatisfiesTheGuard(KeyPlacement placement)
     {
         var services = WithCustodian();
         services.AddJsonWebTokens();
@@ -108,7 +112,8 @@ public class KeyPlacementWiringTests
             provider.GetRequiredService<IOptions<KeyPlacementChoice>>().Value.ChosenPlacement);
 
         // And the positive branch of every startup validator both placements arm, which a refusal test cannot reach.
-        provider.GetRequiredService<IStartupValidator>().Validate();
+        await provider.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -227,7 +232,9 @@ public class KeyPlacementWiringTests
     public void ALocalBackendJoinsAFamilyTheHostComposedItself()
     {
         var services = new ServiceCollection();
-        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        var custodian = new Mock<IKeyCustodian>(MockBehavior.Loose);
+        custodian.Setup(c => c.ServesKeyManagement(It.IsAny<string>())).Returns(true);
+        services.AddSingleton(custodian.Object);
 
         // A host may bring its own IDataSigner and compose the family under its own composite. The local backend
         // must still end up INSIDE that family: added beside it, it would win the singular resolve; skipped
@@ -247,7 +254,7 @@ public class KeyPlacementWiringTests
     }
 
     [Fact]
-    public void CustodianIsDiConstructed_WhenRegisteredByType()
+    public async Task CustodianIsDiConstructed_WhenRegisteredByType()
     {
         var services = new ServiceCollection();
         services.AddJsonWebTokens();
@@ -263,7 +270,8 @@ public class KeyPlacementWiringTests
         var custodian = Assert.IsType<DependentCustodian>(provider.GetRequiredService<IKeyCustodian>());
         Assert.Same(provider.GetRequiredService<TimeProvider>(), custodian.TimeProvider);
 
-        provider.GetRequiredService<IStartupValidator>().Validate();
+        await provider.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken);
     }
 
     [Theory]
@@ -292,19 +300,79 @@ public class KeyPlacementWiringTests
         Assert.Equal(SigningKeyName, provider.GetRequiredService<CustodianHeldKeys>().SigningKeyName);
     }
 
+    /// <summary>
+    /// A host whose keys are named per issuer chooses the placement without naming any: the choice is recorded and
+    /// no selection is left for a consumer to take as the one for every issuer.
+    /// </summary>
     [Fact]
-    public void MintingPlacementRefusesWithoutAStore_BecauseAnUnsharedRingFailsOnFirstUse()
+    public async Task ThePlacementChosenWithoutNames_LeavesNoSelection()
     {
         var services = WithCustodian();
         services.AddJsonWebTokens();
-        services.RequireKeyPlacement().UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "kek" });
+        services.RequireKeyPlacement().UseKeysInCustodian();
 
         using var provider = services.BuildServiceProvider();
 
-        var error = Assert.Throws<OptionsValidationException>(
-            provider.GetRequiredService<IStartupValidator>().Validate);
+        await provider.GetRequiredService<IAsyncStartupValidator>().ValidateAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(KeyPlacement.Custodian, provider.GetRequiredService<IOptions<KeyPlacementChoice>>().Value.ChosenPlacement);
+        Assert.Null(provider.GetService<CustodianHeldKeys>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MintingPlacementRefusesWithoutAStore_BecauseAnUnsharedRingFailsOnFirstUse(
+        bool validateOnBuild)
+    {
+        var services = WithCustodian();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        services.RequireKeyPlacement().UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "kek" });
+
+        // A host in Development validates the container as it is built, and the refusal still has to be ours
+        using var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateOnBuild = validateOnBuild });
+
+        var error = await Assert.ThrowsAsync<OptionsValidationException>(
+            () => provider.GetRequiredService<IAsyncStartupValidator>()
+                .ValidateAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains(nameof(IKeyRingStore), Assert.Single(error.Failures));
+    }
+
+    /// <summary>
+    /// A key ring registered by itself, with no placement call in front of it, is refused at startup without a
+    /// store just as the minting placement is, and starts with one.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task AKeyRingRegisteredByItself_IsRefusedAtStartup_OnlyWithoutAStore(
+        bool validateOnBuild,
+        bool withStore)
+    {
+        var services = WithCustodian();
+        services.AddLogging();
+        services.AddJsonWebTokens();
+        if (withStore)
+            services.AddSingleton(new Mock<IKeyRingStore>().Object);
+        services.AddKeyRing(new MintedKeys { KeyEncryptionKeyName = "kek" });
+
+        using var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateOnBuild = validateOnBuild });
+        var validation = provider.GetRequiredService<IAsyncStartupValidator>()
+            .ValidateAsync(TestContext.Current.CancellationToken);
+
+        if (withStore)
+        {
+            await validation;
+            return;
+        }
+
+        var error = await Assert.ThrowsAsync<OptionsValidationException>(() => validation);
+        Assert.Equal(typeof(KeyRingOptions), error.OptionsType);
     }
 
     /// <summary>
@@ -327,6 +395,8 @@ public class KeyPlacementWiringTests
 
     private class StubCustodian : IKeyCustodian
     {
+        public bool ServesKeyManagement(string algorithm) => true;
+
         public Task<byte[]> SignAsync(
             string keyId, string algorithm, byte[] data, CancellationToken cancellationToken)
             => throw new NotSupportedException();
@@ -339,7 +409,7 @@ public class KeyPlacementWiringTests
             CancellationToken cancellationToken)
             => throw new NotSupportedException();
 
-        public Task<byte[]> AgreeKeyAsync(
+        public Task<byte[]?> AgreeKeyAsync(
             string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
             => throw new NotSupportedException();
 

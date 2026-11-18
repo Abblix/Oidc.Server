@@ -8,32 +8,41 @@
 
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.Consents;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.RichAuthorizationRequests;
+using Abblix.Utils;
+using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
 /// <summary>
 /// Default <see cref="IConsentConstraintEnforcer"/>. Asserts <c>granted ⊆ requested</c> for scopes,
-/// resources (including their nested scopes) and RFC 9396 <c>authorization_details</c>, throwing
-/// when the consent provider returned anything outside the request.
+/// resources (including their nested scopes) and RFC 9396 <c>authorization_details</c> types, throwing
+/// when the consent provider returned one outside the request, and answers with access_denied when a
+/// per-type validator refuses a granted entry held to the requested ones.
 /// </summary>
+/// <param name="logger">Records a granted entry a per-type validator found wider than the request.</param>
 /// <param name="authorizationDetailsPolicy">Re-runs granted <c>authorization_details</c> through the
 /// per-type validators and per-client allowlist; the per-type validator owns the "is B a narrowing
-/// of A" decision for intra-entry content (RFC 9396 §6.1 has no universal comparator).</param>
-public class ConsentConstraintEnforcer(
+/// of A" decision for intra-entry content (RFC 9396 section 6.1 has no universal comparator).</param>
+public partial class ConsentConstraintEnforcer(
+    ILogger<ConsentConstraintEnforcer> logger,
     IAuthorizationDetailsPolicy authorizationDetailsPolicy) : IConsentConstraintEnforcer
 {
     /// <inheritdoc />
-    public async Task<JsonArray?> EnforceAsync(
+    public async Task<Result<JsonArray, OidcError>> EnforceAsync(
+        TenantDefinition tenant,
         ValidAuthorizationRequest request,
         ConsentDefinition granted,
         CancellationToken cancellationToken)
     {
         EnforceScopes(request, granted);
         EnforceResources(request, granted);
-        return await EnforceAuthorizationDetailsAsync(request, granted, cancellationToken);
+        return await EnforceAuthorizationDetailsAsync(tenant, request, granted, cancellationToken);
     }
 
     private static void EnforceScopes(ValidAuthorizationRequest request, ConsentDefinition granted)
@@ -81,13 +90,14 @@ public class ConsentConstraintEnforcer(
         }
     }
 
-    private async Task<JsonArray?> EnforceAuthorizationDetailsAsync(
+    private async Task<Result<JsonArray, OidcError>> EnforceAuthorizationDetailsAsync(
+        TenantDefinition tenant,
         ValidAuthorizationRequest request,
         ConsentDefinition granted,
         CancellationToken cancellationToken)
     {
         if (granted.AuthorizationDetails is not { Count: > 0 } grantedAuthorizationDetails)
-            return null;
+            return new JsonArray();
 
         // Type-level subset: every granted entry's type must appear among the requested types. The
         // per-client allowlist (re-checked below) is not enough on its own - a client allowed types
@@ -97,44 +107,36 @@ public class ConsentConstraintEnforcer(
         var grantedTypes = RefuseTypesOutside(
             requestedTypes, grantedAuthorizationDetails, nameof(IUserConsentsProvider));
 
-        // Intra-entry narrowing: RFC 9396 §6.1 defines no universal comparator for "is B a narrowing of
+        // Intra-entry narrowing: RFC 9396 section 6.1 defines no universal comparator for "is B a narrowing of
         // A" (an amount, a locations list within one entry), so re-run the granted entries through
-        // the per-type validators and per-client allowlist and let the per-type validator own that
-        // decision. A rejection means a granted entry's content escalated beyond what the validator
-        // permits for this client.
+        // the per-type validators, handed the requested entries of their type, and let each own that
+        // decision. The types are known and requested by now, so a rejection is the validator finding a
+        // granted entry wider than what was asked: with both in hand, most likely an edited consent form,
+        // which the client is told as a denial rather than the end user shown a server error.
         var revalidation = await authorizationDetailsPolicy.ApplyGrantedAsync(
-            grantedAuthorizationDetails, request.ClientInfo, cancellationToken);
+            tenant,
+            grantedAuthorizationDetails, request.AuthorizationDetails, request.ClientInfo, cancellationToken);
 
         if (!revalidation.TryGetSuccess(out var revalidated))
         {
-            throw new InvalidOperationException(
-                "The IUserConsentsProvider granted authorization_details that fail per-type re-validation, " +
-                "so the granted set is not a valid narrowing of the request " +
-                "(the consent provider violated the granted ⊆ requested contract): " +
-                revalidation.GetFailure().ErrorDescription);
+            LogGrantedAuthorizationDetailsRefused(
+                request.ClientInfo.ClientId, revalidation.GetFailure().ErrorDescription);
+
+            return new OidcError(
+                ErrorCodes.AccessDenied,
+                "The granted authorization_details were refused");
         }
 
-        // Nothing at all means nothing to change, which is how the request-time, CIBA and device
-        // validators read the same result, so the granted array stands as it was - but it is re-checked
-        // all the same. A validator that narrows by editing the entry IN PLACE, which is what every
-        // narrowing fixture in this repository does, has already written into this array by the time it
-        // answers, and the types read before the call are the only untouched copy of what was granted.
-        if (revalidated is null)
-        {
-            RefuseTypesOutside(grantedTypes, grantedAuthorizationDetails, nameof(IAuthorizationDetailsPolicy));
-            return grantedAuthorizationDetails;
-        }
-
-        // An EMPTY array is a different statement, and this request has already decided what it means:
-        // a consent decision granting no entries against a request that carried some answers
-        // access_denied, one step before this call. Reaching here with one says the validators removed
-        // every entry, so returning the granted set would put back exactly what they removed.
+        // The call above is guarded on a non-empty granted set, and this request has already decided
+        // what an empty answer means: a consent decision granting no entries against a request that
+        // carried some answers access_denied, one step before this call. So reaching here with one says
+        // the validators removed every entry, and returning the granted set would put back exactly what
+        // they removed.
         if (revalidated.Count == 0)
         {
             throw new InvalidOperationException(
-                "The per-type re-validation of the granted authorization_details returned an empty set. " +
-                "A policy signals 'nothing to change' by returning null; an empty array says every entry " +
-                "was removed, and there is no set left to issue a grant for.");
+                "The per-type re-validation of the granted authorization_details returned an empty set, " +
+                "so every entry was removed and there is no set left to issue a grant for.");
         }
 
         // What comes back is the decision, not a copy of what went in: a validator narrowing an entry
@@ -149,7 +151,7 @@ public class ConsentConstraintEnforcer(
         RefuseTypesOutside(grantedTypes, revalidated, nameof(IAuthorizationDetailsPolicy));
         return revalidated;
 
-        HashSet<string> RefuseTypesOutside(HashSet<string> allowed, JsonArray details, string culprit)
+        static HashSet<string> RefuseTypesOutside(HashSet<string> allowed, JsonArray details, string culprit)
         {
             // ToTypedArray drops whatever is not a JSON object, so a shorter result means an entry this
             // guard cannot read - and "no escaped types" would then describe what it managed to look at
@@ -157,7 +159,7 @@ public class ConsentConstraintEnforcer(
             if (details.ToTypedArray() is not { } typed || typed.Length != details.Count)
                 throw Violation(culprit, "authorization_details entries", ["an entry that is not a JSON object"]);
 
-            // A missing type is refused on its own, never folded into a stand-in string. RFC 9396 §2 makes
+            // A missing type is refused on its own, never folded into a stand-in string. RFC 9396 section 2 makes
             // type REQUIRED, and a stand-in would be a value a client can request: naming it as its own
             // type would then admit every entry that has none.
             if (Array.Exists(typed, detail => detail.Type is null))

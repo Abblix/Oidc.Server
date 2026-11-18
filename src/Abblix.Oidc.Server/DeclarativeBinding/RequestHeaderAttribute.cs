@@ -10,7 +10,7 @@ namespace Abblix.Oidc.Server.DeclarativeBinding;
 
 /// <summary>
 /// Declares that the value arrives in the named HTTP request header rather than in the request
-/// payload - e.g. the compact DPoP proof JWT carried in the <c>DPoP</c> header per RFC 9449 §4.1.
+/// payload - e.g. the compact DPoP proof JWT carried in the <c>DPoP</c> header per RFC 9449 section 4.1.
 /// Purely semantic: it names the transport source and leaves the extraction mechanism to the
 /// transport layer.
 /// </summary>

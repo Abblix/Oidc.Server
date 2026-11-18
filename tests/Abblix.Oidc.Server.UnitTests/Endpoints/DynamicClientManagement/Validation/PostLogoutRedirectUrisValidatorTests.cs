@@ -8,6 +8,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
@@ -51,7 +52,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -70,7 +71,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -89,11 +90,11 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("fragment", result.ErrorDescription);
         Assert.Contains("post_logout_redirect_uris", result.ErrorDescription);
     }
@@ -111,11 +112,11 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("secure", result.ErrorDescription);
         Assert.Contains("https", result.ErrorDescription);
     }
@@ -133,11 +134,11 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("localhost", result.ErrorDescription);
     }
 
@@ -154,11 +155,11 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -174,7 +175,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -193,10 +194,81 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
+    }
+
+    /// <summary>
+    /// A native client's <c>http</c> post-logout redirect URI is held to the hosts OpenID Connect Dynamic Client
+    /// Registration 1.0 section 2 names for its redirect URIs: <c>localhost</c>, <c>127.0.0.1</c> and <c>[::1]</c>.
+    /// Another address of the loopback range is refused.
+    /// </summary>
+    [Theory]
+    [InlineData("http://localhost/logout", true)]
+    [InlineData("http://127.0.0.1:8080/logout", true)]
+    [InlineData("http://[::1]/logout", true)]
+    [InlineData("http://127.0.0.2/logout", false)]
+    [InlineData("http://127.255.255.254/logout", false)]
+    [InlineData("http://[::ffff:127.0.0.1]/logout", false)]
+    public async Task ValidateAsync_NativeClientHttpHost_AcceptsOnlyNamedLoopbackHosts(string uri, bool accepted)
+    {
+        var context = CreateContext(
+            postLogoutRedirectUris: [new Uri(uri)],
+            applicationType: ApplicationTypes.Native);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(accepted, result == null);
+        if (!accepted)
+        {
+            Assert.Equal(ErrorCodes.InvalidClientMetadata, result!.Error);
+            Assert.Contains("localhost", result.ErrorDescription);
+            Assert.Contains("127.0.0.1", result.ErrorDescription);
+            Assert.Contains("[::1]", result.ErrorDescription);
+        }
+    }
+
+    /// <summary>
+    /// A web client keeps refusing every loopback host, not only the ones a native client may use, however the name is
+    /// spelled: a trailing dot, full-width letters or an ideographic full stop name the same host once normalized.
+    /// </summary>
+    [Theory]
+    [InlineData("https://127.0.0.2/logout")]
+    [InlineData("https://localhost./logout")]
+    [InlineData("https://LOCALHOST./logout")]
+    [InlineData("https://127.0.0.1./logout")]
+    [InlineData("https://ｌｏｃａｌｈｏｓｔ/logout")]
+    [InlineData("https://localhost。/logout")]
+    [InlineData("https://１２７.０.０.１/logout")]
+    [InlineData("https://127.0.0.2./logout")]
+    [InlineData("https://[::ffff:127.0.0.2]/logout")]
+    public async Task ValidateAsync_WebClientWithLoopbackHost_ShouldReturnError(string uri)
+        => await AssertWebClientPostLogoutUri(uri, accepted: false);
+
+    /// <summary>
+    /// A name that only resembles a loopback host is an ordinary host for a web client.
+    /// </summary>
+    [Theory]
+    [InlineData("https://example.com./logout")]
+    [InlineData("https://foo.localhost./logout")]
+    [InlineData("https://127.0.0.1.example.com/logout")]
+    [InlineData("https://[::ffff:8.8.8.8]/logout")]
+    public async Task ValidateAsync_WebClientWithNameResemblingLoopback_ShouldReturnNull(string uri)
+        => await AssertWebClientPostLogoutUri(uri, accepted: true);
+
+    private async Task AssertWebClientPostLogoutUri(string uri, bool accepted)
+    {
+        var context = CreateContext(
+            postLogoutRedirectUris: [new Uri(uri)],
+            applicationType: ApplicationTypes.Web);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(accepted, result == null);
+        if (!accepted)
+            Assert.Equal(ErrorCodes.InvalidClientMetadata, result!.Error);
     }
 
     /// <summary>
@@ -212,11 +284,11 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("localhost", result.ErrorDescription);
     }
 
@@ -233,12 +305,28 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRedirectUri, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("custom URI schemes", result.ErrorDescription);
+    }
+
+    /// <summary>
+    /// An application type the server does not know comes from the request body, so it is refused rather than
+    /// thrown on, also for a client that registers no redirect URI and so never meets that validator's refusal.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_UnknownApplicationType_IsInvalidClientMetadata()
+    {
+        var context = CreateContext(
+            postLogoutRedirectUris: [new Uri("https://example.com/logout")],
+            applicationType: "service");
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
+
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, Assert.IsType<OidcError>(result).Error);
     }
 
     /// <summary>
@@ -254,7 +342,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -278,7 +366,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -302,7 +390,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -322,7 +410,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -341,7 +429,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -360,7 +448,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Web);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -379,7 +467,7 @@ public class PostLogoutRedirectUrisValidatorTests
             applicationType: ApplicationTypes.Native);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);

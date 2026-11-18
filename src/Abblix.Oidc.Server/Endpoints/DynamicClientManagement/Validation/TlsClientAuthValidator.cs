@@ -10,6 +10,7 @@ using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
@@ -24,18 +25,19 @@ public class TlsClientAuthValidator : SyncClientRegistrationContextValidator
     /// Validates the client registration context for tls_client_auth method.
     /// Ensures at least one identification field is provided and all fields are properly formatted.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The client registration validation context containing the request to validate.</param>
     /// <returns>
     /// An <see cref="OidcError"/> if validation fails, or null if the request is valid or not using tls_client_auth.
     /// </returns>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var request = context.Request;
 
         if (!IsTlsClientAuth(request))
             return null;
 
-        // RFC 8705 §2.1.2: a tls_client_auth client registers EXACTLY ONE subject identifier.
+        // RFC 8705 section 2.1.2: a tls_client_auth client registers EXACTLY ONE subject identifier.
         switch (CountSubjectIdentifiers(request))
         {
             case 0:
@@ -47,7 +49,7 @@ public class TlsClientAuthValidator : SyncClientRegistrationContextValidator
             case > 1:
                 return ErrorFactory.InvalidClientMetadata(
                     "When using tls_client_auth, exactly one subject identifier may be specified " +
-                    "(RFC 8705 §2.1.2): choose a single one of tls_client_auth_subject_dn, " +
+                    "(RFC 8705 section 2.1.2): choose a single one of tls_client_auth_subject_dn, " +
                     "tls_client_auth_san_dns, tls_client_auth_san_uri, tls_client_auth_san_ip, or " +
                     "tls_client_auth_san_email");
         }
@@ -68,7 +70,7 @@ public class TlsClientAuthValidator : SyncClientRegistrationContextValidator
         request.TokenEndpointAuthMethod == ClientAuthenticationMethods.TlsClientAuth;
 
     /// <summary>
-    /// Counts how many of the five RFC 8705 §2.1.2 subject-identifier metadata parameters are
+    /// Counts how many of the five RFC 8705 section 2.1.2 subject-identifier metadata parameters are
     /// present. A SAN array with several entries still counts as a single parameter - the spec
     /// constrains which parameter is registered, not how many values it carries.
     /// </summary>

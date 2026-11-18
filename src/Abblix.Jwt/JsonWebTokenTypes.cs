@@ -48,7 +48,7 @@ public static class JsonWebTokenTypes
 	// generic JWT that the JWT library writes. What a vendor value does instead is break at a version
 	// boundary - an ID token issued before a rename is refused after it, which is how RP-initiated logout
 	// stopped working across two servers of different builds. Every kind this class names is listed
-	// in Known below, and an ID token is recognised by not being one of them.
+	// in Known below, and an ID token is recognized by not being one of them.
 
 	/// <summary>
 	/// The "LogoutToken" JWT type is used in the context of OpenID Connect for single logout functionality.
@@ -56,25 +56,25 @@ public static class JsonWebTokenTypes
 	/// <remarks>
 	/// FIXED BY SPECIFICATION - MUST NOT be changed. Registered with IANA as <c>application/logout+jwt</c> by
 	/// the OpenID Foundation and required by OpenID Connect Back-Channel Logout, which the relying parties we
-	/// notify implement. A different value would leave every one of them unable to recognise the token.
+	/// notify implement. A different value would leave every one of them unable to recognize the token.
 	/// </remarks>
 	public const string LogoutToken = "logout+jwt";
 
 	/// <summary>
-	/// The "DPoP proof" JWT type per RFC 9449 §4.2. The <c>typ</c> header MUST equal this
+	/// The "DPoP proof" JWT type per RFC 9449 section 4.2. The <c>typ</c> header MUST equal this
 	/// value so a relying party that trusts the same client across multiple JWT types
 	/// (id_token, request_object, DPoP proof) cannot have one type replayed as another
-	/// per the RFC 8725 §3.11 token-type confusion guidance.
+	/// per the RFC 8725 section 3.11 token-type confusion guidance.
 	/// </summary>
 	public const string DPoPProof = "dpop+jwt";
 
 	/// <summary>
-	/// The "token introspection response" JWT type per RFC 9701 §5. The <c>typ</c> header equals this value so a
-	/// signed introspection response cannot be replayed as a different JWT type (RFC 8725 §3.11).
+	/// The "token introspection response" JWT type per RFC 9701 section 5. The <c>typ</c> header equals this value so a
+	/// signed introspection response cannot be replayed as a different JWT type (RFC 8725 section 3.11).
 	/// </summary>
 	public const string TokenIntrospection = "token-introspection+jwt";
 
-	/// <summary>A JWT used to authenticate a client, per RFC 7523bis (approved, awaiting its number).</summary>
+	/// <summary>A JWT used to authenticate a client, per RFC 10070 section 4.</summary>
 	public const string ClientAuthentication = "client-authentication+jwt";
 
 	/// <summary>An OAuth 2.0 request object, per RFC 9101.</summary>
@@ -177,9 +177,9 @@ public static class JsonWebTokenTypes
 	/// </returns>
 	/// <remarks>
 	/// This enumerates what to refuse rather than what to accept, which is the opposite of the usual
-	/// preference, and the reason is that the accepting side cannot be enumerated. RFC 7523bis allows a client
-	/// authentication JWT to be typed "client-authentication+jwt or another more specific explicit type value
-	/// defined by a specification profiling this specification", and RFC 9101 Section 4 observes of the request
+	/// preference, and the reason is that the accepting side cannot be enumerated. RFC 10070 section 4 allows a
+	/// client authentication JWT to be typed "client-authentication+jwt" or "another more specific explicit type
+	/// value defined by a specification profiling this specification", and RFC 9101 Section 4 observes of the request
 	/// object that "some existing deployments may alternatively be using the type application/jwt". An allow
 	/// list would refuse conformant senders on both counts, so an absent, generic or unfamiliar value passes
 	/// untouched and a sender that never heard of explicit typing is unaffected.

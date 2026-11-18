@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Microsoft.Extensions.Options;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -39,11 +40,13 @@ public class ExternalKeysWiringTests
     private static IServiceCollection AnOidcHost()
     {
         var services = new ServiceCollection();
-        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        services.AddSingleton(Mock.Of<IKeyCustodian>(c => c.ServesKeyManagement(It.IsAny<string>())));
         services.AddLogging();
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(SingleIssuer.Catalog);
         services.AddJsonWebTokens();
+        services.AddSingleton(SingleIssuer.Accessor);
         services.AddAuthServiceJwt();
         return services;
     }
@@ -75,14 +78,17 @@ public class ExternalKeysWiringTests
     public void PlacementChosenBeforeTheServerRegistration_IsStillServed()
     {
         var services = new ServiceCollection();
-        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        services.AddLogging();
+        services.AddSingleton(Mock.Of<IKeyCustodian>(c => c.ServesKeyManagement(It.IsAny<string>())));
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(SingleIssuer.Catalog);
         services.AddJsonWebTokens();
 
         // The placement runs BEFORE the server's own registration. Reading the choice at resolve is what permits
         // that: nothing here has to be ordered against the placement call.
         services.RequireKeyPlacement().UseKeysInCustodian(Keys);
+        services.AddSingleton(SingleIssuer.Accessor);
         services.AddAuthServiceJwt();
 
         using var provider = services.BuildServiceProvider();
@@ -96,11 +102,13 @@ public class ExternalKeysWiringTests
         var chosen = Mock.Of<IAuthServiceKeysProvider>();
 
         var services = new ServiceCollection();
-        services.AddSingleton(new Mock<IKeyCustodian>(MockBehavior.Loose).Object);
+        services.AddSingleton(Mock.Of<IKeyCustodian>(c => c.ServesKeyManagement(It.IsAny<string>())));
         services.AddSingleton(chosen);
         services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(SingleIssuer.Catalog);
         services.AddJsonWebTokens();
+        services.AddSingleton(SingleIssuer.Accessor);
         services.AddAuthServiceJwt();
         services.RequireKeyPlacement().UseKeysInCustodian(Keys);
 
@@ -128,7 +136,9 @@ public class ExternalKeysWiringTests
         // Both roles, because both fail the same silent way: the host believes its private halves are in the
         // custodian and they are in a settings file, with nothing anywhere saying so.
         var error = await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await (signing ? keysProvider.GetSigningKeys() : keysProvider.GetEncryptionKeys())
+            async () => await (signing
+                    ? keysProvider.GetSigningKeys(SingleIssuer.Tenant)
+                    : keysProvider.GetEncryptionKeys(SingleIssuer.Tenant))
                 .ToListAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains(nameof(ExternalKeysServiceCollectionExtensions.UseKeysInCustodian), error.Message);
@@ -141,8 +151,9 @@ public class ExternalKeysWiringTests
 
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddOptions<OidcOptions>().Configure(options => options.SigningKeys = [signingKey]);
+        services.AddOptions<OidcOptions>();
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(SingleIssuer.Catalog);
         services.AddJsonWebTokens();
         services.AddAuthServiceJwt();
 
@@ -151,7 +162,31 @@ public class ExternalKeysWiringTests
 
         // The refusal is about a HALF-wired custodian, so a host that wired none must be unaffected
         // by it and simply served the keys it configured.
-        var served = await keysProvider.GetSigningKeys().ToListAsync(TestContext.Current.CancellationToken);
+        var served = await keysProvider.GetSigningKeys(new TestIssuer { SigningKeys = [signingKey] }.ToTenant())
+            .ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(signingKey.KeyId, Assert.Single(served).KeyId);
+    }
+
+    /// <summary>
+    /// The published key set is cached for the server's propagation window, so a key the server mints waits that
+    /// same window before it signs; a window set on the key ring alone would let a client with a warm cache meet a
+    /// key it has not seen.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MintedKeysWaitTheWindowTheKeySetIsCachedFor(bool ringConfiguredByHost)
+    {
+        var window = TimeSpan.FromHours(24);
+        var services = AnOidcHost();
+        services.RequireKeyPlacement().UseKeysInProcess(new MintedKeys { KeyEncryptionKeyName = "oidc-kek" });
+        services.AddSingleton(new Mock<IKeyRingStore>(MockBehavior.Loose).Object);
+        services.Configure<OidcOptions>(options => options.KeyRolloverPropagation = window);
+        if (ringConfiguredByHost)
+            services.Configure<KeyRingOptions>(options => options.KeyRolloverPropagation = TimeSpan.FromMinutes(5));
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(window, provider.GetRequiredService<IOptions<KeyRingOptions>>().Value.KeyRolloverPropagation);
     }
 }

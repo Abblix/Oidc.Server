@@ -15,7 +15,6 @@ using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.Model;
 using Abblix.Oidc.Server.Model;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -24,8 +23,8 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// validation gate (<c>RefreshTokenGrantHandler</c> → <c>AuthServiceJwtValidator</c> → the real
 /// signer) before it ever touches the token store: a tampered refresh token is rejected with
 /// <c>invalid_grant</c> however it was mutated. Covers the RFC 8725 attack matrix on the refresh-token
-/// path - alg-stripping (§3.1), payload tampering (§2.1), signature corruption, and segment-count
-/// confusion (RFC 7515 §7.1) - which the handler's unit tests cannot exercise because they mock the
+/// path - alg-stripping (section 3.1), payload tampering (section 2.1), signature corruption, and segment-count
+/// confusion (RFC 7515 section 7.1) - which the handler's unit tests cannot exercise because they mock the
 /// validator. Each test obtains its own genuine refresh token and only ever submits a mutated copy, so
 /// the real token is never spent and no rotation/family state is disturbed.
 /// </summary>
@@ -107,7 +106,7 @@ public class RefreshTokenTamperingTests(TestFactory factory) : TestBase(factory)
         var client = CreateClient();
         var discovery = await FetchDiscoveryAsync(client);
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
         return (client, discovery, refreshToken);
     }
 
@@ -125,7 +124,7 @@ public class RefreshTokenTamperingTests(TestFactory factory) : TestBase(factory)
         var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = JsonNode.Parse(raw)!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidGrant, body[ResponseParameters.Error]!.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidGrant, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
     }
 
     private static string Base64UrlEncode(string value) =>

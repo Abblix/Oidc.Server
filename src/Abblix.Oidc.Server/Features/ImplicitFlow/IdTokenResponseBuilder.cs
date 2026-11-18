@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Tokens;
 
 namespace Abblix.Oidc.Server.Features.ImplicitFlow;
@@ -27,9 +28,10 @@ namespace Abblix.Oidc.Server.Features.ImplicitFlow;
 /// This builder is order-dependent: it reads <see cref="SuccessfullyAuthenticated.Code"/>
 /// and <see cref="SuccessfullyAuthenticated.AccessToken"/> populated by earlier builders to
 /// compute the <c>c_hash</c> and <c>at_hash</c> claims when those response components are
-/// present. The orchestrator iterates response-type parts in canonical order (<c>code</c> →
-/// <c>token</c> → <c>id_token</c>) so this dependency holds without explicit sequencing on
-/// the builder side.
+/// present, and <c>s_hash</c> from the result's <c>Model.State</c> - the value the response echoes, so the
+/// hash cannot cover a state other than the one sent.
+/// The authorization request processor runs the <c>id_token</c> builder after every other one,
+/// whatever order they were registered in, so this dependency holds without sequencing on the builder side.
 /// </remarks>
 public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
     : IAuthorizationResponseBuilder
@@ -44,7 +46,8 @@ public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
     }
 
     /// <inheritdoc />
-    public async Task BuildResponseAsync(
+    public async Task<AuthorizationError?> BuildResponseAsync(
+        TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result)
@@ -52,12 +55,31 @@ public class IdTokenResponseBuilder(IIdentityTokenService identityTokenService)
         var responseType = request.Model.ResponseType;
         var standalone = !responseType.HasFlag(ResponseTypes.Code) && !responseType.HasFlag(ResponseTypes.Token);
 
-        result.IdToken = await identityTokenService.CreateIdentityTokenAsync(
-            authorizedGrant.AuthSession,
-            authorizedGrant.Context,
-            request.ClientInfo,
-            standalone,
-            result.Code,
-            result.AccessToken?.EncodedJwt);
+        // A client with no key its registered encryption algorithm can encrypt to is refused by the formatter, which the
+        // authorization endpoint answers as the client's error rather than as a server one
+        var created = await identityTokenService.CreateIdentityTokenAsync(
+            tenant,
+            new IdentityTokenRequest(
+                authorizedGrant.AuthSession,
+                authorizedGrant.Context,
+                request.ClientInfo,
+                IncludeUserClaims: standalone,
+                result.Code,
+                result.AccessToken?.EncodedJwt,
+                result.Model.State));
+        if (created is { } issued && issued.TryGetFailure(out var refusal))
+        {
+            return new AuthorizationError(
+                request.Model,
+                // An authorization error response knows no invalid_client (RFC 6749 section 4.1.2.1); a key set the
+                // client cannot be issued to is unauthorized_client here, as ClientValidator answers it
+                ErrorCodes.UnauthorizedClient,
+                refusal.ErrorDescription,
+                request.ResponseMode,
+                request.Model.RedirectUri);
+        }
+
+        result.IdToken = created?.GetSuccess();
+        return null;
     }
 }

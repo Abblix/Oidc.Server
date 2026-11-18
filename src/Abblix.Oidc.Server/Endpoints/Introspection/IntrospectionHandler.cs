@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -29,6 +30,7 @@ public class IntrospectionHandler(
     /// Asynchronously handles an introspection request by validating the request and, if valid, processing it to
     /// return the state and metadata of the specified token.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="introspectionRequest">The introspection request containing the token to be introspected and
     /// other relevant parameters.</param>
     /// <param name="clientRequest">Supplementary information about the client making the request,
@@ -43,10 +45,11 @@ public class IntrospectionHandler(
     /// and attributes of tokens.
     /// </remarks>
     public async Task<Result<IntrospectionSuccess, OidcError>> HandleAsync(
+        TenantDefinition tenant,
         IntrospectionRequest introspectionRequest,
         ClientRequest clientRequest)
     {
-        var validationResult = await validator.ValidateAsync(introspectionRequest, clientRequest);
-        return await validationResult.BindAsync(processor.ProcessAsync);
+        var validationResult = await validator.ValidateAsync(tenant, introspectionRequest, clientRequest);
+        return await validationResult.BindAsync(request => processor.ProcessAsync(tenant, request));
     }
 }

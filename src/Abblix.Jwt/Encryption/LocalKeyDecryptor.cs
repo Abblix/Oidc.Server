@@ -36,7 +36,7 @@ internal sealed class LocalKeyDecryptor(IServiceProvider serviceProvider) : ICon
         // LocalKeyDecryptor owns only keys that carry their secret half (see CanDecrypt). When no custodian is
         // composed it is resolved as the sole decryptor, so it enforces its own ownership here too: a public-only
         // key with no custodian is a misconfiguration, not a decryption failure, so fail loud rather than silently
-        // reject every inbound token for it. The RFC 7516 §11.5 uniform-null stays for real decryption failures,
+        // reject every inbound token for it. The RFC 7516 section 11.5 uniform-null stays for real decryption failures,
         // which DecryptLocally returns.
         if (!key.HasPrivateKey)
             throw new InvalidOperationException(

@@ -12,7 +12,7 @@ using Xunit;
 namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
-/// Verifies how <see cref="JsonWebKeyExtensions.ToJsonWebKey"/> derives the JWK <c>use</c> from a certificate's
+/// Verifies how <see cref="CertificateJsonWebKeyExtensions.ToJsonWebKey"/> derives the JWK <c>use</c> from a certificate's
 /// Key Usage extension: one value for a single-purpose certificate, and no <c>use</c> (never a multi-valued
 /// string such as "sig enc") for one that permits both signing and encryption, per RFC 7517 &#167;4.2.
 /// </summary>
@@ -66,23 +66,21 @@ public class JsonWebKeyExtensionsTests
     /// <summary>
     /// A key declaring no algorithm is answerable, not unknown: RFC 7518 section 3.1 binds each signature
     /// algorithm to a key type and section 3.4 binds each ECDSA one to a single curve, so the material settles
-    /// what the declaration left open. This is the ordinary case for a certificate-imported key, which never
-    /// carries an <c>alg</c>.
+    /// what the declaration left open. This is the ordinary case for a key imported from an RSA certificate, which
+    /// never carries an <c>alg</c>.
     /// </summary>
     [Theory]
     [InlineData(SigningAlgorithms.RS256, true)]
     [InlineData(SigningAlgorithms.PS512, true)]
     [InlineData(SigningAlgorithms.ES256, false)]   // needs an EC key on P-256
     [InlineData(SigningAlgorithms.HS256, false)]   // needs a symmetric key
-    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, true)]
-    [InlineData(EncryptionAlgorithms.KeyManagement.EcdhEs, false)]
     [InlineData(SigningAlgorithms.None, false)]
     [InlineData("made-up", false)]
     public void RsaKey_SupportsExactlyTheAlgorithmsItsMaterialCanPerform(string algorithm, bool expected)
     {
-        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256);
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) with { Algorithm = null };
 
-        Assert.Equal(expected, key.SupportsAlgorithm(algorithm));
+        Assert.Equal(expected, RegisteredAlgorithms.Signing.CanSign(key, algorithm));
     }
 
     /// <summary>
@@ -96,11 +94,102 @@ public class JsonWebKeyExtensionsTests
     [InlineData(EllipticCurveTypes.P384, SigningAlgorithms.ES384, true)]
     [InlineData(EllipticCurveTypes.P521, SigningAlgorithms.ES512, true)]
     [InlineData(EllipticCurveTypes.P256, SigningAlgorithms.RS256, false)]
-    [InlineData(EllipticCurveTypes.P256, EncryptionAlgorithms.KeyManagement.EcdhEs, true)]
     public void EllipticCurveKey_IsJudgedByItsCurve(string curve, string algorithm, bool expected)
     {
-        var key = JsonWebKeyFactory.CreateEllipticCurve(curve, SigningAlgorithms.ES256);
+        var key = JsonWebKeyFactory.CreateEllipticCurve(curve, SigningAlgorithms.ES256) with { Algorithm = null };
 
-        Assert.Equal(expected, key.SupportsAlgorithm(algorithm));
+        Assert.Equal(expected, RegisteredAlgorithms.Signing.CanSign(key, algorithm));
+    }
+
+    /// <summary>
+    /// A key declaring an algorithm is used with that one alone (RFC 8725 section 3.1), and only where its material
+    /// performs it: a key declaring another algorithm is refused for this one, and a declaration its material cannot
+    /// honour, an EC key declaring an RSA algorithm, is refused for the declared one too.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256, SigningAlgorithms.RS256, true)]
+    [InlineData(SigningAlgorithms.RS384, SigningAlgorithms.RS256, false)]
+    public void RsaKeyDeclaringAnAlgorithm_IsUsedWithThatOneAlone(string declared, string algorithm, bool expected)
+    {
+        var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature) with { Algorithm = declared };
+
+        Assert.Equal(expected, RegisteredAlgorithms.Signing.CanSign(key, algorithm));
+    }
+
+    [Fact]
+    public void EllipticCurveKeyDeclaringAnRsaAlgorithm_IsRefusedForIt()
+    {
+        var key = JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256)
+            with { Algorithm = SigningAlgorithms.RS256 };
+
+        Assert.False(RegisteredAlgorithms.Signing.CanSign(key, SigningAlgorithms.RS256));
+    }
+
+    /// <summary>
+    /// RFC 7518 sections 3.3 and 3.5: "A key of size 2048 bits or larger MUST be used", so a shorter RSA key is not
+    /// chosen for an RSA signature, declared or not, rather than refused when the first token is signed.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.RS256)]
+    [InlineData(SigningAlgorithms.PS256)]
+    public void AnRsaKeyBelow2048Bits_IsNotChosen(string algorithm)
+    {
+        // The key factory refuses to create one this short, so its modulus is written out: 1024 bits, high bit set
+        var shortKey = new RsaJsonWebKey { Exponent = [1, 0, 1], Modulus = [0x80, .. new byte[127]] };
+        var floorKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, null, 2048);
+
+        Assert.False(RegisteredAlgorithms.Signing.CanSign(shortKey, algorithm));
+        Assert.False(RegisteredAlgorithms.Signing.CanSign(shortKey with { Algorithm = algorithm }, algorithm));
+        Assert.True(RegisteredAlgorithms.Signing.CanSign(floorKey, algorithm));
+    }
+
+    /// <summary>
+    /// RFC 7518 section 3.2: "A key of the same size as the hash output ... or larger MUST be used", so a symmetric key
+    /// is chosen for an HMAC algorithm only from that size; one whose bytes a custodian holds carries none here and is
+    /// left to the custodian.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.HS256, 31, false)]
+    [InlineData(SigningAlgorithms.HS256, 32, true)]
+    [InlineData(SigningAlgorithms.HS384, 32, false)]
+    [InlineData(SigningAlgorithms.HS512, 48, false)]
+    [InlineData(SigningAlgorithms.HS512, 64, true)]
+    public void AnHmacKey_IsChosenFromTheHashOutputSize(string algorithm, int keySize, bool expected)
+    {
+        var key = new OctetJsonWebKey { KeyValue = new byte[keySize] };
+
+        Assert.Equal(expected, RegisteredAlgorithms.Signing.CanSign(key, algorithm));
+    }
+
+    [Fact]
+    public void AnHmacKeyACustodianHolds_IsChosen()
+        => Assert.True(RegisteredAlgorithms.Signing.CanSign(new OctetJsonWebKey { KeyId = "held" }, SigningAlgorithms.HS512));
+
+    /// <summary>
+    /// Every signing algorithm this library recognizes, except "none", is registered and accepted by some key, so an
+    /// algorithm added to the catalog fails this test until its signer is registered for a key type.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(RecognizedAlgorithms))]
+    public void EveryRecognizedAlgorithm_IsMetBySomeKey(string algorithm)
+    {
+        JsonWebKey[] keys =
+        [
+            JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature),
+            JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P256, SigningAlgorithms.ES256),
+            JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P384, SigningAlgorithms.ES384),
+            JsonWebKeyFactory.CreateEllipticCurve(EllipticCurveTypes.P521, SigningAlgorithms.ES512),
+            JsonWebKeyFactory.CreateHmac(SigningAlgorithms.HS512),
+        ];
+
+        Assert.Contains(keys, key => RegisteredAlgorithms.Signing.CanSign(key with { Algorithm = null }, algorithm));
+    }
+
+    public static TheoryData<string> RecognizedAlgorithms
+    {
+        get
+        {
+            return new TheoryData<string>(SigningAlgorithms.Known.Where(algorithm => algorithm != SigningAlgorithms.None));
+        }
     }
 }

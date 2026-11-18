@@ -28,7 +28,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Abblix.Jwt;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -50,7 +49,6 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
 {
     private const string PairwiseClientId = "e2e-pairwise";
     private const string RealSubject = "e2e-subject";
-    private const string AccessTokenType = "urn:ietf:params:oauth:token-type:access_token";
 
     [Fact]
     public async Task PairwiseClient_AccessMatchesIdToken_HidesRealSubject_AndUserInfoRecoversUser()
@@ -60,10 +58,10 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainPairwiseTokensAsync(client, discovery, Scopes.OpenId);
-        var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         var accessSub = DecodeJwtPayload(accessToken)[IanaClaimTypes.Sub]!.GetValue<string>();
-        var idSub = DecodeJwtPayload(tokens[ResponseParameters.IdToken]!.GetValue<string>())[IanaClaimTypes.Sub]!.GetValue<string>();
+        var idSub = DecodeJwtPayload(tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>())[IanaClaimTypes.Sub]!.GetValue<string>();
 
         // RFC 9068 Section 2.2: the access token's sub matches the id_token's sub. Both carry the pairwise
         // pseudonym now that the access token's subject is sealed too - before #256 they diverged (real sub in the
@@ -95,7 +93,7 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
 
         var tokens = await ObtainPairwiseTokensAsync(
             client, discovery, Scopes.OpenId, Scopes.OfflineAccess);
-        var refreshToken = tokens[TokenRequest.Parameters.RefreshToken]!.GetValue<string>();
+        var refreshToken = tokens[TokenResponse.Parameters.RefreshToken]!.GetValue<string>();
 
         // Refreshing forces the server to recover the real subject by opening the refresh token's pairwise sub
         // (AuthorizeByRefreshTokenAsync) and re-issue against it.
@@ -103,11 +101,11 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.RefreshToken,
             [TokenRequest.Parameters.RefreshToken] = refreshToken,
-            [AuthorizationRequest.Parameters.ClientId] = PairwiseClientId,
+            [ClientRequest.Parameters.ClientId] = PairwiseClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
-        var accessToken = refreshed[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = refreshed[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var accessPayload = DecodeJwtPayload(accessToken);
         var accessSub = accessPayload[IanaClaimTypes.Sub]!.GetValue<string>();
 
@@ -135,20 +133,20 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         var discovery = await FetchDiscoveryAsync(client);
 
         var tokens = await ObtainPairwiseTokensAsync(client, discovery, Scopes.OpenId);
-        var subjectToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var subjectToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
 
         // Presenting the pairwise access token as an RFC 8693 subject_token forces the resolver to look the
         // pairwise client up and open the pseudonym in its sub back to the real subject before building the grant.
         var exchanged = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.TokenExchange,
-            ["subject_token"] = subjectToken,
-            ["subject_token_type"] = AccessTokenType,
-            [AuthorizationRequest.Parameters.ClientId] = PairwiseClientId,
+            [TokenRequest.Parameters.SubjectToken] = subjectToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [ClientRequest.Parameters.ClientId] = PairwiseClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
-        var exchangedToken = exchanged[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var exchangedToken = exchanged[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var exchangedSub = DecodeJwtPayload(exchangedToken)[IanaClaimTypes.Sub]!.GetValue<string>();
 
         // The re-issued token carries the same pairwise pseudonym: the exchange recovered the real subject from the
@@ -192,9 +190,9 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = PairwiseClientId,
+            [ClientRequest.Parameters.ClientId] = PairwiseClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
     }
@@ -216,7 +214,7 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         // A token belonging to somebody else. Its owner is a public client, so it carries the real subject -
         // which is exactly what must not come back out of introspection.
         var tokens = await ObtainConfidentialOfflineTokensAsync(client, discovery);
-        var accessToken = tokens[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokens[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         Assert.Equal(RealSubject, DecodeJwtPayload(accessToken)[IanaClaimTypes.Sub]!.GetValue<string>());
 
         var body = await IntrospectAsync(client, discovery, accessToken, PairwiseClientId);
@@ -250,7 +248,7 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
             AllowedGrantTypes = [GrantTypes.AuthorizationCode, GrantTypes.RefreshToken, GrantTypes.TokenExchange],
             PkceRequired = true,
             RedirectUris = [new Uri(TestConstants.RedirectUri, UriKind.Absolute)],
-            OfflineAccessAllowed = true,
+            OfflineAccess = OfflineAccess.Allowed,
             SubjectType = SubjectTypes.Pairwise,
 
             // Also acts as a protected resource in the introspection scenario below, so it receives tokens
@@ -261,8 +259,6 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
         return Factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
             {
-                services.AddPairwiseSubjectIdentifiers(
-                    new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) });
 
                 // Emit a real pairwise id_token: the default host stub writes the raw subject to the id_token's
                 // 'sub', so replace it with a provider that applies the pairwise conversion exactly as the
@@ -280,8 +276,13 @@ public class PairwiseProtectedSubjectTests(TestFactory factory) : TestBase(facto
                             // independent of service-token encryption (it is keyed by the pairwise salt).
                             options.ServiceTokens.AccessToken.Encrypt = false;
                             options.ServiceTokens.RefreshToken.Encrypt = false;
-                            options.Clients = [.. options.Clients, pairwiseClient];
                         }));
+
+                services.PostConfigure<TestTenantSettings>(tenant =>
+                {
+                    tenant.PairwiseSubject = new PairwiseSubjectSettings { Salt = Convert.ToBase64String(new byte[32]) };
+                    tenant.Clients = [.. tenant.Clients, pairwiseClient];
+                });
             }));
     }
 

@@ -27,20 +27,12 @@ public static class ProofErrorReasons
     /// <summary>Header <c>alg</c> is missing, not asymmetric, or not in the configured whitelist.</summary>
     public const string InvalidAlgorithm = "invalid_alg";
 
-    /// <summary>Header <c>jwk</c> is missing, malformed, or contains private-key material.</summary>
-    /// <remarks>
-    /// Only where THIS validator establishes it. A refusal that came from the JWT core arrives under
-    /// <see cref="InvalidHeader"/> instead, because the core reports a bad <c>jwk</c>, a bad <c>crit</c>
-    /// and a missing required header under one category and cannot tell a consumer which it met.
-    /// </remarks>
-    public const string InvalidJwk = "invalid_jwk";
-
     /// <summary>A JOSE header parameter is malformed or violates a structural rule.</summary>
     /// <remarks>
     /// Deliberately named for the header rather than for one member of it: this is what the JWT core's
     /// <c>InvalidHeader</c> becomes, and that category covers an unusable <c>jwk</c>, a <c>crit</c> that
     /// is malformed or names an extension nothing handles, and a header a trust model requires and the
-    /// token omits. Reporting all three as <c>invalid_jwk</c> told a client its key was bad over a
+    /// token omits. Reporting all three as a key problem would tell a client its key was bad over a
     /// <c>crit</c> it had written itself.
     /// <para>
     /// WHICH of the three happened is on <see cref="ProofError.Detail"/> and goes no further - no
@@ -67,10 +59,10 @@ public static class ProofErrorReasons
     /// <summary>Payload <c>htu</c> claim is missing.</summary>
     public const string HttpUriMissing = "htu_missing";
 
-    /// <summary>Payload <c>htu</c> is not a valid absolute URI.</summary>
+    /// <summary>Payload <c>htu</c> is not an absolute http or https URI.</summary>
     public const string HttpUriInvalid = "htu_invalid";
 
-    /// <summary>Payload <c>htu</c> does not match the request URI after RFC 3986 §6.2 canonicalisation.</summary>
+    /// <summary>Payload <c>htu</c> does not match the request URI after RFC 3986 section 6.2 canonicalization.</summary>
     public const string HttpUriMismatch = "htu_mismatch";
 
     /// <summary>Payload <c>iat</c> claim is missing.</summary>
@@ -93,4 +85,27 @@ public static class ProofErrorReasons
 
     /// <summary>Payload <c>jti</c> has already been used within the acceptance window.</summary>
     public const string ReplayDetected = "replay_detected";
+
+    /// <summary>The reason a <see cref="Abblix.Jwt.JwtError"/> category from the JWT validator maps to.</summary>
+    /// <remarks>
+    /// The validator already covered JWS structure, typ pinning, alg-whitelist, header shape and signature
+    /// verification, so each of its categories has a matching token here.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">The category has no reason.</exception>
+    internal static string Of(Abblix.Jwt.JwtError error) => error switch
+    {
+        Abblix.Jwt.JwtError.MalformedToken => MalformedJwt,
+        Abblix.Jwt.JwtError.InvalidAlgorithm => InvalidAlgorithm,
+        Abblix.Jwt.JwtError.InvalidTokenType => InvalidTokenType,
+        Abblix.Jwt.JwtError.InvalidHeader => InvalidHeader,
+        Abblix.Jwt.JwtError.InvalidSignature => SignatureInvalid,
+
+        // A proof is checked without lifetime, replay or revocation stages, so these come only from a validator
+        // configured otherwise; they keep the reason they had before every category was named.
+        Abblix.Jwt.JwtError.InvalidToken => SignatureInvalid,
+        Abblix.Jwt.JwtError.TokenAlreadyUsed => SignatureInvalid,
+        Abblix.Jwt.JwtError.TokenRevoked => SignatureInvalid,
+
+        _ => throw new ArgumentOutOfRangeException(nameof(error), error, "A JWT error without a proof reason."),
+    };
 }

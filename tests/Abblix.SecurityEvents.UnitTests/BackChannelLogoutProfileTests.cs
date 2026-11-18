@@ -9,7 +9,6 @@ using System.Buffers.Text;
 using System.Text;
 using System.Text.Json.Nodes;
 using Abblix.Jwt;
-using Abblix.SecurityEvents;
 using Abblix.SecurityEvents.Abstractions;
 using Abblix.SecurityEvents.Infrastructure;
 using Abblix.SecurityEvents.Validation;
@@ -28,8 +27,9 @@ namespace Abblix.SecurityEvents.UnitTests;
 /// its own, without one line of the security-event package changing.
 /// </summary>
 /// <remarks>
-/// Driven through <see cref="Infrastructure.ServiceCollectionExtensions.AddBackChannelLogoutReceiver"/> on
-/// purpose. A suite that composed the same profile itself would prove the composite can be
+/// Driven through
+/// <see cref="Infrastructure.BackChannelLogoutServiceCollectionExtensions.AddBackChannelLogoutReceiver"/>
+/// on purpose. A suite that composed the same profile itself would prove the composite can be
 /// reshaped and say nothing about whether the shipped registration reshapes it that way, which is
 /// the only question a host's token depends on.
 /// </remarks>
@@ -48,6 +48,7 @@ public class BackChannelLogoutProfileTests
     {
         public Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
             string compactToken,
+            TokenTypePolicy tokenTypes,
             string? keyId = null,
             CancellationToken cancellationToken = default)
         {
@@ -58,7 +59,7 @@ public class BackChannelLogoutProfileTests
                 Payload = new JsonWebTokenPayload(DecodeSegment(segments[1])),
             };
 
-            return Task.FromResult(Result<JsonWebToken, SecurityEventTokenValidationError>.Success(token));
+            return Task.FromResult((Result<JsonWebToken, SecurityEventTokenValidationError>)(token));
         }
 
         private static JsonObject DecodeSegment(string segment)
@@ -186,7 +187,7 @@ public class BackChannelLogoutProfileTests
     [Fact]
     public async Task ANonce_IsRefused()
     {
-        var compact = LogoutCompact(token => token.Payload.Nonce = "n-0S6_WzA2Mj");
+        var compact = LogoutCompact(token => token.Payload[IanaClaimTypes.Nonce] = "n-0S6_WzA2Mj");
 
         var result = await LogoutProfileValidator().ValidateAsync(
             compact, ReceiverOptions(), TestContext.Current.CancellationToken);
@@ -201,7 +202,7 @@ public class BackChannelLogoutProfileTests
         var compact = LogoutCompact(token =>
         {
             token.Payload.Json.Remove(JwtClaimTypes.Subject);
-            token.Payload.Json.Remove(JwtClaimTypes.SessionId);
+            token.Payload.Json.Remove(IanaClaimTypes.Sid);
         });
 
         var result = await LogoutProfileValidator().ValidateAsync(
@@ -216,7 +217,7 @@ public class BackChannelLogoutProfileTests
     {
         var compact = LogoutCompact(token =>
         {
-            token.Payload.Json[JwtClaimTypes.Events] = new JsonObject
+            token.Payload.Json[IanaClaimTypes.Events] = new JsonObject
             {
                 ["https://example.com/events/something-else"] = new JsonObject(),
             };
@@ -271,7 +272,7 @@ public class BackChannelLogoutProfileTests
 
         // The code by name. This row previously asserted only that it was NOT SignatureInvalid, and when
         // that was deleted it asserted nothing about the code at all - on the one path the ledger records
-        // as the source of a shipped-behaviour regression.
+        // as the source of a shipped-behavior regression.
         Assert.Equal(SecurityEventTokenErrorCode.SignatureInvalid, error.Code);
         Assert.Contains(algorithm, error.Description, StringComparison.Ordinal);
         Assert.Contains(SigningAlgorithms.RS256, error.Description, StringComparison.Ordinal);

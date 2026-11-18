@@ -13,7 +13,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// <summary>
 /// End-to-end guard that the MVC adapter applies the CORS policy its controllers reference with
 /// <c>[EnableCors]</c>: with no host CORS configuration, a cross-origin GET to the discovery document is
-/// answered with an <c>Access-Control-Allow-Origin</c> header. The policy's behaviour (default, host override
+/// answered with an <c>Access-Control-Allow-Origin</c> header. The policy's behavior (default, host override
 /// and the OidcCorsOptions supplement) is unit-tested against AddOidcCors; this only proves the MVC pipeline
 /// resolves and applies it.
 /// </summary>

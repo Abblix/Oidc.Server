@@ -5,8 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Text;
-
 namespace Abblix.Jwt;
 
 /// <summary>
@@ -17,13 +15,11 @@ namespace Abblix.Jwt;
 /// It supports setting standard claims such as issuer, audience, and times, as well as custom claims
 /// contained within the provided <see cref="JsonWebToken"/> instance.
 /// </remarks>
-/// <param name="signer">The JWT signer for creating signatures.</param>
-/// <param name="encryptor">The JWT encryptor for creating encrypted tokens.</param>
+/// <param name="issuer">Signs a token and encrypts it when asked.</param>
 /// <param name="signingAlgorithmsProvider">The provider for supported signing algorithms.</param>
 /// <param name="encryptionAlgorithmsProvider">The provider for supported JWE key-management algorithms.</param>
 internal sealed class JsonWebTokenCreator(
-    IJsonWebTokenSigner signer,
-    IJsonWebTokenEncryptor encryptor,
+    NestedJwtIssuer issuer,
     SigningAlgorithmsProvider signingAlgorithmsProvider,
     EncryptionAlgorithmsProvider encryptionAlgorithmsProvider) : IJsonWebTokenCreator
 {
@@ -38,6 +34,9 @@ internal sealed class JsonWebTokenCreator(
     /// Dynamically determined from the registered encryptors in the dependency injection container.
     /// </summary>
     public IEnumerable<string> EncryptedResponseAlgorithmsSupported => encryptionAlgorithmsProvider.KeyManagementAlgorithms;
+
+    /// <inheritdoc />
+    public IEnumerable<string> EncryptedResponseMethodsSupported => encryptionAlgorithmsProvider.ContentEncryptionAlgorithms;
 
     /// <summary>
     /// Asynchronously issues a JWT based on the specified JsonWebToken, signing key, and optional encryption key.
@@ -63,30 +62,19 @@ internal sealed class JsonWebTokenCreator(
     /// The method creates a JWT using custom implementation that supports multiple audiences.
     /// Supports both JWS (signed) and JWE (encrypted) tokens.
     /// </remarks>
-    public async Task<string> IssueAsync(
+    public Task<string> IssueAsync(
         JsonWebToken token,
         JsonWebKey? signingKey,
         JsonWebKey? encryptionKey = null,
         string keyEncryptionAlgorithm = EncryptionAlgorithms.KeyManagement.RsaOaep256,
         string contentEncryptionAlgorithm = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512)
-    {
-        // IssueAsync does not yet carry a CancellationToken: the external key-custodian ports that would
-        // observe one arrive with remote signing / key-management, which is when it is threaded up from
-        // the callers. In-process crypto ignores cancellation, so None is passed until then.
-        var jwtString = await signer.SignAsync(token, signingKey, CancellationToken.None);
+        => issuer.IssueAsync(token, signingKey, encryptionKey, keyEncryptionAlgorithm, contentEncryptionAlgorithm);
 
-        if (encryptionKey != null)
-        {
-            // The encryptor is byte-oriented; wrap the inner JWS as its UTF-8 plaintext.
-            jwtString = await encryptor.EncryptAsync(
-                Encoding.UTF8.GetBytes(jwtString),
-                encryptionKey,
-                token.Header.Type,
-                keyEncryptionAlgorithm,
-                contentEncryptionAlgorithm,
-                CancellationToken.None);
-        }
-
-        return jwtString;
-    }
+    /// <inheritdoc />
+    public Task<string> EncryptClaimsAsync(
+        JsonWebToken token,
+        JsonWebKey encryptionKey,
+        string keyEncryptionAlgorithm,
+        string contentEncryptionAlgorithm)
+        => issuer.EncryptClaimsAsync(token, encryptionKey, keyEncryptionAlgorithm, contentEncryptionAlgorithm);
 }

@@ -51,32 +51,32 @@ public static class TestConstants
     /// <summary>
     /// Default scope value (OpenID Connect mandatory scope).
     /// </summary>
-    public const string DefaultScope = "openid";
+    public const string DefaultScope = Scopes.OpenId;
 
     /// <summary>
     /// Profile scope for user profile information.
     /// </summary>
-    public const string ProfileScope = "profile";
+    public const string ProfileScope = Scopes.Profile;
 
     /// <summary>
     /// Email scope for user email information.
     /// </summary>
-    public const string EmailScope = "email";
+    public const string EmailScope = Scopes.Email;
 
     /// <summary>
     /// Address scope for user address information.
     /// </summary>
-    public const string AddressScope = "address";
+    public const string AddressScope = Scopes.Address;
 
     /// <summary>
     /// Phone scope for user phone information.
     /// </summary>
-    public const string PhoneScope = "phone";
+    public const string PhoneScope = Scopes.Phone;
 
     /// <summary>
     /// Offline access scope for refresh tokens.
     /// </summary>
-    public const string OfflineAccessScope = "offline_access";
+    public const string OfflineAccessScope = Scopes.OfflineAccess;
 
     /// <summary>
     /// Default authorization code for token exchange.

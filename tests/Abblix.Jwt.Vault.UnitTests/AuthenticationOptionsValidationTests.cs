@@ -6,7 +6,6 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Jwt;
 using Abblix.Jwt.ExternalKeys;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,6 +35,22 @@ public sealed class AuthenticationOptionsValidationTests
         var options = Resolve(vault => vault.Token = "s.host");
 
         Assert.Null(options.Authentication);
+    }
+
+    /// <summary>
+    /// A server address with no scheme and host cannot be the base of a request, so it is refused at startup rather
+    /// than at the first call to the server.
+    /// </summary>
+    [Fact]
+    public void ARelativeAddress_IsRefused()
+    {
+        var exception = Assert.Throws<OptionsValidationException>(() => Resolve(vault =>
+        {
+            vault.Token = "s.host";
+            vault.Address = new Uri("/vault", UriKind.Relative);
+        }));
+
+        Assert.Contains(nameof(VaultTransitOptions.Address), exception.Message);
     }
 
     [Fact]

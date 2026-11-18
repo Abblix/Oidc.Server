@@ -11,7 +11,7 @@ using Abblix.Oidc.Server.Common.Constants;
 namespace Abblix.Oidc.Server.Common;
 
 /// <summary>
-/// Subtype of <see cref="OidcError"/> that signals an RFC 9449 §8 nonce-challenge: the DPoP proof either omitted
+/// Subtype of <see cref="OidcError"/> that signals an RFC 9449 section 8 nonce-challenge: the DPoP proof either omitted
 /// the <c>nonce</c> claim or carried a stale one, and the server is responding with <c>use_dpop_nonce</c> plus
 /// a fresh nonce the client must echo on the next attempt. The carried <see cref="Nonce"/> value travels out through
 /// the response formatter as the <c>DPoP-Nonce</c> HTTP header alongside the standard error envelope - the body

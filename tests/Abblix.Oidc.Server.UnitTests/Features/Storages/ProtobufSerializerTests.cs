@@ -10,8 +10,14 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common.Implementation;
 using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.Storages.Proto;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Google.Protobuf;
+using Google.Protobuf.WellKnownTypes;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using AuthorizationContext = Abblix.Oidc.Server.Common.AuthorizationContext;
 using AuthorizationRequest = Abblix.Oidc.Server.Model.AuthorizationRequest;
@@ -23,7 +29,6 @@ using JsonWebTokenStatus = Abblix.Oidc.Server.Features.Tokens.Revocation.JsonWeb
 using RequestedClaimDetails = Abblix.Oidc.Server.Model.RequestedClaimDetails;
 using RequestedClaims = Abblix.Oidc.Server.Model.RequestedClaims;
 using TokenInfo = Abblix.Oidc.Server.Endpoints.Token.Interfaces.TokenInfo;
-using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Storages;
 
@@ -34,6 +39,219 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Storages;
 public class ProtobufSerializerTests
 {
     private readonly ProtobufSerializer _serializer = new();
+
+    /// <summary>
+    /// Text is stored as its bare UTF-8 bytes, which is what every record of text written before reads back from, so a
+    /// codec writing it any other way would leave those records unreadable.
+    /// </summary>
+    [Fact]
+    public void Serialize_Text_IsItsUtf8Bytes()
+    {
+        const string text = "клиент-é";
+
+        var bytes = _serializer.Serialize(text);
+
+        Assert.Equal(System.Text.Encoding.UTF8.GetBytes(text), bytes);
+        Assert.Equal(text, _serializer.Deserialize<string>(System.Text.Encoding.UTF8.GetBytes(text)));
+    }
+
+    /// <summary>
+    /// The next-poll instant survives a round trip.
+    /// </summary>
+    [Fact]
+    public void Serialize_PollSchedule_RoundTrip()
+    {
+        var instant = DateTimeOffset.Parse("2026-01-01T12:00:05Z", CultureInfo.InvariantCulture);
+
+        var bytes = _serializer.Serialize(new PollSchedule { NextPollAt = instant.ToTimestamp() });
+        var result = _serializer.Deserialize<PollSchedule>(bytes);
+
+        Assert.NotNull(result);
+        Assert.Equal(instant, result.NextPollAt.ToDateTimeOffset());
+    }
+
+    /// <summary>
+    /// The secret a rotation bucket's nonces are signed with survives a round trip byte for byte; a secret read
+    /// back different would refuse every nonce issued before it.
+    /// </summary>
+    [Fact]
+    public void Serialize_NonceSecret_RoundTrip()
+    {
+        var secret = ByteString.CopyFrom([1, 2, 3, 250, 0, 7]);
+
+        var bytes = _serializer.Serialize(new NonceSecret { Value = secret });
+        var result = _serializer.Deserialize<NonceSecret>(bytes);
+
+        Assert.NotNull(result);
+        Assert.Equal(secret, result.Value);
+    }
+
+    /// <summary>
+    /// The value a session's outstanding logout question was asked with survives a round trip; without it no
+    /// answer would ever match and no logout could be confirmed.
+    /// </summary>
+    [Fact]
+    public void Serialize_LogoutConfirmation_RoundTrip()
+    {
+        var result = _serializer.Deserialize<LogoutConfirmation>(
+            _serializer.Serialize(new LogoutConfirmation { Confirmation = "the-value-that-asks" }));
+
+        Assert.NotNull(result);
+        Assert.Equal("the-value-that-asks", result.Confirmation);
+    }
+
+    /// <summary>
+    /// One recorded verification attempt survives a round trip.
+    /// </summary>
+    [Fact]
+    public void Serialize_RateLimitAttempt_RoundTrip()
+    {
+        var instant = DateTimeOffset.Parse("2026-01-01T12:00:00Z", CultureInfo.InvariantCulture);
+
+        var bytes = _serializer.Serialize(new RateLimitAttempt { At = instant.ToTimestamp() });
+        var result = _serializer.Deserialize<RateLimitAttempt>(bytes);
+
+        Assert.NotNull(result);
+        Assert.Equal(instant, result.At.ToDateTimeOffset());
+    }
+
+    /// <summary>
+    /// The name of a user code's current life survives a round trip.
+    /// </summary>
+    [Fact]
+    public void Serialize_RateLimitGeneration_RoundTrip()
+    {
+        var result = _serializer.Deserialize<RateLimitGeneration>(
+            _serializer.Serialize(new RateLimitGeneration { Id = "a-life" }));
+
+        Assert.NotNull(result);
+        Assert.Equal("a-life", result.Id);
+    }
+
+    /// <summary>
+    /// A record left by the build that stored a count in this message reads as a record naming no life, which
+    /// is the answer a code no verification has cleared gives - so nothing in a store has to be cleared before
+    /// deploying.
+    /// </summary>
+    /// <remarks>
+    /// The bytes are what that build wrote for a count of two, rather than a message this build could produce:
+    /// a message of this build's own with nothing set is empty, and an empty payload never reaches the parser
+    /// at all, so a row built on one would be about the reader's shortcut instead of about the upgrade.
+    /// </remarks>
+    [Fact]
+    public void ARecordFromTheBuildThatCounted_ReadsAsNamingNoLife()
+    {
+        var counted = new byte[] { 0x08, 0x02 };
+
+        var result = _serializer.Deserialize<RateLimitGeneration>(counted);
+
+        Assert.NotNull(result);
+        Assert.Empty(result.Id);
+    }
+
+    /// <summary>
+    /// And a record naming no life is written as nothing at all and read back as no record, which is the same
+    /// answer an absent one gives.
+    /// </summary>
+    /// <remarks>
+    /// The empty payload is the wire format: a field at its default value is not written, and the field this
+    /// message used to carry is reserved rather than reused. Reading an empty payload back as absent is this
+    /// serializer's own decision, taken for every shape at once, so a deployment that supplies its own storage
+    /// need not share it.
+    /// </remarks>
+    [Fact]
+    public void ARateLimitGenerationNamingNoLife_IsWrittenAsNothingAndReadBackAsNoRecord()
+    {
+        var bytes = _serializer.Serialize(new RateLimitGeneration());
+
+        Assert.Empty(bytes);
+        Assert.Null(_serializer.Deserialize<RateLimitGeneration>(bytes));
+    }
+
+    /// <summary>
+    /// A recorded client of a session and the generation it belongs to survive a round trip.
+    /// </summary>
+    [Fact]
+    public void Serialize_SessionClientRecords_RoundTrip()
+    {
+        var end = DateTimeOffset.Parse("2026-01-01T12:00:00Z", CultureInfo.InvariantCulture);
+
+        var client = _serializer.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClient>(
+            _serializer.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClient { ClientId = "client-1" }));
+        var generation = _serializer.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration>(
+            _serializer.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration { Id = "g-1", ExpiresAt = end.ToTimestamp() }));
+
+        Assert.Equal("client-1", client?.ClientId);
+        Assert.Equal("g-1", generation?.Id);
+        Assert.Equal(end, generation?.ExpiresAt.ToDateTimeOffset());
+    }
+
+    /// <summary>
+    /// The record that a flow ended survives a round trip.
+    /// </summary>
+    [Fact]
+    public void Serialize_ConsumedRequestUri_RoundTrip()
+    {
+        var instant = DateTimeOffset.Parse("2026-01-01T12:00:00Z", CultureInfo.InvariantCulture);
+
+        var record = _serializer.Deserialize<ConsumedRequestUri>(
+            _serializer.Serialize(new ConsumedRequestUri { ConsumedAt = instant.ToTimestamp() }));
+
+        Assert.Equal(instant, record?.ConsumedAt.ToDateTimeOffset());
+    }
+
+    /// <summary>
+    /// The shapes named here do not reach the JSON fallback, which is the reason they have definitions at all.
+    /// </summary>
+    /// <remarks>
+    /// The fallback works and would carry them, so a round trip alone says nothing here - it passes either
+    /// way. What it costs is a warning carrying an exception on every write, and one of these is written on
+    /// every poll of every device and every decoupled authentication. A warning an operator sees that often
+    /// is a warning they stop reading.
+    /// <para>
+    /// Every value here is a non-default one, because a message at its defaults is written as nothing and read
+    /// back without the reader ever being consulted - so a row built on defaults would say nothing about the
+    /// half it looks like it covers.
+    /// </para>
+    /// <para>
+    /// What it does not say is that the list is complete: a shape added to the serializer without a line here
+    /// leaves this green and reaches the fallback in a deployment. Deriving the list from the serializer's own
+    /// registry does not answer that either - it was tried, and an entry deleted from the registry took its own
+    /// expectation with it. Answering it needs a population neither side owns, which is its own piece of work.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheShapesNamedHere_DoNotReachTheJsonFallback()
+    {
+        var recorder = new RecordingLoggerFactory();
+        var composite = new CompositeBinarySerializer(
+            recorder.CreateLogger<CompositeBinarySerializer>(),
+            new ProtobufSerializer(),
+            new JsonBinarySerializer());
+
+        var instant = DateTimeOffset.Parse("2026-01-01T12:00:00Z", CultureInfo.InvariantCulture);
+
+        composite.Deserialize<RevocationCutoff>(
+            composite.Serialize(new RevocationCutoff { Cutoff = instant.ToTimestamp() }));
+        composite.Deserialize<PollSchedule>(
+            composite.Serialize(new PollSchedule { NextPollAt = instant.ToTimestamp() }));
+        composite.Deserialize<RateLimitAttempt>(
+            composite.Serialize(new RateLimitAttempt { At = instant.ToTimestamp() }));
+        composite.Deserialize<RateLimitGeneration>(
+            composite.Serialize(new RateLimitGeneration { Id = "a-life" }));
+        composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClient>(
+            composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClient { ClientId = "client-1" }));
+        composite.Deserialize<Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration>(
+            composite.Serialize(new Abblix.Oidc.Server.Features.Storages.Proto.SessionClientsGeneration { Id = "g-1", ExpiresAt = instant.ToTimestamp() }));
+        composite.Deserialize<LogoutConfirmation>(
+            composite.Serialize(new LogoutConfirmation { Confirmation = "the-value-that-asks" }));
+        composite.Deserialize<NonceSecret>(
+            composite.Serialize(new NonceSecret { Value = ByteString.CopyFromUtf8("a-rotation-secret") }));
+        composite.Deserialize<ConsumedRequestUri>(
+            composite.Serialize(new ConsumedRequestUri { ConsumedAt = instant.ToTimestamp() }));
+
+        Assert.Empty(recorder.Entries);
+    }
 
     [Theory]
     [InlineData(JsonWebTokenStatus.Unknown)]
@@ -108,7 +326,6 @@ public class ProtobufSerializerTests
             "local")
         {
             AuthContextClassRef = "urn:oasis:names:tc:SAML:2.0:ac:classes:Password",
-            AffectedClientIds = ["client-1", "client-2"],
             AuthenticationMethodReferences = ["pwd", "mfa"],
             Email = "user@example.com",
             EmailVerified = true,
@@ -130,7 +347,6 @@ public class ProtobufSerializerTests
         Assert.Equal(session.AuthenticationTime, result.AuthenticationTime);
         Assert.Equal(session.IdentityProvider, result.IdentityProvider);
         Assert.Equal(session.AuthContextClassRef, result.AuthContextClassRef);
-        Assert.Equal(session.AffectedClientIds, result.AffectedClientIds);
         Assert.Equal(session.AuthenticationMethodReferences, result.AuthenticationMethodReferences);
         Assert.Equal(session.Email, result.Email);
         Assert.Equal(session.EmailVerified, result.EmailVerified);
@@ -144,7 +360,7 @@ public class ProtobufSerializerTests
         // Arrange
         var context = new AuthorizationContext(
             "client-123",
-            [TestConstants.DefaultScope, "profile", "email"],
+            [TestConstants.DefaultScope, Scopes.Profile, Scopes.Email],
             new RequestedClaims
             {
                 IdToken = new() { ["sub"] = new RequestedClaimDetails { Essential = true } },
@@ -154,7 +370,7 @@ public class ProtobufSerializerTests
             RedirectUri = TestConstants.DefaultRedirectUri,
             Nonce = "nonce-789",
             CodeChallenge = "challenge-xyz",
-            CodeChallengeMethod = "S256",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
             Resources = [new Uri("https://api.example.com")],
         };
 
@@ -173,21 +389,21 @@ public class ProtobufSerializerTests
         Assert.Equal(context.CodeChallengeMethod, result.CodeChallengeMethod);
         Assert.NotNull(result.Resources);
         Assert.Single(result.Resources);
-        Assert.Equal(context.Resources![0], result.Resources[0]);
+        Assert.Equal(context.Resources[0], result.Resources[0]);
     }
 
     [Fact]
     public void Serialize_AuthorizedGrant_RoundTrip()
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context)
         {
             IssuedTokens =
             [
-                new TokenInfo("access-token-1", DateTimeOffset.UtcNow.AddHours(1)),
-                new TokenInfo("refresh-token-1", DateTimeOffset.UtcNow.AddDays(30))
+                new TokenInfo("access-token-1", TimeProvider.System.GetUtcNow().AddHours(1)),
+                new TokenInfo("refresh-token-1", TimeProvider.System.GetUtcNow().AddDays(30))
             ],
         };
 
@@ -210,15 +426,15 @@ public class ProtobufSerializerTests
         // Arrange
         var request = new AuthorizationRequest
         {
-            Scope = [TestConstants.DefaultScope, "profile", "email"],
-            ResponseType = ["code"],
+            Scope = [TestConstants.DefaultScope, Scopes.Profile, Scopes.Email],
+            ResponseType = [ResponseTypes.Code],
             ClientId = "client-123",
             RedirectUri = TestConstants.DefaultRedirectUri,
             State = "state-xyz",
-            ResponseMode = "query",
+            ResponseMode = ResponseModes.Query,
             Nonce = "nonce-abc",
-            Display = "page",
-            Prompt = "consent",
+            Display = DisplayModes.Page,
+            Prompt = [Prompts.Consent],
             MaxAge = TimeSpan.FromMinutes(30),
             UiLocales = [new CultureInfo("en-US"), new CultureInfo("fr-FR")],
             ClaimsLocales = [new CultureInfo("en-US")],
@@ -226,7 +442,7 @@ public class ProtobufSerializerTests
             LoginHint = "user@example.com",
             AcrValues = ["urn:mace:incommon:iap:silver"],
             CodeChallenge = "challenge-xyz",
-            CodeChallengeMethod = "S256",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
             Request = "eyJhbGc...",
             RequestUri = new Uri("https://example.com/request.jwt"),
             Resources = [new Uri("https://api.example.com")],
@@ -268,6 +484,43 @@ public class ProtobufSerializerTests
         Assert.NotNull(result.Claims);
     }
 
+    /// <summary>Absent, empty and carrying values: the three answers the field gives.</summary>
+    public static TheoryData<string[]?> RequiredLevelShapes => new()
+    {
+        (string[]?)null,
+        new string[0],
+        new[] { "urn:example:acr:strong", "urn:example:acr:stronger" },
+    };
+
+    /// <summary>
+    /// The levels a decoupled request required travel through the protobuf serializer in all three states,
+    /// and the composite serializer a deployment registers never falls back to JSON for them.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(RequiredLevelShapes))]
+    public void Serialize_BackChannelAuthenticationRequest_KeepsTheRequiredLevels(string[]? levels)
+    {
+        var recorder = new RecordingLoggerFactory();
+        var composite = new CompositeBinarySerializer(
+            recorder.CreateLogger<CompositeBinarySerializer>(),
+            new ProtobufSerializer(),
+            new JsonBinarySerializer());
+
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
+        var request = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(session, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            RequiredAuthContextClassRefs = levels,
+        };
+
+        var result = composite.Deserialize<BackChannelAuthenticationRequest>(composite.Serialize(request));
+
+        Assert.NotNull(result);
+        Assert.Equal(levels, result.RequiredAuthContextClassRefs);
+        Assert.Empty(recorder.Entries);
+    }
+
     [Theory]
     [InlineData(BackChannelAuthenticationStatus.Pending)]
     [InlineData(BackChannelAuthenticationStatus.Denied)]
@@ -275,12 +528,11 @@ public class ProtobufSerializerTests
     public void Serialize_BackChannelAuthenticationRequest_RoundTrip(BackChannelAuthenticationStatus status)
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context);
-        var bcRequest = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5))
+        var bcRequest = new BackChannelAuthenticationRequest(grant, TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
-            NextPollAt = DateTimeOffset.UtcNow.AddSeconds(30),
             Status = status,
         };
 
@@ -291,7 +543,6 @@ public class ProtobufSerializerTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(bcRequest.Status, result.Status);
-        Assert.NotNull(result.NextPollAt);
         Assert.Equal(bcRequest.AuthorizedGrant.AuthSession.Subject, result.AuthorizedGrant.AuthSession.Subject);
     }
 
@@ -355,7 +606,7 @@ public class ProtobufSerializerTests
     public void Serialize_AuthSession_MinimalFields_RoundTrip()
     {
         // Arrange - only required fields
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
 
         // Act
         var bytes = _serializer.Serialize(session);
@@ -371,13 +622,33 @@ public class ProtobufSerializerTests
         Assert.Null(result.AdditionalClaims);
     }
 
+    /// <summary>
+    /// A session stored by a release that kept the session's clients inside it, as field 6, still reads back.
+    /// </summary>
+    /// <remarks>
+    /// Such a session sits inside every authorization code issued before an upgrade.
+    /// </remarks>
+    [Fact]
+    public void Deserialize_AuthSessionStoredWithAClientList_StillReads()
+    {
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
+        const string clientId = "client-1";
+
+        // Field 6, wire type 2 (length-delimited): the tag byte is (6 << 3) | 2.
+        byte[] clientListField = [(6 << 3) | 2, (byte)clientId.Length, ..System.Text.Encoding.ASCII.GetBytes(clientId)];
+        byte[] stored = [.._serializer.Serialize(session), ..clientListField];
+
+        var result = _serializer.Deserialize<AuthSession>(stored);
+
+        Assert.Equal(session.SessionId, result?.SessionId);
+    }
+
     [Fact]
     public void Serialize_CompareWithJsonSerializer_ProducesSmaller()
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local")
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local")
         {
-            AffectedClientIds = ["client-1", "client-2", "client-3"],
             AuthenticationMethodReferences = ["pwd", "mfa", "otp"],
             Email = "user@example.com",
         };

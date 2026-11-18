@@ -7,7 +7,9 @@
 
 using System.Net;
 using System.Net.Mime;
+using Abblix.Jwt.ReplayPrevention;
 using Abblix.SecurityEvents.BackChannelLogout;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -28,7 +30,7 @@ public class BackChannelLogoutHandlerTests
     /// Accepts whatever it is given and reports the token it was asked about, so a case can say
     /// which string reached validation rather than only that one did.
     /// </summary>
-    private sealed class StubValidator(string? refuseWith = null) : ILogoutTokenValidator
+    private sealed class StubValidator(string? refuseWith = null, string? tokenId = "jti-1") : ILogoutTokenValidator
     {
         public string? Received { get; private set; }
 
@@ -38,7 +40,7 @@ public class BackChannelLogoutHandlerTests
             Received = logoutToken;
 
             return refuseWith is null
-                ? Task.FromResult(new LogoutNotification(Issuer, "user-1", "session-1", "jti-1"))
+                ? Task.FromResult(new LogoutNotification(Issuer, "user-1", "session-1", tokenId))
                 : throw new LogoutTokenValidationException(refuseWith);
         }
     }
@@ -55,9 +57,35 @@ public class BackChannelLogoutHandlerTests
         }
     }
 
+    /// <summary>Records what the handler gave back, and fails to give it back when told to.</summary>
+    private sealed class ReleasingCache(Exception? releaseFails = null) : IReplayCache
+    {
+        public List<string> Released { get; } = [];
+
+        public List<CancellationToken> ReleasedWith { get; } = [];
+
+        public Task<bool> TryReserveAsync(
+            string identifier, DateTimeOffset expiresAt, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task ReleaseAsync(string identifier, CancellationToken cancellationToken = default)
+        {
+            Released.Add(identifier);
+            ReleasedWith.Add(cancellationToken);
+            return releaseFails is null ? Task.CompletedTask : Task.FromException(releaseFails);
+        }
+    }
+
+    private sealed class ThrowingSink(Exception failure) : ILogoutNotificationSink
+    {
+        public Task<string?> ConsumeAsync(
+            LogoutNotification notification, CancellationToken cancellationToken = default)
+            => Task.FromException<string?>(failure);
+    }
+
     private static BackChannelLogoutHandler Handler(
         StubValidator validator, ILogoutNotificationSink sink)
-        => new(NullLogger<BackChannelLogoutHandler>.Instance, validator, sink);
+        => new(NullLogger<BackChannelLogoutHandler>.Instance, validator, sink, new ReleasingCache());
 
     /// <summary>Keeps EVERY line this handler wrote: its level, its identifier and its message.</summary>
     /// <remarks>
@@ -160,6 +188,23 @@ public class BackChannelLogoutHandlerTests
         Assert.Empty(sink.Consumed);
     }
 
+    /// <summary>
+    /// A refusal quoting the request carries only the characters RFC 6749 section 5.2 allows in error_description,
+    /// %x20-21 / %x23-5B / %x5D-7E, which Back-Channel Logout 1.0 Section 2.8 refers to: the quote and the backslash
+    /// of a media type parameter do not come back.
+    /// </summary>
+    [Fact]
+    public async Task ARefusalQuotingTheRequest_CarriesOnlyTheCharactersAllowed()
+    {
+        var result = await Handler(new StubValidator(), new RecordingSink()).HandleAsync(
+            "text/plain; a=\"x\\y\"", $"logout_token={Token}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.All(result.Error!.Description, character => Assert.True(
+            character is (>= '\x20' and <= '\x21') or (>= '\x23' and <= '\x5B') or (>= '\x5D' and <= '\x7E'),
+            $"U+{(int)character:X4} in '{result.Error.Description}'"));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("state=abc")]
@@ -242,19 +287,42 @@ public class BackChannelLogoutHandlerTests
         var sink = new RecordingSink(
             expected.Contains("sink", StringComparison.Ordinal) ? "refused by the sink" : null);
 
-        var handler = new BackChannelLogoutHandler(logger, validator, sink);
+        var handler = new BackChannelLogoutHandler(logger, validator, sink, new ReleasingCache());
         var result = await handler.HandleAsync(contentType, body, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
 
         var (eventId, warning) = Assert.Single(logger.Warnings);
-        Assert.Contains(expected, warning, StringComparison.Ordinal);
+        Assert.Contains(Sanitized.Value(expected).ToString(), warning, StringComparison.Ordinal);
         Assert.Contains(result.Error!.Error, warning, StringComparison.Ordinal);
 
         // The number is the contract a runbook keys off, so it is asserted rather than the message:
         // the text may be reworded, the identifier may not move.
         Assert.Equal(LogEvents.BackChannelLogout.RequestRefused, eventId.Id);
     }
+
+    /// <summary>
+    /// The endpoint is unauthenticated, and the refusal of a wrong media type quotes the request's Content-Type, so
+    /// an anonymous caller chooses what that record says: it is written cut short and without its line breaks.
+    /// </summary>
+    [Fact]
+    public async Task ARefusalQuotingTheCaller_IsRecordedCutShortAndOnOneLine()
+    {
+        var logger = new RecordingLogger();
+        var handler = new BackChannelLogoutHandler(logger, new StubValidator(), new RecordingSink(null), new ReleasingCache());
+        var contentType = "text/plain\r\nforged record " + new string('x', LongerThanAnyRecordKeeps);
+
+        var result = await handler.HandleAsync(contentType, "logout_token=x", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        var (_, warning) = Assert.Single(logger.Warnings);
+        Assert.DoesNotContain('\n', warning);
+        Assert.DoesNotContain('\r', warning);
+        Assert.True(warning.Length < contentType.Length);
+    }
+
+    // Longer than the part of a value the log keeps, so the record shows it was cut.
+    private const int LongerThanAnyRecordKeeps = 5000;
 
     /// <summary>Success is silent at EVERY level, so the refusals stay findable among ordinary traffic.</summary>
     /// <remarks>
@@ -266,7 +334,8 @@ public class BackChannelLogoutHandlerTests
     public async Task AnAcceptedRequest_RecordsNoWarning()
     {
         var logger = new RecordingLogger();
-        var handler = new BackChannelLogoutHandler(logger, new StubValidator(), new RecordingSink());
+        var handler = new BackChannelLogoutHandler(
+            logger, new StubValidator(), new RecordingSink(), new ReleasingCache());
 
         var result = await handler.HandleAsync(
             MediaTypeNames.Application.FormUrlEncoded,
@@ -275,5 +344,121 @@ public class BackChannelLogoutHandlerTests
 
         Assert.Equal(HttpStatusCode.OK, result.StatusCode);
         Assert.Empty(logger.Lines);
+    }
+
+    /// <summary>
+    /// A release that fails does not change what the provider is told: it gets the sink's own
+    /// answer, and the operator gets a line saying the token stays refused until it expires.
+    /// </summary>
+    [Fact]
+    public async Task AReleaseThatFails_LeavesTheSinksRefusalStanding_AndIsRecorded()
+    {
+        var logger = new RecordingLogger();
+        var cache = new ReleasingCache(new InvalidOperationException("The cache did not answer."));
+        var handler = new BackChannelLogoutHandler(
+            logger, new StubValidator(), new RecordingSink("The session store is unreachable."), cache);
+
+        var result = await handler.HandleAsync(
+            MediaTypeNames.Application.FormUrlEncoded,
+            "logout_token=" + Token,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Contains("unreachable", result.Error!.Description);
+        Assert.Single(cache.Released);
+        Assert.Contains(
+            logger.Warnings,
+            warning => warning.EventId.Id == LogEvents.BackChannelLogout.ReservationKept);
+    }
+
+    /// <summary>
+    /// And a sink that threw is what the caller sees, not the release that failed after it: the
+    /// sink's failure is the one that explains the open session.
+    /// </summary>
+    [Fact]
+    public async Task AReleaseThatFails_LeavesTheSinksExceptionStanding()
+    {
+        var sinkFailure = new InvalidOperationException("The session store did not answer.");
+        var handler = new BackChannelLogoutHandler(
+            new RecordingLogger(),
+            new StubValidator(),
+            new ThrowingSink(sinkFailure),
+            new ReleasingCache(new InvalidOperationException("The cache did not answer.")));
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(
+            MediaTypeNames.Application.FormUrlEncoded,
+            "logout_token=" + Token,
+            TestContext.Current.CancellationToken));
+
+        Assert.Same(sinkFailure, thrown);
+    }
+
+    /// <summary>
+    /// A host that registered no replay cache has nothing to give back, and its refusals carry no
+    /// report of a reservation kept.
+    /// </summary>
+    [Fact]
+    public async Task WithNoReplayCache_ARefusalIsRecordedAloneAsARefusal()
+    {
+        var logger = new RecordingLogger();
+        var handler = new BackChannelLogoutHandler(
+            logger, new StubValidator(), new RecordingSink("The session store is unreachable."));
+
+        var result = await handler.HandleAsync(
+            MediaTypeNames.Application.FormUrlEncoded,
+            "logout_token=" + Token,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(LogEvents.BackChannelLogout.RequestRefused, Assert.Single(logger.Warnings).EventId.Id);
+    }
+
+    /// <summary>
+    /// A notification naming no token identifier, which only a host's own validator can produce, had
+    /// nothing reserved under it, so nothing is released and no reservation is reported kept.
+    /// </summary>
+    [Fact]
+    public async Task ANotificationWithNoTokenIdentifier_ReleasesNothing()
+    {
+        var logger = new RecordingLogger();
+        var cache = new ReleasingCache();
+        var handler = new BackChannelLogoutHandler(
+            logger,
+            new StubValidator(tokenId: null),
+            new RecordingSink("The session store is unreachable."),
+            cache);
+
+        await handler.HandleAsync(
+            MediaTypeNames.Application.FormUrlEncoded,
+            "logout_token=" + Token,
+            TestContext.Current.CancellationToken);
+
+        Assert.Empty(cache.Released);
+        Assert.Equal(LogEvents.BackChannelLogout.RequestRefused, Assert.Single(logger.Warnings).EventId.Id);
+    }
+
+    /// <summary>
+    /// A canceled request is one of the failures the release answers, so the release does not carry
+    /// the request's cancellation: a store that honors it would refuse the release at once.
+    /// </summary>
+    [Fact]
+    public async Task AReleaseAfterACanceledRequest_IsNotCanceledWithIt()
+    {
+        using var request = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken);
+        await request.CancelAsync();
+        var cache = new ReleasingCache();
+        var handler = new BackChannelLogoutHandler(
+            new RecordingLogger(),
+            new StubValidator(),
+            new ThrowingSink(new OperationCanceledException(request.Token)),
+            cache);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => handler.HandleAsync(
+            MediaTypeNames.Application.FormUrlEncoded,
+            "logout_token=" + Token,
+            request.Token));
+
+        Assert.False(Assert.Single(cache.ReleasedWith).IsCancellationRequested);
     }
 }

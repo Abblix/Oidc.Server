@@ -25,7 +25,6 @@ public static class HttpRequestExtensions
 	/// <param name="path">
 	/// The path to resolve. Supports:
 	/// - Application-relative paths starting with <c>"~/"</c> (e.g., <c>~/dashboard</c>)
-	/// - Route template constants with default values (e.g., <c>[route:authorize?~/connect/authorize]</c>)
 	/// - Regular relative paths
 	/// </param>
 	/// <returns>

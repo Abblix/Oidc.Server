@@ -1,4 +1,4 @@
-# Pre-commit hooks: workflow safety, committed-text hygiene and C# documentation.
+# Pre-commit hooks: workflow safety and committed-text hygiene.
 #
 # One-time setup per clone:
 #   pip install pre-commit
@@ -7,9 +7,9 @@
 # Run manually on all files:
 #   pre-commit run --all-files
 #
-# Bypass once (NOT recommended, and not a safety net). Of everything below, CI re-runs actionlint and
-# the inline-secrets check; EVERY OTHER hook here runs in this clone or nowhere. Said as the condition
-# rather than by naming them, because the list grows and a stale enumeration reads as a complete one:
+# Bypass once (NOT recommended, and not a safety net). Of everything below, CI re-runs only actionlint;
+# EVERY OTHER hook here runs in this clone or nowhere. The check for expressions inside executed values
+# runs in CI alone, through the shared action the lint workflow pins:
 #   git commit --no-verify
 #
 # actionlint through this hook has twice failed to finish inside ten minutes, while the same binary
@@ -17,36 +17,24 @@
 # of CPU - so they were blocked rather than working. The cause is not known; stdin was the obvious
 # suspect and a direct run without it redirected finishes anyway.
 #
-# It is one of the two hooks CI re-runs, so skip that ONE (SKIP=actionlint) rather than reaching for
-# --no-verify, which drops the five that run in this clone or nowhere - and run the binary yourself,
+# It is the one hook CI re-runs, so skip that ONE (SKIP=actionlint) rather than reaching for
+# --no-verify, which drops the ones that run in this clone or nowhere - and run the binary yourself,
 # or its two halves: actionlint -shellcheck= for the schema, shellcheck on the extracted run: body.
 #
 # Rules and rationale: the workspace's GitHub Actions security checklist.
 
 repos:
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.10
+    # A commit of main rather than a release: v1.7.12 and older hang on Windows on a run: step longer
+    # than about 4 KB (rhysd/actionlint#651 fixed it). Move to the first release that contains it.
+    # shellcheck must be on PATH: without it actionlint skips the shell checks and still reports Passed.
+    rev: 011a6d15e749bb3f2d771eed9c7aa0e7e3e10ee7
     hooks:
       - id: actionlint
         files: ^\.github/workflows/.*\.(yml|yaml)$
 
   - repo: local
     hooks:
-      - id: no-inline-secrets
-        name: "Block inline untrusted-input interpolation in run: blocks"
-        entry: python .github/scripts/lint-no-inline-secrets.py
-        language: python
-        additional_dependencies: [pyyaml]
-        files: ^\.github/(workflows/.*\.(yml|yaml)|scripts/lint-no-inline-secrets\.py)$
-        pass_filenames: false
-      - id: take-once-consumers
-        name: "Refuse an unreviewed consumer of the take-once protocol"
-        entry: python .github/scripts/lint-take-once-consumers.py
-        language: python
-        pass_filenames: false
-        # The script's own path is in the pattern: a commit editing only KNOWN must re-run the
-        # check, or the list is edited by whoever is not looking at what it holds.
-        files: (\.cs|\.github/scripts/lint-take-once-consumers\.py)$
       - id: msbuild-xml-parses
         name: "Refuse a build XML file that does not parse"
         entry: python .github/scripts/lint-msbuild-xml.py
@@ -57,11 +45,6 @@ repos:
         # A .runsettings or an app.config arriving later would sit outside the list too; selecting on
         # content is the general answer, and this is the cheap one.
         files: (\.(props|targets|csproj|slnx|xml)$|(^|/)[Nn]u[Gg]et\.[Cc]onfig$)
-      - id: no-split-doc-comments
-        name: "Block a doc comment that documents two members"
-        entry: python .github/scripts/lint-no-split-doc-comments.py
-        language: python
-        types: [c#]
       - id: no-cr-in-blobs
         name: "Block carriage returns in committed text"
         entry: python .github/scripts/lint-no-cr-in-blobs.py

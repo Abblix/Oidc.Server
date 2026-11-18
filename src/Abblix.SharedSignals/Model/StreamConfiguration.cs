@@ -41,6 +41,11 @@ public sealed record StreamConfiguration
     /// and the value a receiver must confirm matches the issuer it discovered the transmitter
     /// through (SSF 1.0 Sections 8.1.1, 8.1.1.1).
     /// </summary>
+    /// <remarks>
+    /// The transmitter answers a stream with the issuer it issues under when it answers, and its events carry that
+    /// issuer when they are sent. The value stored with the stream is the one it was written with, and neither
+    /// answer nor event takes it.
+    /// </remarks>
     [JsonPropertyName(StreamMemberNames.Issuer)]
     public required string Issuer { get; init; }
 

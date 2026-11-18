@@ -73,7 +73,7 @@ public class SigningAlgorithmPolicyTests
 
         var compact = await SignAsync(pair, cancellationToken);
         var verified = await pair.GetRequiredService<ISecurityEventTokenVerifier>()
-            .VerifyAsync(compact, cancellationToken: cancellationToken);
+            .VerifyAsync(compact, TokenTypePolicy.CheckedByCaller, cancellationToken: cancellationToken);
 
         Assert.True(verified.TryGetSuccess(out _), "A token signed with an allowed algorithm did not verify.");
     }
@@ -138,7 +138,7 @@ public class SigningAlgorithmPolicyTests
 
         var receiver = BuildPair(key, [SigningAlgorithms.RS256]);
         var verified = await receiver.GetRequiredService<ISecurityEventTokenVerifier>()
-            .VerifyAsync(compact, cancellationToken: cancellationToken);
+            .VerifyAsync(compact, TokenTypePolicy.CheckedByCaller, cancellationToken: cancellationToken);
 
         Assert.False(verified.TryGetSuccess(out _), "A signature outside the accepted set was verified.");
     }
@@ -215,14 +215,14 @@ public class SigningAlgorithmPolicyTests
         var compact = await SignAsync(transmitter, cancellationToken);
 
         var verified = await host.GetRequiredService<ISecurityEventTokenVerifier>()
-            .VerifyAsync(compact, cancellationToken: cancellationToken);
+            .VerifyAsync(compact, TokenTypePolicy.CheckedByCaller, cancellationToken: cancellationToken);
 
         Assert.Equal(acceptedByDefault, verified.TryGetSuccess(out _));
 
         // And widening admits it, which is the move the documentation tells such a host to make.
         await using var widened = BuildPair(key, [algorithm]);
         var accepted = await widened.GetRequiredService<ISecurityEventTokenVerifier>()
-            .VerifyAsync(compact, cancellationToken: cancellationToken);
+            .VerifyAsync(compact, TokenTypePolicy.CheckedByCaller, cancellationToken: cancellationToken);
 
         Assert.True(accepted.TryGetSuccess(out _), $"{algorithm} was refused after widening.");
     }
@@ -231,7 +231,8 @@ public class SigningAlgorithmPolicyTests
     /// An algorithm failure that is NOT a policy refusal does not offer the way out of one.
     /// </summary>
     /// <remarks>
-    /// The negative control for the row below, and the reason it exists: the core reports four
+    /// The negative control for <see cref="AnAlgorithmOutsideTheSet_IsRefusedAsAPolicyDecision"/>, and the
+    /// reason it exists: the core reports four
     /// different failures under one category - a missing <c>alg</c>, one outside the RFC 7518
     /// taxonomy, the allowlist refusal, and an unsigned token where signatures are required - so a
     /// consumer that reads the category and appends "widen your allowlist" says it to all four.
@@ -255,7 +256,7 @@ public class SigningAlgorithmPolicyTests
         var compact = $"{Base64UrlOf(header)}.{Base64UrlOf(payload)}.{signature}";
 
         var verified = await receiver.GetRequiredService<ISecurityEventTokenVerifier>()
-            .VerifyAsync(compact, cancellationToken: cancellationToken);
+            .VerifyAsync(compact, TokenTypePolicy.CheckedByCaller, cancellationToken: cancellationToken);
 
         Assert.True(verified.TryGetFailure(out var error));
         Assert.DoesNotContain("allowed signing algorithms", error.Description, StringComparison.Ordinal);
@@ -288,7 +289,7 @@ public class SigningAlgorithmPolicyTests
         await using var receiver = BuildPair(key, [SigningAlgorithms.RS256]);
 
         var verified = await receiver.GetRequiredService<ISecurityEventTokenVerifier>()
-            .VerifyAsync(compact, cancellationToken: cancellationToken);
+            .VerifyAsync(compact, TokenTypePolicy.CheckedByCaller, cancellationToken: cancellationToken);
 
         Assert.True(verified.TryGetFailure(out var error));
 
@@ -323,7 +324,7 @@ public class SigningAlgorithmPolicyTests
 
         // And the way out, which the inbound copy alone leaves open: what the getter hands back is a copy
         // too, so writing into it does not reach the signer.
-        options.AllowedSigningAlgorithms![0] = SigningAlgorithms.None;
+        options.AllowedSigningAlgorithms[0] = SigningAlgorithms.None;
 
         Assert.DoesNotContain(SigningAlgorithms.None, options.EffectiveSigningAlgorithms);
     }

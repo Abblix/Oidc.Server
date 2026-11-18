@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Storages;
 
@@ -23,13 +24,14 @@ public interface IAuthorizationRequestStorage
 	/// like the Pushed Authorization Request (PAR). This method also accepts an expiration time for the request,
 	/// allowing the storage mechanism to automatically invalidate the request after a certain period.
 	/// </summary>
+	/// <param name="tenant">The tenant the request belongs to.</param>
 	/// <param name="request">The <see cref="Model.AuthorizationRequest"/> instance to be stored.</param>
 	/// <param name="expiresIn">The duration after which the stored request should expire and be considered invalid.</param>
 	/// <returns>A <see cref="Task"/> that, when completed successfully,
 	/// yields a <see cref="PushedAuthorizationResponse"/> containing the unique identifier of the stored request
 	/// and its expiration information.
 	/// </returns>
-	Task<PushedAuthorizationResponse> StoreAsync(Model.AuthorizationRequest request, TimeSpan expiresIn);
+	Task<PushedAuthorizationResponse> StoreAsync(TenantDefinition tenant, Model.AuthorizationRequest request, TimeSpan expiresIn);
 
 	/// <summary>
 	/// Asynchronously retrieves an authorization request using a previously stored unique identifier.
@@ -43,6 +45,7 @@ public interface IAuthorizationRequestStorage
 	/// choice, taken on the specification's recommendation rather than on its requirement. Narrows rather
 	/// than closes: the returns block says what a null covers.
 	/// </summary>
+	/// <param name="tenant">The tenant the request belongs to.</param>
 	/// <param name="requestUri">The unique identifier of the authorization request, typically a URI,
 	/// used to locate the request in storage.</param>
 	/// <param name="shouldRemove">Specifies whether the request should be removed from storage on
@@ -53,5 +56,5 @@ public interface IAuthorizationRequestStorage
 	/// covers the entry having expired, another caller having removed it, and a claim that expired
 	/// mid-protocol on a single caller with nobody to lose to. A store call that fails after the removal
 	/// raises instead of answering.</returns>
-	Task<Model.AuthorizationRequest?> TryGetAsync(Uri requestUri, bool shouldRemove = false);
+	Task<Model.AuthorizationRequest?> TryGetAsync(TenantDefinition tenant, Uri requestUri, bool shouldRemove = false);
 }

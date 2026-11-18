@@ -38,7 +38,9 @@ public record ConsentDefinition(ScopeDefinition[] Scopes, ResourceDefinition[] R
     /// what was requested, in either direction: dropping an entry keeps it out of the issued token, editing
     /// one inside (an amount narrowed by a slider) is carried through as edited, and the section's own example
     /// is the opposite case, the server filling in the accounts a user picked. What is refused is a granted
-    /// entry of a <c>type</c> the request did not carry; within an entry, the per-type validator decides.
+    /// entry of a <c>type</c> the request did not carry; within an entry, the per-type validator decides,
+    /// handed the requested entries of its type, and an entry it finds wider than them is answered with
+    /// access_denied.
     /// </para>
     /// <para>
     /// Only the authorization endpoint consults this. A backchannel authentication request has no consent seam
@@ -47,7 +49,7 @@ public record ConsentDefinition(ScopeDefinition[] Scopes, ResourceDefinition[] R
     /// <para>
     /// The storage is raw so that member order, type-specific payload and members this server does not model
     /// survive the round trip untouched. For rendering a consent screen, read the same entries as
-    /// <see cref="Abblix.Jwt.AuthorizationDetail"/> through <c>ToTypedArray()</c>: the typed view wraps these
+    /// <see cref="AuthorizationDetail"/> through <c>ToTypedArray()</c>: the typed view wraps these
     /// nodes rather than copying them, so it names the RFC 9396 section 2.2 common members without costing the
     /// rest.
     /// </para>

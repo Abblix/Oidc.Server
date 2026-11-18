@@ -6,12 +6,13 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.DPoP;
 
 /// <summary>
-/// Validates a DPoP proof JWT per RFC 9449 §4.2 / §4.3 (structure, signature, claim
+/// Validates a DPoP proof JWT per RFC 9449 section 4.2 / section 4.3 (structure, signature, claim
 /// shape) but excluding replay-cache and nonce checks. Those layered checks land
 /// alongside the <c>jti</c>-replay-cache and DPoP-Nonce service in a separate slice and
 /// build on the <see cref="Proof"/> returned by a successful validation here.
@@ -25,8 +26,10 @@ public interface IProofValidator
     /// into the validator, so callers never need to thread them through. When
     /// <paramref name="accessToken"/> is supplied (the proof accompanies a bearer-style
     /// access-token presentation), the proof's <c>ath</c> claim is verified against the
-    /// access-token hash per RFC 9449 §4.2.
+    /// access-token hash per RFC 9449 section 4.2.
     /// </summary>
+    /// <param name="profile">The controls in force for the client presenting the proof, whose signature algorithms
+    /// narrow those a proof may use (FAPI 1.0 Part 2 section 8.6, FAPI 2.0 section 5.4.1).</param>
     /// <param name="proofJwt">The compact JWS form of the DPoP proof, taken from the
     /// <c>DPoP</c> request header.</param>
     /// <param name="accessToken">The access token presented alongside the proof, when the
@@ -37,6 +40,7 @@ public interface IProofValidator
     /// validation step passes, otherwise <see cref="ProofError"/> describing the failure
     /// reason.</returns>
     Task<Result<Proof, ProofError>> ValidateAsync(
+        SecurityProfileRequirements profile,
         string proofJwt,
         string? accessToken = null,
         CancellationToken cancellationToken = default);

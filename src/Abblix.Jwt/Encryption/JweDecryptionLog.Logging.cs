@@ -1,0 +1,40 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0. You may obtain a copy at
+// http://www.apache.org/licenses/LICENSE-2.0
+
+using Abblix.Utils;
+using Microsoft.Extensions.Logging;
+
+namespace Abblix.Jwt.Encryption;
+
+partial class JweDecryptionLog
+{
+    [LoggerMessage(
+        EventId = LogEvents.Jwt.NoDecryptionKey,
+        Level = LogLevel.Warning,
+        Message = "JWE decryption failed: no decryption key is available for the token (alg='{Algorithm}', "
+                  + "enc='{EncryptionAlgorithm}', kid='{KeyId}'). A kid naming no key of this server usually means "
+                  + "the sender encrypted to a key that was never published here or was retired.")]
+    private partial void LogNoDecryptionKey(Sanitized Algorithm, Sanitized EncryptionAlgorithm, Sanitized KeyId);
+
+    [LoggerMessage(
+        EventId = LogEvents.Jwt.DecryptionKeysForAnotherAlgorithm,
+        Level = LogLevel.Warning,
+        Message = "JWE decryption failed: {KeyCount} key(s) the token could name cannot be used with "
+                  + "alg='{Algorithm}' (enc='{EncryptionAlgorithm}', kid='{KeyId}'): a key is used only with the "
+                  + "algorithm it declares, or, declaring none, with one its type performs. The sender chose an "
+                  + "algorithm this server's key is not published for.")]
+    private partial void LogKeysForAnotherAlgorithm(
+        Sanitized Algorithm, Sanitized EncryptionAlgorithm, Sanitized KeyId, int KeyCount);
+
+    [LoggerMessage(
+        EventId = LogEvents.Jwt.NoDecryptionKeyOpened,
+        Level = LogLevel.Warning,
+        Message = "JWE decryption failed: none of {KeyCount} candidate key(s) opened the token (alg='{Algorithm}', "
+                  + "enc='{EncryptionAlgorithm}', kid='{KeyId}'). A token encrypted to another key and a token "
+                  + "altered on the way look the same here.")]
+    private partial void LogNoKeyOpened(Sanitized Algorithm, Sanitized EncryptionAlgorithm, Sanitized KeyId, int KeyCount);
+}

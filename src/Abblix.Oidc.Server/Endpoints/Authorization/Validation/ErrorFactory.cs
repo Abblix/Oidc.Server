@@ -122,7 +122,7 @@ public static class ErrorFactory
 
 	/// <summary>
 	/// Creates an <see cref="AuthorizationRequestValidationError"/> indicating an invalid
-	/// <c>authorization_details</c> array per RFC 9396 §5. Used when an entry references an
+	/// <c>authorization_details</c> array per RFC 9396 section 5. Used when an entry references an
 	/// unknown <c>type</c>, fails per-type schema validation, or is not in the per-client allowlist.
 	/// </summary>
 	/// <param name="context">The validation context associated with the request.</param>

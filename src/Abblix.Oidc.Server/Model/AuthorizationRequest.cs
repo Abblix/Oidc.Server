@@ -11,16 +11,19 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.DeclarativeBinding;
+using Abblix.Utils;
 using Abblix.Utils.Json;
+using Abblix.Oidc.Server.Features.Storages;
 
 namespace Abblix.Oidc.Server.Model;
 
 /// <summary>
 /// The set of parameters carried by an OAuth 2.0 / OpenID Connect authorization request to the
-/// <c>authorization_endpoint</c> as defined in RFC 6749 §4.1.1 and OpenID Connect Core 1.0 §3.1.2.1.
+/// <c>authorization_endpoint</c> as defined in RFC 6749 section 4.1.1 and OpenID Connect Core 1.0 section 3.1.2.1.
 /// Parameters are bound from query string, form body, or a Request Object passed via
-/// <see cref="Request"/> / <see cref="RequestUri"/> (OIDC Core §6).
+/// <see cref="Request"/> / <see cref="RequestUri"/> (OIDC Core section 6).
 /// </summary>
+[ExternalInput]
 public record AuthorizationRequest
 {
 	/// <summary>
@@ -49,7 +52,7 @@ public record AuthorizationRequest
     public JsonArray? AuthorizationDetails { get; init; }
 
 	/// <summary>
-	/// The OAuth 2.0 <c>response_type</c> parameter (RFC 6749 §3.1.1, OIDC Core §3) that selects the grant flow:
+	/// The OAuth 2.0 <c>response_type</c> parameter (RFC 6749 section 3.1.1, OIDC Core section 3) that selects the grant flow:
 	/// <c>code</c> for authorization code,
 	/// <c>token</c> for the implicit grant access token,
 	/// <c>id_token</c> for the hybrid/implicit ID token.
@@ -67,7 +70,7 @@ public record AuthorizationRequest
 
 	/// <summary>
 	/// The OAuth 2.0 <c>client_id</c> identifying the relying party that issued the request,
-	/// per RFC 6749 §4.1.1. Required for any conformant authorization request.
+	/// per RFC 6749 section 4.1.1. Required for any conformant authorization request.
 	/// </summary>
 	/// <remarks>
 	/// Deliberately not marked as required at the model level: a missing client identifier must
@@ -78,7 +81,7 @@ public record AuthorizationRequest
 	public string? ClientId { get; init; }
 
 	/// <summary>
-	/// The OAuth 2.0 <c>redirect_uri</c> (RFC 6749 §3.1.2) where the authorization response is delivered.
+	/// The OAuth 2.0 <c>redirect_uri</c> (RFC 6749 section 3.1.2) where the authorization response is delivered.
 	/// Must be an absolute URI and must exactly match one of the redirect URIs pre-registered for the client.
 	/// </summary>
 	[JsonPropertyName(Parameters.RedirectUri)]
@@ -86,7 +89,7 @@ public record AuthorizationRequest
     public Uri? RedirectUri { get; init; }
 
 	/// <summary>
-	/// The opaque <c>state</c> value (RFC 6749 §4.1.1) returned unchanged in the authorization response
+	/// The opaque <c>state</c> value (RFC 6749 section 4.1.1) returned unchanged in the authorization response
 	/// so the client can correlate request and response and protect against cross-site request forgery.
 	/// </summary>
 	[JsonPropertyName(Parameters.State)]
@@ -104,31 +107,43 @@ public record AuthorizationRequest
     public string? ResponseMode { get; init; }
 
 	/// <summary>
-	/// The OIDC <c>nonce</c> (OIDC Core §3.1.2.1) bound into the issued ID Token to prevent token replay.
+	/// The OIDC <c>nonce</c> (OIDC Core section 3.1.2.1) bound into the issued ID Token to prevent token replay.
 	/// Required for the implicit and hybrid flows; recommended for the authorization code flow.
 	/// </summary>
 	[JsonPropertyName(Parameters.Nonce)]
     public string? Nonce { get; init; }
 
 	/// <summary>
-	/// The OIDC <c>display</c> parameter (OIDC Core §3.1.2.1) hinting how the authentication and consent UI
+	/// The OIDC <c>display</c> parameter (OIDC Core section 3.1.2.1) hinting how the authentication and consent UI
 	/// should be rendered: <c>page</c>, <c>popup</c>, <c>touch</c>, or <c>wap</c>.
 	/// </summary>
+	/// <remarks>
+	/// Deliberately not constrained by a declarative value list: a value outside the set is refused by
+	/// <see cref="Endpoints.Authorization.Validation.DisplayValidator"/> once the client and the redirect URI are known,
+	/// so the client is told at its redirect URI rather than the end user's browser showing a 400.
+	/// </remarks>
 	[JsonPropertyName(Parameters.Display)]
-    [AllowedValues(DisplayModes.Page, DisplayModes.Popup, DisplayModes.Touch, DisplayModes.Wap)]
     public string? Display { get; init; }
 
 	/// <summary>
-	/// The OIDC <c>prompt</c> parameter (OIDC Core §3.1.2.1) controlling whether the authorization server
-	/// re-prompts for authentication and consent. Values: <c>none</c>, <c>login</c>, <c>consent</c>,
-	/// <c>select_account</c>, and the registration extension <c>create</c>.
+	/// The OIDC <c>prompt</c> parameter (OIDC Core section 3.1.2.1), "Space-delimited, case-sensitive list of ASCII
+	/// string values", controlling whether the authorization server prompts the end user for authentication, account
+	/// selection and consent. Values: <c>none</c>, <c>login</c>, <c>consent</c>, <c>select_account</c>, and the
+	/// registration extension <c>create</c>; their order in the parameter carries no meaning.
 	/// </summary>
+	/// <remarks>
+	/// A value outside that list is refused with 400 and <c>invalid_request</c>, as Initiating User Registration via
+	/// OpenID Connect 1.0, section 4.1, recommends for a value not in <c>prompt_values_supported</c>: by the adapters'
+	/// models as the request is read, and by the request object's merge for a value inside a request object.
+	/// </remarks>
 	[JsonPropertyName(Parameters.Prompt)]
+	[JsonConverter(typeof(SpaceSeparatedValuesConverter))]
+	[SpaceSeparatedString]
     [AllowedValues(Prompts.Create, Prompts.Consent, Prompts.Login, Prompts.None, Prompts.SelectAccount)]
-    public string? Prompt { get; init; }
+    public string[]? Prompt { get; init; }
 
 	/// <summary>
-	/// The OIDC <c>max_age</c> parameter (OIDC Core §3.1.2.1) bounding the elapsed time since the last
+	/// The OIDC <c>max_age</c> parameter (OIDC Core section 3.1.2.1) bounding the elapsed time since the last
 	/// active end-user authentication. Serialized as an integer number of seconds.
 	/// </summary>
 	[JsonPropertyName(Parameters.MaxAge)]
@@ -137,39 +152,39 @@ public record AuthorizationRequest
     public TimeSpan? MaxAge { get; init; }
 
 	/// <summary>
-	/// The OIDC <c>ui_locales</c> parameter (OIDC Core §3.1.2.1), a preference-ordered list of BCP 47 language tags
+	/// The OIDC <c>ui_locales</c> parameter (OIDC Core section 3.1.2.1), a preference-ordered list of BCP 47 language tags
 	/// that the client wishes the authorization UI to be rendered in.
 	/// </summary>
 	[JsonPropertyName(Parameters.UiLocales)]
-	[JsonConverter(typeof(ArrayConverter<CultureInfo, CultureInfoConverter>))]
+	[JsonConverter(typeof(CultureListConverter))]
 	[CultureList]
     public CultureInfo[]? UiLocales { get; init; }
 
 	/// <summary>
-	/// The OIDC <c>claims_locales</c> parameter (OIDC Core §5.2), preference-ordered BCP 47 language tags
+	/// The OIDC <c>claims_locales</c> parameter (OIDC Core section 5.2), preference-ordered BCP 47 language tags
 	/// the client prefers when claims are returned in localized form.
 	/// </summary>
 	[JsonPropertyName(Parameters.ClaimsLocales)]
-	[JsonConverter(typeof(ArrayConverter<CultureInfo, CultureInfoConverter>))]
+	[JsonConverter(typeof(CultureListConverter))]
 	[CultureList]
     public CultureInfo[]? ClaimsLocales { get; init; }
 
 	/// <summary>
-	/// The OIDC <c>id_token_hint</c> (OIDC Core §3.1.2.1), a previously issued ID Token used as a hint about
+	/// The OIDC <c>id_token_hint</c> (OIDC Core section 3.1.2.1), a previously issued ID Token used as a hint about
 	/// the end-user's current or past authenticated session, typically combined with <c>prompt=none</c>.
 	/// </summary>
 	[JsonPropertyName(Parameters.IdTokenHint)]
     public string? IdTokenHint { get; init; }
 
 	/// <summary>
-	/// The OIDC <c>login_hint</c> (OIDC Core §3.1.2.1) suggesting the login identifier (such as an email or phone)
+	/// The OIDC <c>login_hint</c> (OIDC Core section 3.1.2.1) suggesting the login identifier (such as an email or phone)
 	/// that the authorization server should use to pre-fill the authentication UI.
 	/// </summary>
 	[JsonPropertyName(Parameters.LoginHint)]
     public string? LoginHint { get; init; }
 
 	/// <summary>
-	/// The OIDC <c>acr_values</c> (OIDC Core §3.1.2.1), a preference-ordered list of Authentication Context Class
+	/// The OIDC <c>acr_values</c> (OIDC Core section 3.1.2.1), a preference-ordered list of Authentication Context Class
 	/// Reference values that the client requests the authorization server to satisfy during authentication.
 	/// </summary>
 	[JsonPropertyName(Parameters.AcrValues)]
@@ -178,7 +193,7 @@ public record AuthorizationRequest
     public string[]? AcrValues { get; init; }
 
 	/// <summary>
-	/// The PKCE <c>code_challenge</c> (RFC 7636 §4.3), a high-entropy value derived from the client-held
+	/// The PKCE <c>code_challenge</c> (RFC 7636 section 4.3), a high-entropy value derived from the client-held
 	/// <c>code_verifier</c> using <see cref="CodeChallengeMethod"/>. Required for public clients to defend
 	/// the authorization code against interception.
 	/// </summary>
@@ -186,12 +201,17 @@ public record AuthorizationRequest
     public string? CodeChallenge { get; init; }
 
 	/// <summary>
-	/// The PKCE <c>code_challenge_method</c> (RFC 7636 §4.3) declaring how <see cref="CodeChallenge"/> was
+	/// The PKCE <c>code_challenge_method</c> (RFC 7636 section 4.3) declaring how <see cref="CodeChallenge"/> was
 	/// derived from the code verifier. <c>S256</c> is required by current best-practice profiles; <c>plain</c>
 	/// is supported only for legacy compatibility.
 	/// </summary>
+	/// <remarks>
+	/// Deliberately not constrained by a declarative value list: RFC 7636, section 4.4.1, requires an unsupported
+	/// method be answered with an authorization error response, which
+	/// <see cref="Endpoints.Authorization.Validation.PkceValidator"/> sends to the client's redirect URI once the client
+	/// and the redirect URI are known.
+	/// </remarks>
 	[JsonPropertyName(Parameters.CodeChallengeMethod)]
-    [AllowedValues(CodeChallengeMethods.Plain, CodeChallengeMethods.S256, CodeChallengeMethods.S512)]
     public string? CodeChallengeMethod { get; init; }
 
 	/// <summary>
@@ -203,9 +223,9 @@ public record AuthorizationRequest
 
 	/// <summary>
 	/// A URI referencing the Request Object carrying the authorization request parameters as JWT claims:
-	/// either an HTTPS URL hosted by the client (OpenID Connect Core §6.2) or the
+	/// either an HTTPS URL hosted by the client (OpenID Connect Core section 6.2) or the
 	/// <c>urn:ietf:params:oauth:request_uri:</c> value issued by the pushed authorization request
-	/// endpoint (RFC 9126 §2.2). Both forms are absolute URIs; scheme-specific rules are enforced
+	/// endpoint (RFC 9126 section 2.2). Both forms are absolute URIs; scheme-specific rules are enforced
 	/// by the request object fetchers.
 	/// </summary>
 	[JsonPropertyName(Parameters.RequestUri)]
@@ -219,7 +239,39 @@ public record AuthorizationRequest
 	/// once a code or token has been issued.
 	/// </summary>
 	[JsonIgnore]
+	[NotStored("Set by the fetcher once the stored request is read, so a stored request never has one")]
 	public Uri? PushedRequestUri { get; init; }
+
+	/// <summary>
+	/// When the server last sent the end user to the page of each <c>prompt</c> value the request asks for, set by the
+	/// server and kept with the request it stores for that page. The page is answered by what the host wrote since:
+	/// a session authenticated since then for <c>login</c> and <c>create</c>, a session signed in since then for
+	/// <c>select_account</c>, and a consent given since then for <c>consent</c>. So the request coming back from a
+	/// page proceeds rather than sending the end user there again, and an answer given before the page was shown
+	/// never counts. Kept off the wire, so no client can claim it.
+	/// </summary>
+	[JsonIgnore]
+	public IReadOnlyDictionary<string, DateTimeOffset>? Prompted { get; init; }
+
+	/// <summary>
+	/// The request URN this request was first fetched under - the one the client pushed it under (RFC 9126), or that
+	/// of the first page a request sent by value was stored for - set by the server and kept with the request it
+	/// stores for each page the end user is sent to. The request comes back from a page under a URN of that page's
+	/// own, so this is how the first URN is consumed once a code or token is issued. Kept off the wire, so no client
+	/// can claim it.
+	/// </summary>
+	[JsonIgnore]
+	public Uri? OriginRequestUri { get; init; }
+
+	/// <summary>
+	/// Whether the client named no scope, so the scope the request carries is the default the server served it with
+	/// (RFC 6749 section 3.3), set by the server and kept with the request it stores for each page. A scope the client
+	/// never named is not refused at the token endpoint when narrowing to the token's resources leaves none of it.
+	/// Kept off the wire, so no client can claim it. A request stored before this member existed reads false, as a
+	/// scope the client named.
+	/// </summary>
+	[JsonIgnore]
+	public bool ClientNamedNoScope { get; init; }
 
 	/// <summary>
 	/// Specifies the resource for which the access token is requested.
@@ -231,7 +283,7 @@ public record AuthorizationRequest
 	public Uri[]? Resources { get; set; }
 
 	/// <summary>
-	/// Client's pre-commitment to a DPoP proof-of-possession key per RFC 9449 §10
+	/// Client's pre-commitment to a DPoP proof-of-possession key per RFC 9449 section 10
 	/// (<c>dpop_jkt</c> parameter): the base64url-encoded RFC 7638 JWK Thumbprint of the
 	/// key the client will demonstrate at the token endpoint. Persisted with the
 	/// authorization code so /token can reject mismatched proofs and close the
@@ -241,9 +293,9 @@ public record AuthorizationRequest
 	public string? ProofKeyThumbprint { get; init; }
 
 	/// <summary>
-    /// Wire-level parameter names accepted at the authorization endpoint per RFC 6749 §4.1.1,
-    /// OpenID Connect Core 1.0 §3.1.2.1, RFC 7636 (PKCE), RFC 8707 (resource indicators),
-    /// and RFC 9449 §10 (DPoP).
+    /// Wire-level parameter names accepted at the authorization endpoint per RFC 6749 section 4.1.1,
+    /// OpenID Connect Core 1.0 section 3.1.2.1, RFC 7636 (PKCE), RFC 8707 (resource indicators),
+    /// and RFC 9449 section 10 (DPoP).
     /// </summary>
     public static class Parameters
     {
@@ -255,7 +307,7 @@ public record AuthorizationRequest
         /// specific claims to appear in the ID Token or UserInfo response.</summary>
         public const string Claims = "claims";
 
-        /// <summary>The <c>authorization_details</c> authorization request parameter (RFC 9396 §2)
+        /// <summary>The <c>authorization_details</c> authorization request parameter (RFC 9396 section 2)
         /// carrying a JSON array of structured authorization requirements per the RFC 9396 Rich
         /// Authorization Requests profile.</summary>
         public const string AuthorizationDetails = "authorization_details";
@@ -316,7 +368,7 @@ public record AuthorizationRequest
         /// Context Class Reference values.</summary>
         public const string AcrValues = "acr_values";
 
-        /// <summary>The <c>code_challenge</c> PKCE parameter (RFC 7636 §4.3) derived from the client's
+        /// <summary>The <c>code_challenge</c> PKCE parameter (RFC 7636 section 4.3) derived from the client's
         /// code verifier.</summary>
         public const string CodeChallenge = "code_challenge";
 
@@ -329,14 +381,14 @@ public record AuthorizationRequest
         public const string Resource = "resource";
 
         /// <summary>The <c>request</c> authorization request parameter carrying a Request Object as a
-        /// JWT (OpenID Connect Core §6.1).</summary>
+        /// JWT (OpenID Connect Core section 6.1).</summary>
         public const string Request = "request";
 
         /// <summary>The <c>request_uri</c> authorization request parameter referencing a Request Object
-        /// hosted at an HTTPS URL (OpenID Connect Core §6.2).</summary>
+        /// hosted at an HTTPS URL (OpenID Connect Core section 6.2).</summary>
         public const string RequestUri = "request_uri";
 
-        /// <summary>The <c>dpop_jkt</c> authorization request parameter (RFC 9449 §10) carrying the
+        /// <summary>The <c>dpop_jkt</c> authorization request parameter (RFC 9449 section 10) carrying the
         /// base64url-encoded JWK Thumbprint of the DPoP key the client will demonstrate at the token
         /// endpoint.</summary>
         public const string DpopJkt = "dpop_jkt";

@@ -6,12 +6,14 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 
 /// <summary>
-/// Syntactic validator for the RFC 9449 §10 <c>dpop_jkt</c> authorization-request
+/// Syntactic validator for the RFC 9449 section 10 <c>dpop_jkt</c> authorization-request
 /// parameter: surfaces malformed thumbprints at the authorize / PAR endpoint with
 /// <c>invalid_request</c> instead of letting them slip through to /token where they
 /// would surface only as <c>invalid_dpop_proof</c> on the live-proof comparison -
@@ -20,11 +22,11 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// <remarks>
 /// Accepts exactly 43 base64url characters (no padding) - the unique encoded length
 /// of an RFC 7638 SHA-256 JWK thumbprint, the only digest algorithm DPoP uses
-/// (RFC 9449 §6.1). Rejects any other length or non-base64url character.
+/// (RFC 9449 section 6.1). Rejects any other length or non-base64url character.
 /// The parameter is optional; missing values pass through (clients that do not
 /// pre-bind don't pay the cost). The actual thumbprint comparison against a
 /// presented proof happens at the token endpoint inside
-/// <c>DPoPTokenEndpointValidator</c>; this step only enforces wire-format validity.
+/// <c>DPoPBindingValidator</c>; this step only enforces wire-format validity.
 /// </remarks>
 public class ProofKeyThumbprintValidator : SyncAuthorizationContextValidatorBase
 {
@@ -35,11 +37,19 @@ public class ProofKeyThumbprintValidator : SyncAuthorizationContextValidatorBase
     private const int Sha256ThumbprintLength = 43;
 
     /// <inheritdoc/>
-    protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+    protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         var thumbprint = context.Request.ProofKeyThumbprint;
         if (thumbprint is null)
             return null;
+
+        // FAPI 1.0 Part 2 section 8.2: "shall only support sender-constrained access tokens via MTLS", so a commitment
+        // to a DPoP key is one no token of this client will honour
+        if (SecurityProfileRequirements.For(tenant, context.ClientInfo).RequireCertificateBoundTokens)
+        {
+            return context.InvalidRequest(
+                "The security profile issues certificate-bound access tokens only; dpop_jkt is not accepted.");
+        }
 
         if (thumbprint.Length != Sha256ThumbprintLength || !IsBase64UrlAlphabet(thumbprint))
         {
@@ -51,5 +61,5 @@ public class ProofKeyThumbprintValidator : SyncAuthorizationContextValidatorBase
     }
 
     private static bool IsBase64UrlAlphabet(string value)
-        => value.All(ch => ch is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9' or '-' or '_');
+        => value.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_');
 }

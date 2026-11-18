@@ -18,6 +18,8 @@ using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.TokenExchange;
 
@@ -26,10 +28,13 @@ namespace Abblix.Oidc.Server.UnitTests.Features.TokenExchange;
 /// pairwise client, its <c>sub</c> is that client's per-sector pseudonym, and the resolver must look the client up
 /// and open the pseudonym back to the real subject. The general resolver tests exercise only the public pass-through
 /// path (no settings, no client), so this fills the gap. It runs in the License collection because the client lookup
-/// runs a licence check.
+/// runs a license check.
 /// </summary>
 public class JwtSubjectTokenResolverPairwiseTests
 {
+    /// <summary>The client requesting the exchange.</summary>
+    private static readonly ClientInfo Requester = new("requester");
+
     private const string TokenWire = "header.payload.signature";
     private const string RealSubject = "real-user-42";
     private const string OriginalClientId = "pairwise-client";
@@ -54,10 +59,10 @@ public class JwtSubjectTokenResolverPairwiseTests
             SectorIdentifier = "sector.example.com",
         };
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(OriginalClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, OriginalClientId))
             .ReturnsAsync(_pairwiseClient);
 
-        _resolver = new JwtSubjectTokenResolver(_jwtValidator.Object, _converter, _clientInfoProvider.Object);
+        _resolver = new JwtSubjectTokenResolver(_jwtValidator.Object, new FixedSubjectTypeConverter(_converter), _clientInfoProvider.Object);
     }
 
     [Fact]
@@ -81,10 +86,10 @@ public class JwtSubjectTokenResolverPairwiseTests
             },
         };
         _jwtValidator
-            .Setup(v => v.ValidateAsync(TokenWire, SubjectTokenValidation))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), TokenWire, It.IsAny<TokenTypePolicy>(), SubjectTokenValidation))
             .ReturnsAsync(jwt);
 
-        var result = await _resolver.ResolveAsync(TokenWire, CancellationToken.None);
+        var result = await _resolver.ResolveAsync(SingleIssuer.Tenant, Requester, TokenWire, new Uri(TokenExchangeTokenTypes.Jwt), CancellationToken.None);
 
         Assert.True(result.TryGetSuccess(out var ctx));
         Assert.Equal(RealSubject, ctx.Subject);

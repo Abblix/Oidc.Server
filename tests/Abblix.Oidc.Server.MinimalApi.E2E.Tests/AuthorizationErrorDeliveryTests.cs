@@ -108,7 +108,7 @@ public sealed class AuthorizationErrorDeliveryTests(TestFactory factory) : IClas
         var body = JsonNode.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!.AsObject();
 
-        Assert.False(string.IsNullOrEmpty(body[ResponseParameters.Error]?.GetValue<string>()));
+        Assert.False(string.IsNullOrEmpty(body[ErrorResponse.Parameters.Error]?.GetValue<string>()));
     }
 
     /// <summary>

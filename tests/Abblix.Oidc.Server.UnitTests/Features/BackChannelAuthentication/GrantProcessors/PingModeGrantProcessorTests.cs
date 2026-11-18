@@ -51,13 +51,13 @@ public class PingModeGrantProcessorTests
     [Fact]
     public async Task Process_ConsumesAuthReqIdFromStorage()
     {
-        _storage.Setup(s => s.TryRemoveAsync(AuthRequestId)).ReturnsAsync(_request);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, AuthRequestId)).ReturnsAsync(_request);
 
-        var result = await _processor.ProcessAuthenticatedRequestAsync(AuthRequestId, _request);
+        var result = await _processor.ProcessAuthenticatedRequestAsync(SingleIssuer.Tenant, AuthRequestId, _request);
 
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.Equal(_request.AuthorizedGrant, grant);
-        _storage.Verify(s => s.TryRemoveAsync(AuthRequestId), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, AuthRequestId), Times.Once);
     }
 
     [Fact]
@@ -65,12 +65,12 @@ public class PingModeGrantProcessorTests
     {
         // First retrieval consumes the entry; the second sees nothing in storage and must fail
         // rather than re-issue tokens for the same single-use auth_req_id.
-        _storage.SetupSequence(s => s.TryRemoveAsync(AuthRequestId))
+        _storage.SetupSequence(s => s.TryRemoveAsync(TestTenant.Matched, AuthRequestId))
             .ReturnsAsync(_request)
             .ReturnsAsync((BackChannelAuthenticationRequest?)null);
 
-        var first = await _processor.ProcessAuthenticatedRequestAsync(AuthRequestId, _request);
-        var second = await _processor.ProcessAuthenticatedRequestAsync(AuthRequestId, _request);
+        var first = await _processor.ProcessAuthenticatedRequestAsync(SingleIssuer.Tenant, AuthRequestId, _request);
+        var second = await _processor.ProcessAuthenticatedRequestAsync(SingleIssuer.Tenant, AuthRequestId, _request);
 
         Assert.True(first.TryGetSuccess(out _));
         Assert.True(second.TryGetFailure(out var error));

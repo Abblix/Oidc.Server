@@ -18,8 +18,8 @@ using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -30,21 +30,19 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="logger">Logger for recording the authentication process and any issues encountered.</param>
 /// <param name="tokenValidator">Validator for JSON Web Tokens.</param>
 /// <param name="clientInfoProvider">Provider for retrieving client information.</param>
-/// <param name="requestInfoProvider">Provider for retrieving request information.</param>
 /// <param name="clock">Time provider for checking secret expiration.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
-/// <param name="issuerProvider">Supplies the issuer identifier a profile-governed assertion must name.</param>
-/// <param name="options">Supplies the server-wide default security profile.</param>
+/// <param name="serviceProvider">Resolves per request where the token and backchannel authentication endpoints are
+/// served, for a client allowed such a URL
+/// as its assertion's audience.</param>
 public partial class ClientSecretJwtAuthenticator(
     ILogger<ClientSecretJwtAuthenticator> logger,
-    IJsonWebTokenValidator tokenValidator,
+    ProfiledJwtValidator tokenValidator,
     IClientInfoProvider clientInfoProvider,
-    IRequestInfoProvider requestInfoProvider,
     TimeProvider clock,
     IReplayCache replayCache,
-    IIssuerProvider issuerProvider,
-    IOptions<OidcOptions> options)
-    : JwtAssertionAuthenticatorBase(logger, replayCache, issuerProvider, options, clock)
+    IServiceProvider serviceProvider)
+    : JwtAssertionAuthenticatorBase(logger, replayCache, clock, serviceProvider)
 {
     /// <summary>
     /// Specifies the client authentication method this authenticator supports, which is 'client_secret_jwt'.
@@ -60,29 +58,31 @@ public partial class ClientSecretJwtAuthenticator(
     /// <summary>
     /// Validates the JWT assertion using HMAC signature with the client secret.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="jwt">The JWT assertion to validate.</param>
     /// <returns>
     /// A Result containing either a ValidJsonWebToken on success, or a JwtValidationError on failure.
     /// </returns>
-    protected override async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(string jwt)
+    protected override async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(
+        TenantDefinition tenant, string jwt)
     {
         var context = new ValidationContext();
+        var profile = DefaultProfileRequirementsOf(tenant);
 
         var result = await tokenValidator.ValidateAsync(
+            profile,
             jwt,
             new ValidationParameters
             {
-                // A client assertion must carry its own expiry: RFC 7521 Section 5.2 requires an
-                // "Expires At entity that limits the time window during which the assertion can be
-                // used", and RFC 7523 Section 3 item 4 states it as a MUST on the exp claim.
-                Options = ValidationOptions.Default | ValidationOptions.RequireExpirationTime,
+                // The base class judges the type and the audience after validation, by RFC 10070 section 4
+                Options = AssertionValidationOptions,
+                TokenTypes = TokenTypePolicy.CheckedByCaller,
 
-                // The tolerance belongs to the profile this deployment is held to, ceiling
-                // included - RFC 7523 Section 3 names no ceiling of its own.
-                ClockSkew = DefaultProfileRequirements.ClockSkewOrDefault(),
-                ValidateAudience = ValidateAudience,
-                ValidateIssuer = issuer => ValidateIssuer(issuer, context),
-                ResolveIssuerSigningKeys = issuer => ResolveIssuerSigningKeys(issuer, context),
+                // The tolerance belongs to the tenant's default profile, ceiling included -
+                // RFC 7523 Section 3 names no ceiling of its own.
+                ClockSkew = profile.ClockSkewOrDefault(),
+                ValidateIssuer = issuer => ValidateIssuer(tenant, issuer, context),
+                ResolveIssuerSigningKeys = issuer => ResolveIssuerSigningKeys(tenant, issuer, context),
             });
 
         return result.MapSuccess(token => new ValidJsonWebToken(token, context.ClientInfo.NotNull(nameof(context.ClientInfo))));
@@ -100,30 +100,13 @@ public partial class ClientSecretJwtAuthenticator(
     }
 
     /// <summary>
-    /// Validates that the JWT's audience claim matches the current request URI.
-    /// </summary>
-    /// <param name="audiences">The audiences from the JWT to validate.</param>
-    /// <returns>True if the audience is valid; otherwise, false.</returns>
-    private Task<bool> ValidateAudience(IEnumerable<string> audiences)
-    {
-        var requestUri = requestInfoProvider.RequestUri;
-        var materialized = audiences.Materialize();
-        var result = materialized.Contains(requestUri);
-        if (!result)
-        {
-            LogAudienceValidationFailed(materialized, requestUri);
-        }
-
-        return Task.FromResult(result);
-    }
-
-    /// <summary>
     /// Validates the JWT issuer and retrieves the associated client information.
     /// </summary>
+    /// <param name="tenant">The tenant the client is looked up in.</param>
     /// <param name="issuer">The issuer claim from the JWT.</param>
     /// <param name="context">The validation context to store resolved client information.</param>
     /// <returns>True if the issuer is valid and client was found; otherwise, false.</returns>
-    private async Task<bool> ValidateIssuer(string issuer, ValidationContext context)
+    private async Task<bool> ValidateIssuer(TenantDefinition tenant, string issuer, ValidationContext context)
     {
         if (context.ClientInfo != null)
         {
@@ -136,7 +119,7 @@ public partial class ClientSecretJwtAuthenticator(
             return true;
         }
 
-        switch (await clientInfoProvider.TryFindClientAsync(issuer).WithLicenseCheck())
+        switch (await clientInfoProvider.TryFindClientAsync(tenant, issuer))
         {
             case { } clientInfo when clientInfo.TokenEndpointAuthMethod != ClientAuthenticationMethods.ClientSecretJwt:
                 LogWrongAuthMethod(issuer);
@@ -155,12 +138,14 @@ public partial class ClientSecretJwtAuthenticator(
     /// Resolves the symmetric signing keys for validating the JWT signature.
     /// Creates HMAC keys from the client's secret for HS256, HS384, and HS512 algorithms.
     /// </summary>
+    /// <param name="tenant">The tenant the client is looked up in.</param>
     /// <param name="issuer">The issuer claim from the JWT.</param>
     /// <param name="context">The validation context containing client information.</param>
     /// <returns>An async enumerable of JSON Web Keys created from the client secrets.</returns>
-    private async IAsyncEnumerable<JsonWebKey> ResolveIssuerSigningKeys(string issuer, ValidationContext context)
+    private async IAsyncEnumerable<JsonWebKey> ResolveIssuerSigningKeys(
+        TenantDefinition tenant, string issuer, ValidationContext context)
     {
-        if (!await ValidateIssuer(issuer, context))
+        if (!await ValidateIssuer(tenant, issuer, context))
             yield break;
 
         var client = context.ClientInfo.NotNull(nameof(context.ClientInfo));

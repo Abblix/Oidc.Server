@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
 
@@ -19,16 +20,18 @@ public interface IUserCodeVerificationService
     /// <summary>
     /// Verifies a user code and returns the associated device authorization request details.
     /// </summary>
+    /// <param name="tenant">The tenant the verification page is served at.</param>
     /// <param name="userCode">The user-entered verification code.</param>
     /// <returns>
     /// A task that returns the verification result containing request details if valid,
     /// or an appropriate error if the code is invalid, expired, or already used.
     /// </returns>
-    Task<UserCodeVerificationResult> VerifyAsync(string userCode);
+    Task<UserCodeVerificationResult> VerifyAsync(TenantDefinition tenant, string userCode);
 
     /// <summary>
     /// Approves the device authorization request, linking the user's authorization to the pending device.
     /// </summary>
+    /// <param name="tenant">The tenant the verification page is served at.</param>
     /// <param name="userCode">The user-entered verification code.</param>
     /// <param name="authorizedGrant">The authorized grant containing the user's authentication session and
     /// context. Its <c>authorization_details</c> are what the device is granted: the library adds none, and
@@ -68,11 +71,12 @@ public interface IUserCodeVerificationService
     /// approval answers <c>false</c> and the request stays pending.
     /// </para>
     /// </remarks>
-    Task<bool> ApproveAsync(string userCode, AuthorizedGrant authorizedGrant);
+    Task<bool> ApproveAsync(TenantDefinition tenant, string userCode, AuthorizedGrant authorizedGrant);
 
     /// <summary>
     /// Denies the device authorization request.
     /// </summary>
+    /// <param name="tenant">The tenant the verification page is served at.</param>
     /// <param name="userCode">The user-entered verification code.</param>
     /// <returns>
     /// True when this call is the one that recorded the denial. False otherwise, and otherwise is wider
@@ -80,5 +84,5 @@ public interface IUserCodeVerificationService
     /// landed first answers false, as does a request whose lifetime ran out. Nothing about the record changes in those cases, and a true
     /// carries the same narrowed-not-closed window <see cref="ApproveAsync"/> describes.
     /// </returns>
-    Task<bool> DenyAsync(string userCode);
+    Task<bool> DenyAsync(TenantDefinition tenant, string userCode);
 }

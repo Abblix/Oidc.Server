@@ -6,16 +6,15 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Configuration;
-using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -65,11 +64,7 @@ public sealed class RegistrationRequestSizeTests(TestFactory factory) : IClassFi
         var routes = services.GetRequiredService<IOptions<OidcRouteOptions>>().Value;
         var route = method is "POST" ? routes.Register : routes.RegisterClient;
 
-        var endpoint = services.GetRequiredService<EndpointDataSource>().Endpoints
-            .OfType<RouteEndpoint>()
-            .Single(candidate =>
-                candidate.RoutePattern.RawText == route
-                && candidate.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Contains(method));
+        var endpoint = RegistrationBinding(services, route, method);
 
         var limit = endpoint.Metadata.GetMetadata<IRequestSizeLimitMetadata>();
 
@@ -102,14 +97,22 @@ public sealed class RegistrationRequestSizeTests(TestFactory factory) : IClassFi
         var routes = services.GetRequiredService<IOptions<OidcRouteOptions>>().Value;
         var route = method is "POST" ? routes.Register : routes.RegisterClient;
 
-        var endpoint = services.GetRequiredService<EndpointDataSource>().Endpoints
-            .OfType<RouteEndpoint>()
-            .Single(candidate =>
-                candidate.RoutePattern.RawText == route
-                && candidate.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Contains(method));
+        var endpoint = RegistrationBinding(services, route, method);
 
         Assert.Null(endpoint.Metadata.GetMetadata<IRequestSizeLimitMetadata>());
     }
+
+    /// <summary>
+    /// The endpoint of <paramref name="route"/> and <paramref name="method"/> reading the registration document: the
+    /// one accepting its media type, beside which another takes a body of any other type and reads none of it.
+    /// </summary>
+    private static RouteEndpoint RegistrationBinding(IServiceProvider services, string route, string method)
+        => services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Single(candidate =>
+                candidate.RoutePattern.RawText == route
+                && candidate.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Contains(method)
+                && candidate.Metadata.GetMetadata<IAcceptsMetadata>() is not null);
 
     /// <summary>
     /// A registration within the limit still goes through. The bound is generous next to a real registration,

@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 using Abblix.Oidc.Server.Model;
 using Moq;
+using Abblix.Oidc;
 using Xunit;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
@@ -61,7 +62,7 @@ public class BackChannelAuthenticationValidatorTests
         var context = CreateContext();
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -78,7 +79,7 @@ public class BackChannelAuthenticationValidatorTests
         var context = CreateContext(tokenDeliveryMode: BackchannelTokenDeliveryModes.Poll);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -97,7 +98,7 @@ public class BackChannelAuthenticationValidatorTests
             notificationEndpoint: new Uri("https://example.com/notify"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -115,7 +116,7 @@ public class BackChannelAuthenticationValidatorTests
         var context = CreateContext(tokenDeliveryMode: BackchannelTokenDeliveryModes.Ping);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -136,7 +137,7 @@ public class BackChannelAuthenticationValidatorTests
             notificationEndpoint: new Uri("https://example.com/notify"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -159,7 +160,7 @@ public class BackChannelAuthenticationValidatorTests
             notificationEndpoint: new Uri("http://client.example.com/notify"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -177,7 +178,7 @@ public class BackChannelAuthenticationValidatorTests
         var context = CreateContext(tokenDeliveryMode: BackchannelTokenDeliveryModes.Push);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -198,7 +199,7 @@ public class BackChannelAuthenticationValidatorTests
             notificationEndpoint: new Uri("https://example.com/notify"));
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -215,7 +216,7 @@ public class BackChannelAuthenticationValidatorTests
         var context = CreateContext(tokenDeliveryMode: "custom-mode");
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -239,7 +240,7 @@ public class BackChannelAuthenticationValidatorTests
             signingAlg: SigningAlgorithms.RS256);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -262,7 +263,7 @@ public class BackChannelAuthenticationValidatorTests
             signingAlg: SigningAlgorithms.ES512);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -282,7 +283,7 @@ public class BackChannelAuthenticationValidatorTests
         var context = CreateContext(tokenDeliveryMode: BackchannelTokenDeliveryModes.Poll);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -305,7 +306,7 @@ public class BackChannelAuthenticationValidatorTests
             signingAlg: "rs256"); // Different case
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -325,7 +326,7 @@ public class BackChannelAuthenticationValidatorTests
             signingAlg: string.Empty);
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -348,7 +349,7 @@ public class BackChannelAuthenticationValidatorTests
     {
         var context = CreateContext(mode, new Uri("/cb", UriKind.Relative));
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // The same code the relative case gets from StoredUriValidator ahead of this one in the
         // pipeline. Every refusal this validator writes carries it, which is what makes the member
@@ -377,11 +378,12 @@ public class BackChannelAuthenticationValidatorTests
     [InlineData(BackchannelTokenDeliveryModes.Ping, null, null, "is required if")]
     [InlineData(BackchannelTokenDeliveryModes.Push, null, null, "is required if")]
     [InlineData("carrier-pigeon", null, null, "delivery mode is not supported")]
-    // The ORDER, which nothing held. These TWO rows are the whole of it: the orderings differ only
+    // The ORDER, which nothing held. The TWO rows pairing an http:// endpoint with poll and with an
+    // unsupported mode are the whole of it: the orderings differ only
     // where the scheme check would fire AND an arm would fire, which is poll with a bad endpoint
     // and an unsupported mode with a bad endpoint. The ping-or-push arm requires a null endpoint,
     // so the scheme check can never fire beside it, and the algorithm check sits below both either
-    // way. With the scheme check moved back above the arms, exactly these two read "HTTPS scheme"
+    // way. With the scheme check moved back above the arms, exactly those two read "HTTPS scheme"
     // instead and nothing else in any suite moves.
     //
     // A client wrong about its MODE has two things wrong with it, and which one it is told about is
@@ -402,7 +404,7 @@ public class BackChannelAuthenticationValidatorTests
             endpoint is null ? null : new Uri(endpoint, UriKind.Absolute),
             signingAlg);
 
-        var result = Assert.IsType<OidcError>(await _validator.ValidateAsync(context));
+        var result = Assert.IsType<OidcError>(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
 
         Assert.Contains(fragment, result.ErrorDescription, StringComparison.Ordinal);
     }
@@ -423,7 +425,7 @@ public class BackChannelAuthenticationValidatorTests
             BackchannelTokenDeliveryModes.Ping,
             new Uri("http://client.example/cb", UriKind.Absolute));
 
-        var result = Assert.IsType<OidcError>(await _validator.ValidateAsync(context));
+        var result = Assert.IsType<OidcError>(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
 
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
@@ -438,7 +440,8 @@ public class BackChannelAuthenticationValidatorTests
     /// removing it turns seventeen unit rows red across two files and sixty-four E2E rows across two
     /// SUITES - the MinimalApi one carries eleven of them. The number has been wrong twice for two
     /// different reasons: it once counted only the suites that happened to be open, and it said
-    /// sixteen until the row below was added, which fails under the same plant. A count is valid for
+    /// sixteen until <see cref="ValidateAsync_NoDeliveryMode_IsNotJudgedOnItsCibaSigningAlgorithm"/> was
+    /// added, which fails under the same plant. A count is valid for
     /// the state it measured, and an edit in the same commit can invalidate it. This row is the one
     /// that says WHY in a sentence, rather than the only one that speaks.
     /// </remarks>
@@ -447,14 +450,15 @@ public class BackChannelAuthenticationValidatorTests
     {
         var context = CreateContext(notificationEndpoint: new Uri("https://client.example/cb"));
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 
     /// <summary>
     /// A registration naming no delivery mode is not judged on its CIBA signing algorithm either.
     /// </summary>
     /// <remarks>
-    /// The row above pins where the null-mode exit sits relative to the switch. This one pins the other
+    /// <see cref="ValidateAsync_NoDeliveryModeAtAll_IsNotAnUnsupportedMode"/> pins where the null-mode exit
+    /// sits relative to the switch. This one pins the other
     /// side of it - the algorithm check below - and without it that position was free: moving the exit
     /// beneath the algorithm check left every suite green. A boundary a value can cross in either
     /// direction needs a row on each side, and the exit had one.
@@ -480,6 +484,42 @@ public class BackChannelAuthenticationValidatorTests
     {
         var context = CreateContext(signingAlg: "NOPE");
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+    }
+
+    /// <summary>
+    /// CIBA Core 1.0 sections 7.1 and 10.1 have the client authenticate at both endpoints of the flow, so a
+    /// registration asking for the flow with the method "none" is refused, and the same flow with a method that
+    /// authenticates is not.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientAuthenticationMethods.None, true)]
+    [InlineData(ClientAuthenticationMethods.PrivateKeyJwt, false)]
+    public async Task ValidateAsync_PollModeAndAuthenticationMethod_IsRefusedOnlyWithoutAuthentication(
+        string authenticationMethod,
+        bool refused)
+    {
+        var request = CreateContext(tokenDeliveryMode: BackchannelTokenDeliveryModes.Poll).Request with
+        {
+            TokenEndpointAuthMethod = authenticationMethod,
+        };
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, new ClientRegistrationValidationContext(request));
+
+        if (refused)
+            Assert.Equal(ErrorCodes.InvalidClientMetadata, Assert.IsType<OidcError>(result).Error);
+        else
+            Assert.Null(result);
+    }
+
+    /// <summary>
+    /// A client that does not ask for the flow may register with the method "none", as any public client does.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_PublicClientWithoutBackChannel_IsAccepted()
+    {
+        var request = CreateContext().Request with { TokenEndpointAuthMethod = ClientAuthenticationMethods.None };
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, new ClientRegistrationValidationContext(request)));
     }
 }

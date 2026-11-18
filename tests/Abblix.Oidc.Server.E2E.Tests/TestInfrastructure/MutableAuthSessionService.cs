@@ -28,11 +28,23 @@ public sealed class MutableAuthSessionService(TimeProvider clock) : IAuthSession
     /// Replaces the logged-in users, in the order the server will see them.
     /// </summary>
     public void SignedInAs(params string[] subjects) =>
-        _sessions = [..subjects.Select(subject => new AuthSession(
-            Subject: subject,
-            SessionId: $"session-{subject}",
-            AuthenticationTime: clock.GetUtcNow(),
-            IdentityProvider: "e2e-test"))];
+        _sessions = [..subjects.Select(subject => Session(subject, null))];
+
+    /// <summary>
+    /// Replaces the logged-in users, each with the authentication level the host recorded for it - null
+    /// for a host that records none.
+    /// </summary>
+    public void SignedInAtLevel(params (string Subject, string? Acr)[] sessions) =>
+        _sessions = [..sessions.Select(session => Session(session.Subject, session.Acr))];
+
+    private AuthSession Session(string subject, string? acr) => new(
+        Subject: subject,
+        SessionId: $"session-{subject}",
+        AuthenticationTime: clock.GetUtcNow(),
+        IdentityProvider: "e2e-test")
+    {
+        AuthContextClassRef = acr,
+    };
 
     public async IAsyncEnumerable<AuthSession> GetAvailableAuthSessions()
     {
@@ -52,7 +64,8 @@ public sealed class MutableAuthSessionService(TimeProvider clock) : IAuthSession
     public Task<AuthSession?> AuthenticateAsync() =>
         Task.FromResult(_sessions.Length > 0 ? _sessions[0] : null);
 
-    public Task SignInAsync(AuthSession authSession) => Task.CompletedTask;
+    public Task<AuthSessionSignInResult> SignInAsync(AuthSession authSession)
+        => Task.FromResult(new AuthSessionSignInResult(authSession, []));
 
     public Task SignOutAsync()
     {

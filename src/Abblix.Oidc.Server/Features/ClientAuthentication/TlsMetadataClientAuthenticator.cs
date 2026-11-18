@@ -13,10 +13,13 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.Extensions.Logging;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -28,6 +31,8 @@ public partial class TlsMetadataClientAuthenticator(
     ILogger<TlsMetadataClientAuthenticator> logger,
     IClientInfoProvider clientInfoProvider) : IClientAuthenticator
 {
+    private readonly MutualTlsCredential _credential = new(clientInfoProvider, ClientAuthenticationMethods.TlsClientAuth);
+
     /// <summary>
     /// OID for Subject Alternative Name extension (RFC 5280 section 4.2.1.6).
     /// </summary>
@@ -48,11 +53,12 @@ public partial class TlsMetadataClientAuthenticator(
     /// Attempts to authenticate a client using mutual TLS with metadata-based certificate validation.
     /// Validates the client certificate against configured Subject DN and/or Subject Alternative Name entries.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="request">The client request containing the certificate and client ID to authenticate.</param>
     /// <returns>
-    /// A task that returns the authenticated <see cref="ClientInfo"/> if successful; otherwise, null.
-    /// Returns null if no certificate is provided, client not found, authentication method doesn't match,
-    /// or certificate validation fails.
+    /// A task that returns the authenticated <see cref="ClientInfo"/>, or why it is not one: no certificate presented
+    /// as a credential (none at all, no client_id, or a client_id naming no client registered for this method), or one
+    /// that does not match the client's metadata.
     /// </returns>
     /// <remarks>
     /// This method implements RFC 8705 tls_client_auth by:
@@ -62,39 +68,31 @@ public partial class TlsMetadataClientAuthenticator(
     /// 4. Validating certificate Subject DN (if configured)
     /// 5. Validating certificate SAN entries (if configured)
     /// </remarks>
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
-        var certificate = request.ClientCertificate;
-        if (certificate == null)
-            return null;
-
-        var clientId = request.ClientId;
-        if (!clientId.NotNullOrWhiteSpace())
-            return null;
-
-        var client = await clientInfoProvider.TryFindClientAsync(clientId).WithLicenseCheck();
-        if (client == null)
-            return null;
-
-        if (client.TokenEndpointAuthMethod != ClientAuthenticationMethods.TlsClientAuth)
-            return null;
+        if (await _credential.FindAsync(tenant, request) is not (var client, var certificate))
+            return ClientAuthenticationFailures.NoCredential;
 
         var options = client.TlsClientAuth;
         if (options == null)
         {
-            LogNoTlsMetadataConfigured(clientId);
-            return null;
+            LogNoTlsMetadataConfigured(client.ClientId);
+            return ClientAuthenticationFailures.InvalidCredential;
         }
 
         if (!MatchSubjectDn(options.SubjectDn, certificate))
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
 
         if (!MatchSans(options, certificate))
-            return null;
+            return ClientAuthenticationFailures.InvalidCredential;
 
-        LogAuthenticated(clientId);
+        LogAuthenticated(client.ClientId);
         return client;
     }
+
+    /// <inheritdoc />
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+        => _credential.FindPresentedAsync(tenant, request);
 
     /// <summary>
     /// Validates the certificate's Subject Distinguished Name against the required DN.
@@ -146,32 +144,36 @@ public partial class TlsMetadataClientAuthenticator(
     /// </remarks>
     private static bool MatchSans(TlsClientAuthOptions options, X509Certificate2 cert)
     {
-        if (options.SanDns is not { Length: > 0 } &&
-            options.SanUris is not { Length: > 0 } &&
-            options.SanIps is not { Length: > 0 } &&
-            options.SanEmails is not { Length: > 0 })
-        {
-            return true; // nothing to check
-        }
+        var requirements = SanRequirements(options).ToArray();
+        if (requirements.Length == 0)
+            return true;
 
         var san = GetSubjectAlternativeName(cert);
-        if (san == null)
-            return false;
+        return san != null && requirements.All(isMetBy => isMetBy(san));
+    }
 
-        if (options.SanDns is { Length: > 0 } && !options.SanDns.All(d => san.DnsNames.Contains(d)))
-            return false;
+    /// <summary>
+    /// One requirement per SAN kind the client configured: every value it lists must be among the certificate's
+    /// entries of that kind.
+    /// </summary>
+    /// <remarks>
+    /// Specification: each kind is a predicate over the parsed entries, so a kind left unconfigured adds nothing
+    /// to check rather than a condition that has to be skipped.
+    /// </remarks>
+    /// <param name="options">The client's TLS client authentication options.</param>
+    private static IEnumerable<Func<SanEntries, bool>> SanRequirements(TlsClientAuthOptions options)
+    {
+        if (options.SanDns is { Length: > 0 } dnsNames)
+            yield return san => dnsNames.All(d => san.DnsNames.Contains(d));
 
-        if (options.SanUris is { Length: > 0 } && !options.SanUris.All(u => san.Uris.Contains(u)))
-            return false;
+        if (options.SanUris is { Length: > 0 } uris)
+            yield return san => uris.All(u => san.Uris.Contains(u));
 
-        if (options.SanIps is { Length: > 0 } && !options.SanIps.All(ip => san.Ips.Contains(ip)))
-            return false;
+        if (options.SanIps is { Length: > 0 } ips)
+            yield return san => ips.All(ip => san.Ips.Contains(ip));
 
-        if (options.SanEmails is { Length: > 0 } && !options.SanEmails.All(e => san.Emails.Contains(e)))
-            return false;
-
-        return true;
-
+        if (options.SanEmails is { Length: > 0 } emails)
+            yield return san => emails.All(e => san.Emails.Contains(e));
     }
 
     /// <summary>
@@ -254,8 +256,21 @@ public partial class TlsMetadataClientAuthenticator(
         while (sequenceReader.HasData)
         {
             var tag = sequenceReader.PeekTag();
+            var name = (GeneralNameTag)tag.TagValue;
 
-            switch ((GeneralNameTag)tag.TagValue)
+            // The certificate is foreign input: a tag beyond the RFC 5280 list is read past rather than refused.
+            if (Enum.IsDefined(name))
+                ReadName(sequenceReader, tag, name, entries);
+            else
+                sequenceReader.ReadEncodedValue();
+        }
+
+        return entries;
+    }
+
+    private static void ReadName(AsnReader sequenceReader, Asn1Tag tag, GeneralNameTag name, SanEntries entries)
+    {
+            switch (name)
             {
                 case GeneralNameTag.Rfc822Name:
                     var email = Encoding.UTF8.GetString(sequenceReader.ReadOctetString(tag));
@@ -268,9 +283,7 @@ public partial class TlsMetadataClientAuthenticator(
                     break;
 
                 case GeneralNameTag.UniformResourceIdentifier:
-                    var uriString = Encoding.UTF8.GetString(sequenceReader.ReadOctetString(tag));
-                    if (Uri.TryCreate(uriString, UriKind.Absolute, out var uri))
-                        entries.Uris.Add(uri);
+                    AddUri(Encoding.UTF8.GetString(sequenceReader.ReadOctetString(tag)), entries);
                     break;
 
                 case GeneralNameTag.IpAddress:
@@ -279,13 +292,24 @@ public partial class TlsMetadataClientAuthenticator(
                     entries.Ips.Add(ip);
                     break;
 
-                default:
-                    // Skip unsupported GeneralName types (otherName, directoryName, x400Address, etc.)
+                // The name forms client authentication does not match on are read past.
+                case GeneralNameTag.OtherName:
+                case GeneralNameTag.X400Address:
+                case GeneralNameTag.DirectoryName:
+                case GeneralNameTag.EdiPartyName:
+                case GeneralNameTag.RegisteredId:
                     sequenceReader.ReadEncodedValue();
                     break;
-            }
-        }
 
-        return entries;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(name), name, "A general name form without a reading rule.");
+            }
+    }
+
+    // An entry that is not an absolute URI is skipped, as the summary of the parse promises.
+    private static void AddUri(string value, SanEntries entries)
+    {
+        if (Uri.TryCreate(value, UriKind.Absolute, out var uri))
+            entries.Uris.Add(uri);
     }
 }

@@ -40,7 +40,7 @@ public sealed class CaepInteropProfileDispatchTests
     private const string Issuer = "https://tr.example.com";
 
     /// <summary>
-    /// Each of the three use cases, because a policy that recognised only <c>session-revoked</c> would
+    /// Each of the three use cases, because a policy that recognized only <c>session-revoked</c> would
     /// pass a suite written for the event the specification happens to name first.
     /// </summary>
     [Theory]
@@ -190,14 +190,14 @@ public sealed class CaepInteropProfileDispatchTests
     {
         var (dispatcher, outbox, _) = await CreateAsync(CaepEventTypes.SessionRevoked, new CaepInteropProfilePolicy());
 
-        var reached = await dispatcher.DispatchAsync(
+        var reached = (await dispatcher.DispatchAsync(
             Descriptor(
                 CaepEventTypes.SessionRevoked,
                 new SessionRevokedPayload
                 {
                     ReasonAdmin = new Dictionary<string, string> { ["en"] = "Landspeed policy violation" },
                 }),
-            Cancellation);
+            Cancellation)).Reached;
 
         Assert.Equal(1, reached);
         Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
@@ -216,8 +216,8 @@ public sealed class CaepInteropProfileDispatchTests
     {
         var (dispatcher, outbox, _) = await CreateAsync(CaepEventTypes.SessionRevoked, payloadPolicy: null);
 
-        var reached = await dispatcher.DispatchAsync(
-            Descriptor(CaepEventTypes.SessionRevoked, new SessionRevokedPayload()), Cancellation);
+        var reached = (await dispatcher.DispatchAsync(
+            Descriptor(CaepEventTypes.SessionRevoked, new SessionRevokedPayload()), Cancellation)).Reached;
 
         Assert.Equal(1, reached);
         Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
@@ -233,8 +233,8 @@ public sealed class CaepInteropProfileDispatchTests
         var (dispatcher, outbox, _) = await CreateAsync(
             CaepEventTypes.SessionEstablished, new CaepInteropProfilePolicy());
 
-        var reached = await dispatcher.DispatchAsync(
-            Descriptor(CaepEventTypes.SessionEstablished, new SessionEstablishedPayload()), Cancellation);
+        var reached = (await dispatcher.DispatchAsync(
+            Descriptor(CaepEventTypes.SessionEstablished, new SessionEstablishedPayload()), Cancellation)).Reached;
 
         Assert.Equal(1, reached);
         Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
@@ -303,7 +303,7 @@ public sealed class CaepInteropProfileDispatchTests
 
         if (populated)
         {
-            Assert.Equal(1, await dispatcher.DispatchAsync(descriptor, Cancellation));
+            Assert.Equal(1, (await dispatcher.DispatchAsync(descriptor, Cancellation)).Reached);
             Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
         }
         else
@@ -351,8 +351,8 @@ public sealed class CaepInteropProfileDispatchTests
             CaepEventTypes.SessionRevoked,
             new CaepInteropProfilePolicy(CaepEventTypes.CredentialChange));
 
-        var reached = await dispatcher.DispatchAsync(
-            Descriptor(CaepEventTypes.SessionRevoked, new SessionRevokedPayload()), Cancellation);
+        var reached = (await dispatcher.DispatchAsync(
+            Descriptor(CaepEventTypes.SessionRevoked, new SessionRevokedPayload()), Cancellation)).Reached;
 
         Assert.Equal(1, reached);
         Assert.Single(await outbox.PendingAsync("receiver-a", "s-1", null, Cancellation));
@@ -363,10 +363,11 @@ public sealed class CaepInteropProfileDispatchTests
     /// deployment ever holds.
     /// </summary>
     /// <remarks>
-    /// Every row above constructs the dispatcher by hand, so all of them would pass over a policy the
-    /// container never injects - a registration nobody resolves reads exactly like a working feature. This
-    /// row resolves it the way a host does, and its twin asserts the optional dependency stays optional:
-    /// a container with nothing registered must still produce a dispatcher.
+    /// Every other test here that dispatches builds the dispatcher by hand, so all of them would pass over
+    /// a policy the container never injects - a registration nobody resolves reads exactly like a working
+    /// feature. The row that registers the policy resolves it the way a host does, and the row that
+    /// registers none asserts the optional dependency stays optional: a container with nothing registered
+    /// must still produce a dispatcher.
     /// </remarks>
     [Theory]
     [InlineData(true)]
@@ -402,7 +403,9 @@ public sealed class CaepInteropProfileDispatchTests
         {
             // No stream is subscribed here, so zero is the honest answer - and the point is that it
             // ANSWERED rather than refused.
-            Assert.Equal(0, await dispatcher.DispatchAsync(descriptor, Cancellation));
+            var result = await dispatcher.DispatchAsync(descriptor, Cancellation);
+            Assert.Equal(0, result.Reached);
+            Assert.Empty(result.NotReached);
         }
     }
 
@@ -477,8 +480,8 @@ public sealed class CaepInteropProfileDispatchTests
                 NullLogger<EventDispatcher>.Instance,
                 store,
                 outbox,
-                new StubSigner(),
-                Issuer,
+                new OptionsTransmitterIdentity(new SharedSignalsTransmitterOptions { Issuer = Issuer }),
+                TestInstruments.Create(),
                 payloadPolicy: payloadPolicy),
             outbox,
             stream);
@@ -486,10 +489,4 @@ public sealed class CaepInteropProfileDispatchTests
 
     /// <summary>A payload of the host's own, which this policy has no way to read.</summary>
     private sealed class HostsOwnPayload : IEventPayload;
-
-    private sealed class StubSigner : ISecurityEventTokenSigner
-    {
-        public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
-            => Task.FromResult($"signed.{token.JwtId}");
-    }
 }

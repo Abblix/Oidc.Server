@@ -88,6 +88,89 @@ internal sealed class Composition<TInterface>(
         return member.ToKeyedFamilyMember(memberKey, member.Lifetime);
     }
 
+    /// <inheritdoc />
+    public IComposition<TInterface> AddFirst(ServiceDescriptor member)
+    {
+        EnsureAbsent(member, nameof(AddFirst));
+        Insert(0, member);
+        return this;
+    }
+
+    /// <inheritdoc />
+    public IComposition<TInterface> AddLast(ServiceDescriptor member)
+    {
+        if (!Contains(member))
+            Add(member);
+        return this;
+    }
+
+    /// <inheritdoc />
+    public IComposition<TInterface> AddBefore<TExisting>(ServiceDescriptor member)
+        where TExisting : TInterface
+    {
+        EnsureAbsent(member, nameof(AddBefore));
+        Insert(IndexOf(typeof(TExisting), nameof(AddBefore)), member);
+        return this;
+    }
+
+    /// <inheritdoc />
+    public IComposition<TInterface> AddAfter<TExisting>(ServiceDescriptor member)
+        where TExisting : TInterface
+    {
+        EnsureAbsent(member, nameof(AddAfter));
+        Insert(IndexOf(typeof(TExisting), nameof(AddAfter)) + 1, member);
+        return this;
+    }
+
+    /// <inheritdoc />
+    public IComposition<TInterface> Remove<TExisting>()
+        where TExisting : TInterface
+    {
+        RemoveAt(IndexOf(typeof(TExisting), nameof(Remove)));
+        return this;
+    }
+
+    /// <inheritdoc />
+    public IComposition<TInterface> Replace<TExisting>(ServiceDescriptor member)
+        where TExisting : TInterface
+    {
+        this[IndexOf(typeof(TExisting), nameof(Replace))] = member;
+        return this;
+    }
+
+    /// <summary>
+    /// Refuses a member the family already holds. The positional methods are asked for a place, so silently
+    /// keeping the one that is there would ignore what the caller asked for, while adding a second copy would
+    /// make every anchor ambiguous - <see cref="AddBefore{TExisting}"/>, <see cref="AddAfter{TExisting}"/>,
+    /// <see cref="Remove{TExisting}"/> and <see cref="Replace{TExisting}"/> all resolve by implementation type
+    /// and would silently take the first.
+    /// </summary>
+    private void EnsureAbsent(ServiceDescriptor member, string operation)
+    {
+        if (!Contains(member))
+            return;
+
+        var implementationType = member.ResolveImplementationType();
+        throw new InvalidOperationException(
+            $"{operation} failed: {implementationType?.Name} is already a member of the " +
+            $"{typeof(TInterface).Name} family, which holds one member per implementation type. Use " +
+            $"{nameof(Replace)} to change it in place, or {nameof(Remove)} it first to move it.");
+    }
+
+    /// <summary>The position of the member whose implementation type is <paramref name="anchor"/>, or a loud throw.</summary>
+    private int IndexOf(Type anchor, string operation)
+    {
+        for (var index = 0; index < Count; index++)
+        {
+            if (this[index].ResolveImplementationType() == anchor)
+                return index;
+        }
+
+        throw new InvalidOperationException(
+            $"{operation}<{anchor.Name}> failed: {anchor.Name} is not a member of the composed " +
+            $"{typeof(TInterface).Name} family.");
+    }
+
     public int Count => MemberIndices().Count;
 
     public bool IsReadOnly => false;

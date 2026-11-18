@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Model;
+using Abblix.Oidc.Server.Features.Storages;
 
 namespace Abblix.Oidc.Server.Common;
 
@@ -91,7 +92,7 @@ public record AuthorizationContext
     /// An array of unique scope names represented as strings, combining those from scopes
     /// and resources.
     /// </returns>
-    private static string[] GetScopeNames(ScopeDefinition[] scopes, ResourceDefinition[] resources)
+    internal static string[] GetScopeNames(ScopeDefinition[] scopes, ResourceDefinition[] resources)
     {
         return scopes
             .Concat(resources.SelectMany(rd => rd.Scopes))
@@ -123,29 +124,13 @@ public record AuthorizationContext
     /// <summary>
     /// Base64url-encoded SHA-256 thumbprint of the client X.509 certificate used at the token endpoint
     /// for mutual TLS client authentication. When present, access tokens carry a confirmation
-    /// claim (<c>cnf</c>) containing <c>x5t#S256</c> equal to this value (RFC 8705 §3.1).
+    /// claim (<c>cnf</c>) containing <c>x5t#S256</c> equal to this value (RFC 8705 section 3.1).
     /// </summary>
     public string? CertificateSha256Thumbprint { get; init; }
 
     /// <summary>
-    /// Legacy alias for <see cref="CertificateSha256Thumbprint"/>: forwards to the same backing
-    /// storage so existing JSON blobs and downstream callers initialising this property still
-    /// resolve correctly, while the deprecation warning steers new code to the canonical name.
-    /// The X509 prefix was dropped on the canonical name to align with the cnf-member naming
-    /// used by <see cref="Abblix.Jwt.JsonWebTokenConfirmation.CertificateSha256Thumbprint"/>.
-    /// </summary>
-    [Obsolete($"Use {nameof(CertificateSha256Thumbprint)} instead.")]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1133:Deprecated code should be removed",
-        Justification = "Permanent backward-compat alias; removal is a major-version concern.")]
-    public string? X509CertificateSha256Thumbprint
-    {
-        get => CertificateSha256Thumbprint;
-        init => CertificateSha256Thumbprint = value;
-    }
-
-    /// <summary>
     /// RFC 7638 base64url-encoded JWK thumbprint of the DPoP proof-of-possession key
-    /// bound to this authorization (RFC 9449 §6.1). When present, access tokens carry a
+    /// bound to this authorization (RFC 9449 section 6.1). When present, access tokens carry a
     /// <c>cnf.jkt</c> confirmation claim equal to this value, locking the token to the
     /// specific key the client demonstrated control of at the token endpoint.
     /// </summary>
@@ -193,7 +178,7 @@ public record AuthorizationContext
     public JsonArray? AuthorizationDetails { get; init; }
 
     /// <summary>
-    /// RFC 8693 §4.1 <c>act</c> claim: the actor party (in delegation flows) the issued token
+    /// RFC 8693 section 4.1 <c>act</c> claim: the actor party (in delegation flows) the issued token
     /// represents. Stored as a raw <see cref="JsonObject"/> so nested delegation chains are
     /// preserved byte-exact through storage. <c>null</c> for impersonation flows and for
     /// non-Token-Exchange grants.
@@ -201,11 +186,21 @@ public record AuthorizationContext
     public JsonObject? Actor { get; init; }
 
     /// <summary>
-    /// RFC 8693 §2.1 <c>audience</c> request parameter passed through to the issued token. Logical
+    /// Whether the client named no scope at the authorization step this grant comes from - the authorization, device
+    /// authorization or backchannel authentication request - so <see cref="Scope"/> began as the default the server
+    /// served it with (RFC 6749 section 3.3). The token endpoint refuses a request whose named scopes narrowing to
+    /// the token's resources leaves none of, and a default the client never named is not among them. A grant stored
+    /// before this member existed reads false, as a scope the client named.
+    /// </summary>
+    public bool ClientNamedNoScope { get; init; }
+
+    /// <summary>
+    /// RFC 8693 section 2.1 <c>audience</c> request parameter passed through to the issued token. Logical
     /// names of the relying party for which the requested token is intended. Distinct from
     /// <see cref="Resources"/> (RFC 8707 absolute URIs); audience values are opaque strings. JWT
     /// emission folds both <see cref="Resources"/> and <c>Audiences</c> into the <c>aud</c> claim.
     /// </summary>
+    [NotStored("Set only by a token exchange, whose grant is never stored")]
     public string[]? Audiences { get; init; }
 
     /// <summary>

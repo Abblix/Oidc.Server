@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+// The logout confirmation a session currently has outstanding: the question the server asked its end user.
+//
+// One record per session, handed back while it stands and removed once it is answered. Asking is something any
+// site can cause, by making a browser reach the logout address with its cookie on it, and the two halves of
+// that answer two different halves of the shape: the key is the session's, so the number of these is bounded
+// by the sessions that exist rather than by the requests that arrive; and the record is handed back rather
+// than replaced, so a later request cannot void the question the end user is looking at.
+//
+// It holds the value the page will send back, which is what makes handing it back possible, and that makes
+// this record answer-bearing: whoever reads the store holds one half of a logout for a named session, the
+// other half being the ability to drive that browser. It sits with the authorization codes and user codes
+// this storage already keeps, and an operator judges the cache accordingly.
+//
+// A message rather than a bare string for the reason PollSchedule states: the serializer dispatches on the
+// stored type, and a type without a definition here falls back to JSON and logs a warning on every write.
+message LogoutConfirmation {
+  // The value the end user's page sends back, which is what makes asking again idempotent.
+  string confirmation = 1;
+}

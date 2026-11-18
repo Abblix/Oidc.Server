@@ -9,7 +9,7 @@
 namespace Abblix.Oidc.Server.Features.RandomGenerators;
 
 /// <summary>
-/// Produces unique identifiers for JSON Web Tokens, used as the <c>jti</c> claim defined in RFC 7519 §4.1.7.
+/// Produces unique identifiers for JSON Web Tokens, used as the <c>jti</c> claim defined in RFC 7519 section 4.1.7.
 /// A unique <c>jti</c> per token is required to support replay detection and one-time token semantics, so
 /// implementations must generate values with sufficient entropy to make collisions and guessing impractical.
 /// </summary>

@@ -775,9 +775,9 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// The composition core shared by the plain and keyed families: moves the detached members into keyed
-    /// registrations under <paramref name="memberKey"/> (sharing the composite's lifetime, so member
-    /// instances live exactly as long as the composite that consumes them) and returns the factory that
-    /// materializes the composite over them.
+    /// registrations under <paramref name="memberKey"/>, each keeping the lifetime it was registered with, and
+    /// returns the factory that materializes the composite over them. The composite itself takes the shortest
+    /// lifetime among the members, so it never outlives one of them.
     /// </summary>
     private static Func<IServiceProvider, object> KeyFamilyMembers<TInterface>(
         this IServiceCollection services,
@@ -972,8 +972,8 @@ public static class ServiceCollectionExtensions
     /// <returns>The updated <see cref="IServiceCollection"/>.</returns>
     /// <remarks>
     /// This method allows decoration of keyed services registered using the keyed service APIs.
-    /// If the keyed service is not found, it falls back to decorating the non-keyed service
-    /// and registers the decorator as a keyed service. This is useful when you want to create
+    /// If the keyed service is not found, it falls back to decorating the non-keyed service the container
+    /// resolves, the last one registered, and registers the decorator as a keyed service. This is useful when you want to create
     /// a keyed variant of an existing non-keyed service with additional behavior.
     /// The decorator will wrap the existing implementation while preserving the service lifetime.
     /// </remarks>
@@ -1000,9 +1000,10 @@ public static class ServiceCollectionExtensions
                 return services;
             }
 
+            // The last non-keyed registration is the one the container resolves, so it is the one decorated
             if (services[i].ServiceKey == null)
             {
-                fallbackService = services[i];
+                fallbackService ??= services[i];
             }
         }
 

@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces;
 
@@ -20,6 +21,7 @@ public interface IPushedAuthorizationHandler
     /// Asynchronously handles and processes a Pushed Authorization Request, ensuring it complies with OAuth 2.0
     /// and OpenID Connect specifications.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="authorizationRequest">An instance of <see cref="Model.AuthorizationRequest"/> representing the details
     /// of the authorization request submitted by the client.</param>
     /// <param name="clientRequest">An instance of <see cref="Model.ClientRequest"/> providing additional information about
@@ -36,6 +38,7 @@ public interface IPushedAuthorizationHandler
     /// the exposure of sensitive information in subsequent authorization requests.
     /// </remarks>
     Task<AuthorizationResponse> HandleAsync(
+        TenantDefinition tenant,
         Model.AuthorizationRequest authorizationRequest,
         Model.ClientRequest clientRequest);
 }

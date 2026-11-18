@@ -9,7 +9,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ResponseObject;
 using P = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
@@ -17,37 +17,34 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization;
 
 /// <summary>
 /// Default <see cref="IAuthorizationResponseEncoder"/>. Applies the <c>iss</c> (RFC 9207) and
-/// implicit/hybrid <c>scope</c> gating, and - for a JARM (<c>*.jwt</c>) response mode - packs the
+/// access token <c>scope</c> gating, and - for a JARM (<c>*.jwt</c>) response mode - packs the
 /// response parameters into a signed/encrypted <c>response</c> JWT and resolves the delivery mode.
-/// Mutates the response in place; the transport layer only maps the encoded response onto the wire.
+/// Mutates the response, or replaces it with an error when its JWT cannot be produced, and returns the one to
+/// deliver; the transport layer only maps the encoded response onto the wire.
 /// </summary>
-/// <param name="issuerProvider">Supplies the <c>iss</c> value (RFC 9207).</param>
 /// <param name="authorizationMetadata">Tells whether <c>iss</c> is advertised/emitted.</param>
 /// <param name="responseJwtBuilder">Builds the JARM <c>response</c> JWT.</param>
 public class AuthorizationResponseEncoder(
-	IIssuerProvider issuerProvider,
 	IAuthorizationMetadataProvider authorizationMetadata,
 	IResponseJwtBuilder responseJwtBuilder) : IAuthorizationResponseEncoder
 {
 	/// <inheritdoc />
-	public async Task EncodeAsync(AuthorizationResponse response)
+	public async Task<AuthorizationResponse> EncodeAsync(TenantDefinition tenant, AuthorizationResponse response)
 	{
 		switch (response)
 		{
 			case SuccessfullyAuthenticated success:
 			{
-				// Scope rides the authorization response only for implicit/hybrid flows (OIDC Core
-				// §3.2.2.5 / §3.3.2.5), where the response itself carries tokens. The code flow returns
-				// only code + state (+ optional iss per RFC 9207); emitting scope there is flagged by
-				// OIDF Conformance as "unexpected parameters" and disallowed by FAPI 2.0 §5.3.1.
-				// The value is the GRANTED scope (matching the issued token), not the requested set, so a
-				// consent-narrowed grant is advertised truthfully per RFC 6749 §3.3.
+				// RFC 6749 section 4.2.2 defines the scope response parameter as "The scope of the access token", and
+				// OpenID Connect Core 1.0 sections 3.1.2.5, 3.2.2.5 and 3.3.2.5 list no scope for a response returning
+				// none, so it rides only a response carrying an access token: code id_token and the code flow get
+				// none. The value is the GRANTED scope (matching the issued token), not the requested set, so a
+				// consent-narrowed grant is advertised truthfully per RFC 6749 section 3.3.
 				var carriesTokens = success is { AccessToken: not null } or { IdToken: not null };
-				success.Issuer = Issuer;
-				success.Scope = carriesTokens ? string.Join(' ', success.GrantedScopes) : null;
+				success.Issuer = IssuerOf(tenant);
+				success.Scope = success.AccessToken is not null ? string.Join(' ', success.GrantedScopes) : null;
 
-				await PackJwtAsync(success, carriesTokens, SuccessParameters(success));
-				break;
+				return await PackJwtAsync(tenant, success, carriesTokens, SuccessParameters(success));
 			}
 
 			// Errors are JARM-packed only when delivered to a redirect URI; non-redirectable errors
@@ -58,38 +55,69 @@ public class AuthorizationResponseEncoder(
 					responseType.Contains(ResponseTypes.Token) ||
 					responseType.Contains(ResponseTypes.IdToken));
 
-				error.Issuer = Issuer;
+				error.Issuer = IssuerOf(tenant);
 
-				await PackJwtAsync(error, carriesTokens, ErrorParameters(error));
-				break;
+				return await PackJwtAsync(tenant, error, carriesTokens, ErrorParameters(error));
 			}
 
 			// Interaction responses (login/consent/account-selection) redirect to the AS's own UI,
 			// not the client, so JARM does not apply - leave them untouched.
+			default:
+				return response;
 		}
 	}
 
 	/// <summary>
 	/// The <c>iss</c> value to place on the response, or null when the server does not advertise it.
 	/// </summary>
-	private string? Issuer => authorizationMetadata.AuthorizationResponseIssParameterSupported
-		? issuerProvider.GetIssuer()
+	/// <param name="tenant">The tenant the request is served at.</param>
+	private string? IssuerOf(TenantDefinition tenant) => authorizationMetadata.AuthorizationResponseIssParameterSupported
+		? tenant.Issuer.OriginalString
 		: null;
 
 	/// <summary>
 	/// When the response mode is a JARM <c>*.jwt</c> mode, packs the supplied parameters into the
 	/// <c>response</c> JWT and resolves the plaintext delivery mode; otherwise a no-op.
 	/// </summary>
-	private async Task PackJwtAsync(
+	/// <remarks>
+	/// JARM says nothing of a response JWT the server cannot produce; when the client asked for its responses
+	/// encrypted and publishes no key one can be encrypted to, the response goes to the redirect URI in the plain mode
+	/// the JARM mode delivers through, as the error response of RFC 6749 section 4.1.2.1: an error stays the error it
+	/// was, and a success becomes unauthorized_client, which is what the client cannot be issued to. This plain-mode
+	/// error is outside JARM: section 2.1 wants an error response inside the JWT, and a strict JARM client, which
+	/// processes nothing before the JWT checks of section 2.4 succeed, discards it; it only spares the request a server
+	/// error.
+	/// </remarks>
+	private async Task<AuthorizationResponse> PackJwtAsync(
+		TenantDefinition tenant,
 		ClientDeliveredResponse response,
 		bool carriesTokens,
 		IReadOnlyList<(string name, string? value)> parameters)
 	{
 		if (!response.ResponseMode.IsJwtMode())
-			return;
+			return response;
 
-		response.ResponseJwt = await responseJwtBuilder.BuildAsync(response.Model.ClientId, parameters);
-		response.ResponseMode = response.ResponseMode.ToDeliveryMode(carriesTokens);
+		var deliveryMode = response.ResponseMode.ToDeliveryMode(carriesTokens);
+		var built = await responseJwtBuilder.BuildAsync(tenant, response.Model.ClientId, parameters);
+		if (built.TryGetFailure(out var refusal))
+		{
+			if (response is AuthorizationError error)
+			{
+				error.ResponseMode = deliveryMode;
+				return error;
+			}
+
+			return new AuthorizationError(
+				response.Model,
+				ErrorCodes.UnauthorizedClient,
+				refusal.ErrorDescription,
+				deliveryMode,
+				response.Model.RedirectUri) { Issuer = response.Issuer };
+		}
+
+		response.ResponseJwt = built.GetSuccess();
+		response.ResponseMode = deliveryMode;
+		return response;
 	}
 
 	private static IReadOnlyList<(string name, string? value)> SuccessParameters(SuccessfullyAuthenticated success) =>

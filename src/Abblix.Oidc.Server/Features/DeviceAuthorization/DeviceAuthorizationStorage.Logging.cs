@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
@@ -43,12 +44,12 @@ partial class DeviceAuthorizationStorage
     [LoggerMessage(
         EventId = LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemovedAfterClaim,
         Level = LogLevel.Warning,
-        Message = "The device code at {DeviceCodeKey} was claimed and removed, but the store refused to " +
+        Message = "The device code {DeviceCode} was claimed and removed, but the store refused to " +
                   "remove the user-code index entry it was handed. That entry expires on its own; the " +
                   "caller was told it took the code, which it did. The entry is not named here because " +
                   "this method cannot establish that the user code it was handed is the spent one - " +
                   "which is the same reason nothing here can say what that entry still points at.")]
-    private partial void LogUserCodeIndexNotRemovedAfterClaim(Exception exception, string DeviceCodeKey);
+    private partial void LogUserCodeIndexNotRemovedAfterClaim(Exception exception, Fingerprint DeviceCode);
 
     /// <summary>
     /// The index survived a DISCARD, where nothing was consumed and the request is still being removed.
@@ -72,10 +73,10 @@ partial class DeviceAuthorizationStorage
     [LoggerMessage(
         EventId = LogEvents.Device.DeviceAuthorizationStorage.UserCodeIndexNotRemovedBeforeDiscard,
         Level = LogLevel.Warning,
-        Message = "A device authorization request is being discarded, and its user-code index at " +
-                  "{UserCodeKey} could not be removed. Nothing was issued and no caller was told it took " +
+        Message = "A device authorization request is being discarded, and the index of its user code " +
+                  "{UserCode} could not be removed. Nothing was issued and no caller was told it took " +
                   "the code. Removing the request itself runs next and is NOT guarded, so whether the " +
                   "caller sees a fault or a grant error depends on whether that write is refused too; " +
                   "the index entry expires on its own either way.")]
-    private partial void LogUserCodeIndexNotRemovedBeforeDiscard(Exception exception, string UserCodeKey);
+    private partial void LogUserCodeIndexNotRemovedBeforeDiscard(Exception exception, Fingerprint UserCode);
 }

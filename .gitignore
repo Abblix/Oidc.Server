@@ -380,6 +380,7 @@ FodyWeavers.xsd
 
 # Development configuration
 **/CLAUDE.md
+**/AGENTS.md
 .claude/
 TEST_*.md
 LICENSE-*.md
@@ -395,3 +396,4 @@ RELEASE_NOTES*
 !*.sln.DotSettings
 !*.csproj.DotSettings
 
+docs/

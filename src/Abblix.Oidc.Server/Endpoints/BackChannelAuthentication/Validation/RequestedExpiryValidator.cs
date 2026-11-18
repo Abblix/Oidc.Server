@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
@@ -25,11 +26,12 @@ public class RequestedExpiryValidator(IOptionsMonitor<OidcOptions> options) : IB
     /// Asynchronously validates the expiry time for the backchannel authentication request.
     /// Ensures that the requested expiry is within the allowed range and assigns an appropriate expiry to the context.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">
     /// The validation context containing the backchannel authentication request and its parameters.</param>
     /// <returns>A task representing the asynchronous operation, returning an error if validation fails,
     /// or null if validation succeeds.</returns>
-    public Task<OidcError?> ValidateAsync(BackChannelAuthenticationValidationContext context)
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, BackChannelAuthenticationValidationContext context)
         => Task.FromResult(Validate(context));
 
     /// <summary>

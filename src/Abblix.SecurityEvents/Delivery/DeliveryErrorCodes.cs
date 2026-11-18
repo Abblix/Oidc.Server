@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Collections.Frozen;
 using Abblix.SecurityEvents.Validation;
 
 namespace Abblix.SecurityEvents.Delivery;
@@ -99,21 +100,29 @@ public static class DeliveryErrorCodes
     /// The verdict is not one this table knows - a new enum member was added without extending
     /// the mapping, and failing loudly here is what keeps the table from silently under-reporting
     /// it as some default.</exception>
-    public static string FromValidationError(SecurityEventTokenErrorCode code) => code switch
-    {
-        SecurityEventTokenErrorCode.MalformedToken => InvalidRequest,
-        SecurityEventTokenErrorCode.TokenConfusion => InvalidRequest,
-        SecurityEventTokenErrorCode.MissingEvents => InvalidRequest,
-        SecurityEventTokenErrorCode.IatOutOfRange => InvalidRequest,
-        SecurityEventTokenErrorCode.Custom => InvalidRequest,
-        SecurityEventTokenErrorCode.UnknownIssuer => InvalidIssuer,
-        SecurityEventTokenErrorCode.SignatureInvalid => InvalidKey,
-        SecurityEventTokenErrorCode.KeyNotFound => InvalidKey,
-        SecurityEventTokenErrorCode.DecryptionFailed => InvalidKey,
-        SecurityEventTokenErrorCode.AudienceMismatch => InvalidAudience,
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(code),
-            code,
-            $"No delivery error code is mapped for this {nameof(SecurityEventTokenErrorCode)}."),
-    };
+    public static string FromValidationError(SecurityEventTokenErrorCode code)
+        => ValidationErrorMapping.TryGetValue(code, out var deliveryCode)
+            ? deliveryCode
+            : throw new ArgumentOutOfRangeException(
+                nameof(code),
+                code,
+                $"No delivery error code is mapped for this {nameof(SecurityEventTokenErrorCode)}.");
+
+    /// <summary>
+    /// The table <see cref="FromValidationError"/> reads; a test walks every verdict through it.
+    /// </summary>
+    private static readonly FrozenDictionary<SecurityEventTokenErrorCode, string> ValidationErrorMapping =
+        new Dictionary<SecurityEventTokenErrorCode, string>
+        {
+            [SecurityEventTokenErrorCode.MalformedToken] = InvalidRequest,
+            [SecurityEventTokenErrorCode.TokenConfusion] = InvalidRequest,
+            [SecurityEventTokenErrorCode.MissingEvents] = InvalidRequest,
+            [SecurityEventTokenErrorCode.IatOutOfRange] = InvalidRequest,
+            [SecurityEventTokenErrorCode.Custom] = InvalidRequest,
+            [SecurityEventTokenErrorCode.UnknownIssuer] = InvalidIssuer,
+            [SecurityEventTokenErrorCode.SignatureInvalid] = InvalidKey,
+            [SecurityEventTokenErrorCode.KeyNotFound] = InvalidKey,
+            [SecurityEventTokenErrorCode.DecryptionFailed] = InvalidKey,
+            [SecurityEventTokenErrorCode.AudienceMismatch] = InvalidAudience,
+        }.ToFrozenDictionary();
 }

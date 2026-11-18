@@ -139,7 +139,7 @@ public class DeliveryContractTests
     [Fact]
     public void EveryValidationVerdict_MapsToARegisteredDeliveryCode()
     {
-        // The mapping's default arm throws for an unmapped verdict; walking every enum value is
+        // The mapping throws for a verdict its table has no entry for; walking every enum value is
         // what turns "a new verdict was added without extending the table" into a red test
         // instead of a runtime surprise.
         var registered = new[]

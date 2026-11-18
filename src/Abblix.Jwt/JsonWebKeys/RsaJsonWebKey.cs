@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
@@ -134,26 +135,30 @@ public sealed record RsaJsonWebKey : JsonWebKey
 
     /// <inheritdoc/>
     /// <remarks>
-    /// For RSA keys, returns true if any RFC 7518 §6.3.2 private-key member is present -
-    /// not just <c>d</c>. The DPoP §4.2 «MUST NOT contain private key» check needs to
+    /// For RSA keys, returns true if any RFC 7518 section 6.3.2 private-key member is present -
+    /// not just <c>d</c>. The DPoP section 4.2 «MUST NOT contain private key» check needs to
     /// catch a JWK that omits <c>d</c> but still leaks CRT factors (<c>p</c>, <c>q</c>,
     /// <c>dp</c>, <c>dq</c>, <c>qi</c>), since those alone reconstruct the private key.
     /// </remarks>
     [JsonIgnore]
-    public override bool HasPrivateKey
-        => PrivateExponent is { Length: > 0 }
-        || FirstPrimeFactor is { Length: > 0 }
-        || SecondPrimeFactor is { Length: > 0 }
-        || FirstFactorCrtExponent is { Length: > 0 }
+    public override bool HasPrivateKey => PrivateExponent is { Length: > 0 } || HasPrimeFactors || HasCrtValues;
+
+    private bool HasPrimeFactors => FirstPrimeFactor is { Length: > 0 } || SecondPrimeFactor is { Length: > 0 };
+
+    private bool HasCrtValues
+        => FirstFactorCrtExponent is { Length: > 0 }
         || SecondFactorCrtExponent is { Length: > 0 }
         || FirstCrtCoefficient is { Length: > 0 };
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Required RSA members per RFC 7638 §3.2 in lexicographic order: <c>e</c>,
-    /// <c>kty</c>, <c>n</c>. Both base64url-encoded values contain only characters that
-    /// need no JSON escaping.
+    /// Required RSA members per RFC 7638 section 3.2 in lexicographic order: <c>e</c>,
+    /// <c>kty</c>, <c>n</c>.
     /// </remarks>
-    protected override string CanonicalJson()
-        => $$"""{"e":"{{Encode(JsonWebKeyPropertyNames.Exponent, Exponent)}}","kty":"{{KeyType}}","n":"{{Encode(JsonWebKeyPropertyNames.Modulus, Modulus)}}"}""";
+    protected override void WriteCanonicalMembers(Utf8JsonWriter writer)
+    {
+        writer.WriteString(JsonWebKeyPropertyNames.Exponent, Encode(JsonWebKeyPropertyNames.Exponent, Exponent));
+        writer.WriteString(JsonWebKeyPropertyNames.KeyType, KeyType);
+        writer.WriteString(JsonWebKeyPropertyNames.Modulus, Encode(JsonWebKeyPropertyNames.Modulus, Modulus));
+    }
 }

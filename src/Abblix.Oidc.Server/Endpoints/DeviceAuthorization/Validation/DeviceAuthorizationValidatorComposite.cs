@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
@@ -20,6 +21,6 @@ public class DeviceAuthorizationValidatorComposite(
     IEnumerable<IDeviceAuthorizationContextValidator> validators) : IDeviceAuthorizationContextValidator
 {
     /// <inheritdoc />
-    public Task<OidcError?> ValidateAsync(DeviceAuthorizationValidationContext context)
-        => validators.FirstOrDefaultAsync(v => v.ValidateAsync(context));
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
+        => validators.FirstOrDefaultAsync(v => v.ValidateAsync(tenant, context));
 }

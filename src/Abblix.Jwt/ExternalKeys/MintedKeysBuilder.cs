@@ -24,9 +24,14 @@ internal sealed class MintedKeysBuilder(IServiceCollection services, MintedKeys 
     public MintedKeys Policy { get; private set; } = policy;
 
     /// <inheritdoc />
-    public IMintedKeysBuilder AdoptExistingKeys(params JsonWebKey[] keys)
+    public IMintedKeysBuilder AdoptExistingKeys(string partition, params JsonWebKey[] keys)
     {
-        Policy = Policy with { AdoptedKeys = [..Policy.AdoptedKeys, ..keys] };
+        ArgumentNullException.ThrowIfNull(partition);
+        var adopted = new Dictionary<string, IReadOnlyList<JsonWebKey>>(Policy.AdoptedKeys, StringComparer.Ordinal)
+        {
+            [partition] = [..Policy.AdoptedKeys.GetValueOrDefault(partition) ?? [], ..keys],
+        };
+        Policy = Policy with { AdoptedKeys = adopted };
         return this;
     }
 }

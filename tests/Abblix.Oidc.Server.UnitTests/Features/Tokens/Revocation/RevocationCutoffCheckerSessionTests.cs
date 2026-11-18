@@ -11,7 +11,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
@@ -21,6 +20,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Revocation;
 
@@ -42,6 +42,7 @@ public class RevocationCutoffCheckerSessionTests
 {
     private const string Subject = "user_42";
     private const string SessionId = "session_7";
+    private const string ClientId = "client_9";
 
     private static readonly DateTimeOffset AuthenticatedAt = new(2024, 1, 15, 11, 0, 0, TimeSpan.Zero);
 
@@ -52,7 +53,7 @@ public class RevocationCutoffCheckerSessionTests
     {
         _cutoffs
             .Setup(c => c.GetCutoffAsync(
-                It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                TestTenant.Matched, It.IsAny<RevocationScope>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DateTimeOffset?)null);
     }
 
@@ -62,23 +63,19 @@ public class RevocationCutoffCheckerSessionTests
     /// </summary>
     private IRevocationCutoffChecker Checker(TimeSpan? skew = null)
     {
-        var issuers = new Mock<IIssuerProvider>(MockBehavior.Strict);
-        issuers.Setup(p => p.GetIssuer()).Returns(TestConstants.DefaultIssuer.OriginalString);
-
         return new RevocationCutoffChecker(
             NullLogger<RevocationCutoffChecker>.Instance,
             _cutoffs.Object,
-            issuers.Object,
             Options.Create(skew is { } configured
-                ? new OidcOptions { RevocationCutoffSkew = configured }
+                ? new OidcOptions { ReplicaClockSkew = configured }
                 : new OidcOptions()),
             _clients.Object,
-            new SubjectTypeConverter());
+            new FixedSubjectTypeConverter(new SubjectTypeConverter()));
     }
 
     private void SetupCutoff(RevocationScope scope, string principal, DateTimeOffset cutoff)
         => _cutoffs
-            .Setup(c => c.GetCutoffAsync(scope, principal, It.IsAny<CancellationToken>()))
+            .Setup(c => c.GetCutoffAsync(TestTenant.Matched, scope, principal, It.IsAny<CancellationToken>()))
             .ReturnsAsync(cutoff);
 
     private static AuthSession Session(DateTimeOffset? authenticatedAt = null)
@@ -87,7 +84,7 @@ public class RevocationCutoffCheckerSessionTests
     [Fact]
     public async Task WithNoCutoffRecorded_TheSessionIsUsable()
     {
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.False(refused);
     }
@@ -101,7 +98,7 @@ public class RevocationCutoffCheckerSessionTests
     {
         SetupCutoff(RevocationScope.Subject, Subject, AuthenticatedAt.AddMinutes(1));
 
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.True(refused);
     }
@@ -115,9 +112,24 @@ public class RevocationCutoffCheckerSessionTests
     {
         SetupCutoff(RevocationScope.Session, SessionId, AuthenticatedAt.AddMinutes(1));
 
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.True(refused);
+    }
+
+    /// <summary>
+    /// Withdrawing consent from one client leaves the session usable: it serves the end user's other clients too,
+    /// and that client reaches the end user again only through a new authorization, which asks for consent anew.
+    /// </summary>
+    [Fact]
+    public async Task WhenTheSubjectWasRevokedAtOneClient_TheSessionIsUsable()
+    {
+        SetupCutoff(
+            RevocationScope.ClientSubject, PrincipalOf(RevocationScope.ClientSubject), AuthenticatedAt.AddMinutes(1));
+
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
+
+        Assert.False(refused);
     }
 
     /// <summary>
@@ -130,9 +142,9 @@ public class RevocationCutoffCheckerSessionTests
     [InlineData(RevocationScope.Session)]
     public async Task WhenTheCutoffPredatesTheSignIn_TheSessionIsUsable(RevocationScope scope)
     {
-        SetupCutoff(scope, scope is RevocationScope.Subject ? Subject : SessionId, AuthenticatedAt.AddHours(-1));
+        SetupCutoff(scope, PrincipalOf(scope), AuthenticatedAt.AddHours(-1));
 
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.False(refused);
     }
@@ -160,7 +172,7 @@ public class RevocationCutoffCheckerSessionTests
     {
         SetupCutoff(RevocationScope.Subject, Subject, AuthenticatedAt.AddSeconds(-secondsAfter));
 
-        var refused = await Checker(TimeSpan.FromMinutes(1)).IsSessionRefusedAsync(Session());
+        var refused = await Checker(TimeSpan.FromMinutes(1)).IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.False(refused);
     }
@@ -185,7 +197,7 @@ public class RevocationCutoffCheckerSessionTests
         var cutoff = AuthenticatedAt.AddTicks(ticksTheCutoffFollowsBy);
         SetupCutoff(RevocationScope.Subject, Subject, cutoff);
 
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.Equal(expected, refused);
     }
@@ -202,7 +214,7 @@ public class RevocationCutoffCheckerSessionTests
     {
         SetupCutoff(RevocationScope.Session, SessionId, AuthenticatedAt.AddSeconds(-1));
 
-        var refused = await Checker(TimeSpan.FromMinutes(1)).IsSessionRefusedAsync(Session());
+        var refused = await Checker(TimeSpan.FromMinutes(1)).IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.False(refused);
     }
@@ -222,13 +234,13 @@ public class RevocationCutoffCheckerSessionTests
         SetupCutoff(RevocationScope.Subject, Subject, AuthenticatedAt.AddMinutes(1));
         SetupCutoff(RevocationScope.Session, SessionId, AuthenticatedAt.AddMinutes(1));
 
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.True(refused);
 
         // The subject scope is never reached, which is what says the session arm answered first.
         _cutoffs.Verify(
-            c => c.GetCutoffAsync(RevocationScope.Subject, Subject, It.IsAny<CancellationToken>()),
+            c => c.GetCutoffAsync(It.IsAny<TenantDefinition>(), RevocationScope.Subject, Subject, It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -249,7 +261,7 @@ public class RevocationCutoffCheckerSessionTests
 
         var session = new AuthSession(subject, sessionId, AuthenticatedAt, "local");
 
-        Assert.True(await Checker().IsSessionRefusedAsync(session));
+        Assert.True(await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, session));
     }
 
     /// <summary>
@@ -270,11 +282,11 @@ public class RevocationCutoffCheckerSessionTests
     {
         // The cutoff is recorded against the principal this session does not name, so the arm that would
         // have refused has nothing to look up and the other arm has no cutoff to find.
-        SetupCutoff(scope, scope is RevocationScope.Subject ? Subject : SessionId, AuthenticatedAt.AddMinutes(1));
+        SetupCutoff(scope, PrincipalOf(scope), AuthenticatedAt.AddMinutes(1));
 
         var session = new AuthSession(subject, sessionId, AuthenticatedAt, "local");
 
-        Assert.False(await Checker().IsSessionRefusedAsync(session));
+        Assert.False(await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, session));
     }
 
     /// <summary>
@@ -287,7 +299,7 @@ public class RevocationCutoffCheckerSessionTests
         const string somebodyElse = "somebody-else";
         SetupCutoff(RevocationScope.Subject, somebodyElse, AuthenticatedAt.AddMinutes(1));
 
-        var refused = await Checker().IsSessionRefusedAsync(Session());
+        var refused = await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
         Assert.False(refused);
 
@@ -295,10 +307,10 @@ public class RevocationCutoffCheckerSessionTests
         // exact argument, so a cutoff planted under another principal is never consulted and the planting
         // proves nothing. Assert that this session's own principal is what was asked about.
         _cutoffs.Verify(
-            c => c.GetCutoffAsync(RevocationScope.Subject, Subject, It.IsAny<CancellationToken>()),
+            c => c.GetCutoffAsync(TestTenant.Matched, RevocationScope.Subject, Subject, It.IsAny<CancellationToken>()),
             Times.Once);
         _cutoffs.Verify(
-            c => c.GetCutoffAsync(RevocationScope.Subject, somebodyElse, It.IsAny<CancellationToken>()),
+            c => c.GetCutoffAsync(It.IsAny<TenantDefinition>(), RevocationScope.Subject, somebodyElse, It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -311,8 +323,16 @@ public class RevocationCutoffCheckerSessionTests
     {
         SetupCutoff(RevocationScope.Subject, Subject, AuthenticatedAt.AddMinutes(1));
 
-        await Checker().IsSessionRefusedAsync(Session());
+        await Checker().IsSessionRefusedAsync(SingleIssuer.Tenant, Session());
 
-        _clients.Verify(p => p.TryFindClientAsync(It.IsAny<string>()), Times.Never);
+        _clients.Verify(p => p.TryFindClientAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
+
+    private static string PrincipalOf(RevocationScope scope) => scope switch
+    {
+        RevocationScope.Subject => Subject,
+        RevocationScope.Session => SessionId,
+        RevocationScope.ClientSubject => RevocationPrincipal.ClientSubject(ClientId, Subject),
+        _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, "A revocation scope without a principal."),
+    };
 }

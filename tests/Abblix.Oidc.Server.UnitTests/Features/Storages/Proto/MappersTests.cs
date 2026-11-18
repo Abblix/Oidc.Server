@@ -7,8 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
@@ -18,6 +20,7 @@ using Abblix.Oidc.Server.Model;
 using Xunit;
 using BackChannelAuthenticationRequest = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationRequest;
 using BackChannelAuthenticationStatus = Abblix.Oidc.Server.Features.BackChannelAuthentication.BackChannelAuthenticationStatus;
+using StoredDeviceRequest = Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationRequest;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Storages.Proto;
@@ -140,21 +143,21 @@ public class MappersTests
         Assert.Single(proto.UserInfo);
         var result = RequestedClaimsMapper.FromProto(proto);
         Assert.NotNull(result);
-        Assert.NotNull(result!.UserInfo);
-        Assert.True(result.UserInfo!.ContainsKey("email"));
+        Assert.NotNull(result.UserInfo);
+        Assert.True(result.UserInfo.ContainsKey("email"));
     }
 
     [Fact]
     public void AuthSessionMapper_ToProto_PreservesAllOptionalFields()
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "google")
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "google")
         {
             AuthContextClassRef = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
-            AffectedClientIds = ["client-1", "client-2", "client-3"],
             AuthenticationMethodReferences = ["pwd", "mfa", "face"],
             Email = "user@example.com",
             EmailVerified = true,
+            SignedInAt = new DateTimeOffset(2026, 10, 6, 12, 0, 0, TimeSpan.Zero),
             AdditionalClaims = new JsonObject
             {
                 ["tenant"] = "tenant-123",
@@ -171,7 +174,6 @@ public class MappersTests
         Assert.Equal(session.SessionId, proto.SessionId);
         Assert.Equal(session.IdentityProvider, proto.IdentityProvider);
         Assert.Equal(session.AuthContextClassRef, proto.AuthContextClassRef);
-        Assert.Equal(3, proto.AffectedClientIds.Count);
         Assert.Equal(3, proto.AuthenticationMethodReferences.Count);
         Assert.Equal(session.Email, proto.Email);
         Assert.True(proto.EmailVerified);
@@ -181,6 +183,7 @@ public class MappersTests
         Assert.Equal(session.Subject, result.Subject);
         Assert.Equal(session.Email, result.Email);
         Assert.Equal(session.EmailVerified, result.EmailVerified);
+        Assert.Equal(session.SignedInAt, result.SignedInAt);
         Assert.NotNull(result.AdditionalClaims);
         Assert.Equal(42, result.AdditionalClaims["count"]!.GetValue<int>());
     }
@@ -189,7 +192,7 @@ public class MappersTests
     public void AuthSessionMapper_ToProto_HandlesMinimalFields()
     {
         // Arrange - only required fields
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, null!);
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), null!);
 
         // Act
         var proto = session.ToProto();
@@ -201,7 +204,6 @@ public class MappersTests
         var result = proto.FromProto();
         Assert.Equal(session.Subject, result.Subject);
         Assert.Null(result.AuthContextClassRef);
-        Assert.Empty(result.AffectedClientIds);
         Assert.Null(result.AuthenticationMethodReferences);
     }
 
@@ -211,7 +213,7 @@ public class MappersTests
         // Arrange
         var context = new AuthorizationContext(
             "client-123",
-            [TestConstants.DefaultScope, "profile"],
+            [TestConstants.DefaultScope, Scopes.Profile],
             null)
         {
             RedirectUri = new Uri("https://example.com/callback?state=xyz"),
@@ -233,7 +235,22 @@ public class MappersTests
         Assert.Equal(context.RedirectUri, result.RedirectUri);
         Assert.NotNull(result.Resources);
         Assert.Equal(2, result.Resources.Length);
-        Assert.Equal(context.Resources![0], result.Resources[0]);
+        Assert.Equal(context.Resources[0], result.Resources[0]);
+    }
+
+    /// <summary>
+    /// A device request keeps each resource as it was written, so a token issued for it names the resource
+    /// exactly as registered rather than in a form with a path added.
+    /// </summary>
+    [Fact]
+    public void DeviceAuthorizationRequestMapper_RoundTrips_AResourceAsWritten()
+    {
+        const string resource = "https://orders.example.com";
+        var request = new StoredDeviceRequest("client", [TestConstants.DefaultScope], [new Uri(resource)], "USERCODE");
+
+        var result = request.ToProto().FromProto();
+
+        Assert.Equal(resource, Assert.Single(result.Resources!).OriginalString);
     }
 
     [Fact]
@@ -259,7 +276,7 @@ public class MappersTests
 
         // Assert - byte-exact preservation through the proto string field.
         Assert.NotNull(result.AuthorizationDetails);
-        Assert.Equal(wireJson, result.AuthorizationDetails!.ToJsonString());
+        Assert.Equal(wireJson, result.AuthorizationDetails.ToJsonString());
         Assert.Equal(wireJson, proto.AuthorizationDetailsJson);
     }
 
@@ -283,7 +300,7 @@ public class MappersTests
 
         Assert.Equal(wireJson, proto.AuthorizationDetailsJson);
         Assert.NotNull(result.AuthorizationDetails);
-        Assert.Equal(wireJson, result.AuthorizationDetails!.ToJsonString());
+        Assert.Equal(wireJson, result.AuthorizationDetails.ToJsonString());
     }
 
     [Fact]
@@ -321,14 +338,14 @@ public class MappersTests
         var proto = context.ToProto();
 
         // Empty array is treated identically to null in protobuf storage - no point
-        // persisting an empty marker that yields the same observable behaviour.
+        // persisting an empty marker that yields the same observable behavior.
         Assert.False(proto.HasAuthorizationDetailsJson);
     }
 
     [Fact]
     public void AuthorizationContextMapper_RoundTrips_Actor_ByteExact()
     {
-        // RFC 8693 §4.1 act claim. The simplest delegation shape: { sub: actor-id } with no
+        // RFC 8693 section 4.1 act claim. The simplest delegation shape: { sub: actor-id } with no
         // nested act member. After ToProto -> FromProto the JsonObject must serialise back
         // to the same wire JSON byte-for-byte.
         const string actorJson = """{"sub":"svc-worker-7","client_id":"svc-fleet"}""";
@@ -344,7 +361,7 @@ public class MappersTests
 
         Assert.Equal(actorJson, proto.ActorJson);
         Assert.NotNull(result.Actor);
-        Assert.Equal(actorJson, result.Actor!.ToJsonString());
+        Assert.Equal(actorJson, result.Actor.ToJsonString());
     }
 
     [Fact]
@@ -366,7 +383,7 @@ public class MappersTests
         var result = AuthorizationContextMapper.FromProto(proto);
 
         Assert.NotNull(result.Actor);
-        Assert.Equal(chainedActorJson, result.Actor!.ToJsonString());
+        Assert.Equal(chainedActorJson, result.Actor.ToJsonString());
         // The nested act member must remain a JsonObject (not coerced into a string).
         Assert.IsType<JsonObject>(result.Actor["act"]);
     }
@@ -391,7 +408,7 @@ public class MappersTests
         // and serialise to the wire bytes that pre-upgrade code would have produced. A current reader
         // must deserialise those bytes cleanly, with the new fields surfacing as null on the C# record.
         // Proto3 optional fields are designed to behave this way, but a regression test pins the
-        // observable behaviour so future schema additions can't accidentally break old storage.
+        // observable behavior so future schema additions can't accidentally break old storage.
         var preUpgradeProto = new Abblix.Oidc.Server.Features.Storages.Proto.AuthorizationContext
         {
             ClientId = "client-123",
@@ -400,9 +417,9 @@ public class MappersTests
             RedirectUri = "https://example.com/cb",
             Nonce = "n-0S6_WzA2Mj",
             CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
-            CodeChallengeMethod = "S256",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
         };
-        preUpgradeProto.Scope.Add("openid");
+        preUpgradeProto.Scope.Add(Scopes.OpenId);
         preUpgradeProto.Resources.Add("https://api.example.com");
 
         // Round-trip through actual wire bytes so we're testing the protobuf parser, not a
@@ -431,7 +448,8 @@ public class MappersTests
     public void AuthorizationContextMapper_NewWireBytes_PreserveBothAuthorizationDetailsAndActor()
     {
         // FORWARD COMPAT proof: a context populated with both new fields serialises and
-        // re-parses byte-exactly. Together with the previous test, this pins the wire shape
+        // re-parses byte-exactly. Together with
+        // AuthorizationContextMapper_PreUpgradeWireBytes_DeserializeWithNullNewFields, this pins the wire shape
         // both with the new fields present and absent.
         const string adWire = """[{"type":"payment_initiation","actions":["initiate"]}]""";
         const string actorWire = """{"sub":"svc-actor"}""";
@@ -460,7 +478,7 @@ public class MappersTests
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null)
         {
             CodeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
-            CodeChallengeMethod = "S256",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
             Nonce = "n-0S6_WzA2Mj",
         };
 
@@ -482,15 +500,15 @@ public class MappersTests
     public void AuthorizedGrantMapper_ToProto_HandlesIssuedTokens()
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context)
         {
             IssuedTokens =
             [
-                new TokenInfo("access-123", DateTimeOffset.UtcNow.AddHours(1)),
-                new TokenInfo("refresh-456", DateTimeOffset.UtcNow.AddDays(30)),
-                new TokenInfo("id-789", DateTimeOffset.UtcNow.AddHours(1))
+                new TokenInfo("access-123", TimeProvider.System.GetUtcNow().AddHours(1)),
+                new TokenInfo("refresh-456", TimeProvider.System.GetUtcNow().AddDays(30)),
+                new TokenInfo("id-789", TimeProvider.System.GetUtcNow().AddHours(1))
             ],
         };
 
@@ -511,7 +529,7 @@ public class MappersTests
     public void AuthorizedGrantMapper_ToProto_HandlesNullTokens()
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context); // No IssuedTokens
 
@@ -523,6 +541,50 @@ public class MappersTests
 
         var result = proto.FromProto();
         Assert.Null(result.IssuedTokens);
+    }
+
+    /// <summary>
+    /// The family a grant exercises survives storage, and a grant exercising none reads back as none rather than
+    /// as an empty name. A stored grant that lost the family would mint tokens no revocation reaches.
+    /// </summary>
+    [Theory]
+    [InlineData("grant_of_this_lineage")]
+    [InlineData(null)]
+    public void AuthorizedGrantMapper_RoundTrips_TheFamily(string? grantId)
+    {
+        var grant = new AuthorizedGrant(
+            new AuthSession("user-123", "session-456", DateTimeOffset.UnixEpoch, "local"),
+            new AuthorizationContext("client-123", [TestConstants.DefaultScope], null))
+        {
+            GrantId = grantId,
+        };
+
+        var result = grant.ToProto().FromProto();
+
+        Assert.Equal(grantId, result.GrantId);
+    }
+
+    /// <summary>
+    /// When the end user authorized a grant survives storage, and a grant carrying none reads back as none. A stored
+    /// code that lost the moment would be measured against its session at redemption, refusing a consent given
+    /// again in that session after a revocation at its client.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AuthorizedGrantMapper_RoundTrips_WhenItWasAuthorized(bool authorized)
+    {
+        DateTimeOffset? authorizedAt = authorized ? new DateTimeOffset(2024, 1, 15, 11, 0, 0, 125, TimeSpan.Zero) : null;
+        var grant = new AuthorizedGrant(
+            new AuthSession("user-123", "session-456", DateTimeOffset.UnixEpoch, "local"),
+            new AuthorizationContext("client-123", [TestConstants.DefaultScope], null))
+        {
+            AuthorizedAt = authorizedAt,
+        };
+
+        var result = grant.ToProto().FromProto();
+
+        Assert.Equal(authorizedAt, result.AuthorizedAt);
     }
 
     [Fact]
@@ -559,6 +621,36 @@ public class MappersTests
         Assert.Equal("en-GB", result.ClaimsLocales[0].Name);
     }
 
+    /// <summary>
+    /// The moment the server sent the end user to log in survives storage, or the request coming back from the
+    /// login page would be sent there again.
+    /// </summary>
+    [Fact]
+    public void AuthorizationRequestMapper_RoundTrips_Prompted()
+    {
+        var shownAt = new DateTimeOffset(2026, 10, 1, 12, 30, 45, 500, TimeSpan.Zero);
+        var prompted = new Dictionary<string, DateTimeOffset>
+        {
+            [Prompts.SelectAccount] = shownAt,
+            [Prompts.Login] = shownAt.AddMinutes(1),
+        };
+        var request = new AuthorizationRequest { Scope = [TestConstants.DefaultScope], Prompted = prompted };
+
+        Assert.Equal(prompted, request.ToProto().FromProto().Prompted);
+    }
+
+    /// <summary>
+    /// The URN the client pushed the request under survives storage, or it would outlive the code the flow led to.
+    /// </summary>
+    [Fact]
+    public void AuthorizationRequestMapper_RoundTrips_OriginRequestUri()
+    {
+        var pushed = new Uri("urn:ietf:params:oauth:request_uri:pushed");
+        var request = new AuthorizationRequest { Scope = [TestConstants.DefaultScope], OriginRequestUri = pushed };
+
+        Assert.Equal(pushed, request.ToProto().FromProto().OriginRequestUri);
+    }
+
     [Fact]
     public void AuthorizationRequestMapper_ToProto_HandlesMaxAge()
     {
@@ -586,25 +678,25 @@ public class MappersTests
         // Arrange
         var request = new AuthorizationRequest
         {
-            Scope = [TestConstants.DefaultScope, "profile", "email"],
+            Scope = [TestConstants.DefaultScope, Scopes.Profile, Scopes.Email],
             Claims = new RequestedClaims
             {
                 IdToken = new() { ["email"] = new RequestedClaimDetails { Essential = true } },
             },
-            ResponseType = ["code", "id_token"],
+            ResponseType = [ResponseTypes.Code, ResponseTypes.IdToken],
             ClientId = "client-123",
             RedirectUri = TestConstants.DefaultRedirectUri,
             State = "state-xyz",
-            ResponseMode = "form_post",
+            ResponseMode = ResponseModes.FormPost,
             Nonce = "nonce-abc",
-            Display = "popup",
-            Prompt = "login consent",
+            Display = DisplayModes.Popup,
+            Prompt = [Prompts.Login, Prompts.Consent],
             MaxAge = TimeSpan.FromMinutes(15),
             IdTokenHint = "eyJhbGc...",
             LoginHint = "user@example.com",
             AcrValues = ["urn:mace:incommon:iap:silver"],
             CodeChallenge = "challenge",
-            CodeChallengeMethod = "S256",
+            CodeChallengeMethod = CodeChallengeMethods.S256,
             Request = "eyJhbGc...",
             RequestUri = new Uri("https://example.com/request.jwt"),
             Resources = [new Uri("https://api.example.com")],
@@ -620,16 +712,16 @@ public class MappersTests
         Assert.Equal("client-123", proto.ClientId);
         Assert.Equal(TestConstants.DefaultRedirectUri.OriginalString, proto.RedirectUri);
         Assert.Equal("state-xyz", proto.State);
-        Assert.Equal("form_post", proto.ResponseMode);
+        Assert.Equal(ResponseModes.FormPost, proto.ResponseMode);
         Assert.Equal("nonce-abc", proto.Nonce);
-        Assert.Equal("popup", proto.Display);
+        Assert.Equal(DisplayModes.Popup, proto.Display);
         Assert.Equal("login consent", proto.Prompt);
         Assert.NotNull(proto.MaxAge);
         Assert.Equal("eyJhbGc...", proto.IdTokenHint);
         Assert.Equal("user@example.com", proto.LoginHint);
         Assert.Single(proto.AcrValues);
         Assert.Equal("challenge", proto.CodeChallenge);
-        Assert.Equal("S256", proto.CodeChallengeMethod);
+        Assert.Equal(CodeChallengeMethods.S256, proto.CodeChallengeMethod);
         Assert.Equal("eyJhbGc...", proto.Request);
         Assert.Equal("https://example.com/request.jwt", proto.RequestUri);
         Assert.Single(proto.Resources);
@@ -638,6 +730,20 @@ public class MappersTests
         Assert.Equal(request.ClientId, result.ClientId);
         Assert.Equal(request.State, result.State);
         Assert.Equal(request.Nonce, result.Nonce);
+        Assert.Equal(request.Prompt, result.Prompt);
+    }
+
+    /// <summary>
+    /// A request that carries an empty prompt is stored as one, apart from a request that carries none.
+    /// </summary>
+    [Fact]
+    public void AuthorizationRequestMapper_KeepsAnEmptyPromptApartFromAnAbsentOne()
+    {
+        var empty = new AuthorizationRequest { Prompt = [] }.ToProto().FromProto();
+        var absent = new AuthorizationRequest { Prompt = null }.ToProto().FromProto();
+
+        Assert.Equal(Array.Empty<string>(), empty.Prompt);
+        Assert.Null(absent.Prompt);
     }
 
     [Theory]
@@ -648,10 +754,10 @@ public class MappersTests
         BackChannelAuthenticationStatus status)
     {
         // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var grant = new AuthorizedGrant(session, context);
-        var request = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5)) { Status = status };
+        var request = new BackChannelAuthenticationRequest(grant, TimeProvider.System.GetUtcNow().AddMinutes(5)) { Status = status };
 
         // Act
         var proto = request.ToProto();
@@ -682,10 +788,10 @@ public class MappersTests
     [MemberData(nameof(RequestedSubjectShapes))]
     public void BackChannelAuthenticationRequestMapper_RoundTrip_KeepsRequestedSubjects(string[]? subjects)
     {
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
         var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
         var request = new BackChannelAuthenticationRequest(
-            new AuthorizedGrant(session, context), DateTimeOffset.UtcNow.AddMinutes(5))
+            new AuthorizedGrant(session, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
         {
             RequestedSubjects = subjects,
         };
@@ -693,6 +799,31 @@ public class MappersTests
         var result = request.ToProto().FromProto();
 
         Assert.Equal(subjects, result.RequestedSubjects);
+    }
+
+    /// <summary>
+    /// The levels a decoupled request requires survive the store in all three states: absent (written by a
+    /// build that did not record them), empty (nothing required) and carrying values.
+    /// </summary>
+    /// <remarks>
+    /// Absent and empty answer differently at completion - the first reads the requirement from the grant,
+    /// the second requires nothing - so a round trip folding one into the other changes what is refused.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(RequestedSubjectShapes))]
+    public void BackChannelAuthenticationRequestMapper_RoundTrip_KeepsRequiredAuthenticationLevels(string[]? levels)
+    {
+        var session = new AuthSession("user-123", "session-456", TimeProvider.System.GetUtcNow(), "local");
+        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
+        var request = new BackChannelAuthenticationRequest(
+            new AuthorizedGrant(session, context), TimeProvider.System.GetUtcNow().AddMinutes(5))
+        {
+            RequiredAuthContextClassRefs = levels,
+        };
+
+        var result = request.ToProto().FromProto();
+
+        Assert.Equal(levels, result.RequiredAuthContextClassRefs);
     }
 
     /// <summary>
@@ -719,49 +850,6 @@ public class MappersTests
         var result = request.ToProto().FromProto();
 
         Assert.Equal(wire, result.RequestedAuthorizationDetails?.ToJsonString());
-    }
-
-    [Fact]
-    public void BackChannelAuthenticationRequestMapper_ToProto_HandlesNextPollAt()
-    {
-        // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
-        var grant = new AuthorizedGrant(session, context);
-        var nextPoll = DateTimeOffset.UtcNow.AddSeconds(45);
-        var request = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5))
-        {
-            NextPollAt = nextPoll,
-            Status = BackChannelAuthenticationStatus.Pending,
-        };
-
-        // Act
-        var proto = request.ToProto();
-
-        // Assert
-        Assert.NotNull(proto.NextPollAt);
-
-        var result = proto.FromProto();
-        Assert.NotNull(result.NextPollAt);
-        // Compare with millisecond precision
-        Assert.Equal(nextPoll.ToUnixTimeMilliseconds(), result.NextPollAt.Value.ToUnixTimeMilliseconds());
-    }
-
-    [Fact]
-    public void BackChannelAuthenticationRequestMapper_ToProto_HandlesNullNextPollAt()
-    {
-        // Arrange
-        var session = new AuthSession("user-123", "session-456", DateTimeOffset.UtcNow, "local");
-        var context = new AuthorizationContext("client-123", [TestConstants.DefaultScope], null);
-        var grant = new AuthorizedGrant(session, context);
-        var request = new BackChannelAuthenticationRequest(grant, DateTimeOffset.UtcNow.AddMinutes(5)); // NextPollAt is null
-
-        // Act
-        var proto = request.ToProto();
-
-        // Assert
-        var result = proto.FromProto();
-        Assert.Null(result.NextPollAt);
     }
 
     [Fact]

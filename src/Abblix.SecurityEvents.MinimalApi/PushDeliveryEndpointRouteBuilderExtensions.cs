@@ -8,6 +8,7 @@
 using Abblix.SecurityEvents.Delivery;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 
 namespace Abblix.SecurityEvents.MinimalApi;
@@ -42,7 +43,7 @@ public static class PushDeliveryEndpointRouteBuilderExtensions
     /// </summary>
     private static async Task<IResult> HandleAsync(
         HttpRequest request,
-        PushDeliveryHandler handler,
+        [FromServices] PushDeliveryHandler handler,
         CancellationToken cancellationToken)
     {
         using var reader = new StreamReader(request.Body);

@@ -18,7 +18,7 @@ namespace Abblix.Utils.UnitTests;
 /// </summary>
 /// <remarks>
 /// Serializing callers on a key stops one of them overwriting another's token, which is one of the three
-/// ways a value goes with nobody told. The tests below measure that serialization directly rather than
+/// ways a value goes with nobody told. The tests in this class measure that serialization directly rather than
 /// trying to observe the absence of an interleaving - and then measure the ways it does NOT close, one
 /// test each for an expiring claim and for a store fault after the removal, because a guarantee stated as
 /// a list of prevented causes is the shape that keeps turning out to be short by one.
@@ -229,7 +229,8 @@ public class RedemptionSerializationTests
 	}
 
 	/// <summary>
-	/// The control for the test above. With the lock outliving the protocol, the same single caller wins,
+	/// The control for <see cref="TryRemoveAsync_TheLockExpiresMidProtocol_OneCallerAloneLosesTheValue"/>. With
+	/// the lock outliving the protocol, the same single caller wins,
 	/// so what that test measures is the expiry and not the delay.
 	/// </summary>
 	[Fact]
@@ -451,12 +452,12 @@ public class RedemptionSerializationTests
 		cache.ResumeNext();
 		Assert.True(await AnsweredAsync(holder));
 
-		// If the cancelled waiter had over-released, two callers could now be inside at once. Drive the
+		// If the canceled waiter had over-released, two callers could now be inside at once. Drive the
 		// same arrangement again and require it to still serialize.
 		//
 		// The counts run on from the first arrangement, because entries are counted cumulatively rather
 		// than as a queue depth: the holder was the first, so a is the second and b would be the third.
-		// The cancelled waiter is not among them - it never got in, which is the property above.
+		// The canceled waiter is not among them - it never got in, which is the property above.
 		await inner.SetAsync(Key, Encoding.UTF8.GetBytes("again"), TestContext.Current.CancellationToken);
 
 		var a = cache.TryRemoveAsync(Key, cancellationToken: TestContext.Current.CancellationToken);
@@ -574,8 +575,8 @@ public class RedemptionSerializationTests
 		/// <para>
 		/// It counts ENTRIES, not callers, and the two part company: a take-once against a key whose value
 		/// is still there reads the gated key TWICE, once for the value and once inside the removal
-		/// protocol, so one caller advances this by two. Every row below drives the take-once against a
-		/// key that is already empty, which is why their numbers read as caller counts. A row that does
+		/// protocol, so one caller advances this by two. Every row in this file that drives the take-once does
+		/// so against a key that is already empty, which is why their numbers read as caller counts. A row that does
 		/// not - the obvious next one to write - has to count reads instead.
 		/// </para>
 		/// </summary>

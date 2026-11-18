@@ -59,7 +59,7 @@ public class AuthorizationEndpointMetadataFactoryTests
     /// <summary>
     /// Verifies that without <c>EnableImplicitFlow()</c>, the discovery document advertises only
     /// the <c>code</c> response type; <c>token</c>, <c>id_token</c>, and the four hybrid
-    /// combinations are absent. Per OAuth 2.1 §1.4 default-off Implicit Flow contract.
+    /// combinations are absent. Per OAuth 2.1 section 1.4 default-off Implicit Flow contract.
     /// </summary>
     [Fact]
     public void Create_ResponseTypesSupported_WhenImplicitFlowDisabled_ContainsOnlyCode()

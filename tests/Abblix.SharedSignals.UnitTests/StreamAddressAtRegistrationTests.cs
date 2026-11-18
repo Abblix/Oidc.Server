@@ -13,6 +13,7 @@ using Abblix.SecurityEvents.Abstractions;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
 using Abblix.SharedSignals.Transmitter;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -122,7 +123,8 @@ public class StreamAddressAtRegistrationTests
 
     /// <summary>The control for the update: the same call over https goes through.</summary>
     /// <remarks>
-    /// Without it the refusal above is satisfied by an update path that refuses every delivery it is
+    /// Without it the refusal in <see cref="AnUpdateOntoACleartextAddress_IsRefused"/> is satisfied by an
+    /// update path that refuses every delivery it is
     /// given, which is a check that cannot fail rather than a check.
     /// </remarks>
     [Fact]
@@ -235,7 +237,8 @@ public class StreamAddressAtRegistrationTests
 
     /// <summary>The control: delivery still asks the whole question, resolution included.</summary>
     /// <remarks>
-    /// Without it the case above is satisfied by a policy that stopped resolving at all, which would
+    /// Without it <see cref="ARegistration_DoesNotResolveTheName"/> is satisfied by a policy that stopped
+    /// resolving at all, which would
     /// remove the check that keeps a public name resolving to a private address out of the network.
     /// </remarks>
     [Fact]
@@ -251,7 +254,7 @@ public class StreamAddressAtRegistrationTests
 
     private static StreamManagementService Service(
         IReadOnlyList<Uri>? allowed = null,
-        ReceiverAddressPolicy.HostResolver? resolve = null)
+        ResolveHostDelegate? resolve = null)
     {
         var options = new SharedSignalsTransmitterOptions
         {
@@ -265,7 +268,12 @@ public class StreamAddressAtRegistrationTests
         var outbox = new InMemoryEventOutbox();
         var clock = new FakeTimeProvider(DateTimeOffset.FromUnixTimeSeconds(1754200000));
         var dispatcher = new EventDispatcher(
-            NullLogger<EventDispatcher>.Instance, store, outbox, new NeverSigner(), options.Issuer, clock: clock);
+            NullLogger<EventDispatcher>.Instance,
+            store,
+            outbox,
+            new OptionsTransmitterIdentity(options),
+            TestInstruments.Create(),
+            clock: clock);
 
         // A resolver of the test's own, so the one branch of the policy that is not a string comparison
         // stays out of this file: a live DNS lookup would make these tests depend on a name nobody owns.
@@ -277,15 +285,11 @@ public class StreamAddressAtRegistrationTests
             store, outbox, dispatcher, options, policy, PollEndpointsOf(options), clock);
     }
 
-    private sealed class NeverSigner : ISecurityEventTokenSigner
-    {
-        public Task<string> SignAsync(SecurityEventToken token, CancellationToken cancellationToken = default)
-            => Task.FromResult("signed");
-    }
     /// <summary>
     /// The poll address, taken from the options the way the container would. These fixtures name it
     /// through <see cref="SharedSignalsTransmitterOptions.PollEndpointFactory"/>; a host that maps the
     /// endpoints instead has it declared by the mapping, which is covered end to end.
     /// </summary>
-    private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options) => new(options);
+    private static PollEndpointLocator PollEndpointsOf(SharedSignalsTransmitterOptions options)
+        => new(options, new TransmitterRoutes(), new OptionsTransmitterIdentity(options));
 }

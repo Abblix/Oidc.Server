@@ -32,7 +32,11 @@ internal sealed partial class BlobKeyRingStore(ILogger<BlobKeyRingStore> logger,
     : IKeyRingStore
 {
     /// <inheritdoc />
-    public async Task<IReadOnlyList<StoredKey>> LoadAsync(CancellationToken cancellationToken)
+    public Task<IReadOnlyList<StoredKey>> LoadAsync(CancellationToken cancellationToken)
+        => AzureFailure.Classified<IReadOnlyList<StoredKey>>(
+            "read the key ring", () => LoadCoreAsync(cancellationToken), cancellationToken);
+
+    private async Task<IReadOnlyList<StoredKey>> LoadCoreAsync(CancellationToken cancellationToken)
     {
         // A ring nobody has minted into yet is the normal bootstrap: the first pod is meant to find it empty.
         await container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
@@ -48,7 +52,11 @@ internal sealed partial class BlobKeyRingStore(ILogger<BlobKeyRingStore> logger,
     }
 
     /// <inheritdoc />
-    public async Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
+    public Task<bool> TryAddAsync(StoredKey key, CancellationToken cancellationToken)
+        => AzureFailure.Classified(
+            "add a key to the ring", () => TryAddCoreAsync(key, cancellationToken), cancellationToken);
+
+    private async Task<bool> TryAddCoreAsync(StoredKey key, CancellationToken cancellationToken)
     {
         await container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
 
@@ -83,8 +91,30 @@ internal sealed partial class BlobKeyRingStore(ILogger<BlobKeyRingStore> logger,
     }
 
     /// <inheritdoc />
-    public async Task RemoveAsync(string id, CancellationToken cancellationToken)
-        => await container.GetBlobClient(id).DeleteIfExistsAsync(cancellationToken: cancellationToken);
+    public Task RemoveAsync(string id, CancellationToken cancellationToken)
+        => AzureFailure.Classified(
+            "remove a key from the ring",
+            async () =>
+            {
+                try
+                {
+                    await container.GetBlobClient(id).DeleteAsync(cancellationToken: cancellationToken);
+                }
+                catch (RequestFailedException failure)
+                    when (failure.Status == (int)HttpStatusCode.NotFound
+                          && failure.ErrorCode == BlobErrorCode.BlobNotFound)
+                {
+                    // Two pods may retire the same expired key: removing what is already gone is the outcome
+                    // both wanted.
+                    //
+                    // Written out rather than left to the SDK's delete-if-exists, which answers a container
+                    // that is gone the same way - and that would report a retirement against a container
+                    // where nothing was retired.
+                }
+
+                return true;
+            },
+            cancellationToken);
 
     /// <summary>Reads one entry, tolerating one deleted between the listing and the read.</summary>
     private async Task<StoredKey?> ReadAsync(string id, CancellationToken cancellationToken)
@@ -97,10 +127,16 @@ internal sealed partial class BlobKeyRingStore(ILogger<BlobKeyRingStore> logger,
 
             return new StoredKey { Id = id, Jwe = entry.Jwe, CreatedAt = entry.CreatedAt };
         }
-        catch (RequestFailedException failure) when (failure.Status == (int)HttpStatusCode.NotFound)
+        catch (RequestFailedException failure)
+            when (failure.Status == (int)HttpStatusCode.NotFound
+                  && failure.ErrorCode == BlobErrorCode.BlobNotFound)
         {
             // Retired between the listing and this read, which is a race the caller does not care about: the key
             // is gone either way.
+            //
+            // The error code, not the status alone: a container removed under a running deployment answers 404
+            // ContainerNotFound on every entry, and reading those as absent would hand the caller an empty ring
+            // - which is the bootstrap signal that starts minting a fresh period over a ring nobody read.
             return null;
         }
     }

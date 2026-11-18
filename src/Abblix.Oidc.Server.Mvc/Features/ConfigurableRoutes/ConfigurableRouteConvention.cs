@@ -1,4 +1,4 @@
-﻿// Abblix OIDC Server Library
+// Abblix OIDC Server Library
 // SPDX-FileCopyrightText: Copyright (c) Abblix LLP
 // SPDX-License-Identifier: LicenseRef-Abblix-EULA
 //
@@ -6,116 +6,37 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using System.Diagnostics;
-using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
-using Microsoft.Extensions.Configuration;
 
 namespace Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 
 /// <summary>
-/// A convention that resolves tokenized route templates using configuration values,
-/// supporting fallback values with the syntax: [route:TokenName?FallbackValue].
+/// Resolves the tokens in the host's own attribute route templates, such as <c>[route:ApiPrefix?v1]/users</c>, from
+/// the configuration section <see cref="ConfigurableRoutesExtensions.ConfigureRoutes"/> was given.
 /// </summary>
-public class ConfigurableRouteConvention : IApplicationModelConvention
+/// <remarks>
+/// The host asks for it by calling that method, which is the only way it reaches <c>MvcOptions</c>. A template
+/// carrying no token is left untouched, and one carrying a token would not start without it, since MVC replaces
+/// only its own tokens, so it can turn no working route of the host's into another. The library's own controllers
+/// carry no template at all.
+/// </remarks>
+/// <param name="resolver">Resolves a template's tokens from the section.</param>
+internal sealed class ConfigurableRouteConvention(RouteTemplateResolver resolver) : IApplicationModelConvention
 {
-    private const string TokenGroup = "token";
-    private const string FallbackGroup = "fallback";
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ConfigurableRouteConvention"/> class.
-    /// </summary>
-    /// <param name="prefix">The token prefix to recognize in route templates. Defaults to "route".</param>
-    /// <param name="configSection">The configuration section to use for token resolution.</param>
-    /// <remarks>
-    /// Tokens must follow the format: [route:MyToken] or [route:MyToken?FallbackValue].
-    /// </remarks>
-    public ConfigurableRouteConvention(string prefix = "route", IConfigurationSection? configSection = null)
-    {
-        _configSection = configSection;
-        // The input is developer-authored route templates read once at startup, so the timeout is
-        // a hang backstop, not a defence against untrusted input - and it measures wall-clock
-        // time. A tight value turns ordinary CI-runner starvation during the first, JIT-compiling
-        // match into a RegexMatchTimeoutException that kills host startup; 100 ms was hit that
-        // way on a loaded runner, so the bound is generous on purpose.
-        _routeRegex = new Regex(
-            $@"\[{prefix}:(?<{TokenGroup}>\w+)(\?(?<{FallbackGroup}>.+))?\]",
-            RegexOptions.Compiled,
-            TimeSpan.FromSeconds(10));
-    }
-    private readonly IConfigurationSection? _configSection;
-    private readonly Regex _routeRegex;
-
-    /// <summary>
-    /// Applies the route token resolution to all controllers and actions in the application model.
-    /// </summary>
-    /// <param name="application">The application model to apply the convention to.</param>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown if a route token is not found in the configuration.
-    /// </exception>
+    /// <inheritdoc />
     public void Apply(ApplicationModel application)
     {
-        var selectors = application.Controllers
-            .SelectMany(controller => controller.Actions)
-            .SelectMany(action => action.Selectors);
+        var routes = application.Controllers
+            .SelectMany(controller => controller.Selectors.Concat(controller.Actions.SelectMany(action => action.Selectors)))
+            .Select(selector => selector.AttributeRouteModel)
+            .OfType<AttributeRouteModel>()
+            .Where(route => !string.IsNullOrEmpty(route.Template));
 
-        foreach (var selector in selectors)
+        foreach (var route in routes)
         {
-            Apply(selector);
+            var resolved = resolver.Resolve(route.Template!).Template;
+            if (!string.Equals(resolved, route.Template, StringComparison.Ordinal))
+                route.Template = resolved;
         }
-    }
-
-    /// <summary>
-    /// Applies token replacement to a single selector's route template.
-    /// </summary>
-    /// <param name="selector">The <see cref="SelectorModel"/> whose route template may contain tokens.</param>
-    public void Apply(SelectorModel selector)
-    {
-        var model = selector.AttributeRouteModel;
-        if (!string.IsNullOrEmpty(model?.Template))
-            model.Template = Resolve(model.Template);
-    }
-
-    /// <summary>
-    /// Replaces all recognized route tokens in the format [route:TokenName?Fallback] with their resolved values.
-    /// </summary>
-    /// <param name="template">The original template string.</param>
-    /// <returns>The resolved route template string.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown if a token cannot be resolved and no fallback is provided.
-    /// </exception>
-    public string Resolve(string template)
-    {
-        var resolvedTokens = new HashSet<string>(StringComparer.Ordinal);
-        while (true)
-        {
-            var originalTemplate = template;
-
-            template = _routeRegex.Replace(
-                originalTemplate,
-                match =>
-                {
-                    var token = match.Groups[TokenGroup].Value;
-                    if (!resolvedTokens.Add(token))
-                        throw new InvalidOperationException($"Circular dependency for token '{token}' in route '{originalTemplate}'.");
-
-                    var resolvedPath = _configSection?.GetValue<string>(token);
-                    if (resolvedPath != null)
-                        return resolvedPath;
-
-                    var fallbackGroup = match.Groups[FallbackGroup];
-                    if (fallbackGroup.Success)
-                        return fallbackGroup.Value;
-
-                    throw new InvalidOperationException($"Can't resolve the route {token}");
-                });
-
-            if (string.Equals(originalTemplate, template, StringComparison.Ordinal))
-                break;
-
-            Debug.WriteLine($"The template {originalTemplate} resolved to {template}");
-        }
-
-        return template;
     }
 }

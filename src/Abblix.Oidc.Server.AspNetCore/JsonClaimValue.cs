@@ -1,0 +1,258 @@
+// Abblix OIDC Server Library
+// SPDX-FileCopyrightText: Copyright (c) Abblix LLP
+// SPDX-License-Identifier: LicenseRef-Abblix-EULA
+//
+// This software is provided 'as-is', without any express or implied warranty.
+// Licensing terms, including free-of-charge use, are stated in LICENSE.md
+// in the official repository at https://github.com/Abblix/Oidc.Server
+
+using System.Collections.Frozen;
+using System.Security.Claims;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using static System.Globalization.CultureInfo;
+using static System.Globalization.DateTimeStyles;
+using static System.Globalization.NumberStyles;
+
+namespace Abblix.Oidc.Server.AspNetCore;
+
+/// <summary>
+/// Carries a JSON value through a claim and back, keeping its exact JSON kind and CLR type: the claim's
+/// <see cref="Claim.ValueType"/> is the only channel that survives the claim being serialized into the
+/// authentication cookie, so it records which kind was written.
+/// </summary>
+internal static class JsonClaimValue
+{
+	/// <summary>
+	/// Claim <see cref="Claim.ValueType"/> markers for the JSON node kinds the standard <see cref="ClaimValueTypes"/>
+	/// set does not distinguish.
+	/// </summary>
+	private static class CustomValueTypes
+	{
+		/// <summary>
+		/// A JSON object, serialized to its JSON text. Matches <c>JsonClaimValueTypes.Json</c> of
+		/// System.IdentityModel.Tokens.Jwt / Microsoft.IdentityModel, declared here by value
+		/// so claims interoperate with JWT handlers without taking a dependency on those packages.
+		/// </summary>
+		public const string Json = "JSON";
+
+		/// <summary>
+		/// A JSON array, serialized to its JSON text. Matches <c>JsonClaimValueTypes.JsonArray</c> of
+		/// System.IdentityModel.Tokens.Jwt / Microsoft.IdentityModel.
+		/// </summary>
+		public const string JsonArray = "JSON_ARRAY";
+
+		/// <summary>
+		/// A single-precision floating-point value - the <c>xs:float</c> XSD primitive type URI, a sibling of
+		/// <c>ClaimValueTypes.Double</c> = <c>xs:double</c>.
+		/// </summary>
+		public const string Float = "http://www.w3.org/2001/XMLSchema#float";
+
+		/// <summary>
+		/// A decimal value - the <c>xs:decimal</c> XSD primitive type URI, a sibling of
+		/// <c>ClaimValueTypes.Double</c> = <c>xs:double</c>.
+		/// </summary>
+		public const string Decimal = "http://www.w3.org/2001/XMLSchema#decimal";
+
+		/// <summary>
+		/// A <c>DateTimeOffset</c> - it has no XSD primitive distinct from <c>xs:dateTime</c> (which
+		/// <c>ClaimValueTypes.DateTime</c> already uses for a <c>DateTime</c>), so it keeps a library-specific marker.
+		/// </summary>
+		public const string DateTimeOffset = "urn:abblix:datetimeoffset";
+	}
+
+	/// <summary>
+	/// The primitive kinds, tried in this order when writing - a Chain of Responsibility in which the first kind the
+	/// value converts to wins. The order matters: string and bool first, then integers widest-last, then the floating
+	/// kinds, each tagged distinctly so the read side reconstructs the exact CLR/JSON type.
+	/// </summary>
+	/// <remarks>
+	/// An instant is written as a <see cref="System.DateTimeOffset"/> in the ISO 8601 round-trip format ("O"), which
+	/// keeps its offset, and a date without a time as a <see cref="DateOnly"/> ("yyyy-MM-dd"), which no time zone can
+	/// move to the day before. A claim a sign-in or an earlier release tagged as a DateTime is still read, as the
+	/// instant it names, an instant written without an offset being UTC; nothing is written as one.
+	/// </remarks>
+	private static readonly PrimitiveClaimFormat[] PrimitiveFormats =
+	[
+		new(ClaimValueTypes.String, WriteString, ReadString),
+		new(ClaimValueTypes.Boolean, WriteBoolean, ReadBoolean),
+		new(ClaimValueTypes.Integer32, WriteInt32, ReadInt32),
+		new(ClaimValueTypes.Integer64, WriteInt64, ReadInt64),
+		new(CustomValueTypes.Float, WriteFloat, ReadFloat),
+		new(ClaimValueTypes.Double, WriteDouble, ReadDouble),
+		new(CustomValueTypes.Decimal, WriteDecimal, ReadDecimal),
+		new(ClaimValueTypes.Date, WriteDate, ReadDate),
+		new(CustomValueTypes.DateTimeOffset, WriteDateTimeOffset, ReadDateTimeOffset),
+		new(ClaimValueTypes.DateTime, WriteNothing, ReadUtcInstant),
+	];
+
+	private static readonly FrozenDictionary<string, PrimitiveClaimFormat> FormatsByValueType =
+		PrimitiveFormats.ToFrozenDictionary(format => format.ValueType, StringComparer.Ordinal);
+
+	/// <summary>
+	/// Creates a claim from a JSON value. Primitives are converted to their string representation with a value type
+	/// that pins the exact JSON kind; arrays and objects are JSON-serialized and tagged so the read side parses them
+	/// back rather than handing back the serialized string.
+	/// </summary>
+	public static Claim ToClaim(string claimType, JsonNode claimValue) => claimValue switch
+	{
+		JsonArray => new Claim(claimType, claimValue.ToJsonString(), CustomValueTypes.JsonArray),
+
+		JsonValue primitive when Format(primitive) is { } formatted
+			=> new Claim(claimType, formatted.Text, formatted.ValueType),
+
+		// Objects, and any JsonValue of a kind no primitive format takes.
+		_ => new Claim(claimType, claimValue.ToJsonString(), CustomValueTypes.Json),
+	};
+
+	/// <summary>
+	/// Parses a claim back to a JSON value using the claim's value type to reconstruct the exact type
+	/// <see cref="ToClaim"/> recorded.
+	/// </summary>
+	public static JsonNode? FromClaim(Claim claim)
+	{
+		var value = claim.Value;
+
+		if (string.IsNullOrEmpty(value))
+			return null;
+
+		// A primitive whose text does not parse as its recorded kind is still the value it was given, so it is kept
+		// as a string. The JSON markers, or a claim written by something other than ToClaim, are tried as JSON.
+		return FormatsByValueType.TryGetValue(claim.ValueType, out var format)
+			? format.Read(value) ?? JsonValue.Create(value)
+			: ParseJsonOrString(value);
+	}
+
+	private static (string Text, string ValueType)? Format(JsonValue value)
+	{
+		foreach (var format in PrimitiveFormats)
+		{
+			if (format.Write(value) is { } text)
+				return (text, format.ValueType);
+		}
+
+		return null;
+	}
+
+	private static string? WriteString(JsonValue value)
+		=> value.TryGetValue<string>(out var text) ? text : null;
+
+	private static JsonNode? ReadString(string text) => JsonValue.Create(text);
+
+	private static string? WriteBoolean(JsonValue value)
+		=> value.TryGetValue<bool>(out var flag) ? flag.ToString().ToLowerInvariant() : null;
+
+	private static JsonNode? ReadBoolean(string text)
+		=> bool.TryParse(text, out var flag) ? JsonValue.Create(flag) : null;
+
+	private static string? WriteInt32(JsonValue value)
+		=> value.TryGetValue<int>(out var number) ? number.ToString(InvariantCulture) : null;
+
+	private static JsonNode? ReadInt32(string text)
+		=> int.TryParse(text, Integer, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
+
+	private static string? WriteInt64(JsonValue value)
+		=> value.TryGetValue<long>(out var number) ? number.ToString(InvariantCulture) : null;
+
+	private static JsonNode? ReadInt64(string text)
+		=> long.TryParse(text, Integer, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
+
+	private static string? WriteFloat(JsonValue value)
+		=> value.TryGetValue<float>(out var number) ? Exactly(value, number.ToString(InvariantCulture)) : null;
+
+	private static JsonNode? ReadFloat(string text)
+		=> float.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
+
+	private static string? WriteDouble(JsonValue value)
+		=> value.TryGetValue<double>(out var number) ? Exactly(value, number.ToString(InvariantCulture)) : null;
+
+	/// <summary>
+	/// The text a non-integer kind would write for <paramref name="value"/>, or null when that kind does not hold it.
+	/// </summary>
+	/// <remarks>
+	/// A number parsed from JSON text converts to every non-integer kind whose range it fits, rounding to that kind's
+	/// precision, and a single or double also turns a number past its range into an infinity or a zero, so the
+	/// narrowest kind tried first would keep only what it can hold. Such a number is held when the kind's text
+	/// carries the same number as the JSON text did, which an infinity's text never does.
+	/// The texts are compared digit by digit rather than through another numeric kind, which would round both sides
+	/// alike at the edges of its own range. A value the host created is its own kind and is written as it is.
+	/// </remarks>
+	private static string? Exactly(JsonValue value, string text)
+		=> !value.TryGetValue<JsonElement>(out var element) || Denotes(text, element) ? text : null;
+
+	private static bool Denotes(string text, JsonElement element)
+		=> Canonical(text) is { } written && written == Canonical(element.GetRawText());
+
+	/// <summary>
+	/// The number a JSON or invariant-culture numeric text denotes, as its sign, its significant digits and where the
+	/// point stands counted from the first of them, so two texts of one number compare equal however they write it.
+	/// </summary>
+	/// <returns>Null when the text's exponent does not fit an <see cref="int"/>.</returns>
+	private static (bool Negative, string Digits, int Exponent)? Canonical(string text)
+	{
+		var mantissa = text.TrimStart('-');
+		var exponentAt = mantissa.IndexOfAny(['e', 'E']);
+		var exponent = 0;
+		if (exponentAt >= 0)
+		{
+			if (!int.TryParse(mantissa[(exponentAt + 1)..], AllowLeadingSign, InvariantCulture, out exponent))
+				return null;
+
+			mantissa = mantissa[..exponentAt];
+		}
+
+		var point = mantissa.IndexOf('.');
+		var digits = mantissa.Replace(".", string.Empty);
+		var significant = digits.TrimStart('0');
+		var position = exponent + (point < 0 ? mantissa.Length : point) - (digits.Length - significant.Length);
+
+		significant = significant.TrimEnd('0');
+		return significant.Length == 0 ? (false, string.Empty, 0) : (text.StartsWith('-'), significant, position);
+	}
+
+	private static JsonNode? ReadDouble(string text)
+		=> double.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
+
+	private static string? WriteDecimal(JsonValue value)
+		=> value.TryGetValue<decimal>(out var number) ? Exactly(value, number.ToString(InvariantCulture)) : null;
+
+	private static JsonNode? ReadDecimal(string text)
+		=> decimal.TryParse(text, Float, InvariantCulture, out var number) ? JsonValue.Create(number) : null;
+
+	// For DateOnly: "2009-06-15"
+	private static string? WriteDate(JsonValue value)
+		=> value.TryGetValue<DateOnly>(out var date) ? date.ToString("O", InvariantCulture) : null;
+
+	private static JsonNode? ReadDate(string text)
+		=> DateOnly.TryParseExact(text, "O", InvariantCulture, System.Globalization.DateTimeStyles.None, out var date) ? JsonValue.Create(date) : null;
+
+	// A value type only read: the chain passes over it when writing
+	private static string? WriteNothing(JsonValue value) => null;
+
+	// For a claim tagged DateTime: "2009-06-15T13:45:30.0000000Z", or without an offset, which is read as UTC
+	private static JsonNode? ReadUtcInstant(string text)
+		=> System.DateTimeOffset.TryParse(text, InvariantCulture, AssumeUniversal | AdjustToUniversal, out var instant)
+			? JsonValue.Create(instant)
+			: null;
+
+	// For DateTimeOffset: "2009-06-15T13:45:30.0000000-07:00"
+	private static string? WriteDateTimeOffset(JsonValue value)
+		=> value.TryGetValue<DateTimeOffset>(out var instant) ? instant.ToString("O", InvariantCulture) : null;
+
+	private static JsonNode? ReadDateTimeOffset(string text)
+		=> DateTimeOffset.TryParse(text, InvariantCulture, RoundtripKind, out var instant)
+			? JsonValue.Create(instant)
+			: null;
+
+	private static JsonNode? ParseJsonOrString(string value)
+	{
+		try
+		{
+			return JsonNode.Parse(value) ?? JsonValue.Create(value);
+		}
+		catch (JsonException)
+		{
+			return JsonValue.Create(value);
+		}
+	}
+}

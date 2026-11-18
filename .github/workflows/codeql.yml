@@ -21,7 +21,9 @@ permissions:
 
 concurrency:
   group: codeql-${{ github.ref }}
-  cancel-in-progress: true
+  # Every run here is a push to develop or a manual one, and each is the verdict on its commit: cancelling
+  # it for the next push would hide that commit's result. A newer push replaces only a run still waiting.
+  cancel-in-progress: false
 
 jobs:
   analyze:

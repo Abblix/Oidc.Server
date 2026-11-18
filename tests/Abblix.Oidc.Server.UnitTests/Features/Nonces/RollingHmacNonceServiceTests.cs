@@ -11,11 +11,16 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features;
 using Abblix.Oidc.Server.Features.Nonces;
+using Abblix.Oidc.Server.Features.Storages;
+using Abblix.Oidc.Server.Features.Storages.Proto;
+using Google.Protobuf;
 
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
+using Moq;
 
 using Xunit;
 
@@ -24,7 +29,7 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Nonces;
 /// <summary>
 /// Tests for <see cref="RollingHmacNonceService"/>. Cover the issue/validate
 /// round-trip, the three failure categories of <see cref="NonceValidationFailure"/>,
-/// behaviour across the rotation boundary, and the multi-instance contract that
+/// behavior across the rotation boundary, and the multi-instance contract that
 /// instances sharing an <see cref="IDistributedCache"/> can verify each other's
 /// nonces.
 /// </summary>
@@ -59,6 +64,12 @@ public class RollingHmacNonceServiceTests
 
         var time = new FakeTimeProvider(startTime ?? Anchor);
         services.AddSingleton<TimeProvider>(time);
+
+        // The server's own storage over the cache, so instances sharing the cache share the secrets as they do
+        // in a deployment.
+        services.AddCommonServices();
+        services.AddSingleton(SingleIssuer.AccessorOf(() => new TestIssuer()));
+        services.AddSingleton<IEntityStorageKeyFactory, EntityStorageKeyFactory>();
         services.AddSingleton<INonceService, RollingHmacNonceService>();
 
         var sp = services.BuildServiceProvider();
@@ -72,9 +83,9 @@ public class RollingHmacNonceServiceTests
     public async Task IssueThenValidate_AtSameInstant_Succeeds()
     {
         var (svc, _, _) = BuildService();
-        var nonce = await svc.IssueAsync(Ct);
+        var nonce = await svc.IssueAsync(SingleIssuer.Tenant, Ct);
 
-        var failure = await svc.ValidateAsync(nonce, Ct);
+        var failure = await svc.ValidateAsync(SingleIssuer.Tenant, nonce, Ct);
 
         Assert.Null(failure);
     }
@@ -84,7 +95,7 @@ public class RollingHmacNonceServiceTests
     {
         var (svc, _, _) = BuildService();
 
-        var failure = await svc.ValidateAsync("not-a-real-nonce!!", Ct);
+        var failure = await svc.ValidateAsync(SingleIssuer.Tenant, "not-a-real-nonce!!", Ct);
 
         Assert.Equal(NonceValidationFailure.Malformed, failure);
     }
@@ -94,7 +105,7 @@ public class RollingHmacNonceServiceTests
     {
         var (svc, _, _) = BuildService();
 
-        var failure = await svc.ValidateAsync(string.Empty, Ct);
+        var failure = await svc.ValidateAsync(SingleIssuer.Tenant, string.Empty, Ct);
 
         Assert.Equal(NonceValidationFailure.Malformed, failure);
     }
@@ -105,10 +116,10 @@ public class RollingHmacNonceServiceTests
         var window = TimeSpan.FromMinutes(5);
         var (svc, time, _) = BuildService(acceptanceWindow: window);
 
-        var nonce = await svc.IssueAsync(Ct);
+        var nonce = await svc.IssueAsync(SingleIssuer.Tenant, Ct);
         time.Advance(window + TimeSpan.FromSeconds(1));
 
-        var failure = await svc.ValidateAsync(nonce, Ct);
+        var failure = await svc.ValidateAsync(SingleIssuer.Tenant, nonce, Ct);
 
         Assert.Equal(NonceValidationFailure.OutOfWindow, failure);
     }
@@ -135,8 +146,8 @@ public class RollingHmacNonceServiceTests
             startTime: Anchor,
             acceptanceWindow: window);
 
-        var futureNonce = await mintee.IssueAsync(Ct);
-        var failure = await validator.ValidateAsync(futureNonce, Ct);
+        var futureNonce = await mintee.IssueAsync(SingleIssuer.Tenant, Ct);
+        var failure = await validator.ValidateAsync(SingleIssuer.Tenant, futureNonce, Ct);
 
         Assert.Equal(NonceValidationFailure.OutOfWindow, failure);
     }
@@ -145,12 +156,12 @@ public class RollingHmacNonceServiceTests
     public async Task ValidateAsync_TamperedTag_ReturnsBadSignature()
     {
         var (svc, _, _) = BuildService();
-        var nonce = await svc.IssueAsync(Ct);
+        var nonce = await svc.IssueAsync(SingleIssuer.Tenant, Ct);
 
         // Flip one base64url character somewhere in the tag region (last bytes).
         var tampered = nonce[..^2] + (nonce[^2] == 'a' ? "b" : "a") + nonce[^1..];
 
-        var failure = await svc.ValidateAsync(tampered, Ct);
+        var failure = await svc.ValidateAsync(SingleIssuer.Tenant, tampered, Ct);
 
         Assert.Equal(NonceValidationFailure.BadSignature, failure);
     }
@@ -168,8 +179,8 @@ public class RollingHmacNonceServiceTests
         var (issuer, _, _) = BuildService(sharedCache: sharedCache);
         var (verifier, _, _) = BuildService(sharedCache: sharedCache);
 
-        var nonce = await issuer.IssueAsync(Ct);
-        var failure = await verifier.ValidateAsync(nonce, Ct);
+        var nonce = await issuer.IssueAsync(SingleIssuer.Tenant, Ct);
+        var failure = await verifier.ValidateAsync(SingleIssuer.Tenant, nonce, Ct);
 
         Assert.Null(failure);
     }
@@ -177,13 +188,13 @@ public class RollingHmacNonceServiceTests
     [Fact]
     public async Task ValidateAsync_AcrossInstancesWithSeparateCaches_ReturnsBadSignature()
     {
-        // Sanity check the previous test: without a shared cache each instance
+        // Sanity check ValidateAsync_AcrossInstancesSharingCache_Succeeds: without a shared cache each instance
         // generates its own bucket secret, so the tag will not match.
         var (issuer, _, _) = BuildService();
         var (verifier, _, _) = BuildService();
 
-        var nonce = await issuer.IssueAsync(Ct);
-        var failure = await verifier.ValidateAsync(nonce, Ct);
+        var nonce = await issuer.IssueAsync(SingleIssuer.Tenant, Ct);
+        var failure = await verifier.ValidateAsync(SingleIssuer.Tenant, nonce, Ct);
 
         Assert.Equal(NonceValidationFailure.BadSignature, failure);
     }
@@ -198,12 +209,69 @@ public class RollingHmacNonceServiceTests
         var window = TimeSpan.FromMinutes(5);
         var (svc, time, _) = BuildService(rotationInterval: rotation, acceptanceWindow: window);
 
-        var nonce = await svc.IssueAsync(Ct);
+        var nonce = await svc.IssueAsync(SingleIssuer.Tenant, Ct);
         time.Advance(rotation + TimeSpan.FromSeconds(30));
 
-        var failure = await svc.ValidateAsync(nonce, Ct);
+        var failure = await svc.ValidateAsync(SingleIssuer.Tenant, nonce, Ct);
 
         Assert.Null(failure);
+    }
+
+    /// <summary>
+    /// A storage where another instance claims the bucket's secret between this instance's miss and its own
+    /// claim: the first read finds nothing, the claim loses, and every read after it finds the winner's secret.
+    /// </summary>
+    private static IEntityStorage LostRaceStorage(NonceSecret winner)
+    {
+        var missed = false;
+        var storage = new Mock<IEntityStorage>(MockBehavior.Strict);
+        storage
+            .Setup(s => s.GetAsync<NonceSecret>(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken?>()))
+            .ReturnsAsync(() =>
+            {
+                if (missed)
+                    return winner;
+
+                missed = true;
+                return null;
+            });
+        storage
+            .Setup(s => s.TrySetIfAbsentAsync(
+                It.IsAny<string>(), It.IsAny<NonceSecret>(), It.IsAny<StorageOptions>(), It.IsAny<CancellationToken?>()))
+            .ReturnsAsync(false);
+        storage
+            .Setup(s => s.SetAsync(
+                It.IsAny<string>(), It.IsAny<NonceSecret>(), It.IsAny<StorageOptions>(), It.IsAny<CancellationToken?>()))
+            .ThrowsAsync(new InvalidOperationException("The secret is claimed, never overwritten."));
+
+        return storage.Object;
+    }
+
+    /// <summary>
+    /// The instance that loses the race to create a bucket's secret signs with the winner's, so the nonces of all
+    /// instances verify against one another; signing with its own would make every nonce it issued fail elsewhere.
+    /// </summary>
+    [Fact]
+    public async Task AnInstanceLosingTheRaceForTheSecret_SignsWithTheWinners()
+    {
+        var winner = new NonceSecret { Value = ByteString.CopyFrom(new byte[32]) };
+
+        static INonceService Build(IEntityStorage storage)
+        {
+            var services = new ServiceCollection().AddLogging();
+            services.AddSingleton<TimeProvider>(new FakeTimeProvider(Anchor));
+            services.AddSingleton(storage);
+            services.AddSingleton<IEntityStorageKeyFactory, EntityStorageKeyFactory>();
+            services.AddSingleton<INonceService, RollingHmacNonceService>();
+            return services.BuildServiceProvider().GetRequiredService<INonceService>();
+        }
+
+        var loser = Build(LostRaceStorage(winner));
+        var nonce = await loser.IssueAsync(SingleIssuer.Tenant, Ct);
+
+        var verifier = Build(LostRaceStorage(winner));
+        await verifier.IssueAsync(SingleIssuer.Tenant, Ct);
+        Assert.Null(await verifier.ValidateAsync(SingleIssuer.Tenant, nonce, Ct));
     }
 
     [Fact]
@@ -214,12 +282,12 @@ public class RollingHmacNonceServiceTests
         // independently.
         var (svc, time, _) = BuildService();
 
-        var first = await svc.IssueAsync(Ct);
+        var first = await svc.IssueAsync(SingleIssuer.Tenant, Ct);
         time.Advance(TimeSpan.FromSeconds(1));
-        var second = await svc.IssueAsync(Ct);
+        var second = await svc.IssueAsync(SingleIssuer.Tenant, Ct);
 
         Assert.NotEqual(first, second);
-        Assert.Null(await svc.ValidateAsync(first, Ct));
-        Assert.Null(await svc.ValidateAsync(second, Ct));
+        Assert.Null(await svc.ValidateAsync(SingleIssuer.Tenant, first, Ct));
+        Assert.Null(await svc.ValidateAsync(SingleIssuer.Tenant, second, Ct));
     }
 }

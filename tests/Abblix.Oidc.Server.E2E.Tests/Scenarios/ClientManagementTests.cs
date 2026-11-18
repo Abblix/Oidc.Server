@@ -18,19 +18,23 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.Tests.Model;
+using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.E2E.Tests.TestInfrastructure;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Abblix.Jwt;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using RequestMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 using ResponseMembers = Abblix.Oidc.Server.Model.ClientRegistrationResponse.Parameters;
 using Xunit;
+using Abblix.Oidc.Server.Features.ClientInformation;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -46,17 +50,20 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// The property that matters here is not the response shape but who is allowed through. A registration access
 /// token is bound to one client, and a server that accepts one client's token against another's registration
 /// lets any registrant read a competitor's secret, point its redirect URIs at an attacker, or delete it
-/// outright. Every test below is written around that boundary rather than around the formatter behind it.
+/// outright. <see cref="One_clients_token_does_not_open_anothers_registration"/>,
+/// <see cref="One_clients_token_cannot_rewrite_anothers_registration"/> and
+/// <see cref="One_clients_token_cannot_delete_anothers_registration"/> are written around that boundary
+/// rather than around the formatter behind it.
 /// </remarks>
 public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 {
     // Named once: the same member is written into a request and looked for in a response and in an
     // extension's view, and those three have to agree.
     /// <summary>The JSON member every refusal in this suite reads its code out of.</summary>
-    private const string ErrorMember = "error";
+    private const string ErrorMember = ErrorResponse.Parameters.Error;
 
     /// <summary>The JSON member carrying the human-readable half of a refusal.</summary>
-    private const string DescriptionMember = "error_description";
+    private const string DescriptionMember = ErrorResponse.Parameters.ErrorDescription;
 
     private const string VendorTier = "x_vendor_tier";
 
@@ -87,11 +94,367 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute));
     }
 
+    /// <summary>
+    /// A registration naming a resource or a token exchange audience the host does not grant a registering client is
+    /// refused: which resources a client reaches is the server's policy, not the client's choice.
+    /// </summary>
+    [Theory]
+    [InlineData(RequestMembers.AllowedResources, TestConstants.OtherApiResource)]
+    [InlineData(RequestMembers.TokenExchangeAudiences, "https://elsewhere.example.com")]
+    public async Task A_registration_reaching_beyond_what_the_host_grants_is_refused(string member, string value)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("reaching-beyond-the-grant");
+        metadata[member] = new JsonArray(value);
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A client registering without the members is given the host's sets, and reading the registration back shows
+    /// them.
+    /// </summary>
+    [Fact]
+    public async Task A_registration_naming_neither_is_given_what_the_host_grants()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var registration = await RegisterAsync(client, discovery, "given-the-grant");
+
+        var read = await ReadJsonAsync(await client.SendAsync(
+            Request(HttpMethod.Get, registration.ConfigurationUri, registration.AccessToken),
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(TestConstants.ApiResource, Assert.Single(read[ResponseMembers.AllowedResources]!.AsArray())!.GetValue<string>());
+        Assert.Equal(
+            TestConstants.ExchangeAudience,
+            Assert.Single(read[ResponseMembers.TokenExchangeAudiences]!.AsArray())!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// An update naming neither member replaces the metadata whole, so the client is given the host's sets again, as a
+    /// registration naming neither is: a client that narrowed its list on registration gets the host's list back.
+    /// </summary>
+    [Fact]
+    public async Task An_update_naming_neither_is_given_what_the_host_grants()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("narrowed-then-updated");
+        metadata[RequestMembers.AllowedResources] = new JsonArray();
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+        Assert.Empty(registered[ResponseMembers.AllowedResources]!.AsArray());
+
+        var updated = NewClientMetadata("narrowed-then-updated");
+        updated[RequestMembers.ClientId] = registered[ResponseMembers.ClientId]!.GetValue<string>();
+        var update = Request(
+            HttpMethod.Put,
+            new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute),
+            registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>());
+        update.Content = JsonContent.Create(updated);
+        var response = await ReadJsonAsync(await client.SendAsync(update, TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            TestConstants.ApiResource,
+            Assert.Single(response[ResponseMembers.AllowedResources]!.AsArray())!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// An update is held to the same policy, so a client cannot widen its list after registering within it.
+    /// </summary>
+    [Fact]
+    public async Task An_update_widening_the_allowed_resources_is_refused()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var registration = await RegisterAsync(client, discovery, "widening-on-update");
+        var updated = NewClientMetadata("widening-on-update");
+        updated[RequestMembers.ClientId] = registration.ClientId;
+        updated[RequestMembers.AllowedResources] = new JsonArray(TestConstants.ApiResource, TestConstants.OtherApiResource);
+
+        var update = Request(HttpMethod.Put, registration.ConfigurationUri, registration.AccessToken);
+        update.Content = JsonContent.Create(updated);
+        var response = await client.SendAsync(update, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A metadata value the server does not support is refused with the code RFC 7591 section 3.2.2 gives it: "The
+    /// value of one of the client metadata fields is invalid and the server has rejected this request".
+    /// </summary>
+    [Theory]
+    [InlineData(RequestMembers.IdTokenSignedResponseAlg, "XS256")]
+    [InlineData(RequestMembers.AuthorizationSignedResponseAlg, SigningAlgorithms.None)]
+    [InlineData(RequestMembers.RequestObjectSigningAlg, "XS256")]
+    [InlineData(RequestMembers.TokenEndpointAuthMethod, "no_such_method")]
+    [InlineData(RequestMembers.PostLogoutRedirectUris, "https://client.example.com/logout#fragment")]
+    public async Task An_unsupported_metadata_value_is_invalid_client_metadata(string member, string value)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata($"unsupported-{member}");
+        metadata[member] = member == RequestMembers.PostLogoutRedirectUris ? new JsonArray(value) : value;
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A member sent as JSON null is read as omitted, as RFC 7592 section 2.2 treats an omitted field as a null one,
+    /// so the registration gets the member's default on both hosts rather than a fault or a refusal.
+    /// </summary>
+    [Theory]
+    [InlineData(RequestMembers.ResponseTypes)]
+    [InlineData(RequestMembers.GrantTypes)]
+    [InlineData(RequestMembers.ApplicationType)]
+    [InlineData(RequestMembers.TokenEndpointAuthMethod)]
+    [InlineData(RequestMembers.PostLogoutRedirectUris)]
+    public async Task A_null_member_is_read_as_omitted(string member)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata($"null-{member}");
+        metadata[member] = null;
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        AssertDefault(member, await ReadJsonAsync(response));
+    }
+
+    /// <summary>
+    /// The same on update: a null replaces the stored value with the member's default, as RFC 7592 section 2.2 treats
+    /// an omitted field as a null one.
+    /// </summary>
+    [Fact]
+    public async Task A_null_member_in_an_update_is_read_as_omitted()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("null-on-update");
+        metadata[RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode, GrantTypes.RefreshToken);
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+
+        var updated = NewClientMetadata("null-on-update");
+        updated[RequestMembers.ClientId] = registered[ResponseMembers.ClientId]!.GetValue<string>();
+        updated[RequestMembers.ResponseTypes] = null;
+        updated[RequestMembers.GrantTypes] = null;
+
+        var update = Request(
+            HttpMethod.Put,
+            new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute),
+            registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>());
+        update.Content = JsonContent.Create(updated);
+        var response = await client.SendAsync(update, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await ReadJsonAsync(response);
+        AssertDefault(RequestMembers.ResponseTypes, body);
+        AssertDefault(RequestMembers.GrantTypes, body);
+    }
+
+    /// <summary>
+    /// The member's value in <paramref name="body"/> is the default a registration omitting it is given.
+    /// </summary>
+    private static void AssertDefault(string member, JsonObject body)
+    {
+        JsonNode expected = member switch
+        {
+            RequestMembers.ResponseTypes => new JsonArray(ResponseTypes.Code),
+            RequestMembers.GrantTypes => new JsonArray(GrantTypes.AuthorizationCode),
+            RequestMembers.ApplicationType => ApplicationTypes.Web,
+            RequestMembers.TokenEndpointAuthMethod => ClientAuthenticationMethods.ClientSecretBasic,
+            RequestMembers.PostLogoutRedirectUris => new JsonArray(),
+            _ => throw new ArgumentOutOfRangeException(nameof(member), member, "No default is known for the member"),
+        };
+
+        Assert.True(JsonNode.DeepEquals(expected, body[member]), $"{member}: {body[member]?.ToJsonString() ?? "absent"}");
+    }
+
+    /// <summary>
+    /// A null among the response types names no response type, and is refused as the empty one is.
+    /// </summary>
+    [Fact]
+    public async Task A_null_response_type_is_invalid_client_metadata()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("null-response-type");
+        metadata[RequestMembers.ResponseTypes] = new JsonArray((JsonNode?)null);
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// An application type nobody defined, from a client that registers no redirect URI but a post-logout one, is
+    /// refused rather than answered as a fault of the server.
+    /// </summary>
+    [Fact]
+    public async Task An_unknown_application_type_with_only_a_post_logout_uri_is_refused()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("post-logout-only-unknown-type");
+        metadata.Remove(RequestMembers.RedirectUris);
+        metadata[RequestMembers.GrantTypes] = new JsonArray(GrantTypes.Ciba);
+        metadata[RequestMembers.ResponseTypes] = new JsonArray();
+        metadata[RequestMembers.ApplicationType] = "service";
+        metadata[RequestMembers.PostLogoutRedirectUris] = new JsonArray("https://client.example.com/logout");
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// A software statement sent to a server that trusts no statement issuer is refused with the code RFC 7591 section
+    /// 3.2.2 reserves for one "not approved for use by this authorization server": this host configures none.
+    /// </summary>
+    [Fact]
+    public async Task A_software_statement_to_a_server_trusting_no_issuer_is_unapproved()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("unusable-software-statement");
+        metadata[RequestMembers.SoftwareStatement] = "not.a.statement";
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(
+            ErrorCodes.UnapprovedSoftwareStatement,
+            (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// RFC 7591 section 2.1 pairs the authorization_code grant with the code response type and says a server "SHOULD
+    /// take steps to ensure that a client cannot register itself into an inconsistent state": a client registering the grant with no
+    /// response type is refused, on registration and on an update. A client of a grant the table pairs with no
+    /// response type registers none and is served.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.AuthorizationCode, false, HttpStatusCode.BadRequest)]
+    [InlineData(GrantTypes.AuthorizationCode, true, HttpStatusCode.BadRequest)]
+    [InlineData(GrantTypes.ClientCredentials, false, HttpStatusCode.Created)]
+    [InlineData(GrantTypes.ClientCredentials, true, HttpStatusCode.OK)]
+    public async Task A_grant_type_is_registered_only_with_the_response_type_it_pairs_with(
+        string grantType, bool onUpdate, HttpStatusCode expected)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata($"no-response-type-{grantType}-{onUpdate}");
+        metadata[RequestMembers.GrantTypes] = new JsonArray(grantType);
+        metadata[RequestMembers.ResponseTypes] = new JsonArray();
+
+        HttpResponseMessage response;
+        if (onUpdate)
+        {
+            var registration = await RegisterAsync(client, discovery, $"no-response-type-{grantType}-{onUpdate}");
+            metadata[RequestMembers.ClientId] = registration.ClientId;
+            var update = Request(HttpMethod.Put, registration.ConfigurationUri, registration.AccessToken);
+            update.Content = JsonContent.Create(metadata);
+            response = await client.SendAsync(update, TestContext.Current.CancellationToken);
+        }
+        else
+        {
+            response = await client.PostAsJsonAsync(
+                discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+        }
+
+        var body = await ReadJsonAsync(response);
+        // The body of a success carries the registration's credentials, so only the error is quoted
+        Assert.True(response.StatusCode == expected, $"{(int)response.StatusCode}: {body[DescriptionMember]}");
+        if (expected == HttpStatusCode.BadRequest)
+            Assert.Equal(ErrorCodes.InvalidClientMetadata, body[ErrorMember]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// OpenID Connect Core 1.0 section 9 has a client_secret_jwt client compute the HMAC "using the octets of the UTF-8
+    /// representation of the client_secret as the shared key", so it registers no keys: registered without jwks or
+    /// jwks_uri, it is issued a secret and authenticates at the token endpoint with an assertion signed by it.
+    /// </summary>
+    [Fact]
+    public async Task A_client_secret_jwt_client_registers_without_keys_and_authenticates_with_its_secret()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = NewClientMetadata("client-secret-jwt-without-keys");
+        metadata[RequestMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretJwt;
+        metadata[RequestMembers.GrantTypes] = new JsonArray(GrantTypes.ClientCredentials);
+        metadata[RequestMembers.ResponseTypes] = new JsonArray();
+
+        var registered = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+        var body = await ReadJsonAsync(registered);
+        Assert.True(registered.StatusCode == HttpStatusCode.Created, $"{(int)registered.StatusCode}: {body[DescriptionMember]}");
+
+        var clientId = body[ResponseMembers.ClientId]!.GetValue<string>();
+        var assertion = await ClientSecretJwtAssertion.IssueWithSecretAsync(
+            clientId, body[ResponseMembers.ClientSecret]!.GetValue<string>(), discovery.Issuer.OriginalString);
+
+        using var token = await FormPostHelpers.PostFormAsync(
+            client,
+            discovery.TokenEndpoint,
+            new Dictionary<string, string>
+            {
+                [TokenRequest.Parameters.GrantType] = GrantTypes.ClientCredentials,
+                [ClientRequest.Parameters.ClientAssertionType] = ClientAssertionTypes.JwtBearer,
+                [ClientRequest.Parameters.ClientAssertion] = assertion,
+            });
+
+        // The token response carries the access token, so only the error is quoted
+        var tokenBody = await ReadJsonAsync(token);
+        Assert.True(token.StatusCode == HttpStatusCode.OK, $"{(int)token.StatusCode}: {tokenBody[ErrorMember]}");
+    }
+
+    /// <summary>
+    /// An update is answered with the same codes: a value the server does not support, and a client_id other than
+    /// the one issued, which RFC 7592 section 2.2 requires to be "the same as its currently issued client identifier"
+    /// and answers, as every invalid field, with the RFC 7591 errors.
+    /// </summary>
+    [Theory]
+    [InlineData(RequestMembers.TokenEndpointAuthMethod, "no_such_method")]
+    [InlineData(RequestMembers.ClientId, "another-client")]
+    public async Task An_invalid_value_in_an_update_is_invalid_client_metadata(string member, string value)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var registration = await RegisterAsync(client, discovery, $"invalid-on-update-{member}");
+        var updated = NewClientMetadata($"invalid-on-update-{member}");
+        updated[RequestMembers.ClientId] = registration.ClientId;
+        updated[member] = value;
+
+        var update = Request(HttpMethod.Put, registration.ConfigurationUri, registration.AccessToken);
+        update.Content = JsonContent.Create(updated);
+        var response = await client.SendAsync(update, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+    }
+
     private static HttpRequestMessage Request(HttpMethod method, Uri uri, string? accessToken)
     {
         var request = new HttpRequestMessage(method, uri);
         if (accessToken is not null)
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            request.Headers.Authorization = new AuthenticationHeaderValue(TokenTypes.Bearer, accessToken);
 
         return request;
     }
@@ -252,10 +615,10 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 
         // And that it names the member it refused. Asserting the status alone left the one refusal this
         // change WROTE unmeasured while it hardened the naming of fourteen it did not: putting
-        // redirect_uris in that message passed both suites. The whole-token form is copied from the theory
-        // below so the two rows cannot drift apart - not because this member sits in a containment
-        // pair, which it does not: no member name contains it and it contains none, so a plain
-        // Contains would catch the same plant.
+        // redirect_uris in that message passed both suites. The whole-token form is copied from
+        // No_uri_member_accepts_a_relative_value so the two cannot drift apart - not because this member
+        // sits in a containment pair, which it does not: no member name contains it and it contains none,
+        // so a plain Contains would catch the same plant.
         var body = await ReadJsonAsync(response);
         var description = body[DescriptionMember]!.GetValue<string>();
         Assert.True(
@@ -348,11 +711,11 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         // As a whole TOKEN, not a substring: redirect_uris sits inside post_logout_redirect_uris, so
         // with containment a redirect_uris refusal LABELLED post_logout_redirect_uris passed the
         // UNIT theory - and passed here too, but for an unrelated reason rather than for that one.
-        // One direction only - the reverse never passed, because the longer name is not
-        // contained in the shorter - and saying "for each other" would send the next reader looking
-        // for a second pair that does not exist. Measured, this
-        // row still cannot see that particular pair - RedirectUrisValidator is registered earlier and
-        // answers a relative redirect_uris in its own words, so the mislabel never reaches the client.
+        // One direction only - the reverse never passed, because the longer name is not contained in the
+        // shorter - and saying "for each other" would send the next reader looking for a second pair that
+        // does not exist. Measured, this row still cannot see that particular pair - RedirectUrisValidator
+        // is registered earlier and answers a relative redirect_uris in its own words, so the mislabel
+        // never reaches the client.
         // The unit theory is what catches it, by asking the validator directly.
         var body = await ReadJsonAsync(response);
         var description = body[DescriptionMember]!.GetValue<string>();
@@ -532,7 +895,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     {
         public IDictionary<string, JsonElement>? Seen { get; private set; }
 
-        public Task<OidcError?> ValidateAsync(ClientRegistrationValidationContext context)
+        public Task<OidcError?> ValidateAsync(TenantDefinition tenant, ClientRegistrationValidationContext context)
         {
             Seen = context.Request.AdditionalMembers;
             return Task.FromResult<OidcError?>(null);
@@ -634,6 +997,13 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             discovery.RegistrationEndpoint, metadata, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+
+        // And the refusal carries the status alone. The other adapter leaves the bound to the server as
+        // endpoint metadata, which its own suite asserts, since an in-memory server enforces no such bound
+        // and a test demanding this status there could never fail.
+        Assert.Equal(
+            string.Empty,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 #endif
 
@@ -690,6 +1060,45 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
 
         Assert.Equal(expected, response.StatusCode);
     }
+
+    /// <summary>
+    /// A body that declares a length over the bound is refused, and the refusal carries the status and
+    /// nothing after it. Every other case here arrives chunked, so this is the only one that reaches the
+    /// comparison against a declared length at all; that the body goes unread is what the declaration buys
+    /// and is not visible from this side of the connection, so what is asserted is the answer.
+    /// </summary>
+    [Fact]
+    public async Task A_body_declaring_a_length_over_the_bound_is_refused()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var limit = Factory.Services.GetRequiredService<IOptions<OidcOptions>>()
+            .Value.MaxRegistrationRequestSize;
+        Assert.NotNull(limit);
+
+        var metadata = NewClientMetadata("declares-too-much");
+        metadata[VendorPad] = new string('a', (int)limit.Value);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.RegistrationEndpoint)
+        {
+            Content = new StringContent(
+                metadata.ToJsonString(),
+                Encoding.UTF8,
+                MediaTypeNames.Application.Json),
+        };
+
+        // What separates this case from A_body_at_the_boundary_is_decided_by_one_byte, which strips the
+        // header on purpose.
+        Assert.NotNull(request.Content.Headers.ContentLength);
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        Assert.Equal(
+            string.Empty,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
 #endif
 
     // Asserts the HTTP shape the MVC pipeline produces. The Minimal API transport reaches the same
@@ -722,6 +1131,147 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
     }
 #endif
 
+    /// <summary>
+    /// The registration, read and update responses return the metadata the client registered, each member as it
+    /// was sent (RFC 7591 section 3.2.1, RFC 7592 section 3).
+    /// </summary>
+    [Fact]
+    public async Task Every_registered_member_comes_back_from_registration_read_and_update()
+    {
+        // A request object is encrypted to a key of the server, so its algorithm is accepted only with a server
+        // encryption key that opens it; every other member needs no configuration of the host
+        await using var host = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+                services.PostConfigure<TestTenantSettings>(tenant => tenant.EncryptionKeys =
+                [
+                    JsonWebKeyFactory.CreateEllipticCurve(
+                        EllipticCurveTypes.P256, EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW),
+                ])));
+        var client = host.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = TestServerAddress.BaseAddress,
+        });
+        var discovery = await FetchDiscoveryAsync(client);
+
+        // Every member, each set apart from the server's default and from every other member, so a value returned
+        // under the wrong name or left at its default fails
+        var metadata = new JsonObject
+        {
+            [RequestMembers.ClientName] = "described",
+            [RequestMembers.RedirectUris] = new JsonArray("com.example.client:/callback"),
+            [RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode, GrantTypes.RefreshToken, GrantTypes.Ciba),
+            [RequestMembers.ResponseTypes] = new JsonArray(ResponseTypes.Code),
+            [RequestMembers.Scope] = $"{Scopes.OpenId} {Scopes.Profile}",
+            [RequestMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.PrivateKeyJwt,
+            [RequestMembers.TokenEndpointAuthSigningAlg] = SigningAlgorithms.PS256,
+            [RequestMembers.JwksUri] = "https://client.example.com/jwks",
+            [RequestMembers.ApplicationType] = ApplicationTypes.Native,
+            [RequestMembers.ClientUri] = "https://client.example.com/",
+            [RequestMembers.PolicyUri] = "https://client.example.com/privacy",
+            [RequestMembers.TosUri] = "https://client.example.com/terms",
+            [RequestMembers.LogoUri] = "https://client.example.com/logo.png",
+            [RequestMembers.Contacts] = new JsonArray("ops@client.example.com"),
+            [RequestMembers.PostLogoutRedirectUris] = new JsonArray("com.example.client:/signed-out"),
+            [RequestMembers.InitiateLoginUri] = "https://client.example.com/login",
+            [RequestMembers.RequestUris] = new JsonArray("https://client.example.com/request"),
+            [RequestMembers.DefaultMaxAge] = 300,
+            [RequestMembers.RequireAuthTime] = true,
+            [RequestMembers.DefaultAcrValues] = new JsonArray("urn:example:loa:2"),
+            [RequestMembers.IdTokenSignedResponseAlg] = SigningAlgorithms.ES256,
+            [RequestMembers.IdTokenEncryptedResponseAlg] = EncryptionAlgorithms.KeyManagement.RsaOaep256,
+            [RequestMembers.IdTokenEncryptedResponseEnc] = EncryptionAlgorithms.ContentEncryption.Aes256Gcm,
+            [RequestMembers.UserInfoSignedResponseAlg] = SigningAlgorithms.ES384,
+            [RequestMembers.UserInfoEncryptedResponseAlg] = EncryptionAlgorithms.KeyManagement.RsaOaep,
+            [RequestMembers.UserInfoEncryptedResponseEnc] = EncryptionAlgorithms.ContentEncryption.Aes128Gcm,
+            [RequestMembers.IntrospectionSignedResponseAlg] = SigningAlgorithms.PS384,
+            [RequestMembers.IntrospectionEncryptedResponseAlg] = EncryptionAlgorithms.KeyManagement.EcdhEs,
+            [RequestMembers.IntrospectionEncryptedResponseEnc] = EncryptionAlgorithms.ContentEncryption.Aes192Gcm,
+            [RequestMembers.AuthorizationSignedResponseAlg] = SigningAlgorithms.ES512,
+            [RequestMembers.AuthorizationEncryptedResponseAlg] = EncryptionAlgorithms.KeyManagement.EcdhEsAes128KW,
+            [RequestMembers.AuthorizationEncryptedResponseEnc] = EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256,
+            [RequestMembers.RequestObjectSigningAlg] = SigningAlgorithms.PS512,
+            [RequestMembers.RequestObjectEncryptionAlg] = EncryptionAlgorithms.KeyManagement.EcdhEsAes256KW,
+            [RequestMembers.RequestObjectEncryptionEnc] = EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512,
+            [RequestMembers.FrontChannelLogoutUri] = "https://client.example.com/fc-logout",
+            [RequestMembers.FrontChannelLogoutSessionRequired] = false,
+            [RequestMembers.BackChannelLogoutUri] = "https://client.example.com/bc-logout",
+            [RequestMembers.BackChannelLogoutSessionRequired] = false,
+            [RequestMembers.DpopBoundAccessTokens] = true,
+            [RequestMembers.RequirePushedAuthorizationRequests] = true,
+            [RequestMembers.RequireSignedRequestObject] = true,
+            [RequestMembers.PkceRequired] = false,
+            [RequestMembers.OfflineAccess] = JsonSerializer.SerializeToNode(OfflineAccess.Disabled),
+            [RequestMembers.AuthorizationDetailsTypes] = new JsonArray(TestConstants.PaymentInitiationType),
+            [RequestMembers.TokenExchangeSubjectTokenTypes] = new JsonArray(TokenExchangeTokenTypes.AccessToken),
+            [RequestMembers.TokenExchangeAudiences] = new JsonArray(TestConstants.ExchangeAudience),
+            [RequestMembers.AllowedResources] = new JsonArray(TestConstants.ApiResource),
+            [RequestMembers.BackChannelTokenDeliveryMode] = BackchannelTokenDeliveryModes.Ping,
+            [RequestMembers.BackChannelClientNotificationEndpoint] = "https://client.example.com/ciba",
+            [RequestMembers.BackChannelAuthenticationRequestSigningAlg] = SigningAlgorithms.ES256,
+            [RequestMembers.BackChannelUserCodeParameter] = true,
+            [RequestMembers.SoftwareId] = "described-software",
+            [RequestMembers.SoftwareVersion] = "1.2.3",
+        };
+
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+        AssertEchoed(metadata, registered);
+
+        var clientId = registered[ResponseMembers.ClientId]!.GetValue<string>();
+        var configurationUri = new Uri(
+            registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute);
+
+        var read = await client.SendAsync(
+            Request(HttpMethod.Get, configurationUri, registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>()),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        AssertEchoed(metadata, await ReadJsonAsync(read));
+
+        var updated = metadata.DeepClone().AsObject();
+        updated[RequestMembers.ClientId] = clientId;
+        updated[RequestMembers.PolicyUri] = "https://client.example.com/privacy-v2";
+        var update = Request(
+            HttpMethod.Put, configurationUri, registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>());
+        update.Content = JsonContent.Create(updated);
+        var updateResponse = await client.SendAsync(update, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        AssertEchoed(updated, await ReadJsonAsync(updateResponse), except: RequestMembers.ClientId);
+    }
+
+    /// <summary>
+    /// A maximum authentication age no duration can hold, or a negative one, is a malformed request rather than a
+    /// fault of the server.
+    /// </summary>
+    [Theory]
+    [InlineData(long.MaxValue)]
+    [InlineData(-1L)]
+    public async Task A_maximum_authentication_age_no_duration_holds_is_refused(long seconds)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+
+        var metadata = NewClientMetadata("ageless");
+        metadata[RequestMembers.DefaultMaxAge] = seconds;
+
+        var response = await client.PostAsJsonAsync(
+            discovery.RegistrationEndpoint!, metadata, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    /// Each member of <paramref name="sent"/> is present in <paramref name="returned"/> with the same JSON value.
+    /// </summary>
+    private static void AssertEchoed(JsonObject sent, JsonObject returned, string? except = null)
+    {
+        var differing = sent
+            .Where(member => member.Key != except && !JsonNode.DeepEquals(member.Value, returned[member.Key]))
+            .Select(member => $"{member.Key}: sent {member.Value?.ToJsonString()}, got {returned[member.Key]?.ToJsonString()}")
+            .ToArray();
+
+        Assert.Empty(differing);
+    }
+
     [Fact]
     public async Task A_client_can_read_its_own_registration()
     {
@@ -736,6 +1286,102 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await ReadJsonAsync(response);
         Assert.Equal(registration.ClientId, body[ResponseMembers.ClientId]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// An update is judged under the security profile the host holds the client to, and keeps it: a client the host
+    /// holds to FAPI 2.0 at a tenant held to none cannot replace its metadata with a set the FAPI 2.0 rules refuse (a
+    /// client secret sent in a header among them), while a client the host holds to no profile of its own, or names
+    /// none for explicitly, can, and keeps what the host named.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi2, HttpStatusCode.BadRequest)]
+    [InlineData(null, HttpStatusCode.OK)]
+    [InlineData(ClientSecurityProfile.None, HttpStatusCode.OK)]
+    public async Task An_update_is_judged_under_the_profile_the_host_holds_the_client_to(
+        ClientSecurityProfile? hostHeldProfile,
+        HttpStatusCode expected)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var registration = await RegisterAsync(client, discovery, "held-by-the-host");
+        var tenant = TestTenant.Of(Factory.Services);
+        var clients = Factory.Services.GetRequiredService<IClientInfoManager>();
+        var registered = await clients.TryFindRegisteredClientAsync(tenant, registration.ClientId);
+        Assert.NotNull(registered);
+        Assert.True(await clients.TryUpdateClientAsync(
+            tenant,
+            registered,
+            registered with { ClientInfo = registered.ClientInfo with { SecurityProfile = hostHeldProfile } }));
+
+        var updated = NewClientMetadata("held-by-the-host");
+        updated[RequestMembers.ClientId] = registration.ClientId;
+        updated[RequestMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretBasic;
+        var update = Request(HttpMethod.Put, registration.ConfigurationUri, registration.AccessToken);
+        update.Content = JsonContent.Create(updated);
+        var response = await client.SendAsync(update, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.BadRequest)
+        {
+            Assert.Equal(
+                ErrorCodes.InvalidClientMetadata,
+                (await ReadJsonAsync(response))[ErrorMember]!.GetValue<string>());
+        }
+
+        var stored = await clients.TryFindRegisteredClientAsync(tenant, registration.ClientId);
+        Assert.Equal(hostHeldProfile, stored?.ClientInfo.SecurityProfile);
+    }
+
+    /// <summary>
+    /// A client the host holds to FAPI 2.0 at a tenant held to none updating to metadata that profile admits is
+    /// accepted, and the stored client is still held to the profile.
+    /// </summary>
+    [Fact]
+    public async Task A_conforming_update_keeps_the_profile_the_host_holds_the_client_to()
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var metadata = new JsonObject
+        {
+            [RequestMembers.ClientName] = "held-to-fapi",
+            [RequestMembers.RedirectUris] = new JsonArray("https://client.example.com/callback"),
+            [RequestMembers.GrantTypes] = new JsonArray(GrantTypes.AuthorizationCode),
+            [RequestMembers.ResponseTypes] = new JsonArray(ResponseTypes.Code),
+            [RequestMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.PrivateKeyJwt,
+            [RequestMembers.TokenEndpointAuthSigningAlg] = SigningAlgorithms.PS256,
+            [RequestMembers.JwksUri] = "https://client.example.com/jwks",
+            [RequestMembers.DpopBoundAccessTokens] = true,
+            [RequestMembers.IdTokenSignedResponseAlg] = SigningAlgorithms.PS256,
+            [RequestMembers.AuthorizationSignedResponseAlg] = SigningAlgorithms.PS256,
+        };
+        var registered = await RegisterClientAsync(client, discovery, metadata);
+        var clientId = registered[ResponseMembers.ClientId]!.GetValue<string>();
+        var tenant = TestTenant.Of(Factory.Services);
+        var clients = Factory.Services.GetRequiredService<IClientInfoManager>();
+        var stored = await clients.TryFindRegisteredClientAsync(tenant, clientId);
+        Assert.NotNull(stored);
+        Assert.True(await clients.TryUpdateClientAsync(
+            tenant,
+            stored,
+            stored with { ClientInfo = stored.ClientInfo with { SecurityProfile = ClientSecurityProfile.Fapi2 } }));
+
+        var updated = metadata.DeepClone().AsObject();
+        updated[RequestMembers.ClientId] = clientId;
+        updated[RequestMembers.ClientName] = "held-to-fapi-renamed";
+        var update = Request(
+            HttpMethod.Put,
+            new Uri(registered[ResponseMembers.RegistrationClientUri]!.GetValue<string>(), UriKind.RelativeOrAbsolute),
+            registered[ResponseMembers.RegistrationAccessToken]!.GetValue<string>());
+        update.Content = JsonContent.Create(updated);
+        var response = await client.SendAsync(update, TestContext.Current.CancellationToken);
+
+        Assert.True(
+            response.StatusCode == HttpStatusCode.OK,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        var after = await clients.TryFindRegisteredClientAsync(tenant, clientId);
+        Assert.Equal("held-to-fapi-renamed", after?.ClientInfo.ClientName);
+        Assert.Equal(ClientSecurityProfile.Fapi2, after?.ClientInfo.SecurityProfile);
     }
 
     [Fact]
@@ -804,7 +1450,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, read.StatusCode);
-        Assert.Equal("after-update", (await ReadJsonAsync(read))[RequestMembers.ClientName]!.GetValue<string>());
+        Assert.Equal("after-update", (await ReadJsonAsync(read))[ResponseMembers.ClientName]!.GetValue<string>());
     }
 
     [Fact]
@@ -864,7 +1510,7 @@ public class ClientManagementTests(TestFactory factory) : TestBase(factory)
             Request(HttpMethod.Get, victim.ConfigurationUri, victim.AccessToken),
             TestContext.Current.CancellationToken);
 
-        var redirectUris = (await ReadJsonAsync(read))[RequestMembers.RedirectUris]!.AsArray();
+        var redirectUris = (await ReadJsonAsync(read))[ResponseMembers.RedirectUris]!.AsArray();
         Assert.DoesNotContain(
             redirectUris,
             uri => uri!.GetValue<string>().Contains("attacker.example.com", StringComparison.Ordinal));

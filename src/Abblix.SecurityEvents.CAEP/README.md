@@ -2,7 +2,9 @@
 
 The OpenID Continuous Access Evaluation Profile (CAEP) 1.0 event dictionary for [Abblix.SecurityEvents](https://www.nuget.org/packages/Abblix.SecurityEvents): typed payload models and event type identifiers for the CAEP events, registered over the Security Events core in one call. CAEP is how cooperating services keep reacting to each other AFTER login - one provider revokes a session or sees a risk level shift, and every subscribed service learns of it without waiting for the next authentication.
 
-[Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) places this vocabulary in the stack: the envelope underneath it, the streams that carry it, and what a receiver does with a session event once it arrives.
+[A map of the Shared Signals layers and back-channel logout](https://www.abblix.com/en/docs/shared-signals-framework) places this vocabulary in the stack: the envelope underneath it, the streams that carry it, and what a receiver does with a session event once it arrives.
+
+[A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) follows a session revocation the whole way, from the host that decides it to the one that acts on it.
 
 ## Install
 
@@ -42,6 +44,12 @@ if (token.EventPayloads?.GetValueOrDefault(CaepEventTypes.SessionRevoked) is Ses
 
 ## Transmitting
 
+Events are sent through the Shared Signals transmitter, which comes with [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals):
+
+```bash
+dotnet add package Abblix.SharedSignals
+```
+
 ```csharp
 await dispatcher.DispatchAsync(new SecurityEventDescriptor
 {
@@ -55,6 +63,8 @@ await dispatcher.DispatchAsync(new SecurityEventDescriptor
     },
 });
 ```
+
+The call reports which streams the event could not be queued for; the [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals) README says how to retry them.
 
 ## Claiming the interoperability profile
 
@@ -90,7 +100,7 @@ use cases you claim, though - an unclaimed event carrying an empty object still 
 policy is a statement about the profile and not a validator for CAEP 1.0.
 
 Two things the policy does not reach. Naming a use case the profile does not define is refused when the
-policy is built, because a value it does not recognise would otherwise leave it registered, consulted and
+policy is built, because a value it does not recognize would otherwise leave it registered, consulted and
 refusing nothing. And `DispatchToStreamAsync` is not judged at all: it carries the framework's own
 verification and stream-updated signals, and its callers write state before dispatching, so a refusal
 there would fault mid-operation.

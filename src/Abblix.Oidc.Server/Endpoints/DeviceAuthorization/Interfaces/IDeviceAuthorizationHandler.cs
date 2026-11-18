@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -21,6 +22,7 @@ public interface IDeviceAuthorizationHandler
     /// Handles a device authorization request, validating and processing it to generate
     /// device_code and user_code for the client.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The device authorization request from the client.</param>
     /// <param name="clientRequest">The client authentication information.</param>
     /// <returns>
@@ -28,6 +30,7 @@ public interface IDeviceAuthorizationHandler
     /// with device_code and user_code, or an OIDC error.
     /// </returns>
     Task<Result<DeviceAuthorizationResponse, OidcError>> HandleAsync(
+        TenantDefinition tenant,
         DeviceAuthorizationRequest request,
         ClientRequest clientRequest);
 }

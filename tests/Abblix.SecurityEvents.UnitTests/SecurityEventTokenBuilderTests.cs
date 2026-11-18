@@ -175,7 +175,7 @@ public class SecurityEventTokenBuilderTests
             .WithJwtId("id-1");
 
         var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
-        Assert.Contains(JwtClaimTypes.Events, exception.Message);
+        Assert.Contains(IanaClaimTypes.Events, exception.Message);
     }
 
     [Fact]
@@ -209,7 +209,7 @@ public class SecurityEventTokenBuilderTests
     public void WithClaim_Exp_IsRejected()
     {
         // The absence of "exp" is the wall between a SET and the ID and access tokens an attacker
-        // would pass one off as (RFC 8417 Sections 4.1 and 4.2); the builder owns that defence.
+        // would pass one off as (RFC 8417 Sections 4.1 and 4.2); the builder owns that defense.
         var exception = Assert.Throws<ArgumentException>(
             () => MinimalValidBuilder().WithClaim(JwtClaimTypes.ExpiresAt, 1700000000));
 
@@ -222,7 +222,7 @@ public class SecurityEventTokenBuilderTests
     [InlineData(JwtClaimTypes.JwtId)]
     [InlineData(JwtClaimTypes.IssuedAt)]
     [InlineData(JwtClaimTypes.Subject)]
-    [InlineData(JwtClaimTypes.Events)]
+    [InlineData(IanaClaimTypes.Events)]
     [InlineData(IanaClaimTypes.Txn)]
     [InlineData(IanaClaimTypes.Toe)]
     [InlineData(IanaClaimTypes.SubId)]
@@ -339,7 +339,7 @@ public class SecurityEventTokenBuilderTests
         var second = builder.Build();
 
         // Mutating one token must not reach the other.
-        first.Token.Payload.Json.Remove(JwtClaimTypes.Events);
+        first.Token.Payload.Json.Remove(IanaClaimTypes.Events);
 
         Assert.NotNull(second.Events);
         Assert.Single(second.Events);
@@ -409,7 +409,7 @@ public class SecurityEventTokenBuilderTests
 
     /// <summary>
     /// A signer that records what it was asked to sign: the test is about the handoff, and real
-    /// cryptography would only obscure whose behaviour failed.
+    /// cryptography would only obscure whose behavior failed.
     /// </summary>
     private sealed class CapturingSigner : ISecurityEventTokenSigner
     {

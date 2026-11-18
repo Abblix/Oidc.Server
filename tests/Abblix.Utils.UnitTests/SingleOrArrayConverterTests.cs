@@ -19,8 +19,9 @@ public class SingleOrArrayConverterTests
     /// <summary>
     /// A DTO whose single-or-array value is a property inside an object, with another property
     /// after it. This is the real-world shape (e.g. a "resource" array in a JWT request object) that
-    /// exposed the over-read bug: the top-level-array tests below cannot, because at end of stream
-    /// the stray read past EndArray simply returns false.
+    /// exposed the over-read bug: the top-level-array row of
+    /// <see cref="SingleOrArrayConverterTests.Read_ValidJson_ReturnsExpectedArray"/> cannot, because at end
+    /// of stream the stray read past EndArray simply returns false.
     /// </summary>
     private sealed class Dto
     {

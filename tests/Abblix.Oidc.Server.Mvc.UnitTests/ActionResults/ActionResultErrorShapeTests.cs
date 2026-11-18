@@ -7,8 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.RateLimiting;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
+using Abblix.Oidc.Server.MinimalApi.UnitTests;
 using Abblix.Oidc.Server.Mvc.ActionResults;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Net.Http.Headers;
@@ -35,6 +37,12 @@ public class ActionResultErrorShapeTests
 {
     private const string Realm = "https://auth.example.com";
     private static readonly string[] DPoPAlgs = [SigningAlgorithms.RS256, SigningAlgorithms.ES256];
+
+    /// <summary>A code carrying a character RFC 6750 section 3 keeps out of the <c>error</c> attribute.</summary>
+    private const string CodeOutsideTheChallengeSet = "host_defined_\u00e9rror";
+
+    /// <summary>A scope carrying a character RFC 6750 section 3 keeps out of the <c>scope</c> attribute.</summary>
+    private const string ScopeOutsideTheChallengeSet = "openid caf\u00e9";
 
     private static string Challenge(ActionResultRunner.Response response)
         => response.Headers[HeaderNames.WWWAuthenticate].ToString();
@@ -151,14 +159,17 @@ public class ActionResultErrorShapeTests
     }
 
     /// <summary>
-    /// RFC 9449 section 7.1: when both schemes are advertised the DPoP line comes first, and the Bearer line
-    /// carries only the realm - the Bearer scheme did not fail, so attaching the DPoP error to it would name the
-    /// wrong culprit.
+    /// When both schemes are advertised the DPoP line comes first, and a failure over DPoP leaves the Bearer line
+    /// bare: RFC 9449 section 7.2, "If the mechanism used to attempt authentication could be established
+    /// unambiguously, then the corresponding challenge SHOULD be used to deliver error information".
     /// </summary>
     [Fact]
     public async Task Advertising_both_schemes_puts_dpop_first_and_leaves_the_bearer_line_bare()
     {
-        var error = new InvalidDPoPProofError("The proof is missing the htm claim");
+        var error = new InvalidDPoPProofError("The proof is missing the htm claim")
+        {
+            PresentedScheme = AccessTokenScheme.DPoP,
+        };
 
         var response = await ActionResultRunner.RunAsync(
             error.Format(StatusCodes.Status400BadRequest, Realm, DPoPAlgs, advertiseBearer: true));
@@ -209,5 +220,110 @@ public class ActionResultErrorShapeTests
         Assert.Equal(fallbackStatusCode, response.StatusCode);
         Assert.Contains(errorCode, response.Body);
         Assert.Contains(TokenTypes.DPoP, Challenge(response));
+    }
+
+    /// <summary>
+    /// A caller over its budget of requests is answered 429 and told how long to wait, in whole seconds rounded
+    /// up: a client told to wait less than the server asked for comes back to the same refusal. The body stays
+    /// empty, because no registered error code means "you asked too often" and one that means something else
+    /// would have the client act on it.
+    /// </summary>
+    [Fact]
+    public async Task A_caller_over_its_budget_answers_429_and_says_how_long_to_wait()
+    {
+        var error = new TooManyRequestsError(
+            "Too many introspection requests from this client",
+            TimeSpan.FromMilliseconds(1500),
+            CallerRateLimiters.Introspection);
+
+        var response = await ActionResultRunner.RunAsync(
+            error.Format(StatusCodes.Status401Unauthorized, Realm));
+
+        Assert.Equal(StatusCodes.Status429TooManyRequests, response.StatusCode);
+        Assert.Equal("2", response.Headers[HeaderNames.RetryAfter].ToString());
+        Assert.Empty(response.Body);
+    }
+
+    /// <summary>
+    /// The refusal keeps its status through the overload that advertises DPoP as well. An endpoint whose errors
+    /// carry a scheme challenge would otherwise answer a spent budget with the status it uses for a bad request,
+    /// and the caller would read a refusal about its token.
+    /// </summary>
+    [Fact]
+    public async Task A_caller_over_its_budget_answers_429_under_the_dpop_overload_too()
+    {
+        var error = new TooManyRequestsError("Too many requests from this client", TimeSpan.FromSeconds(1), CallerRateLimiters.Introspection);
+
+        var response = await ActionResultRunner.RunAsync(
+            error.Format(StatusCodes.Status400BadRequest, Realm, DPoPAlgs, advertiseBearer: true));
+
+        Assert.Equal(StatusCodes.Status429TooManyRequests, response.StatusCode);
+        Assert.Equal("1", response.Headers[HeaderNames.RetryAfter].ToString());
+
+        // And it carries no challenge: a spent budget says nothing about how the caller authenticated, so a
+        // challenge here would invite it to try another scheme for a refusal no scheme can lift.
+        Assert.False(response.Headers.ContainsKey(HeaderNames.WWWAuthenticate));
+    }
+
+    /// <summary>
+    /// A limiter that names no interval leaves the header off entirely, rather than stating a wait of zero -
+    /// which would send every refused client straight back.
+    /// </summary>
+    [Fact]
+    public async Task A_refusal_naming_no_interval_carries_no_retry_after_header()
+    {
+        var error = new TooManyRequestsError("Too many requests from this client", RetryAfter: null, CallerRateLimiters.Introspection);
+
+        var response = await ActionResultRunner.RunAsync(
+            error.Format(StatusCodes.Status400BadRequest, Realm));
+
+        Assert.Equal(StatusCodes.Status429TooManyRequests, response.StatusCode);
+        Assert.False(response.Headers.ContainsKey(HeaderNames.RetryAfter));
+    }
+
+    /// <summary>
+    /// The RFC 6750 section 3 character set is a rule about the Bearer challenge, so it holds where that challenge is
+    /// sent and nowhere else: "Values for the "error" and "error_description" attributes ... MUST NOT include
+    /// characters outside the set %x20-21 / %x23-5B / %x5D-7E", and the same of "scope". An error answered with no
+    /// challenge - the token endpoint's 400, introspection's 401, a client read's 404 - keeps its own status whatever
+    /// its code is made of, instead of failing as a 500 on a header it never sends.
+    /// </summary>
+    [Theory]
+    [InlineData(StatusCodes.Status400BadRequest)]
+    [InlineData(StatusCodes.Status401Unauthorized)]
+    [InlineData(StatusCodes.Status404NotFound)]
+    public async Task An_error_answered_without_a_challenge_keeps_its_status_whatever_its_code_holds(
+        int fallbackStatusCode)
+    {
+        var error = new OidcError(CodeOutsideTheChallengeSet, "Something the client must read");
+
+        var response = await ActionResultRunner.RunAsync(error.Format(fallbackStatusCode, Realm));
+
+        Assert.Equal(fallbackStatusCode, response.StatusCode);
+        Assert.DoesNotContain(
+            TokenTypes.Bearer,
+            response.Headers[HeaderNames.WWWAuthenticate].Select(challenge => ChallengeReader.Parse(challenge).Scheme));
+    }
+
+    /// <summary>
+    /// The two arms an error code cannot reach are reached by a scope: a client-authentication failure answered with
+    /// a Basic challenge, which carries no scope attribute (RFC 7617 section 2), and an invalid_request answered with
+    /// no challenge at all.
+    /// </summary>
+    [Theory]
+    [InlineData(ErrorCodes.InvalidClient, StatusCodes.Status401Unauthorized, TokenTypes.Basic)]
+    [InlineData(ErrorCodes.InvalidRequest, StatusCodes.Status400BadRequest, null)]
+    public async Task An_error_answered_without_a_bearer_challenge_keeps_its_status_whatever_its_scope_holds(
+        string errorCode, int expectedStatusCode, string? expectedScheme)
+    {
+        var error = new OidcError(errorCode, "Something the client must read") { RequiredScope = ScopeOutsideTheChallengeSet };
+
+        var response = await ActionResultRunner.RunAsync(error.Format(StatusCodes.Status401Unauthorized, Realm));
+
+        string[] expectedSchemes = expectedScheme is null ? [] : [expectedScheme];
+        Assert.Equal(expectedStatusCode, response.StatusCode);
+        Assert.Equal(
+            expectedSchemes,
+            response.Headers[HeaderNames.WWWAuthenticate].Select(challenge => ChallengeReader.Parse(challenge).Scheme));
     }
 }

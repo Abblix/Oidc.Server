@@ -16,7 +16,6 @@ namespace Abblix.Jwt.Signing;
 /// Uses constant-time comparison to prevent timing attacks during verification.
 /// </summary>
 /// <remarks>
-/// HMAC instances are created per operation to avoid shared state.
 /// Per RFC 7518 Section 3.2, the HMAC key must be at least as long as the hash output:
 /// - HS256: minimum 256 bits (32 bytes) with SHA-256
 /// - HS384: minimum 384 bits (48 bytes) with SHA-384
@@ -28,63 +27,51 @@ internal sealed class HmacSigner(string algorithm) : ISignatureAlgorithm<OctetJs
 	public string Algorithm => algorithm;
 
 	/// <inheritdoc />
-	public byte[] Sign(OctetJsonWebKey octetKey, byte[] data)
+	/// <remarks>RFC 7518 section 3.2: a key at least as long as the hash output, as <see cref="Sign"/> and
+	/// <see cref="Verify"/> require. A key whose bytes a custodian holds carries none here, and the custodian carries
+	/// the algorithm out with them.</remarks>
+	public bool Accepts(OctetJsonWebKey key)
+		=> key.KeyValue is not { } keyValue || keyValue.Length >= GetMinimumKeyLengthBytes();
+
+	/// <inheritdoc />
+	public byte[] Sign(OctetJsonWebKey key, byte[] data)
 	{
-		var keyValue = octetKey.KeyValue;
+		var keyValue = key.KeyValue;
 		if (keyValue == null)
-			throw new ArgumentException("Octet key must have a KeyValue", nameof(octetKey));
+			throw new ArgumentException("Octet key must have a KeyValue", nameof(key));
 
 		var minLength = GetMinimumKeyLengthBytes();
 		if (keyValue.Length < minLength)
 			throw new ArgumentException(
 				$"{algorithm} requires a key of at least {minLength} bytes ({minLength << 3} bits) " +
-				$"per RFC 7518 §3.2; got {keyValue.Length} bytes.",
-				nameof(octetKey));
+				$"per RFC 7518 section 3.2; got {keyValue.Length} bytes.",
+				nameof(key));
 
-		using var hmac = CreateHmac(keyValue);
-		return hmac.ComputeHash(data);
+		return HmacAlgorithms.Compute(algorithm, keyValue, data);
 	}
 
 	/// <inheritdoc />
-	public bool Verify(OctetJsonWebKey octetKey, byte[] data, byte[] signature)
+	public bool Verify(OctetJsonWebKey key, byte[] data, byte[] signature)
 	{
-		var keyValue = octetKey.KeyValue;
+		var keyValue = key.KeyValue;
 		if (keyValue == null)
-			throw new ArgumentException("Octet key must have a KeyValue", nameof(octetKey));
+			throw new ArgumentException("Octet key must have a KeyValue", nameof(key));
 
-		// RFC 7518 §3.2: a key shorter than the hash output cannot satisfy the algorithm's
+		// RFC 7518 section 3.2: a key shorter than the hash output cannot satisfy the algorithm's
 		// nominal strength; reject without performing the HMAC so callers cannot silently
 		// downgrade integrity by registering a weak shared secret in a JWKS.
 		if (keyValue.Length < GetMinimumKeyLengthBytes())
 			return false;
 
-		using var hmac = CreateHmac(keyValue);
-		var computedSignature = hmac.ComputeHash(data);
+		var computedSignature = HmacAlgorithms.Compute(algorithm, keyValue, data);
 		return CryptographicOperations.FixedTimeEquals(signature, computedSignature);
 	}
 
 	/// <summary>
-	/// Returns the minimum key length in bytes required by RFC 7518 §3.2 for the configured
+	/// Returns the minimum key length in bytes required by RFC 7518 section 3.2 for the configured
 	/// HMAC algorithm: 32 for HS256, 48 for HS384, 64 for HS512.
 	/// </summary>
 	private int GetMinimumKeyLengthBytes()
-		=> (JsonWebKeyExtensions.MinimumHmacKeyBits(algorithm)
+		=> (KeySizeFloors.MinimumHmacKeyBits(algorithm)
 			?? throw new InvalidOperationException($"Unsupported HMAC algorithm: {algorithm}")) >> 3;
-
-	/// <summary>
-	/// Creates an HMAC instance for the configured algorithm and key.
-	/// </summary>
-	/// <param name="keyValue">The symmetric key bytes.</param>
-	/// <returns>An HMAC instance configured for the algorithm.</returns>
-	/// <exception cref="InvalidOperationException">Thrown when the algorithm is not supported.</exception>
-	private HMAC CreateHmac(byte[] keyValue)
-	{
-		return algorithm switch
-		{
-			SigningAlgorithms.HS256 => new HMACSHA256(keyValue),
-			SigningAlgorithms.HS384 => new HMACSHA384(keyValue),
-			SigningAlgorithms.HS512 => new HMACSHA512(keyValue),
-			_ => throw new InvalidOperationException($"Unsupported HMAC algorithm: {algorithm}")
-		};
-	}
 }

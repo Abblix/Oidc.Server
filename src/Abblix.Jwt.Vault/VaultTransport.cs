@@ -9,6 +9,8 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Abblix.Jwt.ExternalKeys;
+
 namespace Abblix.Jwt.Vault;
 
 /// <summary>
@@ -50,13 +52,31 @@ public static class VaultTransport
     /// <param name="body">The request body, serialized as JSON, or null for a request without one.</param>
     /// <param name="cancellationToken">Cancels the request.</param>
     /// <returns>What Vault answered. The caller owns it and disposes it.</returns>
-    internal static Task<ApiResponse> SendAsync(
+    internal static async Task<ApiResponse> SendAsync(
         this HttpClient httpClient,
         HttpMethod method,
         string path,
         object? body,
         CancellationToken cancellationToken)
-        => httpClient.SendCoreAsync(method, path, body, token: null, selfAuthenticated: false, cancellationToken);
+    {
+        try
+        {
+            return await httpClient.SendCoreAsync(
+                method, path, body, token: null, selfAuthenticated: false, cancellationToken);
+        }
+        catch (Exception exception) when (VaultFailure.IsTransientTransport(exception, cancellationToken))
+        {
+            // A request that never reached Vault says nothing about itself, and left as the transport's own
+            // exception it arrives somewhere that cannot read it. Reported here rather than at each caller,
+            // so the custodian and the key ring get the same answer. The self-authenticated path below is
+            // deliberately not wrapped: the login loop reads these exceptions by type to decide on a retry.
+            throw new KeyCustodianUnavailableException(
+                path,
+                $"The vault at '{path}' could not be reached.",
+                retryAfter: null,
+                exception);
+        }
+    }
 
     /// <summary>
     /// Sends a request that manages its own authentication: a login, which is unauthenticated by design

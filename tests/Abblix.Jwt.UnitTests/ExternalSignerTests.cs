@@ -17,7 +17,7 @@ namespace Abblix.Jwt.UnitTests;
 /// Verifies external (key-custodian) signing: a signing key published public-only, whose private half lives
 /// behind a host <c>IKeyCustodian</c> on the composed crypto seam, produces a token that
 /// validates against the public key - proving the library never loads private material yet issues a
-/// verifiable signature. Also verifies the fail-closed behaviour when a public-only key has no external
+/// verifiable signature. Also verifies the fail-closed behavior when a public-only key has no external
 /// signer wired.
 /// </summary>
 public class ExternalSignerTests
@@ -71,6 +71,7 @@ public class ExternalSignerTests
         var validator = provider.GetRequiredService<IJsonWebTokenValidator>();
         var result = await validator.ValidateAsync(jwt, new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             Options = ValidationOptions.ValidateIssuer | ValidationOptions.RequireSignedTokens,
             ValidateIssuer = iss => Task.FromResult(iss == Issuer),
             ResolveIssuerSigningKeys = _ => new JsonWebKey[] { publicOnlyKey }.ToAsyncEnumerable(),
@@ -115,6 +116,8 @@ public class ExternalSignerTests
     /// </summary>
     private sealed class FakeCustodian(RsaJsonWebKey privateKey) : IKeyCustodian
     {
+        public bool ServesKeyManagement(string algorithm) => true;
+
         public int CallCount { get; private set; }
         public string? LastKid { get; private set; }
         public string? LastAlgorithm { get; private set; }
@@ -135,7 +138,7 @@ public class ExternalSignerTests
             string keyId, string algorithm, JsonWebTokenHeader header, byte[] encryptedKey, CancellationToken cancellationToken)
             => throw new NotSupportedException("This signing custodian holds no decryption keys.");
 
-        public Task<byte[]> AgreeKeyAsync(
+        public Task<byte[]?> AgreeKeyAsync(
             string keyId, string algorithm, JsonWebKey ephemeralPublicKey, CancellationToken cancellationToken)
             => throw new NotSupportedException("This signing custodian holds no decryption keys.");
 

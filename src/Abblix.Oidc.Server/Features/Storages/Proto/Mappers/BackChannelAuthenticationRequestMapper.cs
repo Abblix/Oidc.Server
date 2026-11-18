@@ -28,13 +28,10 @@ internal static class BackChannelAuthenticationRequestMapper
             ExpiresAt = source.ExpiresAt.ToTimestamp(),
         };
 
-        if (source.NextPollAt.HasValue)
-            proto.NextPollAt = source.NextPollAt.Value.ToTimestamp();
-
         // Ping/push delivery fields - absent for poll mode, kept null-distinct via the
         // proto3 optional accessors so the round-trip never coerces null into "".
         if (source.ClientNotificationEndpoint is not null)
-            proto.ClientNotificationEndpoint = source.ClientNotificationEndpoint.ToString();
+            proto.ClientNotificationEndpoint = source.ClientNotificationEndpoint.OriginalString;
 
         if (source.ClientNotificationToken is not null)
             proto.ClientNotificationToken = source.ClientNotificationToken;
@@ -48,6 +45,12 @@ internal static class BackChannelAuthenticationRequestMapper
         if (source.RequestedAuthorizationDetails is { } requestedDetails)
             proto.RequestedAuthorizationDetailsJson = requestedDetails.ToJsonString();
 
+        if (source.RequiredAuthContextClassRefs is { } requiredLevels)
+        {
+            proto.RequiredAuthenticationLevels = new RequiredAuthenticationLevels();
+            proto.RequiredAuthenticationLevels.Values.AddRange(requiredLevels);
+        }
+
         return proto;
     }
 
@@ -60,12 +63,12 @@ internal static class BackChannelAuthenticationRequestMapper
             source.AuthorizedGrant.FromProto(),
             source.ExpiresAt.ToDateTimeOffset())
         {
-            NextPollAt = source.NextPollAt?.ToDateTimeOffset(),
             Status = source.Status.FromProtoStatus(),
             ClientNotificationEndpoint = source.HasClientNotificationEndpoint
                 ? new Uri(source.ClientNotificationEndpoint)
                 : null,
             RequestedSubjects = source.RequestedSubjects?.Values.ToArray(),
+            RequiredAuthContextClassRefs = source.RequiredAuthenticationLevels?.Values.ToArray(),
             RequestedAuthorizationDetails = source.HasRequestedAuthorizationDetailsJson
                 ? JsonNode.Parse(source.RequestedAuthorizationDetailsJson) as JsonArray
                 : null,

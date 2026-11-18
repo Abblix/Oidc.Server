@@ -6,12 +6,14 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -28,13 +30,9 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
 /// registered processor - this enforces OAuth 2.1 (draft) default-off Implicit Flow at the validation
 /// layer (without <c>EnableImplicitFlow()</c>, no <c>token</c> / <c>id_token</c> processors exist
 /// and any request asking for them gets <c>unsupported_response_type</c>).</param>
-/// <param name="options">Provides the server-wide default security profile a client inherits when it
-/// states none, used to reject implicit and hybrid response types for a client held to a code-only
-/// profile (FAPI 2.0).</param>
 public partial class FlowTypeValidator(
     ILogger<FlowTypeValidator> logger,
-    IEnumerable<IAuthorizationResponseBuilder> processors,
-    IOptions<OidcOptions> options) : SyncAuthorizationContextValidatorBase
+    IEnumerable<IAuthorizationResponseBuilder> processors) : SyncAuthorizationContextValidatorBase
 {
     private readonly IReadOnlySet<string> _supportedResponseTypeParts =
         processors.Select(b => b.ResponseType).ToHashSet(StringComparer.Ordinal);
@@ -43,37 +41,24 @@ public partial class FlowTypeValidator(
     /// Validates the flow type specified in the authorization request.
     /// This method checks if the flow type is supported and aligns with the OAuth 2.0 specifications.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">The validation context containing client and request information.</param>
     /// <returns>
     /// An <see cref="AuthorizationRequestValidationError" /> if the flow type is not valid or supported,
     /// or null if the flow type is valid.
     /// </returns>
-    protected override AuthorizationRequestValidationError? Validate(AuthorizationValidationContext context)
+    protected override AuthorizationRequestValidationError? Validate(TenantDefinition tenant, AuthorizationValidationContext context)
     {
         var responseType = context.Request.ResponseType;
         var returnsTokenFromAuthorization = responseType.ReturnsTokenFromAuthorization();
 
-        // RFC 6749 §4.1.2.1: response_type is REQUIRED, and a missing required parameter is
+        // RFC 6749 section 4.1.2.1: response_type is REQUIRED, and a missing required parameter is
         // invalid_request - not unsupported_response_type (no method was named at all) and not
         // unauthorized_client (no client policy was consulted).
         if (responseType is not { Length: > 0 })
         {
-            LogResponseTypeInvalid(responseType);
+            LogResponseTypeInvalid(Sanitized.Values(responseType));
             return Error(ErrorCodes.InvalidRequest, "The response type is required");
-        }
-
-        // A code-only profile (FAPI 2.0) rejects any response type that returns a token or id_token
-        // from the authorization endpoint, regardless of what the client's AllowedResponseTypes
-        // permits - the profile tightens, the granular whitelist cannot widen it. Checked before the
-        // server-support gate so a profiled client gets the profile-specific reason even on a server
-        // where Implicit Flow is enabled for other clients.
-        var profile = SecurityProfileRequirements.For(context.ClientInfo, options.Value.DefaultSecurityProfile);
-        if (profile.RequireCodeResponseTypeOnly && returnsTokenFromAuthorization)
-        {
-            LogResponseTypeNotAllowed(responseType);
-            return Error(
-                ErrorCodes.UnauthorizedClient,
-                "The security profile permits only the authorization code response type");
         }
 
         // Server-level support: every part of response_type must have a registered processor. This
@@ -89,10 +74,20 @@ public partial class FlowTypeValidator(
                 $"The response type '{unsupportedPart}' is not supported by this server");
         }
 
+        // After the server-support gate, so a part no processor serves is answered with unsupported_response_type
+        // under a profile too, and before the client's own list, so a profiled client gets the profile-specific
+        // reason even where Implicit Flow is enabled and the client is registered for it
+        var profile = SecurityProfileRequirements.For(context.ClientInfo, tenant.DefaultSecurityProfile);
+        if (WhyTheProfileRefuses(profile, context.Request) is { } refusal)
+        {
+            LogResponseTypeNotAllowed(Sanitized.Values(responseType));
+            return Error(refusal.ErrorCode, refusal.Reason);
+        }
+
         if (!ResponseTypeAllowed(context))
         {
-            LogResponseTypeNotAllowed(responseType);
-            // RFC 6749 §4.1.2.1 / §4.2.2.1: the server supports this response_type (the gate above
+            LogResponseTypeNotAllowed(Sanitized.Values(responseType));
+            // RFC 6749 section 4.1.2.1 / section 4.2.2.1: the server supports this response_type (the gate above
             // passed), but this particular client is not registered to use it - that is
             // unauthorized_client. unsupported_response_type (returned before) is reserved for
             // methods the server itself cannot produce.
@@ -101,7 +96,7 @@ public partial class FlowTypeValidator(
 
         if (!TryDetectFlowType(responseType, out var flowType, out var responseMode))
         {
-            LogResponseTypeInvalid(responseType);
+            LogResponseTypeInvalid(Sanitized.Values(responseType));
             return Error(ErrorCodes.UnsupportedResponseType, "The response type is not supported");
         }
 
@@ -115,7 +110,7 @@ public partial class FlowTypeValidator(
             return context.Error(errorCode, message);
         }
 
-        // OAuth 2.0 Multiple Response Types §5: when the requested response_type contains a
+        // OAuth 2.0 Multiple Response Types section 5: when the requested response_type contains a
         // value that requires fragment encoding (token / id_token), the error response MUST be
         // returned in the fragment as well. The previous unconditional query default delivered
         // the error to a channel the client never reads and exposed it to the server hosting
@@ -123,6 +118,69 @@ public partial class FlowTypeValidator(
         string GetDefaultResponseMode()
             => returnsTokenFromAuthorization ? ResponseModes.Fragment : ResponseModes.Query;
     }
+
+    /// <summary>
+    /// The error and description a security profile refuses the requested response type with, or null where it
+    /// admits it.
+    /// </summary>
+    private static (string ErrorCode, string Reason)? WhyTheProfileRefuses(
+        SecurityProfileRequirements profile,
+        Model.AuthorizationRequest request)
+    {
+        // FAPI 2.0 Security Profile section 5.3.2.2: "authorization servers shall require the value of response_type
+        // described in [RFC6749] to be code". An implicit or hybrid response type is refused, and so is none, which
+        // returns no token, whatever the client's AllowedResponseTypes permits - the profile tightens, the granular
+        // whitelist cannot widen it
+        if (profile.RequireCodeResponseTypeOnly && !request.ResponseType.IsCodeAlone())
+        {
+            return (ErrorCodes.UnauthorizedClient,
+                "The security profile permits only the authorization code response type");
+        }
+
+        // FAPI 1.0 Part 2 section 5.2.2: "code id_token", whose ID token signs the response, or "code" with the
+        // response mode "jwt"; FAPI 2.0 Message Signing section 5.4.1: signed responses "via JWT Secured
+        // Authorization Response Mode", any of its modes. A response nothing signs is refused
+        if (profile.SignedAuthorizationResponseModes is { } signedModes && !IsSignedResponse(request, signedModes))
+            return (RefusalOfAnUnsignedResponse(request), SignedResponseRequired(profile, signedModes));
+
+        return null;
+    }
+
+    /// <summary>
+    /// The error code of a response nothing signs, by which parameter is at fault. Code alone is a response type the
+    /// profile admits, so what fails is the response mode, missing or of another value: RFC 6749 section 4.1.2.1 has
+    /// invalid_request for a request "missing a required parameter, includes an invalid parameter value". Any other
+    /// response type is one the server will not use here: unsupported_response_type, "The authorization server does
+    /// not support obtaining an authorization code using this method".
+    /// </summary>
+    private static string RefusalOfAnUnsignedResponse(Model.AuthorizationRequest request)
+        => request.ResponseType.IsCodeAlone() ? ErrorCodes.InvalidRequest : ErrorCodes.UnsupportedResponseType;
+
+    /// <summary>
+    /// The reason a response nothing signs is refused, naming code id_token only where the profile admits it.
+    /// </summary>
+    private static string SignedResponseRequired(SecurityProfileRequirements profile, IReadOnlySet<string> signedModes)
+    {
+        var modes = string.Join(" or ", signedModes.Order(StringComparer.Ordinal));
+
+        if (profile.RequireCodeResponseTypeOnly)
+            return $"The security profile requires the code response type with the response mode {modes}";
+
+        return $"The security profile requires the code id_token response type, or code with the response mode {modes}";
+    }
+
+    /// <summary>
+    /// Whether the response the request asks for is one the server signs: <c>code id_token</c> in either order, or
+    /// <c>code</c> alone with one of <paramref name="signedModes"/>.
+    /// </summary>
+    private static bool IsSignedResponse(Model.AuthorizationRequest request, IReadOnlySet<string> signedModes)
+        => request.ResponseType switch
+        {
+            { Length: 2 } both when both.HasFlag(ResponseTypes.Code) && both.HasFlag(ResponseTypes.IdToken) => true,
+            { Length: 1 } one when one.HasFlag(ResponseTypes.Code) =>
+                request.ResponseMode is { } mode && signedModes.Contains(mode),
+            _ => false,
+        };
 
     /// <summary>
     /// Validates whether the requested response type in an authorization request matches any of the allowed response

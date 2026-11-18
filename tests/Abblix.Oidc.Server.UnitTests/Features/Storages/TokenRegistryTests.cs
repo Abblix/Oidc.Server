@@ -8,6 +8,7 @@
 
 using System;
 using System.Threading.Tasks;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.Tokens.Revocation;
 using Moq;
@@ -32,8 +33,8 @@ public class TokenRegistryTests
 
         // Setup key factory to return expected keys
         _keyFactory
-            .Setup(kf => kf.JsonWebTokenStatusKey(It.IsAny<string>()))
-            .Returns<string>(jwtId => $"Abblix.Oidc.Server:JWT:{jwtId}");
+            .Setup(kf => kf.JsonWebTokenStatusKey(TestTenant.Matched, It.IsAny<string>()))
+            .Returns<TenantDefinition, string>((_, jwtId) => $"Abblix.Oidc.Server:JWT:{jwtId}");
 
         _registry = new TokenRegistry(_storage.Object, _keyFactory.Object);
     }
@@ -59,7 +60,7 @@ public class TokenRegistryTests
             .ReturnsAsync(expectedStatus);
 
         // Act
-        var result = await _registry.GetStatusAsync(jwtId);
+        var result = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(expectedStatus, result);
@@ -84,7 +85,7 @@ public class TokenRegistryTests
             .ReturnsAsync(expectedStatus);
 
         // Act
-        var result = await _registry.GetStatusAsync(jwtId);
+        var result = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(expectedStatus, result);
@@ -109,7 +110,7 @@ public class TokenRegistryTests
             .ReturnsAsync(expectedStatus);
 
         // Act
-        var result = await _registry.GetStatusAsync(jwtId);
+        var result = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(expectedStatus, result);
@@ -133,7 +134,7 @@ public class TokenRegistryTests
             .Returns(Task.FromResult(default(JsonWebTokenStatus)));
 
         // Act
-        var result = await _registry.GetStatusAsync(jwtId);
+        var result = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(default(JsonWebTokenStatus), result);
@@ -159,7 +160,7 @@ public class TokenRegistryTests
             .ReturnsAsync(JsonWebTokenStatus.Unknown);
 
         // Act
-        await _registry.GetStatusAsync(jwtId);
+        await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         _storage.Verify(
@@ -191,7 +192,7 @@ public class TokenRegistryTests
             .ReturnsAsync(JsonWebTokenStatus.Unknown);
 
         // Act
-        await _registry.GetStatusAsync(jwtId);
+        await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.False(capturedRemoveOnRetrieval);
@@ -215,7 +216,7 @@ public class TokenRegistryTests
             .ReturnsAsync(JsonWebTokenStatus.Unknown);
 
         // Act
-        await _registry.GetStatusAsync(jwtId);
+        await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         _storage.Verify(
@@ -252,8 +253,8 @@ public class TokenRegistryTests
             .ReturnsAsync(JsonWebTokenStatus.Revoked);
 
         // Act
-        var result1 = await _registry.GetStatusAsync(jwtId1);
-        var result2 = await _registry.GetStatusAsync(jwtId2);
+        var result1 = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId1);
+        var result2 = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId2);
 
         // Assert
         Assert.NotEqual(CreateExpectedKey(jwtId1), CreateExpectedKey(jwtId2));
@@ -280,9 +281,9 @@ public class TokenRegistryTests
             .ReturnsAsync(expectedStatus);
 
         // Act
-        var result1 = await _registry.GetStatusAsync(jwtId);
-        var result2 = await _registry.GetStatusAsync(jwtId);
-        var result3 = await _registry.GetStatusAsync(jwtId);
+        var result1 = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
+        var result2 = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
+        var result3 = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(expectedStatus, result1);
@@ -300,7 +301,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "set_unknown_jwt";
         var status = JsonWebTokenStatus.Unknown;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -311,7 +312,7 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
 
         // Assert
         _storage.Verify(
@@ -333,7 +334,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "set_used_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddMinutes(10);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -344,7 +345,7 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
 
         // Assert
         _storage.Verify(
@@ -366,7 +367,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "set_revoked_jwt";
         var status = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddDays(30);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddDays(30);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -377,7 +378,7 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
 
         // Assert
         _storage.Verify(
@@ -399,7 +400,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "key_format_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
         var expectedKey = $"Abblix.Oidc.Server:JWT:{jwtId}";
 
         _storage
@@ -411,7 +412,7 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
 
         // Assert
         _storage.Verify(
@@ -447,11 +448,11 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.Equal(expiresAt, capturedOptions!.AbsoluteExpiration);
+        Assert.Equal(expiresAt, capturedOptions.AbsoluteExpiration);
         Assert.Null(capturedOptions.AbsoluteExpirationRelativeToNow);
         Assert.Null(capturedOptions.SlidingExpiration);
     }
@@ -466,7 +467,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "single_set_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddMinutes(5);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -477,7 +478,7 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
 
         // Assert
         _storage.Verify(
@@ -499,7 +500,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "store_status_jwt";
         var expectedStatus = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(2);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(2);
         JsonWebTokenStatus? capturedStatus = null;
 
         _storage
@@ -513,7 +514,7 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, expectedStatus, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, expectedStatus, expiresAt);
 
         // Assert
         Assert.Equal(expectedStatus, capturedStatus);
@@ -530,7 +531,7 @@ public class TokenRegistryTests
         var jwtId1 = "jwt_alpha";
         var jwtId2 = "jwt_beta";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddMinutes(10);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -549,8 +550,8 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId1, status, expiresAt);
-        await _registry.SetStatusAsync(jwtId2, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId1, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId2, status, expiresAt);
 
         // Assert
         Assert.NotEqual(CreateExpectedKey(jwtId1), CreateExpectedKey(jwtId2));
@@ -579,7 +580,7 @@ public class TokenRegistryTests
     {
         // Arrange
         var jwtId = "update_jwt";
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -590,9 +591,9 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, JsonWebTokenStatus.Unknown, expiresAt);
-        await _registry.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt);
-        await _registry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, JsonWebTokenStatus.Unknown, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, JsonWebTokenStatus.Used, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, JsonWebTokenStatus.Revoked, expiresAt);
 
         // Assert
         _storage.Verify(
@@ -615,8 +616,8 @@ public class TokenRegistryTests
         var jwtId1 = "short_exp_jwt";
         var jwtId2 = "long_exp_jwt";
         var status = JsonWebTokenStatus.Revoked;
-        var shortExpiration = DateTimeOffset.UtcNow.AddMinutes(5);
-        var longExpiration = DateTimeOffset.UtcNow.AddDays(30);
+        var shortExpiration = TimeProvider.System.GetUtcNow().AddMinutes(5);
+        var longExpiration = TimeProvider.System.GetUtcNow().AddDays(30);
         var expirations = new System.Collections.Generic.List<DateTimeOffset?>();
 
         _storage
@@ -630,8 +631,8 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId1, status, shortExpiration);
-        await _registry.SetStatusAsync(jwtId2, status, longExpiration);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId1, status, shortExpiration);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId2, status, longExpiration);
 
         // Assert
         Assert.Equal(2, expirations.Count);
@@ -649,7 +650,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "integration_unknown_jwt";
         var status = JsonWebTokenStatus.Unknown;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -667,8 +668,8 @@ public class TokenRegistryTests
             .ReturnsAsync(status);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
-        var result = await _registry.GetStatusAsync(jwtId);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
+        var result = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(status, result);
@@ -684,7 +685,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "integration_used_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(15);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddMinutes(15);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -702,8 +703,8 @@ public class TokenRegistryTests
             .ReturnsAsync(status);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
-        var result = await _registry.GetStatusAsync(jwtId);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
+        var result = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(status, result);
@@ -719,7 +720,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "integration_revoked_jwt";
         var status = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddDays(7);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddDays(7);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -737,8 +738,8 @@ public class TokenRegistryTests
             .ReturnsAsync(status);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
-        var result = await _registry.GetStatusAsync(jwtId);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
+        var result = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(status, result);
@@ -755,7 +756,7 @@ public class TokenRegistryTests
         var jwtId = "overwrite_jwt";
         var usedStatus = JsonWebTokenStatus.Used;
         var revokedStatus = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(2);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(2);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -773,9 +774,9 @@ public class TokenRegistryTests
             .ReturnsAsync(revokedStatus);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, usedStatus, expiresAt);
-        await _registry.SetStatusAsync(jwtId, revokedStatus, expiresAt);
-        var result = await _registry.GetStatusAsync(jwtId);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, usedStatus, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, revokedStatus, expiresAt);
+        var result = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(revokedStatus, result);
@@ -791,7 +792,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "early_exp_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddSeconds(30);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddSeconds(30);
         DateTimeOffset? capturedExpiration = null;
 
         _storage
@@ -805,7 +806,7 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
 
         // Assert
         Assert.Equal(expiresAt, capturedExpiration);
@@ -821,7 +822,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "late_exp_jwt";
         var status = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddYears(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddYears(1);
         DateTimeOffset? capturedExpiration = null;
 
         _storage
@@ -835,7 +836,7 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
 
         // Assert
         Assert.Equal(expiresAt, capturedExpiration);
@@ -852,7 +853,7 @@ public class TokenRegistryTests
         var jwt1 = "multi_jwt_1";
         var jwt2 = "multi_jwt_2";
         var jwt3 = "multi_jwt_3";
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -900,13 +901,13 @@ public class TokenRegistryTests
             .ReturnsAsync(JsonWebTokenStatus.Revoked);
 
         // Act
-        await _registry.SetStatusAsync(jwt1, JsonWebTokenStatus.Unknown, expiresAt);
-        await _registry.SetStatusAsync(jwt2, JsonWebTokenStatus.Used, expiresAt);
-        await _registry.SetStatusAsync(jwt3, JsonWebTokenStatus.Revoked, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwt1, JsonWebTokenStatus.Unknown, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwt2, JsonWebTokenStatus.Used, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwt3, JsonWebTokenStatus.Revoked, expiresAt);
 
-        var result1 = await _registry.GetStatusAsync(jwt1);
-        var result2 = await _registry.GetStatusAsync(jwt2);
-        var result3 = await _registry.GetStatusAsync(jwt3);
+        var result1 = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwt1);
+        var result2 = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwt2);
+        var result3 = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwt3);
 
         // Assert
         Assert.Equal(JsonWebTokenStatus.Unknown, result1);
@@ -923,7 +924,7 @@ public class TokenRegistryTests
     {
         // Arrange
         var jwtId = "status_transition_jwt";
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -942,10 +943,10 @@ public class TokenRegistryTests
             .ReturnsAsync(JsonWebTokenStatus.Used);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, JsonWebTokenStatus.Unknown, expiresAt);
-        var status1 = await _registry.GetStatusAsync(jwtId);
-        await _registry.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt);
-        var status2 = await _registry.GetStatusAsync(jwtId);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, JsonWebTokenStatus.Unknown, expiresAt);
+        var status1 = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, JsonWebTokenStatus.Used, expiresAt);
+        var status2 = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(JsonWebTokenStatus.Unknown, status1);
@@ -961,7 +962,7 @@ public class TokenRegistryTests
     {
         // Arrange
         var jwtId = "same_key_jwt";
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
         var keys = new System.Collections.Generic.List<string>();
 
         _storage
@@ -975,8 +976,8 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, JsonWebTokenStatus.Used, expiresAt);
-        await _registry.SetStatusAsync(jwtId, JsonWebTokenStatus.Revoked, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, JsonWebTokenStatus.Used, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, JsonWebTokenStatus.Revoked, expiresAt);
 
         // Assert
         Assert.Equal(2, keys.Count);
@@ -994,7 +995,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = string.Empty;
         var status = JsonWebTokenStatus.Unknown;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -1012,8 +1013,8 @@ public class TokenRegistryTests
             .ReturnsAsync(status);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
-        var result = await _registry.GetStatusAsync(jwtId);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
+        var result = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(status, result);
@@ -1030,7 +1031,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = new string('a', 1000);
         var status = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -1048,8 +1049,8 @@ public class TokenRegistryTests
             .ReturnsAsync(status);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
-        var result = await _registry.GetStatusAsync(jwtId);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
+        var result = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(status, result);
@@ -1065,7 +1066,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "jwt-id_with.special:chars@2025!#$%";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -1083,8 +1084,8 @@ public class TokenRegistryTests
             .ReturnsAsync(status);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
-        var result = await _registry.GetStatusAsync(jwtId);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
+        var result = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(status, result);
@@ -1100,7 +1101,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "past_exp_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(-1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(-1);
         DateTimeOffset? capturedExpiration = null;
 
         _storage
@@ -1114,7 +1115,7 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
 
         // Assert
         Assert.Equal(expiresAt, capturedExpiration);
@@ -1144,7 +1145,7 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
 
         // Assert
         Assert.Equal(expiresAt, capturedExpiration);
@@ -1169,9 +1170,9 @@ public class TokenRegistryTests
             .ReturnsAsync(status);
 
         // Act
-        var result1 = await _registry.GetStatusAsync(jwtId);
-        var result2 = await _registry.GetStatusAsync(jwtId);
-        var result3 = await _registry.GetStatusAsync(jwtId);
+        var result1 = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
+        var result2 = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
+        var result3 = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(status, result1);
@@ -1195,7 +1196,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "options_structure_jwt";
         var status = JsonWebTokenStatus.Used;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(3);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(3);
         StorageOptions? capturedOptions = null;
 
         _storage
@@ -1209,11 +1210,11 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
 
         // Assert
         Assert.NotNull(capturedOptions);
-        Assert.NotNull(capturedOptions!.AbsoluteExpiration);
+        Assert.NotNull(capturedOptions.AbsoluteExpiration);
         Assert.Null(capturedOptions.AbsoluteExpirationRelativeToNow);
         Assert.Null(capturedOptions.SlidingExpiration);
     }
@@ -1228,7 +1229,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "key_consistency_jwt";
         var status = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
         string? setKey = null;
         string? getKey = null;
 
@@ -1252,8 +1253,8 @@ public class TokenRegistryTests
             .ReturnsAsync(status);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
-        await _registry.GetStatusAsync(jwtId);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
+        await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.NotNull(setKey);
@@ -1273,7 +1274,7 @@ public class TokenRegistryTests
         var jwt1 = "concurrent_jwt_1";
         var jwt2 = "concurrent_jwt_2";
         var jwt3 = "concurrent_jwt_3";
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(1);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -1305,14 +1306,14 @@ public class TokenRegistryTests
             .ReturnsAsync(JsonWebTokenStatus.Revoked);
 
         // Act
-        var setTask1 = _registry.SetStatusAsync(jwt1, JsonWebTokenStatus.Unknown, expiresAt);
-        var setTask2 = _registry.SetStatusAsync(jwt2, JsonWebTokenStatus.Used, expiresAt);
-        var setTask3 = _registry.SetStatusAsync(jwt3, JsonWebTokenStatus.Revoked, expiresAt);
+        var setTask1 = _registry.SetStatusAsync(SingleIssuer.Tenant, jwt1, JsonWebTokenStatus.Unknown, expiresAt);
+        var setTask2 = _registry.SetStatusAsync(SingleIssuer.Tenant, jwt2, JsonWebTokenStatus.Used, expiresAt);
+        var setTask3 = _registry.SetStatusAsync(SingleIssuer.Tenant, jwt3, JsonWebTokenStatus.Revoked, expiresAt);
         await Task.WhenAll(setTask1, setTask2, setTask3);
 
-        var getTask1 = _registry.GetStatusAsync(jwt1);
-        var getTask2 = _registry.GetStatusAsync(jwt2);
-        var getTask3 = _registry.GetStatusAsync(jwt3);
+        var getTask1 = _registry.GetStatusAsync(SingleIssuer.Tenant, jwt1);
+        var getTask2 = _registry.GetStatusAsync(SingleIssuer.Tenant, jwt2);
+        var getTask3 = _registry.GetStatusAsync(SingleIssuer.Tenant, jwt3);
         await Task.WhenAll(getTask1, getTask2, getTask3);
 
         // Assert
@@ -1331,7 +1332,7 @@ public class TokenRegistryTests
         // Arrange
         var jwtId = "immediate_retrieval_jwt";
         var expectedStatus = JsonWebTokenStatus.Revoked;
-        var expiresAt = DateTimeOffset.UtcNow.AddHours(2);
+        var expiresAt = TimeProvider.System.GetUtcNow().AddHours(2);
 
         _storage
             .Setup(s => s.SetAsync(
@@ -1349,8 +1350,8 @@ public class TokenRegistryTests
             .ReturnsAsync(expectedStatus);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, expectedStatus, expiresAt);
-        var result = await _registry.GetStatusAsync(jwtId);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, expectedStatus, expiresAt);
+        var result = await _registry.GetStatusAsync(SingleIssuer.Tenant, jwtId);
 
         // Assert
         Assert.Equal(expectedStatus, result);
@@ -1380,7 +1381,7 @@ public class TokenRegistryTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _registry.SetStatusAsync(jwtId, status, expiresAt);
+        await _registry.SetStatusAsync(SingleIssuer.Tenant, jwtId, status, expiresAt);
 
         // Assert
         Assert.Equal(expiresAt, capturedExpiration);

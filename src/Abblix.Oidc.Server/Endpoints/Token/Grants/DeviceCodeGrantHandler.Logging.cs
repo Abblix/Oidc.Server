@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Grants;
@@ -34,7 +35,7 @@ partial class DeviceCodeGrantHandler
         Message = "Client {ClientId} presented a device code whose stored grant carries " +
                   "authorization_details types the device authorization request never asked for, so the " +
                   "redemption is refused and no token was issued. Types: {EscapedTypes}. The comparison " +
-                  "is by type, because RFC 9396 §6.1 defines no universal comparator for two arbitrary " +
+                  "is by type, because RFC 9396 section 6.1 defines no universal comparator for two arbitrary " +
                   "entries.")]
     private partial void LogGrantedAuthorizationDetailsExceedTheRequest(string ClientId, string EscapedTypes);
 
@@ -42,8 +43,8 @@ partial class DeviceCodeGrantHandler
     /// The per-type validator's own words, which the client never sees.
     /// </summary>
     /// <remarks>
-    /// A granted-phase rejection names a host-side defect, so the validator writes for whoever has to fix
-    /// it and may name a tenant, a ceiling or a configuration key. The client is told only that the
+    /// A granted-phase rejection is explained to whoever runs the host, so the validator writes for whoever
+    /// has to act on it and may name a tenant, a ceiling or a configuration key. The client is told only that the
     /// deployment will not issue these details; this is where the sentence that explains it lives.
     /// </remarks>
     [LoggerMessage(
@@ -51,7 +52,7 @@ partial class DeviceCodeGrantHandler
         Level = LogLevel.Warning,
         Message = "Client {ClientId} presented a device code whose stored grant the per-type validators " +
                   "will not issue, so the redemption is refused and no token was issued: {Reason}")]
-    private partial void LogGrantedAuthorizationDetailsRefused(string ClientId, string Reason);
+    private partial void LogGrantedAuthorizationDetailsRefused(string ClientId, Sanitized Reason);
 
     /// <summary>
     /// The only account of a record that cannot be looked at afterwards.

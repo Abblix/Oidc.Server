@@ -46,14 +46,14 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         var jwt = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var payload = DecodeJwtPayload(jwt);
 
-        // RFC 9701 §5: addressed to the client and issued by the AS.
+        // RFC 9701 section 5: addressed to the client and issued by the AS.
         Assert.Equal(clientId, payload[IanaClaimTypes.Aud]!.GetValue<string>());
         Assert.Equal(
             discovery.Issuer.AbsoluteUri.TrimEnd('/'),
             payload[IanaClaimTypes.Iss]!.GetValue<string>().TrimEnd('/'));
 
         // The RFC 7662 response is carried under the token_introspection claim and reports the token as active.
-        // RFC 7662 §2.2 types active as a JSON boolean, so the assertion reads it as bool.
+        // RFC 7662 section 2.2 types active as a JSON boolean, so the assertion reads it as bool.
         var introspection = payload[IanaClaimTypes.TokenIntrospection]!.AsObject();
         Assert.True(introspection[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
     }
@@ -77,6 +77,96 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         Assert.True(body[IntrospectionSuccess.Parameters.Active]!.GetValue<bool>());
     }
 
+    /// <summary>
+    /// RFC 9701 section 6: introspection_signed_response_alg is OPTIONAL and "The default, if omitted, is RS256". A
+    /// client that registered none and Accepts the +jwt media type gets a JWT signed RS256.
+    /// </summary>
+    [Fact]
+    public async Task Introspection_with_jwt_accept_signs_rs256_for_a_client_that_registered_no_algorithm()
+    {
+        var httpClient = CreateClient();
+        var discovery = await FetchDiscoveryAsync(httpClient);
+        var (clientId, clientSecret, accessToken) = await RegisterClientAndGetAccessTokenAsync(
+            httpClient, discovery, introspectionSignedResponseAlg: null);
+
+        var response = await IntrospectAsync(
+            httpClient, discovery, clientId, clientSecret, accessToken, IntrospectionJwtMediaType);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(IntrospectionJwtMediaType, response.Content.Headers.ContentType?.MediaType);
+
+        var jwt = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var header = JsonNode.Parse(Base64UrlDecode(jwt.Split('.')[0]))!;
+        Assert.Equal(SigningAlgorithms.RS256, header[JwtClaimTypes.Algorithm]!.GetValue<string>());
+        Assert.True(DecodeJwtPayload(jwt)[IanaClaimTypes.TokenIntrospection]![IntrospectionSuccess.Parameters.Active]!
+            .GetValue<bool>());
+    }
+
+    /// <summary>
+    /// RFC 9701 section 5: the server "MUST refuse to serve introspection requests that don't authenticate the caller
+    /// and return an HTTP status code 400". A request naming a client and carrying no credential of it is answered
+    /// 400 with invalid_client, which RFC 6749 section 5.2 defines for "no client authentication included".
+    /// </summary>
+    [Fact]
+    public async Task Introspection_without_client_authentication_is_answered_400()
+    {
+        var httpClient = CreateClient();
+        var discovery = await FetchDiscoveryAsync(httpClient);
+        Assert.NotNull(discovery.IntrospectionEndpoint);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, discovery.IntrospectionEndpoint)
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                [IntrospectionRequest.Parameters.Token] = "any-token",
+                [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            }),
+        };
+        request.Headers.Accept.Add(MediaTypeWithQualityHeaderValue.Parse(IntrospectionJwtMediaType));
+
+        var response = await httpClient.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.Equal(ErrorCodes.InvalidClient, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// RFC 7662 section 2.3: a caller whose client credential "is invalid" is answered "HTTP 401 (Unauthorized) as
+    /// described in Section 5.2 of OAuth 2.0", so a wrong secret stays a 401, unlike a missing one.
+    /// </summary>
+    [Fact]
+    public async Task Introspection_with_a_wrong_client_secret_is_answered_401()
+    {
+        var httpClient = CreateClient();
+        var discovery = await FetchDiscoveryAsync(httpClient);
+
+        var response = await IntrospectAsync(
+            httpClient, discovery, TestConstants.ConfidentialClientId, "not-the-secret", "any-token",
+            IntrospectionJwtMediaType);
+
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>
+    /// A registered introspection algorithm no signing key of the server produces (ES256 at a server holding an RSA
+    /// key alone) makes the JWT a representation the server cannot supply: RFC 9110 section 15.5.7, 406 Not
+    /// Acceptable, rather than a server error.
+    /// </summary>
+    [Fact]
+    public async Task Introspection_with_a_registered_algorithm_no_key_produces_is_answered_406()
+    {
+        var httpClient = CreateClient();
+        var discovery = await FetchDiscoveryAsync(httpClient);
+        var (clientId, clientSecret, accessToken) = await RegisterClientAndGetAccessTokenAsync(
+            httpClient, discovery, introspectionSignedResponseAlg: SigningAlgorithms.ES256);
+
+        var response = await IntrospectAsync(
+            httpClient, discovery, clientId, clientSecret, accessToken, IntrospectionJwtMediaType);
+
+        Assert.Equal(System.Net.HttpStatusCode.NotAcceptable, response.StatusCode);
+    }
+
     [Fact]
     public async Task Discovery_advertises_introspection_signing_alg_values()
     {
@@ -84,27 +174,28 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         var discovery = await FetchDiscoveryAsync(httpClient);
 
         Assert.NotNull(discovery.IntrospectionSigningAlgValuesSupported);
-        Assert.Contains(SigningAlgorithms.RS256, discovery.IntrospectionSigningAlgValuesSupported!);
+        Assert.Contains(SigningAlgorithms.RS256, discovery.IntrospectionSigningAlgValuesSupported);
     }
 
     private static async Task<(string ClientId, string ClientSecret, string AccessToken)> RegisterClientAndGetAccessTokenAsync(
         HttpClient httpClient,
         DiscoveryDocument discovery,
-        string introspectionSignedResponseAlg)
+        string? introspectionSignedResponseAlg)
     {
         var (verifier, challenge) = GeneratePkcePair();
 
         var dcrBody = new JsonObject
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
-            ["response_types"] = new JsonArray { ResponseTypes.Code },
-            ["token_endpoint_auth_method"] = "client_secret_post",
-            [ClientRegistrationRequest.Parameters.IntrospectionSignedResponseAlg] = introspectionSignedResponseAlg,
+            [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
         };
+        if (introspectionSignedResponseAlg is not null)
+            dcrBody[ClientRegistrationRequest.Parameters.IntrospectionSignedResponseAlg] = introspectionSignedResponseAlg;
         var registered = await RegisterClientAsync(httpClient, discovery, dcrBody);
-        var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
-        var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>();
 
         var code = await AuthorizeAndExtractCodeAsync(httpClient, discovery, new Dictionary<string, string>
         {
@@ -122,13 +213,13 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
 
-        var accessToken = tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var accessToken = tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         return (clientId, clientSecret, accessToken);
     }
 
@@ -147,7 +238,7 @@ public class JwtIntrospectionResponseTests(TestFactory factory) : TestBase(facto
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 [IntrospectionRequest.Parameters.Token] = token,
-                [AuthorizationRequest.Parameters.ClientId] = clientId,
+                [ClientRequest.Parameters.ClientId] = clientId,
                 [ClientRequest.Parameters.ClientSecret] = clientSecret,
             }),
         };

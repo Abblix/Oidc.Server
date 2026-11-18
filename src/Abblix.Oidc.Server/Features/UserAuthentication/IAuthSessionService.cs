@@ -35,9 +35,21 @@ public interface IAuthSessionService
 	/// Initiates a new user session based on provided user claims, effectively signing in the user.
 	/// This method is essential for establishing new user sessions following successful authentication.
 	/// </summary>
+	/// <remarks>
+	/// The implementation decides whether the sign-in ends a session the user agent already holds. It ends each such
+	/// session through <see cref="IAuthSessionTerminator"/> after writing the new one, so a sign-in that fails signs
+	/// nobody out, and reports it in the result. That revokes the session's tokens when
+	/// <see cref="Common.Configuration.OidcOptions.RevokeSessionTokensOnLogout"/> asks for it and sends its clients
+	/// back-channel logout notifications. Front-channel notifications are not sent, because a sign-in has no logout
+	/// page to render them on.
+	/// <para>
+	/// A failure while ending a replaced session surfaces from this call after the new session is already written:
+	/// the end user is signed in, and the clients of the replaced session may not have been told.
+	/// </para>
+	/// </remarks>
 	/// <param name="authSession">Detailed information about the authentication session to be established.</param>
-	/// <returns>A task that signifies the completion of the user sign-in process.</returns>
-	Task SignInAsync(AuthSession authSession);
+	/// <returns>The session written and the sessions the sign-in ended.</returns>
+	Task<AuthSessionSignInResult> SignInAsync(AuthSession authSession);
 
 	/// <summary>
 	/// Terminates the current user session, effectively signing out the user.

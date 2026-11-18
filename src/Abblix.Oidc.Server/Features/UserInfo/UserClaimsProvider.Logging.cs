@@ -17,10 +17,4 @@ partial class UserClaimsProvider
         Level = LogLevel.Warning,
         Message = "The user claims were not found by subject value")]
     private partial void LogUserClaimsNotFound();
-
-    [LoggerMessage(
-        EventId = LogEvents.Misc.UserClaimsProvider.MissingClaims,
-        Level = LogLevel.Warning,
-        Message = "The following claims are requested, but not returned from {IUserInfoProvider}: {@MissingClaims}")]
-    private partial void LogMissingClaims(string? IUserInfoProvider, string[] MissingClaims);
 }

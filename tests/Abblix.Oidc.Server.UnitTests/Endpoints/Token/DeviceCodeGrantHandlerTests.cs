@@ -8,6 +8,7 @@
 
 using System;
 using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
@@ -16,10 +17,16 @@ using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.DeviceAuthorization;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.RandomGenerators;
+using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Common.Implementation;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -43,6 +50,7 @@ public class DeviceCodeGrantHandlerTests
 
     private readonly Mock<IDeviceAuthorizationStorage> _storage;
     private readonly DeviceCodeGrantHandler _handler;
+    private readonly IPollScheduleStore _pollSchedule;
     private readonly DateTimeOffset _currentTime = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
     private readonly TimeSpan _pollingInterval = TimeSpan.FromSeconds(5);
 
@@ -63,9 +71,13 @@ public class DeviceCodeGrantHandlerTests
             }
         });
 
+        _pollSchedule = NewPollSchedule();
+
         _handler = new DeviceCodeGrantHandler(
             NullLogger<DeviceCodeGrantHandler>.Instance,
             _storage.Object,
+            _pollSchedule,
+            new EntityStorageKeyFactory(),
             StubAuthorizationDetailsPolicy.Accepting,
             timeProvider,
             options);
@@ -78,7 +90,7 @@ public class DeviceCodeGrantHandlerTests
     [Fact]
     public async Task AuthorizeAsync_MissingDeviceCode_ReturnsInvalidRequest()
     {
-        var result = await _handler.AuthorizeAsync(new TokenRequest(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, new TokenRequest(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -119,11 +131,11 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -131,7 +143,7 @@ public class DeviceCodeGrantHandlerTests
         Assert.Equal(UserId, grant.AuthSession.Subject);
         Assert.Equal(ClientId, grant.Context.ClientId);
 
-        _storage.Verify(s => s.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode), Times.Once);
     }
 
     /// <summary>
@@ -160,10 +172,11 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await _handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -174,16 +187,16 @@ public class DeviceCodeGrantHandlerTests
         // 3.5 has the client stop polling on any code other than authorization_pending or slow_down, and
         // the user-denial refusal beside this one removes first for the same reason - but it depends on the
         // order of the arms, which nothing else here would notice being changed.
-        _storage.Verify(storage => storage.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
+        _storage.Verify(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode), Times.Once);
     }
 
     /// <summary>
     /// A stored grant that stays inside what the device asked for is redeemed.
     /// </summary>
     /// <remarks>
-    /// The control for the refusal above. Without it the same assertions would hold over a handler that
-    /// refused every request carrying <c>authorization_details</c> at all, which is the shape a guard
-    /// written slightly too wide takes.
+    /// The control for <see cref="AuthorizedGrantWideningTheRequest_IsRefusedWhenTheCodeIsRedeemed"/>.
+    /// Without it the same assertions would hold over a handler that refused every request carrying
+    /// <c>authorization_details</c> at all, which is the shape a guard written slightly too wide takes.
     /// </remarks>
     [Fact]
     public async Task AuthorizedGrantInsideTheRequest_IsRedeemed()
@@ -201,14 +214,15 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await _handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out var grant));
-        Assert.Equal(UserId, grant!.AuthSession.Subject);
+        Assert.Equal(UserId, grant.AuthSession.Subject);
     }
 
     /// <summary>
@@ -239,10 +253,11 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await _handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -287,10 +302,11 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await _handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -320,10 +336,11 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             new TokenRequest { DeviceCode = DeviceCode }, new ClientInfo(ClientId),
             TestContext.Current.CancellationToken);
 
@@ -366,24 +383,68 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             new TokenRequest { DeviceCode = DeviceCode }, new ClientInfo(ClientId),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetSuccess(out _));
         Assert.Equal(1, policy.GrantedCalls);
+        Assert.Same(deviceRequest.AuthorizationDetails, policy.LastRequested);
         Assert.NotNull(policy.LastSeen);
         Assert.NotSame(granted, policy.LastSeen);
-        Assert.Equal(granted.ToJsonString(), policy.LastSeen!.ToJsonString());
+        Assert.Equal(granted.ToJsonString(), policy.LastSeen.ToJsonString());
     }
+
+    /// <summary>
+    /// A poll abandoned by its client after the device code has been claimed still yields the grant: the
+    /// claim cannot be undone, so abandoning past it would spend the code and issue nothing.
+    /// </summary>
+    [Fact]
+    public async Task AnAbandonedPoll_PastTheClaim_StillYieldsTheGrant()
+    {
+        var policy = StubAuthorizationDetailsPolicy.HonouringCancellation;
+        var handler = HandlerWith(policy);
+
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Authorized,
+            AuthorizedGrant = GrantWith(new JsonArray(new JsonObject { ["type"] = "payment_initiation" })),
+            AuthorizationDetails = new JsonArray(new JsonObject { ["type"] = "payment_initiation" }),
+            ExpiresAt = _currentTime.AddMinutes(15),
+        };
+
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
+
+        var result = await handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
+            new TokenRequest { DeviceCode = DeviceCode }, new ClientInfo(ClientId),
+            new CancellationToken(canceled: true));
+
+        Assert.True(result.TryGetSuccess(out _));
+        Assert.Equal(1, policy.GrantedCalls);
+        _storage.Verify(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode), Times.Once);
+    }
+
+    /// <summary>
+    /// A poll schedule over a real memory cache, so what the handler wrote is what the next read sees.
+    /// </summary>
+    private static IPollScheduleStore NewPollSchedule()
+        => new PollScheduleStore(
+            new DistributedCacheStorage(
+                new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
+                new ProtobufSerializer()));
 
     private DeviceCodeGrantHandler HandlerWith(StubAuthorizationDetailsPolicy policy)
         => new(
             NullLogger<DeviceCodeGrantHandler>.Instance,
             _storage.Object,
+            NewPollSchedule(),
+            new EntityStorageKeyFactory(),
             policy,
             new FakeTimeProvider(_currentTime),
             Options.Create(new OidcOptions
@@ -430,40 +491,62 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(false); // Removal failed - another thread won
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(false); // Removal failed - another thread won
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
         Assert.Contains("already used", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 
-        _storage.Verify(s => s.TryRemoveAsync(DeviceCode, UserCode), Times.Once);
+        _storage.Verify(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode), Times.Once);
     }
 
     /// <summary>
-    /// Verifies that when the device code is not found in storage (expired or never existed),
-    /// the handler returns an ExpiredToken error.
+    /// A device code the storage does not hold and that carries no instant of expiry is an invalid grant
+    /// (RFC 6749 section 5.2).
     /// </summary>
     [Fact]
-    public async Task DeviceCodeNotFound_ShouldReturnExpiredTokenError()
+    public async Task DeviceCodeNotFound_ShouldReturnInvalidGrantError()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
-        Assert.Contains("expired", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
+    }
+
+    /// <summary>
+    /// A code whose record is gone is told expired_token once the instant it carries has come, as a poll at the
+    /// expiry is while the record is still held, and invalid_grant before it.
+    /// </summary>
+    [Theory]
+    [InlineData(-1, ErrorCodes.ExpiredToken)]
+    [InlineData(0, ErrorCodes.ExpiredToken)]
+    [InlineData(1, ErrorCodes.InvalidGrant)]
+    public async Task DeviceCodeNotFound_IsAnsweredByTheExpiryItCarries(int secondsLeft, string expectedError)
+    {
+        var deviceCode = ExpiringIdentifier.Compose(DeviceCode, _currentTime.AddSeconds(secondsLeft));
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, deviceCode)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
+
+        var result = await _handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
+            new TokenRequest { DeviceCode = deviceCode },
+            new ClientInfo(ClientId),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(expectedError, error.Error);
     }
 
     /// <summary>
@@ -498,24 +581,26 @@ public class DeviceCodeGrantHandlerTests
         // must answer the same, and a row asserting only the endpoint would let the two drift apart.
         Assert.False(deviceRequest.HasLifetimeLeft(_currentTime, out _));
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.RemoveAsync(DeviceCode)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.RemoveAsync(TestTenant.Matched, DeviceCode)).Returns(Task.CompletedTask);
 
         var result = await _handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
 
         // The code is taken out of storage rather than left for the next poll to refuse again.
-        _storage.Verify(s => s.RemoveAsync(DeviceCode), Times.Once);
+        _storage.Verify(s => s.RemoveAsync(TestTenant.Matched, DeviceCode), Times.Once);
     }
 
     /// <summary>
     /// A poll one tick BEFORE the expiry is still pending.
     /// </summary>
     /// <remarks>
-    /// The control on the row above, and measured rather than assumed: a handler calling EVERY code
+    /// The control on <see cref="PolledAtExactlyItsExpiry_TheCodeIsExpiredAndSoSaysTheRecord"/>, and measured
+    /// rather than assumed: a handler calling EVERY code
     /// expired is already killed by nineteen other rows in this file, so that is not what this one buys.
     /// What it alone catches is the boundary shifted one tick EARLY - planted, and it is the only row in
     /// the suite that dies. The fifteen-minute rows cannot see a tick.
@@ -534,15 +619,17 @@ public class DeviceCodeGrantHandlerTests
 
         Assert.True(deviceRequest.HasLifetimeLeft(_currentTime, out _));
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
         _storage
             .Setup(s => s.UpdateAsync(
-                DeviceCode,
+                TestTenant.Matched,
+                It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(),
                 It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationRequest>(),
                 It.IsAny<TimeSpan>()))
             .Returns(Task.CompletedTask);
 
         var result = await _handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
@@ -566,10 +653,10 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, wrongClientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, wrongClientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -578,7 +665,7 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when the client polls too early (before NextPollAt time),
+    /// Verifies that when the client polls too early (before the instant it was given),
     /// the handler returns a SlowDown error and increases the interval.
     /// </summary>
     [Fact]
@@ -593,32 +680,37 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = nextPollAt,
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, DeviceCode);
+        await _pollSchedule.SetNextPollAtAsync(pollKey, nextPollAt, TimeSpan.FromMinutes(15));
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.SlowDown, error.Error);
 
-        // Verify interval was increased
-        Assert.Equal(nextPollAt + _pollingInterval, deviceRequest.NextPollAt);
-        _storage.Verify(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>()), Times.Once);
+        // Pushed further out rather than reset from now, so ignoring the interval buys nothing.
+        Assert.Equal(nextPollAt + _pollingInterval, await _pollSchedule.TryGetNextPollAtAsync(pollKey));
+
+        // And the request itself is untouched, which is what keeps a poll from overwriting an approval.
+        _storage.Verify(
+            s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
     }
 
     /// <summary>
     /// Verifies that when the authorization request is still pending
     /// and the client polls at the correct time, the handler returns an AuthorizationPending error
-    /// and updates NextPollAt for rate limiting.
+    /// and notes when it may ask again.
     /// </summary>
     [Fact]
-    public async Task PendingRequest_NormalPoll_ShouldReturnAuthorizationPendingErrorAndUpdateNextPollAt()
+    public async Task PendingRequest_NormalPoll_ShouldReturnAuthorizationPendingErrorAndNoteTheNextPoll()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
@@ -627,24 +719,26 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = null,
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
         Assert.Contains("pending", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 
-        // Verify NextPollAt was set
-        Assert.Equal(_currentTime + _pollingInterval, deviceRequest.NextPollAt);
-        _storage.Verify(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>()), Times.Once);
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, DeviceCode);
+        Assert.Equal(_currentTime + _pollingInterval, await _pollSchedule.TryGetNextPollAtAsync(pollKey));
+
+        // And the request itself is untouched, which is what keeps a poll from overwriting an approval.
+        _storage.Verify(
+            s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            Times.Never);
     }
 
     /// <summary>
@@ -664,18 +758,18 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.RemoveAsync(DeviceCode)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.RemoveAsync(TestTenant.Matched, DeviceCode)).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AccessDenied, error.Error);
         Assert.Contains("denied", error.ErrorDescription, StringComparison.OrdinalIgnoreCase);
 
-        _storage.Verify(s => s.RemoveAsync(DeviceCode), Times.Once);
+        _storage.Verify(s => s.RemoveAsync(TestTenant.Matched, DeviceCode), Times.Once);
     }
 
     /// <summary>
@@ -688,10 +782,10 @@ public class DeviceCodeGrantHandlerTests
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = null };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(null!)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, null!)).ReturnsAsync((StoredDeviceAuthorizationRequest?)null);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert: the missing required device_code is rejected by the parameter validator.
         Assert.True(result.TryGetFailure(out _));
@@ -713,14 +807,14 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.UpdateAsync(TestTenant.Matched, It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
 
         // Act
-        await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
-        _storage.Verify(s => s.RemoveAsync(It.IsAny<string>()), Times.Never);
+        _storage.Verify(s => s.RemoveAsync(It.IsAny<TenantDefinition>(), It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -749,11 +843,11 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -767,29 +861,28 @@ public class DeviceCodeGrantHandlerTests
 
     /// <summary>
     /// Verifies that time-based rate limiting works correctly at the boundary condition
-    /// (exactly at NextPollAt time should NOT trigger SlowDown).
+    /// (asking exactly at the instant given should NOT trigger SlowDown).
     /// </summary>
     [Fact]
-    public async Task PendingRequest_ExactlyAtNextPollAt_ShouldReturnAuthorizationPending()
+    public async Task PendingRequest_ExactlyAtTheInstantGiven_ShouldReturnAuthorizationPending()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
 
-        var nextPollAt = _currentTime;
-
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = nextPollAt,
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, DeviceCode);
+        await _pollSchedule.SetNextPollAtAsync(pollKey, _currentTime, TimeSpan.FromMinutes(15));
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -797,30 +890,29 @@ public class DeviceCodeGrantHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when the authorization is pending but NextPollAt has passed,
+    /// Verifies that when the authorization is pending but the instant given has passed,
     /// the handler returns an AuthorizationPending error (not SlowDown).
     /// </summary>
     [Fact]
-    public async Task PendingRequest_AfterNextPollAt_ShouldReturnAuthorizationPendingError()
+    public async Task PendingRequest_AfterTheInstantGiven_ShouldReturnAuthorizationPendingError()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
 
-        var nextPollAt = _currentTime.AddSeconds(-1);
-
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = nextPollAt,
             ExpiresAt = _currentTime.AddMinutes(15)
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>())).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, DeviceCode);
+        await _pollSchedule.SetNextPollAtAsync(pollKey, _currentTime.AddSeconds(-1), TimeSpan.FromMinutes(15));
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -841,32 +933,81 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = _currentTime.AddSeconds(-30),
             ExpiresAt = _currentTime.AddSeconds(-1),
         };
 
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.RemoveAsync(DeviceCode)).Returns(Task.CompletedTask);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(s => s.RemoveAsync(TestTenant.Matched, DeviceCode)).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.ExpiredToken, error.Error);
-        _storage.Verify(s => s.RemoveAsync(DeviceCode), Times.Once);
+        _storage.Verify(s => s.RemoveAsync(TestTenant.Matched, DeviceCode), Times.Once);
         _storage.Verify(
-            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
     /// <summary>
-    /// A poll that races a just-completed approval must not overwrite the Authorized
-    /// status with its stale Pending snapshot. The handler must re-read and surface the granted tokens
-    /// instead of persisting authorization_pending forever.
+    /// The instant a client is told to wait for never lands beyond the code's own expiry.
     /// </summary>
+    /// <remarks>
+    /// Each early ask pushes it one interval further, so a client polling many times a second would
+    /// otherwise push it hours ahead - and from then on that client can only ever be told to slow down,
+    /// for a code that has expired in the meantime. Bounding it at the expiry keeps the answer a client
+    /// gets tied to the state of the code rather than to how rudely it polled.
+    /// </remarks>
     [Fact]
-    public async Task PendingPoll_ApprovalRacedIn_DoesNotClobberApproval()
+    public async Task TheInstantToldToAClient_NeverPassesTheCodesExpiry()
+    {
+        // Arrange
+        var clientInfo = new ClientInfo(ClientId);
+        var tokenRequest = new TokenRequest { DeviceCode = DeviceCode };
+
+        var expiresAt = _currentTime.AddSeconds(2);
+        var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
+        {
+            Status = DeviceAuthorizationStatus.Pending,
+            ExpiresAt = expiresAt,
+        };
+
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+
+        var pollKey = new EntityStorageKeyFactory().DeviceAuthorizationNextPollKey(SingleIssuer.Tenant, DeviceCode);
+        await _pollSchedule.SetNextPollAtAsync(pollKey, _currentTime.AddSeconds(1), TimeSpan.FromSeconds(2));
+
+        // Act: asked early, so the instant is pushed - one interval past where it stands is past expiry.
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.SlowDown, error.Error);
+        Assert.Equal(expiresAt, await _pollSchedule.TryGetNextPollAtAsync(pollKey));
+    }
+
+    /// <summary>
+    /// A pending poll writes nothing to the request, so an approval landing beside it cannot be
+    /// overwritten.
+    /// </summary>
+    /// <remarks>
+    /// This used to be the narrowed version of that claim: the poll wrote the request back to note the
+    /// next-poll instant, and what kept an approval alive was the handler re-reading first and
+    /// re-dispatching when the status had advanced - which left a window one store round trip wide. The
+    /// instant lives under a key of its own now, so the poll has no reason to write the request and the
+    /// window has no width. One read is therefore the whole interaction, and that is what this row pins.
+    /// <para>
+    /// The approval surviving an interleaved poll, and being answered by that same poll, is driven end to
+    /// end over a real store in <c>LostUpdateTests</c>; what belongs here is that the handler does not
+    /// write. How many times it reads is not pinned: the pending arm reads again so that an approval
+    /// arriving beside the poll is answered at once rather than one interval later, and that is a choice
+    /// about latency which a count in a test would freeze.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task PendingPoll_WritesNothingToTheRequest()
     {
         // Arrange
         var clientInfo = new ClientInfo(ClientId);
@@ -875,37 +1016,20 @@ public class DeviceCodeGrantHandlerTests
         var pending = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = null,
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        var approvedGrant = new AuthorizedGrant(
-            new AuthSession(UserId, "session_123", _currentTime, "device"),
-            new AuthorizationContext(ClientId, [Scopes.OpenId], null));
-
-        var approved = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
-        {
-            Status = DeviceAuthorizationStatus.Authorized,
-            AuthorizedGrant = approvedGrant,
-            ExpiresAt = _currentTime.AddMinutes(15),
-        };
-
-        // First read (line 67) sees Pending; the re-read in the pending branch and the re-dispatch see
-        // the approval that landed in the window.
-        _storage.SetupSequence(s => s.TryGetByDeviceCodeAsync(DeviceCode))
-            .ReturnsAsync(pending)
-            .ReturnsAsync(approved)
-            .ReturnsAsync(approved);
-        _storage.Setup(s => s.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(pending);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
-        // Assert: the approval survives - tokens are issued, and no Pending snapshot was written back.
-        Assert.True(result.TryGetSuccess(out var grant));
-        Assert.Equal(UserId, grant.AuthSession.Subject);
+        // Assert
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
+
         _storage.Verify(
-            s => s.UpdateAsync(It.IsAny<string>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
+            s => s.UpdateAsync(It.IsAny<TenantDefinition>(), It.IsAny<Abblix.Oidc.Server.Features.DeviceAuthorization.DeviceAuthorizationReference>(), It.IsAny<StoredDeviceAuthorizationRequest>(), It.IsAny<TimeSpan>()),
             Times.Never);
     }
 
@@ -923,20 +1047,44 @@ public class DeviceCodeGrantHandlerTests
         var deviceRequest = new StoredDeviceAuthorizationRequest(ClientId, [Scopes.OpenId], null, UserCode)
         {
             Status = DeviceAuthorizationStatus.Pending,
-            NextPollAt = null,
             ExpiresAt = _currentTime.AddMinutes(3),
         };
 
         TimeSpan capturedTtl = default;
-        _storage.Setup(s => s.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(s => s.UpdateAsync(DeviceCode, deviceRequest, It.IsAny<TimeSpan>()))
-            .Callback<string, StoredDeviceAuthorizationRequest, TimeSpan>((_, _, ttl) => capturedTtl = ttl)
+        _storage.Setup(s => s.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+
+        // The span now reaches the poll schedule rather than the request, so that is where it is read.
+        var schedule = new Mock<IPollScheduleStore>(MockBehavior.Loose);
+        schedule
+            .Setup(s => s.SetNextPollAtAsync(
+                It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<TimeSpan>()))
+            .Callback<string, DateTimeOffset, TimeSpan>((_, _, ttl) => capturedTtl = ttl)
             .Returns(Task.CompletedTask);
 
-        // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var handler = new DeviceCodeGrantHandler(
+            NullLogger<DeviceCodeGrantHandler>.Instance,
+            _storage.Object,
+            schedule.Object,
+            new EntityStorageKeyFactory(),
+            StubAuthorizationDetailsPolicy.Accepting,
+            new FakeTimeProvider(_currentTime),
+            Options.Create(new OidcOptions
+            {
+                DeviceAuthorization = new DeviceAuthorizationOptions
+                {
+                    CodeLifetime = TimeSpan.FromMinutes(15),
+                    PollingInterval = _pollingInterval,
+                    DeviceCodeLength = 32,
+                    UserCodeLength = 8,
+                    VerificationUri = new Uri("https://example.com/device"),
+                },
+            }));
 
-        // Assert: the refreshed TTL is the 3-minute remainder, not the 15-minute CodeLifetime.
+        // Act
+        var result = await handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        // Assert: the entry lives for the 3-minute remainder, not the 15-minute lifetime - so polling
+        // cannot keep the schedule, or anything keyed beside it, alive past the code's fixed expiry.
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.AuthorizationPending, error.Error);
         Assert.Equal(TimeSpan.FromMinutes(3), capturedTtl);
@@ -978,10 +1126,11 @@ public class DeviceCodeGrantHandlerTests
             ExpiresAt = _currentTime.AddMinutes(15),
         };
 
-        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(DeviceCode)).ReturnsAsync(deviceRequest);
-        _storage.Setup(storage => storage.TryRemoveAsync(DeviceCode, UserCode)).ReturnsAsync(true);
+        _storage.Setup(storage => storage.TryGetByDeviceCodeAsync(TestTenant.Matched, DeviceCode)).ReturnsAsync(deviceRequest);
+        _storage.Setup(storage => storage.TryRemoveAsync(TestTenant.Matched, DeviceCode, UserCode)).ReturnsAsync(true);
 
         var result = await _handler.AuthorizeAsync(
+            SingleIssuer.Tenant,
             tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));

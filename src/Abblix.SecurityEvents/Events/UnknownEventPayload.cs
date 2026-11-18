@@ -15,7 +15,7 @@ namespace Abblix.SecurityEvents.Events;
 /// <remarks>
 /// An unregistered type is a normal condition, not an error: a transmitter may start emitting a
 /// new event type before its receivers update, and a receiver that rejected what it does not
-/// recognise would go deaf exactly when the stream evolves. The raw payload stays available, so a
+/// recognize would go deaf exactly when the stream evolves. The raw payload stays available, so a
 /// consumer can log it, route it, or ignore it deliberately - each of which requires having
 /// received it.
 /// </remarks>

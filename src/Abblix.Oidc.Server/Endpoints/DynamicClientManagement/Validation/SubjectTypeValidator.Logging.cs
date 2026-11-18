@@ -17,5 +17,5 @@ partial class SubjectTypeValidator
         EventId = LogEvents.DynamicClientManagement.SubjectTypeValidator.SectorIdentifierMissingUris,
         Level = LogLevel.Warning,
         Message = "The following registered URIs are missing from the document at {SectorIdentifierUri}: {@MissingUris}")]
-    private partial void LogSectorIdentifierMissingUris(Sanitized SectorIdentifierUri, Uri[] MissingUris);
+    private partial void LogSectorIdentifierMissingUris(Sanitized SectorIdentifierUri, Sanitized[] MissingUris);
 }

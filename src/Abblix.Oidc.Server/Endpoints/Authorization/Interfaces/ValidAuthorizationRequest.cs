@@ -38,6 +38,7 @@ public record ValidAuthorizationRequest
 		AuthorizationDetails = context.AuthorizationDetails;
 		IdTokenHintSubject = context.IdTokenHintSubject;
 		RequestedSubjects = context.RequestedSubjects;
+		RequiredAuthContextClassRefs = context.RequiredAuthContextClassRefs;
 	}
 
 	/// <summary>
@@ -76,6 +77,11 @@ public record ValidAuthorizationRequest
 	/// way the client wrote them, so a comparison converts the session forward rather than opening these.
 	/// </remarks>
 	public string[]? RequestedSubjects { get; init; }
+
+	/// <summary>
+	/// The authentication levels this request requires of the ID token, or null when it requires none.
+	/// </summary>
+	public string[]? RequiredAuthContextClassRefs { get; init; }
 
 	/// <summary>
 	/// Information about the client making the request, as determined during validation.

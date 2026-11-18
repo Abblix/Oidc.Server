@@ -236,7 +236,7 @@ public class TryAddEnumerableAliasTests
     /// <summary>
     /// A Transient source produces a fresh instance for every resolution - the «shared»
     /// invariant degenerates to «routed through source» since Transient gives a new instance
-    /// each call. The alias still goes through the source factory, so behaviour is consistent
+    /// each call. The alias still goes through the source factory, so behavior is consistent
     /// with a direct Transient resolution.
     /// </summary>
     [Fact]

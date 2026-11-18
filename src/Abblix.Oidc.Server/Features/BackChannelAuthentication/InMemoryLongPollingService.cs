@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using System.Collections.Concurrent;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
@@ -39,7 +40,8 @@ namespace Abblix.Oidc.Server.Features.BackChannelAuthentication;
 /// </para>
 /// </remarks>
 public partial class InMemoryLongPollingService(
-    ILogger<InMemoryLongPollingService> logger)
+    ILogger<InMemoryLongPollingService> logger,
+    CredentialFingerprints fingerprints)
     : IBackChannelLongPollingService
 {
     /// <summary>
@@ -56,7 +58,7 @@ public partial class InMemoryLongPollingService(
     /// Uses TaskCompletionSource to efficiently wait without blocking threads.
     /// </summary>
     public async Task<bool> WaitForStatusChangeAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
@@ -68,7 +70,7 @@ public partial class InMemoryLongPollingService(
             _ => new ConcurrentDictionary<TaskCompletionSource<bool>, byte>());
         waiters.TryAdd(tcs, 0);
 
-        LogWaitingForStatusChange(authenticationRequestId.Sanitized(), timeout);
+        LogWaitingForStatusChange(fingerprints.Of(authenticationRequestId), timeout);
 
         try
         {
@@ -82,11 +84,11 @@ public partial class InMemoryLongPollingService(
 
             if (completedTask == tcs.Task)
             {
-                LogStatusChangeReceived(authenticationRequestId.Sanitized());
+                LogStatusChangeReceived(fingerprints.Of(authenticationRequestId));
                 return true;
             }
 
-            LogWaitTimedOut(authenticationRequestId.Sanitized());
+            LogWaitTimedOut(fingerprints.Of(authenticationRequestId));
             return false;
         }
         catch (OperationCanceledException ex) when (LogCancellation(ex, authenticationRequestId))
@@ -97,7 +99,7 @@ public partial class InMemoryLongPollingService(
         finally
         {
             // A signaled waiter has already completed, so this is a no-op for it; for a timed-out
-            // or cancelled waiter it releases the still-pending task.
+            // or canceled waiter it releases the still-pending task.
             tcs.TrySetCanceled(cancellationToken);
 
             // Remove this waiter so a request abandoned by the user - one that expires by storage
@@ -120,9 +122,9 @@ public partial class InMemoryLongPollingService(
     }
 
     // Exception-filter helper: logs cancellation details while letting the original exception propagate unchanged.
-    private bool LogCancellation(OperationCanceledException ex, string authenticationRequestId)
+    private bool LogCancellation(OperationCanceledException ex, [Credential] string authenticationRequestId)
     {
-        LogWaitCancelled(ex, authenticationRequestId.Sanitized());
+        LogWaitCancelled(ex, fingerprints.Of(authenticationRequestId));
         return false;
     }
 
@@ -131,17 +133,17 @@ public partial class InMemoryLongPollingService(
     /// Signals all TaskCompletionSource objects waiting for this auth_req_id.
     /// </summary>
     public Task NotifyStatusChangeAsync(
-        string authenticationRequestId,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationStatus newStatus)
     {
         if (!_waiters.TryRemove(authenticationRequestId, out var waiters))
         {
             // No one waiting - this is normal and expected
-            LogNoWaiters(newStatus, authenticationRequestId.Sanitized());
+            LogNoWaiters(newStatus, fingerprints.Of(authenticationRequestId));
             return Task.CompletedTask;
         }
 
-        LogNotifyingWaiters(waiters.Count, newStatus, authenticationRequestId.Sanitized());
+        LogNotifyingWaiters(waiters.Count, newStatus, fingerprints.Of(authenticationRequestId));
 
         // Signal all waiting tasks
         foreach (var waiter in waiters.Keys)

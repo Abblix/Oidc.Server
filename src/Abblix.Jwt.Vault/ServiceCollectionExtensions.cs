@@ -30,6 +30,11 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection to configure.</param>
     /// <param name="configureOptions">Configures the Vault address, auth token and Transit mount.</param>
     /// <returns>The builder whose placement call completes the wiring.</returns>
+    /// <remarks>
+    /// The example names the keys for the whole process, as a host without the OIDC server does. An OpenID Provider
+    /// names them for each tenant in <c>TenantDefinition.CustodianKeys</c> and calls <c>UseKeysInCustodian()</c>
+    /// without them, and refuses to start with keys named for the whole server.
+    /// </remarks>
     /// <example>
     /// <code>
     /// services
@@ -107,6 +112,9 @@ public static class ServiceCollectionExtensions
         // refusing at the first login names nothing and retries forever.
         services.AddOptions<VaultTransitOptions>()
             .Validate(
+                options => options.Address is { IsAbsoluteUri: true },
+                $"{nameof(VaultTransitOptions.Address)} must be the absolute address of the Vault server.")
+            .Validate(
                 options => options.Authentication is not { Kubernetes: null, AppRole: null },
                 $"{nameof(VaultTransitOptions.Authentication)} is configured without an auth method: set either " +
                 $"{nameof(VaultAuthenticationOptions.Kubernetes)} or {nameof(VaultAuthenticationOptions.AppRole)}.")
@@ -139,7 +147,7 @@ public static class ServiceCollectionExtensions
             // The address stops at the server root: a mount belongs to an engine, and Transit and KV are on
             // different ones, so each spells its own into every path.
             var options = provider.GetRequiredService<IOptions<VaultTransitOptions>>().Value;
-            http.BaseAddress = new Uri($"{options.Address.TrimEnd('/')}/v1/");
+            http.BaseAddress = new Uri($"{options.Address.OriginalString.TrimEnd('/')}/v1/");
         })
         .AddHttpMessageHandler<TokenHandler>()
 

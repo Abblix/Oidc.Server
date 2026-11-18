@@ -19,7 +19,6 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using Xunit;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -137,7 +136,7 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
     /// redirection. A validator placed before the redirect URI has been established cannot do that, and
     /// nothing inside the validator can tell - which is why this is asserted from a real host.
     /// <see cref="TestBase.AuthorizeAndExtractErrorAsync"/> fails the test on any response that is not a
-    /// redirect, so the assertion below is reached only if the refusal travelled the right way.
+    /// redirect, so the assertion below is reached only if the refusal traveled the right way.
     /// </remarks>
     [Fact]
     public async Task An_unusable_hint_is_refused_by_redirect_not_by_an_error_page()
@@ -232,23 +231,23 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
     }
 
     /// <summary>
-    /// One <c>claims</c> request whose own two qualifiers disagree accepts nobody.
+    /// One <c>claims</c> request whose own two qualifiers disagree is refused rather than answered.
     /// </summary>
     /// <remarks>
-    /// The unit tests assert that this records an empty constraint; only here is the empty constraint shown
-    /// to mean "accept nobody" at the point that decides. Both named users are signed in, so a filter that
-    /// read the empty array as "no constraint" would answer the request rather than refuse it, and would do
-    /// so for an end user the request explicitly ruled out - what
+    /// The unit tests assert the refusal at the validator; only here is it shown to hold at the point that
+    /// decides. Both named users are signed in, so a server that read the contradiction as "no constraint"
+    /// would answer the request rather than refuse it, and would do so for an end user the request
+    /// explicitly ruled out - what
     /// <see href="https://openid.net/specs/openid-connect-core-1_0.html">OpenID Connect Core 1.0</see>
     /// Section 5.5.1 calls a mismatch that "MUST cause the authentication to fail".
     /// <para>
-    /// This is the case the guard in the validator was written to survive: changing the filter's condition
-    /// from a null check to a length check would silently turn the refusal back into a positive response, and
-    /// every unit test would still pass.
+    /// This is the case the guard was written to survive, and it is why the contradiction is stated as a
+    /// refusal rather than carried as an empty set: an empty set travelling to the session filter is one
+    /// condition away from being read as no condition at all, and every unit test would still pass.
     /// </para>
     /// </remarks>
     [Fact]
-    public async Task One_request_whose_qualifiers_disagree_answers_login_required()
+    public async Task One_request_whose_qualifiers_disagree_is_an_invalid_request()
     {
         await using var host = CreateHost(out var sessions);
         var client = CreateClientFor(host);
@@ -262,7 +261,7 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
         var error = await AuthorizeAndExtractErrorAsync(
             client, discovery, With(SilentRenewal(), AuthorizationRequest.Parameters.Claims, claims));
 
-        Assert.Equal(ErrorCodes.LoginRequired, error);
+        Assert.Equal(ErrorCodes.InvalidRequest, error);
     }
 
     /// <summary>
@@ -292,9 +291,9 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
@@ -308,9 +307,9 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
     }
@@ -340,7 +339,7 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
     /// The verifier travels beside the request rather than inside it. This client is registered as requiring
     /// PKCE, so the code cannot be redeemed without it, and a verifier carried in the same dictionary would
     /// be sent to the authorization endpoint as a query parameter - where the server is told to ignore what
-    /// it does not recognise, so nothing would ever complain.
+    /// it does not recognize, so nothing would ever complain.
     /// </remarks>
     private static (Dictionary<string, string> Request, string Verifier) SilentRenewal()
     {
@@ -361,7 +360,7 @@ public class RequestedEndUserTests(TestFactory factory) : TestBase(factory)
     }
 
     private static string IdTokenOf(JsonObject tokens) =>
-        tokens[ResponseParameters.IdToken]!.GetValue<string>();
+        tokens[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
     private static string SubjectOf(JsonObject tokens) =>
         DecodeJwtPayload(IdTokenOf(tokens))[IanaClaimTypes.Sub]!.GetValue<string>();

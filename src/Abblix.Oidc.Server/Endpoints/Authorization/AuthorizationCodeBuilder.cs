@@ -9,6 +9,7 @@
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.ReusePrevention;
 using Abblix.Oidc.Server.Features.Storages;
 using Abblix.Oidc.Server.Model;
@@ -39,22 +40,37 @@ public class AuthorizationCodeBuilder(
     }
 
     /// <inheritdoc />
-    public async Task BuildResponseAsync(
+    public async Task<AuthorizationError?> BuildResponseAsync(
+        TenantDefinition tenant,
         ValidAuthorizationRequest request,
         AuthorizedGrant authorizedGrant,
         SuccessfullyAuthenticated result)
     {
+        // A code_challenge and a nonce must be transaction-specific (RFC 9700 section 2.1.1), so each is reserved for
+        // this client before the code is issued, and a value it already used refuses the code. Here, once per code,
+        // so the same request processed again across a login or consent redirect is not refused.
+        var context = authorizedGrant.Context;
+        if (context.CodeChallenge is { } codeChallenge &&
+            !await reuseDetector.TryReserveAsync(
+                tenant, context.ClientId, AuthorizationRequest.Parameters.CodeChallenge, codeChallenge))
+        {
+            return Reused(request, "The PKCE code_challenge must be unique per authorization request");
+        }
+
+        if (context.Nonce is { Length: > 0 } nonce &&
+            !await reuseDetector.TryReserveAsync(tenant, context.ClientId, AuthorizationRequest.Parameters.Nonce, nonce))
+        {
+            return Reused(request, "The nonce must be unique per authorization request");
+        }
+
         result.Code = await authorizationCodeService.GenerateAuthorizationCodeAsync(
+            tenant,
             authorizedGrant,
             request.ClientInfo.AuthorizationCodeExpiresIn);
 
-        // Record this transaction's replay-protection values so a later reuse of a constant code_challenge
-        // or nonce by the same client is detected (RFC 9700 §2.1.1). Doing it here - once per issued code -
-        // means the same request re-processed across a login or consent redirect is not flagged.
-        var context = authorizedGrant.Context;
-        if (context.CodeChallenge is { } codeChallenge)
-            await reuseDetector.RecordAsync(context.ClientId, AuthorizationRequest.Parameters.CodeChallenge, codeChallenge);
-        if (context.Nonce is { } nonce)
-            await reuseDetector.RecordAsync(context.ClientId, AuthorizationRequest.Parameters.Nonce, nonce);
+        return null;
     }
+
+    private static AuthorizationError Reused(ValidAuthorizationRequest request, string description)
+        => new(request.Model, ErrorCodes.InvalidRequest, description, request.ResponseMode, request.Model.RedirectUri);
 }

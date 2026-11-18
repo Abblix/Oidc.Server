@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Diagnostics.CodeAnalysis;
 
 namespace Abblix.Oidc.Server.Features.Storages.Proto.Mappers;
 
@@ -51,6 +52,7 @@ internal static class RequestedClaimsMapper
     /// <summary>
     /// Converts a protobuf RequestedClaims message to a C# record.
     /// </summary>
+    [return: NotNullIfNotNull(nameof(source))]
     public static Model.RequestedClaims? FromProto(this RequestedClaims? source)
     {
         if (source == null)

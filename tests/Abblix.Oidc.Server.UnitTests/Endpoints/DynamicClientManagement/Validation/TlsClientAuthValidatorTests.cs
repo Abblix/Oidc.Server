@@ -42,7 +42,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -63,7 +63,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert - pin the error code (the stable contract), not the description wording.
         Assert.NotNull(result);
@@ -72,7 +72,7 @@ public class TlsClientAuthValidatorTests
 
     /// <summary>
     /// Verifies validation fails when more than one subject identifier is specified.
-    /// RFC 8705 §2.1.2 requires a tls_client_auth client to register exactly one of the
+    /// RFC 8705 section 2.1.2 requires a tls_client_auth client to register exactly one of the
     /// subject-identifier parameters; supplying both a Subject DN and a SAN must be rejected.
     /// </summary>
     [Fact]
@@ -88,7 +88,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -111,7 +111,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -133,7 +133,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -159,7 +159,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -181,7 +181,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -207,7 +207,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -233,7 +233,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -258,7 +258,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -285,7 +285,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -309,7 +309,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -335,7 +335,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.Null(result);
@@ -359,7 +359,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -368,7 +368,7 @@ public class TlsClientAuthValidatorTests
 
     /// <summary>
     /// Verifies validation fails when several subject-identifier metadata types are combined.
-    /// RFC 8705 §2.1.2 requires exactly one; a request mixing DN, DNS, URI, IP and email must
+    /// RFC 8705 section 2.1.2 requires exactly one; a request mixing DN, DNS, URI, IP and email must
     /// be rejected rather than accepted.
     /// </summary>
     [Fact]
@@ -387,7 +387,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);
@@ -410,7 +410,7 @@ public class TlsClientAuthValidatorTests
         });
 
         // Act
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         // Assert
         Assert.NotNull(result);

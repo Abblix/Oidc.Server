@@ -57,7 +57,7 @@ public sealed class LogoutTokenValidator(
         await RefuseReplayAsync(issuer, token, cancellationToken);
 
         var payload = token.Token.Payload;
-        return new LogoutNotification(issuer, payload.Subject, payload.SessionId, token.JwtId);
+        return new LogoutNotification(issuer, payload.Subject, payload.Json.GetProperty<string>(IanaClaimTypes.Sid), token.JwtId);
     }
 
     /// <summary>

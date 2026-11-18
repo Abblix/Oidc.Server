@@ -2,7 +2,9 @@
 
 ASP.NET Core Minimal API integration for [Abblix.SharedSignals](https://www.nuget.org/packages/Abblix.SharedSignals): the OpenID Shared Signals Framework 1.0 endpoints as route handlers, with no MVC dependency.
 
-[Shared Signals in .NET: SSF, CAEP, RISC and Back-Channel Logout](https://www.abblix.com/en/docs/shared-signals-framework) explains which endpoints belong to the event layer and which to the stream layer, so the two adapters stop looking interchangeable.
+[A map of the Shared Signals layers and back-channel logout](https://www.abblix.com/en/docs/shared-signals-framework) explains which endpoints belong to the event layer and which to the stream layer, so the two adapters stop looking interchangeable.
+
+[A working Shared Signals transmitter and receiver for ASP.NET Core](https://www.abblix.com/en/docs/shared-signals-guide) puts those endpoints in running hosts, where each layer keeps its own routes in plain sight.
 
 ## Which adapter maps which endpoint
 
@@ -57,6 +59,8 @@ Two members of that metadata come from defaults. `authorization_schemes` is publ
 A gateway-fronted deployment adjusts this in the same options object, without moving the protocol address: `MapWellKnownConfiguration = false` leaves the canonical route to the gateway or CDN in front, `ConfigurationDocumentRoute` names the internal route a rewriting proxy maps the canonical address onto (served by `MapSharedSignalsConfigurationDocument()`), and `AdvertisedPrefix` is what the document advertises - the external prefix, whatever `ManagementPrefix` mapped internally. The external address never moves, because receivers derive it from the issuer.
 
 Receivers are told apart by identity: the endpoints read it from the authenticated principal (the `sub` claim, then the identity name), and `SharedSignalsEndpointOptions.ReceiverIdSelector` replaces that mapping when the host's authentication carries the identity elsewhere.
+
+Where the transmitter names the issuer its receivers come from, as each tenant's transmitter does on an Abblix OIDC Server, a receiver's credentials must come from that issuer. The endpoints read it from the `iss` claim, and `SharedSignalsEndpointOptions.ReceiverIssuerSelector` replaces that when the host keeps it elsewhere; credentials that do not come from that issuer are answered with 401 and `invalid_token`.
 
 Scopes are the other half, and they are off until you switch them on. The CAEP Interoperability Profile defines `ssf.read` and `ssf.manage` and requires a transmitter to check that a token is sufficient for what was asked. It assigns five operations: reading a stream's configuration and getting its status to `ssf.read`, creating a stream, deleting one and verification to `ssf.manage`. The other six routes it does not assign, and this library places them - everything that changes a stream needs `ssf.manage`, and poll needs `ssf.read`.
 

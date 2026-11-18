@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
 /// <summary>
@@ -18,6 +20,7 @@ public interface IAuthorizationHandler
     /// Asynchronously processes an authorization request, validating its parameters and generating an appropriate
     /// response that either grants or denies the authorization based on the application's logic and security requirements.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="request">The authorization request containing necessary information for processing,
     /// such as client ID, requested scopes, redirect URI, and other protocol-specific parameters.</param>
     /// <returns>A task that results in an <see cref="AuthorizationResponse"/>, encapsulating either a successful
@@ -28,5 +31,5 @@ public interface IAuthorizationHandler
     /// obtaining user consent and issuing authorization codes or tokens.
     /// This method is central to the authorization endpoint's functionality.
     /// </remarks>
-    Task<AuthorizationResponse> HandleAsync(Model.AuthorizationRequest request);
+    Task<AuthorizationResponse> HandleAsync(TenantDefinition tenant, Model.AuthorizationRequest request);
 }

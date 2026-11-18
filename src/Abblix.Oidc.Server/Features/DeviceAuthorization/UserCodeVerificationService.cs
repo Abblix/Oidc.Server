@@ -6,10 +6,12 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
-using Abblix.Jwt;
+using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.DeviceAuthorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Features.DeviceAuthorization;
@@ -36,37 +38,46 @@ public partial class UserCodeVerificationService(
     TimeProvider timeProvider) : IUserCodeVerificationService
 {
     /// <inheritdoc />
-    public async Task<UserCodeVerificationResult> VerifyAsync(string userCode)
+    public async Task<UserCodeVerificationResult> VerifyAsync(TenantDefinition tenant, [Credential] string userCode)
     {
         // Canonicalize before both rate limiting and lookup: this accepts the readability variants
         // the user may have typed and keeps a single rate-limit bucket per logical code, so case or
         // dash variations cannot be used to multiply the per-code brute-force budget.
         userCode = normalizer.Normalize(userCode);
 
-        var clientIp = requestInfoProvider.RemoteIpAddress?.ToString() ?? "unknown";
+        var clientIp = requestInfoProvider.SourceName();
 
         // Check rate limiting before attempting verification
-        var rateLimitCheck = await rateLimiter.CheckAsync(userCode, clientIp);
-        if (rateLimitCheck.TryGetFailure(out _))
+        if (await rateLimiter.CheckAsync(tenant, userCode, clientIp) is { } refusal)
         {
-            // Return invalid to prevent information disclosure about valid vs invalid codes
-            // The rate limiter will log the security event
-            return new InvalidUserCode();
+            // A refusal that followed from attempts against THIS code stays indistinguishable from an
+            // unknown code: only a value the server issued can have such attempts, so naming the refusal
+            // would name the value as real. A refusal that counted attempts rather than codes carries no
+            // such information, and the caller is told how long to wait - otherwise somebody refused
+            // because a stranger is guessing sees exactly what their own typo shows.
+            return refusal.AboutThisCode
+                ? new InvalidUserCode()
+                : new TooManyUserCodeAttempts(refusal.RetryAfter);
         }
 
-        var result = await storage.TryGetByUserCodeAsync(userCode);
+        var result = await storage.TryGetByUserCodeAsync(tenant, userCode);
         if (result == null)
         {
-            // Record failed attempt for rate limiting
-            await rateLimiter.RecordFailureAsync(userCode, clientIp);
+            // Charged to the source and to the server's budget for the window, and NOT to the value that
+            // was typed: there is no code here to charge. A guesser never submits one value twice, so a
+            // count per value bounds nothing - and a count standing against a value nobody was issued
+            // would be spent before a real code could carry it, leaving the person reading that code off
+            // their screen unable to use it.
+            await rateLimiter.RecordUnknownCodeAsync(tenant, clientIp);
             return new InvalidUserCode();
         }
 
         var (_, request) = result.Value;
         if (request.Status != DeviceAuthorizationStatus.Pending)
         {
-            // Code already used - still record as failure to prevent enumeration
-            await rateLimiter.RecordFailureAsync(userCode, clientIp);
+            // This value IS a code, so the attempt belongs to it. That is what stops one code being
+            // hammered, from one source or from a thousand.
+            await rateLimiter.RecordFailureAsync(tenant, userCode, clientIp);
             return new UserCodeAlreadyUsed();
         }
 
@@ -78,31 +89,26 @@ public partial class UserCodeVerificationService(
         // promises for this - "not found or has expired".
         if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out _))
         {
-            await rateLimiter.RecordFailureAsync(userCode, clientIp);
+            await rateLimiter.RecordFailureAsync(tenant, userCode, clientIp);
             return new InvalidUserCode();
         }
 
         // Valid user code found and pending - record success to reset counters
-        await rateLimiter.RecordSuccessAsync(userCode, clientIp);
-        return new ValidUserCode(request.ClientId, request.Scope, request.Resources, request.AuthorizationDetails);
+        await rateLimiter.RecordSuccessAsync(tenant, userCode, clientIp);
+        // A copy, because the stored entries are the baseline the granted ones are held to when the code is
+        // redeemed: a host narrowing what it was handed in place, over a store keeping objects in memory, would
+        // move the baseline along with the grant and the comparison would see nothing.
+        return new ValidUserCode(
+            request.ClientId,
+            request.Scope,
+            request.Resources,
+            (JsonArray?)request.AuthorizationDetails?.DeepClone());
     }
 
     /// <inheritdoc />
-    public async Task<bool> ApproveAsync(string userCode, AuthorizedGrant authorizedGrant)
+    public async Task<bool> ApproveAsync(TenantDefinition tenant, [Credential] string userCode, AuthorizedGrant authorizedGrant)
     {
-        userCode = normalizer.Normalize(userCode);
-        var result = await storage.TryGetByUserCodeAsync(userCode);
-        if (result == null)
-            return false;
-
-        var (deviceCode, request) = result.Value;
-
-        if (request.Status != DeviceAuthorizationStatus.Pending)
-            return false;
-
-        // An approval landing after the code's fixed lifetime (RFC 8628 section 3.2) cannot be redeemed, so treat
-        // it as a no-op rather than reviving an expired code; this also keeps the refreshed cache TTL positive.
-        if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out var remaining))
+        if (await FindDecidableAsync(tenant, userCode) is not var (reference, request, remaining))
             return false;
 
         // Narrowing is the host's to decide; widening is not. A grant carrying a type the device
@@ -118,12 +124,19 @@ public partial class UserCodeVerificationService(
         }
 
         if (!await TryDecideAsync(
-                deviceCode,
+                tenant,
+                reference,
                 remaining,
                 current =>
                 {
                     current.Status = DeviceAuthorizationStatus.Authorized;
-                    current.AuthorizedGrant = authorizedGrant;
+                    // The host builds the grant's context, so whether the client named a scope is set from the
+                    // request it answers rather than left to the host to copy
+                    current.AuthorizedGrant = authorizedGrant with
+                    {
+                        AuthorizedAt = timeProvider.GetUtcNow(),
+                        Context = authorizedGrant.Context with { ClientNamedNoScope = current.ClientNamedNoScope },
+                    };
                 }))
         {
             return false;
@@ -146,25 +159,59 @@ public partial class UserCodeVerificationService(
     }
 
     /// <inheritdoc />
-    public async Task<bool> DenyAsync(string userCode)
+    public async Task<bool> DenyAsync(TenantDefinition tenant, [Credential] string userCode)
     {
-        userCode = normalizer.Normalize(userCode);
-        var result = await storage.TryGetByUserCodeAsync(userCode);
-        if (result == null)
-            return false;
-
-        var (deviceCode, request) = result.Value;
-
-        if (request.Status != DeviceAuthorizationStatus.Pending)
-            return false;
-
-        // A denial after the code's fixed lifetime (RFC 8628 section 3.2) is moot - the code is already unusable, so
-        // treat it as a no-op rather than writing a record with a non-positive cache TTL.
-        if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out var remaining))
+        if (await FindDecidableAsync(tenant, userCode) is not var (reference, _, remaining))
             return false;
 
         return await TryDecideAsync(
-            deviceCode, remaining, current => current.Status = DeviceAuthorizationStatus.Denied);
+            tenant, reference, remaining, current => current.Status = DeviceAuthorizationStatus.Denied);
+    }
+
+    /// <summary>
+    /// Finds the pending authorization a user code names, for a decision on it, or null when there is nothing to
+    /// decide: the attempt is refused by the rate limiter, no authorization carries the code, it is no longer
+    /// pending, or its lifetime has run out.
+    /// </summary>
+    private async Task<(DeviceAuthorizationReference Reference, DeviceAuthorizationRequest Request, TimeSpan Remaining)?>
+        FindDecidableAsync(TenantDefinition tenant, [Credential] string userCode)
+    {
+        userCode = normalizer.Normalize(userCode);
+
+        // The same limits as verification, because a decision takes the same thing - a user code as a string -
+        // and answers whether it names a live authorization, which is the question a guesser is asking.
+        // Without this it is the same oracle with no counting at all, and the one that grants.
+        var clientIp = requestInfoProvider.SourceName();
+        if (await rateLimiter.CheckAsync(tenant, userCode, clientIp) is not null)
+            return null;
+
+        var result = await storage.TryGetByUserCodeAsync(tenant, userCode);
+        if (result == null)
+        {
+            await rateLimiter.RecordUnknownCodeAsync(tenant, clientIp);
+            return null;
+        }
+
+        var (reference, request) = result.Value;
+
+        if (request.Status != DeviceAuthorizationStatus.Pending)
+        {
+            // Charged to the code, as verification charges it: the value names a real authorization and the
+            // attempt is against it, whether it arrived here or at the verification step.
+            await rateLimiter.RecordFailureAsync(tenant, userCode, clientIp);
+            return null;
+        }
+
+        // A decision landing after the code's fixed lifetime (RFC 8628 section 3.2) is moot: an approval could not
+        // be redeemed and a denial changes nothing, so nothing is decided rather than reviving an expired code or
+        // writing a record with a non-positive cache TTL.
+        if (!request.HasLifetimeLeft(timeProvider.GetUtcNow(), out var remaining))
+        {
+            await rateLimiter.RecordFailureAsync(tenant, userCode, clientIp);
+            return null;
+        }
+
+        return (reference, request, remaining);
     }
 
     /// <summary>
@@ -186,27 +233,30 @@ public partial class UserCodeVerificationService(
     /// against a REMOVED record would miss.
     /// </para>
     /// <para>
-    /// The same shape <c>DeviceCodeGrantHandler.TryBumpNextPollAsync</c> already uses on this store, and
-    /// with the same limit: re-reading NARROWS the window to the store round trip and does not close it.
-    /// Closing it needs a compare-and-swap the entity storage does not expose, which is issue 194.
+    /// Re-reading NARROWS the window to one store round trip and does not close it. What closes it is a
+    /// store that decides the write - a conditional update, or a claim on a key of its own - which is
+    /// what the polling paths now do and what this one still cannot, because it writes the record the
+    /// approval lives in. Issue 435 tracks the remaining half.
     /// </para>
     /// </remarks>
-    /// <param name="deviceCode">The record to decide on.</param>
+    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="reference">The record to decide on.</param>
     /// <param name="remaining">The lifetime left, applied as the cache TTL so the code cannot be extended.</param>
     /// <param name="decide">Applies the decision to the freshly read record.</param>
     private async Task<bool> TryDecideAsync(
-        string deviceCode,
+        TenantDefinition tenant,
+        DeviceAuthorizationReference reference,
         TimeSpan remaining,
         Action<DeviceAuthorizationRequest> decide)
     {
-        var current = await storage.TryGetByDeviceCodeAsync(deviceCode);
+        var current = await storage.TryGetAsync(tenant, reference);
         if (current is not { Status: DeviceAuthorizationStatus.Pending })
         {
             return false;
         }
 
         decide(current);
-        await storage.UpdateAsync(deviceCode, current, remaining);
+        await storage.UpdateAsync(tenant, reference, current, remaining);
         return true;
     }
 }

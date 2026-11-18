@@ -19,17 +19,23 @@ namespace Abblix.Jwt.Signing;
 /// </remarks>
 internal sealed class EcdsaSigner(string algorithm) : ISignatureAlgorithm<EllipticCurveJsonWebKey>
 {
-	private readonly (HashAlgorithmName hashAlgorithm, int signatureLength) _parameters = GetAlgorithmParameters(algorithm);
+	private readonly (HashAlgorithmName hashAlgorithm, int signatureLength, string curve) _parameters =
+		GetAlgorithmParameters(algorithm);
 
 	/// <inheritdoc />
 	public string Algorithm => algorithm;
 
 	/// <inheritdoc />
-	public byte[] Sign(EllipticCurveJsonWebKey ecKey, byte[] data)
+	/// <remarks>RFC 7518 section 3.4 binds each ECDSA algorithm to one curve: ES256 to P-256, ES384 to P-384 and
+	/// ES512 to P-521.</remarks>
+	public bool Accepts(EllipticCurveJsonWebKey key) => key.Curve == _parameters.curve;
+
+	/// <inheritdoc />
+	public byte[] Sign(EllipticCurveJsonWebKey key, byte[] data)
 	{
 		var signature = new byte[_parameters.signatureLength];
 
-		using var ecdsa = ecKey.ToEcdsa();
+		using var ecdsa = key.ToEcdsa();
 		if (!ecdsa.TrySignData(data, signature, _parameters.hashAlgorithm, DSASignatureFormat.IeeeP1363FixedFieldConcatenation, out var bytesWritten))
 			throw new InvalidOperationException($"Failed to sign data, expected {_parameters.signatureLength} bytes");
 
@@ -40,28 +46,31 @@ internal sealed class EcdsaSigner(string algorithm) : ISignatureAlgorithm<Ellipt
 	}
 
 	/// <inheritdoc />
-	public bool Verify(EllipticCurveJsonWebKey ecKey, byte[] data, byte[] signature)
+	public bool Verify(EllipticCurveJsonWebKey key, byte[] data, byte[] signature)
 	{
 		if (signature.Length != _parameters.signatureLength)
 			return false;
 
-		using var ecdsa = ecKey.ToEcdsa();
+		using var ecdsa = key.ToEcdsa();
 		return ecdsa.VerifyData(data, signature, _parameters.hashAlgorithm, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
 	}
 
 	/// <summary>
-	/// Gets the hash algorithm and signature length for the specified ECDSA algorithm.
+	/// Gets the hash algorithm, signature length and curve for the specified ECDSA algorithm.
 	/// </summary>
 	/// <param name="algorithm">The ECDSA algorithm (ES256, ES384, ES512).</param>
-	/// <returns>A tuple containing the hash algorithm name and expected signature length in bytes.</returns>
+	/// <returns>A tuple containing the hash algorithm name, the expected signature length in bytes and the curve the
+	/// algorithm is bound to.</returns>
 	/// <exception cref="InvalidOperationException">Thrown when the algorithm is not supported.</exception>
-	private static (HashAlgorithmName hashAlgorithm, int signatureLength) GetAlgorithmParameters(string algorithm)
+	private static (HashAlgorithmName hashAlgorithm, int signatureLength, string curve) GetAlgorithmParameters(
+		string algorithm)
 	{
 		return algorithm switch
 		{
-			SigningAlgorithms.ES256 => (HashAlgorithmName.SHA256, 64),  // P-256: 32 bytes R + 32 bytes S
-			SigningAlgorithms.ES384 => (HashAlgorithmName.SHA384, 96),  // P-384: 48 bytes R + 48 bytes S
-			SigningAlgorithms.ES512 => (HashAlgorithmName.SHA512, 132), // P-521: 66 bytes R + 66 bytes S
+			// R and S of 32, 48 and 66 bytes each
+			SigningAlgorithms.ES256 => (HashAlgorithmName.SHA256, 64, EllipticCurveTypes.P256),
+			SigningAlgorithms.ES384 => (HashAlgorithmName.SHA384, 96, EllipticCurveTypes.P384),
+			SigningAlgorithms.ES512 => (HashAlgorithmName.SHA512, 132, EllipticCurveTypes.P521),
 			_ => throw new InvalidOperationException($"Unsupported ECDSA algorithm: {algorithm}")
 		};
 	}

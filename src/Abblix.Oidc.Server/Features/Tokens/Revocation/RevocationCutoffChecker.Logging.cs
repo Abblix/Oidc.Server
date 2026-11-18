@@ -50,4 +50,13 @@ partial class RevocationCutoffChecker
                   + "by a {Scope} revocation cutoff")]
     private partial void LogSessionRefusedByCutoff(
         Sanitized SessionId, DateTimeOffset AuthenticationTime, RevocationScope Scope);
+
+    // The redemption side of a cutoff at one client: a code or a device authorization the end user approved
+    // before withdrawing consent from that client. The client is named, since it is what the revocation named.
+    [LoggerMessage(
+        EventId = LogEvents.Revocation.RevocationCutoffChecker.GrantRefusedByCutoff,
+        Level = LogLevel.Information,
+        Message = "Refused a grant of client {ClientId}, authorized at {AuthorizedAt}, "
+                  + "by a {Scope} revocation cutoff")]
+    private partial void LogGrantRefusedByCutoff(Sanitized ClientId, DateTimeOffset AuthorizedAt, RevocationScope Scope);
 }

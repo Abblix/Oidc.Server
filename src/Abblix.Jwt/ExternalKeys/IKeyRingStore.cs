@@ -56,8 +56,8 @@ public interface IKeyRingStore
     /// <param name="id">The <see cref="StoredKey.Id"/> to remove.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <remarks>
-    /// Only ever called for a key already past every token it signed, so removal races are harmless: two pods
-    /// removing the same expired entry is the same outcome as one.
+    /// Called for a key already past every token it signed, or for every key of a partition whose issuer is gone, so
+    /// removal races are harmless: two pods removing the same entry is the same outcome as one.
     /// </remarks>
     Task RemoveAsync(string id, CancellationToken cancellationToken);
 }

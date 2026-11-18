@@ -1,0 +1,730 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 2.4 or 2.4.0-beta3)'
+        required: true
+        type: string
+      pre_release:
+        description: 'Create pre-release'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  # Release/publish workflow: never cancel an in-flight run. A second dispatch
+  # must not kill a publish mid-flight (half-pushed packages, a dangling tag).
+  # This deliberately overrides the org-wide "cancel-in-progress: true" default,
+  # which exists for runaway analyzer/PR queues, not for state-mutating releases.
+  cancel-in-progress: false
+
+jobs:
+  versioning:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.set_version.outputs.version }}
+      version_full: ${{ steps.set_version.outputs.version_full }}
+      previous_version: ${{ steps.set_version.outputs.previous_version }}
+    steps:
+      # harden-runner in audit mode: capture baseline egress without blocking.
+      # Promote to egress-policy: block + disable-sudo: true once the allowlist
+      # is known (per the GHA security checklist rollout guidance).
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Resolve version
+        id: set_version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [[ ! "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z0-9.-]+)?$ ]]; then
+            echo "::error title=Version input::The version input is not X.Y, X.Y.Z or X.Y.Z-suffix. Skipped step: dispatch again from the release branch with the version the tag names without its v, such as 3.0"
+            echo "Invalid version input: $INPUT_VERSION" >&2
+            exit 1
+          fi
+          VERSION="$INPUT_VERSION"
+          echo "Using explicit version: $VERSION"
+
+          # MinVer 7.x rejects a two-part --version-override (MINVER1005), so expand the X.Y
+          # release input to a full X.Y.0 SemVer for the build and pack override only. The tag and
+          # the GitHub Release keep the X.Y form, deliberately: NuGet normalizes X.Y to X.Y.0, so
+          # the published package version is identical, and the short name is what the releases,
+          # their links and the notes files have always used.
+          #
+          # The cost is stated rather than discovered: MinVer parses a TAG as SemVer, and "2.3" is
+          # not one, so it reads none of this repository's release tags. Nothing depends on it
+          # reading them - the release version comes from this input and dev versions from
+          # MinVerMinimumMajorMinor - but it does mean the height in a dev version counts from the
+          # root commit rather than from the last release, and that a tag is not what any number
+          # here is derived from. A -prerelease suffix is preserved as given.
+          CORE="${VERSION%%-*}"
+          PRERELEASE=""
+          [ "$VERSION" != "$CORE" ] && PRERELEASE="-${VERSION#*-}"
+          if [[ "$CORE" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            VERSION_FULL="${CORE}.0${PRERELEASE}"
+          else
+            VERSION_FULL="$VERSION"
+          fi
+          echo "MinVer override version: $VERSION_FULL"
+
+          # The release's own tag is on HEAD by now, so it is excluded - otherwise the release
+          # is reported as its own predecessor and the fallback changelog spans nothing.
+          PREVIOUS_VERSION=$(git describe --tags --abbrev=0 --exclude "v$VERSION" 2>/dev/null || echo "")
+          if [ -n "$PREVIOUS_VERSION" ]; then
+            PREVIOUS_VERSION=${PREVIOUS_VERSION#v}
+            echo "Previous version: $PREVIOUS_VERSION"
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "version_full=$VERSION_FULL"
+            echo "previous_version=$PREVIOUS_VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+        timeout-minutes: 3
+    timeout-minutes: 5
+  # The same shards every pull request runs, one job per test project, so the release meets the
+  # suite on the rig that already proved this commit rather than on a single job with a wall of
+  # its own. The shards build each project from the same commit; what they prove is the source,
+  # and the packed binaries below are built from it once more under the release version.
+  tests:
+    needs: versioning
+    uses: ./.github/workflows/test-shards.yml
+    with:
+      coverage: true
+
+  # The merged coverage per assembly, in the run summary. Nothing below needs it: the figure is
+  # informative, and a broken summary must not hold back a release.
+  coverage:
+    needs: tests
+    if: ${{ !cancelled() }}
+    uses: ./.github/workflows/coverage-summary.yml
+    with:
+      projects: ${{ needs.tests.outputs.projects }}
+
+  # The OpenID Foundation conformance plans, the certified OpenID Connect ones and the FAPI and FAPI-CIBA ones, run
+  # against the release commit's own conformance host on each transport adapter, four jobs at once. create-release
+  # needs this job, which succeeds only when all four do, before it creates the GitHub release and the packages are
+  # published, and for a pre-release before the tag is created; a stable release's tag is pushed
+  # by hand before this workflow starts, so a failed run leaves that tag in place. The called workflow is this commit's
+  # copy, so it needs no pin, and it is passed no secret: it holds none and reads the repository only, which the
+  # workflow's contents: read grants
+  conformance:
+    needs: versioning
+    uses: ./.github/workflows/conformance.yml
+
+  # SonarQube Cloud analyses only the main branch (develop) in full here, never a release branch,
+  # so the release is judged by develop's analysis once that analysis is shown to be of this code:
+  # of develop's head, which contains this commit, with no analysed file different from it. The
+  # script refuses an open issue, a hotspot to review, an unexplained accepted issue, and an
+  # analysis of other code or missing a project. It reads the public Web API, so it holds no secret.
+  sonar-gate:
+    needs: versioning
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      # Full history and every branch: the script checks that develop contains this commit.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: No open SonarQube Cloud issue in the release code
+        env:
+          RELEASE_COMMIT: ${{ github.sha }}
+          RELEASE_BRANCH: ${{ github.ref_name }}
+        run: |
+          DEVELOP_HEAD=$(git rev-parse origin/develop)
+          status=0
+          python3 -I .github/scripts/sonar-release-gate.py Abblix_Oidc.Server "$RELEASE_COMMIT" "$DEVELOP_HEAD" "$RELEASE_BRANCH" > sonar-gate.md || status=$?
+          cat sonar-gate.md >> "$GITHUB_STEP_SUMMARY"
+          cat sonar-gate.md
+          exit "$status"
+        timeout-minutes: 3
+    timeout-minutes: 5
+
+  build-and-pack:
+    needs: [versioning, tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Build-provenance attestation signs the produced packages through the
+      # Sigstore OIDC flow and records the attestation in the repo (SLSA L3).
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.versioning.outputs.version }}
+      VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          # No version here on purpose: with dotnet-version absent the action installs what
+          # global.json names, which is the same file the local build resolves against. Naming a
+          # version in each workflow is an enumeration - one of them is missed by a bump and that
+          # job keeps building on the old SDK, green, until something needs the new one. The
+          # version itself still moves by hand - global.json names an exact build and the action
+          # installs that one - but it moves in one place.
+          global-json-file: global.json
+        timeout-minutes: 3
+      - name: Log build context
+        run: |
+          echo "Commit:  $(git rev-parse HEAD)"
+          echo "Ref:     $GITHUB_REF"
+          echo "Version: $VERSION"
+        timeout-minutes: 3
+      - name: Restore dependencies
+        run: dotnet restore
+      # MinVerVersionOverride forces MinVer to use the workflow-supplied
+      # version verbatim, bypassing the tag/height computation. The
+      # subsequent create-release job then tags this exact version, so
+      # the produced .nupkg files and the resulting GitHub Release stay
+      # in lock-step.
+        timeout-minutes: 3
+      - name: Build
+        run: dotnet build --no-restore -c Release -p:MinVerVersionOverride="$VERSION_FULL"
+        # Above the step baseline: the whole solution builds here in one job, and the baseline is
+        # what killed a release build that needed most of it.
+        timeout-minutes: 10
+      - name: Pack
+        # Not `--no-build`: on the multi-targeted family projects the outer no-build does not reach
+        # the inner per-framework pack, which then invokes Build and fails with NETSDK1085 ("NoBuild
+        # set but Build target invoked"). The Build step above left everything up to date, so the
+        # build pack performs is an incremental no-op under the same version override, and
+        # GeneratePackageOnBuild=false keeps that build from packing a second time. The dev-build
+        # workflow packs the same way for the same reason.
+        run: dotnet pack --no-restore -c Release -o nupkg -p:MinVerVersionOverride="$VERSION_FULL" -p:GeneratePackageOnBuild=false
+        # Above the step baseline: pack re-enters the build of every packable project first.
+        timeout-minutes: 10
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: 'nupkg/*.nupkg'
+        timeout-minutes: 3
+      - name: Upload NuGet packages as artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nuget-packages
+          path: |
+            nupkg/*.nupkg
+            nupkg/*.snupkg
+          # Read only by the later jobs of this same run, behind the release-approval gate and, for the two
+          # publishes, the publish-packages gate after it, so it lives long enough for both approvals and a re-run
+          # of a failed publish, and not the 90-day default that holds the organization's shared artifact storage
+          retention-days: 3
+
+        timeout-minutes: 3
+    timeout-minutes: 5
+  test-getting-started:
+    needs: [versioning, build-and-pack]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.versioning.outputs.version }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - name: Checkout main repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: main-repo
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Checkout GettingStarted repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: Abblix/Oidc.Server.GettingStarted
+          # The samples prepared for the release being cut, rather than the default branch, which
+          # carries what people use TODAY and is built against the last released packages. This job
+          # substitutes the version under test into a sample and builds it, so the sample has to
+          # target the framework that version ships for and compile against its surface - and the
+          # default branch cannot, while it also has to keep working for everyone on the previous
+          # release.
+          #
+          # This line goes when that branch merges into the default one, which is part of shipping
+          # the release rather than an afterthought: left behind, it pins this check to a branch
+          # nobody updates any more, and the check keeps passing while proving less every month.
+          ref: release/3.0
+          path: getting-started
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: local-packages
+        timeout-minutes: 3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          # The working copy of THIS repository is under main-repo/, so the pin is there rather
+          # than at the workspace root. The GettingStarted build below runs outside that
+          # directory on purpose: it proves the published package works for a consumer, whose SDK
+          # is whatever they have rather than whatever we pinned.
+          global-json-file: main-repo/global.json
+        timeout-minutes: 3
+      - name: Setup local package source
+        run: |
+          dotnet nuget add source "$(pwd)/local-packages" --name "LocalAbblix"
+          dotnet nuget locals all --clear
+        timeout-minutes: 3
+      - name: Update package references
+        run: |
+          cd getting-started
+          sed -i "s|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"[^\"]*\"|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"$VERSION\"|g" OpenIDProviderApp/OpenIDProviderApp.csproj
+        timeout-minutes: 3
+      - name: Test GettingStarted builds
+        run: |
+          cd getting-started
+          dotnet restore
+          dotnet build
+        timeout-minutes: 3
+      # The sample must answer its discovery document at the address its own launch profile names,
+      # which is also its issuer; any other outcome within the wait fails the step. -k: the sample
+      # serves the runner's untrusted ASP.NET Core development certificate on loopback.
+      - name: Test OpenIDProviderApp answers discovery
+        run: |
+          cd getting-started/OpenIDProviderApp
+          BASE=$(python3 -c "import json; print(json.load(open('Properties/launchSettings.json', encoding='utf-8-sig'))['profiles']['https']['applicationUrl'].split(';')[0])")
+          dotnet run --launch-profile https &
+          APP_PID=$!
+          for _ in {1..60}; do
+            if curl -fsSk --max-time 5 -o discovery.json "$BASE/.well-known/openid-configuration"; then
+              if ! python3 -c "import json, sys; sys.exit(0 if json.load(open('discovery.json')).get('issuer', '').startswith(sys.argv[1]) else 1)" "$BASE"; then
+                echo "::error title=Getting-started sample::The discovery document at $BASE names no issuer under that address. Skipped step: run the sample on the Abblix/Oidc.Server.GettingStarted branch that the Checkout GettingStarted repo step names (dotnet run --launch-profile https in OpenIDProviderApp), fix it there until it serves /.well-known/openid-configuration with its own issuer, then re-run this job"
+                kill "$APP_PID" 2>/dev/null || true
+                exit 1
+              fi
+              echo "App answers discovery at $BASE"
+              kill "$APP_PID" 2>/dev/null || true
+              exit 0
+            fi
+            if ! kill -0 "$APP_PID" 2>/dev/null; then
+              echo "::error title=Getting-started sample::The sample exited before answering at $BASE; its output is above. Skipped step: run the sample on the Abblix/Oidc.Server.GettingStarted branch that the Checkout GettingStarted repo step names (dotnet run --launch-profile https in OpenIDProviderApp), fix it there until it serves /.well-known/openid-configuration with its own issuer, then re-run this job"
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "::error title=Getting-started sample::The sample did not answer its discovery document at $BASE within the wait. Skipped step: run the sample on the Abblix/Oidc.Server.GettingStarted branch that the Checkout GettingStarted repo step names (dotnet run --launch-profile https in OpenIDProviderApp), fix it there until it serves /.well-known/openid-configuration with its own issuer, then re-run this job"
+          kill "$APP_PID" 2>/dev/null || true
+          exit 1
+        timeout-minutes: 3
+    timeout-minutes: 5
+  create-release:
+    needs: [versioning, build-and-pack, test-getting-started, conformance, sonar-gate]
+    runs-on: ubuntu-latest
+    environment: release-approval
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.versioning.outputs.version }}
+      PREVIOUS_VERSION: ${{ needs.versioning.outputs.previous_version }}
+    outputs:
+      is_prerelease: ${{ steps.validate_inputs.outputs.is_prerelease }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - name: Validate and normalize inputs
+        id: validate_inputs
+        env:
+          INPUT_PRE_RELEASE: ${{ github.event.inputs.pre_release }}
+        run: |
+          if [ "$INPUT_PRE_RELEASE" = "true" ]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+        timeout-minutes: 3
+      # This job pushes a tag on the pre-release path, so the checkout keeps its
+      # git credentials (no persist-credentials: false). Stable releases must
+      # already carry a human-created signed tag - see "Create or verify tag".
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+        timeout-minutes: 3
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: nupkg
+        timeout-minutes: 3
+      - name: Create or verify tag
+        env:
+          INPUT_PRE_RELEASE: ${{ github.event.inputs.pre_release }}
+          RELEASE_COMMIT: ${{ github.sha }}
+          RELEASE_BRANCH: ${{ github.ref_name }}
+        run: |
+          # A pre-release run creates its own tag, so a stale one is removed rather than re-cut.
+          if [ "$INPUT_PRE_RELEASE" = "true" ]; then
+            RECUT="delete it (git push origin :refs/tags/v$VERSION) and dispatch again; this run creates the pre-release tag itself"
+          else
+            RECUT="re-cut it on the release head: git tag -d v$VERSION; git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s --cleanup=verbatim $RELEASE_COMMIT && git push --force origin v$VERSION, then dispatch again"
+          fi
+          BRANCH_HEAD=$(git rev-parse "origin/$RELEASE_BRANCH")
+          # A re-run keeps the commit of its first attempt; once the branch has moved on, every tag
+          # step belongs to the new head and a new dispatch, so this is decided before any of them.
+          if [ "$RELEASE_COMMIT" != "$BRANCH_HEAD" ]; then
+            if [ "$INPUT_PRE_RELEASE" = "true" ]; then
+              MOVED="delete the tag if one exists (git push origin :refs/tags/v$VERSION) and dispatch the release again; that run creates the pre-release tag on the new head"
+            else
+              MOVED="put the tag on $BRANCH_HEAD if it is not there yet, then dispatch the release again rather than re-running this run"
+            fi
+            echo "::error title=Release tag::This run builds $RELEASE_COMMIT, but $RELEASE_BRANCH has moved on to $BRANCH_HEAD. Skipped step: $MOVED"
+            exit 1
+          fi
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            if [ "$(git cat-file -t "v$VERSION")" != "tag" ]; then
+              echo "::error title=Release tag::Tag v$VERSION is lightweight, and a release needs an annotated tag; a stable one is signed and carries the release notes. Skipped step: $RECUT"
+              exit 1
+            fi
+            TAGGED=$(git rev-parse "v$VERSION^{commit}")
+            if [ "$TAGGED" != "$RELEASE_COMMIT" ]; then
+              echo "::error title=Release tag::Tag v$VERSION is on $TAGGED, while this run builds $RELEASE_COMMIT, the head of the dispatched branch. Skipped step: $RECUT"
+              exit 1
+            fi
+            echo "Tag v$VERSION is annotated and on the commit being built - using it"
+          else
+            if [ "$INPUT_PRE_RELEASE" != "true" ]; then
+              echo "::error title=Release tag::No tag v$VERSION, and a stable release must be tagged before this workflow runs. Skipped step: tag the release head: git tag -a v$VERSION -F RELEASE_NOTES_v$VERSION.md -s --cleanup=verbatim $RELEASE_COMMIT && git push origin v$VERSION, then dispatch again"
+              exit 1
+            fi
+            echo "Pre-release: creating annotated tag v$VERSION"
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            git tag -a "v$VERSION" -m "Pre-release v$VERSION"
+            git push origin "v$VERSION"
+          fi
+        timeout-minutes: 3
+      - name: Generate changelog
+        id: changelog
+        run: |
+          if [ "$(git cat-file -t "v$VERSION" 2>/dev/null)" = "tag" ]; then
+            echo "Using annotated tag message as release notes"
+            # %(contents) includes the GPG/SSH signature block; strip it so the
+            # release body is only the notes. The tag must be created with
+            # --cleanup=verbatim so Markdown "##" headers in the notes survive.
+            git tag -l --format='%(contents)' "v$VERSION" | sed '/-----BEGIN .* SIGNATURE-----/,$d' > CHANGELOG.md
+          elif [ -n "$PREVIOUS_VERSION" ]; then
+            echo "## Changes since v$PREVIOUS_VERSION" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+
+            PREV_TAG="v$PREVIOUS_VERSION"
+            CURR_TAG="v$VERSION"
+
+            if git rev-parse "$PREV_TAG" >/dev/null 2>&1 && git rev-parse "$CURR_TAG" >/dev/null 2>&1; then
+              git log --oneline "$PREV_TAG..$CURR_TAG" --pretty=format:"- %s" >> CHANGELOG.md \
+                || echo "- Various improvements and fixes" >> CHANGELOG.md
+            else
+              echo "- Various improvements and fixes" >> CHANGELOG.md
+            fi
+          else
+            echo "## Initial Release" > CHANGELOG.md
+          fi
+
+          # Nothing is appended to the notes. The release body is the tag's annotation and no more:
+          # the packages are the release's own assets, listed right under the body by GitHub, and a
+          # section repeating their names is a list that goes stale the day a package is added.
+        timeout-minutes: 3
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        with:
+          tag_name: v${{ needs.versioning.outputs.version }}
+          name: v${{ needs.versioning.outputs.version }}
+          body_path: CHANGELOG.md
+          files: |
+            nupkg/*.nupkg
+            nupkg/*.snupkg
+          prerelease: ${{ steps.validate_inputs.outputs.is_prerelease == 'true' }}
+          make_latest: ${{ steps.validate_inputs.outputs.is_prerelease != 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+        timeout-minutes: 3
+    timeout-minutes: 5
+  publish-github-packages:
+    needs: [versioning, build-and-pack, test-getting-started, create-release]
+    runs-on: ubuntu-latest
+    # Same approval gate as NuGet.org: no package leaves the build for any
+    # registry without passing the publish-packages environment reviewers.
+    environment: publish-packages
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      # global.json is the one place naming the SDK, and this job has no working copy to read it
+      # from - it downloads the packages as an artifact and pushes them. Fetched on its own rather
+      # than naming a version here, which would drift from the build that produced the packages.
+      # It runs before the download: checkout empties the workspace first, packages included.
+      - name: Fetch the SDK pin
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: global.json
+          sparse-checkout-cone-mode: false
+          # Nothing here pushes, and this job holds a publishing token.
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          # No version here on purpose: with dotnet-version absent the action installs what
+          # global.json names, which is the same file the local build resolves against. Naming a
+          # version in each workflow is an enumeration - one of them is missed by a bump and that
+          # job keeps building on the old SDK, green, until something needs the new one. The
+          # version itself still moves by hand - global.json names an exact build and the action
+          # installs that one - but it moves in one place.
+          global-json-file: global.json
+        timeout-minutes: 3
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: nupkg
+        timeout-minutes: 3
+      - name: List packages to be published
+        run: |
+          shopt -s failglob
+          echo "Packages ready for publishing to GitHub Packages:"
+          for pkg in nupkg/*.nupkg; do
+            echo "  - $(basename "$pkg")"
+          done
+          echo "Publishing destination: https://nuget.pkg.github.com/Abblix/index.json"
+        timeout-minutes: 3
+      - name: Publish to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for pkg in nupkg/*.nupkg; do
+            echo "Publishing $(basename "$pkg") to GitHub Packages..."
+            dotnet nuget push "$pkg" \
+              --api-key "$GITHUB_TOKEN" \
+              --source https://nuget.pkg.github.com/Abblix/index.json \
+              --skip-duplicate
+          done
+          echo "GitHub Packages publishing completed"
+        timeout-minutes: 3
+      - name: Verify publication
+        run: |
+          echo "Verification: https://github.com/Abblix/Oidc.Server/packages"
+          echo "Published packages (sha256):"
+          sha256sum nupkg/*.nupkg
+        timeout-minutes: 3
+    timeout-minutes: 5
+  # NuGet.org trusted publishing: the job proves its identity with GitHub's OIDC token and receives a
+  # one-hour, single-use API key for this push, so no long-lived key is stored. The nuget.org policy
+  # names this repository, this workflow file and the publish-packages environment, so another
+  # workflow or a run without the approval cannot obtain a key.
+  publish-nuget-org:
+    needs: [versioning, build-and-pack, test-getting-started, create-release]
+    runs-on: ubuntu-latest
+    environment: publish-packages
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      # global.json is the one place naming the SDK, and this job has no working copy to read it
+      # from - it downloads the packages as an artifact and pushes them. Fetched on its own rather
+      # than naming a version here, which would drift from the build that produced the packages.
+      # It runs before the download: checkout empties the workspace first, packages included.
+      - name: Fetch the SDK pin
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: global.json
+          sparse-checkout-cone-mode: false
+          # Nothing here pushes, and this job holds a publishing token.
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          # No version here on purpose: with dotnet-version absent the action installs what
+          # global.json names, which is the same file the local build resolves against. Naming a
+          # version in each workflow is an enumeration - one of them is missed by a bump and that
+          # job keeps building on the old SDK, green, until something needs the new one. The
+          # version itself still moves by hand - global.json names an exact build and the action
+          # installs that one - but it moves in one place.
+          global-json-file: global.json
+        timeout-minutes: 3
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: nupkg
+        timeout-minutes: 3
+      - name: List packages to be published
+        run: |
+          shopt -s failglob
+          echo "Packages ready for publishing to NuGet.org:"
+          for pkg in nupkg/*.nupkg; do
+            echo "  - $(basename "$pkg")"
+          done
+          echo "Publishing destination: https://api.nuget.org/v3/index.json"
+          echo "This step requires manual approval in GitHub Actions."
+        timeout-minutes: 3
+      - name: NuGet.org user for trusted publishing
+        env:
+          NUGET_USER: ${{ secrets.NUGET_USER }}
+        run: |
+          if [ -z "$NUGET_USER" ]; then
+            echo "::error title=NuGet.org trusted publishing::The publish-packages environment has no NUGET_USER secret. Skipped step: create the trusted publishing policy at https://www.nuget.org/account/trustedpublishing (owner: the account that owns the Abblix packages; repository owner Abblix, repository Oidc.Server, workflow file release.yml, environment publish-packages, scope allowing new packages and new versions for the glob Abblix.*) and set the publish-packages environment secret NUGET_USER to the nuget.org profile name of the policy creator, then re-run the failed jobs"
+            exit 1
+          fi
+        timeout-minutes: 3
+      # The key is requested just before the push: it is valid for one hour.
+      - name: Get a short-lived NuGet.org key
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ secrets.NUGET_USER }}
+        timeout-minutes: 3
+      - name: Name the skipped step when no key was issued
+        if: ${{ failure() && steps.login.outcome == 'failure' }}
+        run: |
+          echo "::error title=NuGet.org trusted publishing::NuGet.org issued no key for this run. Skipped step: create the trusted publishing policy at https://www.nuget.org/account/trustedpublishing (owner: the account that owns the Abblix packages; repository owner Abblix, repository Oidc.Server, workflow file release.yml, environment publish-packages, scope allowing new packages and new versions for the glob Abblix.*) and set the publish-packages environment secret NUGET_USER to the nuget.org profile name of the policy creator; if the policy shows as inactive because its 7-day window passed without a publish, restart the window there. Then re-run the failed jobs"
+          exit 1
+        timeout-minutes: 3
+      - name: Publish to NuGet.org
+        id: push
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          for pkg in nupkg/*.nupkg; do
+            echo "Publishing $(basename "$pkg") to NuGet.org..."
+            dotnet nuget push "$pkg" \
+              --api-key "$NUGET_API_KEY" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
+          echo "NuGet.org publishing completed"
+        timeout-minutes: 3
+      - name: Name the skipped step when NuGet.org refused a package
+        if: ${{ failure() && steps.push.outcome == 'failure' }}
+        run: |
+          echo "::error title=NuGet.org trusted publishing::NuGet.org refused a package; the push log above names it. Skipped step: for a package new on nuget.org, let the trusted publishing policy's scope allow new packages for the glob Abblix.*; for an existing one, make the policy's owner one of its owners. Then re-run the failed jobs; packages already pushed are skipped as duplicates"
+          exit 1
+        timeout-minutes: 3
+      - name: Verify publication
+        run: |
+          echo "Verification: https://www.nuget.org/packages?q=Abblix"
+          echo "Wait 5-15 minutes for package indexing to complete"
+          echo "Published packages (sha256):"
+          sha256sum nupkg/*.nupkg
+        timeout-minutes: 3
+    timeout-minutes: 5
+  update-getting-started:
+    needs: [versioning, create-release, publish-nuget-org]
+    runs-on: ubuntu-latest
+    environment: update-sample
+    permissions:
+      contents: read
+    if: ${{ needs.create-release.outputs.is_prerelease == 'false' }}
+    env:
+      VERSION: ${{ needs.versioning.outputs.version }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      # Read-only checkout to edit the csproj locally; the signed commit is made
+      # through the Contents API (next step), so nothing is git-pushed here and
+      # the token must not be persisted as a git credential.
+      - name: Checkout GettingStarted repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: Abblix/Oidc.Server.GettingStarted
+          token: ${{ secrets.GETTING_STARTED_REPO_TOKEN }}
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Update package references to released version
+        run: |
+          sed -i "s|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"[^\"]*\"|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"$VERSION\"|g" OpenIDProviderApp/OpenIDProviderApp.csproj
+        timeout-minutes: 3
+      - name: Open a pull request with a signed commit
+        env:
+          GH_TOKEN: ${{ secrets.GETTING_STARTED_REPO_TOKEN }}
+        run: |
+          REPO="Abblix/Oidc.Server.GettingStarted"
+          FILE="OpenIDProviderApp/OpenIDProviderApp.csproj"
+          BRANCH="chore/bump-abblix-v$VERSION"
+          # Nothing to do if the version already matches.
+          if git diff --quiet -- "$FILE"; then
+            echo "No version change needed; skipping PR."
+            exit 0
+          fi
+          # The master branch ruleset requires signed commits AND a pull request,
+          # so a plain git push is rejected (GH013). Commit the bumped file
+          # through the Contents API instead: GitHub signs API commits (satisfies
+          # required_signatures) and the PR satisfies the pull_request rule. A
+          # code owner still reviews and merges (1 approval required).
+          # Existence is checked explicitly so real errors fail the job loudly
+          # instead of being masked by "|| echo".
+          if gh api "repos/$REPO/git/ref/heads/$BRANCH" >/dev/null 2>&1; then
+            echo "Branch $BRANCH already exists; reusing it."
+          else
+            BASE_SHA=$(gh api "repos/$REPO/git/ref/heads/master" --jq '.object.sha')
+            gh api -X POST "repos/$REPO/git/refs" -f "ref=refs/heads/$BRANCH" -f "sha=$BASE_SHA"
+          fi
+          FILE_SHA=$(gh api "repos/$REPO/contents/$FILE?ref=$BRANCH" --jq '.sha')
+          CONTENT=$(base64 -w0 "$FILE")
+          gh api -X PUT "repos/$REPO/contents/$FILE" \
+            -f "message=Update Abblix packages to v$VERSION" \
+            -f "content=$CONTENT" \
+            -f "sha=$FILE_SHA" \
+            -f "branch=$BRANCH"
+          if [ "$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq 'length')" != "0" ]; then
+            echo "A pull request for $BRANCH is already open."
+          else
+            gh pr create --repo "$REPO" --base master --head "$BRANCH" \
+              --title "Update Abblix packages to v$VERSION" \
+              --body "Automated bump of Abblix.Oidc.Server.Mvc to v$VERSION after the release. Requires code-owner review per branch protection."
+          fi
+        timeout-minutes: 3
+    timeout-minutes: 5

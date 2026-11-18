@@ -5,7 +5,6 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
-using System.Text;
 using System.Text.Json;
 
 namespace Abblix.Jwt.ExternalKeys;
@@ -49,6 +48,9 @@ internal sealed class KeyEnvelope(IJsonWebTokenEncryptor encryptor)
             plaintext,
             keyEncryptionKey,
             tokenType: null,
+            // RFC 7517 section 7 lets "cty" be omitted when "the application knows that the encrypted content is a
+            // JWK by another means or convention", which an envelope is
+            contentType: null,
             keyWrapAlgorithm,
             contentEncryptionAlgorithm,
             cancellationToken);
@@ -79,9 +81,12 @@ internal sealed class KeyEnvelope(IJsonWebTokenEncryptor encryptor)
             bytes => bytes,
             error => throw new InvalidOperationException(
                 $"Cannot open a key envelope: the custodian did not unwrap it ({error.ErrorDescription}). The KEK " +
-                "version this envelope names may have been retired, which strands every key wrapped under it."));
+                "version this envelope names may have been retired, which strands every key wrapped under it, or " +
+                "the custodian does not serve the key wrap algorithm the envelope was sealed under, which its own " +
+                "log names."));
 
-        return JsonSerializer.Deserialize<JsonWebKey>(Encoding.UTF8.GetString(plaintext))
+        // Read from the octets, so the whole private key is never copied into one immutable string
+        return JsonSerializer.Deserialize<JsonWebKey>(plaintext)
             ?? throw new InvalidOperationException("A key envelope opened to a null key.");
     }
 }

@@ -1,6 +1,6 @@
 # Abblix.Jwt.Azure
 
-**Abblix.Jwt.Azure** lets any [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) host - the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) included, but equally a service that only signs tokens - sign and decrypt with keys protected by Azure Key Vault, in either of two postures. Hold the keys in the vault, so their private halves never enter your process and every signature is a Key Vault round-trip; or mint them in-process and seal each to a vault key, so signing stays local and only the sealed copies leave the process. Either way only public halves are published, and signature verification runs locally and never calls the vault.
+Abblix.Jwt.Azure lets any [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) host - the [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server) included, but equally a service that only signs tokens - sign and decrypt with keys protected by Azure Key Vault, in either of two postures. Hold the keys in the vault, so their private halves never enter your process and every signature is a Key Vault round-trip; or mint them in-process and seal each to a vault key, so signing stays local and only the sealed copies leave the process. Either way only public halves are published, and signature verification runs locally and never calls the vault.
 
 The Azure SDK is driven through the host's `IHttpClientFactory` pipeline, so it inherits your HTTP handlers, logging and connection policy. No provider private key crosses that pipeline; what does is the signing input, the wrapped keys, and the plaintext key an unwrap returns, which a handler on this pipeline can observe, so scope logging accordingly.
 
@@ -100,7 +100,7 @@ Blank is an opt-in, and it looks identical to a typo: a misspelled configuration
 
 ### The HTTP pipeline
 
-Both transports come from the host's `IHttpClientFactory`, so retries, a circuit breaker, timeouts, a proxy or a client certificate are added with the standard APIs and nothing of ours.
+Both transports come from the host's `IHttpClientFactory`, so retries, a circuit breaker, timeouts, a proxy or a client certificate are added with the standard APIs and nothing of ours. The examples below use `AddStandardResilienceHandler` from [Microsoft.Extensions.Http.Resilience](https://www.nuget.org/packages/Microsoft.Extensions.Http.Resilience), which your application installs itself.
 
 To make every outbound client of your application resilient, including these two, name none of them:
 
@@ -133,7 +133,7 @@ With `UseKeysInProcess`, the server rotates on the `RotateEvery` schedule with n
 
 With `UseKeysInCustodian`, every issued token costs two Key Vault round-trips plus one per enabled key version: the provider lists the signing key's versions, reads each version's public half, then signs. Decrypting an inbound encrypted request object or client assertion adds an unwrap; issuing an encrypted token adds nothing, because it is wrapped to the recipient's public key locally. Nothing here is cached, so the per-version read multiplies with every version you keep enabled. Set an explicit timeout on the Key Vault calls: the Azure SDK's default retry-and-timeout policy can hold a token request open longer than your token endpoint's budget, and a hung custodian should fail fast, not stall issuance.
 
-With `UseKeysInProcess`, token issuance makes no Key Vault call: the server signs locally and reaches the vault only to open a sealed key when a pod loads or refreshes its ring, and, for the winning key of each new period, on any pod that did not mint it. Minting needs the vault only for the key-encryption key's public half, which the server caches.
+With `UseKeysInProcess`, token issuance makes no Key Vault call: the server signs locally and reaches the vault on every refresh of the ring, at half the propagation window: one listing of the key-encryption key's versions plus one read for each enabled version, and one unwrap for every key the ring holds, for each tenant. Each mint also reads the key-encryption key's versions the same way, so a pod cannot mint while the vault is unreachable.
 
 Key Vault also throttles per vault and bills per transaction. Signing counts against the vault's per-10-second limit, which drops sharply for RSA-3072 and RSA-4096; over the limit Key Vault returns HTTP 429. Check your peak token rate against the [service limits](https://learn.microsoft.com/azure/key-vault/general/service-limits) and prefer RSA-2048 or an EC key for headroom. The full picture is in [EXTERNAL_KEYS.md](https://github.com/Abblix/Oidc.Server/blob/master/EXTERNAL_KEYS.md).
 
@@ -155,13 +155,13 @@ ECDH-ES key agreement is not supported: Azure Key Vault exposes no key-agreement
 
 | Package | Description |
 |---------|-------------|
-| **[Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server)** | Core OpenID Connect server implementation |
-| **[Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault)** | HashiCorp Vault / OpenBao Transit custodian for the same external-key seam |
-| **[Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT)** | JWT signing, encryption, and validation using .NET crypto primitives |
+| [Abblix.OIDC.Server](https://www.nuget.org/packages/Abblix.OIDC.Server) | Core OpenID Connect server implementation |
+| [Abblix.JWT.Vault](https://www.nuget.org/packages/Abblix.JWT.Vault) | HashiCorp Vault / OpenBao Transit custodian for the same external-key seam |
+| [Abblix.JWT](https://www.nuget.org/packages/Abblix.JWT) | JWT signing, encryption, and validation using .NET crypto primitives |
 
 ## Getting Started
 
-To learn more about the Abblix OIDC Server product, visit our [Documentation](https://docs.abblix.com/docs) site and explore the [Getting Started Guide](https://docs.abblix.com/docs/getting-started-guide).
+To learn more about the Abblix OIDC Server product, visit our [Documentation](https://www.abblix.com/en/docs/introduction-to-abblix-oidc-server) site and explore the [Getting Started Guide](https://www.abblix.com/en/docs/getting-started-guide).
 
 ## License
 
@@ -169,6 +169,6 @@ See [LICENSE.md](https://github.com/Abblix/Oidc.Server/blob/master/LICENSE.md).
 
 ## Contacts
 
-- **General inquiries**: [info@abblix.com](mailto:info@abblix.com)
-- **Support and security reports**: [support@abblix.com](mailto:support@abblix.com)
-- **Website**: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)
+- General inquiries: [info@abblix.com](mailto:info@abblix.com)
+- Support and security reports: [support@abblix.com](mailto:support@abblix.com)
+- Website: [Abblix OIDC Server](https://www.abblix.com/abblix-oidc-server)

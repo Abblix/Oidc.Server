@@ -19,7 +19,7 @@ namespace Abblix.Oidc.Server.UnitTests.Endpoints.Authorization.Validation;
 
 /// <summary>
 /// Unit tests for <see cref="SignedRequestObjectRequirementValidator"/> verifying the
-/// RFC 9101 §10.5 require_signed_request_object client metadata: plain-parameter requests from a
+/// RFC 9101 section 10.5 require_signed_request_object client metadata: plain-parameter requests from a
 /// committed client are rejected, while request-object and PAR-originated requests pass.
 /// </summary>
 public class SignedRequestObjectRequirementValidatorTests
@@ -55,7 +55,7 @@ public class SignedRequestObjectRequirementValidatorTests
     {
         var context = CreateContext(requireSignedRequestObject: true);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
@@ -66,7 +66,7 @@ public class SignedRequestObjectRequirementValidatorTests
     {
         var context = CreateContext(requireSignedRequestObject: true, requestObject: "header.payload.signature");
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 
     /// <summary>
@@ -80,7 +80,42 @@ public class SignedRequestObjectRequirementValidatorTests
             requireSignedRequestObject: true,
             pushedRequestUri: new Uri("urn:ietf:params:oauth:request_uri:abc"));
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 5.2.2: the server "shall require a JWS signed JWT request object", so a client held to
+    /// the profile is refused plain parameters although its own flag is off - whether it names the profile itself or
+    /// inherits it from the tenant.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ValidateAsync_Fapi1AdvancedWithPlainParameters_ReturnsError(bool namedByTheClient)
+    {
+        var context = CreateContext(requireSignedRequestObject: false);
+        var tenant = SingleIssuer.Tenant;
+        if (namedByTheClient)
+            context.ClientInfo.SecurityProfile = ClientSecurityProfile.Fapi1Advanced;
+        else
+            tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced }.ToTenant();
+
+        var result = await _validator.ValidateAsync(tenant, context);
+
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+    }
+
+    /// <summary>
+    /// The same client with a request object passes, so the refusal above is about the missing object.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_Fapi1AdvancedWithRequestObject_Passes()
+    {
+        var context = CreateContext(requireSignedRequestObject: false, requestObject: "header.payload.signature");
+        context.ClientInfo.SecurityProfile = ClientSecurityProfile.Fapi1Advanced;
+
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 
     [Fact]
@@ -88,6 +123,6 @@ public class SignedRequestObjectRequirementValidatorTests
     {
         var context = CreateContext(requireSignedRequestObject: false);
 
-        Assert.Null(await _validator.ValidateAsync(context));
+        Assert.Null(await _validator.ValidateAsync(SingleIssuer.Tenant, context));
     }
 }

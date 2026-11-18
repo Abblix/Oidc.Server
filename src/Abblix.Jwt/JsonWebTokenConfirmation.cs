@@ -10,10 +10,10 @@ using System.Text.Json.Nodes;
 namespace Abblix.Jwt;
 
 /// <summary>
-/// Typed wrapper over the <c>cnf</c> confirmation-method JSON object (RFC 7800 §3.1).
+/// Typed wrapper over the <c>cnf</c> confirmation-method JSON object (RFC 7800 section 3.1).
 /// Exposes the proof-of-possession binding members an issued JWT can carry: the mutual-TLS
-/// client certificate thumbprint (<c>x5t#S256</c>, RFC 8705 §3.1) and the DPoP proof-key
-/// JWK thumbprint (<c>jkt</c>, RFC 9449 §6.1). Symmetric with <see cref="JsonWebTokenPayload"/>:
+/// client certificate thumbprint (<c>x5t#S256</c>, RFC 8705 section 3.1) and the DPoP proof-key
+/// JWK thumbprint (<c>jkt</c>, RFC 9449 section 6.1). Symmetric with <see cref="JsonWebTokenPayload"/>:
 /// each member is a typed accessor over the underlying <see cref="JsonObject"/>; constants
 /// live in <see cref="IanaClaimTypes.ConfirmationMethods"/> so adding a new member is a
 /// single-file edit.
@@ -37,7 +37,7 @@ public class JsonWebTokenConfirmation(JsonObject json)
 
     /// <summary>
     /// Base64url-encoded SHA-256 thumbprint of the client X.509 certificate that
-    /// authenticated the request (RFC 8705 §3.1). Locks an access token to the
+    /// authenticated the request (RFC 8705 section 3.1). Locks an access token to the
     /// certificate the client presented at the token endpoint via mutual TLS.
     /// </summary>
     public string? CertificateSha256Thumbprint
@@ -47,7 +47,7 @@ public class JsonWebTokenConfirmation(JsonObject json)
     }
 
     /// <summary>
-    /// Base64url-encoded RFC 7638 JWK Thumbprint of the DPoP proof key (RFC 9449 §6.1).
+    /// Base64url-encoded RFC 7638 JWK Thumbprint of the DPoP proof key (RFC 9449 section 6.1).
     /// Locks an access token to the specific proof-of-possession key the client
     /// demonstrated control of when the token was issued.
     /// </summary>

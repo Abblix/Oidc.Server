@@ -8,6 +8,8 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.CheckSession.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 
 namespace Abblix.Oidc.Server.Features.SessionManagement;
@@ -29,9 +31,20 @@ public interface ISessionManagementService
     /// Retrieves the session cookie that is used for managing the user's session. This cookie can be used to persist session
     /// information across browser requests and to facilitate session management operations.
     /// </summary>
+    /// <param name="tenant">The tenant whose session the cookie tracks.</param>
+    /// <param name="persistence">How the user agent keeps the session the cookie tracks, so a session that survives a
+    /// browser restart is not reported as changed after one; a browser session for a cookie written to be removed.
+    /// </param>
+    /// <remarks>
+    /// The expiry is the one the session had when the cookie is written. A host whose authentication cookie is renewed
+    /// with activity renews it past that, and the check-session page then reports the session as changed until the
+    /// next authorization response writes the cookie again. An authentication cookie kept past a browser restart with no
+    /// expiry of its own gives a cookie with none, so after a restart the check-session page reports the session as
+    /// changed.
+    /// </remarks>
     /// <returns>A <see cref="Cookie"/> object configured for session management, containing details such as the cookie name,
     /// value, path, and security settings.</returns>
-    Cookie GetSessionCookie();
+    Cookie GetSessionCookie(TenantDefinition tenant, SessionPersistence persistence);
 
     /// <summary>
     /// Generates a session state string that represents the current state of the user's session. This string can be used
@@ -46,7 +59,8 @@ public interface ISessionManagementService
     /// Asynchronously retrieves the response for a session check operation. This method is called to process check session requests,
     /// allowing the client to query the current state of the user's session and detect any changes.
     /// </summary>
+    /// <param name="tenant">The tenant whose session cookie the page reads.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation, yielding a <see cref="CheckSessionResponse"/> object that
     /// contains the necessary information for the client to evaluate the session state.</returns>
-    Task<CheckSessionResponse> GetCheckSessionResponseAsync();
+    Task<CheckSessionResponse> GetCheckSessionResponseAsync(TenantDefinition tenant);
 }

@@ -63,8 +63,10 @@ internal sealed partial class TokenSource(
         DateTimeOffset RefreshAt,
         TimeSpan FullLease);
 
-    // Entered through EnterScope rather than with a lock statement: the statement form on this type is a
-    // C# 13 feature, and net8.0 compiles as C# 12 against the polyfill in Abblix.Utils.
+    // Entered through EnterScope rather than with a lock statement. Both compile here and do the same
+    // thing; the explicit scope is kept because it is visible at the call site which object is held,
+    // while a lock statement over this type reads identically to one over a plain object and hides that
+    // it is not taking a monitor.
     private readonly Lock _gate = new();
     private LeaseState? _state;
     private Task? _refresh;
@@ -140,14 +142,16 @@ internal sealed partial class TokenSource(
                 var renewal = await loginClient.RenewSelfAsync(alive.Token, CancellationToken.None);
                 switch (renewal.Status)
                 {
+#pragma warning disable S8969 // The compiler does warn here without it (CS8602): Lease is null unless the status is Renewed
                     case RenewStatus.Renewed when renewal.Lease!.LeaseDuration >= alive.FullLease:
+#pragma warning restore S8969
                         Publish(renewal.Lease);
                         return;
 
                     case RenewStatus.Renewed:
                         // The max-TTL ceiling: the lease stopped extending to full length. The renewal
                         // still bought time, so the login below happens while the token is valid.
-                        LogLeaseStoppedExtending(renewal.Lease!.LeaseDuration, alive.FullLease);
+                        LogLeaseStoppedExtending(renewal.Lease.LeaseDuration, alive.FullLease);
                         break;
 
                     case RenewStatus.PermissionDenied:

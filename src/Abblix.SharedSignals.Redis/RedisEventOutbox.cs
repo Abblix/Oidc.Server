@@ -257,7 +257,7 @@ public sealed class RedisEventOutbox(IConnectionMultiplexer connection, RedisOut
     {
         try
         {
-            var read = JsonSerializer.Deserialize<OutboxItem>((byte[])stored!, SerializerOptions);
+            var read = JsonSerializer.Deserialize<OutboxItem>((byte[]?)stored, SerializerOptions);
 
             // A payload that parses but carries no identifier is unreadable too, and worse than
             // unparseable: it would be served and could never be acknowledged, because acknowledgement

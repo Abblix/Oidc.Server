@@ -6,11 +6,13 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Features.Nonces;
 
 /// <summary>
 /// Issues and validates server-issued opaque, time-bounded nonces. The current
-/// consumer is DPoP-Nonce per RFC 9449 §8 / §9 - the server returns a nonce
+/// consumer is DPoP-Nonce per RFC 9449 section 8 / section 9 - the server returns a nonce
 /// via the <c>DPoP-Nonce</c> response header and the client echoes it back in
 /// the <c>nonce</c> claim of a subsequent DPoP proof to prove freshness - but
 /// the primitive is intentionally generic: any future feature needing
@@ -18,7 +20,7 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 /// </summary>
 /// <remarks>
 /// The default implementation is stateless modulo a short-lived rotating HMAC
-/// secret stored in <c>IDistributedCache</c>. No per-nonce state is kept, so
+/// secret kept in the entity storage. No per-nonce state is kept, so
 /// <see cref="ValidateAsync"/> does not enforce single-use; replay protection
 /// at the proof level is handled separately by the <c>jti</c> replay cache.
 /// </remarks>
@@ -29,16 +31,17 @@ public interface INonceService
     /// header. The returned value is opaque to callers - clients must echo it
     /// verbatim.
     /// </summary>
-    Task<string> IssueAsync(CancellationToken cancellationToken = default);
+    Task<string> IssueAsync(TenantDefinition tenant, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Verifies that <paramref name="nonce"/> was issued by this deployment
     /// and is still within the acceptance window.
     /// </summary>
+    /// <param name="tenant">The tenant the nonce belongs to.</param>
     /// <param name="nonce">The nonce string echoed by the client in its DPoP
     /// proof <c>nonce</c> claim.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns><c>null</c> when the nonce is acceptable, otherwise a
     /// <see cref="NonceValidationFailure"/> describing why it is not.</returns>
-    Task<NonceValidationFailure?> ValidateAsync(string nonce, CancellationToken cancellationToken = default);
+    Task<NonceValidationFailure?> ValidateAsync(TenantDefinition tenant, string nonce, CancellationToken cancellationToken = default);
 }

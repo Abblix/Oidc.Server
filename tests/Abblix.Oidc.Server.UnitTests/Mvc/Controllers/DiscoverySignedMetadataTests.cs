@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,20 +14,22 @@ using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Configuration;
-using Abblix.Oidc.Server.Mvc.Features.EndpointResolving;
 using Abblix.Oidc.Server.Mvc.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Microsoft.AspNetCore.Mvc;
+using ModelResponse = Abblix.Oidc.Server.Model.ConfigurationResponse;
 using EndpointResponse = Abblix.Oidc.Server.Endpoints.Configuration.Interfaces.ConfigurationResponse;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Mvc.Controllers;
 
 /// <summary>
-/// Unit tests for <see cref="ConfigurationResponseFormatter"/> verifying RFC 8414 §2.1
+/// Unit tests for <see cref="ConfigurationResponseFormatter"/> verifying RFC 8414 section 2.1
 /// <c>signed_metadata</c> emission: opt-in gating, pure-JWS production (never JWE), the
 /// mandatory <c>iss</c> claim, and the requirement that the signed payload restate the
 /// metadata without containing <c>signed_metadata</c> itself.
@@ -37,13 +40,13 @@ public class DiscoverySignedMetadataTests
     private const string SignedJws = "eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJ4In0.sig";
 
     private readonly Mock<IOptionsSnapshot<OidcOptions>> _optionsMock = new();
-    private readonly Mock<IEndpointResolver> _endpointResolverMock = new();
+    private readonly Mock<IOidcEndpointResolver> _endpointResolverMock = new();
     private readonly Mock<IJsonWebTokenCreator> _jwtCreatorMock = new(MockBehavior.Strict);
     private readonly Mock<IAuthServiceKeysProvider> _keysProviderMock = new(MockBehavior.Strict);
     private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 5, 19, 10, 0, 0, TimeSpan.Zero));
     private readonly OidcOptions _oidcOptions;
     private readonly ConfigurationResponseFormatter _formatter;
-    private readonly JsonWebKey _signingKey = new RsaJsonWebKey { KeyId = "sig", Algorithm = SigningAlgorithms.RS256 };
+    private readonly JsonWebKey _signingKey = new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig", Algorithm = SigningAlgorithms.RS256 };
 
     public DiscoverySignedMetadataTests()
     {
@@ -55,13 +58,14 @@ public class DiscoverySignedMetadataTests
         _optionsMock.Setup(x => x.Value).Returns(_oidcOptions);
 
         _endpointResolverMock
-            .Setup(x => x.Resolve("Token", "Token"))
+            .Setup(x => x.Resolve(OidcEndpoints.Token))
             .Returns(new Uri("https://example.com/token"));
 
         _formatter = new ConfigurationResponseFormatter(
             _optionsMock.Object,
             _endpointResolverMock.Object,
-            new SignedMetadataProvider(_jwtCreatorMock.Object, _keysProviderMock.Object, _clock));
+            new SignedMetadataProvider(new ProfiledJwtIssuer(_jwtCreatorMock.Object, TestEncryptionAlgorithms.Every), _keysProviderMock.Object, _clock, TestSigningAlgorithms.Registered),
+            SingleIssuer.Accessor);
     }
 
     /// <summary>
@@ -71,11 +75,17 @@ public class DiscoverySignedMetadataTests
     /// </summary>
     private static EndpointResponse MinimalResponse() => new()
     {
-        Issuer = Issuer,
-        ResponseTypesSupported = ["code"],
+        Issuer = new Uri(Issuer),
+        ResponseTypesSupported = [ResponseTypes.Code],
         IdTokenSigningAlgValuesSupported = ["RS256"],
         SubjectTypesSupported = ["public"],
     };
+
+    private async Task<ModelResponse> FormatAsync(EndpointResponse response)
+    {
+        var result = Assert.IsType<ObjectResult>(await _formatter.FormatResponseAsync(response));
+        return Assert.IsType<ModelResponse>(result.Value);
+    }
 
     /// <summary>
     /// When the opt-in flag is off, the discovery document carries no <c>signed_metadata</c>
@@ -86,10 +96,8 @@ public class DiscoverySignedMetadataTests
     {
         _oidcOptions.Discovery.SignedMetadata = false;
 
-        var result = await _formatter.FormatResponseAsync(MinimalResponse());
-
-        Assert.NotNull(result.Value);
-        Assert.Null(result.Value.SignedMetadata);
+        var result = await FormatAsync(MinimalResponse());
+        Assert.Null(result.SignedMetadata);
         _jwtCreatorMock.Verify(
             c => c.IssueAsync(It.IsAny<JsonWebToken>(), It.IsAny<JsonWebKey?>(), It.IsAny<JsonWebKey?>(),
                 It.IsAny<string>(), It.IsAny<string>()),
@@ -105,7 +113,7 @@ public class DiscoverySignedMetadataTests
     public async Task SignedMetadataEnabled_EmitsPureJws()
     {
         _oidcOptions.Discovery.SignedMetadata = true;
-        _keysProviderMock.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKey }.ToAsyncEnumerable());
+        _keysProviderMock.Setup(p => p.GetSigningKeys(TestTenant.Matched, true)).Returns(new[] { _signingKey }.ToAsyncEnumerable());
 
         JsonWebKey? capturedEncryptionKey = null;
         _jwtCreatorMock
@@ -115,22 +123,22 @@ public class DiscoverySignedMetadataTests
                 (_, _, enc, _, _) => capturedEncryptionKey = enc)
             .ReturnsAsync(SignedJws);
 
-        var result = await _formatter.FormatResponseAsync(MinimalResponse());
+        var result = await FormatAsync(MinimalResponse());
 
-        Assert.Equal(SignedJws, result.Value!.SignedMetadata);
+        Assert.Equal(SignedJws, result.SignedMetadata);
         Assert.Null(capturedEncryptionKey);
     }
 
     /// <summary>
     /// The signed payload must restate the metadata (resolved endpoints included), carry the
-    /// mandatory <c>iss</c> claim (RFC 8414 §2.1) and an <c>iat</c>, and must NOT contain
+    /// mandatory <c>iss</c> claim (RFC 8414 section 2.1) and an <c>iat</c>, and must NOT contain
     /// <c>signed_metadata</c> itself.
     /// </summary>
     [Fact]
     public async Task SignedMetadataEnabled_PayloadRestatesMetadataWithIssAndNoSelfReference()
     {
         _oidcOptions.Discovery.SignedMetadata = true;
-        _keysProviderMock.Setup(p => p.GetSigningKeys(true)).Returns(new[] { _signingKey }.ToAsyncEnumerable());
+        _keysProviderMock.Setup(p => p.GetSigningKeys(TestTenant.Matched, true)).Returns(new[] { _signingKey }.ToAsyncEnumerable());
 
         JsonWebToken? capturedToken = null;
         _jwtCreatorMock
@@ -142,7 +150,7 @@ public class DiscoverySignedMetadataTests
         await _formatter.FormatResponseAsync(MinimalResponse());
 
         Assert.NotNull(capturedToken);
-        var payload = capturedToken!.Payload.Json;
+        var payload = capturedToken.Payload.Json;
 
         Assert.Equal(Issuer, (string?)payload["iss"]);
         Assert.Equal(Issuer, (string?)payload["issuer"]);
@@ -162,7 +170,7 @@ public class DiscoverySignedMetadataTests
     public async Task SignedMetadataEnabled_NoSigningKeys_Throws()
     {
         _oidcOptions.Discovery.SignedMetadata = true;
-        _keysProviderMock.Setup(p => p.GetSigningKeys(true)).Returns(AsyncEnumerable.Empty<JsonWebKey>());
+        _keysProviderMock.Setup(p => p.GetSigningKeys(TestTenant.Matched, true)).Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => _formatter.FormatResponseAsync(MinimalResponse()));
@@ -184,8 +192,8 @@ public class DiscoverySignedMetadataTests
     {
         _oidcOptions.Discovery.SignedMetadata = true;
         _keysProviderMock
-            .Setup(p => p.GetSigningKeys(true))
-            .Returns(new JsonWebKey[] { new RsaJsonWebKey { KeyId = "sig" } }.ToAsyncEnumerable());
+            .Setup(p => p.GetSigningKeys(TestTenant.Matched, true))
+            .Returns(new JsonWebKey[] { new RsaJsonWebKey { Modulus = TestKeyMaterial.Rsa2048Modulus, KeyId = "sig" } }.ToAsyncEnumerable());
 
         JsonWebToken? capturedToken = null;
         _jwtCreatorMock

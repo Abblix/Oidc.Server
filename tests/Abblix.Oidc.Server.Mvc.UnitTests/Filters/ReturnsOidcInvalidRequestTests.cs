@@ -23,7 +23,7 @@ namespace Abblix.Oidc.Server.Mvc.UnitTests.Filters;
 /// <summary>
 /// Covers the OAuth invalid_request rendering of a failed model-validation pass, the ordering that lets it
 /// pre-empt the <c>[ApiController]</c> automatic 400, and the requirement that every OIDC controller carries
-/// the attribute (placement is what scopes the behaviour to this library's endpoints).
+/// the attribute (placement is what scopes the behavior to this library's endpoints).
 /// </summary>
 public class ReturnsOidcInvalidRequestTests
 {

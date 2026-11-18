@@ -6,11 +6,15 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 
@@ -20,7 +24,7 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// </summary>
 /// <remarks>
 /// The same requirements are checked where a client is configured - at dynamic registration and
-/// over <see cref="OidcOptions.Clients"/> at startup - and that covers every client the deployment
+/// over <see cref="Features.MultiTenancy.TenantDefinition.Clients"/> at startup - and that covers every client the deployment
 /// declares. It does not cover a client that was registered dynamically while no profile was in
 /// force and is still in the store: turning the profile on afterwards leaves it
 /// authenticating with whatever it registered with, because nothing re-reads a stored registration.
@@ -29,30 +33,36 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// checker is the one the configuration paths use, rather than a second reading of the same
 /// requirements that could drift from it.
 ///
-/// A refusal is a null result, indistinguishable to the caller from a credential that did not
-/// verify. That is deliberate: which of the two it was tells an unauthenticated caller something
-/// about a client registration, and every endpoint here already answers an unauthenticated client
-/// the same way.
+/// A refusal is the answer the client's own credential would have had had it failed:
+/// <see cref="ClientAuthenticationFailures.NoCredential"/> for a public client, which presented
+/// none, and <see cref="ClientAuthenticationFailures.InvalidCredential"/> for any other, so the
+/// caller cannot tell it from a credential that did not verify. That is deliberate: which of the two
+/// it was tells an unauthenticated caller something about a client registration, and every endpoint
+/// here already answers an unauthenticated client the same way.
 /// </remarks>
 internal partial class SecurityProfileClientAuthenticator(
     IClientAuthenticator inner,
-    IOptions<OidcOptions> options,
-    ILogger<SecurityProfileClientAuthenticator> logger) : IClientAuthenticator
+    ILogger<SecurityProfileClientAuthenticator> logger,
+    ClientEncryptionKeyResolver encryptionKeyResolver,
+    IOptions<OidcOptions> options) : IClientAuthenticator
 {
     public IEnumerable<string> ClientAuthenticationMethodsSupported
         => inner.ClientAuthenticationMethodsSupported;
 
-    public async Task<ClientInfo?> TryAuthenticateClientAsync(ClientRequest request)
+    public Task<IEnumerable<string>> FindPresentedCredentialsAsync(TenantDefinition tenant, ClientRequest request)
+        => inner.FindPresentedCredentialsAsync(tenant, request);
+
+    public async Task<Result<ClientInfo, OidcError>> TryAuthenticateClientAsync(TenantDefinition tenant, ClientRequest request)
     {
-        var clientInfo = await inner.TryAuthenticateClientAsync(request);
-        if (clientInfo == null)
-            return null;
+        var result = await inner.TryAuthenticateClientAsync(tenant, request);
+        if (!result.TryGetSuccess(out var clientInfo))
+            return result;
 
         // The raw value, because the question below is whether this server DEFINES it - not what
         // it demands. What the client is held to comes from the combination further down, which
-        // takes the deployment's demands as a floor; this read must not, or an undefined value the
-        // client set would be hidden behind a defined deployment default.
-        var profile = clientInfo.SecurityProfile ?? options.Value.DefaultSecurityProfile;
+        // takes the tenant's demands as a floor; this read must not, or an undefined value the
+        // client set would be hidden behind a defined default of the tenant.
+        var profile = SecurityProfileRequirements.ProfileNamedFor(tenant, clientInfo);
 
         // Said where a client is met after proving who it is. The value cannot be interpreted, so
         // the client is held to every control this server can demand - and without this line the
@@ -69,10 +79,42 @@ internal partial class SecurityProfileClientAuthenticator(
             LogProfileIsNotOneThisServerDefines(clientInfo.ClientId, (int)profile);
         }
 
-        var violations = SecurityProfileConsistency.FindViolations(
-            clientInfo.EffectiveResponseTypes,
-            clientInfo.TokenEndpointAuthMethod,
-            SecurityProfileRequirements.For(clientInfo, options.Value.DefaultSecurityProfile));
+        var requirements = SecurityProfileRequirements.For(clientInfo, tenant.DefaultSecurityProfile);
+
+        // FAPI 1.0 Part 1 section 5.2.2: invalid_client "when mis-matched client identifiers were provided through the
+        // client authentication methods that permits sending the client identifier in more than one way". The
+        // credential decided which client this is, so a client_id naming another one is refused rather than ignored
+        if (requirements.RequireMatchingClientIdentifiers &&
+            request.ClientId is { Length: > 0 } namedClientId &&
+            !string.Equals(namedClientId, clientInfo.ClientId, StringComparison.Ordinal))
+        {
+            LogClientIdentifiersMismatch(clientInfo.ClientId, Sanitized.Value(namedClientId));
+            return Refused(clientInfo);
+        }
+        IReadOnlyList<string> violations =
+        [
+            ..SecurityProfileConsistency.FindViolations(
+                clientInfo.EffectiveResponseTypes,
+                clientInfo.TokenEndpointAuthMethod,
+                clientInfo.ClientAssertionAudiences,
+                requirements),
+            ..SecurityProfileConsistency.FindGrantTypeViolations(clientInfo.EffectiveGrantTypes, requirements),
+            ..SecurityProfileConsistency.FindTokenDeliveryViolations(
+                clientInfo.BackChannelTokenDeliveryMode, requirements),
+            ..SecurityProfileConsistency.FindAlgorithmViolations(clientInfo, requirements),
+            ..SecurityProfileConsistency.FindJwksUriViolations(clientInfo.JwksUri, requirements),
+            ..SecurityProfileConsistency.FindResponseModeViolations(
+                clientInfo.AllowedResponseModes, clientInfo.EffectiveResponseTypes, requirements),
+            ..SecurityProfileConsistency.FindTokenBindingViolations(
+                clientInfo.TokenEndpointAuthMethod,
+                clientInfo.TlsClientCertificateBoundAccessTokens,
+                clientInfo.RequireDPoP,
+                requirements),
+            ..SecurityProfileConsistency.FindServiceTokenViolations(
+                SecurityProfileConsistency.IssuedToAClient(options.Value.ServiceTokens), requirements),
+            ..await SecurityProfileConsistency.FindEncryptionKeyViolationsAsync(
+                encryptionKeyResolver, clientInfo, requirements),
+        ];
 
         if (violations.Count == 0)
             return clientInfo;
@@ -82,10 +124,22 @@ internal partial class SecurityProfileClientAuthenticator(
         // sentinel string would put prose where a consumer expects a value it can query.
         if (clientInfo.SecurityProfile is { } named)
             LogRegistrationCannotSatisfyProfile(
-                clientInfo.ClientId, named, options.Value.DefaultSecurityProfile, violations);
+                clientInfo.ClientId, named, tenant.DefaultSecurityProfile, violations);
         else
             LogRegistrationCannotSatisfyDeploymentProfile(
-                clientInfo.ClientId, options.Value.DefaultSecurityProfile, violations);
-        return null;
+                clientInfo.ClientId, tenant.DefaultSecurityProfile, violations);
+        return Refused(clientInfo);
+    }
+
+    /// <summary>
+    /// The refusal of a client the profile does not admit, in the outcome its own credential had: a public client
+    /// presented none, and is refused as a caller that presented none; any other presented one and had it refused.
+    /// </summary>
+    private static OidcError Refused(ClientInfo clientInfo)
+    {
+        if (clientInfo.TokenEndpointAuthMethod == ClientAuthenticationMethods.None)
+            return ClientAuthenticationFailures.NoCredential;
+
+        return ClientAuthenticationFailures.InvalidCredential;
     }
 }

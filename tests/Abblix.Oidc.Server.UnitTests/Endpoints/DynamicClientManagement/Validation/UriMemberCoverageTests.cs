@@ -63,7 +63,7 @@ public class UriMemberCoverageTests
             request,
             property.PropertyType == typeof(Uri[]) ? new[] { Relative } : Relative);
 
-        var result = await new StoredUriValidator().ValidateAsync(new ClientRegistrationValidationContext(request));
+        var result = await new StoredUriValidator().ValidateAsync(SingleIssuer.Tenant, new ClientRegistrationValidationContext(request));
 
         Assert.NotNull(result);
 
@@ -95,8 +95,9 @@ public class UriMemberCoverageTests
         => Regex.IsMatch(description, $@"(?<!\w){Regex.Escape(member)}(?!\w)");
 
     /// <summary>
-    /// The control: the same request with every URI member absolute is accepted, so the rows above
-    /// measure the relative value rather than a validator that refuses whatever it is given.
+    /// The control: the same request with every URI member absolute is accepted, so the rows of
+    /// <see cref="EveryUriMemberIsRefusedWhenRelative"/> measure the relative value rather than a validator that
+    /// refuses whatever it is given.
     /// </summary>
     [Fact]
     public async Task AnAbsoluteValueInEveryMemberIsAccepted()
@@ -117,7 +118,7 @@ public class UriMemberCoverageTests
                 property.PropertyType == typeof(Uri[]) ? new[] { absolute } : absolute);
         }
 
-        var result = await new StoredUriValidator().ValidateAsync(new ClientRegistrationValidationContext(request));
+        var result = await new StoredUriValidator().ValidateAsync(SingleIssuer.Tenant, new ClientRegistrationValidationContext(request));
 
         Assert.Null(result);
     }

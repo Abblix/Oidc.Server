@@ -15,7 +15,7 @@ namespace Abblix.Jwt.Vault.UnitTests;
 
 /// <summary>
 /// Refresh-on-use, on a fake clock that only ever answers "what time is it" - there are no timers to
-/// race. The case the design centres on is the max-TTL ceiling: renewal there does not fail, it
+/// race. The case the design centers on is the max-TTL ceiling: renewal there does not fail, it
 /// succeeds with a shrinking lease, so the source must log in afresh the moment the lease stops
 /// extending, while the old token is still valid.
 /// </summary>

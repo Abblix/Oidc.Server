@@ -17,17 +17,29 @@ namespace Abblix.Oidc.Server.Model;
 /// transport adapters (MVC, Minimal API) serialize; serialization is identical across frameworks, so a single core
 /// type serves both.
 /// </summary>
+[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 public record TokenResponse
 {
-    private static class Parameters
+    /// <summary>
+    /// Wire-level member names of the token endpoint's JSON response.
+    /// </summary>
+    public static class Parameters
     {
+        /// <summary>The <c>access_token</c> the authorization server issued.</summary>
         public const string AccessToken = "access_token";
+        /// <summary>The <c>token_type</c> of the issued access token.</summary>
         public const string TokenType = "token_type";
+        /// <summary>The <c>issued_token_type</c> of a token exchange response.</summary>
         public const string IssuedTokenType = "issued_token_type";
+        /// <summary>The <c>expires_in</c> access-token lifetime in seconds.</summary>
         public const string ExpiresIn = "expires_in";
+        /// <summary>The <c>refresh_token</c> for obtaining new access tokens.</summary>
         public const string RefreshToken = "refresh_token";
+        /// <summary>The <c>scope</c> of the issued access token.</summary>
         public const string Scope = "scope";
+        /// <summary>The <c>id_token</c> issued alongside the access token.</summary>
         public const string IdToken = "id_token";
+        /// <summary>The <c>authorization_details</c> granted to the access token.</summary>
         public const string AuthorizationDetails = "authorization_details";
     }
 
@@ -76,7 +88,7 @@ public record TokenResponse
     public string? IdToken { get; init; }
 
     /// <summary>
-    /// RFC 9396 §7 <c>authorization_details</c>: the structured authorization data the token was granted for, echoed
+    /// RFC 9396 section 7 <c>authorization_details</c>: the structured authorization data the token was granted for, echoed
     /// back to the client byte-exact. Omitted when no Rich Authorization Request was used.
     /// </summary>
     [JsonPropertyName(Parameters.AuthorizationDetails)]

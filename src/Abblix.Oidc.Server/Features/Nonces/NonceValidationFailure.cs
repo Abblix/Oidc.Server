@@ -11,7 +11,7 @@ namespace Abblix.Oidc.Server.Features.Nonces;
 /// <summary>
 /// Reasons a server-issued nonce can fail validation. The categories are for
 /// log filters and metrics - at the protocol layer DPoP-Nonce flows surface
-/// every failure as the same RFC 9449 §8 <c>use_dpop_nonce</c> error with a
+/// every failure as the same RFC 9449 section 8 <c>use_dpop_nonce</c> error with a
 /// freshly issued nonce in the response header, regardless of the underlying
 /// reason.
 /// </summary>
@@ -36,9 +36,9 @@ public enum NonceValidationFailure
     /// <summary>
     /// The HMAC tag does not match what the server would compute for the
     /// embedded timestamp under any in-rotation secret. Indicates either
-    /// tampering, a nonce minted by a different deployment, or a brief
-    /// rotation race window where the issuing instance's secret has not yet
-    /// propagated through <c>IDistributedCache</c>.
+    /// tampering, a nonce minted by a different deployment or a different tenant,
+    /// or a brief rotation race window where the issuing instance's secret has not
+    /// yet propagated through the entity storage.
     /// </summary>
     BadSignature,
 }

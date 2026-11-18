@@ -15,9 +15,56 @@ namespace Abblix.Oidc.Server.Features.Storages;
 /// in-process or distributed.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Implementations must support atomic get-and-remove semantics when
 /// <c>removeOnRetrieval</c> is true so that single-use credentials (authorization codes, PAR
 /// request URIs) cannot be replayed across concurrent token requests.
+/// </para>
+/// <para>
+/// Every operation that decides between callers - the read with removal,
+/// <see cref="TrySetIfAbsentAsync{T}"/>, <see cref="TryReplaceAsync{T}"/> and <see cref="TryExtendAsync"/> -
+/// is exactly as atomic as the store behind it makes it. The shipped <see cref="DistributedCacheStorage"/>
+/// rides <c>IDistributedCache</c>, which has no conditional write, so it decides between the callers of one
+/// process under a per-key gate; two requests that reach different nodes can both be told they came first.
+/// A deployment with several nodes registers a storage that maps each of these operations to one command of
+/// its store, so the decision is made by the store and holds for every node. In Redis:
+/// </para>
+/// <list type="bullet">
+/// <item><description><see cref="TrySetIfAbsentAsync{T}"/> is <c>SET key value NX</c> with <c>PX</c> for a
+/// relative expiry or <c>PXAT</c> for an absolute one, writing the value and its lifetime together, so no key
+/// is ever left without its expiry. A sliding expiry has no such command and is not covered
+/// here.</description></item>
+/// <item><description>The read with removal is <c>GETDEL</c>.</description></item>
+/// <item><description><see cref="TryExtendAsync"/> is <c>PEXPIRE</c> or <c>PEXPIREAT</c>, which leave a key
+/// that is gone alone.</description></item>
+/// <item><description><see cref="TryReplaceAsync{T}"/> is an optimistic transaction: <c>WATCH</c> the key,
+/// <c>GET</c> it, compare the values in the process as that method requires, then <c>MULTI</c>, <c>SET</c>,
+/// <c>EXEC</c>, an aborted <c>EXEC</c> answering false. A script comparing inside Redis sees only stored
+/// bytes, so it fits only a serialization that writes one value as one byte sequence.</description></item>
+/// </list>
+/// <para>
+/// With such a storage, the decisions built on these operations hold across nodes as well: the logout
+/// confirmation question two overlapping end-session requests share, the reuse check of a PKCE code challenge
+/// or a nonce, the end of a pushed authorization flow, single-use codes and request URIs, the token registry,
+/// the revocation cutoff, the registry of clients in a session and the device user code rate limit. Redeeming
+/// the logout confirmation answer reads, compares and removes in separate steps, so it is not one of them.
+/// </para>
+/// <para>
+/// Other stores have the same primitive, provided an entry past its expiry but not yet purged counts as
+/// absent, both when claiming a key and when reading it. In SQL that is
+/// <c>INSERT ... ON CONFLICT (key) DO UPDATE ... WHERE expires_at &lt;= now()</c>, the affected row count
+/// answering whether this caller wrote; in DynamoDB a conditional put on
+/// <c>attribute_not_exists(pk) OR expiresAt &lt; :now</c>, since its TTL deletion runs late; in etcd a
+/// transaction on a key's create revision with a lease, which expires the key itself. A plain
+/// <c>ON CONFLICT DO NOTHING</c> keeps refusing a key whose entry has expired until the purge runs.
+/// </para>
+/// <para>
+/// The server's replay detection of presented tokens - DPoP proofs, client assertions, JWT bearer grant
+/// assertions, and the security event tokens of a receiver running beside the server - reserves through
+/// <see cref="TrySetIfAbsentAsync{T}"/> and gives a reservation back through <see cref="RemoveAsync"/>, so it
+/// holds across nodes with such a storage too. A host that registers its own <c>IReplayCache</c> keeps those
+/// reservations there instead.
+/// </para>
 /// </remarks>
 public interface IEntityStorage
 {
@@ -44,6 +91,77 @@ public interface IEntityStorage
     /// <param name="token">An optional cancellation token.</param>
     /// <returns>The stored entity, or <c>null</c> when no entry is present or it has expired.</returns>
     Task<T?> GetAsync<T>(string key, bool removeOnRetrieval, CancellationToken? token = null);
+
+    /// <summary>
+    /// Writes an entity only when <paramref name="key"/> carries none, and reports whether this caller
+    /// is the one that wrote it.
+    /// </summary>
+    /// <remarks>
+    /// Implementations must decide this between concurrent callers: of several racing for one key, at
+    /// most one may be told it wrote. This is what lets a count be kept without reading a number and
+    /// writing it back - each event claims a key of its own, and two events arriving together claim two
+    /// keys instead of writing the same number twice.
+    /// </remarks>
+    /// <typeparam name="T">The type of the entity to store.</typeparam>
+    /// <param name="key">The key to claim.</param>
+    /// <param name="value">The entity to store when the key is free.</param>
+    /// <param name="options">Expiration policy for the entry, when one is written.</param>
+    /// <param name="token">An optional cancellation token.</param>
+    /// <returns>
+    /// True when the key held nothing and this caller wrote the value; false when a value was already
+    /// there.
+    /// </returns>
+    Task<bool> TrySetIfAbsentAsync<T>(
+        string key, T value, StorageOptions options, CancellationToken? token = null);
+
+    /// <summary>
+    /// Writes an entity only when <paramref name="key"/> still carries <paramref name="expected"/>, and reports
+    /// whether this caller is the one that wrote it.
+    /// </summary>
+    /// <remarks>
+    /// Implementations must decide this between concurrent callers: of several that read the same value and race
+    /// to replace it, at most one may be told it wrote, and a key that holds nothing, or a value another caller has
+    /// written since, is left as it is. This is what lets a record only ever move one way, such as a revocation
+    /// cutoff that must never be moved back: the caller reads it, decides, and replaces it only if nobody changed it
+    /// in between, or reads it again.
+    /// <para>
+    /// The other half is as binding: when nobody has written since the caller read, the caller must be told it
+    /// wrote. The comparison is therefore of values, not of stored bytes - a value read and written again need not
+    /// come back as the bytes another writer stored for it - and a replace that can never match leaves a caller
+    /// that reads again and retries unable to record anything at all.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="T">The type of the entity to store.</typeparam>
+    /// <param name="key">The key whose value is replaced.</param>
+    /// <param name="expected">The value the caller read and decided on.</param>
+    /// <param name="value">The entity to store in its place.</param>
+    /// <param name="options">Expiration policy for the entry, when one is written.</param>
+    /// <param name="token">An optional cancellation token.</param>
+    /// <returns>
+    /// True when the key held <paramref name="expected"/> and this caller replaced it; false when it held nothing
+    /// or another value.
+    /// </returns>
+    Task<bool> TryReplaceAsync<T>(
+        string key, T expected, T value, StorageOptions options, CancellationToken? token = null);
+
+    /// <summary>
+    /// Gives the entry under <paramref name="key"/> a new expiration policy, keeping its value, when there is
+    /// one, and reports whether there was.
+    /// </summary>
+    /// <remarks>
+    /// Implementations must never write an entry the key does not hold when the call is decided: an entry that
+    /// has expired or been removed stays gone, and an entry written by another caller keeps its value. This is
+    /// what lets a record that others also write be kept longer without bringing back one that has already
+    /// ended, or writing an old value over a newer one. A store that moves an expiry by itself, such as Redis
+    /// with <c>EXPIRE</c>, gives this in one command; one that does not reads the value and writes it straight
+    /// back, deciding between its own callers the way <see cref="TrySetIfAbsentAsync{T}"/> does.
+    /// </remarks>
+    /// <param name="key">The key whose entry is kept longer.</param>
+    /// <param name="options">The new expiration policy.</param>
+    /// <param name="token">An optional cancellation token.</param>
+    /// <returns>True when the key held an entry and it now carries the new policy; false when it held none.
+    /// </returns>
+    Task<bool> TryExtendAsync(string key, StorageOptions options, CancellationToken? token = null);
 
     /// <summary>
     /// Removes the entity stored under <paramref name="key"/>; succeeds silently when no entry

@@ -8,7 +8,6 @@
 using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
-using System.Text;
 using Abblix.Utils;
 
 namespace Abblix.Jwt.Encryption;
@@ -22,7 +21,7 @@ namespace Abblix.Jwt.Encryption;
 /// </summary>
 /// <remarks>
 /// The password travels as an <see cref="OctetJsonWebKey"/> whose key value holds the password
-/// octets (typically the UTF-8 encoding of a passphrase). Per RFC 7518 §4.8.1.1 the PBKDF2 salt
+/// octets (typically the UTF-8 encoding of a passphrase). Per RFC 7518 section 4.8.1.1 the PBKDF2 salt
 /// is <c>UTF8(alg) || 0x00 || p2s</c>, binding the derivation to the exact algorithm name.
 /// Inbound tokens dictate their own iteration count, so a hard upper bound caps the PBKDF2 work
 /// an attacker-supplied token can demand (denial-of-service by iteration count).
@@ -34,23 +33,17 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 	public string Algorithm => algorithm;
 
 	/// <summary>
-	/// The PBKDF2 pseudorandom function and the derived KEK size for this algorithm.
+	/// Derives the key encryption key from the password, the same way on both sides.
 	/// </summary>
-	private readonly (HashAlgorithmName Prf, int KeyEncryptionKeySize) _parameters = algorithm switch
-	{
-		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha256Aes128KW => (HashAlgorithmName.SHA256, 16),
-		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha384Aes192KW => (HashAlgorithmName.SHA384, 24),
-		EncryptionAlgorithms.KeyManagement.Pbes2HmacSha512Aes256KW => (HashAlgorithmName.SHA512, 32),
-		_ => throw new ArgumentException($"Unsupported PBES2 algorithm: {algorithm}", nameof(algorithm))
-	};
+	private readonly Pbes2KeyDerivation _derivation = new(algorithm);
 
-	// RFC 7518 §4.8.1.1: the 'p2s' salt input MUST be at least 8 octets.
+	// RFC 7518 section 4.8.1.1: the 'p2s' salt input MUST be at least 8 octets.
 	private const int MinSaltInputSize = 8;
 
 	// The salt input generated for outbound tokens; comfortably above the spec minimum.
 	private const int SaltInputSize = 16;
 
-	// RFC 7518 §4.8.1.2: "A minimum iteration count of 1000 is RECOMMENDED" - enforced on inbound tokens.
+	// RFC 7518 section 4.8.1.2: "A minimum iteration count of 1000 is RECOMMENDED" - enforced on inbound tokens.
 	private const int MinIterationCount = 1000;
 
 	// Hard upper bound on the inbound iteration count: 'p2c' is attacker-controlled, and without a cap a
@@ -67,7 +60,7 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 	/// <inheritdoc />
 	/// <remarks>
 	/// Generates a fresh random salt input for every encryption and records it with the iteration
-	/// count in the 'p2s'/'p2c' header parameters, as RFC 7518 §4.8.1 requires.
+	/// count in the 'p2s'/'p2c' header parameters, as RFC 7518 section 4.8.1 requires.
 	/// </remarks>
 	public byte[] EncryptKey(JsonWebTokenHeader header, OctetJsonWebKey passwordKey, byte[] keyToEncrypt)
 	{
@@ -79,8 +72,10 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 		header.Pbes2SaltInput = Base64Url.EncodeToString(saltInput);
 		header.Pbes2IterationCount = DefaultIterationCount;
 
-		var keyEncryptionKey = DeriveKeyEncryptionKey(password, saltInput, DefaultIterationCount);
-		return AesKeyWrap.Wrap(keyEncryptionKey, keyToEncrypt);
+		var keyEncryptionKey = _derivation.KeyEncryptionKey(password, saltInput, DefaultIterationCount);
+		using var aes = Aes.Create();
+		aes.Key = keyEncryptionKey;
+		return aes.EncryptKeyWrap(keyToEncrypt);
 	}
 
 	/// <inheritdoc />
@@ -117,26 +112,11 @@ internal sealed class Pbes2KeyEncryptor(string algorithm) : IKeyManagementAlgori
 		if (saltInput.Length < MinSaltInputSize)
 			return false;
 
-		var keyEncryptionKey = DeriveKeyEncryptionKey(password, saltInput, iterationCount);
+		var keyEncryptionKey = _derivation.KeyEncryptionKey(password, saltInput, iterationCount);
 
 		// The unwrap's integrity register check rejects tampered input and wrong-password attempts.
-		return AesKeyWrap.TryUnwrap(keyEncryptionKey, encryptedKey, out decryptedKey);
-	}
-
-	/// <summary>
-	/// Derives the Key Encryption Key per RFC 7518 §4.8.1: PBKDF2 with the salt
-	/// <c>UTF8(alg) || 0x00 || p2s</c>, the algorithm's HMAC PRF and the KEK length the
-	/// algorithm name declares.
-	/// </summary>
-	private byte[] DeriveKeyEncryptionKey(byte[] password, byte[] saltInput, int iterationCount)
-	{
-		var algorithmName = Encoding.UTF8.GetBytes(algorithm);
-
-		var salt = new byte[algorithmName.Length + 1 + saltInput.Length];
-		algorithmName.CopyTo(salt, 0);
-		salt[algorithmName.Length] = 0;
-		saltInput.CopyTo(salt, algorithmName.Length + 1);
-
-		return Rfc2898DeriveBytes.Pbkdf2(password, salt, iterationCount, _parameters.Prf, _parameters.KeyEncryptionKeySize);
+		using var aes = Aes.Create();
+		aes.Key = keyEncryptionKey;
+		return aes.TryUnwrapKey(encryptedKey, out decryptedKey);
 	}
 }

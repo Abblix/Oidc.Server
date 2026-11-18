@@ -14,6 +14,8 @@ using Abblix.Oidc.Server.Common.Configuration;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.ReplayPrevention;
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -37,8 +39,7 @@ public class ConfiguredReplayCacheTests
     private static readonly DateTimeOffset Expiry = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>
-    /// Records the deadline it was handed, which is what these cases are about. The class also emits
-    /// the two events an operator's runbook keys off, and nothing here holds it to those.
+    /// Records the deadline it was handed and the identifier it was asked to release.
     /// </summary>
     private sealed class RecordingCache : IReplayCache
     {
@@ -49,6 +50,14 @@ public class ConfiguredReplayCacheTests
         {
             Reserved = expiresAt;
             return Task.FromResult(true);
+        }
+
+        public string? Released { get; private set; }
+
+        public Task ReleaseAsync(string identifier, CancellationToken cancellationToken = default)
+        {
+            Released = identifier;
+            return Task.CompletedTask;
         }
     }
 
@@ -66,6 +75,31 @@ public class ConfiguredReplayCacheTests
         Assert.True(await cache.TryReserveAsync("jti", Expiry, TestContext.Current.CancellationToken));
 
         return inner.Reserved!.Value;
+    }
+
+    /// <summary>
+    /// A release reaches the store. A host running this server beside a back-channel logout receiver
+    /// shares this cache with it, and a release stopped here leaves every Logout Token the application
+    /// failed on refused as a replay when the provider sends it again.
+    /// </summary>
+    [Fact]
+    public async Task AReleaseReachesTheStore()
+    {
+        var inner = new RecordingCache();
+        var logs = new RecordingLoggerFactory();
+        var cache = new ConfiguredReplayCache(
+            new Logger<ConfiguredReplayCache>(logs), inner, new OptionsMonitorStub(new OidcOptions()));
+
+        await cache.ReleaseAsync("token-released", TestContext.Current.CancellationToken);
+
+        Assert.Equal("token-released", inner.Released);
+
+        // Without a line of its own, a debug log shows the same identifier reserved twice with
+        // nothing between, which reads as the guard letting a replay through.
+        Assert.Contains(
+            logs.Entries,
+            entry => entry.EventId.Id == LogEvents.Tokens.ConfiguredReplayCache.Released
+                     && entry.Message.Contains("token-released", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -96,7 +130,8 @@ public class ConfiguredReplayCacheTests
 
     /// <summary>
     /// And a deployment naming a LONGER one is not cut down to the profile's window, without which
-    /// the case above would be satisfied by ignoring the setting entirely.
+    /// <see cref="AShorterConfiguredWindow_DoesNotShortenTheRetention"/> would be satisfied by ignoring the
+    /// setting entirely.
     /// </summary>
     [Fact]
     public async Task ALongerConfiguredWindow_IsHonoured()
@@ -110,7 +145,8 @@ public class ConfiguredReplayCacheTests
 
     /// <summary>
     /// Setting nothing leaves the profile's window, which is what the bearer grant resolves to as
-    /// well. Without this case both cases above could be satisfied by a class that always adds the
+    /// well. Without this case both <see cref="AShorterConfiguredWindow_DoesNotShortenTheRetention"/> and
+    /// <see cref="ALongerConfiguredWindow_IsHonoured"/> could be satisfied by a class that always adds the
     /// configured value and treats its absence as zero.
     /// </summary>
     [Fact]

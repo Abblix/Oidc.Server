@@ -19,6 +19,9 @@ using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 using HashAlg = Abblix.Oidc.Server.Features.Hashing.HashAlgorithm;
+using Abblix.Oidc.Server.Features.MultiTenancy;
+using Abblix.Utils;
+using Abblix.Oidc.Server.Common;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
@@ -57,8 +60,8 @@ public class ClientSecretAuthenticatorTests
         IHashService hashService)
         : ClientSecretAuthenticator(logger, clientInfoProvider, clock, hashService)
     {
-        public Task<ClientInfo?> TestTryAuthenticateAsync(string? clientId, string? secret, string authMethod)
-            => TryAuthenticateAsync(clientId, secret, authMethod);
+        public Task<Result<ClientInfo, OidcError>> TestTryAuthenticateAsync(string? clientId, string? secret, string authMethod)
+            => TryAuthenticateAsync(SingleIssuer.Tenant, clientId, secret, authMethod);
     }
 
     private static byte[] ComputeSha256(string value)
@@ -87,7 +90,7 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -106,7 +109,7 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -125,7 +128,7 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -144,7 +147,7 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -163,7 +166,7 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -178,7 +181,7 @@ public class ClientSecretAuthenticatorTests
         var secret = "test-secret";
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(clientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
@@ -186,7 +189,7 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -206,7 +209,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(clientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -214,7 +217,7 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -235,7 +238,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(clientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         // Act
@@ -243,7 +246,7 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -264,7 +267,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(clientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -280,8 +283,8 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(clientId, result.ClientId);
+        Assert.True((result).TryGetSuccess(out _));
+        Assert.Equal(clientId, result.GetSuccess().ClientId);
     }
 
     /// <summary>
@@ -302,7 +305,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(clientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -314,8 +317,8 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(clientId, result.ClientId);
+        Assert.True((result).TryGetSuccess(out _));
+        Assert.Equal(clientId, result.GetSuccess().ClientId);
     }
 
     /// <summary>
@@ -337,7 +340,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(clientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -353,7 +356,7 @@ public class ClientSecretAuthenticatorTests
             clientId, incorrectSecret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -382,7 +385,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(clientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -398,7 +401,7 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.Null(result);
+        Assert.False((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -427,7 +430,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(clientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -443,7 +446,7 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -470,7 +473,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(clientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -486,7 +489,7 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True((result).TryGetSuccess(out _));
     }
 
     /// <summary>
@@ -510,7 +513,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(clientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -522,7 +525,7 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True((result).TryGetSuccess(out _));
         // Verify SHA256 was never called since SHA512 matched
         _hashService.Verify(h => h.Sha(HashAlg.Sha256, secret), Times.Never);
     }
@@ -555,7 +558,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(clientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -601,7 +604,7 @@ public class ClientSecretAuthenticatorTests
         };
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(clientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, clientId))
             .ReturnsAsync(clientInfo);
 
         _hashService
@@ -617,6 +620,6 @@ public class ClientSecretAuthenticatorTests
             clientId, secret, ClientAuthenticationMethods.ClientSecretBasic);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.True((result).TryGetSuccess(out _));
     }
 }

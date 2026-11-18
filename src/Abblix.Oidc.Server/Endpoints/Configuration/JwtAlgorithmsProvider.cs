@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Endpoints.Configuration.Interfaces;
 using Abblix.Oidc.Server.Features.DPoP;
@@ -17,11 +18,12 @@ namespace Abblix.Oidc.Server.Endpoints.Configuration;
 /// </summary>
 public sealed class JwtAlgorithmsProvider(
 	IJsonWebTokenCreator jwtCreator,
-	IJsonWebTokenValidator jwtValidator) : IJwtAlgorithmsProvider
+	IJsonWebTokenValidator jwtValidator,
+	EncryptionAlgorithmsProvider encryptionAlgorithms) : IJwtAlgorithmsProvider
 {
 	/// <summary>
 	/// HMAC algorithms are excluded from every client-addressed response-signing list: per
-	/// OIDC Core §10.1 an HS* signature uses the client_secret as the key, but this server
+	/// OIDC Core section 10.1 an HS* signature uses the client_secret as the key, but this server
 	/// persists client secrets as SHA-512 hashes (except the client_secret_jwt case), so it
 	/// cannot derive the HMAC key at signing time. Advertising HS* let a client register it
 	/// via DCR and then fail with a server error on the first issued token. The JWT layer
@@ -41,7 +43,7 @@ public sealed class JwtAlgorithmsProvider(
 	public IEnumerable<string> SigningAlgorithmsSupported => jwtValidator.SigningAlgorithmsSupported;
 
 	/// <summary>
-	/// RFC 8414 §2 and OpenID Connect Discovery 1.0 §3 both state the value "none" MUST NOT appear
+	/// RFC 8414 section 2 and OpenID Connect Discovery 1.0 section 3 both state the value "none" MUST NOT appear
 	/// in token_endpoint_auth_signing_alg_values_supported - a client authenticates by signing a
 	/// JWT assertion, so an unsecured assertion would prove nothing. HS* stay because
 	/// client_secret_jwt legitimately keys on the shared client secret.
@@ -50,7 +52,7 @@ public sealed class JwtAlgorithmsProvider(
 		=> jwtValidator.SigningAlgorithmsSupported.Where(alg => alg != SigningAlgorithms.None);
 
 	/// <summary>
-	/// CIBA Core §7.1.1 requires the signed backchannel authentication request to use an asymmetric
+	/// CIBA Core section 7.1.1 requires the signed backchannel authentication request to use an asymmetric
 	/// algorithm, so both "none" and the symmetric HS* algorithms are excluded here.
 	/// </summary>
 	public IEnumerable<string> BackChannelAuthenticationRequestSigningAlgValuesSupported
@@ -70,18 +72,30 @@ public sealed class JwtAlgorithmsProvider(
 	/// <inheritdoc />
 	public IEnumerable<string> AuthorizationSigningAlgValuesSupported => ClientAddressedSigningAlgorithms;
 
-	/// <inheritdoc />
-	public IEnumerable<string> AuthorizationEncryptionAlgValuesSupported => jwtValidator.EncryptionAlgorithmsSupported;
+	/// <summary>
+	/// The key management algorithms the creator encrypts with, less the symmetric ones OpenID Connect Core 1.0 section
+	/// 10.2 derives no key for from the client secret (it covers "the AES key wrapping or direct encryption algorithm
+	/// used"), which no client holds a key for.
+	/// </summary>
+	public IEnumerable<string> EncryptedResponseAlgorithmsSupported
+		=> jwtCreator.EncryptedResponseAlgorithmsSupported.Where(
+			algorithm => ClientSecretEncryptionKey.CanBeServed(encryptionAlgorithms, algorithm));
 
 	/// <inheritdoc />
-	public IEnumerable<string> AuthorizationEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;
+	public IEnumerable<string> EncryptedResponseMethodsSupported => jwtCreator.EncryptedResponseMethodsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> AuthorizationEncryptionAlgValuesSupported => EncryptedResponseAlgorithmsSupported;
+
+	/// <inheritdoc />
+	public IEnumerable<string> AuthorizationEncryptionEncValuesSupported => EncryptedResponseMethodsSupported;
 
 	/// <inheritdoc />
 	public IEnumerable<string> IntrospectionSigningAlgValuesSupported => ClientAddressedSigningAlgorithms;
 
 	/// <inheritdoc />
-	public IEnumerable<string> IntrospectionEncryptionAlgValuesSupported => jwtValidator.EncryptionAlgorithmsSupported;
+	public IEnumerable<string> IntrospectionEncryptionAlgValuesSupported => EncryptedResponseAlgorithmsSupported;
 
 	/// <inheritdoc />
-	public IEnumerable<string> IntrospectionEncryptionEncValuesSupported => jwtValidator.EncryptionMethodsSupported;
+	public IEnumerable<string> IntrospectionEncryptionEncValuesSupported => EncryptedResponseMethodsSupported;
 }

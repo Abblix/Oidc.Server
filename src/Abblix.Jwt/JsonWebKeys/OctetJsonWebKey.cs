@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Abblix.Utils.Json;
 
@@ -78,10 +79,12 @@ public sealed record OctetJsonWebKey : JsonWebKey
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Required oct members per RFC 7638 §3.2 in lexicographic order: <c>k</c>,
-    /// <c>kty</c>. The base64url-encoded key value contains only characters that need
-    /// no JSON escaping.
+    /// Required oct members per RFC 7638 section 3.2 in lexicographic order: <c>k</c>,
+    /// <c>kty</c>.
     /// </remarks>
-    protected override string CanonicalJson()
-        => $$"""{"k":"{{Encode(JsonWebKeyPropertyNames.KeyValue, KeyValue)}}","kty":"{{KeyType}}"}""";
+    protected override void WriteCanonicalMembers(Utf8JsonWriter writer)
+    {
+        writer.WriteString(JsonWebKeyPropertyNames.KeyValue, Encode(JsonWebKeyPropertyNames.KeyValue, KeyValue));
+        writer.WriteString(JsonWebKeyPropertyNames.KeyType, KeyType);
+    }
 }

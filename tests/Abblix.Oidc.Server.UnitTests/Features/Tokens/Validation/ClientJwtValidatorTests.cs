@@ -6,13 +6,13 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common.Constants;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
-using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
 using Microsoft.Extensions.Logging;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
@@ -21,6 +21,7 @@ using Xunit;
 using JsonWebKey = Abblix.Jwt.JsonWebKey;
 using Abblix.Oidc.Server.Common.Configuration;
 using Microsoft.Extensions.Options;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens.Validation;
 
@@ -42,39 +43,35 @@ public class ClientJwtValidatorTests
     private readonly Mock<IClientKeysProvider> _clientKeysProvider;
     private readonly Mock<IAuthServiceKeysProvider> _serviceKeysProvider;
     private readonly JsonWebKey _serverDecryptionKey;
+    private readonly JsonWebKey _serverSymmetricKey;
     private readonly ClientJwtValidator _validator;
 
     public ClientJwtValidatorTests()
     {
         var logger = new Mock<ILogger<ClientJwtValidator>>();
         var requestInfoProvider = new Mock<IRequestInfoProvider>(MockBehavior.Strict);
-        var issuerProvider = new Mock<IIssuerProvider>(MockBehavior.Strict);
         _tokenValidator = new Mock<IJsonWebTokenValidator>(MockBehavior.Strict);
         _clientInfoProvider = new Mock<IClientInfoProvider>(MockBehavior.Strict);
         _clientKeysProvider = new Mock<IClientKeysProvider>(MockBehavior.Strict);
         _serviceKeysProvider = new Mock<IAuthServiceKeysProvider>(MockBehavior.Strict);
 
-        _serverDecryptionKey = new RsaJsonWebKey { KeyId = "server-enc" };
+        _serverDecryptionKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Encryption) with { KeyId = "server-enc" };
+        _serverSymmetricKey = new OctetJsonWebKey { KeyId = "service-tokens", KeyValue = new byte[32] };
         _serviceKeysProvider
-            .Setup(p => p.GetEncryptionKeys(true))
-            .Returns(new[] { _serverDecryptionKey }.ToAsyncEnumerable());
+            .Setup(p => p.GetEncryptionKeys(TestTenant.Matched, true))
+            .Returns(new[] { _serverDecryptionKey, _serverSymmetricKey }.ToAsyncEnumerable());
 
-        requestInfoProvider.Setup(p => p.RequestUri).Returns(RequestUri);
-        issuerProvider.Setup(p => p.GetIssuer()).Returns(Issuer);
+        requestInfoProvider.Setup(p => p.RequestUri).Returns(new Uri(RequestUri));
 
         _validator = new ClientJwtValidator(
             logger.Object,
             requestInfoProvider.Object,
-            _tokenValidator.Object,
+            new ProfiledJwtValidator(_tokenValidator.Object),
             _clientInfoProvider.Object,
             _clientKeysProvider.Object,
-            issuerProvider.Object,
             _serviceKeysProvider.Object,
-            Options.Create(new OidcOptions()),
             TimeProvider.System);
     }
-
-    #region Audience Validation Tests
 
     /// <summary>
     /// Verifies that ValidateAsync accepts JWT when audience matches the request URI.
@@ -91,16 +88,16 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -108,14 +105,78 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
 
         // Verify audience validation callback accepts request URI
-        var audienceValidationResult = await capturedParams!.ValidateAudience!([RequestUri]);
+        var audienceValidationResult = await capturedParams.ValidateAudience!([RequestUri]);
         Assert.True(audienceValidationResult);
+    }
+
+    /// <summary>
+    /// The keys read again on an unfamiliar kid (OpenID Connect Core 1.0 section 10.1.1) are the client's own, asked
+    /// for past the copy held, while the keys first returned come from the copy.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_ReadsTheClientsKeysAgainOnlyForTheRefetch()
+    {
+        var clientInfo = CreateClientInfo(ValidClientId);
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns(async (string _, ValidationParameters p) =>
+            {
+                await p.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync();
+                await p.RefetchIssuerSigningKeys!(ValidClientId).ToArrayAsync();
+                return CreateValidToken();
+            });
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .ReturnsAsync(clientInfo);
+        _clientKeysProvider
+            .Setup(p => p.GetSigningKeys(clientInfo, It.IsAny<bool>()))
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
+
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        _clientKeysProvider.Verify(p => p.GetSigningKeys(clientInfo, false), Times.Once);
+        _clientKeysProvider.Verify(p => p.GetSigningKeys(clientInfo, true), Times.Once);
+    }
+
+    /// <summary>
+    /// The token types the caller accepts reach the JWT validator unchanged, which is what refuses a token of
+    /// another type.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_PassesTheAcceptedTokenTypes()
+    {
+        var accepted = TokenTypePolicy.Exactly(JsonWebTokenTypes.ClientAuthentication);
+        var clientInfo = CreateClientInfo(ValidClientId);
+
+        ValidationParameters? capturedParams = null;
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns(async (string _, ValidationParameters p) =>
+            {
+                capturedParams = p;
+                if (p.ValidateIssuer != null)
+                    await p.ValidateIssuer(ValidClientId);
+                return CreateValidToken();
+            });
+
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .ReturnsAsync(clientInfo);
+
+        _clientKeysProvider
+            .Setup(p => p.GetSigningKeys(clientInfo))
+            .Returns(AsyncEnumerable.Empty<JsonWebKey>());
+
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, accepted);
+
+        Assert.NotNull(capturedParams);
+        Assert.Same(accepted, capturedParams.TokenTypes);
     }
 
     /// <summary>
@@ -134,16 +195,16 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -151,13 +212,13 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
 
         // Verify audience validation callback accepts issuer identifier
-        var audienceValidationResult = await capturedParams!.ValidateAudience!([Issuer]);
+        var audienceValidationResult = await capturedParams.ValidateAudience!([Issuer]);
         Assert.True(audienceValidationResult);
     }
 
@@ -174,16 +235,16 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(ValidClientId);
-            })
-            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Invalid audience"));
+                return new JwtValidationError(JwtError.InvalidToken, "Invalid audience");
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(CreateClientInfo(ValidClientId));
 
         _clientKeysProvider
@@ -191,14 +252,36 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
 
         // Verify audience validation callback rejects wrong audience
-        var audienceValidationResult = await capturedParams!.ValidateAudience!([wrongAudience]);
+        var audienceValidationResult = await capturedParams.ValidateAudience!([wrongAudience]);
         Assert.False(audienceValidationResult);
+    }
+
+    /// <summary>
+    /// The audience is compared with the request address as written, as RFC 7519 section 4.1.3 compares
+    /// StringOrURI values, so a spelling of the same address in another case or with its default port is refused.
+    /// </summary>
+    [Theory]
+    [InlineData("https://AUTH.example.com/token")]
+    [InlineData("HTTPS://auth.example.com/token")]
+    [InlineData("https://auth.example.com:443/token")]
+    public async Task ValidateAsync_TheRequestAddressSpelledOtherwise_IsRefused(string audience)
+    {
+        ValidationParameters? capturedParams = null;
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Callback<string, ValidationParameters>((_, p) => capturedParams = p)
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Invalid audience"));
+
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.False(await capturedParams!.ValidateAudience!([audience]));
+        Assert.True(await capturedParams.ValidateAudience([RequestUri]));
     }
 
     /// <summary>
@@ -216,16 +299,16 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -233,13 +316,13 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
 
         // Verify audience validation accepts when one matches
-        var audienceValidationResult = await capturedParams!.ValidateAudience!(audiences);
+        var audienceValidationResult = await capturedParams.ValidateAudience!(audiences);
         Assert.True(audienceValidationResult);
     }
 
@@ -254,16 +337,16 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(ValidClientId);
-            })
-            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Audience is empty"));
+                return new JwtValidationError(JwtError.InvalidToken, "Audience is empty");
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(CreateClientInfo(ValidClientId));
 
         _clientKeysProvider
@@ -271,19 +354,15 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
 
         // Verify audience validation rejects empty collection
-        var audienceValidationResult = await capturedParams!.ValidateAudience!([]);
+        var audienceValidationResult = await capturedParams.ValidateAudience!([]);
         Assert.False(audienceValidationResult);
     }
-
-    #endregion
-
-    #region Issuer Validation Tests
 
     /// <summary>
     /// Verifies that ValidateAsync accepts JWT when issuer matches a known client ID.
@@ -300,16 +379,16 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 // Simulate the validator calling ValidateIssuer
                 await p.ValidateIssuer!(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -317,7 +396,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validToken));
@@ -325,7 +404,7 @@ public class ClientJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify issuer validation callback
-        var issuerValidationResult = await capturedParams!.ValidateIssuer!(ValidClientId);
+        var issuerValidationResult = await capturedParams.ValidateIssuer!(ValidClientId);
         Assert.True(issuerValidationResult);
     }
 
@@ -342,20 +421,20 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(unknownIssuer);
-            })
-            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Unknown issuer"));
+                return new JwtValidationError(JwtError.InvalidToken, "Unknown issuer");
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(unknownIssuer))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, unknownIssuer))
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -363,7 +442,7 @@ public class ClientJwtValidatorTests
         Assert.NotNull(capturedParams);
 
         // Verify issuer validation callback rejects unknown issuer
-        var issuerValidationResult = await capturedParams!.ValidateIssuer!(unknownIssuer);
+        var issuerValidationResult = await capturedParams.ValidateIssuer!(unknownIssuer);
         Assert.False(issuerValidationResult);
     }
 
@@ -381,40 +460,40 @@ public class ClientJwtValidatorTests
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 // Simulate the validator calling ValidateIssuer
                 await p.ValidateIssuer!(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
             .Setup(p => p.GetSigningKeys(clientInfo))
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Act & Assert - Second validation with different issuer should throw
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
         Assert.NotNull(capturedParams);
 
         // Second call with different issuer should return false (already looked up different client)
-        var result = await capturedParams!.ValidateIssuer!(AnotherClientId);
+        var result = await capturedParams.ValidateIssuer!(AnotherClientId);
         Assert.False(result);
     }
 
@@ -431,15 +510,15 @@ public class ClientJwtValidatorTests
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 // Simulate the validator calling ValidateIssuer
                 await p.ValidateIssuer!(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -447,8 +526,8 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act - Validate twice with same issuer
-        var result1 = await _validator.ValidateAsync(ValidJwt);
-        var result2 = await _validator.ValidateAsync(ValidJwt);
+        var result1 = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        var result2 = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result1.TryGetSuccess(out var validToken1));
@@ -458,7 +537,7 @@ public class ClientJwtValidatorTests
 
         // Verify client lookup happened twice (each ValidateAsync creates new ValidationContext)
         // The flag prevents duplicate calls within a single validation, not across validations
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(ValidClientId), Times.Exactly(2));
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId), Times.Exactly(2));
     }
 
     /// <summary>
@@ -480,16 +559,65 @@ public class ClientJwtValidatorTests
             .ReturnsAsync(token);
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert - a failure, never a success carrying a null Client.
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(JwtError.InvalidToken, error.Error);
     }
 
-    #endregion
+    /// <summary>
+    /// OpenID Connect Core 1.0 section 6.1 asks a request object for iss only "If signed", so an unsecured token
+    /// naming neither its issuer nor a client_id speaks for the client the request names; a signed one does not.
+    /// </summary>
+    [Theory]
+    [InlineData(SigningAlgorithms.None, true)]
+    [InlineData(SigningAlgorithms.RS256, false)]
+    public async Task ValidateAsync_ATokenNamingNoClient_SpeaksForTheNamedClientOnlyUnsecured(
+        string algorithm,
+        bool served)
+    {
+        var token = CreateValidToken();
+        token.Header.Algorithm = algorithm;
+        token.Payload.Issuer = null;
+        var namedClient = CreateClientInfo(ValidClientId);
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .ReturnsAsync(token);
 
-    #region Key Resolution Tests
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, namedClient, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(served, result.TryGetSuccess(out var valid));
+        if (served)
+            Assert.Same(namedClient, valid!.Client);
+    }
+
+    /// <summary>
+    /// An unsecured token whose client_id claim names a client the server does not know names a client, just not the
+    /// one the request names, so it is not attributed to that one.
+    /// </summary>
+    [Fact]
+    public async Task ValidateAsync_AnUnsecuredTokenNamingAnUnknownClient_IsNotAttributedToTheNamedClient()
+    {
+        const string unknownClientId = "ghost";
+        var token = CreateValidToken();
+        token.Header.Algorithm = SigningAlgorithms.None;
+        token.Payload.Issuer = null;
+        token.Payload.ClientId = unknownClientId;
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .ReturnsAsync(token);
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, unknownClientId))
+            .ReturnsAsync((ClientInfo?)null);
+
+        var result = await _validator.ValidateAsync(
+            SingleIssuer.Tenant, CreateClientInfo(ValidClientId), ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(JwtError.InvalidToken, error.Error);
+    }
 
     /// <summary>
     /// Verifies that ValidateAsync resolves signing keys from client keys provider.
@@ -509,17 +637,17 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 // Simulate the validator calling ValidateIssuer
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -527,11 +655,11 @@ public class ClientJwtValidatorTests
             .Returns(signingKeys.ToAsyncEnumerable());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync(TestContext.Current.CancellationToken);
+        var resolvedKeys = await capturedParams.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Equal(signingKeys.Length, resolvedKeys.Length);
 
         _clientKeysProvider.Verify(p => p.GetSigningKeys(clientInfo), Times.Once);
@@ -551,16 +679,16 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -568,11 +696,11 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync(TestContext.Current.CancellationToken);
+        var resolvedKeys = await capturedParams.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Empty(resolvedKeys);
     }
 
@@ -589,24 +717,24 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(unknownIssuer);
-            })
-            .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Unknown issuer"));
+                return new JwtValidationError(JwtError.InvalidToken, "Unknown issuer");
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(unknownIssuer))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, unknownIssuer))
             .ReturnsAsync((ClientInfo?)null);
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
-        var resolvedKeys = await capturedParams!.ResolveIssuerSigningKeys!(unknownIssuer).ToArrayAsync(TestContext.Current.CancellationToken);
+        var resolvedKeys = await capturedParams.ResolveIssuerSigningKeys!(unknownIssuer).ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Empty(resolvedKeys);
 
         // Verify GetSigningKeys was never called for unknown client
@@ -616,7 +744,7 @@ public class ClientJwtValidatorTests
     /// <summary>
     /// Verifies that ValidateAsync wires the server's own private keys as the token-decryption keys,
     /// so a request object that the client JWE-encrypted to the server can be decrypted (RFC 9101
-    /// §6.1). The inner signed JWT is still verified with the client's key.
+    /// section 6.1). The inner signed JWT is still verified with the client's key.
     /// </summary>
     [Fact]
     public async Task ValidateAsync_ShouldResolveServerDecryptionKeys()
@@ -628,16 +756,16 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -645,19 +773,19 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert - the decryption-key resolver is configured and yields the server's private keys.
         Assert.NotNull(capturedParams);
-        Assert.NotNull(capturedParams!.ResolveTokenDecryptionKeys);
-        var decryptionKeys = await capturedParams.ResolveTokenDecryptionKeys!(string.Empty)
+        Assert.NotNull(capturedParams.ResolveTokenDecryptionKeys);
+        var decryptionKeys = await capturedParams.ResolveTokenDecryptionKeys(string.Empty)
             .ToArrayAsync(TestContext.Current.CancellationToken);
         Assert.Contains(_serverDecryptionKey, decryptionKeys);
+
+        // A symmetric server key is published to no client (OpenID Connect Discovery 1.0 section 3, jwks_uri), so
+        // nothing a client encrypts is opened with it and discovery lists no algorithm for it
+        Assert.DoesNotContain(_serverSymmetricKey, decryptionKeys);
     }
-
-    #endregion
-
-    #region Validation Options Tests
 
     /// <summary>
     /// Verifies that ValidateAsync uses Default validation options when not specified.
@@ -673,16 +801,16 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -690,11 +818,11 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.Equal(ValidationOptions.Default, capturedParams!.Options);
+        Assert.Equal(ValidationOptions.Default, capturedParams.Options);
     }
 
     /// <summary>
@@ -713,16 +841,16 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -730,16 +858,12 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt, customOptions);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller, customOptions);
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.Equal(customOptions, capturedParams!.Options);
+        Assert.Equal(customOptions, capturedParams.Options);
     }
-
-    #endregion
-
-    #region Integration Tests
 
     /// <summary>
     /// Verifies complete validation flow for a valid client-signed JWT.
@@ -754,15 +878,15 @@ public class ClientJwtValidatorTests
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 // Simulate the validator calling ValidateIssuer
                 await p.ValidateIssuer!(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -770,7 +894,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var validToken));
@@ -778,7 +902,7 @@ public class ClientJwtValidatorTests
         Assert.Same(clientInfo, validToken.Client);
 
         _tokenValidator.Verify(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()), Times.Once);
-        _clientInfoProvider.Verify(p => p.TryFindClientAsync(ValidClientId), Times.Once);
+        _clientInfoProvider.Verify(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId), Times.Once);
     }
 
     /// <summary>
@@ -795,7 +919,7 @@ public class ClientJwtValidatorTests
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Invalid signature"));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(CreateClientInfo(ValidClientId));
 
         _clientKeysProvider
@@ -803,7 +927,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -824,7 +948,7 @@ public class ClientJwtValidatorTests
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token expired"));
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(CreateClientInfo(ValidClientId));
 
         _clientKeysProvider
@@ -832,7 +956,7 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -853,16 +977,16 @@ public class ClientJwtValidatorTests
         ValidationParameters? capturedParams = null;
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 capturedParams = p;
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(ValidClientId);
-            })
-            .ReturnsAsync(token);
+                return token;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -870,11 +994,11 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        await _validator.ValidateAsync(ValidJwt);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.NotNull(capturedParams);
-        Assert.NotNull(capturedParams!.ValidateIssuer);
+        Assert.NotNull(capturedParams.ValidateIssuer);
         Assert.NotNull(capturedParams.ValidateAudience);
         Assert.NotNull(capturedParams.ResolveIssuerSigningKeys);
         Assert.Equal(ValidationOptions.Default, capturedParams.Options);
@@ -893,15 +1017,15 @@ public class ClientJwtValidatorTests
 
         _tokenValidator
             .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
-            .Callback<string, ValidationParameters>(async (_, p) =>
+            .Returns(async (string _, ValidationParameters p) =>
             {
                 if (p.ValidateIssuer != null)
                     await p.ValidateIssuer(ValidClientId);
-            })
-            .ReturnsAsync(expectedToken);
+                return expectedToken;
+            });
 
         _clientInfoProvider
-            .Setup(p => p.TryFindClientAsync(ValidClientId))
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
             .ReturnsAsync(clientInfo);
 
         _clientKeysProvider
@@ -909,16 +1033,12 @@ public class ClientJwtValidatorTests
             .Returns(AsyncEnumerable.Empty<JsonWebKey>());
 
         // Act
-        var result = await _validator.ValidateAsync(ValidJwt);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
 
         // Assert
         Assert.True(result.TryGetSuccess(out _));
         _tokenValidator.Verify(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()), Times.Once);
     }
-
-    #endregion
-
-    #region Helper Methods
 
     private static JsonWebToken CreateValidToken()
     {
@@ -933,9 +1053,9 @@ public class ClientJwtValidatorTests
                 Issuer = ValidClientId,
                 Audiences = [RequestUri],
                 Subject = ValidClientId,
-                IssuedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
-                NotBefore = DateTimeOffset.UtcNow,
+                IssuedAt = TimeProvider.System.GetUtcNow(),
+                ExpiresAt = TimeProvider.System.GetUtcNow().AddMinutes(5),
+                NotBefore = TimeProvider.System.GetUtcNow(),
             }
         };
     }
@@ -948,5 +1068,170 @@ public class ClientJwtValidatorTests
         };
     }
 
-    #endregion
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.6 has the server use "PS256 or ES256", so what a client held to FAPI 1.0 Advanced
+    /// signs for it - a request object, an authentication assertion - is refused under any other algorithm once the
+    /// client is known; PS256 and ES256 pass, and a client held to no profile keeps RS256.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.RS256, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.PS256, true)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, SigningAlgorithms.ES256, true)]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.RS256, false)]
+    [InlineData(ClientSecurityProfile.Fapi2, SigningAlgorithms.ES256, true)]
+    [InlineData(null, SigningAlgorithms.RS256, true)]
+    public async Task ValidateAsync_TheClientsProfile_DecidesTheSignatureAlgorithm(
+        ClientSecurityProfile? profile, string algorithm, bool accepted)
+    {
+        var token = CreateValidToken();
+        token.Header.Algorithm = algorithm;
+        var clientInfo = CreateClientInfo(ValidClientId);
+        clientInfo.SecurityProfile = profile;
+
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns(async (string _, ValidationParameters p) =>
+            {
+                await p.ValidateIssuer!(ValidClientId);
+                return token;
+            });
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .ReturnsAsync(clientInfo);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// What a client encrypts for the server is judged by the same clause: a request object encrypted with RSA1_5 by
+    /// a client held to FAPI 1.0 Advanced is refused once the client is known, the same object encrypted with
+    /// RSA-OAEP-256 passes, and a client held to no profile keeps RSA1_5.
+    /// </summary>
+    [Theory]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, EncryptionAlgorithms.KeyManagement.Rsa1_5, false)]
+    [InlineData(ClientSecurityProfile.Fapi1Advanced, EncryptionAlgorithms.KeyManagement.RsaOaep256, true)]
+    [InlineData(null, EncryptionAlgorithms.KeyManagement.Rsa1_5, true)]
+    public async Task ValidateAsync_TheClientsProfile_DecidesTheKeyManagementAlgorithm(
+        ClientSecurityProfile? profile, string keyManagement, bool accepted)
+    {
+        const string jwe = "header.key.iv.ciphertext.tag";
+        var token = CreateValidToken();
+        token.Header.Algorithm = SigningAlgorithms.PS256;
+        var clientInfo = CreateClientInfo(ValidClientId);
+        clientInfo.SecurityProfile = profile;
+
+        // The validator reports each JWE layer's key management algorithm before decrypting it, as the real one does
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(jwe, It.IsAny<ValidationParameters>()))
+            .Returns(async (string _, ValidationParameters p) =>
+            {
+                if (!p.ValidateKeyManagementAlgorithm!(keyManagement))
+                    return new JwtValidationError(JwtError.InvalidToken, "refused");
+
+                await p.ValidateIssuer!(ValidClientId);
+                return token;
+            });
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .ReturnsAsync(clientInfo);
+
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, null, jwe, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(accepted, result.TryGetSuccess(out _));
+    }
+
+    /// <summary>
+    /// Under a tenant holding every client to FAPI 1.0 Advanced a layer encrypted with RSA1_5 is refused before it is
+    /// decrypted, the client not yet known; RSA-OAEP-256 is let through.
+    /// </summary>
+    [Theory]
+    [InlineData(EncryptionAlgorithms.KeyManagement.Rsa1_5, false)]
+    [InlineData(EncryptionAlgorithms.KeyManagement.RsaOaep256, true)]
+    public async Task ValidateAsync_TheTenantsProfile_JudgesEachLayerBeforeDecryption(string keyManagement, bool admitted)
+    {
+        ValidationParameters? parameters = null;
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns((string _, ValidationParameters p) =>
+            {
+                parameters = p;
+                return Task.FromResult<Abblix.Utils.Result<JsonWebToken, JwtValidationError>>(
+                    new JwtValidationError(JwtError.InvalidToken, "not under test"));
+            });
+        var tenant = new TestIssuer { DefaultSecurityProfile = ClientSecurityProfile.Fapi1Advanced }.ToTenant();
+
+        await _validator.ValidateAsync(tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(admitted, parameters!.ValidateKeyManagementAlgorithm!(keyManagement));
+    }
+
+    /// <summary>
+    /// Where the request names its client outside the token, as an authorization request names it in client_id, that
+    /// client's profile bounds every layer before it is decrypted: a request object encrypted with RSA1_5 by a client
+    /// held to FAPI 1.0 Advanced is refused unread at a tenant held to none (Part 2 section 8.6.1), while one with no
+    /// client named is left to the tenant's profile until the token names its client.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task ValidateAsync_TheNamedClientsProfile_JudgesEachLayerBeforeDecryption(bool named, bool admitted)
+    {
+        ValidationParameters? parameters = null;
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns((string _, ValidationParameters p) =>
+            {
+                parameters = p;
+                return Task.FromResult<Abblix.Utils.Result<JsonWebToken, JwtValidationError>>(
+                    new JwtValidationError(JwtError.InvalidToken, "not under test"));
+            });
+        var client = CreateClientInfo(ValidClientId);
+        client.SecurityProfile = ClientSecurityProfile.Fapi1Advanced;
+
+        await _validator.ValidateAsync(
+            SingleIssuer.Tenant, named ? client : null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+
+        Assert.Equal(
+            admitted,
+            parameters!.ValidateKeyManagementAlgorithm!(EncryptionAlgorithms.KeyManagement.Rsa1_5));
+    }
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 section 8.9 "requires that jwks_uri endpoints shall be served over TLS": a client held to FAPI
+    /// 1.0 Advanced whose jwks_uri is http is given no keys to verify with, so nothing it signs is accepted on any path,
+    /// whatever schemes the host lets the fetcher use; an https jwks_uri is read.
+    /// </summary>
+    [Theory]
+    [InlineData("http://client.example.com/jwks", false)]
+    [InlineData("https://client.example.com/jwks", true)]
+    public async Task ResolveIssuerSigningKeys_Fapi1Advanced_ReadsOnlyAnHttpsJwksUri(string jwksUri, bool read)
+    {
+        var clientInfo = CreateClientInfo(ValidClientId);
+        clientInfo.SecurityProfile = ClientSecurityProfile.Fapi1Advanced;
+        clientInfo.JwksUri = new Uri(jwksUri);
+        var key = new RsaJsonWebKey { KeyId = "client-key" };
+        ValidationParameters? parameters = null;
+
+        _tokenValidator
+            .Setup(v => v.ValidateAsync(ValidJwt, It.IsAny<ValidationParameters>()))
+            .Returns((string _, ValidationParameters p) =>
+            {
+                parameters = p;
+                return Task.FromResult<Abblix.Utils.Result<JsonWebToken, JwtValidationError>>(
+                    new JwtValidationError(JwtError.InvalidToken, "not under test"));
+            });
+        _clientInfoProvider
+            .Setup(p => p.TryFindClientAsync(TestTenant.Matched, ValidClientId))
+            .ReturnsAsync(clientInfo);
+        _clientKeysProvider
+            .Setup(p => p.GetSigningKeys(clientInfo, false))
+            .Returns(new JsonWebKey[] { key }.ToAsyncEnumerable());
+
+        await _validator.ValidateAsync(SingleIssuer.Tenant, null, ValidJwt, TokenTypePolicy.CheckedByCaller);
+        var keys = await parameters!.ResolveIssuerSigningKeys!(ValidClientId).ToArrayAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(read ? 1 : 0, keys.Length);
+    }
 }

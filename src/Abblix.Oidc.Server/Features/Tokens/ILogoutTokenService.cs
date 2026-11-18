@@ -6,14 +6,17 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Common;
+using Abblix.Utils;
 using Abblix.Jwt;
 using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Features.LogoutNotification;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.Tokens;
 
 /// <summary>
-/// Issues OpenID Connect Back-Channel Logout tokens (OIDC Back-Channel Logout 1.0 §2.4): JWTs
+/// Issues OpenID Connect Back-Channel Logout tokens (OIDC Back-Channel Logout 1.0 section 2.4): JWTs
 /// with an <c>events</c> claim containing the back-channel logout event URI, addressed to a
 /// specific RP and identifying the affected end-user via <c>sub</c> and/or <c>sid</c>. The
 /// <c>nonce</c> claim is prohibited per the specification.
@@ -25,6 +28,7 @@ public interface ILogoutTokenService
     /// This token is sent to clients to initiate the back-channel logout process, enabling them to clean up
     /// user sessions in accordance with the OpenID Connect back-channel logout specification.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="clientInfo">Details about the client application that will receive the logout token. This includes
     ///     the client's identifier and other relevant configuration settings that may affect the token generation process.
     /// </param>
@@ -35,5 +39,6 @@ public interface ILogoutTokenService
     /// <returns>A task that returns a <see cref="JsonWebToken"/>.
     /// This token is specifically formatted to conform to the OpenID Connect back-channel logout specification,
     /// containing claims such as 'sub', 'sid', and 'events' to indicate the logout event to the client.</returns>
-    Task<EncodedJsonWebToken> CreateLogoutTokenAsync(ClientInfo clientInfo, LogoutContext logoutContext);
+    Task<Result<EncodedJsonWebToken, OidcError>> CreateLogoutTokenAsync(
+        TenantDefinition tenant, ClientInfo clientInfo, LogoutContext logoutContext);
 }

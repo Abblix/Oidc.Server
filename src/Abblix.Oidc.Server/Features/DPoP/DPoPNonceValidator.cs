@@ -7,18 +7,20 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Nonces;
 
 namespace Abblix.Oidc.Server.Features.DPoP;
 
 /// <summary>
-/// Base class for DPoP-aware endpoint validators that enforce the RFC 9449 §8 nonce
+/// Base class for DPoP-aware endpoint validators that enforce the RFC 9449 section 8 nonce
 /// challenge-response loop. Encapsulates the proof-claim check, fresh-nonce issuance,
 /// and <see cref="UseDPoPNonceError"/> shaping; concrete validators override
 /// <see cref="LogNonceChallengeIssued"/> to attribute the «challenge issued» event to
 /// their own endpoint <c>EventId</c>.
 /// </summary>
-public abstract class DPoPNonceValidator(INonceService nonceService)
+public abstract class DPoPNonceValidator(
+    INonceService nonceService)
 {
     /// <summary>
     /// Enforces the nonce policy on <paramref name="proof"/>. Returns <c>null</c> when
@@ -27,22 +29,24 @@ public abstract class DPoPNonceValidator(INonceService nonceService)
     /// a <see cref="UseDPoPNonceError"/> the response formatter attaches to the
     /// <c>DPoP-Nonce</c> response header.
     /// </summary>
-    protected async Task<OidcError?> EnforceNonceAsync(Proof proof)
+    /// <param name="tenant">The tenant the request is served at, whose nonces the proof is judged against.</param>
+    /// <param name="proof">The validated DPoP proof whose nonce is judged.</param>
+    protected async Task<OidcError?> EnforceNonceAsync(TenantDefinition tenant, Proof proof)
     {
         var nonceClaim = proof.Token.Payload.Nonce;
         if (nonceClaim is null)
-            return await UseDPoPNonce();
+            return await UseDPoPNonce(tenant);
 
-        var failure = await nonceService.ValidateAsync(nonceClaim);
+        var failure = await nonceService.ValidateAsync(tenant, nonceClaim);
         if (failure is not null)
-            return await UseDPoPNonce();
+            return await UseDPoPNonce(tenant);
 
         return null;
     }
 
-    private async Task<UseDPoPNonceError> UseDPoPNonce()
+    private async Task<UseDPoPNonceError> UseDPoPNonce(TenantDefinition tenant)
     {
-        var nonce = await nonceService.IssueAsync();
+        var nonce = await nonceService.IssueAsync(tenant);
         LogNonceChallengeIssued();
         return new UseDPoPNonceError(nonce);
     }

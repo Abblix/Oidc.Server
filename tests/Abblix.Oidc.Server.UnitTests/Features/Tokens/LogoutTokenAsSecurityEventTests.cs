@@ -20,10 +20,10 @@ using Abblix.Oidc.Server.Features.Tokens.Formatters;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Abblix.SecurityEvents;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Features.Tokens;
 
@@ -67,14 +67,15 @@ public class LogoutTokenAsSecurityEventTests
         var logoutContext = new LogoutContext(SessionId, SubjectId, Issuer);
 
         subjectTypeConverter
-            .Setup(converter => converter.Convert(SubjectId, clientInfo))
+            .Setup(converter => converter.Convert(TestTenant.Matched, SubjectId, clientInfo))
             .Returns(SubjectId);
 
         JsonWebToken? produced = null;
         jwtFormatter
             .Setup(formatter => formatter.FormatAsync(
+                TestTenant.Matched,
                 It.IsAny<JsonWebToken>(), clientInfo, It.IsAny<ClientJwtEncryption>()))
-            .Callback<JsonWebToken, ClientInfo, ClientJwtEncryption>((token, _, _) => produced = token)
+            .Callback<TenantDefinition, JsonWebToken, ClientInfo, ClientJwtEncryption>((_, token, _, _) => produced = token)
             .ReturnsAsync("encoded.logout.token");
 
         var service = new LogoutTokenService(
@@ -82,10 +83,9 @@ public class LogoutTokenAsSecurityEventTests
             new FakeTimeProvider(IssuedAt),
             subjectTypeConverter.Object,
             jwtFormatter.Object,
-            tokenIdGenerator.Object,
-            Options.Create(new OidcOptions()));
+            tokenIdGenerator.Object);
 
-        await service.CreateLogoutTokenAsync(clientInfo, logoutContext);
+        await service.CreateLogoutTokenAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         Assert.NotNull(produced);
         return produced;

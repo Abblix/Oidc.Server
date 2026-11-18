@@ -106,7 +106,7 @@ public sealed class ScopeEnforcementTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
 
         var challenge = Assert.Single(response.Headers.WwwAuthenticate);
-        Assert.DoesNotContain("error", challenge.Parameter!);
+        Assert.DoesNotContain("error", challenge.Parameter);
     }
 
     /// <summary>
@@ -131,7 +131,7 @@ public sealed class ScopeEnforcementTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
         var challenge = Assert.Single(response.Headers.WwwAuthenticate);
-        Assert.Contains($"scope=\"{SsfScopes.Read}\"", challenge.Parameter!);
+        Assert.Contains($"scope=\"{SsfScopes.Read}\"", challenge.Parameter);
     }
 
     /// <summary>
@@ -149,7 +149,7 @@ public sealed class ScopeEnforcementTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
         var challenge = Assert.Single(response.Headers.WwwAuthenticate);
-        Assert.Contains($"scope=\"{SsfScopes.Read}\"", challenge.Parameter!);
+        Assert.Contains($"scope=\"{SsfScopes.Read}\"", challenge.Parameter);
     }
 
     /// <summary>
@@ -177,12 +177,13 @@ public sealed class ScopeEnforcementTests
         // RFC 6750 Section 3.1 names the code, and the scope attribute is what tells the receiver what to
         // ask its authorization server for. Without it a 403 is a dead end.
         var challenge = Assert.Single(response.Headers.WwwAuthenticate);
-        Assert.Contains("insufficient_scope", challenge.Parameter!);
-        Assert.Contains($"scope=\"{SsfScopes.Manage}\"", challenge.Parameter!);
+        Assert.Contains("insufficient_scope", challenge.Parameter);
+        Assert.Contains($"scope=\"{SsfScopes.Manage}\"", challenge.Parameter);
     }
 
     /// <summary>
-    /// The control for the row above: the same requests with the wider scope are not refused, so the 403
+    /// The control for <see cref="AReadScopedCaller_IsRefusedAnythingThatChangesAStream"/>: the same requests
+    /// with the wider scope are not refused, so the 403
     /// is the scope check rather than the request being malformed.
     /// </summary>
     [Theory]
@@ -217,7 +218,7 @@ public sealed class ScopeEnforcementTests
 
     /// <summary>
     /// A host that never set the selector gets what it had before this option existed. Without this row,
-    /// making the check unconditional would pass every test above and break every deployment that
+    /// making the check unconditional would pass every other test in this class and break every deployment that
     /// authorizes some other way.
     /// </summary>
     [Fact]
@@ -248,7 +249,7 @@ public sealed class ScopeEnforcementTests
     /// same caller.
     /// </summary>
     /// <remarks>
-    /// This pins a documented gap rather than a wanted behaviour, which is the only honest way to leave
+    /// This pins a documented gap rather than a wanted behavior, which is the only honest way to leave
     /// it: the filter judges a route by the requirement it declares, which for a host route is none, so
     /// it is let through. The fail-open branch is deliberate, because refusing a route with no metadata
     /// would refuse exactly this one.

@@ -10,6 +10,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 using Abblix.Oidc.Server.Features;
@@ -47,6 +48,19 @@ public class PushModeValidatorRegistrationTests
         Assert.Contains(validators, v => v is PushModeValidator);
     }
 
+    /// <summary>
+    /// The essential acr reader runs in the backchannel pipeline, so a malformed requirement is refused on
+    /// arrival and the host is handed the levels it has to meet.
+    /// </summary>
+    [Fact]
+    public void AddOidcServices_WiresTheRequiredAcrReaderIntoTheBackChannelPipeline()
+    {
+        var validators = ExtractComposedValidators(
+            BuildProvider().GetRequiredService<IBackChannelAuthenticationContextValidator>());
+
+        Assert.Contains(validators, v => v is RequiredAuthContextClassRefValidator);
+    }
+
     private static IBackChannelAuthenticationContextValidator[] ExtractComposedValidators(
         IBackChannelAuthenticationContextValidator composite)
     {
@@ -79,8 +93,7 @@ public class PushModeValidatorRegistrationTests
 
         services.AddOidcServices(options =>
         {
-            options.Issuer = TestConstants.DefaultIssuer.OriginalString;
-            options.SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)];
+            options.Tenants.Add(new TenantDefinition { Id = TestIssuer.TenantId, Issuer = TestConstants.DefaultIssuer, SigningKeys = [JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature, SigningAlgorithms.RS256)] });
             options.RequireInitialAccessToken = false;
         });
 

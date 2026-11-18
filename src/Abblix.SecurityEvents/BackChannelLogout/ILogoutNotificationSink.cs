@@ -30,6 +30,11 @@ namespace Abblix.SecurityEvents.BackChannelLogout;
 /// "if the logout request was invalid or the logout FAILED" - so a sink that could not end the
 /// sessions says so rather than acknowledging work it did not do.
 /// </para>
+/// <para>
+/// A description, like an exception, gives the token back to the replay guard, so the provider's
+/// retransmission of it reaches this sink again. A sink that refuses the same token every time sees
+/// it on every retransmission until the token expires.
+/// </para>
 /// </remarks>
 public interface ILogoutNotificationSink
 {

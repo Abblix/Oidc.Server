@@ -6,6 +6,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
 
 namespace Abblix.Jwt.Encryption;
 
@@ -40,6 +41,11 @@ internal sealed class AesKeyWrapEncryptor(string algorithm) : IKeyManagementAlgo
 	};
 
 	/// <inheritdoc />
+	/// <remarks>RFC 7518 section 4.4: the key is of exactly the size the algorithm names. A key whose bytes a custodian
+	/// holds carries none here, and the custodian carries the algorithm out with them.</remarks>
+	public bool Accepts(OctetJsonWebKey key) => key.KeyValue is not { } keyValue || keyValue.Length == _keySize;
+
+	/// <inheritdoc />
 	public byte[] EncryptKey(JsonWebTokenHeader header, OctetJsonWebKey keyEncryptionKey, byte[] keyToEncrypt)
 	{
 		// Key Encryption Key (KEK) validation
@@ -53,7 +59,9 @@ internal sealed class AesKeyWrapEncryptor(string algorithm) : IKeyManagementAlgo
 				$"Actual size: {keyEncryptionKey.KeyValue.Length} bytes.");
 		}
 
-		return AesKeyWrap.Wrap(keyEncryptionKey.KeyValue, keyToEncrypt);
+		using var aes = Aes.Create();
+		aes.Key = keyEncryptionKey.KeyValue;
+		return aes.EncryptKeyWrap(keyToEncrypt);
 	}
 
 	/// <inheritdoc />
@@ -71,6 +79,8 @@ internal sealed class AesKeyWrapEncryptor(string algorithm) : IKeyManagementAlgo
 		}
 
 		// The unwrap's integrity register check rejects tampered input and wrong-KEK attempts.
-		return AesKeyWrap.TryUnwrap(keyEncryptionKey.KeyValue, encryptedKey, out decryptedKey);
+		using var aes = Aes.Create();
+		aes.Key = keyEncryptionKey.KeyValue;
+		return aes.TryUnwrapKey(encryptedKey, out decryptedKey);
 	}
 }

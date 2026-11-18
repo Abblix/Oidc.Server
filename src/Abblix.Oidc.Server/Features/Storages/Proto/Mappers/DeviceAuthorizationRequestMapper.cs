@@ -35,12 +35,9 @@ internal static class DeviceAuthorizationRequestMapper
         {
             foreach (var resource in source.Resources)
             {
-                proto.Resources.Add(resource.ToString());
+                proto.Resources.Add(resource.OriginalString);
             }
         }
-
-        if (source.NextPollAt.HasValue)
-            proto.NextPollAt = Timestamp.FromDateTimeOffset(source.NextPollAt.Value);
 
         if (source.AuthorizedGrant != null)
             proto.AuthorizedGrant = source.AuthorizedGrant.ToProto();
@@ -48,6 +45,7 @@ internal static class DeviceAuthorizationRequestMapper
         if (source.AuthorizationDetails is { Count: > 0 })
             proto.AuthorizationDetailsJson = source.AuthorizationDetails.ToJsonString();
 
+        proto.ClientNamedNoScope = source.ClientNamedNoScope;
         return proto;
     }
 
@@ -70,13 +68,13 @@ internal static class DeviceAuthorizationRequestMapper
             resources,
             source.UserCode)
         {
-            NextPollAt = source.NextPollAt != null ? source.NextPollAt.ToDateTimeOffset() : null,
             ExpiresAt = source.ExpiresAt?.ToDateTimeOffset() ?? default,
             Status = source.Status.FromProtoStatus(),
             AuthorizedGrant = source.AuthorizedGrant?.FromProto(),
             AuthorizationDetails = source.HasAuthorizationDetailsJson
                 ? JsonNode.Parse(source.AuthorizationDetailsJson) as JsonArray
                 : null,
+            ClientNamedNoScope = source.ClientNamedNoScope,
         };
     }
 

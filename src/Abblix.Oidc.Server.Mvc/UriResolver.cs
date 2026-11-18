@@ -7,14 +7,12 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.AspNetCore;
-using Abblix.Oidc.Server.Mvc.Features.ConfigurableRoutes;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.Options;
 
 namespace Abblix.Oidc.Server.Mvc;
 
@@ -27,11 +25,9 @@ namespace Abblix.Oidc.Server.Mvc;
 /// providing context for generating URLs, such as the current request's scheme and host.</param>
 /// <param name="urlHelperFactory">The factory used to create instances of <see cref="IUrlHelper"/>,
 /// which facilitates the generation of URLs for actions and content.</param>
-/// <param name="mvcOptions">The MVC options used to access registered conventions for route template resolution.</param>
 public class UriResolver(
     IHttpContextAccessor httpContextAccessor,
-    IUrlHelperFactory urlHelperFactory,
-    IOptions<MvcOptions> mvcOptions) : IUriResolver
+    IUrlHelperFactory urlHelperFactory) : IUriResolver
 {
     /// <summary>
     /// Generates an absolute URI for a specified controller action, enabling action methods to be easily referenced
@@ -67,25 +63,7 @@ public class UriResolver(
     /// <inheritdoc />
     public Uri Content(string path)
     {
-        // Try to get the registered ConfigurableRouteConvention from MVC options
-        var convention = mvcOptions.Value.Conventions
-            .OfType<ConfigurableRouteConvention>()
-            .FirstOrDefault();
-
-        // Fallback: create a convention with default behavior (uses fallback values)
-        convention ??= new ConfigurableRouteConvention();
-
-        // Resolve route template constants like [route:authorize?~/connect/authorize]
-        path = convention.Resolve(path);
-
         var httpContext = httpContextAccessor.HttpContext.NotNull(nameof(httpContextAccessor.HttpContext));
-        var appUrl = httpContext.Request.GetAppUrl();
-
-        // Convert to absolute URI:
-        // - Application-relative paths (~/...) are resolved relative to app base
-        // - Other paths are resolved relative to server root
-        return path.StartsWith("~/")
-            ? new Uri(appUrl + path[1..], UriKind.Absolute)
-            : new Uri(new Uri(appUrl, UriKind.Absolute), path);
+        return httpContext.Request.ResolveInteractionUri(path);
     }
 }

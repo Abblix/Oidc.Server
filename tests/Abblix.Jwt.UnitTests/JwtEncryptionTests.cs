@@ -37,7 +37,7 @@ public class JwtEncryptionTests
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         // RSA1_5 is deliberately not part of the AddJsonWebTokens defaults - the legacy-interop
-        // round-trip and Bleichenbacher-mitigation tests below opt in explicitly
+        // round trip, Rsa1_5_RoundTrips, opts in explicitly
         services.AddRsaPkcs1KeyManagement();
         services.AddJsonWebTokens();
         return services.BuildServiceProvider();
@@ -57,7 +57,7 @@ public class JwtEncryptionTests
     [Fact]
     public async Task JwtFullCycleTest()
     {
-        var issuedAt = DateTimeOffset.UtcNow;
+        var issuedAt = TimeProvider.System.GetUtcNow();
         var expiresIn = TimeSpan.FromSeconds(10);
 
         var token = new JsonWebToken
@@ -88,6 +88,7 @@ public class JwtEncryptionTests
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             ValidateAudience = aud => Task.FromResult(token.Payload.Audiences.SequenceEqual(aud)),
             ValidateIssuer = iss => Task.FromResult(iss == token.Payload.Issuer),
             ResolveTokenDecryptionKeys = _ => new [] { encryptionKey }.ToAsyncEnumerable(),
@@ -163,6 +164,7 @@ public class JwtEncryptionTests
 
         var parameters = new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
             ResolveTokenDecryptionKeys = _ => new[] { encryptionKey }.ToAsyncEnumerable(),
@@ -204,6 +206,7 @@ public class JwtEncryptionTests
         var validator = ServiceProvider.GetRequiredService<IJsonWebTokenValidator>();
         var parameters = new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             ValidateAudience = _ => Task.FromResult(true),
             ValidateIssuer = _ => Task.FromResult(true),
             ResolveTokenDecryptionKeys = _ => new[] { encryptionKey }.ToAsyncEnumerable(),
@@ -241,6 +244,8 @@ public class JwtEncryptionTests
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddJsonWebTokens();
+        // The mitigation guards hosts that opted into RSA1_5; a key is tried only for an algorithm registered for it
+        services.AddRsaPkcs1KeyManagement();
         // Appended after AddJsonWebTokens so keyed last-wins resolution routes A256GCM to the spy.
         services.AddKeyedSingleton<IContentEncryptionAlgorithm>(EncryptionAlgorithms.ContentEncryption.Aes256Gcm, spy);
         await using var provider = services.BuildServiceProvider();

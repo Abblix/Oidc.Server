@@ -58,7 +58,7 @@ public class SigningAlgorithmsValidatorTests
     {
         var context = CreateContext();
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -76,7 +76,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.RS256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -94,16 +94,16 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.ES256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("request_object_signing_alg", result.ErrorDescription);
         Assert.Contains("not supported", result.ErrorDescription);
     }
 
     /// <summary>
-    /// request_object_signing_alg may be "none" (OIDC Core §6.1 - unsigned request objects delivered
+    /// request_object_signing_alg may be "none" (OIDC Core section 6.1 - unsigned request objects delivered
     /// over TLS), so it stays acceptable when the server advertises it.
     /// </summary>
     [Fact]
@@ -115,7 +115,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.None);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -132,10 +132,10 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.None);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -151,7 +151,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(backChannelAuthSigningAlg: SigningAlgorithms.ES256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -169,15 +169,15 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(backChannelAuthSigningAlg: SigningAlgorithms.PS256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("backchannel_authentication_request_signing_alg", result.ErrorDescription);
     }
 
     /// <summary>
-    /// CIBA Core §7.1.1: "none" is not a valid backchannel_authentication_request_signing_alg -
+    /// CIBA Core section 7.1.1: "none" is not a valid backchannel_authentication_request_signing_alg -
     /// the filtered set excludes it, so registration is rejected.
     /// </summary>
     [Fact]
@@ -189,15 +189,15 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(backChannelAuthSigningAlg: SigningAlgorithms.None);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("backchannel_authentication_request_signing_alg", result.ErrorDescription);
     }
 
     /// <summary>
-    /// CIBA Core §7.1.1 requires an asymmetric signature - a symmetric HS* value is rejected because
+    /// CIBA Core section 7.1.1 requires an asymmetric signature - a symmetric HS* value is rejected because
     /// it is not a member of the filtered backchannel set.
     /// </summary>
     [Fact]
@@ -209,10 +209,10 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(backChannelAuthSigningAlg: SigningAlgorithms.HS256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("backchannel_authentication_request_signing_alg", result.ErrorDescription);
     }
 
@@ -229,7 +229,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(tokenEndpointAuthSigningAlg: SigningAlgorithms.RS256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -247,15 +247,15 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(tokenEndpointAuthSigningAlg: SigningAlgorithms.ES256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("token_endpoint_auth_signing_alg", result.ErrorDescription);
     }
 
     /// <summary>
-    /// RFC 8414 §2 / OIDC Discovery 1.0 §3: "none" is not a valid token_endpoint_auth_signing_alg -
+    /// RFC 8414 section 2 / OIDC Discovery 1.0 section 3: "none" is not a valid token_endpoint_auth_signing_alg -
     /// the filtered set excludes it, so registration is rejected.
     /// </summary>
     [Fact]
@@ -267,10 +267,10 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(tokenEndpointAuthSigningAlg: SigningAlgorithms.None);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
         Assert.Contains("token_endpoint_auth_signing_alg", result.ErrorDescription);
     }
 
@@ -296,7 +296,7 @@ public class SigningAlgorithmsValidatorTests
             backChannelAuthSigningAlg: SigningAlgorithms.ES256,
             tokenEndpointAuthSigningAlg: SigningAlgorithms.PS256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -317,7 +317,7 @@ public class SigningAlgorithmsValidatorTests
             backChannelAuthSigningAlg: SigningAlgorithms.ES256,
             tokenEndpointAuthSigningAlg: SigningAlgorithms.ES256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
         Assert.Contains("request_object_signing_alg", result.ErrorDescription);
@@ -336,10 +336,10 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: "rs256");
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -364,7 +364,7 @@ public class SigningAlgorithmsValidatorTests
             backChannelAuthSigningAlg: SigningAlgorithms.ES384,
             tokenEndpointAuthSigningAlg: SigningAlgorithms.RS256);
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.Null(result);
     }
@@ -382,10 +382,10 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: "custom-alg-2024");
 
-        var result = await _validator.ValidateAsync(context);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         Assert.NotNull(result);
-        Assert.Equal(ErrorCodes.InvalidRequest, result.Error);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     /// <summary>
@@ -401,7 +401,7 @@ public class SigningAlgorithmsValidatorTests
 
         var context = CreateContext(requestObjectSigningAlg: SigningAlgorithms.RS256);
 
-        await _validator.ValidateAsync(context);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context);
 
         _jwtAlgorithms.Verify(p => p.SigningAlgorithmsSupported, Times.Once);
     }

@@ -9,6 +9,8 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ScopeManagement;
+using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
 
@@ -27,15 +29,17 @@ public class ScopeValidator(IScopeManager scopeManager) : IBackChannelAuthentica
 	/// from requesting unauthorized scopes, such as offline access,
 	/// unless explicitly allowed by the client's configuration.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="context">The validation context that includes details about the request and the client.</param>
 	/// <returns>
 	/// A <see cref="OidcError"/> if the scope validation fails,
 	/// or null if the scopes in the request are valid.
 	/// </returns>
 	public Task<OidcError?> ValidateAsync(
+		TenantDefinition tenant,
 		BackChannelAuthenticationValidationContext context)
 	{
-		return Task.FromResult(Validate(context));
+		return Task.FromResult(Validate(tenant, context));
 	}
 
 	/// <summary>
@@ -43,24 +47,32 @@ public class ScopeValidator(IScopeManager scopeManager) : IBackChannelAuthentica
 	/// It checks for issues like unauthorized offline access requests and verifies the compatibility of
 	/// the requested scopes with the client's registered permissions and the resources requested.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="context">
 	/// Contains the authorization request and the client information necessary for validation.</param>
 	/// <returns>
 	/// A <see cref="OidcError"/> if the requested scopes are not valid or not allowed,
 	/// or null if the validation passes.
 	/// </returns>
-	private OidcError? Validate(BackChannelAuthenticationValidationContext context)
+	private OidcError? Validate(TenantDefinition tenant, BackChannelAuthenticationValidationContext context)
 	{
-		if (context.Request.Scope.Contains(Scopes.OfflineAccess) &&
-		    context.ClientInfo.OfflineAccessAllowed != true)
+		if (context.ClientInfo.ScopeServedFor(context.Request.Scope) is not { } scope)
+		{
+			return new OidcError(
+				ErrorCodes.InvalidScope,
+				ScopeRefusals.NoneNamed);
+		}
+
+		if (scope.Contains(Scopes.OfflineAccess) &&
+		    !context.ClientInfo.OfflineAccess.IsAllowed())
 		{
 			return new OidcError(
 				ErrorCodes.InvalidScope,
 				"This client is not allowed to request for offline access");
 		}
 
-		if (!scopeManager.Validate(
-			    context.Request.Scope,
+		if (!scopeManager.Validate(tenant,
+			    scope,
 			    context.Resources,
 			    context.ClientInfo.AllowedScopes,
 			    out var scopeDefinitions,

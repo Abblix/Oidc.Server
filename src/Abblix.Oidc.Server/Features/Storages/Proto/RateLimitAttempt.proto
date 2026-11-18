@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option csharp_namespace = "Abblix.Oidc.Server.Features.Storages.Proto";
+
+import "google/protobuf/timestamp.proto";
+
+// One failed verification attempt, recorded under a key nobody else writes.
+//
+// The count of attempts is how many of these exist rather than a number kept in one record:
+// a number read, raised and written back loses events when failures arrive together, and a
+// short user code is defended by that count (RFC 8628, section 5.1).
+//
+// A message rather than a bare timestamp for the reason RevocationCutoff states.
+message RateLimitAttempt {
+  // When this attempt happened, which is what the backoff after it is measured from.
+  google.protobuf.Timestamp at = 1;
+}

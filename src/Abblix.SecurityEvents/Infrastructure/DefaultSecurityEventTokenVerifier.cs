@@ -17,11 +17,12 @@ namespace Abblix.SecurityEvents.Infrastructure;
 /// from the issuer resolver.
 /// </summary>
 /// <remarks>
-/// The core is asked for exactly the signature - a signed token, verified against the issuer's
-/// keys - and nothing more: issuer allowlisting, audience, freshness and typing are pipeline
-/// steps, and letting the core re-check them would report their failures in the wrong vocabulary
-/// from the wrong place. An issuer the resolver yields no keys for is reported as a key miss
-/// rather than a bad signature, because a refetch may heal the former and never the latter.
+/// The core is asked for the signature - a signed token, verified against the issuer's keys - and
+/// for the token types the caller accepts; the validation pipeline judges the type in its own step
+/// and asks for none here. Issuer allowlisting, audience and freshness are pipeline steps, and
+/// letting the core re-check them would report their failures in the wrong vocabulary from the
+/// wrong place. An issuer the resolver yields no keys for is reported as a key miss rather than a
+/// bad signature, because a refetch may heal the former and never the latter.
 /// </remarks>
 /// <param name="validator">The JWT core's validator.</param>
 /// <param name="keyResolver">The receiver's key trust.</param>
@@ -36,6 +37,7 @@ public sealed class DefaultSecurityEventTokenVerifier(
     /// <inheritdoc />
     public async Task<Result<JsonWebToken, SecurityEventTokenValidationError>> VerifyAsync(
         string compactToken,
+        TokenTypePolicy tokenTypes,
         string? keyId = null,
         CancellationToken cancellationToken = default)
     {
@@ -47,6 +49,7 @@ public sealed class DefaultSecurityEventTokenVerifier(
         var parameters = new ValidationParameters
         {
             Options = ValidationOptions.RequireSignedTokens | ValidationOptions.ValidateIssuerSigningKey,
+            TokenTypes = tokenTypes,
             AllowedSigningAlgorithms = allowedAlgorithms.ToHashSet(StringComparer.Ordinal),
             ResolveIssuerSigningKeys = ResolveBuffered,
         };
@@ -94,8 +97,6 @@ public sealed class DefaultSecurityEventTokenVerifier(
             // InvalidToken at every one of their refusal sites and InvalidHeader at none.
             JwtError.InvalidHeader => SecurityEventTokenErrorCode.MalformedToken,
 
-            _ when noKeysResolved => SecurityEventTokenErrorCode.KeyNotFound,
-
             // An algorithm this receiver does not accept lands here with everything else the core
             // refuses a signature over, and that is not a loss of meaning: RFC 8935 Section 2.4 renders
             // it as invalid_key, "unacceptable to the SET Recipient", which is what it is. Reading it
@@ -103,9 +104,20 @@ public sealed class DefaultSecurityEventTokenVerifier(
             // missing alg, an unregistered one and an unsigned token, and this seam cannot tell them
             // apart. The description says which happened, and the core writes it where the branch is
             // known.
-            _ => SecurityEventTokenErrorCode.SignatureInvalid,
+            JwtError.InvalidToken => Refused(noKeysResolved),
+            JwtError.TokenAlreadyUsed => Refused(noKeysResolved),
+            JwtError.TokenRevoked => Refused(noKeysResolved),
+            JwtError.InvalidAlgorithm => Refused(noKeysResolved),
+            JwtError.InvalidTokenType => SecurityEventTokenErrorCode.TokenConfusion,
+            JwtError.InvalidSignature => Refused(noKeysResolved),
+
+            _ => throw new ArgumentOutOfRangeException(nameof(error), error.Error, "A JWT error without a SET error code."),
         };
 
         return new SecurityEventTokenValidationError(code, error.ErrorDescription);
     }
+
+    // A refused signature with no key resolved at all is a missing key, not a bad signature.
+    private static SecurityEventTokenErrorCode Refused(bool noKeysResolved) =>
+        noKeysResolved ? SecurityEventTokenErrorCode.KeyNotFound : SecurityEventTokenErrorCode.SignatureInvalid;
 }

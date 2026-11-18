@@ -54,7 +54,7 @@ public sealed record MintedKeys
     /// <remarks>
     /// A new key does not sign the moment it appears. It is published and verifiable for
     /// <c>KeyRingOptions.KeyRolloverPropagation</c> first, so a client whose JWKS cache is stale never meets a token
-    /// signed by a key it lacks. Keep this comfortably larger than that window.
+    /// signed by a key it lacks. Keep this comfortably larger than that window. Must be positive.
     /// </remarks>
     public TimeSpan RotateEvery { get; init; } = TimeSpan.FromDays(30);
 
@@ -66,7 +66,7 @@ public sealed record MintedKeys
     /// This must outlast every token the key signed. Removing it early does not degrade anything gracefully: the
     /// key vanishes from <c>/jwks</c> and every unexpired token it signed stops verifying, which is why the
     /// default errs long rather than short. Set it explicitly only to say "no token of mine lives longer than
-    /// this", and remember refresh tokens are signed too, not just access tokens.
+    /// this", and remember refresh tokens are signed too, not just access tokens. Must not be negative.
     /// </remarks>
     public TimeSpan? KeepRetiredFor { get; init; }
 
@@ -77,9 +77,10 @@ public sealed record MintedKeys
     public string ContentEncryptionAlgorithm { get; init; } = EncryptionAlgorithms.ContentEncryption.Aes256Gcm;
 
     /// <summary>
-    /// Keys the server already signs with, taken into an EMPTY ring so the move to minted keys does not change
-    /// which key is producing on the day it happens. Normally set through
-    /// <see cref="IMintedKeysBuilder.AdoptExistingKeys"/> rather than written here.
+    /// Keys an issuer already signs with, by the partition they are taken into: each partition that has minted nothing
+    /// yet takes its own, so the move to minted keys does not change which key is producing on the day it happens, and
+    /// no partition serves another's. Normally set through
+    /// <see cref="IMintedKeysBuilder.AdoptExistingKeys(string, JsonWebKey[])"/> rather than written here.
     /// </summary>
     /// <remarks>
     /// Without this the ring starts empty, and a ring of one key has nothing to trail behind: the freshly minted
@@ -88,11 +89,13 @@ public sealed record MintedKeys
     /// while the minted key serves out its propagation window - the old key keeps signing, the new one is
     /// published, and the changeover happens once clients have had the window to fetch it.
     /// <para>
-    /// Adoption happens only into an empty ring. That is what makes leaving the call in place harmless: once the
-    /// ring holds anything the keys are never taken again, so a key that has since retired is not resurrected,
+    /// Adoption happens only until the ring holds its first minted key. That is what makes leaving the call in place
+    /// harmless: from then on the keys are never taken again, so a key that has since retired is not resurrected,
     /// and pods racing to adopt settle it the same way they settle minting - one insert wins and the rest drop
-    /// what they built.
+    /// what they built. Until then every refresh takes the whole set again, so a set whose writing stopped partway
+    /// is completed by the next refresh.
     /// </para>
     /// </remarks>
-    public IReadOnlyList<JsonWebKey> AdoptedKeys { get; init; } = [];
+    public IReadOnlyDictionary<string, IReadOnlyList<JsonWebKey>> AdoptedKeys { get; init; } =
+        new Dictionary<string, IReadOnlyList<JsonWebKey>>(StringComparer.Ordinal);
 }

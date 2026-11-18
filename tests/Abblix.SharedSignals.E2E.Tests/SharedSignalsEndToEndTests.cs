@@ -6,7 +6,11 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Net;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using Abblix.Jwt;
 using Abblix.SecurityEvents.Abstractions;
@@ -20,13 +24,14 @@ using Abblix.SharedSignals.Infrastructure;
 using Abblix.SharedSignals.MinimalApi;
 using Abblix.SharedSignals.Model;
 using Abblix.SharedSignals.Model.Delivery;
-using Abblix.SharedSignals.Receiver;
 using Abblix.SharedSignals.Receiver.SecurityEvent;
+using Abblix.SharedSignals.Telemetry;
 using Abblix.SharedSignals.Transmitter;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Abblix.SharedSignals.E2E.Tests;
@@ -50,6 +55,10 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
 
     private readonly RecordingSink _sink = new();
 
+    // One clock for both hosts, so the receiver judges a token's issue time against the time the transmitter
+    // keeps. It starts at the present and moves only when a test moves it.
+    private readonly FakeTimeProvider _clock = new(TimeProvider.System.GetUtcNow());
+
     private WebApplication _transmitter = null!;
     private WebApplication _receiver = null!;
 
@@ -63,6 +72,31 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
     {
         await _receiver.DisposeAsync();
         await _transmitter.DisposeAsync();
+    }
+
+    /// <summary>
+    /// An event that waited in the outbox longer than the receiver tolerates for a token's issue time - a receiver
+    /// down for a while, or the queue behind it - still reaches that receiver.
+    /// </summary>
+    [Fact]
+    public async Task AnEventQueuedLongerThanTheIssuedAtTolerance_IsStillDelivered()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var management = await DiscoverAndCreatePushStreamAsync(cancellationToken);
+        var stream = management.Created;
+        Assert.True(await management.Client.AddSubjectAsync(
+            new AddSubjectRequest { StreamId = stream.StreamId, Subject = Jdoe() },
+            cancellationToken));
+        Assert.True(await management.Client.RequestVerificationAsync(
+            new VerificationRequest { StreamId = stream.StreamId, State = "stale" },
+            cancellationToken));
+
+        _clock.Advance(new SecurityEventTokenValidationOptions().IssuedAtTolerance + TimeSpan.FromMinutes(1));
+
+        Assert.Equal(
+            new PushDeliveryPassOutcome(Delivered: 1, Rejected: 0),
+            await DrainPushAsync(stream.StreamId, cancellationToken));
+        Assert.Single(_sink.Consumed);
     }
 
     [Fact]
@@ -94,9 +128,9 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
 
         // A business event reaches the stream through the matching fan-out.
         var dispatcher = _transmitter.Services.GetRequiredService<EventDispatcher>();
-        Assert.Equal(1, await dispatcher.DispatchAsync(
+        Assert.Equal(1, (await dispatcher.DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
-            cancellationToken));
+            cancellationToken)).Reached);
 
         // Captured before draining, so the exact same SET can be redelivered afterwards.
         var outbox = _transmitter.Services.GetRequiredService<IEventOutbox>();
@@ -114,6 +148,96 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
         Assert.Equal(1, (await DrainPushAsync(stream.StreamId, cancellationToken)).Delivered);
         Assert.Equal(3, _sink.Consumed.Count);
     }
+
+    /// <summary>
+    /// A running transmitter records every instrument of its meter, and every attribute on its spans and measurements
+    /// comes from the set its documentation names: nothing names a stream, a receiver's address or a subject.
+    /// </summary>
+    [Fact]
+    public async Task ARunningTransmitter_RecordsEachInstrument_WithAdmittedAttributesOnly()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        // The spans of this test are the ones under its own trace: the suites beside it record into the same source
+        using var trace = new Activity(nameof(ARunningTransmitter_RecordsEachInstrument_WithAdmittedAttributesOnly))
+            .Start();
+        var spans = new ConcurrentQueue<Activity>();
+        using var activityListener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == SharedSignalsTelemetry.SourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = span =>
+            {
+                if (span.TraceId == trace.TraceId)
+                    spans.Enqueue(span);
+            },
+        };
+        ActivitySource.AddActivityListener(activityListener);
+
+        var meters = _transmitter.Services.GetRequiredService<IMeterFactory>();
+        var measurements = new ConcurrentQueue<(string Instrument, KeyValuePair<string, object?>[] Tags)>();
+        using var meterListener = new MeterListener();
+        meterListener.InstrumentPublished = (instrument, listener) =>
+        {
+            if (instrument.Meter.Scope == meters && instrument.Meter.Name == SharedSignalsTelemetry.SourceName)
+                listener.EnableMeasurementEvents(instrument);
+        };
+        meterListener.SetMeasurementEventCallback<long>(
+            (instrument, _, tags, _) => measurements.Enqueue((instrument.Name, tags.ToArray())));
+        meterListener.SetMeasurementEventCallback<double>(
+            (instrument, _, tags, _) => measurements.Enqueue((instrument.Name, tags.ToArray())));
+        meterListener.Start();
+
+        var management = await DiscoverAndCreatePushStreamAsync(cancellationToken);
+        Assert.True(await management.Client.AddSubjectAsync(
+            new AddSubjectRequest { StreamId = management.Created.StreamId, Subject = Jdoe() },
+            cancellationToken));
+        Assert.Equal(1, (await _transmitter.Services.GetRequiredService<EventDispatcher>().DispatchAsync(
+            new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
+            cancellationToken)).Reached);
+        Assert.Equal(1, (await DrainPushAsync(management.Created.StreamId, cancellationToken)).Delivered);
+
+        Assert.Equal(
+            ConstantsOf(typeof(SharedSignalsMetrics)).Order(),
+            measurements.Select(measurement => measurement.Instrument).Distinct().Order());
+        Assert.Contains(spans, span => span.OperationName == SharedSignalsTelemetry.TransmitSpan);
+        Assert.Contains(spans, span => span.OperationName == SharedSignalsTelemetry.PushSpan);
+
+        var tags = measurements
+            .SelectMany(measurement => measurement.Tags)
+            .Concat(spans.SelectMany(span => span.TagObjects))
+            .ToArray();
+        Assert.Contains(tags, tag => tag.Key == SharedSignalsTags.EventType);
+        Assert.Contains(tags, tag => tag.Key == SharedSignalsTags.PushOutcome);
+        Assert.All(tags, tag => Assert.True(IsAdmitted(tag), $"{tag.Key}={tag.Value} is not admitted"));
+    }
+
+    /// <summary>
+    /// Whether an attribute is one the transmitter documents, with a value from the set it documents for it.
+    /// </summary>
+    private static bool IsAdmitted(KeyValuePair<string, object?> tag) => tag.Key switch
+    {
+        SharedSignalsTags.EventType => tag.Value is MembershipChanged
+            or SharedSignalsEventTypes.Verification
+            or SharedSignalsEventTypes.StreamUpdated,
+        SharedSignalsTags.PushOutcome => ConstantsOf(typeof(PushDeliveryOutcomes)).Contains(tag.Value),
+
+        // This transmitter answers as one issuer, so nothing it records names a tenant
+        SharedSignalsTags.Tenant => false,
+        SharedSignalsTags.ErrorType => tag.Value is string name && IsExceptionType(name),
+        _ => false,
+    };
+
+    private static bool IsExceptionType(string name) => AppDomain.CurrentDomain.GetAssemblies()
+        .Select(assembly => assembly.GetType(name))
+        .Any(type => type is not null && typeof(Exception).IsAssignableFrom(type));
+
+    private static string[] ConstantsOf(Type type) =>
+    [
+        .. type.GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Where(field => field.IsLiteral)
+            .Select(field => (string)field.GetRawConstantValue()!),
+    ];
 
     [Fact]
     public async Task PollLifecycle_SwitchesDelivery_HoldsAcrossAPause_AndEndsWithDeletion()
@@ -137,9 +261,9 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
         var dispatcher = _transmitter.Services.GetRequiredService<EventDispatcher>();
         var pollClient = new PollClient(_transmitter.GetTestClient());
 
-        Assert.Equal(1, await dispatcher.DispatchAsync(
+        Assert.Equal(1, (await dispatcher.DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
-            cancellationToken));
+            cancellationToken)).Reached);
 
         var page = await pollClient.PollAsync(poll, new PollRequest(), cancellationToken);
         var jwtId = Assert.Single(page.Sets).Key;
@@ -153,9 +277,9 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
         await client.UpdateStatusAsync(
             new StreamStatus { StreamId = streamId, Status = StreamStatuses.Paused },
             cancellationToken);
-        Assert.Equal(1, await dispatcher.DispatchAsync(
+        Assert.Equal(1, (await dispatcher.DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
-            cancellationToken));
+            cancellationToken)).Reached);
         Assert.Empty((await pollClient.PollAsync(poll, new PollRequest(), cancellationToken)).Sets);
 
         await client.UpdateStatusAsync(
@@ -200,16 +324,18 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
 
         // The subject survived the replacement: the event still fans out to this stream.
         var dispatcher = _transmitter.Services.GetRequiredService<EventDispatcher>();
-        Assert.Equal(1, await dispatcher.DispatchAsync(
+        Assert.Equal(1, (await dispatcher.DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
-            cancellationToken));
+            cancellationToken)).Reached);
 
         // Removal's CONSEQUENCE, not its status code: the same event now matches no stream.
         Assert.True(await client.RemoveSubjectAsync(
             new RemoveSubjectRequest { StreamId = streamId, Subject = Jdoe() }, cancellationToken));
-        Assert.Equal(0, await dispatcher.DispatchAsync(
+        var afterRemoval = await dispatcher.DispatchAsync(
             new SecurityEventDescriptor { EventType = MembershipChanged, Subject = Jdoe() },
-            cancellationToken));
+            cancellationToken);
+        Assert.Equal(0, afterRemoval.Reached);
+        Assert.Empty(afterRemoval.NotReached);
     }
 
     [Fact]
@@ -309,7 +435,9 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
         var sender = new PushDeliverySender(
             _receiver.GetTestClient(),
             _transmitter.Services.GetRequiredService<IEventOutbox>(),
-            _transmitter.Services.GetRequiredService<ReceiverAddressPolicy>(), NullLogger<PushDeliverySender>.Instance);
+            _transmitter.Services.GetRequiredService<ReceiverAddressPolicy>(), NullLogger<PushDeliverySender>.Instance,
+            _transmitter.Services.GetRequiredService<SharedSignalsInstruments>(),
+            _transmitter.Services.GetRequiredService<QueuedEventSigner>());
 
         return await sender.SendPendingAsync(stream!, cancellationToken);
     }
@@ -318,6 +446,7 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton<TimeProvider>(_clock);
         builder.Services.AddSecurityEvents(options =>
             options.SigningKeySource = _ => Task.FromResult(_key));
         builder.Services.AddSharedSignalsTransmitter(new SharedSignalsTransmitterOptions
@@ -348,6 +477,7 @@ public sealed class SharedSignalsEndToEndTests : IAsyncLifetime
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
+        builder.Services.AddSingleton<TimeProvider>(_clock);
         builder.Services.AddSingleton<IIssuerKeyResolver>(new FixedKeyResolver(_key));
         builder.Services.AddSecurityEvents(options =>
             options.Events.Register<VerificationEventPayload>(SharedSignalsEventTypes.Verification));

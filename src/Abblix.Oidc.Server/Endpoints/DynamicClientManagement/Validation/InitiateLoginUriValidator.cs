@@ -7,12 +7,13 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using static Abblix.Oidc.Server.Model.ClientRegistrationRequest;
 
 namespace Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Validation;
 
 /// <summary>
-/// Validates the OIDC DCR 1.0 §2 <c>initiate_login_uri</c>: when supplied it must be an
+/// Validates the OIDC DCR 1.0 section 2 <c>initiate_login_uri</c>: when supplied it must be an
 /// absolute URI using the <c>https</c> scheme.
 /// </summary>
 public class InitiateLoginUriValidator: SyncClientRegistrationContextValidator
@@ -21,7 +22,7 @@ public class InitiateLoginUriValidator: SyncClientRegistrationContextValidator
     /// Returns an <c>invalid_client_metadata</c> error if <c>initiate_login_uri</c> is relative
     /// or non-HTTPS; <c>null</c> when absent or compliant.
     /// </summary>
-    protected override OidcError? Validate(ClientRegistrationValidationContext context)
+    protected override OidcError? Validate(TenantDefinition tenant, ClientRegistrationValidationContext context)
     {
         var model = context.Request;
         if (model.InitiateLoginUri != null)

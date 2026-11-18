@@ -32,13 +32,12 @@ public partial class SecureUriValidator : ISecureUriValidator
     /// states one.
     /// </summary>
     /// <param name="options">The fetch policy this validator enforces.</param>
-    /// <param name="logger">Carries the one-time report; absent in hosts that build the validator
-    /// by hand, where there is nowhere to report to.</param>
-    public SecureUriValidator(IOptions<SecureHttpFetchOptions> options, ILogger<SecureUriValidator>? logger = null)
+    /// <param name="logger">Carries the one-time report.</param>
+    public SecureUriValidator(IOptions<SecureHttpFetchOptions> options, ILogger<SecureUriValidator> logger)
     {
         this.options = options;
 
-        if (options.Value.AllowedSchemes is { Length: 0 } && logger != null)
+        if (options.Value.AllowedSchemes is { Length: 0 })
             LogSchemeRestrictionLifted(logger);
     }
 
@@ -64,11 +63,17 @@ public partial class SecureUriValidator : ISecureUriValidator
         => allowedDestinations is { Length: > 0 } destinations &&
            Array.Exists(destinations, allowed =>
                allowed.IsAbsoluteUri &&
-               string.Equals(uri.Scheme, allowed.Scheme, StringComparison.OrdinalIgnoreCase) &&
-               string.Equals(uri.Host, allowed.Host, StringComparison.OrdinalIgnoreCase) &&
-               uri.Port == allowed.Port &&
-               (allowed.AbsolutePath == "/" ||
-                string.Equals(uri.AbsolutePath, allowed.AbsolutePath, StringComparison.Ordinal)));
+               IsSameOrigin(uri, allowed) &&
+               PathIsCoveredBy(uri, allowed));
+
+    private static bool IsSameOrigin(Uri uri, Uri allowed)
+        => string.Equals(uri.Scheme, allowed.Scheme, StringComparison.OrdinalIgnoreCase) &&
+           string.Equals(uri.Host, allowed.Host, StringComparison.OrdinalIgnoreCase) &&
+           uri.Port == allowed.Port;
+
+    private static bool PathIsCoveredBy(Uri uri, Uri allowed)
+        => allowed.AbsolutePath == "/" ||
+           string.Equals(uri.AbsolutePath, allowed.AbsolutePath, StringComparison.Ordinal);
 
     /// <inheritdoc />
     public string? Validate(Uri uri)
@@ -103,13 +108,13 @@ public partial class SecureUriValidator : ISecureUriValidator
             return null;
 
         var hostname = uri.Host;
-        if (IsInternalHostname(hostname))
+        if (PrivateNetworks.IsPrivateHostname(hostname))
         {
             return $"Hostname '{hostname}' matches internal hostname pattern. " +
                    $"Request blocked to prevent access to internal infrastructure.";
         }
 
-        if (IPAddress.TryParse(hostname, out var ipAddress) && IsPrivateOrReservedAddress(ipAddress))
+        if (IPAddress.TryParse(hostname, out var ipAddress) && PrivateNetworks.IsPrivateOrReservedAddress(ipAddress))
         {
             return $"IP address '{ipAddress}' is private/internal. " +
                    $"Request blocked to prevent access to internal infrastructure.";
@@ -117,24 +122,4 @@ public partial class SecureUriValidator : ISecureUriValidator
 
         return null;
     }
-
-    /// <summary>
-    /// Checks if a hostname appears to be internal or non-public.
-    /// </summary>
-    /// <remarks>
-    /// The rules live in <see cref="PrivateNetworks"/>, where every package that must refuse such an address
-    /// reads them, so a name added there takes effect here too. The wording of this member is kept as shipped:
-    /// it is public, and a rename would break a host that calls it for nothing but a synonym.
-    /// </remarks>
-    public static bool IsInternalHostname(string hostname)
-        => PrivateNetworks.IsPrivateHostname(hostname);
-
-    /// <summary>
-    /// Checks if an IP address is private, loopback, link-local, or otherwise reserved.
-    /// </summary>
-    /// <remarks>
-    /// Delegates to <see cref="PrivateNetworks"/> for the same reason as the hostname rules above.
-    /// </remarks>
-    public static bool IsPrivateOrReservedAddress(IPAddress address)
-        => PrivateNetworks.IsPrivateOrReservedAddress(address);
 }

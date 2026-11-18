@@ -16,7 +16,7 @@ namespace Abblix.Jwt.UnitTests.ReplayPrevention;
 
 /// <summary>
 /// Pins the replay cache's contract over the store the host supplies: first reservation wins, a
-/// repeat is recognised, callers keyed under different prefixes cannot see each other's entries,
+/// repeat is recognized, callers keyed under different prefixes cannot see each other's entries,
 /// and the entry lives exactly until the moment the caller named. Honoring that lifetime is the
 /// store's own contract and is not re-tested here.
 /// </summary>

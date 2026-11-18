@@ -10,6 +10,7 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.GrantProcessors;
@@ -40,7 +41,8 @@ public class PollModeGrantProcessor(IBackChannelRequestStorage storage)
     /// this method.
     /// </summary>
     public async Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
-        string authenticationRequestId,
+        TenantDefinition tenant,
+        [Credential] string authenticationRequestId,
         BackChannelAuthenticationRequest request)
     {
         // Removed through the store's claim protocol, which is what keeps two polls from both coming back
@@ -49,7 +51,7 @@ public class PollModeGrantProcessor(IBackChannelRequestStorage storage)
         // would otherwise end with NEITHER poll told it took the request. Neither closes the window in
         // which a write lands between the read and the removal. Null does not say WHY - see the storage
         // contract.
-        var removedRequest = await storage.TryRemoveAsync(authenticationRequestId);
+        var removedRequest = await storage.TryRemoveAsync(tenant, authenticationRequestId);
 
         if (removedRequest == null)
         {

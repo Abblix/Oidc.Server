@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Validation;
@@ -16,11 +17,11 @@ partial class ResponseModeValidator
         EventId = LogEvents.Endpoints.ResponseModeValidator.IncompatibleResponseMode,
         Level = LogLevel.Warning,
         Message = "The response mode {ResponseMode} is not compatible with response type {ResponseType}")]
-    private partial void LogIncompatibleResponseMode(string ResponseMode, string[]? ResponseType);
+    private partial void LogIncompatibleResponseMode(Sanitized ResponseMode, Sanitized[]? ResponseType);
 
     [LoggerMessage(
         EventId = LogEvents.Endpoints.ResponseModeValidator.ResponseModeNotAllowedForClient,
         Level = LogLevel.Warning,
         Message = "The response mode {ResponseMode} is not allowed for the client {ClientId}")]
-    private partial void LogResponseModeNotAllowedForClient(string ResponseMode, string ClientId);
+    private partial void LogResponseModeNotAllowedForClient(Sanitized ResponseMode, string ClientId);
 }

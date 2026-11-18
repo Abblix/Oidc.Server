@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Globalization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Net.Http.Headers;
 
@@ -54,6 +55,24 @@ public static class HttpResponseExtensions
     }
 
     /// <summary>
+    /// Adds the <c>private</c> directive to the Cache-Control the response already carries, keeping every directive
+    /// in it - the no-store above included - so the response still sends one Cache-Control header.
+    /// </summary>
+    /// <remarks>
+    /// RFC 6750 section 2.3: "Server success (2XX status) responses to these requests SHOULD contain a Cache-Control
+    /// header with the "private" option", these being requests carrying the access token in the URI query. The typed
+    /// header is read anew from the response, so the shared value written above is never changed.
+    /// </remarks>
+    /// <param name="response">The HTTP response to modify.</param>
+    public static void AddPrivateCacheDirective(this HttpResponse response)
+    {
+        var headers = response.GetTypedHeaders();
+        var cacheControl = headers.CacheControl ?? new CacheControlHeaderValue();
+        cacheControl.Private = true;
+        headers.CacheControl = cacheControl;
+    }
+
+    /// <summary>
     /// Advertises a positive cache lifetime for a public, cacheable metadata response - the JWKS endpoint. Sets
     /// <c>Cache-Control: public, max-age=&lt;maxAge&gt;</c> and clears any <c>Pragma</c> / <c>Expires</c> a
     /// no-cache policy left behind, so the response carries a single, non-contradictory caching directive. Size
@@ -68,4 +87,44 @@ public static class HttpResponseExtensions
         response.Headers.Pragma = default;
         response.Headers.Expires = default;
     }
+
+    /// <summary>
+    /// Redirects the user agent with HTTP 303 See Other instead of the framework-default 302 Found.
+    /// </summary>
+    /// <remarks>
+    /// A 303 forces the follow-up request to use GET and never re-sends the original request body, so the
+    /// authorization endpoint (which accepts POST and may carry the user's credentials) never leaks that body
+    /// to the redirect target. RFC 9700 Section 4.12 says such a server "MUST NOT use the HTTP 307" and
+    /// "SHOULD use HTTP status code 303 (See Other)": 307 is forbidden, and 303 is the recommended choice.
+    /// </remarks>
+    /// <param name="response">The HTTP response to modify.</param>
+    /// <param name="location">The absolute URI to redirect the user agent to.</param>
+    public static void RedirectSeeOther(this HttpResponse response, string location)
+    {
+        response.StatusCode = StatusCodes.Status303SeeOther;
+        response.Headers.Location = location;
+    }
+
+    /// <summary>
+    /// Writes <c>Retry-After</c> onto the response, telling the caller how long to wait before asking again.
+    /// Use it where the response itself is at hand; a refusal that travels as a result carries the header
+    /// through <see cref="RetryAfterHeaderValue"/> instead.
+    /// </summary>
+    /// <param name="response">The HTTP response to modify.</param>
+    /// <param name="interval">How long the caller should wait.</param>
+    public static void SetRetryAfter(this HttpResponse response, TimeSpan interval)
+        => response.Headers.RetryAfter = RetryAfterHeaderValue(interval);
+
+    /// <summary>
+    /// Renders an interval as the <c>Retry-After</c> header states it, for the adapters that attach the header
+    /// to a result rather than to a response.
+    /// </summary>
+    /// <remarks>
+    /// Retry-After counts whole seconds (RFC 9110 section 10.2.3), and rounding up is what keeps the advice honest:
+    /// a client told to wait less than the server asked for arrives at the same refusal.
+    /// </remarks>
+    /// <param name="interval">How long the caller should wait.</param>
+    /// <returns>The header value, in whole seconds.</returns>
+    public static string RetryAfterHeaderValue(TimeSpan interval)
+        => ((long)Math.Ceiling(interval.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
 }

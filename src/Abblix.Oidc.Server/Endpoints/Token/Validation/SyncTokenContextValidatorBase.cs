@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Token.Validation;
 
@@ -19,8 +20,9 @@ public abstract class SyncTokenContextValidatorBase : ITokenContextValidator
 {
     /// <summary>
     /// Asynchronously validates the token request within the provided context by invoking the synchronous
-    /// <see cref="Validate(TokenValidationContext)"/> method.
+    /// <see cref="Validate(TenantDefinition, TokenValidationContext)"/> method.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">
     /// The context containing the token request and related information that needs to be validated.</param>
     /// <returns>
@@ -29,18 +31,19 @@ public abstract class SyncTokenContextValidatorBase : ITokenContextValidator
     /// otherwise, resolves to null indicating that the validation was successful.
     /// </returns>
     /// <param name="cancellationToken">Abandons the operation when the caller stops waiting.</param>
-    public Task<OidcError?> ValidateAsync(TokenValidationContext context, CancellationToken cancellationToken)
-        => Task.FromResult(Validate(context));
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, TokenValidationContext context, CancellationToken cancellationToken)
+        => Task.FromResult(Validate(tenant, context));
 
     /// <summary>
     /// Validates the token request within the provided context. This method must be implemented by derived classes
     /// to perform the specific validation logic.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="context">
     /// The context containing the token request and related information that needs to be validated.</param>
     /// <returns>
     /// A <see cref="OidcError"/> containing error details if the validation fails;
     /// otherwise, returns null indicating that the validation was successful.
     /// </returns>
-    protected abstract OidcError? Validate(TokenValidationContext context);
+    protected abstract OidcError? Validate(TenantDefinition tenant, TokenValidationContext context);
 }

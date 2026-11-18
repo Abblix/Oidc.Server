@@ -14,9 +14,9 @@ partial class KeyRingRefreshService
     [LoggerMessage(
         EventId = LogEvents.KeyRing.RefreshFailed,
         Level = LogLevel.Error,
-        Message = "Refreshing the key ring failed; the server keeps serving the keys it already holds and will " +
-                  "retry in {RetryIn}. Until a refresh succeeds it announces no key another instance has minted " +
-                  "since, so a rotation completed during the outage will produce tokens this instance cannot " +
-                  "verify.")]
-    private partial void LogRefreshFailed(Exception exception, TimeSpan retryIn);
+        Message = "Refreshing the key ring partition '{Partition}' failed; the server keeps serving the keys it " +
+                  "already holds and will retry in {RetryIn}. Until a refresh succeeds it announces no key another " +
+                  "instance has minted since, so a rotation completed during the outage will produce tokens this " +
+                  "instance cannot verify.")]
+    private partial void LogRefreshFailed(Exception exception, string partition, TimeSpan retryIn);
 }

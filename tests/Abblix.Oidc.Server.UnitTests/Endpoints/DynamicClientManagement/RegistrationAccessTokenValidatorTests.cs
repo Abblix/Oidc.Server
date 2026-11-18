@@ -10,6 +10,7 @@ using System.Net.Http.Headers;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement;
 using Abblix.Oidc.Server.Features.Tokens.Validation;
@@ -20,10 +21,9 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement;
 
 /// <summary>
-/// Verifies the RFC 7592 §5 registration-access-token binding in
-/// <see cref="RegistrationAccessTokenValidator"/>: a token is accepted only when its jti matches
-/// the value recorded on the client, so a rotated token invalidates its predecessors, while a null
-/// expectation keeps statically configured / pre-existing clients working unchanged.
+/// Verifies <see cref="RegistrationAccessTokenValidator"/> answers with the jti of a registration access token
+/// valid for the client, which the endpoint then matches against its registration (RFC 7592 section 5), and
+/// refuses a token that names another client or carries no jti to match.
 /// </summary>
 public class RegistrationAccessTokenValidatorTests
 {
@@ -34,13 +34,13 @@ public class RegistrationAccessTokenValidatorTests
     {
         var jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
         jwtValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<string>(), It.IsAny<ValidationOptions>()))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, null, It.IsAny<string>(), It.IsAny<TokenTypePolicy>(), It.IsAny<ValidationOptions>()))
             .ReturnsAsync(token);
 
         return new RegistrationAccessTokenValidator(jwtValidator.Object);
     }
 
-    private static JsonWebToken CreateToken(string jti, string? subject = null, string? audience = null) => new()
+    private static JsonWebToken CreateToken(string? jti, string? subject = null, string? audience = null) => new()
     {
         Header = new JsonWebTokenHeader(new JsonObject
         {
@@ -57,24 +57,80 @@ public class RegistrationAccessTokenValidatorTests
     private static AuthenticationHeaderValue Bearer => new(TokenTypes.Bearer, "the.jwt.token");
 
     [Fact]
-    public async Task MatchingJti_IsAccepted()
+    public async Task AValidToken_AnswersWithItsJti()
     {
         var validator = CreateValidator(CreateToken("jti-current"));
 
-        var error = await validator.ValidateAsync(Bearer, ClientId, "jti-current");
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Bearer, ClientId);
 
-        Assert.Null(error);
+        Assert.True(result.TryGetSuccess(out var tokenId));
+        Assert.Equal("jti-current", tokenId);
     }
 
+    /// <summary>
+    /// RFC 9110 section 11.1 identifies the scheme by a case-insensitive token, so the scheme in another case
+    /// carries the same token.
+    /// </summary>
     [Fact]
-    public async Task MismatchedJti_IsRejected()
+    public async Task AValidToken_UnderTheSchemeInAnotherCase_AnswersWithItsJti()
     {
-        // A token issued before the last rotation carries a stale jti; binding rejects it.
-        var validator = CreateValidator(CreateToken("jti-old"));
+        var validator = CreateValidator(CreateToken("jti-current"));
+        var header = new AuthenticationHeaderValue(TokenTypes.Bearer.ToLowerInvariant(), "the.jwt.token");
 
-        var error = await validator.ValidateAsync(Bearer, ClientId, "jti-current");
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, header, ClientId);
 
-        Assert.NotNull(error);
+        Assert.True(result.TryGetSuccess(out var tokenId));
+        Assert.Equal("jti-current", tokenId);
+    }
+
+    /// <summary>
+    /// RFC 6750 section 3.1: a request that "lacks any authentication information (e.g., the client was unaware that
+    /// authentication is necessary or attempted using an unsupported authentication method)" is answered with no error
+    /// code, which the marker tells the challenge builder. Nothing is validated, so the strict validator is not called.
+    /// </summary>
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(TokenTypes.Basic, "credentials")]
+    [InlineData(TokenTypes.Basic, null)]
+    public async Task ARequestLackingAuthentication_IsAnsweredWithTheMarker(string? scheme, string? credentials)
+    {
+        var validator = new RegistrationAccessTokenValidator(new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict).Object);
+        var header = scheme is null ? null : new AuthenticationHeaderValue(scheme, credentials);
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, header, ClientId);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsType<MissingAuthenticationError>(error);
+    }
+
+    /// <summary>
+    /// RFC 6750 section 2.1: the scheme alone is not the credentials it defines, a malformed request section 3.1 names
+    /// invalid_request.
+    /// </summary>
+    [Fact]
+    public async Task TheBearerSchemeWithoutAToken_IsAnInvalidRequest()
+    {
+        var validator = new RegistrationAccessTokenValidator(new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict).Object);
+
+        var result = await validator.ValidateAsync(
+            SingleIssuer.Tenant, new AuthenticationHeaderValue(TokenTypes.Bearer), ClientId);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.IsType<BearerRequestError>(error);
+    }
+
+    /// <summary>
+    /// A token without a jti binds to no registration, so it manages none.
+    /// </summary>
+    [Fact]
+    public async Task ATokenWithoutAJti_IsRejected()
+    {
+        var validator = CreateValidator(CreateToken(jti: null));
+
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Bearer, ClientId);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
     }
 
     /// <summary>
@@ -88,19 +144,30 @@ public class RegistrationAccessTokenValidatorTests
     {
         var validator = CreateValidator(CreateToken("jti-current"));
 
-        var error = await validator.ValidateAsync(Bearer, "client-2", "jti-current");
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Bearer, "client-2");
 
-        Assert.NotNull(error);
+        Assert.True(result.TryGetFailure(out _));
     }
 
+    /// <summary>
+    /// Only a registration access token manages a registration: the validator is asked for exactly that type, and
+    /// its refusal of another one, such as an access token this server issued, reaches the caller.
+    /// </summary>
     [Fact]
-    public async Task NullExpectation_SkipsBinding()
+    public async Task ATokenOfAnotherType_IsRejected()
     {
-        // Statically configured or pre-existing client with no recorded jti: binding not enforced.
-        var validator = CreateValidator(CreateToken("any-jti"));
+        var jwtValidator = new Mock<IAuthServiceJwtValidator>(MockBehavior.Strict);
+        jwtValidator
+            .Setup(v => v.ValidateAsync(
+                TestTenant.Matched, null, It.IsAny<string>(),
+                TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.RegistrationAccessToken)),
+                It.IsAny<ValidationOptions>()))
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
-        var error = await validator.ValidateAsync(Bearer, ClientId, expectedTokenId: null);
+        var result = await new RegistrationAccessTokenValidator(jwtValidator.Object).ValidateAsync(SingleIssuer.Tenant, Bearer, ClientId);
 
-        Assert.Null(error);
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidToken, error.Error);
     }
+
 }

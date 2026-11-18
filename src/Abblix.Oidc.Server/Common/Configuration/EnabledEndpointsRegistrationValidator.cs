@@ -16,7 +16,7 @@ namespace Abblix.Oidc.Server.Common.Configuration;
 /// were not registered by the matching <c>AddX()</c> opt-in. The flag only advertises and routes the endpoint;
 /// its handler is registered solely by the opt-in, so setting <c>All</c> (or the flag) without the opt-in would
 /// advertise an endpoint that fails on every request. This turns that silent per-request failure into a clear
-/// startup error, honouring RFC 8414 §2 / OpenID Connect Discovery §3 - do not advertise capabilities the server
+/// startup error, honouring RFC 8414 section 2 / OpenID Connect Discovery section 3 - do not advertise capabilities the server
 /// does not actually serve.
 /// </summary>
 internal sealed class EnabledEndpointsRegistrationValidator(IOptions<EndpointRegistrationMarker> marker)

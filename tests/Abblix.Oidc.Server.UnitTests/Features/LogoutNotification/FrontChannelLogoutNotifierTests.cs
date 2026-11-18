@@ -112,7 +112,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.Single(logoutContext.FrontChannelLogoutRequestUris);
@@ -133,7 +133,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.Empty(logoutContext.FrontChannelLogoutRequestUris);
@@ -151,7 +151,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext(issuer: "https://my-issuer.example.com");
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -171,7 +171,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext(sessionId: "my_session_abc123");
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -190,7 +190,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -210,7 +210,7 @@ public class FrontChannelLogoutNotifierTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _notifier.NotifyClientAsync(clientInfo, logoutContext));
+            () => _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext));
 
         Assert.Contains("requires session id", exception.Message);
         Assert.Contains(TestConstants.DefaultClientId, exception.Message);
@@ -229,7 +229,7 @@ public class FrontChannelLogoutNotifierTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _notifier.NotifyClientAsync(clientInfo, logoutContext));
+            () => _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext));
 
         Assert.Contains("requires session id", exception.Message);
     }
@@ -248,7 +248,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -280,8 +280,8 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo1, logoutContext);
-        await _notifier.NotifyClientAsync(clientInfo2, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo1, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo2, logoutContext);
 
         // Assert
         Assert.Equal(2, logoutContext.FrontChannelLogoutRequestUris.Count);
@@ -302,8 +302,8 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientWithLogout, logoutContext);
-        await _notifier.NotifyClientAsync(clientWithoutLogout, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientWithLogout, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientWithoutLogout, logoutContext);
 
         // Assert
         Assert.Single(logoutContext.FrontChannelLogoutRequestUris);
@@ -321,7 +321,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext(issuer: "https://issuer.example.com:8443/auth");
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -342,7 +342,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext(sessionId: "session-123_456.789~abc");
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -365,7 +365,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext(sessionId: longSessionId);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -386,7 +386,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext(sessionId: "session with spaces");
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -410,7 +410,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -434,7 +434,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -455,7 +455,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -476,7 +476,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -498,7 +498,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -523,7 +523,7 @@ public class FrontChannelLogoutNotifierTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _notifier.NotifyClientAsync(clientInfo, logoutContext));
+            () => _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext));
 
         Assert.Contains("specific_client_abc123", exception.Message);
     }
@@ -540,7 +540,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        var task = _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        var task = _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         Assert.True(task.IsCompleted);
@@ -560,8 +560,8 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext2 = CreateLogoutContext(sessionId: "session_123", subjectId: "user_2");
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext1);
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext2);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext1);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext2);
 
         // Assert
         var uri1 = logoutContext1.FrontChannelLogoutRequestUris[0];
@@ -584,7 +584,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -605,7 +605,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext();
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -624,7 +624,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext(issuer: "https://issuer.example.com/auth/realm-1");
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -645,7 +645,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext(sessionId: "1234567890");
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];
@@ -665,7 +665,7 @@ public class FrontChannelLogoutNotifierTests
         var logoutContext = CreateLogoutContext(sessionId: uuidSessionId);
 
         // Act
-        await _notifier.NotifyClientAsync(clientInfo, logoutContext);
+        await _notifier.NotifyClientAsync(SingleIssuer.Tenant, clientInfo, logoutContext);
 
         // Assert
         var uri = logoutContext.FrontChannelLogoutRequestUris[0];

@@ -9,6 +9,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ResourceIndicators;
 
@@ -24,6 +25,7 @@ public static class ResourceManagerExtensions
     /// This method ensures that resources and the requested scopes within those resources are registered and allowed.
     /// </summary>
     /// <param name="resourceManager">The resource manager that maintains the definitions of resources.</param>
+    /// <param name="tenant">The tenant whose resources the request is judged against.</param>
     /// <param name="resources">A collection of URIs representing the resources being requested.</param>
     /// <param name="scopes">A collection of scope identifiers associated with the request.</param>
     /// <param name="resourceDefinitions">Outputs an array of <see cref="ResourceDefinition"/> objects if
@@ -34,6 +36,7 @@ public static class ResourceManagerExtensions
     /// false otherwise.</returns>
     public static bool Validate(
         this IResourceManager resourceManager,
+        TenantDefinition tenant,
         IEnumerable<Uri> resources,
         IEnumerable<string> scopes,
         [MaybeNullWhen(false)] out ResourceDefinition[] resourceDefinitions,
@@ -59,7 +62,7 @@ public static class ResourceManagerExtensions
                 return false;
             }
 
-            if (!resourceManager.TryGet(resource, out var definition))
+            if (!resourceManager.TryGet(tenant, resource, out var definition))
             {
                 errorDescription = "The requested resource is unknown";
                 return false;

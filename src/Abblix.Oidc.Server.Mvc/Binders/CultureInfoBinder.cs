@@ -21,25 +21,12 @@ namespace Abblix.Oidc.Server.Mvc.Binders;
 /// <remarks>
 /// This binder is capable of handling culture-specific data by converting string values into <see cref="CultureInfo"/> objects.
 /// It supports binding single <see cref="CultureInfo"/> objects, arrays, and lists of <see cref="CultureInfo"/>.
+/// It reaches a property only through the binder the model generator puts on a property marked
+/// <see cref="CultureListAttribute"/>, so a host's own culture properties bind as they would without this package.
 /// </remarks>
 [Binds(typeof(CultureListAttribute))]
-public class CultureInfoBinder : ModelBinderBase, IModelBinderProvider
+public class CultureInfoBinder : ModelBinderBase
 {
-    /// <summary>
-    /// Gets the model binder based on the provided context.
-    /// </summary>
-    /// <param name="context">The context for the model binding.</param>
-    /// <returns>The model binder for <see cref="CultureInfo"/>, or null if the model type is not supported.</returns>
-    public IModelBinder? GetBinder(ModelBinderProviderContext context)
-    {
-        var type = context.Metadata.ModelType;
-
-        return type == typeof(CultureInfo) ||
-                type.IsAssignableFrom(typeof(CultureInfo[])) ||
-                type.IsAssignableFrom(typeof(List<CultureInfo>))
-            ? this
-            : null;
-    }
 
     /// <summary>
     /// Tries to parse the provided values into a <see cref="CultureInfo"/> object or a collection of <see cref="CultureInfo"/>.
@@ -56,7 +43,7 @@ public class CultureInfoBinder : ModelBinderBase, IModelBinderProvider
 
         if (type == typeof(CultureInfo))
         {
-            result = new CultureInfo(stringValue);
+            result = Culture(stringValue);
             return true;
         }
 
@@ -83,6 +70,17 @@ public class CultureInfoBinder : ModelBinderBase, IModelBinderProvider
     /// <returns>An enumerable of <see cref="CultureInfo"/>.</returns>
     private static IEnumerable<CultureInfo> GetCultureInfos(StringValues values) =>
         from value in values.OfType<string>()
-        from culture in value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-        select new CultureInfo(culture);
+        from culture in LanguageTag.TryParseList(value, out var cultures)
+            ? cultures
+            : throw new FormatException($"'{value}' has a tag that names no language")
+        select culture;
+
+    /// <summary>
+    /// The culture <paramref name="tag"/> names; a tag naming no language fails the binding, which the base binder
+    /// records against the parameter.
+    /// </summary>
+    private static CultureInfo Culture(string tag)
+        => LanguageTag.TryParse(tag, out var culture)
+            ? culture
+            : throw new FormatException($"'{tag}' names no language");
 }

@@ -12,7 +12,6 @@ using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Xunit;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 
@@ -59,7 +58,7 @@ public class ModelValidationResponseTests(TestFactory factory) : TestBase(factor
 
         var raw = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var body = JsonNode.Parse(raw)!.AsObject();
-        Assert.Equal(ErrorCodes.InvalidRequest, body[ResponseParameters.Error]!.GetValue<string>());
-        Assert.False(string.IsNullOrWhiteSpace(body[ResponseParameters.ErrorDescription]?.GetValue<string>()));
+        Assert.Equal(ErrorCodes.InvalidRequest, body[ErrorResponse.Parameters.Error]!.GetValue<string>());
+        Assert.False(string.IsNullOrWhiteSpace(body[ErrorResponse.Parameters.ErrorDescription]?.GetValue<string>()));
     }
 }

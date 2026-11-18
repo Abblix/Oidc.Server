@@ -33,6 +33,11 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection to configure.</param>
     /// <param name="configureOptions">Configures the vault URI and the service-principal credentials.</param>
     /// <returns>The builder whose placement call completes the wiring.</returns>
+    /// <remarks>
+    /// The example names the keys for the whole process, as a host without the OIDC server does. An OpenID Provider
+    /// names them for each tenant in <c>TenantDefinition.CustodianKeys</c> and calls <c>UseKeysInCustodian()</c>
+    /// without them, and refuses to start with keys named for the whole server.
+    /// </remarks>
     /// <example>
     /// <code>
     /// services
@@ -77,6 +82,9 @@ public static class ServiceCollectionExtensions
         // cache - defeating the caching this client exists for. It also let the library silently beat a host that
         // pre-registered its own custodian, which the repo's DI rule forbids.
         services.TryAddSingleton<IKeyCustodian>(provider => provider.GetRequiredService<KeyVaultClient>());
+
+        // The clock the custodian lets its cached crypto clients go by; a host's own wins
+        services.TryAddSingleton(TimeProvider.System);
 
         return services.RequireKeyPlacement();
     }

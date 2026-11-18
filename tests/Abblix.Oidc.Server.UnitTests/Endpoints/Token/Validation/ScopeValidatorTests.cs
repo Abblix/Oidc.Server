@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Model;
 using Moq;
 using Xunit;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.Token.Validation;
 
@@ -62,8 +63,8 @@ public class ScopeValidatorTests
         {
             var scopeDef = new ScopeDefinition(scope);
             _scopeManager
-                .Setup(m => m.TryGet(scope, out It.Ref<ScopeDefinition?>.IsAny))
-                .Returns(new ScopeManagerTryGetCallback((string s, out ScopeDefinition? def) =>
+                .Setup(m => m.TryGet(TestTenant.Matched, scope, out It.Ref<ScopeDefinition?>.IsAny))
+                .Returns(new ScopeManagerTryGetCallback((TenantDefinition _, string s, out ScopeDefinition? def) =>
                 {
                     def = scopeDef;
                     return true;
@@ -71,8 +72,7 @@ public class ScopeValidatorTests
         }
     }
 
-    private delegate bool ScopeManagerTryGetCallback(
-        string scope,
+    private delegate bool ScopeManagerTryGetCallback(TenantDefinition tenant, string scope,
         out ScopeDefinition? definition);
 
     /// <summary>
@@ -87,7 +87,7 @@ public class ScopeValidatorTests
         SetupScopeManagerForScopes("read", "write");
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -108,11 +108,11 @@ public class ScopeValidatorTests
 
         // Don't setup TryGet for "invalid_scope", so it returns false by default
         _scopeManager
-            .Setup(m => m.TryGet("invalid_scope", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(m => m.TryGet(TestTenant.Matched, "invalid_scope", out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(false);
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -128,17 +128,17 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_ShouldPassCorrectParametersToScopeManager()
     {
         // Arrange
-        var scopes = new[] { TestConstants.DefaultScope, "profile", "email" };
+        var scopes = new[] { TestConstants.DefaultScope, Scopes.Profile, Scopes.Email };
         var context = CreateContext(scope: scopes);
-        SetupScopeManagerForScopes(TestConstants.DefaultScope, "profile", "email");
+        SetupScopeManagerForScopes(TestConstants.DefaultScope, Scopes.Profile, Scopes.Email);
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
-        _scopeManager.Verify(m => m.TryGet(TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
-        _scopeManager.Verify(m => m.TryGet("profile", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
-        _scopeManager.Verify(m => m.TryGet("email", out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet(TestTenant.Matched, TestConstants.DefaultScope, out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet(TestTenant.Matched, Scopes.Profile, out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
+        _scopeManager.Verify(m => m.TryGet(TestTenant.Matched, Scopes.Email, out It.Ref<ScopeDefinition?>.IsAny), Times.Once);
     }
 
     /// <summary>
@@ -149,16 +149,16 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_OnSuccess_ShouldSetScopeInContext()
     {
         // Arrange
-        var context = CreateContext(scope: [TestConstants.DefaultScope, "profile"]);
-        SetupScopeManagerForScopes(TestConstants.DefaultScope, "profile");
+        var context = CreateContext(scope: [TestConstants.DefaultScope, Scopes.Profile]);
+        SetupScopeManagerForScopes(TestConstants.DefaultScope, Scopes.Profile);
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, context.Scope.Length);
         Assert.Contains(context.Scope, s => s.Scope == TestConstants.DefaultScope);
-        Assert.Contains(context.Scope, s => s.Scope == "profile");
+        Assert.Contains(context.Scope, s => s.Scope == Scopes.Profile);
     }
 
     /// <summary>
@@ -172,11 +172,11 @@ public class ScopeValidatorTests
         var context = CreateContext(scope: ["admin"]);
 
         _scopeManager
-            .Setup(m => m.TryGet("admin", out It.Ref<ScopeDefinition?>.IsAny))
+            .Setup(m => m.TryGet(TestTenant.Matched, "admin", out It.Ref<ScopeDefinition?>.IsAny))
             .Returns(false);
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(error);
@@ -195,7 +195,7 @@ public class ScopeValidatorTests
         SetupScopeManagerForScopes("read");
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -211,12 +211,12 @@ public class ScopeValidatorTests
     public async Task ValidateAsync_WithMultipleScopes_ShouldValidateAll()
     {
         // Arrange
-        var scopes = new[] { TestConstants.DefaultScope, "profile", "email", "address", "phone" };
+        var scopes = new[] { TestConstants.DefaultScope, Scopes.Profile, Scopes.Email, Scopes.Address, Scopes.Phone };
         var context = CreateContext(scope: scopes);
         SetupScopeManagerForScopes(scopes);
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -239,7 +239,7 @@ public class ScopeValidatorTests
         // No need to setup scope manager for empty scopes
 
         // Act
-        var error = await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(error);
@@ -258,11 +258,89 @@ public class ScopeValidatorTests
         SetupScopeManagerForScopes("read");
 
         // Act
-        await _validator.ValidateAsync(context, TestContext.Current.CancellationToken);
+        await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
 
         // Assert
         _scopeManager.Verify(
-            m => m.TryGet("read", out It.Ref<ScopeDefinition?>.IsAny),
+            m => m.TryGet(TestTenant.Matched, "read", out It.Ref<ScopeDefinition?>.IsAny),
             Times.Once);
+    }
+
+    private static TokenValidationContext ContextOf(string grantType, ClientInfo client) => new(
+        new TokenRequest { GrantType = grantType, Scope = [] }, new ClientRequest())
+    {
+        ClientInfo = client,
+    };
+
+    /// <summary>
+    /// A request of a grant starting from the client alone that names no scope is served with the client's default
+    /// scope, not with the wider set the client is allowed, and held to that set as a scope it named would be
+    /// (RFC 6749 section 3.3).
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.ClientCredentials)]
+    [InlineData(GrantTypes.Password)]
+    [InlineData(GrantTypes.JwtBearer)]
+    public async Task ARequestNamingNoScope_IsServedWithTheClientsDefault(string grantType)
+    {
+        var context = ContextOf(
+            grantType, new ClientInfo("test-client") { AllowedScopes = ["read", "write"], DefaultScope = ["read"] });
+        SetupScopeManagerForScopes("read");
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
+        Assert.Equal("read", Assert.Single(context.Scope).Scope);
+    }
+
+    /// <summary>
+    /// A client with allowed scopes and no default is served a request naming no scope with no scope, as before the
+    /// default existed, rather than with everything it is allowed.
+    /// </summary>
+    [Fact]
+    public async Task ARequestNamingNoScope_OfAClientWithNoDefault_IsServedWithNoScope()
+    {
+        var context = ContextOf(GrantTypes.ClientCredentials, new ClientInfo("test-client") { AllowedScopes = ["read"] });
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
+        Assert.Empty(context.Scope);
+    }
+
+    /// <summary>
+    /// A client required to name its scope is refused a request of such a grant naming none with
+    /// <c>invalid_scope</c>, the other answer RFC 6749 section 3.3 allows.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.ClientCredentials)]
+    [InlineData(GrantTypes.Password)]
+    [InlineData(GrantTypes.JwtBearer)]
+    public async Task ARequestNamingNoScope_OfAClientRequiredToNameOne_IsRefused(string grantType)
+    {
+        var context = ContextOf(grantType, new ClientInfo("test-client") { DefaultScope = ["read"], RequireScope = true });
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ErrorCodes.InvalidScope, error?.Error);
+    }
+
+    /// <summary>
+    /// A grant carrying the scope it was granted is not given the client's default, nor refused for naming none.
+    /// </summary>
+    [Theory]
+    [InlineData(GrantTypes.AuthorizationCode)]
+    [InlineData(GrantTypes.RefreshToken)]
+    [InlineData(GrantTypes.TokenExchange)]
+    [InlineData(GrantTypes.DeviceAuthorization)]
+    [InlineData(GrantTypes.Ciba)]
+    public async Task ARequestOfAGrantCarryingItsScope_IsNotGivenTheDefault(string grantType)
+    {
+        var context = ContextOf(grantType, new ClientInfo("test-client") { DefaultScope = ["read"], RequireScope = true });
+
+        var error = await _validator.ValidateAsync(SingleIssuer.Tenant, context, TestContext.Current.CancellationToken);
+
+        Assert.Null(error);
+        Assert.Empty(context.Scope);
     }
 }

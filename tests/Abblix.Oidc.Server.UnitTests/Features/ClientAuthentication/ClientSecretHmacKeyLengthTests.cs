@@ -19,8 +19,8 @@ using Xunit;
 namespace Abblix.Oidc.Server.UnitTests.Features.ClientAuthentication;
 
 /// <summary>
-/// A client authenticating with <c>client_secret_jwt</c> (OpenID Connect Core §9) signs its
-/// assertion with the client secret as the HMAC key. Per RFC 7518 §3.2 an HS256 key must be at
+/// A client authenticating with <c>client_secret_jwt</c> (OpenID Connect Core section 9) signs its
+/// assertion with the client secret as the HMAC key. Per RFC 7518 section 3.2 an HS256 key must be at
 /// least 32 bytes, and the JWT layer enforces that floor. This locks the default DCR-issued secret
 /// length to a value whose UTF-8 encoding is usable as an HS256 key, so a client that received a
 /// default secret can actually authenticate with it - the mismatch that the mocked
@@ -40,7 +40,7 @@ public class ClientSecretHmacKeyLengthTests
     }
 
     /// <summary>
-    /// The default client secret, encoded to UTF-8 as an HMAC key, must satisfy the RFC 7518 §3.2
+    /// The default client secret, encoded to UTF-8 as an HMAC key, must satisfy the RFC 7518 section 3.2
     /// HS256 floor (32 bytes). A shorter default (as before, 16 characters) leaves every
     /// default-secret client unable to use HS256 client_secret_jwt at all.
     /// </summary>
@@ -77,7 +77,7 @@ public class ClientSecretHmacKeyLengthTests
                 JwtId = System.Guid.NewGuid().ToString("N"),
                 Issuer = "client-a",
                 Subject = "client-a",
-                Audiences = ["https://auth.example.com/token"],
+                Audiences = ["https://auth.example.com"],
                 IssuedAt = issuedAt,
                 NotBefore = issuedAt,
                 ExpiresAt = issuedAt + System.TimeSpan.FromMinutes(5),
@@ -90,6 +90,7 @@ public class ClientSecretHmacKeyLengthTests
         var validator = Jwt.GetRequiredService<IJsonWebTokenValidator>();
         var result = await validator.ValidateAsync(jws, new ValidationParameters
         {
+            TokenTypes = TokenTypePolicy.CheckedByCaller,
             Options = ValidationOptions.RequireValidSignedTokens,
             ResolveIssuerSigningKeys = _ => ((JsonWebKey)key).ToAsync(),
         });

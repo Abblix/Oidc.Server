@@ -14,6 +14,7 @@ using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using Moq;
 using Xunit;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.UnitTests.Endpoints.DynamicClientManagement.Validation;
 
@@ -44,15 +45,16 @@ public class ScopeValidatorTests
     [Fact]
     public async Task ValidateAsync_WithNullScope_ShouldReturnNull()
     {
-        var result = await _validator.ValidateAsync(CreateContext(null));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext(null));
         Assert.Null(result);
     }
 
     [Fact]
-    public async Task ValidateAsync_WithEmptyScope_ShouldReturnNull()
+    public async Task ValidateAsync_WithEmptyScope_IsRefusedAsInvalidClientMetadata()
     {
-        var result = await _validator.ValidateAsync(CreateContext([]));
-        Assert.Null(result);
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext([]));
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
     }
 
     [Fact]
@@ -60,15 +62,15 @@ public class ScopeValidatorTests
     {
         ScopeDefinition? def = new(Scopes.OpenId);
         _scopeManager
-            .Setup(m => m.TryGet("openid", out def))
+            .Setup(m => m.TryGet(TestTenant.Matched, Scopes.OpenId, out def))
             .Returns(true);
 
         ScopeDefinition? def2 = new(Scopes.Profile);
         _scopeManager
-            .Setup(m => m.TryGet("profile", out def2))
+            .Setup(m => m.TryGet(TestTenant.Matched, Scopes.Profile, out def2))
             .Returns(true);
 
-        var result = await _validator.ValidateAsync(CreateContext(["openid", "profile"]));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext([Scopes.OpenId, Scopes.Profile]));
         Assert.Null(result);
     }
 
@@ -77,10 +79,10 @@ public class ScopeValidatorTests
     {
         ScopeDefinition? def = new(Scopes.OpenId);
         _scopeManager
-            .Setup(m => m.TryGet("openid", out def))
+            .Setup(m => m.TryGet(TestTenant.Matched, Scopes.OpenId, out def))
             .Returns(true);
 
-        var result = await _validator.ValidateAsync(CreateContext(["openid", "unknown_scope"]));
+        var result = await _validator.ValidateAsync(SingleIssuer.Tenant, CreateContext([Scopes.OpenId, "unknown_scope"]));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);

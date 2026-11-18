@@ -6,23 +6,26 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.AspNetCore;
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Mvc.ActionResults;
-using Abblix.Oidc.Server.Mvc.Controllers;
-using Abblix.Oidc.Server.Mvc.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Routing;
 
 namespace Abblix.Oidc.Server.Mvc.Formatters;
 
 /// <summary>
 /// Provides a response formatter for reading client responses.
 /// </summary>
-/// <param name="uriResolver">The URI resolver for generating client management URLs.</param>
-public class ReadClientResponseFormatter(IUriResolver uriResolver) : IReadClientResponseFormatter
+/// <param name="clientUriBuilder">Builds the URL of the client's configuration endpoint.</param>
+/// <param name="tenantAccessor">Names the tenant the request is served at, whose issuer is the realm of a bare challenge.</param>
+public class ReadClientResponseFormatter(
+    RegistrationClientUriBuilder clientUriBuilder,
+    ITenantAccessor tenantAccessor) : IReadClientResponseFormatter<ActionResult>
 {
     /// <summary>
     /// Formats a response for reading a client asynchronously.
@@ -44,15 +47,9 @@ public class ReadClientResponseFormatter(IUriResolver uriResolver) : IReadClient
             success => new OkObjectResult(success with
             {
                 RegistrationClientUri = success.RegistrationAccessToken.HasValue()
-                    ? uriResolver.Action(
-                        MvcUtils.TrimAsync(nameof(ClientManagementController.ReadClientAsync)),
-                        MvcUtils.NameOf<ClientManagementController>(),
-                        new RouteValueDictionary
-                        {
-                            { "clientId", success.ClientId },
-                        })
+                    ? clientUriBuilder.Build(success.ClientId)
                     : null
             }),
-            error => error.Format(StatusCodes.Status404NotFound)));
+            error => error.Format(StatusCodes.Status404NotFound, ClientManagementRealm.Of(error, tenantAccessor))));
     }
 }

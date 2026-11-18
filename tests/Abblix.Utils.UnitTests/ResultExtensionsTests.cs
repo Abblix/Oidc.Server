@@ -20,7 +20,14 @@ namespace Abblix.Utils.UnitTests;
 /// </remarks>
 public class ResultExtensionsTests
 {
-    private const string Failure = "refused";
+    /// <summary>A failure that is not a string, because the success here is one.</summary>
+    /// <remarks>
+    /// The two arms of a result are told apart by their type, so a result whose arms are the same type
+    /// cannot say which one it carries - and every accessor on it answers yes.
+    /// </remarks>
+    private sealed record Refusal(string Reason);
+
+    private static readonly Refusal Failure = new("refused");
 
     [Fact]
     public void Ensure_ASatisfiedPredicate_KeepsTheValue()

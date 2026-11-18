@@ -23,13 +23,18 @@ public class HttpRequestInfoProvider(IHttpContextAccessor httpContextAccessor) :
     private HttpRequest Request => httpContextAccessor.HttpContext.NotNull(nameof(HttpContext)).Request;
 
     /// <inheritdoc />
-    public string RequestUri => Request.GetBaseUrl();
+    /// <remarks>
+    /// A request resolved to a tenant had the path of the tenant's issuer moved into the path base, and the
+    /// endpoints discovery advertises for that tenant carry it; so its address, which a DPoP proof and a client
+    /// assertion are checked against, carries it too.
+    /// </remarks>
+    public Uri RequestUri => new(Request.GetAppUrl() + Request.Path);
 
     /// <inheritdoc />
     public string RequestMethod => Request.Method;
 
     /// <inheritdoc />
-    public string ApplicationUri => Request.GetAppUrl();
+    public Uri ApplicationUri => new(Request.GetAppUrl());
 
     /// <inheritdoc />
     public bool IsHttps => Request.IsHttps;

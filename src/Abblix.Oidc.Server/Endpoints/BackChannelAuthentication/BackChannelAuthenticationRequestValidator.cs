@@ -7,8 +7,10 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.ClientInformation;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Interfaces;
 using Abblix.Oidc.Server.Endpoints.BackChannelAuthentication.Validation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 
@@ -31,6 +33,8 @@ public class BackChannelAuthenticationRequestValidator(IBackChannelAuthenticatio
 	/// If validation succeeds, a <see cref="ValidBackChannelAuthenticationRequest"/> is returned;
 	/// otherwise, the corresponding validation error is returned.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
+	/// <param name="clientInfo">The client that authenticated the request.</param>
 	/// <param name="request">The backchannel authentication request to be validated.</param>
 	/// <param name="clientRequest">The client request associated with the backchannel authentication request.</param>
 	/// <returns>
@@ -38,12 +42,17 @@ public class BackChannelAuthenticationRequestValidator(IBackChannelAuthenticatio
 	/// which can be either a valid request or an error, depending on the outcome of the validation.
 	/// </returns>
 	public async Task<Result<ValidBackChannelAuthenticationRequest, OidcError>> ValidateAsync(
+		TenantDefinition tenant,
+		ClientInfo clientInfo,
 		BackChannelAuthenticationRequest request,
 		ClientRequest clientRequest)
 	{
-		var context = new BackChannelAuthenticationValidationContext(request, clientRequest);
+		var context = new BackChannelAuthenticationValidationContext(request, clientRequest)
+		{
+			ClientInfo = clientInfo,
+		};
 
-		var error = await contextValidator.ValidateAsync(context);
+		var error = await contextValidator.ValidateAsync(tenant, context);
 		if (error != null)
 			return error;
 

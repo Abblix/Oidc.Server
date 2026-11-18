@@ -6,6 +6,8 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
+
 namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 
 /// <summary>
@@ -17,17 +19,21 @@ namespace Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
 /// <remarks>
 /// Invoked from <see cref="IAuthorizationHandler"/> after the full request-processing chain (including
 /// the session-management decorator that sets <c>session_state</c>) has completed, so the JWT captures
-/// the final parameter set. It mutates the response in place: <see cref="SuccessfullyAuthenticated"/>
+/// the final parameter set. It mutates the response: <see cref="SuccessfullyAuthenticated"/>
 /// and <see cref="AuthorizationError"/> gain their <c>Issuer</c>/<c>Scope</c>/<c>ResponseJwt</c> and a
-/// resolved <c>ResponseMode</c>. Interaction responses (login/consent/etc.) and non-redirectable errors
-/// are left untouched. The transport layer then only maps the encoded response onto its wire DTO.
+/// resolved <c>ResponseMode</c>, and a response whose JWT cannot be produced is replaced by an error, so the
+/// caller delivers the response it returns. Interaction responses (login/consent/etc.) and non-redirectable
+/// errors are left untouched. The transport layer then only maps the encoded response onto its wire DTO.
 /// </remarks>
 public interface IAuthorizationResponseEncoder
 {
 	/// <summary>
-	/// Encodes the supplied authorization response in place. No-op for response types that are not
-	/// delivered to the client's redirect URI.
+	/// Encodes the supplied authorization response, returning the one to deliver. No-op for response types that
+	/// are not delivered to the client's redirect URI.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="response">The processed authorization response to encode.</param>
-	Task EncodeAsync(AuthorizationResponse response);
+	/// <returns>The response to deliver: <paramref name="response"/>, or the error that replaces it when its JARM
+	/// response JWT cannot be produced for the client.</returns>
+	Task<AuthorizationResponse> EncodeAsync(TenantDefinition tenant, AuthorizationResponse response);
 }

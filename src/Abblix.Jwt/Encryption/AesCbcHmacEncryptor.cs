@@ -23,13 +23,16 @@ namespace Abblix.Jwt.Encryption;
 /// </remarks>
 internal sealed class AesCbcHmacEncryptor(string algorithm) : IContentEncryptionAlgorithm
 {
-	private readonly int _keySize = GetKeySize(algorithm);
+	// AES block size is always 128 bits, and CBC takes an IV of one block
+	private const int IvSizeInBytes = 128 / 8;
+
+	private readonly AesCbcHmacKey _key = new(algorithm);
 
 	/// <inheritdoc />
 	public string Algorithm => algorithm;
 
 	/// <inheritdoc />
-	public int KeySizeInBytes => _keySize * 2;
+	public int KeySizeInBytes => _key.HalfSize * 2;
 
 	/// <inheritdoc />
 	public EncryptedData Encrypt(
@@ -37,48 +40,19 @@ internal sealed class AesCbcHmacEncryptor(string algorithm) : IContentEncryption
 		byte[] plaintext,
 		byte[] additionalAuthenticatedData)
 	{
-		// Check CEK length
 		var expectedLength = KeySizeInBytes;
 		if (contentEncryptionKey.Length != expectedLength)
 			throw new ArgumentException($"CEK must be {expectedLength} bytes for {algorithm}", nameof(contentEncryptionKey));
 
-		// Split CEK into HMAC key (first half) and AES key (second half)
-		var macKey = new byte[_keySize];
-		var encKey = new byte[_keySize];
-		Buffer.BlockCopy(contentEncryptionKey, 0, macKey, 0, _keySize);
-		Buffer.BlockCopy(contentEncryptionKey, _keySize, encKey, 0, _keySize);
+		var (macKey, encryptionKey) = _key.Split(contentEncryptionKey);
 
-		// Generate random IV
-		var initializationVector = CryptoRandom.GetRandomBytes(16); // AES block size is always 128 bits
+		var initializationVector = CryptoRandom.GetRandomBytes(IvSizeInBytes);
 
-		// Encrypt plaintext using AES-CBC
 		byte[] ciphertext;
-		using (var aes = Aes.Create())
-		{
-			aes.Key = encKey;
-			aes.IV = initializationVector;
-			aes.Mode = CipherMode.CBC;
-			aes.Padding = PaddingMode.PKCS7;
+		using (var aes = AesWith(encryptionKey))
+			ciphertext = aes.EncryptCbc(plaintext, initializationVector, PaddingMode.PKCS7);
 
-			using var encryptor = aes.CreateEncryptor();
-			ciphertext = encryptor.TransformFinalBlock(plaintext, 0, plaintext.Length);
-		}
-
-		// Per RFC 7518 Section 5.2.2.1: Compute authentication tag
-		var al = BitConverter.GetBytes((long)additionalAuthenticatedData.Length * 8);
-		if (BitConverter.IsLittleEndian)
-			Array.Reverse(al);
-
-		// Concatenate AAD with IV, Ciphertext and AL
-		var macInput = ArrayExtensions.Concat(additionalAuthenticatedData, initializationVector, ciphertext, al);
-
-		// Compute HMAC
-		var computedMac = ComputeHash(macKey, macInput);
-
-		// Per RFC 7518 Section 5.2.2.1: Authentication Tag is the first half of the HMAC output
-		var authenticationTag = new byte[_keySize];
-		Buffer.BlockCopy(computedMac, 0, authenticationTag, 0, _keySize);
-
+		var authenticationTag = _key.TagOf(macKey, additionalAuthenticatedData, initializationVector, ciphertext);
 		return new EncryptedData(initializationVector, ciphertext, authenticationTag);
 	}
 
@@ -89,107 +63,43 @@ internal sealed class AesCbcHmacEncryptor(string algorithm) : IContentEncryption
 		byte[] additionalAuthenticatedData,
 		[NotNullWhen(true)] out byte[]? plaintext)
 	{
-		// Check CEK length
-		var expectedLength = _keySize * 2;
-		if (contentEncryptionKey.Length != expectedLength)
-		{
-			plaintext = null;
+		plaintext = null;
+		if (contentEncryptionKey.Length != KeySizeInBytes)
 			return false;
-		}
 
-		// Split CEK into HMAC key (first half) and AES key (second half)
-		var macKey = new byte[_keySize];
-		var encKey = new byte[_keySize];
-		Buffer.BlockCopy(contentEncryptionKey, 0, macKey, 0, _keySize);
-		Buffer.BlockCopy(contentEncryptionKey, _keySize, encKey, 0, _keySize);
+		var (macKey, encryptionKey) = _key.Split(contentEncryptionKey);
 
-		// Per RFC 7518 Section 5.2.2.1: Verify authentication tag
-		var al = BitConverter.GetBytes((long)additionalAuthenticatedData.Length * 8);
-		if (BitConverter.IsLittleEndian)
-			Array.Reverse(al);
-
-		// Concatenate AAD with IV, Ciphertext and AL
-		var macInput = ArrayExtensions.Concat(
+		var computedTag = _key.TagOf(
+			macKey,
 			additionalAuthenticatedData,
 			encryptedData.InitializationVector,
-			encryptedData.Ciphertext,
-			al);
+			encryptedData.Ciphertext);
 
-		// Compute HMAC
-		var computedMac = ComputeHash(macKey, macInput);
-
-		// Per RFC 7518 Section 5.2.2.1: Authentication Tag is the first half of the HMAC output
-		var computedTag = new byte[_keySize];
-		Buffer.BlockCopy(computedMac, 0, computedTag, 0, _keySize);
-
-		// Verify authentication tag using constant-time comparison
+		// Constant-time, so how much of a forged tag matched cannot be read from the time a refusal takes.
 		if (!CryptographicOperations.FixedTimeEquals(encryptedData.AuthenticationTag, computedTag))
-		{
-			plaintext = null;
-			return false; // Authentication failed
-		}
+			return false;
 
-		// Decrypt ciphertext using AES-CBC
+		// The IV comes from the token: DecryptCbc throws ArgumentException on any other size
+		if (encryptedData.InitializationVector.Length != IvSizeInBytes)
+			return false;
+
 		try
 		{
-			using var aes = Aes.Create();
-			aes.Key = encKey;
-			aes.IV = encryptedData.InitializationVector;
-			aes.Mode = CipherMode.CBC;
-			aes.Padding = PaddingMode.PKCS7;
-
-			using var decryptor = aes.CreateDecryptor();
-			plaintext = decryptor.TransformFinalBlock(encryptedData.Ciphertext, 0, encryptedData.Ciphertext.Length);
+			using var aes = AesWith(encryptionKey);
+			plaintext = aes.DecryptCbc(encryptedData.Ciphertext, encryptedData.InitializationVector, PaddingMode.PKCS7);
 			return true;
 		}
 		catch (CryptographicException)
 		{
 			// Padding validation failed or other decryption error
-			plaintext = null;
 			return false;
 		}
 	}
 
-	/// <summary>
-	/// Gets the key size for the specified algorithm.
-	/// </summary>
-	/// <param name="algorithm">The AES-CBC-HMAC algorithm.</param>
-	/// <returns>The key size in bytes (half of the total CEK size).</returns>
-	/// <exception cref="InvalidOperationException">Thrown when the algorithm is not supported.</exception>
-	private static int GetKeySize(string algorithm)
+	private static Aes AesWith(byte[] key)
 	{
-		return algorithm switch
-		{
-			EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256 => 128 / 8, // 16 bytes
-			EncryptionAlgorithms.ContentEncryption.Aes192CbcHmacSha384 => 192 / 8, // 24 bytes
-			EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512 => 256 / 8, // 32 bytes
-			_ => throw new InvalidOperationException($"Unsupported AES-CBC-HMAC algorithm: {algorithm}"),
-		};
+		var aes = Aes.Create();
+		aes.Key = key;
+		return aes;
 	}
-
-	/// <summary>
-	/// Computes HMAC hash for the configured algorithm.
-	/// </summary>
-	/// <param name="key">The HMAC key.</param>
-	/// <param name="input">The input data to hash.</param>
-	/// <returns>The HMAC hash bytes.</returns>
-	/// <exception cref="InvalidOperationException">Thrown when the algorithm is not supported.</exception>
-	private byte[] ComputeHash(byte[] key, byte[] input)
-	{
-		// Per RFC 7518 Section 5.2:
-		// - A128CBC-HS256: AES-128-CBC + HMAC-SHA-256, 256-bit CEK (128-bit HMAC key + 128-bit AES key)
-		// - A192CBC-HS384: AES-192-CBC + HMAC-SHA-384, 384-bit CEK (192-bit HMAC key + 192-bit AES key)
-		// - A256CBC-HS512: AES-256-CBC + HMAC-SHA-512, 512-bit CEK (256-bit HMAC key + 256-bit AES key)
-
-		using HMAC hmac = algorithm switch
-		{
-			EncryptionAlgorithms.ContentEncryption.Aes128CbcHmacSha256 => new HMACSHA256(key),
-			EncryptionAlgorithms.ContentEncryption.Aes192CbcHmacSha384 => new HMACSHA384(key),
-			EncryptionAlgorithms.ContentEncryption.Aes256CbcHmacSha512 => new HMACSHA512(key),
-			_ => throw new InvalidOperationException($"Unsupported AES-CBC-HMAC algorithm: {algorithm}"),
-		};
-
-		return hmac.ComputeHash(input);
-	}
-
 }

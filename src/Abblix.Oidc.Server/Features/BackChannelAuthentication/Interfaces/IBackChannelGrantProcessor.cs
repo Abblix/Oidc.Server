@@ -8,6 +8,7 @@
 
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 
 namespace Abblix.Oidc.Server.Features.BackChannelAuthentication.Interfaces;
@@ -32,6 +33,7 @@ public interface IBackChannelGrantProcessor
     /// Validates whether the client is allowed to retrieve tokens via the token endpoint for this delivery mode,
     /// and performs any mode-specific post-retrieval actions (e.g., removing from storage).
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
     /// <param name="authenticationRequestId">The authentication request identifier.</param>
     /// <param name="request">The authenticated CIBA request from storage.</param>
     /// <returns>
@@ -39,6 +41,7 @@ public interface IBackChannelGrantProcessor
     /// why token retrieval is not permitted for this mode.
     /// </returns>
     Task<Result<AuthorizedGrant, OidcError>> ProcessAuthenticatedRequestAsync(
+        TenantDefinition tenant,
         string authenticationRequestId,
         BackChannelAuthenticationRequest request);
 }

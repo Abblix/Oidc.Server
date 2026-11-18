@@ -9,37 +9,39 @@
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ResourceIndicators;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.DeviceAuthorization.Validation;
 
 /// <summary>
-/// Validates the resources requested in a device authorization request.
+/// Settles the resources (RFC 8707) a device authorization request is for: the ones it names, else the one its scopes
+/// refer to where the tenant infers it. Each has to be registered at the tenant and one the client may get an access
+/// token for. The token request polling for it spends the request, so the tenant's default resource when nothing names
+/// one, and one resource for a client held to one per token, are held here too.
 /// </summary>
 /// <param name="resourceManager">The service for managing and validating resources.</param>
-public class ResourceValidator(IResourceManager resourceManager) : IDeviceAuthorizationContextValidator
+public class ResourceValidator(IResourceManager resourceManager)
+    : PolledRequestResourceValidator(resourceManager), IDeviceAuthorizationContextValidator
 {
     /// <inheritdoc />
-    public Task<OidcError?> ValidateAsync(DeviceAuthorizationValidationContext context)
-        => Task.FromResult(Validate(context));
+    public Task<OidcError?> ValidateAsync(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
+        => Task.FromResult(Validate(tenant, context));
 
-    private OidcError? Validate(DeviceAuthorizationValidationContext context)
+    private OidcError? Validate(TenantDefinition tenant, DeviceAuthorizationValidationContext context)
     {
         var request = context.Request;
+        var scope = context.ClientInfo.ScopeServedFor(request.Scope ?? []) ?? [];
 
-        if (request.Resources is { Length: > 0 })
-        {
-            if (!resourceManager.Validate(
-                    request.Resources,
-                    request.Scope ?? [],
-                    out var resources,
-                    out var errorDescription))
-            {
-                return new OidcError(ErrorCodes.InvalidTarget, errorDescription);
-            }
+        var refusal = Settle(
+            tenant,
+            context.ClientInfo,
+            request.Resources,
+            scope,
+            out var resources);
+        if (refusal is not null)
+            return refusal;
 
-            context.Resources = resources;
-        }
-
+        context.Resources = resources;
         return null;
     }
 }

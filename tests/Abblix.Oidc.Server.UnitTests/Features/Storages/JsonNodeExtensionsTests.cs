@@ -20,8 +20,6 @@ namespace Abblix.Oidc.Server.UnitTests.Features.Storages;
 /// </summary>
 public class JsonNodeExtensionsTests
 {
-    #region ObjectToProtoValue / ProtoValueToObject Tests
-
     [Fact]
     public void ObjectToProtoValue_Null_ReturnsNull()
     {
@@ -244,10 +242,6 @@ public class JsonNodeExtensionsTests
         Assert.Equal(3.14, (double)arrayResult[3], 0.0001);
     }
 
-    #endregion
-
-    #region ToProtoStruct / ToJsonObject Tests
-
     [Fact]
     public void ToProtoStruct_Null_ReturnsNull()
     {
@@ -324,10 +318,6 @@ public class JsonNodeExtensionsTests
         Assert.Equal("admin", roles[0]!.GetValue<string>());
         Assert.Equal("user", roles[1]!.GetValue<string>());
     }
-
-    #endregion
-
-    #region ObjectArrayToProtoListValue / ProtoListValueToObjectArray Tests
 
     [Fact]
     public void ObjectArrayToProtoListValue_Null_ReturnsNull()
@@ -437,10 +427,6 @@ public class JsonNodeExtensionsTests
         Assert.Equal("value", nested["nested"]!.GetValue<string>());
     }
 
-    #endregion
-
-    #region Type Preservation Edge Cases
-
     [Theory]
     [InlineData(0.0)]      // Should become int 0
     [InlineData(1.0)]      // Should become int 1
@@ -487,8 +473,6 @@ public class JsonNodeExtensionsTests
         Assert.Equal((long)value, result);
     }
 
-    #endregion
-
     /// <summary>
     /// The dictionary pair of the bridge: <c>ToStruct(IDictionary)</c> and <c>ToDictionary(Struct)</c>.
     /// </summary>
@@ -500,7 +484,7 @@ public class JsonNodeExtensionsTests
     /// becomes their first caller, does not have to find out how they behave.
     /// The round trip is asserted rather than either direction alone, because the number handling is where a
     /// pair like this loses information: protobuf carries every number as a double, so a whole one has to be
-    /// recognised on the way back or an integer claim returns as a fraction.
+    /// recognized on the way back or an integer claim returns as a fraction.
     /// </remarks>
     [Fact]
     public void DictionaryRoundTrip_PreservesValuesAndTheirTypes()

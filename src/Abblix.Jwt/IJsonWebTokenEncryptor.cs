@@ -28,6 +28,8 @@ public interface IJsonWebTokenEncryptor
     /// <param name="plaintext">The bytes to encrypt; a JWS-wrapping caller UTF-8 encodes the inner JWS.</param>
     /// <param name="encryptionKey">The JSON Web Key to use for encryption.</param>
     /// <param name="tokenType">The token type to set in the JWE header.</param>
+    /// <param name="contentType">The <c>cty</c> of the JWE header, or <c>null</c> to leave it out: <c>JWT</c> when
+    /// the plaintext is a JWT, which RFC 7519 section 5.2 requires of a Nested JWT.</param>
     /// <param name="keyEncryptionAlgorithm">The key encryption algorithm (e.g. RSA-OAEP-256).</param>
     /// <param name="contentEncryptionAlgorithm">The content encryption algorithm (e.g. A256CBC-HS512).</param>
     /// <param name="cancellationToken">Cancels a network-backed external key-management round-trip.</param>
@@ -36,6 +38,7 @@ public interface IJsonWebTokenEncryptor
         byte[] plaintext,
         JsonWebKey encryptionKey,
         string? tokenType,
+        string? contentType,
         string keyEncryptionAlgorithm,
         string contentEncryptionAlgorithm,
         CancellationToken cancellationToken = default);

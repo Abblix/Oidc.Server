@@ -5,6 +5,7 @@
 // Licensed under the Apache License, Version 2.0. You may obtain a copy at
 // http://www.apache.org/licenses/LICENSE-2.0
 
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xunit;
@@ -13,7 +14,7 @@ namespace Abblix.Jwt.UnitTests;
 
 /// <summary>
 /// Tests for the typed accessors on <see cref="JsonWebTokenHeader"/> covering the optional
-/// JOSE header parameters defined in RFC 7515 §4.1.2 - §4.1.8: <c>jku</c>, <c>jwk</c>,
+/// JOSE header parameters defined in RFC 7515 section 4.1.2 - section 4.1.8: <c>jku</c>, <c>jwk</c>,
 /// <c>x5u</c>, <c>x5c</c>, <c>x5t</c>, <c>x5t#S256</c>.
 ///
 /// The accessors are a thin typed surface over <see cref="JsonWebTokenHeader.Json"/>; they do
@@ -26,7 +27,7 @@ public class JsonWebTokenHeaderTests
     private static JsonWebTokenHeader EmptyHeader() => new(new JsonObject());
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // jku - RFC 7515 §4.1.2 (URL of a JWK Set whose keys verify the JWS)
+    // jku - RFC 7515 section 4.1.2 (URL of a JWK Set whose keys verify the JWS)
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -69,7 +70,7 @@ public class JsonWebTokenHeaderTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // jwk - RFC 7515 §4.1.3 (public key embedded directly as a JWK)
+    // jwk - RFC 7515 section 4.1.3 (public key embedded directly as a JWK)
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -77,7 +78,8 @@ public class JsonWebTokenHeaderTests
     {
         var header = EmptyHeader();
 
-        Assert.Null(header.VerificationKey);
+        Assert.True(header.TryReadVerificationKey(out var key));
+        Assert.Null(key);
     }
 
     [Fact]
@@ -88,11 +90,76 @@ public class JsonWebTokenHeaderTests
         var json = new JsonObject { [JwtClaimTypes.JsonWebKeyHeader] = keyJson };
         var header = new JsonWebTokenHeader(json);
 
-        var parsed = header.VerificationKey;
+        Assert.True(header.TryReadVerificationKey(out var parsed));
 
         Assert.NotNull(parsed);
-        Assert.Equal(key.KeyType, parsed!.KeyType);
+        Assert.Equal(key.KeyType, parsed.KeyType);
         Assert.Equal(key.KeyId, parsed.KeyId);
+    }
+
+    /// <summary>A 'jwk' that is an object but no valid key is malformed, not absent.</summary>
+    [Fact]
+    public void VerificationKey_PresentAsAnInvalidKey_IsMalformed()
+    {
+        var json = new JsonObject { [JwtClaimTypes.JsonWebKeyHeader] = new JsonObject { ["kty"] = "unknown" } };
+        var header = new JsonWebTokenHeader(json);
+
+        Assert.False(header.TryReadVerificationKey(out _));
+    }
+
+    /// <summary>A 'jwk' that is not a JSON object is malformed, as a 'crit' that is not an array is.</summary>
+    [Fact]
+    public void VerificationKey_PresentAsAString_IsMalformed()
+    {
+        var json = new JsonObject { [JwtClaimTypes.JsonWebKeyHeader] = "not a key" };
+        var header = new JsonWebTokenHeader(json);
+
+        Assert.False(header.TryReadVerificationKey(out _));
+    }
+
+    /// <summary>
+    /// An 'epk' carries only the members the ephemeral key has (kty, crv, x, y), the wire form conformant JOSE peers
+    /// emit and expect, with no absent member written as a JSON null.
+    /// </summary>
+    [Fact]
+    public void EphemeralPublicKey_IsWrittenWithItsOwnMembersOnly()
+    {
+        using var ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        var key = new EllipticCurveJsonWebKey().Apply(ecdh.ExportParameters(false)) with { Algorithm = null };
+        var header = EmptyHeader();
+
+        header.SetEphemeralPublicKey(key);
+
+        var written = header.Json[JwtClaimTypes.EphemeralPublicKey]!.AsObject().Select(member => member.Key);
+        Assert.Equal(["crv", "kty", "x", "y"], written.Order());
+    }
+
+    /// <summary>An 'epk' that is an object but no valid key is malformed, not absent.</summary>
+    [Fact]
+    public void EphemeralPublicKey_PresentAsAnInvalidKey_IsMalformed()
+    {
+        var json = new JsonObject { [JwtClaimTypes.EphemeralPublicKey] = new JsonObject { ["kty"] = "unknown" } };
+        var header = new JsonWebTokenHeader(json);
+
+        Assert.False(header.TryReadEphemeralPublicKey(out _));
+    }
+
+    /// <summary>
+    /// An 'epk' naming one of its members twice is malformed, as any key is (RFC 7517 section 4): a JWE header parsed
+    /// as text keeps both, and the key is read with neither.
+    /// </summary>
+    [Theory]
+    [InlineData("", true)]
+    [InlineData(""","kid":"a","kid":"b" """, false)]
+    public void EphemeralPublicKey_NamingAMemberTwice_IsMalformed(string extraMembers, bool readable)
+    {
+        using var ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        var key = new EllipticCurveJsonWebKey().Apply(ecdh.ExportParameters(false)) with { Algorithm = null };
+        var keyJson = JsonSerializer.Serialize<JsonWebKey>(key);
+        var epk = keyJson[..^1] + extraMembers.TrimEnd() + "}";
+        var json = JsonNode.Parse($$"""{"{{JwtClaimTypes.EphemeralPublicKey}}":{{epk}}}""")!.AsObject();
+
+        Assert.Equal(readable, new JsonWebTokenHeader(json).TryReadEphemeralPublicKey(out _));
     }
 
     [Fact]
@@ -101,11 +168,11 @@ public class JsonWebTokenHeaderTests
         var header = EmptyHeader();
         var key = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature).Sanitize(includePrivateKeys: false);
 
-        header.VerificationKey = key;
-        var parsed = header.VerificationKey;
+        header.SetVerificationKey(key);
+        Assert.True(header.TryReadVerificationKey(out var parsed));
 
         Assert.NotNull(parsed);
-        Assert.Equal(key.KeyType, parsed!.KeyType);
+        Assert.Equal(key.KeyType, parsed.KeyType);
         Assert.Equal(key.KeyId, parsed.KeyId);
     }
 
@@ -113,15 +180,15 @@ public class JsonWebTokenHeaderTests
     public void VerificationKey_SetNull_RemovesProperty()
     {
         var header = EmptyHeader();
-        header.VerificationKey = JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature).Sanitize(includePrivateKeys: false);
+        header.SetVerificationKey(JsonWebKeyFactory.CreateRsa(PublicKeyUsages.Signature).Sanitize(includePrivateKeys: false));
 
-        header.VerificationKey = null;
+        header.SetVerificationKey(null);
 
         Assert.False(header.Json.ContainsKey(JwtClaimTypes.JsonWebKeyHeader));
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // x5u - RFC 7515 §4.1.5 (URL of an X.509 certificate or chain)
+    // x5u - RFC 7515 section 4.1.5 (URL of an X.509 certificate or chain)
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -152,7 +219,7 @@ public class JsonWebTokenHeaderTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // x5c - RFC 7515 §4.1.6 (X.509 certificate chain as a JSON array of base64-DER)
+    // x5c - RFC 7515 section 4.1.6 (X.509 certificate chain as a JSON array of base64-DER)
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -160,7 +227,8 @@ public class JsonWebTokenHeaderTests
     {
         var header = EmptyHeader();
 
-        Assert.Null(header.Certificates);
+        Assert.True(header.TryReadCertificates(out var chain));
+        Assert.Null(chain);
     }
 
     [Fact]
@@ -174,7 +242,7 @@ public class JsonWebTokenHeaderTests
         };
         var header = new JsonWebTokenHeader(json);
 
-        var chain = header.Certificates;
+        Assert.True(header.TryReadCertificates(out var chain));
 
         Assert.NotNull(chain);
         Assert.Equal([leaf, intermediate], chain);
@@ -186,34 +254,35 @@ public class JsonWebTokenHeaderTests
         var header = EmptyHeader();
         var chain = new[] { "MIIDleaf==", "MIIDintermediate==" };
 
-        header.Certificates = chain;
+        header.SetCertificates(chain);
 
-        Assert.Equal(chain, header.Certificates);
+        Assert.True(header.TryReadCertificates(out var read));
+        Assert.Equal(chain, read);
     }
 
     [Fact]
-    public void Certificates_PresentAsNonArray_Throws()
+    public void Certificates_PresentAsNonArray_IsMalformed()
     {
         var json = new JsonObject { [JwtClaimTypes.X509CertificateChain] = "MIIDleaf==" };
         var header = new JsonWebTokenHeader(json);
 
-        Assert.Throws<JsonException>(() => header.Certificates);
+        Assert.False(header.TryReadCertificates(out _));
     }
 
     [Fact]
     public void Certificates_SetNull_RemovesProperty()
     {
         var header = EmptyHeader();
-        header.Certificates = ["MIIDleaf=="];
+        header.SetCertificates(["MIIDleaf=="]);
 
-        header.Certificates = null;
+        header.SetCertificates(null);
 
         Assert.False(header.Json.ContainsKey(JwtClaimTypes.X509CertificateChain));
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // x5t - RFC 7515 §4.1.7 (base64url SHA-1 thumbprint, deprecated per §10.11)
-    // x5t#S256 - RFC 7515 §4.1.8 (base64url SHA-256 thumbprint)
+    // x5t - RFC 7515 section 4.1.7 (base64url SHA-1 thumbprint, deprecated per section 10.11)
+    // x5t#S256 - RFC 7515 section 4.1.8 (base64url SHA-256 thumbprint)
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]

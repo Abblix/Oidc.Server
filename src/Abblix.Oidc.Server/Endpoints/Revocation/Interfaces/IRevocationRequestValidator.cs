@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Utils;
 using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Model;
@@ -25,10 +26,12 @@ public interface IRevocationRequestValidator
 	/// <summary>
 	/// Validates a revocation request.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="revocationRequest">The revocation request to be validated.</param>
 	/// <param name="clientRequest">Additional client request information for contextual validation.</param>
 	/// <returns>A task representing the asynchronous operation with the validation result.</returns>
 	Task<Result<ValidRevocationRequest, OidcError>> ValidateAsync(
+		TenantDefinition tenant,
 		RevocationRequest revocationRequest,
 		ClientRequest clientRequest);
 }

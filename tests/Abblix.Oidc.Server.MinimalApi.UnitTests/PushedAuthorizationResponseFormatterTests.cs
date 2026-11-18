@@ -8,12 +8,12 @@
 
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Endpoints.Authorization.Interfaces;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.MinimalApi.Formatters;
 using Abblix.Oidc.Server.Model;
 using Microsoft.AspNetCore.Http;
 using CorePushedAuthorizationResponse =
     Abblix.Oidc.Server.Endpoints.PushedAuthorization.Interfaces.PushedAuthorizationResponse;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 
 namespace Abblix.Oidc.Server.MinimalApi.UnitTests;
 
@@ -30,7 +30,8 @@ namespace Abblix.Oidc.Server.MinimalApi.UnitTests;
 /// </remarks>
 public class PushedAuthorizationResponseFormatterTests
 {
-    private readonly PushedAuthorizationResponseFormatter _formatter = new();
+    private readonly PushedAuthorizationResponseFormatter _formatter = new(
+        new ServedBy(new TenantDefinition { Id = "main", Issuer = new Uri("https://auth.example.com") }));
 
     private static AuthorizationError Error(string errorCode, Uri? redirectUri = null)
         => new(
@@ -82,6 +83,29 @@ public class PushedAuthorizationResponseFormatterTests
     }
 
     /// <summary>
+    /// RFC 9126 section 2.3 answers an error the way the token endpoint does, and RFC 6749 section 5.2 gives a client
+    /// that authenticated through the Authorization header a 401 with a challenge for its scheme.
+    /// </summary>
+    [Fact]
+    public async Task A_failed_client_authentication_carries_a_basic_challenge()
+    {
+        var request = new AuthorizationRequest();
+
+        var result = await HttpResultRunner.RunAsync(
+            await _formatter.FormatResponseAsync(request, Error(ErrorCodes.InvalidClient)));
+
+        Assert.StartsWith(
+            TokenTypes.Basic,
+            result.Headers[Microsoft.Net.Http.Headers.HeaderNames.WWWAuthenticate].ToString());
+    }
+
+    /// <summary>Tells every request it is served by <paramref name="tenant"/>.</summary>
+    private sealed class ServedBy(TenantDefinition tenant) : ITenantAccessor
+    {
+        public TenantContext Current { get; } = new() { Tenant = tenant };
+    }
+
+    /// <summary>
     /// The regression this endpoint's formatter exists to prevent: even when the request named a redirect URI,
     /// an error is returned to the caller rather than sent to a browser. PAR is called by the client's back end,
     /// which follows redirects by default and would parse a login page as its error response.
@@ -98,6 +122,6 @@ public class PushedAuthorizationResponseFormatterTests
         Assert.False(
             result.Headers.ContainsKey(Microsoft.Net.Http.Headers.HeaderNames.Location),
             "a pushed authorization error must be answered to the caller, never redirected to a browser");
-        Assert.Contains(ResponseParameters.Error, result.Body);
+        Assert.Contains(ErrorResponse.Parameters.Error, result.Body);
     }
 }

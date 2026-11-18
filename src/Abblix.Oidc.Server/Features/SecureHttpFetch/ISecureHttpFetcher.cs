@@ -23,8 +23,11 @@ public interface ISecureHttpFetcher
     /// </summary>
     /// <typeparam name="T">The type to deserialize the response to. Use string for raw text content.</typeparam>
     /// <param name="uri">The URI to fetch content from.</param>
+    /// <param name="refetch">Whether to fetch the URI again past any copy held of it, as when a key set held no key a
+    /// token names. A fetcher holding no copy fetches either way; one that holds copies refetches a URI at most once
+    /// per <see cref="SecureHttpFetchOptions.RefetchInterval"/>, serving its last refetch in between.</param>
     /// <returns>
     /// A Result containing either the deserialized content or an OidcError if the fetch operation fails.
     /// </returns>
-    Task<Result<T, OidcError>> FetchAsync<T>(Uri uri);
+    Task<Result<T, OidcError>> FetchAsync<T>(Uri uri, bool refetch = false);
 }

@@ -15,6 +15,7 @@ using Abblix.Oidc.Server.Common.Interfaces;
 using Abblix.Oidc.Server.Endpoints.Token.Grants;
 using Abblix.Oidc.Server.Endpoints.Token.Interfaces;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.UserAuthentication;
 using Abblix.Oidc.Server.Model;
 using Moq;
@@ -45,7 +46,7 @@ public class PasswordGrantHandlerTests
     }
 
     /// <summary>
-    /// RFC 6749 §5.2: a token request without the required username or password parameter is the
+    /// RFC 6749 section 5.2: a token request without the required username or password parameter is the
     /// caller's protocol error and yields invalid_request - previously it threw and surfaced as
     /// HTTP 500.
     /// </summary>
@@ -57,7 +58,7 @@ public class PasswordGrantHandlerTests
     {
         var tokenRequest = new TokenRequest { UserName = userName, Password = password };
 
-        var result = await _handler.AuthorizeAsync(tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -81,17 +82,17 @@ public class PasswordGrantHandlerTests
         };
 
         var expectedGrant = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, tokenRequest.Scope, null));
 
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, Password, It.Is<AuthorizationContext>(ctx =>
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, Password, It.Is<AuthorizationContext>(ctx =>
                 ctx.ClientId == ClientId &&
                 ctx.Scope.SequenceEqual(tokenRequest.Scope))))
             .ReturnsAsync(expectedGrant);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -116,11 +117,11 @@ public class PasswordGrantHandlerTests
 
         var authError = new OidcError(ErrorCodes.InvalidGrant, "Invalid username or password");
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, "wrongpassword", It.IsAny<AuthorizationContext>()))
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, "wrongpassword", It.IsAny<AuthorizationContext>()))
             .ReturnsAsync(authError);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -145,11 +146,11 @@ public class PasswordGrantHandlerTests
 
         var authError = new OidcError(ErrorCodes.InvalidGrant, "Account is locked");
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, Password, It.IsAny<AuthorizationContext>()))
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, Password, It.IsAny<AuthorizationContext>()))
             .ReturnsAsync(authError);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -175,15 +176,15 @@ public class PasswordGrantHandlerTests
         };
 
         var expectedGrant = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, tokenRequest.Scope, null));
 
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(specialUserName, specialPassword, It.IsAny<AuthorizationContext>()))
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, specialUserName, specialPassword, It.IsAny<AuthorizationContext>()))
             .ReturnsAsync(expectedGrant);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -207,16 +208,16 @@ public class PasswordGrantHandlerTests
         };
 
         var expectedGrant = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, scopes, null));
 
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, Password, It.Is<AuthorizationContext>(ctx =>
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, Password, It.Is<AuthorizationContext>(ctx =>
                 ctx.Scope.SequenceEqual(scopes))))
             .ReturnsAsync(expectedGrant);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -239,16 +240,16 @@ public class PasswordGrantHandlerTests
         };
 
         var expectedGrant = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, null!, null));
 
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, Password, It.Is<AuthorizationContext>(ctx =>
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, Password, It.Is<AuthorizationContext>(ctx =>
                 ctx.Scope == null)))
             .ReturnsAsync(expectedGrant);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
@@ -285,17 +286,17 @@ public class PasswordGrantHandlerTests
         };
 
         var expectedGrant = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, tokenRequest.Scope, null));
 
         AuthorizationContext? capturedContext = null;
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, Password, It.IsAny<AuthorizationContext>()))
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, Password, It.IsAny<AuthorizationContext>()))
             .ReturnsAsync(expectedGrant)
-            .Callback<string, string, AuthorizationContext>((_, _, ctx) => capturedContext = ctx);
+            .Callback<TenantDefinition, string, string, AuthorizationContext>((_, _, _, ctx) => capturedContext = ctx);
 
         // Act
-        await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(capturedContext);
@@ -330,12 +331,12 @@ public class PasswordGrantHandlerTests
 
         AuthorizationContext? capturedContext = null;
         _credentialsAuthenticator
-            .Setup(a => a.ValidateAsync(UserName, Password, It.IsAny<AuthorizationContext>()))
+            .Setup(a => a.ValidateAsync(TestTenant.Matched, UserName, Password, It.IsAny<AuthorizationContext>()))
             .ReturnsAsync(expectedGrant)
-            .Callback<string, string, AuthorizationContext>((_, _, ctx) => capturedContext = ctx);
+            .Callback<TenantDefinition, string, string, AuthorizationContext>((_, _, _, ctx) => capturedContext = ctx);
 
         // Act
-        await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(capturedContext);

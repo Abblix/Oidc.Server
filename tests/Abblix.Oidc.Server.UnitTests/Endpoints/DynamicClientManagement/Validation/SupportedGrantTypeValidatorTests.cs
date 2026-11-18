@@ -51,7 +51,7 @@ public class SupportedGrantTypeValidatorTests
     {
         var validator = Validator(GrantTypes.AuthorizationCode, GrantTypes.RefreshToken);
 
-        var result = await validator.ValidateAsync(Context([GrantTypes.AuthorizationCode]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([GrantTypes.AuthorizationCode]));
 
         Assert.Null(result);
     }
@@ -65,7 +65,7 @@ public class SupportedGrantTypeValidatorTests
     {
         var validator = Validator(GrantTypes.AuthorizationCode);
 
-        var result = await validator.ValidateAsync(Context([GrantTypes.Implicit]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([GrantTypes.Implicit]));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
@@ -81,7 +81,7 @@ public class SupportedGrantTypeValidatorTests
     {
         var validator = Validator(GrantTypes.AuthorizationCode, GrantTypes.Implicit);
 
-        var result = await validator.ValidateAsync(Context([GrantTypes.Implicit]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([GrantTypes.Implicit]));
 
         Assert.Null(result);
     }
@@ -95,7 +95,7 @@ public class SupportedGrantTypeValidatorTests
     {
         var validator = Validator(GrantTypes.AuthorizationCode, GrantTypes.RefreshToken);
 
-        var result = await validator.ValidateAsync(Context([GrantTypes.Password]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([GrantTypes.Password]));
 
         Assert.NotNull(result);
         Assert.Equal(ErrorCodes.InvalidClientMetadata, result.Error);
@@ -110,7 +110,7 @@ public class SupportedGrantTypeValidatorTests
     {
         var validator = Validator(GrantTypes.AuthorizationCode, GrantTypes.Password);
 
-        var result = await validator.ValidateAsync(Context([GrantTypes.Password]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([GrantTypes.Password]));
 
         Assert.Null(result);
     }
@@ -129,6 +129,7 @@ public class SupportedGrantTypeValidatorTests
         ]);
 
         var result = await validator.ValidateAsync(
+            SingleIssuer.Tenant,
             Context([GrantTypes.AuthorizationCode, GrantTypes.Implicit]));
 
         Assert.Null(result);
@@ -144,6 +145,7 @@ public class SupportedGrantTypeValidatorTests
         var validator = Validator(GrantTypes.AuthorizationCode);
 
         var result = await validator.ValidateAsync(
+            SingleIssuer.Tenant,
             Context([GrantTypes.AuthorizationCode, GrantTypes.Implicit]));
 
         Assert.NotNull(result);
@@ -161,7 +163,7 @@ public class SupportedGrantTypeValidatorTests
     {
         var validator = Validator(GrantTypes.AuthorizationCode);
 
-        var result = await validator.ValidateAsync(Context([]));
+        var result = await validator.ValidateAsync(SingleIssuer.Tenant, Context([]));
 
         Assert.Null(result);
     }

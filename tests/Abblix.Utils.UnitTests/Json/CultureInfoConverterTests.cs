@@ -46,7 +46,7 @@ public class CultureInfoConverterTests
     /// serializer answers <c>null</c> for a reference type before it ever calls a converter that has not
     /// opted into handling null. Production reaches this arm the other way: <c>ui_locales</c> is bound by
     /// <see cref="ArrayConverter{TElement,TConverter}"/>, which reads each element through the element
-    /// converter itself. Testing it through the serializer would have asserted the serializer's behaviour and
+    /// converter itself. Testing it through the serializer would have asserted the serializer's behavior and
     /// left this arm as dark as it was.
     /// </remarks>
     [Fact]

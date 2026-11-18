@@ -137,11 +137,61 @@ public class SanitizedTests
     /// Tests that a null input returns null.
     /// </summary>
     [Fact]
+    public void ToString_ShouldKeepAValueOfTheMaximumLengthWhole()
+    {
+        var input = new string('a', Sanitized.MaxLength);
+
+        Assert.Equal(input, Sanitized.Value(input).ToString());
+    }
+
+    [Fact]
+    public void ToString_ShouldKeepTheStartAndTheEndOfALongerValue()
+    {
+        const int half = Sanitized.MaxLength / 2;
+        var input = new string('a', half) + "middle" + new string('z', half);
+
+        var result = Sanitized.Value(input).ToString();
+
+        Assert.Equal(new string('a', half) + Sanitized.TruncationMark + new string('z', half), result);
+    }
+
+    [Fact]
+    public void ToString_ShouldCutBeforeEscaping()
+    {
+        var input = new string('\n', Sanitized.MaxLength + 1);
+
+        var result = Sanitized.Value(input).ToString();
+
+        var half = string.Concat(Enumerable.Repeat("\\n", Sanitized.MaxLength / 2));
+        Assert.Equal(half + Sanitized.TruncationMark + half, result);
+    }
+
+    [Fact]
+    public void ToString_ShouldNotSplitASurrogatePairAtEitherCut()
+    {
+        const int half = Sanitized.MaxLength / 2;
+        const string pair = "\U0001F600";
+        var input = new string('a', half - 1) + pair + "middle" + pair + new string('z', half - 1);
+
+        var result = Sanitized.Value(input).ToString();
+
+        Assert.Equal(new string('a', half - 1) + Sanitized.TruncationMark + new string('z', half - 1), result);
+    }
+
+    [Fact]
+    public void Values_ShouldSanitizeEachItemOnItsOwn()
+    {
+        var result = Sanitized.Values(["a,b", "c\nd"]);
+
+        Assert.Equal(["a\\,b", "c\\nd"], result.Select(value => value.ToString()));
+    }
+
+    [Fact]
     public void ToString_ShouldHandleNullInput()
     {
         const string? input = null;
         Sanitized sanitizedValue = input;
-        Assert.Equal(string.Empty, sanitizedValue.ToString());
+        Assert.Equal(Sanitized.NullText, sanitizedValue.ToString());
     }
 
     /// <summary>

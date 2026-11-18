@@ -14,7 +14,7 @@ using Abblix.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Abblix.Oidc.Server.Features.Issuer;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Common.Configuration;
 
 namespace Abblix.Oidc.Server.Features.ClientAuthentication;
@@ -26,17 +26,13 @@ namespace Abblix.Oidc.Server.Features.ClientAuthentication;
 /// <param name="logger">Logger for recording the authentication process and any issues encountered.</param>
 /// <param name="replayCache">Replay cache that records assertion jti values and atomically rejects reuse.</param>
 /// <param name="serviceProvider">Service provider used to resolve scoped dependencies.</param>
-/// <param name="issuerProvider">Supplies the issuer identifier a profile-governed assertion must name.</param>
-/// <param name="options">Supplies the server-wide default security profile.</param>
 /// <param name="timeProvider">Judges the assertion's timestamps against the client's own profile.</param>
 public class PrivateKeyJwtAuthenticator(
     ILogger<PrivateKeyJwtAuthenticator> logger,
     IReplayCache replayCache,
     IServiceProvider serviceProvider,
-    IIssuerProvider issuerProvider,
-    IOptions<OidcOptions> options,
     TimeProvider timeProvider)
-    : JwtAssertionAuthenticatorBase(logger, replayCache, issuerProvider, options, timeProvider)
+    : JwtAssertionAuthenticatorBase(logger, replayCache, timeProvider, serviceProvider)
 {
     /// <summary>
     /// Indicates the client authentication method supported by this authenticator.
@@ -52,20 +48,21 @@ public class PrivateKeyJwtAuthenticator(
     /// <summary>
     /// Validates the JWT assertion using the client's public keys from JWKS.
     /// </summary>
+    /// <param name="tenant">The tenant the request is served at; the client is looked up there alone.</param>
     /// <param name="jwt">The JWT assertion to validate.</param>
     /// <returns>
     /// A Result containing either a ValidJsonWebToken on success, or a JwtValidationError on failure.
     /// </returns>
-    protected override async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(string jwt)
+    protected override async Task<Result<ValidJsonWebToken, JwtValidationError>> ValidateJwtAsync(
+        TenantDefinition tenant, string jwt)
     {
-        using var scope = serviceProvider.CreateScope();
+        using var scope = Services.CreateScope();
         var tokenValidator = scope.ServiceProvider.GetRequiredService<IClientJwtValidator>();
 
-        // Stated rather than left to the default, because the requirement is this grant's and not
-        // the validator's: RFC 7521 Section 5.2 requires the assertion to carry an "Expires At
-        // entity that limits the time window during which the assertion can be used", which
-        // RFC 7523 Section 3 item 4 spells as a MUST on exp.
+        // Stated rather than left to the default, because the requirements are this method's and not the
+        // validator's, which also reads request objects: the base class judges the type and the audience after
+        // validation, by RFC 10070 section 4.
         return await tokenValidator.ValidateAsync(
-            jwt, ValidationOptions.Default | ValidationOptions.RequireExpirationTime);
+            tenant, client: null, jwt, TokenTypePolicy.CheckedByCaller, AssertionValidationOptions);
     }
 }

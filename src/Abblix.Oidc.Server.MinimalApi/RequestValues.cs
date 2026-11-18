@@ -17,13 +17,16 @@ namespace Abblix.Oidc.Server.MinimalApi;
 /// </summary>
 internal readonly struct RequestValues(IQueryCollection query, IFormCollection? form)
 {
+    /// <summary>How many values the query and the form carry under <paramref name="name"/> together.</summary>
+    public int Count(string name) => query[name].Count + (form?[name].Count ?? 0);
+
     public StringValues this[string name]
     {
         get
         {
-            // Form precedes query on a duplicate key, mirroring the MVC composite value provider order
-            // (FormValueProviderFactory before QueryStringValueProviderFactory). Keeps the two adapters from
-            // authorizing different requests under query/body parameter pollution.
+            // A parameter that takes one value and arrives in both is refused through Count. For one that may
+            // repeat, the form precedes the query, as the MVC composite value provider orders them
+            // (FormValueProviderFactory before QueryStringValueProviderFactory), so both hosts read the same entries
             if (form is not null && form.TryGetValue(name, out var fromForm) && fromForm.Count > 0)
                 return fromForm;
 

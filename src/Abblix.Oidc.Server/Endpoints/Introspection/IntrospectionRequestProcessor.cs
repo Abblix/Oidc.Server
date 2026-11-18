@@ -12,9 +12,11 @@ using Abblix.Oidc.Server.Common;
 using Abblix.Oidc.Server.Endpoints.Introspection.Interfaces;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Oidc.Server.Features.ClientInformation;
+using Abblix.Oidc.Server.Features.Issuer;
 using Abblix.Oidc.Server.Features.Licensing;
 using Abblix.Oidc.Server.Features.PairwiseIdentifiers;
 using Abblix.Utils;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Endpoints.Introspection;
 
@@ -36,15 +38,16 @@ public class IntrospectionRequestProcessor(
 	/// <summary>
 	/// Processes an introspection request and returns the corresponding introspection response.
 	/// </summary>
+	/// <param name="tenant">The tenant the request is served at.</param>
 	/// <param name="request">The valid introspection request to process. It contains the token to be introspected.</param>
 	/// <returns>
 	/// A <see cref="Task"/> representing the asynchronous operation, with a result of <see cref="IntrospectionSuccess"/>
 	/// or an <see cref="OidcError"/>. The response indicates the active status of the token and contains associated claims.
 	/// </returns>
-	public async Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(ValidIntrospectionRequest request)
-		=> await ProcessInternalAsync(request);
+	public async Task<Result<IntrospectionSuccess, OidcError>> ProcessAsync(TenantDefinition tenant, ValidIntrospectionRequest request)
+		=> await ProcessInternalAsync(tenant, request);
 
-	private async Task<IntrospectionSuccess> ProcessInternalAsync(ValidIntrospectionRequest request)
+	private async Task<IntrospectionSuccess> ProcessInternalAsync(TenantDefinition tenant, ValidIntrospectionRequest request)
 	{
 		if (request.Token == null)
 		{
@@ -72,7 +75,7 @@ public class IntrospectionRequestProcessor(
 		{
 			payload = WithoutPrivateClaims(payload, request.ClientInfo);
 
-			var pseudonym = await PseudonymForCallerAsync(request);
+			var pseudonym = await PseudonymForCallerAsync(tenant, request);
 			if (pseudonym != null)
 			{
 				payload[IanaClaimTypes.Sub] = pseudonym;
@@ -94,13 +97,13 @@ public class IntrospectionRequestProcessor(
 	/// cannot be matched against what another resource sees.
 	/// <para>
 	/// A caller that is not pairwise gets nothing. Its own subject type says it sees users under their real
-	/// identifiers, which is a statement about the tokens issued to it, not a licence to learn the identity of
+	/// identifiers, which is a statement about the tokens issued to it, not a license to learn the identity of
 	/// a user who authorized somebody else.
 	/// </para>
 	/// Anything uncertain also yields nothing: an owner that no longer resolves, or a subject that will not
 	/// open, leaves the response as it would have been without this.
 	/// </remarks>
-	private async Task<string?> PseudonymForCallerAsync(ValidIntrospectionRequest request)
+	private async Task<string?> PseudonymForCallerAsync(TenantDefinition tenant, ValidIntrospectionRequest request)
 	{
 		if (request.ClientInfo.SubjectType != SubjectTypes.Pairwise)
 			return null;
@@ -111,12 +114,12 @@ public class IntrospectionRequestProcessor(
 
 		// The subject in the token is what its own client sees, so it has to be opened against that client
 		// before it can be re-sealed for anybody else.
-		var owner = await clientInfoProvider.TryFindClientAsync(ownerId).WithLicenseCheck();
+		var owner = await clientInfoProvider.TryFindClientAsync(tenant, ownerId);
 		if (owner == null)
 			return null;
 
-		var realSubject = subjectTypeConverter.ConvertBack(subject, owner);
-		return realSubject == null ? null : subjectTypeConverter.Convert(realSubject, request.ClientInfo);
+		var realSubject = subjectTypeConverter.ConvertBack(tenant, subject, owner);
+		return realSubject == null ? null : subjectTypeConverter.Convert(tenant, realSubject, request.ClientInfo);
 	}
 
 	/// <summary>
@@ -169,18 +172,18 @@ public class IntrospectionRequestProcessor(
 	/// Adds the RFC 9396 <c>authorization_details</c> entries this caller is the resource server for.
 	/// </summary>
 	/// <remarks>
-	/// RFC 9396 §9: "In order to enable the RS to enforce the authorization details as approved in the
+	/// RFC 9396 section 9: "In order to enable the RS to enforce the authorization details as approved in the
 	/// authorization process, the AS MUST make this data available to the RS", by the access token or by
-	/// introspection. §9.2 governs the shape when it comes this way: the member carries "the same
+	/// introspection. section 9.2 governs the shape when it comes this way: the member carries "the same
 	/// structure defined in Section 2, potentially filtered and extended for the RS making the
 	/// introspection request", which is the filter applied here.
 	/// <para>
 	/// An entry reaches a caller only by naming it in <c>locations</c>. An entry without them is
-	/// addressed to nobody in particular and stays withheld: §2.2 makes <c>locations</c> optional, so
+	/// addressed to nobody in particular and stays withheld: section 2.2 makes <c>locations</c> optional, so
 	/// its absence says the client did not name a resource server, not that every one may read it.
 	/// </para>
 	/// <para>
-	/// Addresses are compared as TEXT, byte for byte. RFC 9396 §12: "All string comparisons in an
+	/// Addresses are compared as TEXT, byte for byte. RFC 9396 section 12: "All string comparisons in an
 	/// authorization_details parameter are to be done as defined by [RFC8259]. No additional
 	/// transformation or normalization is to be done in evaluating equivalence of string values."
 	/// Parsing both sides into <see cref="Uri"/> and comparing those would be that transformation, and
@@ -191,8 +194,8 @@ public class IntrospectionRequestProcessor(
 	/// should hear about it where it was written; only the comparison is textual.
 	/// </para>
 	/// <para>
-	/// What is disclosed is filtered too. §9.2 allows the member to be "filtered and extended for the RS
-	/// making the introspection request", and §13 asks that this data be shared "on a 'need to know'
+	/// What is disclosed is filtered too. section 9.2 allows the member to be "filtered and extended for the RS
+	/// making the introspection request", and section 13 asks that this data be shared "on a 'need to know'
 	/// basis": the entry goes out with its <c>locations</c> reduced to the ones this caller matched, so
 	/// one resource server does not learn the addresses of the others from an entry naming several.
 	/// </para>
@@ -232,8 +235,8 @@ public class IntrospectionRequestProcessor(
 	/// </summary>
 	/// <remarks>
 	/// Written through the typed setter, which keeps <c>locations</c> an array however few entries
-	/// survive the match: RFC 9396 §9.2 has the member carry "the same structure defined in Section 2",
-	/// and §2.2 defines it as an array of strings. A single surviving location is the case that would
+	/// survive the match: RFC 9396 section 9.2 has the member carry "the same structure defined in Section 2",
+	/// and section 2.2 defines it as an array of strings. A single surviving location is the case that would
 	/// otherwise leave this endpoint answering with a shape no caller is required to accept.
 	/// </remarks>
 	private static JsonNode Disclose(AuthorizationDetail detail, string[] matchedLocations)

@@ -27,7 +27,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// validator) on the unpacked claims. The end-to-end invariant: AD propagates from inside the
 /// signed request object all the way to the access-token claim byte-exact.
 /// </summary>
-public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(factory)
+public partial class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(factory)
 {
     private const string PaymentInitiationWireJson =
         """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
@@ -61,18 +61,18 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         var dcrBody = new JsonObject
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
-            ["response_types"] = new JsonArray { "code" },
-            ["token_endpoint_auth_method"] = "client_secret_post",
-            ["jwks"] = JsonSerializer.SerializeToNode(PublicJwksFor(clientKey)),
-            ["authorization_details_types"] = new JsonArray { TestConstants.PaymentInitiationType },
+            [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
+            [RegistrationMembers.Jwks] = JsonSerializer.SerializeToNode(PublicJwksFor(clientKey)),
+            [RegistrationMembers.AuthorizationDetailsTypes] = new JsonArray { TestConstants.PaymentInitiationType },
         };
         var registered = await RegisterClientAsync(httpClient, discovery, dcrBody);
-        var clientId = registered[AuthorizationRequest.Parameters.ClientId]!.GetValue<string>();
-        var clientSecret = registered[ClientRequest.Parameters.ClientSecret]!.GetValue<string>();
+        var clientId = registered[ClientRegistrationResponse.Parameters.ClientId]!.GetValue<string>();
+        var clientSecret = registered[ClientRegistrationResponse.Parameters.ClientSecret]!.GetValue<string>();
 
         // 3. Build the request JWT containing every authorize parameter -- including the wire-shape
-        // authorization_details JSON array attached as a custom claim. RFC 9101 §6: iss = client_id,
+        // authorization_details JSON array attached as a custom claim. RFC 9101 section 6: iss = client_id,
         // aud = the AS issuer; iat / exp pin the request lifetime. The aud must be the issuer
         // identifier byte-exact: AbsoluteUri appends a trailing slash to a root URL, which the
         // server's exact-match audience validation rightly rejects.
@@ -88,7 +88,7 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
                 ExpiresAt = now.AddMinutes(5),
             },
         };
-        requestJwt.Payload.Json[AuthorizationRequest.Parameters.ResponseType] = "code";
+        requestJwt.Payload.Json[AuthorizationRequest.Parameters.ResponseType] = ResponseTypes.Code;
         requestJwt.Payload.Json[AuthorizationRequest.Parameters.ClientId] = clientId;
         requestJwt.Payload.Json[AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri;
         requestJwt.Payload.Json[AuthorizationRequest.Parameters.Scope] = Scopes.OpenId;
@@ -101,13 +101,13 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         var creator = JwtServices.GetRequiredService<IJsonWebTokenCreator>();
         var signedRequest = await creator.IssueAsync(requestJwt, clientKey);
 
-        // 4. Submit /authorize with request=<signed JWT> + client_id. RFC 9101 §5 allows every
+        // 4. Submit /authorize with request=<signed JWT> + client_id. RFC 9101 section 5 allows every
         // wire parameter inside the JWT plus client_id outside (so the AS can resolve jwks before
         // verifying the signature).
         var code = await AuthorizeAndExtractCodeAsync(httpClient, discovery, new Dictionary<string, string>
         {
             [AuthorizationRequest.Parameters.ClientId] = clientId,
-            ["request"] = signedRequest,
+            [AuthorizationRequest.Parameters.Request] = signedRequest,
         });
 
         // 5. /token exchange.
@@ -115,9 +115,9 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         {
             [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
             [TokenRequest.Parameters.Code] = code,
-            [AuthorizationRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
             [TokenRequest.Parameters.CodeVerifier] = verifier,
-            [AuthorizationRequest.Parameters.ClientId] = clientId,
+            [ClientRequest.Parameters.ClientId] = clientId,
             [ClientRequest.Parameters.ClientSecret] = clientSecret,
         });
 
@@ -125,15 +125,15 @@ public class JarRichAuthorizationRequestsTests(TestFactory factory) : TestBase(f
         // byte-exact. This is the JAR + RAR invariant: signed request object preserves nested
         // claims through every layer (JWT validation -> request-object fetcher -> standard
         // authorize pipeline -> RAR per-type validator -> consent -> token emission).
-        var payload = DecodeJwtPayload(tokenResponse[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
-        var claim = (payload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray)!;
+        var payload = DecodeJwtPayload(tokenResponse[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
+        var claim = (payload[IanaClaimTypes.AuthorizationDetails] as JsonArray)!;
         Assert.NotNull(claim);
         Assert.Equal(PaymentInitiationWireJson, claim.ToJsonString());
     }
 
     /// <summary>
     /// Strips the private RSA components from a signing key, leaving only the modulus (n) and
-    /// public exponent (e) plus identifying metadata. RFC 7517 §6: a public JWK MUST NOT include
+    /// public exponent (e) plus identifying metadata. RFC 7517 section 6: a public JWK MUST NOT include
     /// private fields; sending the full private key over the wire to a registration endpoint is a
     /// catastrophic leak even in a test.
     /// </summary>

@@ -6,6 +6,7 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using Abblix.Oidc.Server.UnitTests.TestInfrastructure;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -50,13 +51,13 @@ public class RefreshTokenGrantHandlerTests
     }
 
     /// <summary>
-    /// RFC 6749 §5.2: a token request without the required refresh_token parameter is the caller's
+    /// RFC 6749 section 5.2: a token request without the required refresh_token parameter is the caller's
     /// protocol error and yields invalid_request - previously it threw and surfaced as HTTP 500.
     /// </summary>
     [Fact]
     public async Task AuthorizeAsync_MissingRefreshToken_ReturnsInvalidRequest()
     {
-        var result = await _handler.AuthorizeAsync(new TokenRequest(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, new TokenRequest(), new ClientInfo(ClientId), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidRequest, error.Error);
@@ -70,29 +71,57 @@ public class RefreshTokenGrantHandlerTests
     public async Task ValidRefreshToken_ShouldReturnNewGrant()
     {
         // Arrange
-        var clientInfo = new ClientInfo(ClientId);
+        var clientInfo = new ClientInfo(ClientId) { OfflineAccess = OfflineAccess.ConsentRequired };
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
         var refreshToken = CreateValidRefreshToken(ClientId);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(refreshToken);
 
         var expectedGrant = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(ClientId, [Scopes.OpenId], null));
 
         _refreshTokenService
-            .Setup(s => s.AuthorizeByRefreshTokenAsync(refreshToken, It.IsAny<ClientInfo>()))
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, refreshToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync(expectedGrant);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetSuccess(out var grant));
         Assert.NotNull(grant);
         Assert.Equal(ClientId, grant.Context.ClientId);
+        _jwtValidator.Verify(v => v.ValidateAsync(
+            TestTenant.Matched, clientInfo, ValidRefreshToken, It.IsAny<TokenTypePolicy>(),
+            ServiceTokenValidation.AnyAudience));
+    }
+
+    /// <summary>
+    /// A refresh token exists only for offline access, so a client not allowed it, as when the host withdrew the
+    /// permission after the token was issued, is refused rather than renewed.
+    /// </summary>
+    [Fact]
+    public async Task RefreshToken_FromClientNotAllowedOfflineAccess_IsRefused()
+    {
+        var clientInfo = new ClientInfo(ClientId) { OfflineAccess = OfflineAccess.Disabled };
+        var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
+        var refreshToken = CreateValidRefreshToken(ClientId);
+        _jwtValidator
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
+            .ReturnsAsync(refreshToken);
+        _refreshTokenService
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, refreshToken, It.IsAny<ClientInfo>()))
+            .ReturnsAsync(new AuthorizedGrant(
+                new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
+                Context: new AuthorizationContext(ClientId, [Scopes.OpenId, Scopes.OfflineAccess], null)));
+
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetFailure(out var error));
+        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
     }
 
     /// <summary>
@@ -108,20 +137,20 @@ public class RefreshTokenGrantHandlerTests
         var refreshToken = CreateValidRefreshToken(ClientId);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(refreshToken);
 
         // Token belongs to different client
         var grantForDifferentClient = new AuthorizedGrant(
-            new AuthSession("user123", "session1", DateTimeOffset.UtcNow, "192.168.1.1"),
+            new AuthSession("user123", "session1", TimeProvider.System.GetUtcNow(), "192.168.1.1"),
             Context: new AuthorizationContext(DifferentClientId, [Scopes.OpenId], null));
 
         _refreshTokenService
-            .Setup(s => s.AuthorizeByRefreshTokenAsync(refreshToken, It.IsAny<ClientInfo>()))
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, refreshToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync(grantForDifferentClient);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -130,52 +159,26 @@ public class RefreshTokenGrantHandlerTests
     }
 
     /// <summary>
-    /// Verifies that when an access token is provided instead of a refresh token, the request is rejected.
-    /// The handler must validate that the token type is specifically 'refresh_token'.
+    /// Only a refresh token is exchanged here: the validator is asked for exactly that type, and its refusal of
+    /// another one ends the grant.
     /// </summary>
     [Fact]
-    public async Task WrongTokenType_AccessToken_ShouldReturnError()
+    public async Task TokenOfAnotherType_ShouldReturnError()
     {
-        // Arrange
         var clientInfo = new ClientInfo(ClientId);
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
-        var accessToken = CreateTokenWithType(JsonWebTokenTypes.AccessToken);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
-            .ReturnsAsync(accessToken);
+            .Setup(v => v.ValidateAsync(
+                TestTenant.Matched, It.IsAny<ClientInfo?>(), ValidRefreshToken,
+                TokenTypesArg.Is(TokenTypePolicy.Exactly(JwtTypes.RefreshToken)),
+                ServiceTokenValidation.AnyAudience))
+            .ReturnsAsync(new JwtValidationError(JwtError.InvalidTokenType, "an access token"));
 
-        // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
-        // Assert
         Assert.True(result.TryGetFailure(out var error));
         Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-        Assert.Contains("Invalid token type", error.ErrorDescription);
-    }
-
-    /// <summary>
-    /// Verifies that when an ID token is provided instead of a refresh token, the request is rejected.
-    /// </summary>
-    [Fact]
-    public async Task WrongTokenType_IdToken_ShouldReturnError()
-    {
-        // Arrange
-        var clientInfo = new ClientInfo(ClientId);
-        var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
-        var idToken = CreateTokenWithType("JWT");
-
-        _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
-            .ReturnsAsync(idToken);
-
-        // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.True(result.TryGetFailure(out var error));
-        Assert.Equal(ErrorCodes.InvalidGrant, error.Error);
-        Assert.Contains("Invalid token type", error.ErrorDescription);
     }
 
     /// <summary>
@@ -189,11 +192,11 @@ public class RefreshTokenGrantHandlerTests
         var tokenRequest = new TokenRequest { RefreshToken = "malformed.jwt" };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync("malformed.jwt", ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), "malformed.jwt", It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token is malformed"));
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -212,11 +215,11 @@ public class RefreshTokenGrantHandlerTests
         var tokenRequest = new TokenRequest { RefreshToken = ValidRefreshToken };
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(new JwtValidationError(JwtError.InvalidToken, "Token has expired"));
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -237,16 +240,16 @@ public class RefreshTokenGrantHandlerTests
         var refreshToken = CreateValidRefreshToken(ClientId);
 
         _jwtValidator
-            .Setup(v => v.ValidateAsync(ValidRefreshToken, ValidationOptions.Default))
+            .Setup(v => v.ValidateAsync(TestTenant.Matched, It.IsAny<ClientInfo?>(), ValidRefreshToken, It.IsAny<TokenTypePolicy>(), ServiceTokenValidation.AnyAudience))
             .ReturnsAsync(refreshToken);
 
         var serviceError = new OidcError(ErrorCodes.InvalidGrant, "Token has been revoked");
         _refreshTokenService
-            .Setup(s => s.AuthorizeByRefreshTokenAsync(refreshToken, It.IsAny<ClientInfo>()))
+            .Setup(s => s.AuthorizeByRefreshTokenAsync(TestTenant.Matched, refreshToken, It.IsAny<ClientInfo>()))
             .ReturnsAsync(serviceError);
 
         // Act
-        var result = await _handler.AuthorizeAsync(tokenRequest, clientInfo, TestContext.Current.CancellationToken);
+        var result = await _handler.AuthorizeAsync(SingleIssuer.Tenant, tokenRequest, clientInfo, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.TryGetFailure(out var error));
@@ -283,28 +286,8 @@ public class RefreshTokenGrantHandlerTests
                 Subject = "user123",
                 ClientId = clientId,
                 Audiences = ["test-audience"],
-                IssuedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.AddDays(30),
-            },
-        };
-    }
-
-    /// <summary>
-    /// Creates a JWT with a specific token type.
-    /// </summary>
-    private static JsonWebToken CreateTokenWithType(string tokenType)
-    {
-        return new JsonWebToken
-        {
-            Header = { Type = tokenType, Algorithm = SigningAlgorithms.RS256 },
-            Payload =
-            {
-                JwtId = Guid.NewGuid().ToString("N"),
-                Issuer = "https://issuer.example.com",
-                Subject = "user123",
-                Audiences = ["test-audience"],
-                IssuedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+                IssuedAt = TimeProvider.System.GetUtcNow(),
+                ExpiresAt = TimeProvider.System.GetUtcNow().AddDays(30),
             },
         };
     }

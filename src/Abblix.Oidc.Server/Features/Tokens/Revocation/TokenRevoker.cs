@@ -7,6 +7,7 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common.Configuration;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Features.Storages;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -29,15 +30,32 @@ public partial class TokenRevoker(
 {
     /// <inheritdoc />
     public Task RevokeSubjectAsync(
+        TenantDefinition tenant,
         string subject, DateTimeOffset? before = null, CancellationToken cancellationToken = default)
-        => RevokeAsync(RevocationScope.Subject, subject, before, cancellationToken);
+        => RevokeAsync(tenant, RevocationScope.Subject, subject, before, cancellationToken);
 
     /// <inheritdoc />
     public Task RevokeSessionAsync(
+        TenantDefinition tenant,
         string sessionId, DateTimeOffset? before = null, CancellationToken cancellationToken = default)
-        => RevokeAsync(RevocationScope.Session, sessionId, before, cancellationToken);
+        => RevokeAsync(tenant, RevocationScope.Session, sessionId, before, cancellationToken);
+
+    /// <inheritdoc />
+    public Task RevokeSubjectAtClientAsync(
+        TenantDefinition tenant,
+        string subject,
+        string clientId,
+        DateTimeOffset? before = null,
+        CancellationToken cancellationToken = default)
+        => RevokeAsync(
+            tenant,
+            RevocationScope.ClientSubject,
+            RevocationPrincipal.ClientSubject(clientId, subject),
+            before,
+            cancellationToken);
 
     private Task RevokeAsync(
+        TenantDefinition tenant,
         RevocationScope scope, string principal, DateTimeOffset? before, CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow();
@@ -53,6 +71,6 @@ public partial class TokenRevoker(
 
         LogCutoffRecorded(scope, cutoff, expiresAt);
 
-        return cutoffRegistry.SetCutoffAsync(scope, principal, cutoff, expiresAt, cancellationToken);
+        return cutoffRegistry.SetCutoffAsync(tenant, scope, principal, cutoff, expiresAt, cancellationToken);
     }
 }

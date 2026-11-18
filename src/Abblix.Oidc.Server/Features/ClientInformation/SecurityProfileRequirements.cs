@@ -6,8 +6,10 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Collections.Frozen;
 using Abblix.Oidc.Server.Common.Constants;
 using Abblix.Jwt;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 
 namespace Abblix.Oidc.Server.Features.ClientInformation;
 
@@ -56,6 +58,14 @@ public sealed record SecurityProfileRequirements
     public bool RequireS256CodeChallenge { get; init; }
 
     /// <summary>
+    /// The profile requires a pushed authorization request to carry a PKCE code challenge with the <c>S256</c> method,
+    /// whether or not it requires PKCE of a request sent to the authorization endpoint directly. FAPI 1.0 Part 2
+    /// section 5.2.2: the server "shall require PAR requests, if supported, to use PKCE (RFC7636) with S256 as the code
+    /// challenge method". Enforced by <c>Endpoints.PushedAuthorization.PushedAuthorizationRequestValidator</c>.
+    /// </summary>
+    public bool RequirePkceWithPushedRequests { get; init; }
+
+    /// <summary>
     /// The profile requires the client to start every authorization flow through a Pushed
     /// Authorization Request, independent of the server-wide
     /// <see cref="Common.Configuration.OidcOptions.RequirePushedAuthorizationRequests"/> flag.
@@ -66,9 +76,37 @@ public sealed record SecurityProfileRequirements
     /// <summary>
     /// The profile requires a sender-constrained access token, satisfied by either a DPoP proof
     /// (RFC 9449) or a certificate-bound token over mutual TLS (RFC 8705 section 3). Enforced by
-    /// <c>Endpoints.Token.Validation.DPoPTokenEndpointValidator</c>.
+    /// <c>Endpoints.Token.Validation.DPoPTokenEndpointValidator</c>, and by <see cref="SecurityProfileConsistency"/>
+    /// on a client registered for the CIBA push mode, whose tokens reach it without a token request to bind them to.
     /// </summary>
     public bool RequireSenderConstrainedTokens { get; init; }
+
+    /// <summary>
+    /// The profile issues certificate-bound access tokens only (RFC 8705 section 3): a token request carrying a DPoP
+    /// proof is refused, and so is one presenting no certificate the token could be bound to. FAPI 1.0 Part 2 section 8.2:
+    /// the protected resources "shall only support sender-constrained access tokens via MTLS". Enforced by
+    /// <c>Endpoints.Token.Validation.DPoPTokenEndpointValidator</c>.
+    /// </summary>
+    public bool RequireCertificateBoundTokens { get; init; }
+
+    /// <summary>
+    /// The profile refuses an access token sent to a protected resource in the URI query (RFC 6750 section 2.3), as
+    /// FAPI 2.0 Security Profile section 5.3.4 and FAPI 1.0 Part 1 section 6.2.1 require, each in the words "shall not
+    /// accept access tokens in the query parameters". The <c>Authorization</c> header (RFC 6750 section 2.1,
+    /// RFC 9449 section 7.1) and the form-encoded body (RFC 6750 section 2.2) stay accepted: the clause names the
+    /// query alone. Enforced by <c>Endpoints.UserInfo.UserInfoRequestValidator</c>.
+    /// </summary>
+    public bool RequireAccessTokenOutsideQuery { get; init; }
+
+    /// <summary>
+    /// The profile has the protected resource answer with the <c>x-fapi-interaction-id</c> response header and log it,
+    /// as FAPI 1.0 Part 1 section 6.2.1 requires: it "shall set the response header x-fapi-interaction-id to the value
+    /// received from the corresponding FAPI client request header or to a RFC4122 UUID value if the request header was
+    /// not provided to track the interaction" and "shall log the value of x-fapi-interaction-id in the log entry".
+    /// FAPI 2.0 Security Profile has no such clause. Enforced by
+    /// <c>Endpoints.UserInfo.FapiInteractionIdResolver</c>, the library's own protected resource being UserInfo.
+    /// </summary>
+    public bool RequireFapiInteractionId { get; init; }
 
     /// <summary>
     /// The furthest either clock window may reach under this profile, or null where the profile
@@ -116,7 +154,7 @@ public sealed record SecurityProfileRequirements
     /// </summary>
     /// <remarks>
     /// The bound is applied HERE rather than carried onward beside the value, so that no reader can
-    /// take one without the other. A ceiling travelling as a second field is a ceiling somebody
+    /// take one without the other. A ceiling traveling as a second field is a ceiling somebody
     /// forgets to pass, and the omission reads as a deployment allowed to be looser rather than as
     /// the mistake it is.
     /// </remarks>
@@ -125,20 +163,270 @@ public sealed record SecurityProfileRequirements
         => (configured ?? DefaultClockSkew).BoundedBy(MaxClockSkew);
 
     /// <summary>
-    /// The profile permits only the authorization-code response type, rejecting any implicit or
-    /// hybrid response type that returns a token or id_token from the authorization endpoint.
+    /// The profile permits only the authorization-code response type, rejecting every other one: an implicit or
+    /// hybrid response type that returns a token or id_token from the authorization endpoint, and none, which returns
+    /// no token - section 5.3.2.2 has the server "require the value of response_type described in [RFC6749] to be code".
     /// Enforced by <c>Endpoints.Authorization.Validation.FlowTypeValidator</c> at request time and
     /// by <see cref="SecurityProfileConsistency"/> as a fail-loud registration/startup check.
+    /// FAPI 2.0 section 5.3.2.2 states it "for flows that use the authorization endpoint", so it binds
+    /// only a client registering a response type: one registering none, as a resource server or a
+    /// client of the client credentials, CIBA or device grant, never reaches that endpoint.
     /// </summary>
     public bool RequireCodeResponseTypeOnly { get; init; }
 
     /// <summary>
+    /// The profile requires every redirect URI to use the https scheme and the one a request names to match a registered
+    /// one exactly, without the loopback port allowance of RFC 8252 section 7.3. FAPI 1.0 Part 1 section 5.2.2, which
+    /// Part 2 section 5.2.2 takes in: the server "shall require the value of redirect_uri to exactly match one of the
+    /// pre-registered redirect URIs" and "shall require redirect URIs to use the https scheme". Enforced by
+    /// <c>Endpoints.Authorization.Validation.RedirectUriValidator</c> at request time and by
+    /// <see cref="SecurityProfileConsistency"/> at registration and at startup.
+    /// </summary>
+    public bool RequireExactHttpsRedirectUris { get; init; }
+
+    /// <summary>
+    /// The profile requires a client publishing its keys at a jwks_uri to serve it over TLS. FAPI 1.0 Part 2 section
+    /// 8.9: "this profile ... requires that jwks_uri endpoints shall be served over TLS". Held by
+    /// <see cref="SecurityProfileConsistency"/> at registration, at startup and where the client authenticates, whatever
+    /// schemes the host lets the outbound fetcher use.
+    /// </summary>
+    public bool RequireHttpsJwksUri { get; init; }
+
+    /// <summary>
+    /// The JARM response modes in which the profile admits an authorization response, or null where it does not
+    /// require the server to sign the response. Where set, the profile admits the response type <c>code</c> only with
+    /// one of these modes, and the response type <c>code id_token</c>, whose ID token is the response's detached
+    /// signature. Enforced by <c>Endpoints.Authorization.Validation.FlowTypeValidator</c>, and held in the client's
+    /// <see cref="ClientInfo.AllowedResponseModes"/> by <see cref="SecurityProfileConsistency"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A set rather than a flag, because the two profiles demanding a signed response name different modes, and a
+    /// flag would answer for both at once. FAPI 1.0 Part 2 section 5.2.2 has the server "require the response_type
+    /// value code id_token, or the response_type value code in conjunction with the response_mode value jwt": the
+    /// clause names one value, <see cref="LiteralJwtResponseMode"/>, and the other JARM modes are what it leaves out.
+    /// FAPI 2.0 Message Signing section 5.4.1 has the server "support, require use of, and issue signed authorization
+    /// responses via JWT Secured Authorization Response Mode for OAuth 2.0 [JARM]", which names the mechanism and no
+    /// mode, so every JARM mode is admitted, <see cref="EveryJwtResponseMode"/>. The client's side of that
+    /// specification, section 5.4.2, has the client "set the response_mode to jwt"; that is what the client sends, not
+    /// what the server is to refuse.
+    /// </para>
+    /// <para>
+    /// <c>code id_token</c> is admitted for FAPI 1.0 Advanced, which names it. A profile from the FAPI 2.0 family
+    /// carries <see cref="RequireCodeResponseTypeOnly"/> as well, which refuses it before this control is asked.
+    /// </para>
+    /// </remarks>
+    public IReadOnlySet<string>? SignedAuthorizationResponseModes { get; init; }
+
+    /// <summary>
+    /// The JARM response mode FAPI 1.0 Part 2 section 5.2.2 names, alone.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> LiteralJwtResponseMode =
+        new[] { ResponseModes.Jwt }.ToFrozenSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Every JARM response mode (JARM section 2.3).
+    /// </summary>
+    internal static readonly IReadOnlySet<string> EveryJwtResponseMode = new[]
+    {
+        ResponseModes.Jwt, ResponseModes.QueryJwt, ResponseModes.FragmentJwt, ResponseModes.FormPostJwt,
+    }.ToFrozenSet(StringComparer.Ordinal);
+
+    /// <summary>
     /// The profile requires strict RFC 9101 section 6.3 request-object processing: only the parameters inside the
     /// request object are used and any parameter passed outside it is ignored, instead of the OpenID Connect
-    /// Core section 6.1 merge behaviour. FAPI 2.0 mandates JWT-Secured Authorization Requests with this exclusivity.
+    /// Core section 6.1 merge behavior. FAPI 2.0 mandates JWT-Secured Authorization Requests with this exclusivity.
     /// Enforced by <c>Features.RequestObject.RequestObjectFetcher</c>.
     /// </summary>
     public bool RequireStrictRequestObjectProcessing { get; init; }
+
+    /// <summary>
+    /// The profile requires every authorization request to arrive as a signed request object, by value or by
+    /// reference, as <see cref="ClientInfo.RequireSignedRequestObject"/> does for one client: plain parameters and an
+    /// unsigned (<c>none</c>) object are refused. FAPI 1.0 Part 2 section 5.2.2 has the server "require a JWS signed
+    /// JWT request object passed by value with the request parameter or by reference with the request_uri
+    /// parameter", and FAPI 2.0 Message Signing section 5.3.1 has it "support, require use of, and verify signed
+    /// request objects according to JAR [RFC9101] at the PAR endpoint [RFC9126]". Enforced by
+    /// <c>Endpoints.Authorization.Validation.SignedRequestObjectRequirementValidator</c>, which the pushed
+    /// authorization request runs through as well, and <c>Features.RequestObject.RequestObjectFetcher</c>.
+    /// </summary>
+    /// <remarks>
+    /// Without it strict processing has nothing to apply to: a client sending plain parameters carries no request
+    /// object, and every parameter it names is used as sent.
+    /// </remarks>
+    public bool RequireSignedRequestObject { get; init; }
+
+    /// <summary>
+    /// The profile requires every backchannel authentication request to arrive as a signed authentication request
+    /// (CIBA Core 1.0 section 7.1.1) in the request parameter; plain parameters are refused. FAPI-CIBA section 5.2.2
+    /// has the server "require Backchannel Authentication Endpoint requests to be signed as described in [CIBA] 7.1.1",
+    /// and that profile builds on FAPI 1.0 Part 2, so FAPI 1.0 Advanced carries it. Enforced by
+    /// <c>Endpoints.BackChannelAuthentication.RequestFetching.RequestObjectFetchAdapter</c>.
+    /// </summary>
+    /// <remarks>
+    /// Apart from <see cref="RequireSignedRequestObject"/> because the two are not the same requirement: FAPI 2.0 has
+    /// no CIBA clause, and its profiles requiring signed request objects require them of the authorization request at
+    /// the PAR endpoint, not of the backchannel authentication request.
+    /// </remarks>
+    public bool RequireSignedBackChannelAuthenticationRequest { get; init; }
+
+    /// <summary>
+    /// The longest a request object may live under this profile, or null where the profile requires no lifetime
+    /// of it. Where set, the request object has to carry both <c>nbf</c> and <c>exp</c>, its <c>exp</c> may lie
+    /// no further than this after its <c>nbf</c>, and its <c>nbf</c> no further than this in the past. Enforced by
+    /// <c>Features.RequestObject.RequestObjectFetcher</c>.
+    /// </summary>
+    /// <remarks>
+    /// One value for the three demands, because FAPI 1.0 Part 2 section 5.2.2 bounds both claims by the same 60
+    /// minutes: "shall require the request object to contain an nbf claim that is no longer than 60 minutes in the past"
+    /// and "shall require the request object to contain an exp claim that has a lifetime of no longer than 60 minutes
+    /// after the nbf claim"; FAPI 2.0 Message Signing section 5.3.1 says the same for its own profile. A request object signed long ago, or valid for long, is one
+    /// whoever obtained it can still present. RFC 9101 alone asks for neither claim, so null is what a deployment
+    /// held to no such profile keeps.
+    /// </remarks>
+    public TimeSpan? MaxRequestObjectLifetime { get; init; }
+
+    /// <summary>
+    /// The profile requires a request object to name the issuer identifier as its audience, as a string or inside an
+    /// array. FAPI 1.0 Part 2 section 5.2.2 has the server "require the aud claim in the request object to be, or to
+    /// be an array containing, the OP's Issuer Identifier URL", and FAPI 2.0 Message Signing section 5.3.1 the same
+    /// of "the authorization server's issuer identifier URL". Enforced by
+    /// <c>Features.RequestObject.RequestObjectFetcher</c>.
+    /// </summary>
+    /// <remarks>
+    /// Narrower than what the server accepts without it: an object naming no audience, or only the endpoint it was
+    /// sent to, passes RFC 9101 alone, whose section 4 has the aud claim only SHOULD name the server. The issuer
+    /// identifier is the one value that names this server whichever endpoint the object reaches.
+    /// </remarks>
+    public bool RequireIssuerAudienceInRequestObject { get; init; }
+
+    /// <summary>
+    /// The profile requires a nonce on every authorization request naming the <c>openid</c> scope itself, whatever the
+    /// response type and whatever default scope it would be served. FAPI 1.0 Part 1 section 5.2.2.2, which Part 2 section 5.2.2 takes in: "If the client requests
+    /// the openid scope, the authorization server shall require the nonce parameter". Enforced by
+    /// <c>Endpoints.Authorization.Validation.NonceValidator</c>.
+    /// </summary>
+    /// <remarks>
+    /// Wider than OpenID Connect Core, which requires the nonce only where the authorization endpoint returns an ID
+    /// token: under this control a code request with the <c>jwt</c> response mode carries one too.
+    /// </remarks>
+    public bool RequireNonceWithOpenIdScope { get; init; }
+
+    /// <summary>
+    /// The profile requires the <c>state</c> parameter on every authorization request not naming the <c>openid</c>
+    /// scope. FAPI 1.0 Part 1 section 5.2.2.3, which Part 2 section 5.2.2 takes in: "If the client does not requests
+    /// the openid scope, the authorization server shall require the state parameter defined in Section 4.1.1 of
+    /// RFC6749". Enforced by <c>Endpoints.Authorization.Validation.StateValidator</c>.
+    /// </summary>
+    public bool RequireStateWithoutOpenIdScope { get; init; }
+
+    /// <summary>
+    /// The profile admits only the PS256 and ES256 signature algorithms, in what the client signs for this server and
+    /// in what this server signs for the client. FAPI 1.0 Part 2 section 8.6: "For JWS, both clients and
+    /// authorization servers shall use PS256 or ES256 algorithms". Read through <see cref="PermitsSigningAlgorithm"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// What the client signs is judged where it is verified: request objects, client authentication assertions and
+    /// CIBA login hint tokens in <c>Features.Tokens.Validation.ClientJwtValidator</c>, and JWT bearer grant
+    /// assertions in <c>Endpoints.Token.Grants.JwtBearerAssertionPolicy</c>, and DPoP proofs where the client is known:
+    /// at the pushed authorization request endpoint and at the token endpoint.
+    /// </para>
+    /// <para>
+    /// What the server signs for the client is judged on the client's configuration, by
+    /// <see cref="SecurityProfileConsistency"/> at startup, at registration and where the client authenticates: the
+    /// algorithms of its ID tokens, logout tokens and JWT authorization, userinfo and introspection responses. A
+    /// registration naming none of the first two is given one a signing key of the tenant produces, by
+    /// <c>Endpoints.DynamicClientManagement.Validation.ProfileSigningKeysValidator</c>, and a static client is checked
+    /// against the tenant's keys at startup. A client added to the store afterwards is refused at the authorization
+    /// endpoint and where it authenticates, before anything is signed for it. Whatever changed in between, nothing is
+    /// signed for a client that its profile or the tenant's keys do not admit:
+    /// <see cref="Tokens.Formatters.ClientJwtFormatter"/>, which every such JWT passes, refuses it, and each endpoint
+    /// answers the refusal in its own protocol. The tokens this server signs for itself,
+    /// such as JWT access tokens, take the algorithm the deployment configures, which
+    /// <c>Common.Configuration.ProfileServiceTokensCheck</c> holds to the profiles in force at startup.
+    /// </para>
+    /// </remarks>
+    public bool RequireFapiSigningAlgorithms { get; init; }
+
+    /// <summary>
+    /// The profile forbids the RSA1_5 key management algorithm in what the client encrypts for this server and in what
+    /// this server encrypts for the client. FAPI 1.0 Part 2 section 8.6.1: "For JWE, both clients and authorization
+    /// servers shall not use the RSA1_5 algorithm". Judged by <c>Features.Tokens.Validation.ClientJwtValidator</c> for
+    /// what the client encrypts and by <see cref="SecurityProfileConsistency"/> on the client's configuration.
+    /// </summary>
+    public bool ForbidRsa1_5KeyManagement { get; init; }
+
+    /// <summary>
+    /// The profile refuses the resource owner password credentials grant (RFC 6749 section 4.3). FAPI 2.0 Security
+    /// Profile section 5.3.2.1: authorization servers "shall reject requests using the resource owner password
+    /// credentials grant". Held by <see cref="SecurityProfileConsistency"/> on the grant types a client is configured
+    /// or registers for, at startup, at registration and where the client authenticates, so no client held to the
+    /// profile reaches the grant: the token endpoint admits only a grant type the client is configured for.
+    /// </summary>
+    public bool ForbidPasswordGrant { get; init; }
+
+    /// <summary>
+    /// Whether a JWE layer encrypted with the key management algorithm <paramref name="algorithm"/> is one this profile
+    /// admits.
+    /// </summary>
+    /// <param name="algorithm">The <c>alg</c> of the JWE's protected header.</param>
+    public bool PermitsKeyManagementAlgorithm(string algorithm)
+        => !ForbidRsa1_5KeyManagement || algorithm != EncryptionAlgorithms.KeyManagement.Rsa1_5;
+
+    /// <summary>
+    /// The signature algorithms <see cref="RequireFapiSigningAlgorithms"/> admits. FAPI 2.0 section 5.4.1 adds EdDSA
+    /// with Ed25519, which this library does not implement, so no client of it can use it.
+    /// </summary>
+    internal static readonly string[] FapiSigningAlgorithms = [SigningAlgorithms.PS256, SigningAlgorithms.ES256];
+
+    /// <summary>
+    /// The first algorithm of <see cref="FapiSigningAlgorithms"/> one of <paramref name="signingKeys"/> produces, or null
+    /// where none does: what this server signs with for a client its profile holds to those algorithms and that names
+    /// none of its own.
+    /// </summary>
+    /// <param name="signingKeys">The tenant's signing keys.</param>
+    /// <param name="signingAlgorithms">Tells which algorithms a key signs with.</param>
+    internal static string? FapiSigningAlgorithmProducedBy(
+        IReadOnlyCollection<JsonWebKey> signingKeys,
+        SigningAlgorithmsProvider signingAlgorithms)
+        => Array.Find(
+            FapiSigningAlgorithms,
+            algorithm => signingKeys.Any(key => signingAlgorithms.CanSign(key, algorithm)));
+
+    /// <summary>
+    /// Whether a JWS signed with <paramref name="algorithm"/> is one this profile admits.
+    /// </summary>
+    /// <param name="algorithm">The <c>alg</c> of the JWS, or null where it names none.</param>
+    public bool PermitsSigningAlgorithm(string? algorithm)
+        => !RequireFapiSigningAlgorithms || FapiSigningAlgorithms.Contains(algorithm, StringComparer.Ordinal);
+
+    /// <summary>
+    /// The algorithm of <paramref name="token"/> this profile does not admit, or null when it admits every one: judged
+    /// after the token is validated, for the party that becomes known only then.
+    /// </summary>
+    /// <param name="token">The token as validated, the innermost JWS where it came encrypted.</param>
+    /// <param name="keyManagementAlgorithms">The key management algorithm of each JWE layer the token came in.</param>
+    internal string? AlgorithmOutside(JsonWebToken token, IEnumerable<string> keyManagementAlgorithms)
+    {
+        // FAPI 1.0 Part 2 section 8.6: "For JWS, both clients and authorization servers shall use PS256 or ES256
+        // algorithms"
+        if (!PermitsSigningAlgorithm(token.Header.Algorithm))
+            return token.Header.Algorithm ?? SigningAlgorithms.None;
+
+        return keyManagementAlgorithms.FirstOrDefault(algorithm => !PermitsKeyManagementAlgorithm(algorithm));
+    }
+
+    /// <summary>
+    /// The signature algorithms this profile admits, as the set a validator takes, or null where it admits any.
+    /// </summary>
+    internal IReadOnlySet<string>? SigningAlgorithmsAdmitted()
+        => RequireFapiSigningAlgorithms ? FapiSigningAlgorithms.ToHashSet(StringComparer.Ordinal) : null;
+
+    /// <summary>
+    /// The request object lifetime the FAPI profiles bound a request object to.
+    /// </summary>
+    internal static readonly TimeSpan FapiRequestObjectLifetime = TimeSpan.FromMinutes(60);
 
     /// <summary>
     /// The profile admits only confidential clients as defined by RFC 6749, so a client that
@@ -156,12 +444,21 @@ public sealed record SecurityProfileRequirements
     public bool RequireKeyBasedClientAuthentication { get; init; }
 
     /// <summary>
-    /// The profile accepts only the server's issuer identifier, and only as a string, in the
-    /// audience of a client authentication assertion, narrowing what the underlying specification
-    /// otherwise permits. Enforced by
-    /// <c>Features.ClientAuthentication.JwtAssertionAuthenticatorBase</c>.
+    /// The profile refuses a request naming a client_id other than the client its credential proves. FAPI 1.0 Part 1
+    /// section 5.2.2, which Part 2 section 5.2.2 takes in: the server "shall return an invalid_client error as defined
+    /// in 5.2 of RFC6749 when mis-matched client identifiers were provided through the client authentication methods
+    /// that permits sending the client identifier in more than one way". Enforced by
+    /// <c>Features.ClientAuthentication.SecurityProfileClientAuthenticator</c>.
     /// </summary>
-    public bool RequireIssuerAudienceInClientAssertion { get; init; }
+    public bool RequireMatchingClientIdentifiers { get; init; }
+
+    /// <summary>
+    /// The profile accepts in the audience of a client authentication assertion only the issuer identifier, as a
+    /// string, whatever <see cref="ClientInfo.ClientAssertionAudiences"/> the host allows the client: no endpoint URL
+    /// and no array. Enforced by <c>Features.ClientAuthentication.JwtAssertionAuthenticatorBase</c>, and refused in
+    /// the client's configuration by <see cref="SecurityProfileConsistency"/>.
+    /// </summary>
+    public bool RequireStringAudienceInClientAssertion { get; init; }
 
     /// <summary>
     /// The profile forbids refresh token rotation, which is the one flag that removes a control
@@ -179,6 +476,7 @@ public sealed record SecurityProfileRequirements
         RequireS256CodeChallenge = true,
         RequirePushedAuthorizationRequests = true,
         RequireSenderConstrainedTokens = true,
+        RequireAccessTokenOutsideQuery = true,
 
         MaxClockSkew = ClockSkew.Fapi2Ceiling,
 
@@ -186,11 +484,113 @@ public sealed record SecurityProfileRequirements
 
         RequireCodeResponseTypeOnly = true,
         RequireStrictRequestObjectProcessing = true,
+
+        // The audience and lifetime of a request object are FAPI 2.0 Message Signing section 5.3.1, a profile of its
+        // own (Fapi2SignedAuthorizationRequestsRequirements below), and not the Security Profile's
+
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
-        RequireIssuerAudienceInClientAssertion = true,
+        RequireStringAudienceInClientAssertion = true,
         ForbidRefreshTokenRotation = true,
+
+        // FAPI 2.0 section 5.4.1: "use PS256, ES256, or EdDSA (using the Ed25519 variant) algorithms"
+        RequireFapiSigningAlgorithms = true,
+
+        // FAPI 2.0 section 5.4.2: "any server providing a jwks_uri endpoint shall only serve the jwks_uri endpoint
+        // over TLS"
+        RequireHttpsJwksUri = true,
+
+        // FAPI 2.0 section 5.4.1: "adhere to [RFC8725]", whose section 3.2 reads "Avoid all RSA-PKCS1 v1.5 encryption
+        // algorithms"
+        ForbidRsa1_5KeyManagement = true,
+
+        // FAPI 2.0 section 5.3.2.1: "shall reject requests using the resource owner password credentials grant"
+        ForbidPasswordGrant = true,
     };
+
+    /// <summary>
+    /// FAPI 1.0 Part 2 sections 5.2.2, 8.6, 8.6.1 and 8.9, the Part 1 section 5.2.2 provisions section 5.2.2 takes
+    /// in, and the Part 1 section 6.2.1 resource server provisions, the clauses this type has a control for. Each member
+    /// below names its clause.
+    /// </summary>
+    /// <remarks>
+    /// Left off on purpose, because each would refuse a client that profile admits: the code-only response type
+    /// (the section admits <c>code id_token</c> as well), Pushed Authorization Requests (which
+    /// it "may support"), PKCE of a request sent directly (it exempts the Baseline clause and asks PKCE with S256 only
+    /// of a pushed request, which <see cref="RequirePkceWithPushedRequests"/> holds), and the clock window, assertion
+    /// audience and rotation controls, which come from FAPI 2.0 and have no clause in FAPI 1.0.
+    /// </remarks>
+    private static readonly SecurityProfileRequirements Fapi1AdvancedRequirements = new()
+    {
+        RequireSenderConstrainedTokens = true,
+        RequireStrictRequestObjectProcessing = true,
+        RequireSignedRequestObject = true,
+        RequireSignedBackChannelAuthenticationRequest = true,
+        MaxRequestObjectLifetime = FapiRequestObjectLifetime,
+        RequireIssuerAudienceInRequestObject = true,
+        SignedAuthorizationResponseModes = LiteralJwtResponseMode,
+        RequireNonceWithOpenIdScope = true,
+        RequireStateWithoutOpenIdScope = true,
+        RequirePkceWithPushedRequests = true,
+        RequireExactHttpsRedirectUris = true,
+        RequireHttpsJwksUri = true,
+        RequireConfidentialClient = true,
+        RequireKeyBasedClientAuthentication = true,
+        RequireMatchingClientIdentifiers = true,
+        RequireCertificateBoundTokens = true,
+        RequireAccessTokenOutsideQuery = true,
+        RequireFapiInteractionId = true,
+        RequireFapiSigningAlgorithms = true,
+        ForbidRsa1_5KeyManagement = true,
+    };
+
+    /// <summary>
+    /// FAPI 2.0 Message Signing section 5.3.1, over the Security Profile its section 5 keeps whole: "All provisions of
+    /// the [FAPI2_Security_Profile] apply to the Message Signing Profile as well, with the extensions described in the
+    /// following."
+    /// </summary>
+    /// <remarks>
+    /// The section's fifth clause, "shall accept request objects with typ header parameter with a value
+    /// oauth-authz-req+jwt", needs no control: <c>Features.RequestObject.RequestObjectFetcher</c> accepts that type for
+    /// every client.
+    /// </remarks>
+    private static readonly SecurityProfileRequirements Fapi2SignedAuthorizationRequestsRequirements = Fapi2Requirements with
+    {
+        // "shall support, require use of, and verify signed request objects according to JAR [RFC9101] at the PAR
+        // endpoint [RFC9126]": the Security Profile already sends every request through the PAR endpoint
+        RequireSignedRequestObject = true,
+
+        // "shall require the aud claim in the request object to be, or to be an array containing, the authorization
+        // server's issuer identifier URL"
+        RequireIssuerAudienceInRequestObject = true,
+
+        // "shall require the request object to contain an nbf claim that is no longer than 60 minutes in the past"
+        // and "shall require the request object to contain an exp claim that has a lifetime of no longer than 60
+        // minutes after the nbf claim"
+        MaxRequestObjectLifetime = FapiRequestObjectLifetime,
+    };
+
+    /// <summary>
+    /// FAPI 2.0 Message Signing section 5.4.1, over the Security Profile its section 5 keeps whole.
+    /// </summary>
+    /// <remarks>
+    /// The note under that section, that the server "should only include the iss authorization response parameter
+    /// defined by [RFC9207] inside the JWT", needs no control: a JARM response carries every response parameter inside
+    /// the JWT for every client.
+    /// </remarks>
+    private static readonly SecurityProfileRequirements Fapi2SignedAuthorizationResponsesRequirements = Fapi2Requirements with
+    {
+        // "shall support, require use of, and issue signed authorization responses via JWT Secured Authorization
+        // Response Mode for OAuth 2.0 [JARM]"
+        SignedAuthorizationResponseModes = EveryJwtResponseMode,
+    };
+
+    /// <summary>
+    /// FAPI 2.0 Message Signing whole: both bundles above. Section 5.5.1, signing introspection responses issued in JWT
+    /// format, holds for every client and needs no control; section 5.6.1 has "No additional requirements".
+    /// </summary>
+    private static readonly SecurityProfileRequirements Fapi2MessageSigningRequirements =
+        Fapi2SignedAuthorizationRequestsRequirements.TightenedBy(Fapi2SignedAuthorizationResponsesRequirements);
 
     /// <summary>
     /// Names every profile that removes a control without carrying the controls that stand in for
@@ -200,7 +600,7 @@ public sealed record SecurityProfileRequirements
     /// This exists because a relaxing flag is one edit away from becoming an ordinary permission.
     /// Someone adding a profile, or loosening an existing one, sees a set of booleans with no
     /// direction to them, and nothing in the type distinguishes the flag that removes protection
-    /// from the nine that add it. So the condition that makes the removal sound is stated as code
+    /// from the ones that add it. So the condition that makes the removal sound is stated as code
     /// and run at startup, where it can fail, rather than as a paragraph that can be skipped.
     ///
     /// Refusing refresh token rotation is sound only alongside a confidential client and a
@@ -297,6 +697,10 @@ public sealed record SecurityProfileRequirements
     {
         ClientSecurityProfile.None => NoneRequirements,
         ClientSecurityProfile.Fapi2 => Fapi2Requirements,
+        ClientSecurityProfile.Fapi1Advanced => Fapi1AdvancedRequirements,
+        ClientSecurityProfile.Fapi2SignedAuthorizationRequests => Fapi2SignedAuthorizationRequestsRequirements,
+        ClientSecurityProfile.Fapi2SignedAuthorizationResponses => Fapi2SignedAuthorizationResponsesRequirements,
+        ClientSecurityProfile.Fapi2MessageSigning => Fapi2MessageSigningRequirements,
         _ => null,
     };
 
@@ -324,14 +728,31 @@ public sealed record SecurityProfileRequirements
         RequireS256CodeChallenge = true,
         RequirePushedAuthorizationRequests = true,
         RequireSenderConstrainedTokens = true,
+        RequireAccessTokenOutsideQuery = true,
 
         MaxClockSkew = ClockSkew.Fapi2Ceiling,
         DefaultClockSkew = ClockSkew.Fapi2,
         RequireCodeResponseTypeOnly = true,
+        SignedAuthorizationResponseModes = LiteralJwtResponseMode,
         RequireStrictRequestObjectProcessing = true,
+        RequireSignedRequestObject = true,
+        RequireSignedBackChannelAuthenticationRequest = true,
+        MaxRequestObjectLifetime = FapiRequestObjectLifetime,
+        RequireIssuerAudienceInRequestObject = true,
+        RequireNonceWithOpenIdScope = true,
+        RequireStateWithoutOpenIdScope = true,
+        RequirePkceWithPushedRequests = true,
+        RequireExactHttpsRedirectUris = true,
+        RequireHttpsJwksUri = true,
         RequireConfidentialClient = true,
         RequireKeyBasedClientAuthentication = true,
-        RequireIssuerAudienceInClientAssertion = true,
+        RequireMatchingClientIdentifiers = true,
+        RequireCertificateBoundTokens = true,
+        RequireStringAudienceInClientAssertion = true,
+        RequireFapiInteractionId = true,
+        RequireFapiSigningAlgorithms = true,
+        ForbidRsa1_5KeyManagement = true,
+        ForbidPasswordGrant = true,
     };
 
     /// <summary>
@@ -354,13 +775,45 @@ public sealed record SecurityProfileRequirements
     /// <param name="client">The client whose effective profile is being resolved.</param>
     /// <param name="defaultProfile">The profile the deployment holds every client to.</param>
     public static SecurityProfileRequirements For(ClientInfo client, ClientSecurityProfile defaultProfile)
+        => ForProfileNamed(client.SecurityProfile, defaultProfile);
+
+    /// <summary>
+    /// The control bundle in force for <paramref name="client"/> at <paramref name="tenant"/>, or the one the tenant
+    /// demands of every client where no client is known. The one resolver the algorithm guards are handed their bundle
+    /// from, so no guard resolves a profile of its own.
+    /// </summary>
+    /// <param name="tenant">The tenant the request is served at.</param>
+    /// <param name="client">The client the bundle is for, or null where none is known yet.</param>
+    public static SecurityProfileRequirements For(TenantDefinition tenant, ClientInfo? client)
+        => client is null ? Resolve(tenant.DefaultSecurityProfile) : For(client, tenant.DefaultSecurityProfile);
+
+    /// <summary>
+    /// The control bundle a client naming <paramref name="clientProfile"/> for itself is held to, which is all of the
+    /// client the resolution reads: a caller holding that value alone gets the answer <see cref="For(ClientInfo,
+    /// ClientSecurityProfile)"/> gives for the client.
+    /// </summary>
+    /// <param name="clientProfile">The profile the client names for itself, or null where it names none.</param>
+    /// <param name="defaultProfile">The profile the deployment holds every client to.</param>
+    internal static SecurityProfileRequirements ForProfileNamed(
+        ClientSecurityProfile? clientProfile,
+        ClientSecurityProfile defaultProfile)
     {
         var deployment = Resolve(defaultProfile);
 
-        return client.SecurityProfile is not { } chosen
+        return clientProfile is not { } chosen
             ? deployment
             : deployment.TightenedBy(Resolve(chosen));
     }
+
+    /// <summary>
+    /// The profile value <paramref name="client"/> is governed by at <paramref name="tenant"/> before any bundle is
+    /// resolved: the one it names, else the tenant's default. The question the checks ask of a value - whether this
+    /// server defines it - is asked of this.
+    /// </summary>
+    /// <param name="tenant">The tenant the client is declared at or served by.</param>
+    /// <param name="client">The client asked about.</param>
+    internal static ClientSecurityProfile ProfileNamedFor(TenantDefinition tenant, ClientInfo client)
+        => client.SecurityProfile ?? tenant.DefaultSecurityProfile;
 
     /// <summary>
     /// This bundle with every control at whichever of the two values concedes less.
@@ -380,24 +833,90 @@ public sealed record SecurityProfileRequirements
     /// </para>
     /// </remarks>
     /// <param name="other">The bundle whose demands are added to this one's.</param>
-    private SecurityProfileRequirements TightenedBy(SecurityProfileRequirements other) => new()
+    private SecurityProfileRequirements TightenedBy(SecurityProfileRequirements other)
+        // Builder: each step settles one family of controls and leaves the others as it found them, so the
+        // steps compose in any order
+        => WithRequestControlsTightenedBy(other)
+            .WithRequestObjectControlsTightenedBy(other)
+            .WithClientControlsTightenedBy(other)
+            .WithTokenControlsTightenedBy(other)
+            .WithClockTightenedBy(other);
+
+    /// <summary>
+    /// This bundle with the controls on the shape of the authorization request and its response tightened by
+    /// <paramref name="other"/>.
+    /// </summary>
+    private SecurityProfileRequirements WithRequestControlsTightenedBy(SecurityProfileRequirements other) => this with
     {
         RequirePkce = RequirePkce || other.RequirePkce,
         RequireS256CodeChallenge = RequireS256CodeChallenge || other.RequireS256CodeChallenge,
         RequirePushedAuthorizationRequests =
             RequirePushedAuthorizationRequests || other.RequirePushedAuthorizationRequests,
-        RequireSenderConstrainedTokens =
-            RequireSenderConstrainedTokens || other.RequireSenderConstrainedTokens,
         RequireCodeResponseTypeOnly = RequireCodeResponseTypeOnly || other.RequireCodeResponseTypeOnly,
-        RequireStrictRequestObjectProcessing =
-            RequireStrictRequestObjectProcessing || other.RequireStrictRequestObjectProcessing,
-        RequireConfidentialClient = RequireConfidentialClient || other.RequireConfidentialClient,
-        RequireKeyBasedClientAuthentication =
-            RequireKeyBasedClientAuthentication || other.RequireKeyBasedClientAuthentication,
-        RequireIssuerAudienceInClientAssertion =
-            RequireIssuerAudienceInClientAssertion || other.RequireIssuerAudienceInClientAssertion,
-        ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
+        SignedAuthorizationResponseModes =
+            Narrower(SignedAuthorizationResponseModes, other.SignedAuthorizationResponseModes),
+        RequireNonceWithOpenIdScope = RequireNonceWithOpenIdScope || other.RequireNonceWithOpenIdScope,
+        RequireStateWithoutOpenIdScope = RequireStateWithoutOpenIdScope || other.RequireStateWithoutOpenIdScope,
+        RequirePkceWithPushedRequests = RequirePkceWithPushedRequests || other.RequirePkceWithPushedRequests,
+        RequireExactHttpsRedirectUris = RequireExactHttpsRedirectUris || other.RequireExactHttpsRedirectUris,
+    };
 
+    /// <summary>
+    /// This bundle with the controls on the request object tightened by <paramref name="other"/>.
+    /// </summary>
+    private SecurityProfileRequirements WithRequestObjectControlsTightenedBy(SecurityProfileRequirements other)
+        => this with
+        {
+            RequireStrictRequestObjectProcessing =
+                RequireStrictRequestObjectProcessing || other.RequireStrictRequestObjectProcessing,
+            RequireSignedRequestObject = RequireSignedRequestObject || other.RequireSignedRequestObject,
+            RequireSignedBackChannelAuthenticationRequest =
+                RequireSignedBackChannelAuthenticationRequest || other.RequireSignedBackChannelAuthenticationRequest,
+            MaxRequestObjectLifetime = Tighter(MaxRequestObjectLifetime, other.MaxRequestObjectLifetime),
+            RequireIssuerAudienceInRequestObject =
+                RequireIssuerAudienceInRequestObject || other.RequireIssuerAudienceInRequestObject,
+        };
+
+    /// <summary>
+    /// This bundle with the controls on the client's credentials tightened by <paramref name="other"/>.
+    /// </summary>
+    private SecurityProfileRequirements WithClientControlsTightenedBy(SecurityProfileRequirements other)
+        => this with
+        {
+            RequireConfidentialClient = RequireConfidentialClient || other.RequireConfidentialClient,
+            RequireKeyBasedClientAuthentication =
+                RequireKeyBasedClientAuthentication || other.RequireKeyBasedClientAuthentication,
+            RequireStringAudienceInClientAssertion =
+                RequireStringAudienceInClientAssertion || other.RequireStringAudienceInClientAssertion,
+            RequireMatchingClientIdentifiers =
+                RequireMatchingClientIdentifiers || other.RequireMatchingClientIdentifiers,
+            RequireHttpsJwksUri = RequireHttpsJwksUri || other.RequireHttpsJwksUri,
+        };
+
+    /// <summary>
+    /// This bundle with the controls on the tokens the client is issued and the grants it is issued them by, and on the
+    /// algorithms they and the client's own JWTs use, tightened by <paramref name="other"/>.
+    /// </summary>
+    private SecurityProfileRequirements WithTokenControlsTightenedBy(SecurityProfileRequirements other)
+        => this with
+        {
+            RequireSenderConstrainedTokens =
+                RequireSenderConstrainedTokens || other.RequireSenderConstrainedTokens,
+            RequireCertificateBoundTokens = RequireCertificateBoundTokens || other.RequireCertificateBoundTokens,
+            RequireAccessTokenOutsideQuery =
+                RequireAccessTokenOutsideQuery || other.RequireAccessTokenOutsideQuery,
+            RequireFapiInteractionId = RequireFapiInteractionId || other.RequireFapiInteractionId,
+            ForbidRefreshTokenRotation = ForbidRefreshTokenRotation || other.ForbidRefreshTokenRotation,
+            RequireFapiSigningAlgorithms = RequireFapiSigningAlgorithms || other.RequireFapiSigningAlgorithms,
+            ForbidRsa1_5KeyManagement = ForbidRsa1_5KeyManagement || other.ForbidRsa1_5KeyManagement,
+            ForbidPasswordGrant = ForbidPasswordGrant || other.ForbidPasswordGrant,
+        };
+
+    /// <summary>
+    /// This bundle with its clock ceiling and default tolerance tightened by <paramref name="other"/>.
+    /// </summary>
+    private SecurityProfileRequirements WithClockTightenedBy(SecurityProfileRequirements other) => this with
+    {
         MaxClockSkew = Tighter(MaxClockSkew, other.MaxClockSkew),
         DefaultClockSkew = new ClockSkew
         {
@@ -416,6 +935,21 @@ public sealed record SecurityProfileRequirements
         (null, { } b) => b,
         _ => null,
     };
+
+    /// <summary>
+    /// What two admitted sets both admit, where absence means no restriction and therefore concedes. A set admitting
+    /// all the other does is the answer as it stands.
+    /// </summary>
+    private static IReadOnlySet<string>? Narrower(IReadOnlySet<string>? left, IReadOnlySet<string>? right)
+        => (left, right) switch
+        {
+            ({ } a, { } b) when a.IsSubsetOf(b) => a,
+            ({ } a, { } b) when b.IsSubsetOf(a) => b,
+            ({ } a, { } b) => a.Intersect(b).ToFrozenSet(StringComparer.Ordinal),
+            ({ } a, null) => a,
+            (null, { } b) => b,
+            _ => null,
+        };
 
     /// <summary>
     /// The shorter of two windows, which is the one granting less.

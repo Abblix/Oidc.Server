@@ -6,13 +6,13 @@
 // Licensing terms, including free-of-charge use, are stated in LICENSE.md
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
+using System.Net;
 using System.Text.Json.Nodes;
 using Abblix.Oidc.Server.E2E.TestHost.TestInfrastructure;
 using Abblix.Oidc.Server.Model;
 using Abblix.Oidc.Server.Common.Constants;
 using Xunit;
 using Abblix.Jwt;
-using ResponseParameters = Abblix.Oidc.Server.Endpoints.Authorization.Interfaces.AuthorizationResponse.Parameters;
 using RegistrationMembers = Abblix.Oidc.Server.Model.ClientRegistrationRequest.Parameters;
 
 namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
@@ -24,9 +24,7 @@ namespace Abblix.Oidc.Server.E2E.Tests.Scenarios;
 /// </summary>
 public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
 {
-    private const string TokenExchangeGrantType = "urn:ietf:params:oauth:grant-type:token-exchange";
-    private const string AccessTokenType = "urn:ietf:params:oauth:token-type:access_token";
-    private const string IdTokenType = "urn:ietf:params:oauth:token-type:id_token";
+    private const string TokenExchangeGrantType = GrantTypes.TokenExchange;
 
     private const string PaymentInitiationWireJson =
         """[{"type":"payment_initiation","actions":["initiate"],"instructedAmount":{"currency":"EUR","amount":"500.00"}}]""";
@@ -38,25 +36,25 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         var initial = await PerformParFlowAsync(
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
-        var subjectToken = initial[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var subjectToken = initial[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var originalSubject = DecodeJwtPayload(subjectToken)["sub"]!.GetValue<string>();
 
         // 2. Exchange it via grant_type=token-exchange.
         var exchanged = await PerformTokenExchangeAsync(new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
-            ["subject_token"] = subjectToken,
-            ["subject_token_type"] = AccessTokenType,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [TokenRequest.Parameters.SubjectToken] = subjectToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
         // 3. Issued access token: same sub, AD forwarded byte-exact, no act claim.
-        var newPayload = DecodeJwtPayload(exchanged[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var newPayload = DecodeJwtPayload(exchanged[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
         Assert.Equal(originalSubject, newPayload["sub"]!.GetValue<string>());
-        var ad = newPayload[AuthorizationRequest.Parameters.AuthorizationDetails] as JsonArray;
+        var ad = newPayload[IanaClaimTypes.AuthorizationDetails] as JsonArray;
         Assert.NotNull(ad);
-        Assert.Equal(PaymentInitiationWireJson, ad!.ToJsonString());
+        Assert.Equal(PaymentInitiationWireJson, ad.ToJsonString());
         Assert.Null(newPayload["act"]);
     }
 
@@ -67,7 +65,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         var subject = await PerformParFlowAsync(
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
-        var subjectToken = subject[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var subjectToken = subject[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var subjectSub = DecodeJwtPayload(subjectToken)["sub"]!.GetValue<string>();
 
         // 2. Mint the actor_token. Same client + flow stands in for a distinct service identity
@@ -76,27 +74,27 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         var actor = await PerformParFlowAsync(
             TestConstants.ConfidentialClientId, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
-        var actorToken = actor[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>();
+        var actorToken = actor[TokenResponse.Parameters.AccessToken]!.GetValue<string>();
         var actorSub = DecodeJwtPayload(actorToken)["sub"]!.GetValue<string>();
 
         // 3. Exchange with both subject_token and actor_token.
         var exchanged = await PerformTokenExchangeAsync(new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
-            ["subject_token"] = subjectToken,
-            ["subject_token_type"] = AccessTokenType,
-            ["actor_token"] = actorToken,
-            ["actor_token_type"] = AccessTokenType,
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [TokenRequest.Parameters.SubjectToken] = subjectToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [TokenRequest.Parameters.ActorToken] = actorToken,
+            [TokenRequest.Parameters.ActorTokenType] = TokenExchangeTokenTypes.AccessToken,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
         // 4. Issued token: sub = subject, act = { sub: actor }.
-        var newPayload = DecodeJwtPayload(exchanged[UserInfoRequest.Parameters.AccessToken]!.GetValue<string>());
+        var newPayload = DecodeJwtPayload(exchanged[TokenResponse.Parameters.AccessToken]!.GetValue<string>());
         Assert.Equal(subjectSub, newPayload["sub"]!.GetValue<string>());
         var act = newPayload["act"] as JsonObject;
         Assert.NotNull(act);
-        Assert.Equal(actorSub, act!["sub"]!.GetValue<string>());
+        Assert.Equal(actorSub, act["sub"]!.GetValue<string>());
     }
 
     [Fact]
@@ -112,22 +110,22 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         var requested = new JsonObject
         {
             [RegistrationMembers.RedirectUris] = new JsonArray { TestConstants.RedirectUri },
-            ["grant_types"] = new JsonArray { GrantTypes.AuthorizationCode },
-            ["response_types"] = new JsonArray { "code" },
-            ["token_endpoint_auth_method"] = "client_secret_post",
-            ["token_exchange_subject_token_types"] = new JsonArray
+            [RegistrationMembers.GrantTypes] = new JsonArray { GrantTypes.AuthorizationCode },
+            [RegistrationMembers.ResponseTypes] = new JsonArray { ResponseTypes.Code },
+            [RegistrationMembers.TokenEndpointAuthMethod] = ClientAuthenticationMethods.ClientSecretPost,
+            [RegistrationMembers.TokenExchangeSubjectTokenTypes] = new JsonArray
             {
-                "urn:ietf:params:oauth:token-type:access_token",
-                "urn:ietf:params:oauth:token-type:id_token",
+                TokenExchangeTokenTypes.AccessToken,
+                TokenExchangeTokenTypes.IdToken,
             },
         };
         var registered = await RegisterClientAsync(client, discovery, requested);
 
-        var echoed = registered["token_exchange_subject_token_types"] as JsonArray;
+        var echoed = registered[ClientRegistrationResponse.Parameters.TokenExchangeSubjectTokenTypes] as JsonArray;
         Assert.NotNull(echoed);
-        Assert.Equal(2, echoed!.Count);
-        Assert.Equal("urn:ietf:params:oauth:token-type:access_token", echoed[0]!.GetValue<string>());
-        Assert.Equal("urn:ietf:params:oauth:token-type:id_token", echoed[1]!.GetValue<string>());
+        Assert.Equal(2, echoed.Count);
+        Assert.Equal(TokenExchangeTokenTypes.AccessToken, echoed[0]!.GetValue<string>());
+        Assert.Equal(TokenExchangeTokenTypes.IdToken, echoed[1]!.GetValue<string>());
     }
 
     [Fact]
@@ -142,7 +140,7 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         var issued = await PerformParFlowAsync(
             clientA, TestConstants.ConfidentialClientSecret,
             TestConstants.RedirectUri, PaymentInitiationWireJson);
-        var idToken = issued[ResponseParameters.IdToken]!.GetValue<string>();
+        var idToken = issued[TokenResponse.Parameters.IdToken]!.GetValue<string>();
 
         // Premise of the finding: the id_token's aud is client A and it has no client_id claim.
         var idPayload = DecodeJwtPayload(idToken);
@@ -154,10 +152,10 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         var response = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
         {
             [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
-            ["subject_token"] = idToken,
-            ["subject_token_type"] = IdTokenType,
+            [TokenRequest.Parameters.SubjectToken] = idToken,
+            [TokenRequest.Parameters.SubjectTokenType] = TokenExchangeTokenTypes.IdToken,
             // Client B presents client A's id_token. Same shared secret across pre-seeded clients.
-            [AuthorizationRequest.Parameters.ClientId] = TestConstants.UnrestrictedClientId,
+            [ClientRequest.Parameters.ClientId] = TestConstants.UnrestrictedClientId,
             [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
         });
 
@@ -165,7 +163,58 @@ public class TokenExchangeTests(TestFactory factory) : TestBase(factory)
         Assert.False(response.IsSuccessStatusCode,
             $"Expected cross-client exchange to be rejected, but got {(int)response.StatusCode}: {raw}");
         var error = JsonNode.Parse(raw)?.AsObject();
-        Assert.Equal(ErrorCodes.InvalidRequest, error?[ResponseParameters.Error]?.GetValue<string>());
+        Assert.Equal(ErrorCodes.InvalidRequest, error?[ErrorResponse.Parameters.Error]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// An exchange names a scope only within the subject token's scope, an empty one included: an access token
+    /// carrying no scope is not exchanged for one carrying a scope, while a token carrying that scope is, and an ID
+    /// token, which carries no scope claim at all, is not bounded by one.
+    /// </summary>
+    [Theory]
+    [InlineData(null, false, HttpStatusCode.BadRequest)]
+    [InlineData(Scopes.Profile, false, HttpStatusCode.OK)]
+    [InlineData(Scopes.OpenId, true, HttpStatusCode.OK)]
+    public async Task AnExchange_IsBoundByTheSubjectTokensScope(string? granted, bool idToken, HttpStatusCode expected)
+    {
+        var client = CreateClient();
+        var discovery = await FetchDiscoveryAsync(client);
+        var (verifier, challenge) = GeneratePkcePair();
+        var parameters = CodeFlowParameters(TestConstants.ConfidentialClientId, challenge);
+        if (granted is null)
+            parameters.Remove(AuthorizationRequest.Parameters.Scope);
+        else
+            parameters[AuthorizationRequest.Parameters.Scope] = granted;
+
+        var code = await AuthorizeAndExtractCodeAsync(client, discovery, parameters);
+        var tokens = await ExchangeCodeForTokensAsync(client, discovery, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = GrantTypes.AuthorizationCode,
+            [TokenRequest.Parameters.Code] = code,
+            [TokenRequest.Parameters.RedirectUri] = TestConstants.RedirectUri,
+            [TokenRequest.Parameters.CodeVerifier] = verifier,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        using var exchange = await FormPostHelpers.PostFormAsync(client, discovery.TokenEndpoint, new Dictionary<string, string>
+        {
+            [TokenRequest.Parameters.GrantType] = TokenExchangeGrantType,
+            [TokenRequest.Parameters.SubjectToken] =
+                tokens[idToken ? TokenResponse.Parameters.IdToken : TokenResponse.Parameters.AccessToken]!.GetValue<string>(),
+            [TokenRequest.Parameters.SubjectTokenType] =
+                idToken ? TokenExchangeTokenTypes.IdToken : TokenExchangeTokenTypes.AccessToken,
+            [TokenRequest.Parameters.Scope] = Scopes.Profile,
+            [ClientRequest.Parameters.ClientId] = TestConstants.ConfidentialClientId,
+            [ClientRequest.Parameters.ClientSecret] = TestConstants.ConfidentialClientSecret,
+        });
+
+        Assert.Equal(expected, exchange.StatusCode);
+        if (expected == HttpStatusCode.BadRequest)
+        {
+            var body = JsonNode.Parse(await exchange.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(ErrorCodes.InvalidScope, body?[ErrorResponse.Parameters.Error]?.GetValue<string>());
+        }
     }
 
     private async Task<JsonObject> PerformTokenExchangeAsync(Dictionary<string, string> form)

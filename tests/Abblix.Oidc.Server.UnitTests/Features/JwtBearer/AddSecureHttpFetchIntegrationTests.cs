@@ -29,8 +29,8 @@ public class AddSecureHttpFetchIntegrationTests
 
         // Add required dependencies
         services.AddMemoryCache();
-        services.AddDistributedMemoryCache(); // Required by DistributedJwtReplayCache
-        services.AddSingleton(System.TimeProvider.System); // Required by DistributedJwtReplayCache
+        services.AddDistributedMemoryCache(); // Required by the replay cache
+        services.AddSingleton(System.TimeProvider.System); // Required by the replay cache
         services.AddOptions();
         services.AddLogging();
 

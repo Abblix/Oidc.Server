@@ -15,7 +15,7 @@ namespace Abblix.SecurityEvents.CAEP.UnitTests;
 /// <summary>
 /// Pins the dictionary's contract rather than any one figure: the registration teaches the
 /// registry all eight event types at once, a payload missing a REQUIRED member fails loudly, and
-/// absent OPTIONAL members stay off the wire instead of travelling as nulls.
+/// absent OPTIONAL members stay off the wire instead of traveling as nulls.
 /// </summary>
 public class CaepEventContractTests
 {

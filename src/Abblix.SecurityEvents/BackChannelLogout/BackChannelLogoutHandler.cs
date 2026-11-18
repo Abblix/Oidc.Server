@@ -7,6 +7,8 @@
 
 using System.Net.Http.Headers;
 using System.Net.Mime;
+using Abblix.Jwt.ReplayPrevention;
+using Abblix.SecurityEvents.Delivery;
 using Microsoft.Extensions.Logging;
 
 namespace Abblix.SecurityEvents.BackChannelLogout;
@@ -26,10 +28,14 @@ namespace Abblix.SecurityEvents.BackChannelLogout;
 /// <param name="logger">Records every refusal, which no other party keeps.</param>
 /// <param name="validator">The Logout Token's validation, which is Section 2.6.</param>
 /// <param name="sink">Where the notification lands, which is Section 2.7.</param>
+/// <param name="replayCache">
+/// Where validation reserved the token, and where the reservation is given back when the sink did
+/// not end the sessions; null for a host whose validator reserves nothing here.</param>
 public sealed partial class BackChannelLogoutHandler(
     ILogger<BackChannelLogoutHandler> logger,
     ILogoutTokenValidator validator,
-    ILogoutNotificationSink sink)
+    ILogoutNotificationSink sink,
+    IReplayCache? replayCache = null)
 {
     /// <summary>
     /// The single parameter the request must carry (Section 2.5).
@@ -80,8 +86,47 @@ public sealed partial class BackChannelLogoutHandler(
             return Refuse(exception.Message);
         }
 
-        var refusal = await sink.ConsumeAsync(notification, cancellationToken);
-        return refusal is null ? BackChannelLogoutResult.Ok : Refuse(refusal);
+        var acted = false;
+        try
+        {
+            var refusal = await sink.ConsumeAsync(notification, cancellationToken);
+            if (refusal is not null)
+                return Refuse(refusal);
+
+            acted = true;
+            return BackChannelLogoutResult.Ok;
+        }
+        finally
+        {
+            // A refusal, a throw and a cancellation all leave the sessions open, and Section 2.5
+            // lets the provider retransmit the same token when it suspects a recoverable failure.
+            if (!acted)
+                await ReleaseAsync(notification);
+        }
+    }
+
+    /// <summary>
+    /// Gives back the reservation validation made for this token.
+    /// </summary>
+    /// <remarks>
+    /// Not cancelable, because a canceled request is one of the failures it answers. A release that
+    /// fails is logged rather than thrown: the provider is owed the outcome of the logout, and the
+    /// entry that stays only expires as it would have without the release.
+    /// </remarks>
+    private async Task ReleaseAsync(LogoutNotification notification)
+    {
+        if (replayCache is null || notification.TokenId is not { } tokenId)
+            return;
+
+        try
+        {
+            await replayCache.ReleaseAsync(
+                ReplayIdentifier.ForToken(notification.Issuer, tokenId), CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            LogReservationKept(exception, notification.Issuer, tokenId);
+        }
     }
 
     /// <summary>
@@ -107,25 +152,10 @@ public sealed partial class BackChannelLogoutHandler(
         // The code is the constant every refusal carries, taken from the constant rather than read
         // back off the result: the result's error is nullable, and dereferencing it here would
         // assert a fact the compiler cannot check in order to learn something already known.
-        LogRefused(BackChannelLogoutError.InvalidRequest, Abbreviate(description));
+        LogRefused(BackChannelLogoutError.InvalidRequest, description);
 
         return BackChannelLogoutResult.BadRequest(description);
     }
-
-    /// <summary>How much of a description is worth keeping in a log line.</summary>
-    /// <remarks>
-    /// This endpoint is unauthenticated by design, and one refusal path echoes the request's own
-    /// Content-Type into the description - so an anonymous caller chooses both the rate and, up to
-    /// the server's header limit, the size of what is written. The response still carries the whole
-    /// text to the provider, which is what Section 2.8 asks for; the log keeps the part that names
-    /// the problem.
-    /// </remarks>
-    private const int LoggedDescriptionLimit = 512;
-
-    private static string Abbreviate(string description)
-        => description.Length <= LoggedDescriptionLimit
-            ? description
-            : description[..LoggedDescriptionLimit] + "...";
 
     /// <summary>
     /// Reads the one parameter this endpoint understands out of a form-encoded body.

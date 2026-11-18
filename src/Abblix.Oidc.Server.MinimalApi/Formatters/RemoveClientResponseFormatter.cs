@@ -7,24 +7,26 @@
 // in the official repository at https://github.com/Abblix/Oidc.Server
 
 using Abblix.Oidc.Server.Common;
+using Abblix.Oidc.Server.Features.MultiTenancy;
 using Abblix.Oidc.Server.Endpoints.DynamicClientManagement.Interfaces;
 using Abblix.Oidc.Server.Model;
 using Abblix.Utils;
 using Microsoft.AspNetCore.Http;
 
-using Abblix.Oidc.Server.MinimalApi.Formatters.Interfaces;
+using Abblix.Oidc.Server.AspNetCore.Formatters;
 
 namespace Abblix.Oidc.Server.MinimalApi.Formatters;
 
 /// <summary>
-/// Formats a client-removal result (RFC 7592 §2.3) as <see cref="IResult"/>: an empty 204 on success, or the JSON
+/// Formats a client-removal result (RFC 7592 section 2.3) as <see cref="IResult"/>: an empty 204 on success, or the JSON
 /// OAuth error on failure.
 /// </summary>
-public class RemoveClientResponseFormatter : IRemoveClientResponseFormatter
+public class RemoveClientResponseFormatter(ITenantAccessor tenantAccessor) : IRemoveClientResponseFormatter<IResult>
 {
     /// <inheritdoc />
     public Task<IResult> FormatResponseAsync(ClientRequest request, Result<RemoveClientSuccessfulResponse, OidcError> response)
         => Task.FromResult(response.Match(
             onSuccess: IResult (_) => Results.NoContent(),
-            onFailure: error => error.Format(StatusCodes.Status400BadRequest)));
+            onFailure: error => error.Format(
+                StatusCodes.Status400BadRequest, ClientManagementRealm.Of(error, tenantAccessor))));
 }

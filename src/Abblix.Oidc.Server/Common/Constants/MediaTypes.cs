@@ -25,7 +25,7 @@ public static class MediaTypes
 
 	/// <summary>
 	/// Represents the "application/token-introspection+jwt" media type for a JWT-formatted token introspection
-	/// response (RFC 9701 §4): the media type a client sends in <c>Accept</c> to request a JWT response, and the
+	/// response (RFC 9701 section 4): the media type a client sends in <c>Accept</c> to request a JWT response, and the
 	/// <c>Content-Type</c> the server returns it with.
 	/// </summary>
 	public const string TokenIntrospectionJwt = "application/token-introspection+jwt";
