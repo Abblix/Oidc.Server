@@ -1,10 +1,8 @@
 #:package Microsoft.CodeAnalysis.CSharp@5.12.0
 
-// Writes the Program.cs a reader of a README quickstart ends up with: the README block, taken from its compiled
-// copy under tests/Abblix.DocSamples/Samples (ReadmeSampleTests holds each copy to its README's lines). The one
-// line it adds is the distributed cache the repository README's outline paragraph leaves to the host, without
-// which the server does not start; it goes once the server falls back to an in-process cache of its own. The
-// release workflow builds the result in a project made by `dotnet new web`.
+// Writes the Program.cs a reader of a README quickstart ends up with: the README block as pasted, taken from its
+// compiled copy under tests/Abblix.DocSamples/Samples (ReadmeSampleTests holds each copy to its README's lines),
+// with nothing added. The release workflow builds the result in a project made by `dotnet new web`.
 //
 //   dotnet quickstart-program.cs <path to the compiled copy> <path of the Program.cs to write>
 //
@@ -16,7 +14,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 if (args is not [var samplePath, var programPath])
 {
@@ -58,18 +55,12 @@ if (outside.Count > 0)
                 + $"'{outside[0]}', which a reader of the README would not have");
 }
 
-var statements = body.Statements.ToList();
-
-// After the builder exists: services are registered before Build
-var (builderAt, builder) = Declaration(statements, "CreateBuilder");
-if (builderAt < 0)
-    return Fail("The quickstart declares no variable initialized by WebApplication.CreateBuilder(...)");
-
-statements.Insert(builderAt + 1, HostLine($"{builder}.Services.AddDistributedMemoryCache();"));
+if (body.Statements.Count == 0)
+    return Fail($"{samplePath} has no statement between its sample markers");
 
 // Each node keeps its own comments and line breaks, so the file reads like the README block it came from
 var program = string.Concat(unit.Usings.Select(directive => directive.WithoutLeadingTrivia().ToFullString()))
-              + string.Concat(statements.Select(statement => statement.ToFullString()));
+              + string.Concat(body.Statements.Select(statement => statement.ToFullString()));
 
 File.WriteAllText(programPath, program);
 Console.WriteLine($"Wrote {programPath}:");
@@ -80,34 +71,6 @@ static List<SyntaxTrivia> Marker(BlockSyntax body, string text)
     => body.DescendantTrivia()
         .Where(trivia => trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) && trivia.ToString().Trim() == text)
         .ToList();
-
-// The index and name of the single variable whose initializer calls a method of that name, or -1 when none does
-static (int Index, string Name) Declaration(List<StatementSyntax> statements, string method)
-{
-    for (var index = 0; index < statements.Count; index++)
-    {
-        if (statements[index] is LocalDeclarationStatementSyntax
-            {
-                Declaration.Variables: [
-                {
-                    Initializer.Value: InvocationExpressionSyntax
-                    {
-                        Expression: MemberAccessExpressionSyntax { Name.Identifier.Text: var name },
-                    },
-                } variable],
-            } && name == method)
-        {
-            return (index, variable.Identifier.Text);
-        }
-    }
-
-    return (-1, string.Empty);
-}
-
-static StatementSyntax HostLine(string code)
-    => ParseStatement(code)
-        .WithLeadingTrivia(LineFeed, Comment("// Added by the host, as the repository README's outline asks"), LineFeed)
-        .WithTrailingTrivia(LineFeed);
 
 static int Fail(string message)
 {

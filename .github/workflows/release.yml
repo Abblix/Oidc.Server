@@ -258,8 +258,7 @@ jobs:
   # Each README quickstart as a reader builds it: a new web project, the package of this run that README installs,
   # the README block pasted as Program.cs, and the issuer in appsettings.json as the README says. The block is the
   # compiled copy ReadmeSampleTests holds to the README's lines, turned into top-level statements by the C# compiler's
-  # parser. The only line added to it is the distributed cache the repository README's outline leaves to the host,
-  # without which the server does not start. One leg per README, the same steps on each, and none stops the others.
+  # parser, with nothing added. One leg per README, the same steps on each, and none stops the others.
   readme-quickstart:
     needs: [versioning, build-and-pack]
     runs-on: ubuntu-latest
@@ -357,7 +356,7 @@ jobs:
           EXPECTED_ISSUER: ${{ steps.quickstart.outputs.issuer }}
         run: |
           refuse() {
-            echo "::error title=$PACKAGE quickstart::$1. Skipped step: make the quickstart of $README work as pasted in a project made by dotnet new web - fix the library or that README on $GITHUB_REF_NAME and check it the way this job does (dotnet new web; dotnet add package $PACKAGE; the README block as Program.cs with the distributed cache the repository README's outline names; Issuer in appsettings.json; dotnet run --launch-profile https), then dispatch the release again from the new head"
+            echo "::error title=$PACKAGE quickstart::$1. Skipped step: make the quickstart of $README work as pasted in a project made by dotnet new web - fix the library or that README on $GITHUB_REF_NAME and check it the way this job does (dotnet new web; dotnet add package $PACKAGE; the README block as Program.cs; Issuer in appsettings.json; dotnet run --launch-profile https), then dispatch the release again from the new head"
             exit 1
           }
           cd "$RUNNER_TEMP/quickstart"
