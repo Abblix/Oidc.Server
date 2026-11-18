@@ -50,8 +50,6 @@ internal static class MinimalApiQuickstartSample
         var app = builder.Build();
 
         app.UseCors();
-        app.UseAuthentication();
-        app.UseAuthorization();
 
         app.MapOidcEndpoints();
 
