@@ -138,6 +138,7 @@ public static class Enrolment
         new("src/Abblix.Oidc.Server.Mvc/README.md", 0, "MvcQuickstart.cs"),
         new("src/Abblix.Oidc.Server.MinimalApi/README.md", 0, "ReadmeQuickstart.cs"),
         new("src/Abblix.Oidc.Server.Mvc/README.md", 1, "MvcRoutes.cs"),
+        new("src/Abblix.Oidc.Server/README.md", 0, "ClientIdMetadataDocuments.cs"),
     ];
 
     /// <summary>
