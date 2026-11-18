@@ -117,6 +117,12 @@ def check_every_file_analysed(commit, analysed, failures):
     for path in required:
         if path not in analysed:
             failures.append(f'{one_line(path)} is in the release and not in the analysis')
+    # The list follows Sonar: a kind it starts analysing is refused here until the list names it,
+    # so the list cannot fall behind the analysis without the gate saying which file showed it.
+    for path in sorted(analysed):
+        if not must_be_analysed(path):
+            failures.append(f'Sonar analyses {one_line(path)}, a kind ANALYSED_SUFFIXES and '
+                            'ANALYSED_DIRECTORIES do not name: add it there')
 
 
 def nosonar_files(commit):
