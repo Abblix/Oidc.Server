@@ -65,6 +65,13 @@ public static class PrivateNetworks
     /// The networks a server-initiated request has no business reaching, loopback aside: the framework already
     /// knows loopback, and the IPv6 unspecified address is a single address rather than a network.
     /// </summary>
+    /// <remarks>
+    /// Every block of the IPv4 and IPv6 special-purpose address registries (RFC 6890 sections 2.2.2 and 2.2.3) is
+    /// here, the ones marked globally reachable included: draft-ietf-oauth-client-id-metadata-document section 10.7
+    /// says an authorization server "MUST NOT fetch a Client ID Metadata Document URL or any URLs contained within a
+    /// Client ID Metadata Document that resolve to special-use IP addresses as defined in [RFC6890]", and the NAT64
+    /// and 6to4 prefixes carry an IPv4 address inside them, a private one as readily as any other.
+    /// </remarks>
     private static readonly IPNetwork[] ReservedNetworks =
     [
         // "This host on this network" (0.0.0.0 routes to loopback on Linux)
@@ -81,8 +88,37 @@ public static class PrivateNetworks
         // Link-local (AWS/Azure metadata)
         IPNetwork.Parse("169.254.0.0/16"),
 
+        // IETF protocol assignments, among them DS-Lite (RFC 6890 section 2.2.2, tables 7 and 8)
+        IPNetwork.Parse("192.0.0.0/24"),
+
+        // Documentation TEST-NET-1, TEST-NET-2 and TEST-NET-3 (RFC 5737)
+        IPNetwork.Parse("192.0.2.0/24"),
+        IPNetwork.Parse("198.51.100.0/24"),
+        IPNetwork.Parse("203.0.113.0/24"),
+
+        // 6to4 relay anycast (RFC 3068)
+        IPNetwork.Parse("192.88.99.0/24"),
+
+        // Benchmarking (RFC 2544)
+        IPNetwork.Parse("198.18.0.0/15"),
+
         // Multicast 224.0.0.0/4 and the reserved 240.0.0.0/4 above it
         IPNetwork.Parse("224.0.0.0/3"),
+
+        // IPv4-IPv6 translation, the NAT64 well-known prefix (RFC 6052)
+        IPNetwork.Parse("64:ff9b::/96"),
+
+        // Discard-only (RFC 6666)
+        IPNetwork.Parse("100::/64"),
+
+        // IETF protocol assignments, Teredo and benchmarking among them (RFC 2928)
+        IPNetwork.Parse("2001::/23"),
+
+        // Documentation (RFC 3849)
+        IPNetwork.Parse("2001:db8::/32"),
+
+        // 6to4 (RFC 3056)
+        IPNetwork.Parse("2002::/16"),
 
         // Link-local
         IPNetwork.Parse("fe80::/10"),

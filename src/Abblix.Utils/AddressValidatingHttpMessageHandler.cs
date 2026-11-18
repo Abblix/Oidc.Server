@@ -43,6 +43,11 @@ public abstract class AddressValidatingHttpMessageHandler : DelegatingHandler
             // No ambient credentials, so a request cannot authenticate to an internal server by accident.
             UseDefaultCredentials = false,
 
+            // No cookie jar, so a cookie one fetched host set is not sent back to it on the next fetch: the handler
+            // is shared by every fetch of its client, and draft-ietf-oauth-client-id-metadata-document section 11.1
+            // has an authorization server "avoid sending cookies" when fetching a client's metadata document.
+            UseCookies = false,
+
             // No automatic decompression, so a hostile response cannot spend the caller's memory on a bomb.
             AutomaticDecompression = DecompressionMethods.None,
         })
