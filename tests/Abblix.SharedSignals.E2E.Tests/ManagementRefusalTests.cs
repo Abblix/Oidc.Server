@@ -112,7 +112,7 @@ public sealed class ManagementRefusalTests
         using var response = await host.GetTestClient().GetAsync("/ssf/stream", cancellationToken);
 
         var challenge = Assert.Single(response.Headers.WwwAuthenticate);
-        Assert.DoesNotContain("error", challenge.Parameter!);
+        Assert.DoesNotContain("error", challenge.Parameter);
     }
 
     /// <summary>
@@ -180,14 +180,14 @@ public sealed class ManagementRefusalTests
 
         var challenge = Assert.Single(response.Headers.WwwAuthenticate);
         Assert.Equal("Bearer", challenge.Scheme);
-        Assert.Contains("error=\"invalid_request\"", challenge.Parameter!);
-        Assert.Contains("stream_id", challenge.Parameter!);
+        Assert.Contains("error=\"invalid_request\"", challenge.Parameter);
+        Assert.Contains("stream_id", challenge.Parameter);
 
         // The helper builds three attributes and the two above hold only two of them. Without this the
         // realm can vanish - the issuer resolving to nothing produces a well-formed challenge that simply
         // omits it - and no row anywhere goes red. The 401 row, AnUnidentifiedCaller_GetsAChallengeRatherThanABare401,
         // asserts the same realm exactly, so the two refusals agree on who is challenging rather than only on why.
-        Assert.Contains($"realm=\"{Issuer}\"", challenge.Parameter!);
+        Assert.Contains($"realm=\"{Issuer}\"", challenge.Parameter);
     }
 
     /// <summary>

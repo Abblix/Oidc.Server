@@ -152,6 +152,7 @@ public sealed class CaepWarningsReachTheirOwnSurfaceTests
 
         public void Dispose()
         {
+            // Nothing to release: the recorders hold only the list of warnings the test reads.
         }
 
         private sealed class Recorder(List<string> warnings) : ILogger

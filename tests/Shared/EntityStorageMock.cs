@@ -34,8 +34,8 @@ namespace Abblix.Tests.Shared;
 /// </remarks>
 public static class EntityStorageMock
 {
-    private static readonly MethodInfo AroundOfResult = typeof(EntityStorageMock)
-        .GetMethod(nameof(AroundAsync), BindingFlags.NonPublic | BindingFlags.Static)!;
+    private static readonly MethodInfo AroundOfResult = typeof(TypedCompletion)
+        .GetMethod(nameof(TypedCompletion.AroundAsync), BindingFlags.Public | BindingFlags.Static)!;
 
     /// <summary>
     /// A strict mock forwarding every member of the storage to <paramref name="inner"/>.
@@ -135,7 +135,14 @@ public static class EntityStorageMock
         return AroundOfResult.MakeGenericMethod(returnType.GetGenericArguments()[0]).Invoke(null, [body])!;
     }
 
-    private static async Task<T> AroundAsync<T>(Func<Task<object?>> body) => (T)(await body())!;
+    /// <summary>
+    /// Holds the generic completion <see cref="Around"/> closes over a runtime type: public so reflection finds it
+    /// without reaching past an access modifier, inside a private type so nothing outside this mock sees it.
+    /// </summary>
+    private static class TypedCompletion
+    {
+        public static async Task<T> AroundAsync<T>(Func<Task<object?>> body) => (T)(await body())!;
+    }
 
     /// <summary>
     /// What a forwarded call answered, read through the member's declared return type, since the task the inner
