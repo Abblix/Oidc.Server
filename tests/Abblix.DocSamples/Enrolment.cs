@@ -135,6 +135,7 @@ public static class Enrolment
         new("README.md", 0, "ReadmeQuickstart.cs"),
         new("src/Abblix.Oidc.Server.SharedSignals/README.md", 0, "SharedSignalsMultiTenancy.cs"),
         new("src/Abblix.Oidc.Server.SharedSignals/README.md", 1, "SharedSignalsConfiguredStreams.cs"),
+        new("src/Abblix.Oidc.Server.Mvc/README.md", 0, "MvcQuickstart.cs"),
         new("src/Abblix.Oidc.Server.Mvc/README.md", 1, "MvcRoutes.cs"),
     ];
 
@@ -152,5 +153,5 @@ public static class Enrolment
     /// as that work is done.
     /// </para>
     /// </remarks>
-    public const int ReadmeUnenrolled = 56;
+    public const int ReadmeUnenrolled = 55;
 }

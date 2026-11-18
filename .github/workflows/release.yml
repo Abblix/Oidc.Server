@@ -246,13 +246,150 @@ jobs:
 
         timeout-minutes: 3
     timeout-minutes: 5
+  # The consumer path: what a reader builds from our documentation, built from the packages THIS run packed (the
+  # nuget-packages artifact, restored through a source mapping that lets no Abblix package come from a feed) and
+  # started. create-release needs all four jobs below, so a release whose quickstart, samples or templates do not
+  # work for the reader stops before either approval. Our own test hosts above never see what these see: a project
+  # made by `dotnet new web`, a sample from another repository, a scaffold of a template.
+
+  # Each adapter's README quickstart as a reader builds it: a new web project, the adapter's package of this run,
+  # the README block as Program.cs plus only what the repository README's outline paragraph says the host adds and
+  # a protocol request needs (a distributed cache, the CORS middleware), and the issuer in appsettings.json. The
+  # block is the compiled copy ReadmeSampleTests holds to the README's lines, turned into top-level statements by
+  # the C# compiler's parser. One leg per adapter, the same steps on each, and neither stops the other.
+  readme-quickstart:
+    needs: [versioning, build-and-pack]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - adapter: Minimal API
+            package: Abblix.OIDC.Server.MinimalAPI
+            readme: README.md
+            copy: ReadmeQuickstart.cs
+          - adapter: MVC
+            package: Abblix.OIDC.Server.MVC
+            readme: src/Abblix.Oidc.Server.Mvc/README.md
+            copy: MvcQuickstart.cs
+    env:
+      VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
+      RELEASE_BRANCH: ${{ github.ref_name }}
+      PACKAGE: ${{ matrix.package }}
+      README: ${{ matrix.readme }}
+      COPY: ${{ matrix.copy }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - name: Checkout main repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: main-repo
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: local-packages
+        timeout-minutes: 3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: main-repo/global.json
+        timeout-minutes: 3
+      - name: Restore Abblix packages from this run only
+        run: python3 -I main-repo/.github/scripts/consumer-packages.py use-local local-packages
+        timeout-minutes: 3
+      - name: Create the ASP.NET Core development certificate
+        run: dotnet dev-certs https
+        timeout-minutes: 3
+      # Outside the checkout, so none of this repository's build, package or SDK settings reach the project
+      - name: Build the README quickstart in a new web project
+        id: quickstart
+        run: |
+          work="$RUNNER_TEMP/quickstart"
+          dotnet new web --name Quickstart --output "$work"
+          dotnet add "$work" package "$PACKAGE" --version "$VERSION_FULL"
+          # The generator names its own Roslyn version, which the repository's central package versions refuse
+          mkdir "$RUNNER_TEMP/program"
+          cp main-repo/.github/scripts/quickstart-program.cs "$RUNNER_TEMP/program/"
+          dotnet "$RUNNER_TEMP/program/quickstart-program.cs" \
+            "main-repo/tests/Abblix.DocSamples/Samples/$COPY" "$work/Program.cs"
+          # The README: the issuer comes from configuration, the address the app is served on
+          issuer=$(python3 -I -c '
+          import json, sys
+          work = sys.argv[1]
+          with open(f"{work}/Properties/launchSettings.json", encoding="utf-8-sig") as file:
+              issuer = json.load(file)["profiles"]["https"]["applicationUrl"].split(";")[0]
+          with open(f"{work}/appsettings.json", encoding="utf-8-sig") as file:
+              settings = json.load(file)
+          settings["Issuer"] = issuer
+          with open(f"{work}/appsettings.json", "w", encoding="utf-8") as file:
+              json.dump(settings, file, indent=2)
+          print(issuer)
+          ' "$work")
+          echo "issuer=$issuer" >> "$GITHUB_OUTPUT"
+          dotnet build "$work"
+        timeout-minutes: 3
+      - name: The quickstart answers discovery and the token endpoint
+        env:
+          # Not ISSUER: the app started below reads every environment variable as configuration, and that name
+          # would set its issuer from this check rather than from appsettings.json
+          EXPECTED_ISSUER: ${{ steps.quickstart.outputs.issuer }}
+        run: |
+          refuse() {
+            echo "::error title=$PACKAGE quickstart::$1. Skipped step: make the quickstart of $README work in a project made by dotnet new web - fix the library or that README on $RELEASE_BRANCH and check it the way this job does (dotnet new web; dotnet add package $PACKAGE; Program.cs from the README block plus the distributed cache and app.UseCors() the repository README's outline names; Issuer in appsettings.json; dotnet run --launch-profile https), then dispatch the release again from the new head"
+            exit 1
+          }
+          cd "$RUNNER_TEMP/quickstart"
+          dotnet run --no-build --launch-profile https > "$RUNNER_TEMP/quickstart.log" 2>&1 &
+          app=$!
+          trap 'kill "$app" 2>/dev/null || true' EXIT
+          code=000
+          for _ in {1..60}; do
+            code=$(curl -sk --max-time 5 -o discovery.json -w '%{http_code}' "$EXPECTED_ISSUER/.well-known/openid-configuration") || code=000
+            [ "$code" != 000 ] && break
+            kill -0 "$app" 2>/dev/null || break
+            sleep 1
+          done
+          if [ "$code" != 200 ]; then
+            tail -n 60 "$RUNNER_TEMP/quickstart.log"
+            [ "$code" = 000 ] && refuse "The quickstart did not answer $EXPECTED_ISSUER/.well-known/openid-configuration within the wait; its log is above"
+            refuse "The quickstart answered its discovery document with HTTP $code; its log is above"
+          fi
+          named=$(python3 -I -c 'import json, sys; print(json.load(open("discovery.json")).get("issuer", ""))')
+          [ "$named" = "$EXPECTED_ISSUER" ] || refuse "The discovery document names the issuer '$named', not $EXPECTED_ISSUER, the address it is served on and the Issuer setting this job wrote"
+          token_endpoint=$(python3 -I -c 'import json, sys; print(json.load(open("discovery.json")).get("token_endpoint", ""))')
+          [ -n "$token_endpoint" ] || refuse "The discovery document names no token_endpoint"
+          # A client the server does not know: the protocol answer is an OAuth error, never a server failure
+          code=$(curl -sk --max-time 10 -o token.json -w '%{http_code}' \
+            -d grant_type=client_credentials -d client_id=consumer-path-check "$token_endpoint") || code=000
+          if [[ ! "$code" =~ ^4[0-9][0-9]$ ]] || ! python3 -I -c 'import json, sys; sys.exit(0 if isinstance(json.load(open("token.json")).get("error"), str) else 1)' 2>/dev/null; then
+            tail -n 60 "$RUNNER_TEMP/quickstart.log"
+            refuse "The token endpoint answered an unknown client with HTTP $code and no OAuth error member, where the protocol answers 400 or 401 with one; the log is above"
+          fi
+          echo "Discovery names $EXPECTED_ISSUER; the token endpoint refused an unknown client with HTTP $code and error $(python3 -I -c 'import json; print(json.load(open("token.json"))["error"])')"
+        timeout-minutes: 3
+      - name: The quickstart restored this run's packages
+        run: python3 -I main-repo/.github/scripts/consumer-packages.py verify local-packages "$VERSION_FULL"
+        timeout-minutes: 3
+    timeout-minutes: 5
+
+  # Every getting-started sample builds against this run's packages. The provider, the client and the API are
+  # also started together by the next job, which replaced the provider's discovery probe that used to follow here.
   test-getting-started:
     needs: [versioning, build-and-pack]
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
-      VERSION: ${{ needs.versioning.outputs.version }}
+      VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -287,55 +424,225 @@ jobs:
           # is whatever they have rather than whatever we pinned.
           global-json-file: main-repo/global.json
         timeout-minutes: 3
-      - name: Setup local package source
-        run: |
-          dotnet nuget add source "$(pwd)/local-packages" --name "LocalAbblix"
-          dotnet nuget locals all --clear
+      # Several samples bundle their client assets with Vite when they build, and Vite has a Node floor
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
         timeout-minutes: 3
-      - name: Update package references
-        run: |
-          cd getting-started
-          sed -i "s|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"[^\"]*\"|<PackageReference Include=\"Abblix.Oidc.Server.Mvc\" Version=\"$VERSION\"|g" OpenIDProviderApp/OpenIDProviderApp.csproj
+      - name: Restore Abblix packages from this run only
+        run: python3 -I main-repo/.github/scripts/consumer-packages.py use-local local-packages
+        timeout-minutes: 3
+      - name: Point the samples at this run's packages
+        run: python3 -I main-repo/.github/scripts/consumer-packages.py point "$VERSION_FULL" getting-started
         timeout-minutes: 3
       - name: Test GettingStarted builds
         run: |
           cd getting-started
-          dotnet restore
-          dotnet build
+          if ! dotnet build; then
+            echo "::error title=Getting-started samples::A sample does not build against this run's packages; the build output above names it. Skipped step: build Abblix/Oidc.Server.GettingStarted (master) against this release's packages and fix the sample there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
+            exit 1
+          fi
         timeout-minutes: 3
-      # The sample must answer its discovery document at the address its own launch profile names,
-      # which is also its issuer; any other outcome within the wait fails the step. -k: the sample
-      # serves the runner's untrusted ASP.NET Core development certificate on loopback.
-      - name: Test OpenIDProviderApp answers discovery
-        run: |
-          cd getting-started/OpenIDProviderApp
-          BASE=$(python3 -c "import json; print(json.load(open('Properties/launchSettings.json', encoding='utf-8-sig'))['profiles']['https']['applicationUrl'].split(';')[0])")
-          dotnet run --launch-profile https &
-          APP_PID=$!
-          for _ in {1..60}; do
-            if curl -fsSk --max-time 5 -o discovery.json "$BASE/.well-known/openid-configuration"; then
-              if ! python3 -c "import json, sys; sys.exit(0 if json.load(open('discovery.json')).get('issuer', '').startswith(sys.argv[1]) else 1)" "$BASE"; then
-                echo "::error title=Getting-started sample::The discovery document at $BASE names no issuer under that address. Skipped step: run the sample on the Abblix/Oidc.Server.GettingStarted branch that the Checkout GettingStarted repo step names (dotnet run --launch-profile https in OpenIDProviderApp), fix it there until it serves /.well-known/openid-configuration with its own issuer, then re-run this job"
-                kill "$APP_PID" 2>/dev/null || true
-                exit 1
-              fi
-              echo "App answers discovery at $BASE"
-              kill "$APP_PID" 2>/dev/null || true
-              exit 0
-            fi
-            if ! kill -0 "$APP_PID" 2>/dev/null; then
-              echo "::error title=Getting-started sample::The sample exited before answering at $BASE; its output is above. Skipped step: run the sample on the Abblix/Oidc.Server.GettingStarted branch that the Checkout GettingStarted repo step names (dotnet run --launch-profile https in OpenIDProviderApp), fix it there until it serves /.well-known/openid-configuration with its own issuer, then re-run this job"
-              exit 1
-            fi
-            sleep 1
-          done
-          echo "::error title=Getting-started sample::The sample did not answer its discovery document at $BASE within the wait. Skipped step: run the sample on the Abblix/Oidc.Server.GettingStarted branch that the Checkout GettingStarted repo step names (dotnet run --launch-profile https in OpenIDProviderApp), fix it there until it serves /.well-known/openid-configuration with its own issuer, then re-run this job"
-          kill "$APP_PID" 2>/dev/null || true
-          exit 1
+      - name: The samples restored this run's packages
+        run: python3 -I main-repo/.github/scripts/consumer-packages.py verify local-packages "$VERSION_FULL"
         timeout-minutes: 3
     timeout-minutes: 5
+
+  # The getting-started loop as a reader runs it: a provider, the API and the web client started together by the
+  # samples' own script, which signs in as the demo user, calls the API with the access token and signs out. One leg
+  # per provider sample, the MVC one and the Minimal API one: the same steps with one argument apart, and neither
+  # stops the other, so a red run says which adapter broke.
+  getting-started-loop:
+    needs: [versioning, build-and-pack]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [mvc, minimal]
+    env:
+      VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
+      PROVIDER: ${{ matrix.provider }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - name: Checkout main repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: main-repo
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Checkout GettingStarted repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: Abblix/Oidc.Server.GettingStarted
+          path: getting-started
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: local-packages
+        timeout-minutes: 3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: main-repo/global.json
+        timeout-minutes: 3
+      # The client and the provider bundle their client assets with Vite when they build
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+        timeout-minutes: 3
+      - name: Restore Abblix packages from this run only
+        run: python3 -I main-repo/.github/scripts/consumer-packages.py use-local local-packages
+        timeout-minutes: 3
+      - name: Point the samples at this run's packages
+        run: python3 -I main-repo/.github/scripts/consumer-packages.py point "$VERSION_FULL" getting-started
+        timeout-minutes: 3
+      - name: Trust the development certificate
+        run: |
+          status=0
+          dotnet dev-certs https --trust || status=$?
+          # On Linux it exits with 4 when the certificate is trusted for OpenSSL, which the three
+          # samples call each other through, but not for every certificate store it tried
+          if [ "$status" -ne 0 ] && [ "$status" -ne 4 ]; then
+            exit "$status"
+          fi
+        timeout-minutes: 3
+      - name: Sign in, call the API and sign out
+        run: |
+          cd getting-started
+          export SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"
+          if ! dotnet run-loop.cs --check --provider "$PROVIDER"; then
+            echo "::error title=Getting-started loop ($PROVIDER)::The $PROVIDER provider, the API and the client did not complete sign-in, the API call and sign-out on this run's packages; the line starting with ==> above the failure names the step. Skipped step: run dotnet run-loop.cs --check --provider $PROVIDER in Abblix/Oidc.Server.GettingStarted (master) against this release's packages and fix the sample there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
+            exit 1
+          fi
+        # The script builds and starts three projects, measured at 1m45s to 2m12s on a hosted runner in the samples'
+        # own workflow, which gives the step the same 4 minutes
+        timeout-minutes: 4
+      - name: The loop restored this run's packages
+        run: python3 -I main-repo/.github/scripts/consumer-packages.py verify local-packages "$VERSION_FULL"
+        timeout-minutes: 3
+    timeout-minutes: 5
+
+  # Every provider template scaffolded, pointed at this run's packages, built and started at the address its own
+  # launch profile names, which must be the issuer its discovery document names. The 3.0 templates live on the
+  # templates' release/3.0 branch until their 3.0 release, and they are installed from their folders, since that
+  # release is not published yet.
+  templates:
+    needs: [versioning, build-and-pack]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERSION_FULL: ${{ needs.versioning.outputs.version_full }}
+      TEMPLATES_REF: release/3.0
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      - name: Checkout main repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: main-repo
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Checkout Templates repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: Abblix/Templates
+          ref: ${{ env.TEMPLATES_REF }}
+          path: templates
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-packages
+          path: local-packages
+        timeout-minutes: 3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: main-repo/global.json
+        timeout-minutes: 3
+      # The Identity template bundles its client assets with Vite when it builds
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+        timeout-minutes: 3
+      - name: Restore Abblix packages from this run only
+        run: python3 -I main-repo/.github/scripts/consumer-packages.py use-local local-packages
+        timeout-minutes: 3
+      - name: Create the ASP.NET Core development certificate
+        run: dotnet dev-certs https
+        timeout-minutes: 3
+      - name: Scaffold, build and start each provider template
+        run: |
+          shopt -s failglob
+          helper=main-repo/.github/scripts/consumer-packages.py
+          refuse() {
+            echo "::error title=Templates::$1. Skipped step: scaffold the template with dotnet new $2 from Abblix/Templates $TEMPLATES_REF against this release's packages and fix it there, then re-run this job; when the library is at fault, fix it on $GITHUB_REF_NAME and dispatch the release again"
+            exit 1
+          }
+          checked=0
+          for config in templates/*/.template.config/template.json; do
+            folder=$(dirname "$(dirname "$config")")
+            short=$(python3 -I -c 'import json, sys; name = json.load(open(sys.argv[1], encoding="utf-8-sig"))["shortName"]; print(name if isinstance(name, str) else name[0])' "$config")
+            dotnet new install "$folder"
+            work="$RUNNER_TEMP/scaffold-$short"
+            dotnet new "$short" --name ConsumerCheck --output "$work"
+            if [ "$(python3 -I "$helper" count "$work")" = 0 ]; then
+              echo "dotnet new $short: no Abblix package reference, not a provider template"
+              continue
+            fi
+            python3 -I "$helper" point "$VERSION_FULL" "$work"
+            url=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8-sig"))["profiles"]["https"]["applicationUrl"].split(";")[0])' "$work/Properties/launchSettings.json")
+            dotnet build "$work" -c Release || refuse "dotnet new $short does not build against this run's packages; the build output above names the error" "$short"
+            # From the output directory: the app reads appsettings.json from its working directory
+            target=$(dotnet msbuild "$work" -getProperty:TargetPath -p:Configuration=Release)
+            pushd "$(dirname "$target")" > /dev/null
+            dotnet "$target" --urls "$url" > app.log 2>&1 &
+            app=$!
+            code=000
+            for _ in {1..60}; do
+              code=$(curl -sk --max-time 5 -o discovery.json -w '%{http_code}' "$url/.well-known/openid-configuration") || code=000
+              [ "$code" != 000 ] && break
+              kill -0 "$app" 2>/dev/null || break
+              sleep 1
+            done
+            kill "$app" 2>/dev/null || true
+            wait "$app" 2>/dev/null || true
+            if [ "$code" != 200 ]; then
+              tail -n 60 app.log
+              refuse "dotnet new $short answered $url/.well-known/openid-configuration with HTTP $code (000: no answer within the wait); its log is above" "$short"
+            fi
+            named=$(python3 -I -c 'import json; print(json.load(open("discovery.json")).get("issuer", ""))')
+            [ "$named" = "$url" ] || refuse "dotnet new $short serves at $url, the address its launchSettings.json names, but its discovery document names the issuer '$named'" "$short"
+            echo "dotnet new $short: discovery at $url names it as the issuer"
+            popd > /dev/null
+            python3 -I "$helper" verify local-packages "$VERSION_FULL"
+            checked=$((checked + 1))
+          done
+          [ "$checked" -gt 0 ] || refuse "No template on $TEMPLATES_REF references an Abblix package, so no provider template was checked" "<template>"
+        # Two scaffolds, cold restores, an npm install and a Vite build, two starts: the templates' own smoke test
+        # measured the two provider templates at 25 seconds together on a hosted runner
+        timeout-minutes: 3
+    timeout-minutes: 5
+
   create-release:
-    needs: [versioning, build-and-pack, test-getting-started, conformance, sonar-gate]
+    needs: [versioning, build-and-pack, readme-quickstart, test-getting-started, getting-started-loop, templates, conformance, sonar-gate]
     runs-on: ubuntu-latest
     environment: release-approval
     permissions:
