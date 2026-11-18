@@ -127,6 +127,42 @@ jobs:
     needs: versioning
     uses: ./.github/workflows/conformance.yml
 
+  # SonarQube Cloud analyses the main branch (develop) and pull requests here, never a release
+  # branch, so the release code is covered by two analyses: the release pull request at this commit
+  # for the lines the release changed, and the main branch at develop's head, which must contain
+  # this commit, for the lines it shares with develop. The script refuses an open issue, a hotspot
+  # to review or an unexplained accepted issue in either, and an analysis of the wrong commit or
+  # missing a project. It reads the public Web API, so it holds no secret.
+  sonar-gate:
+    needs: versioning
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+        timeout-minutes: 3
+      # Full history and every branch: the script checks that develop contains this commit.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+        timeout-minutes: 3
+      - name: No open SonarQube Cloud issue in the release code
+        env:
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          DEVELOP_HEAD=$(git rev-parse origin/develop)
+          status=0
+          python3 -I .github/scripts/sonar-release-gate.py Abblix_Oidc.Server "$RELEASE_COMMIT" "$DEVELOP_HEAD" > sonar-gate.md || status=$?
+          cat sonar-gate.md >> "$GITHUB_STEP_SUMMARY"
+          cat sonar-gate.md
+          exit "$status"
+        timeout-minutes: 3
+    timeout-minutes: 5
+
   build-and-pack:
     needs: [versioning, tests]
     runs-on: ubuntu-latest
@@ -299,7 +335,7 @@ jobs:
         timeout-minutes: 3
     timeout-minutes: 5
   create-release:
-    needs: [versioning, build-and-pack, test-getting-started, conformance]
+    needs: [versioning, build-and-pack, test-getting-started, conformance, sonar-gate]
     runs-on: ubuntu-latest
     environment: release-approval
     permissions:
